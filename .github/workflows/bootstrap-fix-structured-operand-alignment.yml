@@ -31,6 +31,20 @@ jobs:
           python-version: '3.12'
       - name: Install offline builder dependencies
         run: python -m pip install pypdf pdfplumber
+      - name: Repair bootstrap module loading
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tools/bootstrap_fix_structured_operand_alignment.py')
+          text = path.read_text(encoding='utf-8')
+          if 'import sys\n' not in text:
+              text = text.replace('import sqlite3\n', 'import sqlite3\nimport sys\n', 1)
+          old = '''    module = importlib.util.module_from_spec(spec)\n    assert spec.loader is not None\n    spec.loader.exec_module(module)\n'''
+          new = '''    module = importlib.util.module_from_spec(spec)\n    sys.modules[spec.name] = module\n    assert spec.loader is not None\n    spec.loader.exec_module(module)\n'''
+          if old not in text:
+              raise SystemExit('load_module block not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
       - name: Apply generic parser fix and recompute baseline-empty instruction rows
         run: python tools/bootstrap_fix_structured_operand_alignment.py
       - name: Audit recomputed rows
