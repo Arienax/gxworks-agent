@@ -8,7 +8,7 @@ from PLC device addresses after whitespace/case normalization:
 * ``N 4`` can be an MC/MCR nesting level, not a device.
 * ``D | 17 steps | DABSD`` can flatten to ``D 17 steps`` and look like D17.
 
-This module fixes those cases after generic entity extraction.  It deliberately
+This module fixes those cases after generic entity extraction. It deliberately
 does not maintain a blacklist of concrete tokens, so real examples such as
 D307, M599, P10, P11 and P12 remain ordinary device entities.
 """
@@ -52,12 +52,17 @@ def _window(text: str, start: int, end: int, radius: int = 180) -> str:
 
 
 def _is_nesting_level(text: str, match: re.Match[str]) -> bool:
+    # FX MC/MCR nesting levels are N0..N7. Never promote arbitrary N<number>
+    # layout fragments merely because "master control" appears nearby.
+    level = int(match.group(1))
+    if not 0 <= level <= 7:
+        return False
     context = _window(text, match.start(), match.end())
     if _NESTING_CONTEXT_RE.search(context):
         return True
     # Lists such as N0 -> N1 -> ... -> N7 are also unambiguously nesting syntax.
-    nearby_n_values = _UPPER_N_VALUE_RE.findall(context)
-    return len(nearby_n_values) >= 3
+    nearby_n_values = [int(value) for value in _UPPER_N_VALUE_RE.findall(context)]
+    return len([value for value in nearby_n_values if 0 <= value <= 7]) >= 3
 
 
 def sanitize_device_like_entities(
@@ -67,13 +72,13 @@ def sanitize_device_like_entities(
 ) -> EntityCounter:
     """Return a cleaned copy of extracted entity counts.
 
-    Only semantic false positives are changed.  Concrete D/M/P device examples
+    Only semantic false positives are changed. Concrete D/M/P device examples
     are retained even when they occur inside instruction chunks that also contain
     operand-definition prose.
     """
     cleaned: EntityCounter = Counter(dict(entities))
 
-    # N<number> is never emitted as a PLC device.  Reconstruct useful semantics
+    # N<number> is never emitted as a PLC device. Reconstruct useful semantics
     # from source spelling instead of trusting the case-insensitive generic regex.
     for key in list(cleaned):
         entity, kind = key
@@ -84,12 +89,12 @@ def sanitize_device_like_entities(
 
     if chunk_type == "instruction":
         for match in _LOWER_N_VALUE_RE.finditer(text):
-            token = f"N{match.group(1)}"
+            token = f"N{int(match.group(1))}"
             cleaned[(token, "operand_placeholder")] += 1
 
     for match in _UPPER_N_VALUE_RE.finditer(text):
         if _is_nesting_level(text, match):
-            token = f"N{match.group(1)}"
+            token = f"N{int(match.group(1))}"
             cleaned[(token, "nesting_level")] += 1
 
     # Remove only occurrences whose source spelling explicitly says "steps".
