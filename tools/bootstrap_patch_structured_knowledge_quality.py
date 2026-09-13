@@ -119,9 +119,10 @@ new = '''def instruction_completion_flags(pages: list[PageArtifact]) -> list[str
 
     A generic occurrence of the word ``flag`` is intentionally insufficient:
     Mitsubishi instruction pages also contain zero, carry, borrow, error,
-    busy/ready, limit and control flags. Completion phrases are assigned to the
-    nearest M8xxx relay on the same source line, which prevents a nearby status
-    relay from inheriting another relay's completion semantics.
+    busy/ready, limit and control flags. Completion phrases are assigned only
+    to the nearest M8xxx relay on the same source line. This prevents a relay
+    on an adjacent PDF-table/prose line from inheriting another line's
+    completion semantics.
     """
     completion_semantics = re.compile(
         r"\\b(?:instruction\\s+)?execution\\s+complete(?:d)?\\b|"
@@ -135,21 +136,15 @@ new = '''def instruction_completion_flags(pages: list[PageArtifact]) -> list[str
     relay_re = re.compile(r"\\bM8\\d{3}\\b", flags=re.I)
     flags: list[str] = []
 
-    def remember_nearest(context: str, allowed_relays: set[str] | None = None) -> None:
+    def remember_nearest(context: str) -> None:
         relay_matches = list(relay_re.finditer(context))
         semantic_matches = list(completion_semantics.finditer(context))
         if not relay_matches or not semantic_matches:
             return
         for semantic in semantic_matches:
             semantic_center = (semantic.start() + semantic.end()) / 2
-            candidates = [
-                relay for relay in relay_matches
-                if allowed_relays is None or relay.group(0).upper() in allowed_relays
-            ]
-            if not candidates:
-                continue
             relay = min(
-                candidates,
+                relay_matches,
                 key=lambda item: abs(((item.start() + item.end()) / 2) - semantic_center),
             )
             value = relay.group(0).upper()
@@ -157,22 +152,10 @@ new = '''def instruction_completion_flags(pages: list[PageArtifact]) -> list[str
                 flags.append(value)
 
     for page in pages:
-        lines = [normalize_line(line) for line in page.clean_text.splitlines()]
-        for line_index, line in enumerate(lines):
-            relays = {match.group(0).upper() for match in relay_re.finditer(line)}
-            if not relays:
-                continue
-            if completion_semantics.search(line):
-                remember_nearest(line, relays)
-                continue
-            parts: list[str] = []
-            if line_index > 0 and not relay_re.search(lines[line_index - 1]):
-                parts.append(lines[line_index - 1])
-            parts.append(line)
-            if line_index + 1 < len(lines) and not relay_re.search(lines[line_index + 1]):
-                parts.append(lines[line_index + 1])
-            context = " ".join(part for part in parts if part)
-            remember_nearest(context, relays)
+        for raw_line in page.clean_text.splitlines():
+            line = normalize_line(raw_line)
+            if relay_re.search(line) and completion_semantics.search(line):
+                remember_nearest(line)
     return flags
 '''
 assert text.count(old) == 1, 'completion flag parser block not found exactly once'
