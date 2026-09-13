@@ -339,16 +339,37 @@ class WorkbenchService:
             # model on a partial replacement contract and enforce the same scope
             # again after materialization. Syntax-broken JSON has no trustworthy
             # rung identity and therefore uses the separate full-format path.
-            try:
-                parsed_candidate = json.loads(candidate_text)
-            except (TypeError, ValueError):
-                parsed_candidate = None
             from application.generation_repair import candidate_base
-            repair_base = candidate_base(parsed_candidate)
-            local_repair = repair_base is not None
-            allowed_rung_ids = set()
-            allowed_addresses = set()
-            if local_repair:
+            inherited_repair_base = (
+                candidate_base(snapshot.get("repair_baseline"))
+                if snapshot.get("repair_mode") else None
+            )
+            inherited_local_repair = inherited_repair_base is not None
+            if inherited_local_repair:
+                # A failed repair attempt is still repairing the same immutable
+                # baseline. Never widen it to a full-program regeneration merely
+                # because the partial response itself had invalid JSON/shape.
+                repair_base = inherited_repair_base
+                local_repair = True
+                allowed_rung_ids = {
+                    int(item) for item in (snapshot.get("allowed_rung_ids") or [])
+                    if isinstance(item, int) and not isinstance(item, bool)
+                }
+                allowed_addresses = {
+                    str(item).strip().upper()
+                    for item in (snapshot.get("allowed_addresses") or [])
+                    if isinstance(item, str) and item.strip()
+                }
+            else:
+                try:
+                    parsed_candidate = json.loads(candidate_text)
+                except (TypeError, ValueError):
+                    parsed_candidate = None
+                repair_base = candidate_base(parsed_candidate)
+                local_repair = repair_base is not None
+                allowed_rung_ids = set()
+                allowed_addresses = set()
+            if local_repair and not inherited_local_repair:
                 rungs = repair_base["rungs"]
                 by_index = {index: rung for index, rung in enumerate(rungs)}
                 saw_rung_path = False
@@ -384,15 +405,21 @@ class WorkbenchService:
                     "mode": "partial", "rungs": selected,
                     "delete_rung_ids": [], "device_comments": {},
                 }))
-                allowed_addresses.update(
-                    str(address).strip().upper()
-                    for address in repair_base.get("device_comments", {})
-                    if isinstance(address, str) and re.fullmatch(r"[A-Za-z]+\d+", address.strip())
-                )
+                if saw_comment_path:
+                    allowed_addresses.update(
+                        str(address).strip().upper()
+                        for address in repair_base.get("device_comments", {})
+                        if isinstance(address, str) and re.fullmatch(r"[A-Za-z]+\d+", address.strip())
+                    )
 
         location_text = "；".join(locations) if locations else "ladder schema"
         if local_repair:
             rung_text = ", ".join(map(str, sorted(allowed_rung_ids))) or "无（仅允许修复注释字段）"
+            retry_note = (
+                "\n上一次局部修复回复仍未通过校验。只修正下面这个 partial patch 的 JSON/结构问题，"
+                "不要扩大修改范围，也不要改成完整程序。\n上一次失败的局部 patch：\n" + candidate_text
+                if inherited_local_repair else ""
+            )
             repair_text = (
                 "这是用户明确确认的一次局部结构修复。系统已把失败候选作为 Current version JSON 提供给你。"
                 "不要重新分析需求，不要重新生成完整程序，不要改变控制逻辑、地址、参数、触点极性或未出错梯级。"
@@ -401,6 +428,7 @@ class WorkbenchService:
                 "debug_note 是可选字段，默认删除；label、debug_note、device_comment 单条不得超过64字符。\n"
                 f"允许修改的 rung_id：{rung_text}\n"
                 f"失败位置：{location_text}"
+                + retry_note
             )
         else:
             repair_text = (

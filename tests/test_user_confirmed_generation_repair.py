@@ -100,6 +100,57 @@ def test_structural_failure_waits_for_user_then_repairs_once(offline, tmp_path):
         assert service.projects.project(project)["version_count"] == 1
 
 
+class RetryRepairProvider:
+    def __init__(self):
+        self.requests = []
+
+    def stream(self, request):
+        self.requests.append(request)
+        if len(self.requests) == 1:
+            payload = _ladder()
+            payload["rungs"][0]["debug_note"] = "过长说明" * 20
+            yield TextDelta(json.dumps(payload, ensure_ascii=False))
+        elif len(self.requests) == 2:
+            yield TextDelta('{"mode":"partial","device_comments":{},"rungs":[')
+        else:
+            yield TextDelta(json.dumps({"mode": "partial", "device_comments": {},
+                "rungs": [_ladder()["rungs"][0]], "delete_rung_ids": []}, ensure_ascii=False))
+
+
+def test_failed_partial_repair_keeps_original_local_scope(offline, tmp_path):
+    provider = RetryRepairProvider()
+    service = WorkbenchService(tmp_path / "workspace", tmp_path / "state",
+        model_factory=lambda: (provider, {"model": "offline"}))
+    with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
+        headers = _login(client)
+        project = client.post("/api/projects", json={"name": "repair-retry"}, headers=headers).json()["id"]
+        service.store.set_confirmed_spec(project, {"summary": "X0 controls Y0", "io_table": [], "parameters": []})
+        first = client.post("/api/jobs", headers=headers, json={"project_id": project, "kind": "generation",
+            "request_id": "bad-generation-retry", "text": "X0 controls Y0", "response_language": "zh-CN"}).json()["id"]
+        service.jobs._futures[first].result(timeout=15)
+        second = client.post(f"/api/jobs/{first}/repair", headers=headers,
+            json={"request_id": "repair-incomplete"}).json()["id"]
+        service.jobs._futures[second].result(timeout=15)
+        assert client.get(f"/api/jobs/{second}").json()["status"] == "failed"
+
+        third_response = client.post(f"/api/jobs/{second}/repair", headers=headers,
+            json={"request_id": "repair-incomplete-again"})
+        assert third_response.status_code == 202, third_response.text
+        third = third_response.json()["id"]
+        service.jobs._futures[third].result(timeout=15)
+        completed = client.get(f"/api/jobs/{third}").json()
+        assert completed["status"] == "completed", completed
+        snapshot = service.jobs._load(third)["snapshot"]
+        assert snapshot["repair_mode"] is True
+        assert snapshot["format_repair"] is False
+        assert snapshot["allowed_rung_ids"] == [1]
+        prompt = str(provider.requests[2].messages[-1].content)
+        assert "上一次局部修复回复仍未通过校验" in prompt
+        assert "上一次失败的局部 patch" in prompt
+        assert 'mode="partial"' in prompt
+        assert service.projects.project(project)["version_count"] == 1
+
+
 def test_failure_ui_offers_explicit_repair_not_fake_automatic_attempts():
     text = open("web/src/features/JobFailure.tsx", encoding="utf-8").read()
     assert "让 AI 修复" in text
