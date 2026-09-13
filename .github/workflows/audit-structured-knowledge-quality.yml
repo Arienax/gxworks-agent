@@ -8,6 +8,7 @@ on:
       - tools/audit_error_record_alignment.py
       - tools/audit_error_record_semantics.py
       - tools/build_fx3u_knowledge_v3.py
+      - tests/test_structured_knowledge_quality.py
       - resources/knowledge/fx3u_knowledge.sqlite
       - resources/knowledge/manifest.json
       - .github/workflows/audit-structured-knowledge-quality.yml
@@ -44,7 +45,7 @@ jobs:
           python tools/audit_error_record_semantics.py \
             --database resources/knowledge/fx3u_knowledge.sqlite \
             --output error-record-semantic-audit.json > error-record-semantic-audit.log
-      - name: Print compact audit summary
+      - name: Print summary and enforce high-confidence quality gates
         run: |
           python - <<'PY'
           import json
@@ -76,6 +77,17 @@ jobs:
           for item in alignment['issues'][:80]: print(json.dumps(item, ensure_ascii=False, sort_keys=True))
           print('--- FIRST 80 ERROR SEMANTIC ISSUES ---')
           for item in semantic['issues'][:80]: print(json.dumps(item, ensure_ascii=False, sort_keys=True))
+
+          assert report['integrity_check'] == 'ok'
+          assert report['foreign_key_violations'] == 0
+          assert not [item for item in report['issues'] if item['severity'] == 'error']
+          assert not [item for item in alignment['issues'] if item['severity'] == 'error']
+          assert not [item for item in semantic['issues'] if item['severity'] == 'error']
+          forbidden = {
+              'device_records:cross_family_device_range',
+              'completion_flags:weak_completion_semantics',
+          }
+          assert not forbidden.intersection(report['issue_code_counts']), report['issue_code_counts']
           PY
       - uses: actions/upload-artifact@v4
         with:
