@@ -5,6 +5,10 @@ on:
     branches: [fix/json-field-patch-repair-20260914]
     paths:
       - .github/workflows/field-patch-full-regression.yml
+      - src/**
+      - resources/instructions/mitsubishi/**
+      - tests/test_field_patch_repair_protocol.py
+      - tests/test_zrst_registry_alignment.py
   workflow_dispatch:
 
 permissions:
@@ -49,6 +53,7 @@ jobs:
         run: |
           python -m pytest -q `
             tests/test_field_patch_repair_protocol.py `
+            tests/test_zrst_registry_alignment.py `
             tests/test_prompt_context_budget.py `
             tests/test_prompt_slim_generation.py `
             tests/test_generation_opcode_contract.py `
