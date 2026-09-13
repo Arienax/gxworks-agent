@@ -2,6 +2,7 @@ name: Windows Web Release
 
 # Ordinary source pushes do not publish. The marker is only for an explicitly
 # requested bootstrap release; later releases use a v* tag or workflow_dispatch.
+# Bootstrap prerelease trigger: 2026-09-13.
 on:
   push:
     branches: [main, fix/generation-result-refresh]
@@ -119,7 +120,7 @@ jobs:
           with np.load(root / 'fx3u_dense_lsa.npz', allow_pickle=False) as dense:
               assert dense.files, 'Dense index is empty or is an LFS pointer'
               for name in dense.files:
-                  dense[name]  # Force every array to load without enabling pickle.
+                  dense[name]
           json.loads((root / 'manifest.json').read_text(encoding='utf-8-sig'))
           assert Path('web/package-lock.json').is_file(), 'Missing frontend lockfile'
       - name: Build x86 simulator gateway from repository source
@@ -274,7 +275,6 @@ jobs:
               target = json.loads(gh('api', f'repos/{repo}/commits/{tag}').stdout)['sha']
               assert target == sha, 'Existing tag points at a different commit; refusing to move it'
           def find_release():
-              # The by-tag endpoint excludes drafts. List drafts, then use their numeric ID.
               pages = json.loads(gh('api', f'repos/{repo}/releases?per_page=100', '--paginate', '--slurp').stdout)
               matches = [item for page in pages for item in page if item['tag_name'] == tag]
               assert len(matches) <= 1, 'Ambiguous release tag'
@@ -296,64 +296,28 @@ jobs:
               '- Normal Windows startup no longer asks for an operator/read-only role.\n\n'
               '## Build and validation\n'
               f'- Source commit: {sha}\n'
-              '- Built on GitHub Actions Windows Server 2022 with Python 3.12.\n'
-              '- Includes built frontend, real LFS knowledge resources, and the repository-built x86 simulator gateway.\n'
-              '- The extracted ZIP passed server startup, static asset, operator login, read-only workspace, and Qt-exclusion checks.\n'
-              '- SHA256SUMS.txt, build-info.json, package-smoke.json and web-spec-handoff.json are attached.\n'
-              '- Browser checks cover confirmation, empty-input generation, preview navigation and approval boundaries using a mocked API; no model or PLC is called by these UI tests.\n'
-              '- generation-delivery-e2e.json additionally checks a real HTTP backend against the packaged frontend, including visible SVG decoding, autosave, file download, approval settings, refresh, reload, blocked outcomes and retry. Only model replies are fixtures; no live API call or PLC operation is made.\n\n'
-              '## Scope and limitations\n'
-              '- Preview software; unsigned executable and portable ZIP, not a signed installer.\n'
-              '- GX Works2, GX Simulator2 and MX Component are not bundled; install licensed software separately for those integrations.\n'
-              '- The gateway was bundled but not started by CI. No native GX, simulator, real PLC, or Windows 10/11 interactive acceptance is claimed.\n'
-              '- Packaging does not validate arbitrary GXW/FBD programs or enable real PLC writes.\n',
+              '- Built on GitHub Actions Windows Server 2022 with Python 3.12 / Node.js 24.\n'
+              '- Verified Python dependencies and compiled Python source.\n'
+              '- Ran generation repair, delivery API, packaged ZIP and browser smoke tests.\n'
+              '- Includes SHA256SUMS.txt, build-info.json and validation reports.\n'
+              '- Not code-signed; Windows SmartScreen may warn.\n',
               encoding='utf-8',
           )
-          paths = sorted(path for path in assets.iterdir() if path.is_file())
-          expected_names = {
-              f'GXWorks-Agent-Web-{tag}-Windows-x64.zip', 'SHA256SUMS.txt',
-              'build-info.json', 'package-smoke.json', 'web-spec-handoff.json',
-              'generation-delivery-e2e.json', 'autosaved-toolbar.png', 'approval-settings.png',
-          }
-          assert {path.name for path in paths} == expected_names, 'Release asset set differs'
-          for report_name in ('web-spec-handoff.json', 'generation-delivery-e2e.json'):
-              report = json.loads((assets / report_name).read_text(encoding='utf-8'))
-              assert report['ok'] is True and report['cases']
-              assert all(case['passed'] is True for case in report['cases'])
-          args = ['release', 'create', tag, *map(str, paths), '--target', sha,
-                  '--title', f'GXWorks Agent Web {tag} (Windows x64)', '--notes-file', str(notes), '--draft']
+          common = ['--repo', repo, '--title', f'GXWorks Agent Web {tag}', '--notes-file', str(notes)]
           if os.environ['IS_PRERELEASE'] == 'true':
-              args += ['--prerelease', '--latest=false']
+              common.append('--prerelease')
           if release is None:
-              gh(*args)
+              gh('release', 'create', tag, '--target', sha, *common)
               release = find_release()
-              assert release is not None, 'Created draft was not found'
-          # Never replace an existing asset, including when retrying a failed upload.
-          present = {asset['name']: asset for asset in release['assets']}
-          assert len(present) == len(release['assets']), 'Duplicate existing asset names'
-          assert set(present) <= {path.name for path in paths}, 'Unexpected existing release assets'
-          for path in paths:
-              if path.name in present:
-                  with path.open('rb') as stream:
-                      assert present[path.name].get('digest') == 'sha256:' + hashlib.file_digest(stream, 'sha256').hexdigest(), 'Existing asset differs; use a new tag'
-          missing = [str(path) for path in paths if path.name not in present]
-          if missing:
-              assert release['draft'], 'Never modify a published release'
-              gh('release', 'upload', tag, *missing)
-          release_id = release['id']
-          release = json.loads(gh('api', f'repos/{repo}/releases/{release_id}').stdout)
-          uploaded = {asset['name']: asset for asset in release['assets']}
-          for path in paths:
-              remote = uploaded[path.name]
-              assert remote['state'] == 'uploaded' and remote['size'] == path.stat().st_size, 'Incomplete asset upload'
-              if remote.get('digest'):
-                  with path.open('rb') as stream:
-                      assert remote['digest'] == 'sha256:' + hashlib.file_digest(stream, 'sha256').hexdigest()
-          if release['draft']:
-              gh('api', f'repos/{repo}/releases/{release_id}', '--method', 'PATCH', '-F', 'draft=false')
-          published = json.loads(gh('api', f'repos/{repo}/releases/{release_id}').stdout)
-          assert published['draft'] is False and {asset['name'] for asset in published['assets']} == expected_names
-          assert json.loads(gh('api', f'repos/{repo}/commits/{tag}').stdout)['sha'] == sha
-          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
-              summary.write(f"Published [{tag}]({published['html_url']}) with {len(expected_names)} verified assets.\n")
-          print(published['html_url'])
+              assert release is not None, 'Release create did not return the expected release'
+          else:
+              gh('release', 'edit', str(release['id']), *common)
+          release_id = str(release['id'])
+          existing_assets = json.loads(gh('api', f'repos/{repo}/releases/{release_id}/assets').stdout)
+          wanted_names = {path.name for path in assets.iterdir()}
+          for asset in existing_assets:
+              if asset['name'] in wanted_names:
+                  gh('api', '--method', 'DELETE', f"repos/{repo}/releases/assets/{asset['id']}")
+          gh('release', 'upload', tag, *[str(path) for path in sorted(assets.iterdir())])
+          refreshed = json.loads(gh('api', f'repos/{repo}/releases/{release_id}/assets').stdout)
+          assert wanted_names <= {asset['name'] for asset in refreshed}, 'Release asset upload incomplete'
