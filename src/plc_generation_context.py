@@ -63,7 +63,7 @@ LADDER_SYSTEM_PROMPT = """# Role
 - “每次/按下时只执行一次”使用 P/F 边沿语义，不用每扫描重复触发的普通电平触点。
 - 运动完成处理必须与对应运动指令保持同 rung 归属，并使用当前型号资料中的完成状态。
 - 不得用同扫描互补 `NC Mx -> SET Mx` / `NO Mx -> RST Mx` 模拟翻转。
-- OUT 的协议表示：普通 Y/M 用 COIL，T/C 分别用 TIMER/COUNTER；禁止生成 `APP_INSTR OUT`。
+- OUT 的协议表示：普通 Y/M 用 COIL，T/C 分别用 TIMER/COUNTER；禁止生成 `{\"type\":\"APP_INSTR\",\"opcode\":\"OUT\"`。
 - device_comments、label、debug_note 单条不得超过 64 字符。
 - 只返回 schema 允许的 JSON，不输出 Markdown、推理过程或解释正文。"""
 
@@ -165,6 +165,9 @@ def _select_system_prompt(target_mode, is_edit_mode=False, user_requirement="", 
                            separators=(",", ":")))
     else:
         base = _st_system_prompt_for_model(selected_vendor)
+    audit_section("base_prompt", base,
+                  reason="legacy" if resolve_context_policy().legacy else "controlled_baseline",
+                  source="base_prompt")
     dynamic = _specialist_context(classification, target_mode=target_mode, plc_model=selected_vendor)
     result = "\n\n".join(part for part in (base, dynamic) if part)
     audit_section("system_prompt", result, reason="compact_generation", source="api")
@@ -387,6 +390,8 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
                                      confirmed_context=confirmed_context)
     current_context, retrieval_evidence = _current_version_context(user_requirement, current_version_json,
                                                                     target_mode=target_mode)
+    if retrieval_evidence is None and current_version_json is not None:
+        retrieval_evidence = current_version_json
     knowledge_ctx = knowledge_builder(user_requirement, plc_model=plc_model, task_type=normalized_task,
                                       confirmed_context=confirmed_context, evidence=retrieval_evidence)
     system_prompt = confirmed_builder(selected_prompt + profile_builder(
