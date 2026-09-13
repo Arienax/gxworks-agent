@@ -1,6 +1,6 @@
 {
   "build_seconds": 612.671,
-  "builder_version": "3.0.1",
+  "builder_version": "3.0.2",
   "built_at_utc": "2026-08-09T06:25:40.448275+00:00",
   "chunk_strategy": {
     "cross_page_within_section": true,
@@ -10,7 +10,7 @@
   },
   "database": "fx3u_knowledge.sqlite",
   "database_bytes": 140795904,
-  "database_sha256": "49e72265d23a0f4e17bd9efa906b23a389f3052c4183af26d0221dd0c7957939",
+  "database_sha256": "3e00395fb0ed8dfb7cfcdd287a9f4666a113fbd0be5fa0a3fdd3730a433be936",
   "external_sources": [
     {
       "chunks": 1448,
@@ -385,5 +385,14 @@
     "method": "generic operand/applicable-device matrix extraction",
     "source": "authoritative page_artifacts and tables",
     "changed_empty_instruction_rows": 157
+  },
+  "structured_instruction_alignment_fix": {
+    "method": "definition-table/signature alignment plus applicable-device matrix extraction",
+    "source": "authoritative page_artifacts and tables",
+    "baseline_empty_rows": 170,
+    "originally_backfilled_rows": 157,
+    "recomputed_nonempty_rows": 149,
+    "recomputed_empty_rows": 21,
+    "changed_rows": 147
   }
 }

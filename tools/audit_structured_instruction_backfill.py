@@ -126,6 +126,16 @@ def audit_record(connection: sqlite3.Connection, row: dict[str, Any]) -> list[di
             issues.append(_issue("warning", "operand_has_no_semantics", row, index=index, position=position, description=description))
         if description and description_blank:
             issues.append(_issue("error", "blank_marker_used_as_description", row, index=index, position=position, description=description))
+        if description and re.fullmatch(
+            r"(?:(?:\[GLYPH-[0-9A-F]+\]|\(cid:\d+\))\d*\s*)+", description, flags=re.I
+        ):
+            issues.append(_issue("error", "glyph_only_description", row, index=index, position=position, description=description))
+        if description and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", description) and len(description) <= 3:
+            issues.append(_issue("error", "description_looks_like_table_token", row, index=index, position=position, description=description))
+        if description and len(description) < 24:
+            words = re.findall(r"[A-Za-z]+", description)
+            if words and not any(len(word) >= 4 for word in words) and not re.search(r"\d{2,}", description):
+                issues.append(_issue("error", "low_quality_description", row, index=index, position=position, description=description))
         if isinstance(item.get("applicable_devices"), list) and not devices:
             issues.append(_issue("warning", "empty_applicable_device_list", row, index=index, position=position))
 
@@ -146,7 +156,10 @@ def audit_record(connection: sqlite3.Connection, row: dict[str, Any]) -> list[di
                 )
 
         semantic = f"{description} {data_type}".casefold()
-        word_only = "word device" in semantic and "bit or word" not in semantic and "bit/word" not in semantic
+        word_only = bool(re.search(
+            r"\b(?:head\s+word\s+device|word\s+device\s+(?:number|of)|word\s+device$)",
+            semantic,
+        )) and "bit or word" not in semantic and "bit/word" not in semantic
         if word_only:
             raw_bits = sorted(devices.intersection(RAW_BIT_FAMILIES))
             if raw_bits:

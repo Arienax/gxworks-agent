@@ -38,7 +38,7 @@ except ImportError as error:  # pragma: no cover
     raise SystemExit("pdfplumber is required to preserve tables and word geometry") from error
 
 
-BUILDER_VERSION = "3.0.1"
+BUILDER_VERSION = "3.0.2"
 SCHEMA_VERSION = 3
 TASK_TYPES = "*"
 DEFAULT_TARGET_CHARS = 4800
@@ -1070,13 +1070,24 @@ def extract_entities(
 
 
 def _operand_name(value: str) -> str:
-    """Normalize operand placeholders printed in Mitsubishi instruction tables."""
+    """Normalize Mitsubishi instruction operand placeholders.
+
+    Data operands in the source manuals use S/D/N/M/P families (optionally
+    numbered). Device headers such as X/Y/K are not operand placeholders.
+    """
     token = normalize_line(str(value or "")).strip()
     if not token or token.upper() in {"EN", "ENO"}:
         return ""
-    if not re.fullmatch(r"[A-Za-z](?:\d{0,3})?", token):
+    if not re.fullmatch(r"[SDNMPsdnmp](?:\d{0,3})?", token):
         return ""
     return token.upper()
+
+
+def _clean_table_cell(value: str) -> str:
+    token = normalize_line(str(value or "")).strip()
+    if token.casefold() in {"", "<blank>", "blank", "-", "—"}:
+        return ""
+    return token
 
 
 def _device_column_name(value: str) -> str:
@@ -1102,13 +1113,137 @@ def _device_column_name(value: str) -> str:
     return ""
 
 
-def _applicable_devices_by_operand(page: PageArtifact) -> dict[str, set[str]]:
-    """Decode official Applicable-devices matrices without opcode-specific rules."""
+def _signature_operand_order(pages: list[PageArtifact], opcode: str) -> list[str]:
+    if not opcode:
+        return []
+    pattern = re.compile(rf"(?<![A-Z0-9_]){re.escape(opcode)}\s*\(([^)]{{1,180}})\)", re.I)
+    for page in pages[:4]:
+        for text in (page.compact_layout, page.layout_text, page.clean_text):
+            for match in pattern.finditer(text or ""):
+                raw_args = [normalize_line(value) for value in match.group(1).split(",")]
+                names: list[str] = []
+                valid = True
+                for raw in raw_args:
+                    if raw.upper() in {"EN", "ENO"}:
+                        continue
+                    name = _operand_name(raw)
+                    if not name:
+                        valid = False
+                        break
+                    names.append(name)
+                if valid and names:
+                    return list(dict.fromkeys(names))
+    return []
+
+
+def _compact_operand_rows(page: PageArtifact) -> list[tuple[str, str, str]]:
+    rows: list[tuple[str, str, str]] = []
+    active = False
+    type_pattern = re.compile(
+        r"\b(?:ANY(?:16|32|_SIMPLE)|BIN\s*\d+(?:/\d+)?-?bit|bit|binary|word|double\s*word|integer|real|bool|string)\b",
+        flags=re.I,
+    )
+    for raw_line in page.compact_layout.splitlines():
+        line = normalize_line(raw_line.replace("|", " | "))
+        if re.search(r"\bSet data\b|\bOperand\s+Type\b|^Variable\s*\|", line, flags=re.I):
+            active = True
+            continue
+        if active and re.search(
+            r"Applicable devices|Explanation of function|Function and operation explanation",
+            line,
+            flags=re.I,
+        ):
+            break
+        if not active:
+            continue
+        cells = [_clean_table_cell(value) for value in raw_line.split("|")]
+        if not cells:
+            continue
+        name = next((_operand_name(value) for value in cells[:2] if _operand_name(value)), "")
+        if not name:
+            continue
+        meaningful = [value for value in cells[1:] if value]
+        description = meaningful[0] if meaningful else ""
+        data_type = next((value for value in meaningful[1:] if type_pattern.search(value)), "")
+        if description:
+            rows.append((name, description, data_type))
+    return rows
+
+
+def _definition_table_rows(
+    page: PageArtifact,
+    expected_order: list[str],
+) -> list[tuple[str, str, str]]:
+    result: list[tuple[str, str, str]] = []
+    type_pattern = re.compile(
+        r"\b(?:ANY(?:16|32|_SIMPLE)|BIN\s*\d+(?:/\d+)?-?bit|bit|binary|word|double\s*word|integer|real|bool|string)\b",
+        flags=re.I,
+    )
+    for table in page.tables:
+        rows = table.get("rows") or []
+        table_text = normalize_line(str(table.get("text", "")))
+        if not rows or not re.search(r"\bDescription\b", table_text, flags=re.I):
+            continue
+        if re.search(r"Bit\s+Devices", table_text, flags=re.I) and re.search(r"Word\s+Devices", table_text, flags=re.I):
+            continue
+
+        header_index = -1
+        desc_col = -1
+        for row_index, row in enumerate(rows[:6]):
+            for column, raw in enumerate(row):
+                if re.search(r"\bDescription\b", _clean_table_cell(raw), flags=re.I):
+                    header_index, desc_col = row_index, column
+                    break
+            if header_index >= 0:
+                break
+        if header_index < 0 or desc_col < 0:
+            continue
+
+        expected_cursor = 0
+        consumed: set[str] = set()
+        for row in rows[header_index + 1:]:
+            cells = [_clean_table_cell(value) for value in row]
+            if desc_col >= len(cells):
+                continue
+            name_area = cells[:desc_col]
+            if any(str(value).upper() in {"EN", "ENO"} for value in name_area if value):
+                continue
+            explicit = next((_operand_name(value) for value in name_area if _operand_name(value)), "")
+            description = cells[desc_col]
+            if not description:
+                continue
+            data_type = next((value for value in cells[desc_col + 1:] if value and type_pattern.search(value)), "")
+            name = explicit
+            if not name:
+                while expected_cursor < len(expected_order) and expected_order[expected_cursor] in consumed:
+                    expected_cursor += 1
+                if expected_cursor < len(expected_order):
+                    name = expected_order[expected_cursor]
+                    expected_cursor += 1
+            if not name:
+                continue
+            consumed.add(name)
+            result.append((name, description, data_type))
+    return result
+
+
+def _applicable_devices_by_operand(
+    page: PageArtifact,
+    expected_order: list[str],
+) -> dict[str, set[str]]:
+    """Decode official Applicable-devices matrices without opcode rules."""
     found: dict[str, set[str]] = defaultdict(set)
     for table in page.tables:
         rows = table.get("rows") or []
+        table_text = normalize_line(str(table.get("text", "")))
         if not rows:
             continue
+        if not (
+            re.search(r"Bit\s+Devices", table_text, flags=re.I)
+            and re.search(r"Word\s+Devices", table_text, flags=re.I)
+        ):
+            continue
+
         best_index = -1
         best_headers: dict[int, str] = {}
         for row_index, row in enumerate(rows[:8]):
@@ -1121,35 +1256,72 @@ def _applicable_devices_by_operand(page: PageArtifact) -> dict[str, set[str]]:
                 best_index, best_headers = row_index, headers
         if len(best_headers) < 4:
             continue
+
+        first_device_col = min(best_headers)
+        expected_cursor = 0
+        consumed: set[str] = set()
         for row in rows[best_index + 1:]:
-            operand = next(
-                (_operand_name(cell) for cell in row[:4] if _operand_name(cell)),
+            cells = [_clean_table_cell(value) for value in row]
+            marked = [
+                column
+                for column in best_headers
+                if column < len(cells) and cells[column]
+            ]
+            if not marked:
+                continue
+            explicit = next(
+                (_operand_name(value) for value in cells[:first_device_col] if _operand_name(value)),
                 "",
             )
-            if not operand:
+            name = explicit
+            if not name:
+                while expected_cursor < len(expected_order) and expected_order[expected_cursor] in consumed:
+                    expected_cursor += 1
+                if expected_cursor < len(expected_order):
+                    name = expected_order[expected_cursor]
+                    expected_cursor += 1
+            if not name:
                 continue
-            for column, device in best_headers.items():
-                if column >= len(row):
-                    continue
-                marker = normalize_line(str(row[column] or ""))
-                if marker and marker.casefold() not in {"<blank>", "blank", "-", "—"}:
-                    found[operand].add(device)
+            consumed.add(name)
+            for column in marked:
+                found[name].add(best_headers[column])
     return found
 
 
-def parse_operand_schema(pages: list[PageArtifact]) -> list[dict[str, Any]]:
-    """Extract operand meaning, data type and applicable device families.
+def parse_operand_schema(
+    pages: list[PageArtifact],
+    opcode: str = "",
+) -> list[dict[str, Any]]:
+    """Extract operand semantics and device applicability from manual tables.
 
-    The extractor is table-driven.  Instruction-specific facts remain in the
-    authoritative Mitsubishi manual/SQLite instead of being copied into prompts.
+    The parser distinguishes operand-definition tables from Applicable-devices
+    matrices and uses instruction signatures only to align rows whose operand
+    glyph was lost by PDF table extraction.
     """
     operands: list[dict[str, Any]] = []
     by_name: dict[str, dict[str, Any]] = {}
-    applicability: dict[str, set[str]] = defaultdict(set)
 
     def remember(name: str, description: str = "", data_type: str = "") -> None:
         if not name:
             return
+        description = normalize_line(description)
+        data_type = normalize_line(data_type)
+        type_only = re.compile(
+            r"^(?:ANY(?:16|32|_SIMPLE)|BIN\s*\d+(?:/\d+)?-?bit|\d+-bit\s+binary|\d+-\s*or\s*\d+-bit\s+binary|bit|binary|word|double\s*word|integer|real|bool|string)(?:\s+binary)?$",
+            flags=re.I,
+        )
+        if description and not data_type and type_only.fullmatch(description):
+            data_type, description = description, ""
+        if description and re.fullmatch(
+            r"(?:(?:\[GLYPH-[0-9A-F]+\]|\(cid:\d+\))\d*\s*)+", description, flags=re.I
+        ):
+            description = ""
+        if description and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", description) and len(description) <= 3:
+            description = ""
+        if description and len(description) < 24:
+            words = re.findall(r"[A-Za-z]+", description)
+            if words and not any(len(word) >= 4 for word in words) and not re.search(r"\d{2,}", description):
+                description = ""
         current = by_name.get(name)
         if current is None:
             current = {"position": name, "description": description, "data_type": data_type}
@@ -1161,58 +1333,36 @@ def parse_operand_schema(pages: list[PageArtifact]) -> list[dict[str, Any]]:
             if data_type and not current.get("data_type"):
                 current["data_type"] = data_type
 
-    type_pattern = re.compile(
-        r"\b(?:ANY(?:16|32|_SIMPLE)|bit|binary|word|double\s*word|integer|real|bool|string)\b",
-        flags=re.I,
-    )
+    compact_rows: list[tuple[str, str, str]] = []
     for page in pages[:4]:
-        for name, devices in _applicable_devices_by_operand(page).items():
-            applicability[name].update(devices)
+        compact_rows.extend(_compact_operand_rows(page))
+    signature_order = _signature_operand_order(pages, opcode)
+    if signature_order:
+        compact_rows = [row for row in compact_rows if row[0] in signature_order]
+    compact_order = list(dict.fromkeys(name for name, _description, _data_type in compact_rows))
+    expected_order = signature_order or compact_order
 
-        in_operands = False
-        for raw_line in page.compact_layout.splitlines():
-            line = normalize_line(raw_line.replace("|", " | "))
-            if re.search(r"\bSet data\b|\bOperand\s+Type\b|^Variable\s*\|", line, flags=re.I):
-                in_operands = True
-                continue
-            if in_operands and re.search(
-                r"Applicable devices|Explanation of function|Function and operation explanation",
-                line,
-                flags=re.I,
-            ):
-                break
-            if not in_operands:
-                continue
-            match = re.match(r"^([A-Za-z](?:\d{0,3})?)\s*\|\s*(.+)$", raw_line.strip())
-            if not match:
-                continue
-            name = _operand_name(match.group(1))
-            if not name:
-                continue
-            cells = [normalize_line(value) for value in match.group(2).split("|") if normalize_line(value)]
-            description = cells[0] if cells else ""
-            data_type = next((value for value in cells[1:] if type_pattern.search(value)), "")
+    for name, description, data_type in compact_rows:
+        remember(name, description, data_type)
+    for page in pages[:4]:
+        for name, description, data_type in _definition_table_rows(page, expected_order):
             remember(name, description, data_type)
 
-        for table in page.tables:
-            table_text = str(table.get("text", ""))
-            if not re.search(r"Operand\s+Type|Variable", table_text, flags=re.I):
-                continue
-            for row in table.get("rows", [])[1:]:
-                cells = [normalize_line(value) for value in row]
-                name = next((_operand_name(value) for value in cells[:5] if _operand_name(value)), "")
-                if not name:
-                    continue
-                meaningful = [value for value in cells if value and _operand_name(value) != name]
-                description = meaningful[0] if meaningful else ""
-                data_type = next((value for value in meaningful[1:] if type_pattern.search(value)), "")
-                remember(name, description, data_type)
-
+    applicability: dict[str, set[str]] = defaultdict(set)
+    for page in pages[:4]:
+        for name, devices in _applicable_devices_by_operand(page, expected_order).items():
+            applicability[name].update(devices)
     for name, devices in applicability.items():
         remember(name)
         if devices:
             by_name[name]["applicable_devices"] = sorted(devices)
-    return operands
+
+    # Do not publish a placeholder that was seen only as an unlabeled/empty row.
+    return [
+        item for item in operands
+        if item.get("description") or item.get("data_type") or item.get("applicable_devices")
+    ]
+
 
 def instruction_summary(pages: list[PageArtifact]) -> str:
     text = "\n".join(page.clean_text for page in pages[:2])
@@ -1888,7 +2038,7 @@ def insert_instruction_records(
         manual = instruction_pages[0].manual
         instruction_re = instruction_re_by_manual[manual_id]
         variants = instruction_variants(instruction_pages, opcode, instruction_re)
-        operands = parse_operand_schema(instruction_pages)
+        operands = parse_operand_schema(instruction_pages, opcode)
         completion_flags = instruction_completion_flags(instruction_pages)
         restrictions = instruction_restrictions(instruction_pages)
         title = next(
