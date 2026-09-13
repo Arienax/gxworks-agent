@@ -80,7 +80,7 @@ def test_bundled_design_knowledge_is_injected_through_production_analysis_path()
         )
     assert "Curated PLC Control Architecture Design Knowledge" in context
     assert "CONTROL ARCHITECTURE:" in context
-    assert "Retrieved-knowledge precedence" in context
+    assert "Retrieved-knowledge precedence" not in context
 
 
 def test_design_chunks_are_task_scoped_at_the_retriever_boundary():
