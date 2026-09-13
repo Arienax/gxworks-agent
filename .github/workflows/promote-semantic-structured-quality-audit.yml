@@ -24,9 +24,13 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Promote evidence-aware logic into canonical audit
+      - name: Promote canonical Python audit only
         run: |
           python tools/promote_semantic_structured_quality_once.py
+          git checkout -- \
+            .github/workflows/audit-structured-knowledge-quality.yml \
+            .github/workflows/rebuild-device-entity-cleanup.yml \
+            tools/audit_structured_knowledge_quality_v2.py
           python -m py_compile \
             tools/audit_structured_knowledge_quality.py \
             tools/audit_device_placeholder_evidence.py
@@ -88,16 +92,13 @@ jobs:
             exit 1
           }
 
-      - name: Commit and push canonical semantic audit
+      - name: Commit and push canonical semantic audit code
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A \
+          git add \
             tools/audit_structured_knowledge_quality.py \
-            tools/audit_structured_knowledge_quality_v2.py \
-            tests/test_structured_knowledge_quality.py \
-            .github/workflows/audit-structured-knowledge-quality.yml \
-            .github/workflows/rebuild-device-entity-cleanup.yml
+            tests/test_structured_knowledge_quality.py
           git commit -m "refactor(rag): make structured quality audit evidence-aware"
           git push origin HEAD:refs/heads/fix/rejected-json-repair-20260913
 
