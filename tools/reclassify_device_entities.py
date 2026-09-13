@@ -222,8 +222,6 @@ def _rebuild_device_records(connection: sqlite3.Connection) -> int:
 
         current_manuals = sorted({item[1] for item in provenance if item[1]})
         old_manuals = _load_json_list(old.get("source_manuals_json", "[]"))
-        # Preserve the previous ordering/content when it still describes exactly
-        # the surviving provenance; otherwise recompute deterministically.
         source_manuals = old_manuals if set(old_manuals) == set(current_manuals) else current_manuals
 
         current_models = _merge_csv([item[2] for item in provenance])
@@ -331,7 +329,11 @@ def migrate(connection: sqlite3.Connection) -> dict[str, Any]:
             {"chunk_id": chunk_id, "opcode": opcode, "changes": diff}
         )
 
-    device_records = _rebuild_device_records(connection)
+    if affected_chunks:
+        device_records = _rebuild_device_records(connection)
+    else:
+        device_records = int(connection.execute("SELECT COUNT(*) FROM device_records").fetchone()[0])
+
     integrity = str(connection.execute("PRAGMA integrity_check").fetchone()[0])
     fk = connection.execute("PRAGMA foreign_key_check").fetchall()
     if integrity.lower() != "ok" or fk:
