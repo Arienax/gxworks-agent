@@ -83,6 +83,23 @@ def _is_lower_n_operand(text: str, match: re.Match[str]) -> bool:
     return bool(_N_OPERAND_CONTEXT_RE.search(_window(text, match.start(), match.end(), 220)))
 
 
+def _ensure_detected_counts(
+    cleaned: EntityCounter,
+    detected: Counter[str],
+    entity_type: str,
+) -> None:
+    """Ensure semantic counts without incrementing an already-cleaned database.
+
+    The generic builder may already have emitted some operand placeholders. A
+    migration can also be run repeatedly. Using max(existing, detected) makes
+    this post-processing idempotent while still restoring semantics that were
+    previously misclassified solely as devices.
+    """
+    for token, count in detected.items():
+        key = (token, entity_type)
+        cleaned[key] = max(int(cleaned.get(key, 0)), int(count))
+
+
 def sanitize_device_like_entities(
     text: str,
     chunk_type: str,
@@ -105,17 +122,19 @@ def sanitize_device_like_entities(
         elif kind == "device_range" and _N_DEVICE_RANGE_RE.fullmatch(entity):
             cleaned.pop(key, None)
 
+    detected_operands: Counter[str] = Counter()
     if chunk_type == "instruction":
         for match in _LOWER_N_VALUE_RE.finditer(text):
             if not _is_lower_n_operand(text, match):
                 continue
-            token = f"N{int(match.group(1))}"
-            cleaned[(token, "operand_placeholder")] += 1
+            detected_operands[f"N{int(match.group(1))}"] += 1
+    _ensure_detected_counts(cleaned, detected_operands, "operand_placeholder")
 
+    detected_nesting: Counter[str] = Counter()
     for match in _UPPER_N_VALUE_RE.finditer(text):
         if _is_nesting_level(text, match):
-            token = f"N{int(match.group(1))}"
-            cleaned[(token, "nesting_level")] += 1
+            detected_nesting[f"N{int(match.group(1))}"] += 1
+    _ensure_detected_counts(cleaned, detected_nesting, "nesting_level")
 
     # Remove only occurrences whose source spelling explicitly says "steps".
     # This addresses D17 from the ABSD/DABSD instruction-size table without
