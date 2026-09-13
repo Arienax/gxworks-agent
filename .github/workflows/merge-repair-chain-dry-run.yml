@@ -20,6 +20,8 @@ jobs:
       - name: Inspect merge
         shell: bash
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin fix/rejected-json-repair-20260913
           set +e
           git merge --no-commit --no-ff 939477426ca6b1b5ba8ae32597f1babc49ed5af9
