@@ -1,0 +1,110 @@
+name: Rebuild device entity cleanup
+
+on:
+  push:
+    branches: [fix/rejected-json-repair-20260913]
+    paths:
+      - tools/device_entity_cleanup.py
+      - tools/build_fx3u_knowledge_clean.py
+      - tests/test_device_entity_cleanup.py
+      - .github/workflows/rebuild-device-entity-cleanup.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rebuild-device-slice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/rejected-json-repair-20260913
+          lfs: true
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install rebuild dependencies
+        run: python -m pip install --disable-pip-version-check pytest pypdf pdfplumber
+
+      - name: Unit-test semantic cleanup
+        run: python -m pytest -q tests/test_device_entity_cleanup.py
+
+      - name: Rebuild affected manuals from source PDFs
+        run: |
+          python tools/build_fx3u_knowledge_clean.py \
+            --manual-id fx3_programming_r \
+            --manual-id fxcpu_basic_applied_m \
+            --output /tmp/device-clean.sqlite \
+            --manifest /tmp/device-clean-manifest.json \
+            --progress-every 200
+
+      - name: Verify false positives are gone and real examples survive
+        run: |
+          python - <<'PY'
+          import sqlite3
+
+          db = '/tmp/device-clean.sqlite'
+          with sqlite3.connect(db) as con:
+              integrity = con.execute('PRAGMA integrity_check').fetchone()[0]
+              assert integrity == 'ok', integrity
+              fk = con.execute('PRAGMA foreign_key_check').fetchall()
+              assert fk == [], fk[:10]
+
+              n_devices = con.execute(
+                  "SELECT device,occurrences FROM device_records WHERE prefix='N' ORDER BY device"
+              ).fetchall()
+              assert n_devices == [], n_devices[:50]
+
+              d17 = con.execute(
+                  "SELECT device,occurrences FROM device_records WHERE device_norm='d17'"
+              ).fetchall()
+              assert d17 == [], d17
+
+              known_real = {'D307', 'M599', 'P10', 'P11', 'P12'}
+              present = {
+                  row[0].upper()
+                  for row in con.execute(
+                      "SELECT device FROM device_records WHERE UPPER(device) IN ('D307','M599','P10','P11','P12')"
+                  )
+              }
+              assert known_real <= present, (known_real, present)
+
+              nesting = con.execute(
+                  "SELECT entity,SUM(occurrences) FROM entity_index "
+                  "WHERE entity_type='nesting_level' GROUP BY entity ORDER BY entity"
+              ).fetchall()
+              assert nesting, 'expected MC/MCR nesting_level entities'
+
+              operand_n = con.execute(
+                  "SELECT entity,SUM(occurrences) FROM entity_index "
+                  "WHERE entity_type='operand_placeholder' AND entity IN ('N4','N9','N512') "
+                  "GROUP BY entity ORDER BY entity"
+              ).fetchall()
+
+              print('INTEGRITY', integrity)
+              print('N_DEVICE_RECORDS', n_devices)
+              print('D17_DEVICE_RECORDS', d17)
+              print('KNOWN_REAL_PRESENT', sorted(present))
+              print('NESTING_LEVEL_SAMPLE', nesting[:20])
+              print('OPERAND_N_SAMPLE', operand_n)
+          PY
+
+      - name: Audit rebuilt device evidence
+        run: |
+          python tools/audit_device_placeholder_evidence.py \
+            --database /tmp/device-clean.sqlite \
+            --output /tmp/device-clean-evidence.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: device-entity-clean-rebuild
+          path: |
+            /tmp/device-clean.sqlite
+            /tmp/device-clean-manifest.json
+            /tmp/device-clean-evidence.json
+          if-no-files-found: error
