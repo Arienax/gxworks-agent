@@ -176,12 +176,14 @@ class GenerationWorkflow:
                 return clean_json_text(content)
 
             def trim_redundant_json_tail(candidate):
-                """Remove only a tiny redundant closing-delimiter tail.
+                """Remove only a tiny non-semantic tail after a complete object.
 
-                This is intentionally narrower than a generic JSON fixer. It
-                accepts the exact safe case seen in production: a complete JSON
-                object followed by one or a few stray '}' / ']' characters. It
-                never drops prose, a second object, or arbitrary trailing data.
+                This is intentionally narrower than a generic JSON fixer. A
+                complete top-level object may be followed by a few punctuation
+                characters emitted by the model (for example `}`, `]`, `,`, `;`,
+                `.`, a backtick, or CJK punctuation). We never discard letters,
+                digits, quotes, or a second object/array because those may carry
+                semantic content that must remain an explicit repair candidate.
                 """
                 try:
                     json.loads(candidate)
@@ -200,7 +202,7 @@ class GenerationWorkflow:
                     not isinstance(value, dict)
                     or not suffix
                     or len(suffix) > 8
-                    or any(char not in "}]" for char in suffix)
+                    or any(char.isalnum() or char in "{[\"'" for char in suffix)
                 ):
                     return candidate, False
                 return stripped[:end], True
