@@ -148,7 +148,12 @@ def _constrain_native_repair_schema(schema, repair_payload, plc_model):
                         opcode_rule["enum"] = compatible
                 if isinstance(operand_rule, dict):
                     if operands:
-                        operand_rule.setdefault("items", {})["enum"] = operands
+                        # ladder_v1_schema reuses the generic token rule for
+                        # TIMER/COUNTER values and APP_INSTR operands. Detach
+                        # the operand item rule before adding an enum so this
+                        # local repair constraint cannot mutate timer presets.
+                        operand_rule["items"] = dict(operand_rule.get("items") or {})
+                        operand_rule["items"]["enum"] = operands
                     if len(arities) == 1:
                         operand_rule["minItems"] = arities[0]
                         operand_rule["maxItems"] = arities[0]
