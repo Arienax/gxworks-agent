@@ -68,13 +68,18 @@ jobs:
           python tools/audit_error_record_alignment.py \
             --database resources/knowledge/fx3u_knowledge.sqlite \
             --output error-record-alignment-audit.json > error-record-alignment-audit.log
+          python tools/audit_error_record_semantics.py \
+            --database resources/knowledge/fx3u_knowledge.sqlite \
+            --output error-record-semantic-audit.json > error-record-semantic-audit.log
           python - <<'PY'
           import json, sqlite3
           q=json.load(open('structured-knowledge-quality-audit.json',encoding='utf-8'))
           a=json.load(open('error-record-alignment-audit.json',encoding='utf-8'))
+          s=json.load(open('error-record-semantic-audit.json',encoding='utf-8'))
           print('QUALITY',json.dumps(q['issue_code_counts'],ensure_ascii=False,sort_keys=True))
           print('QUALITY_SEVERITY',json.dumps(q['issue_severity_counts'],ensure_ascii=False,sort_keys=True))
           print('ALIGNMENT',json.dumps(a['issue_code_counts'],ensure_ascii=False,sort_keys=True))
+          print('ERROR_SEMANTICS',json.dumps(s['issue_code_counts'],ensure_ascii=False,sort_keys=True))
           assert q['integrity_check']=='ok'
           assert q['foreign_key_violations']==0
           forbidden={
@@ -84,6 +89,7 @@ jobs:
           assert not forbidden.intersection(q['issue_code_counts']), q['issue_code_counts']
           assert not [x for x in q['issues'] if x['domain']=='error_records' and x['severity']=='error']
           assert not [x for x in a['issues'] if x['severity']=='error']
+          assert not [x for x in s['issues'] if x['severity']=='error']
           con=sqlite3.connect('resources/knowledge/fx3u_knowledge.sqlite')
           assert con.execute('PRAGMA integrity_check').fetchone()[0]=='ok'
           assert con.execute('PRAGMA foreign_key_check').fetchall()==[]
@@ -103,12 +109,14 @@ jobs:
           manifest=json.loads(path.read_text(encoding='utf-8'))
           quality=json.load(open('structured-knowledge-quality-audit.json',encoding='utf-8'))
           alignment=json.load(open('error-record-alignment-audit.json',encoding='utf-8'))
+          semantic=json.load(open('error-record-semantic-audit.json',encoding='utf-8'))
           manifest['structured_knowledge_quality_audit']={
               'method':'generic source-driven audit of device records, error records, and completion flags',
               'baseline_detected':{
                   'operand_position_device_index_overlaps':97,
                   'cross_family_device_ranges':7,
                   'weak_completion_flag_semantics':199,
+                  'no_error_row_bleed_records':30,
               },
               'post_rebuild_issue_severity_counts':quality['issue_severity_counts'],
               'post_rebuild_issue_code_counts':quality['issue_code_counts'],
@@ -122,6 +130,12 @@ jobs:
                   'issue_severity_counts':alignment['issue_severity_counts'],
                   'issue_code_counts':alignment['issue_code_counts'],
               },
+              'error_semantic_audit':{
+                  'records':semantic['records'],
+                  'no_error_records':semantic['no_error_records'],
+                  'issue_severity_counts':semantic['issue_severity_counts'],
+                  'issue_code_counts':semantic['issue_code_counts'],
+              },
           }
           path.write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
           PY
@@ -133,5 +147,5 @@ jobs:
           git rm -f .github/workflows/inspect-completion-flag-contexts.yml .github/workflows/inspect-error-0000-contexts.yml || true
           git add -A
           git status --short
-          git commit -m "fix(rag): clean device entities and completion flag semantics"
+          git commit -m "fix(rag): clean structured knowledge extraction semantics"
           git push origin HEAD:fix/rejected-json-repair-20260913
