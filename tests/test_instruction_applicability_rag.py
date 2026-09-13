@@ -1,4 +1,5 @@
 import json
+import re
 import sqlite3
 from pathlib import Path
 
@@ -32,6 +33,33 @@ def test_structured_operand_applicability_is_extracted_from_official_tables():
     zrst = _operands("ZRST")
     first = next(item for item in zrst if item.get("position") == "D1")
     assert "M" in first.get("applicable_devices", [])
+
+
+def test_structured_operand_rows_do_not_leak_applicable_device_headers():
+    """Applicable-device matrix headers must never become operand records."""
+    with sqlite3.connect(_database()) as connection:
+        rows = connection.execute(
+            "SELECT manual_id,opcode,operands_json FROM instructions WHERE operands_json <> '[]'"
+        ).fetchall()
+
+    bad = []
+    for manual_id, opcode, payload in rows:
+        for item in json.loads(payload or "[]"):
+            if not isinstance(item, dict):
+                continue
+            position = str(item.get("position") or "").upper()
+            description = str(item.get("description") or "").strip()
+            if position == "X":
+                bad.append((manual_id, opcode, position, description))
+            if description.casefold() in {"<blank>", "blank"}:
+                bad.append((manual_id, opcode, position, description))
+            if description and re.fullmatch(
+                r"(?:(?:\[GLYPH-[0-9A-F]+\]|\(cid:\d+\))\d*\s*)+",
+                description,
+                flags=re.I,
+            ):
+                bad.append((manual_id, opcode, position, description))
+    assert bad == []
 
 
 def test_structured_instruction_retrieval_surfaces_applicability_without_prompt_patch():
