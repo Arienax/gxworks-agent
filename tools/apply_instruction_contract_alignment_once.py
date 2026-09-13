@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+from pathlib import Path
+
+
+def replace_once(path, old, new, label):
+    p=Path(path); text=p.read_text(encoding='utf-8'); count=text.count(old)
+    if count != 1: raise SystemExit(f'{label}: expected 1 anchor, found {count}')
+    p.write_text(text.replace(old,new,1),encoding='utf-8')
+
+# Explicitly distinguish complete semantic contracts from opcode-identity-only
+# coverage derived from manual evidence.
+replace_once('src/instruction_registry.py',
+'''    cpu_support: frozenset[str] = field(default_factory=frozenset)\n    notes: str = ""\n''',
+'''    cpu_support: frozenset[str] = field(default_factory=frozenset)\n    contract_level: str = "full"\n    notes: str = ""\n''','registry contract field')
+replace_once('src/instruction_registry.py',
+'''        try:\n            semantic_kind = SemanticKind(semantic_text)\n        except ValueError as exc:\n            raise ValueError(\n                f"{mnemonic}: invalid semantic kind {semantic_text!r}"\n            ) from exc\n\n        arity = payload.get("arity") or {}\n''',
+'''        try:\n            semantic_kind = SemanticKind(semantic_text)\n        except ValueError as exc:\n            raise ValueError(\n                f"{mnemonic}: invalid semantic kind {semantic_text!r}"\n            ) from exc\n        contract_level = str(payload.get("contract_level") or "full").strip().lower()\n        if contract_level not in {"full", "opcode_only"}:\n            raise ValueError(f"{mnemonic}: invalid contract_level {contract_level!r}")\n\n        arity = payload.get("arity") or {}\n''','registry contract parse')
+replace_once('src/instruction_registry.py',
+'''            cpu_support=frozenset(\n                str(item).strip().upper()\n                for item in (payload.get("cpu_support") or [])\n                if str(item).strip()\n            ),\n            notes=str(payload.get("notes") or "").strip(),\n''',
+'''            cpu_support=frozenset(\n                str(item).strip().upper()\n                for item in (payload.get("cpu_support") or [])\n                if str(item).strip()\n            ),\n            contract_level=contract_level,\n            notes=str(payload.get("notes") or "").strip(),\n''','registry contract construct')
+replace_once('src/instruction_registry.py',
+'''def load_default_instruction_registry() -> InstructionRegistry:\n    required = ("common.json", "fx3u.json", "fx5u.json")\n    for directory in _candidate_catalog_directories():\n        paths = tuple(directory / name for name in required)\n        if all(path.is_file() for path in paths):\n            return InstructionRegistry.from_files(paths)\n''',
+'''def load_default_instruction_registry() -> InstructionRegistry:\n    required = ("common.json", "fx3u.json", "fx5u.json")\n    for directory in _candidate_catalog_directories():\n        paths = tuple(directory / name for name in required)\n        if all(path.is_file() for path in paths):\n            verified = directory / "fx3u_verified_opcodes.json"\n            if verified.is_file():\n                paths = paths + (verified,)\n            return InstructionRegistry.from_files(paths)\n''','registry overlay loading')
+
+# A field-level repair must not guess a replacement from an opcode-only entry,
+# because its operand signature has intentionally not been hardened.
+replace_once('src/application/field_repair.py',
+'''            spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(mnemonic)\n            if spec is not None and spec.accepts_arity(len(operands)):\n                allowed.append(mnemonic)\n''',
+'''            spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(mnemonic)\n            if (\n                spec is not None\n                and spec.contract_level == "full"\n                and spec.accepts_arity(len(operands))\n            ):\n                allowed.append(mnemonic)\n''','field repair full contract only')
+
+# Score same-opcode structured chunks by signature completeness.  This is only
+# used when the query explicitly names the opcode; broader retrieval remains
+# multi-source.
+replace_once('src/knowledge_retriever_core.py',
+'''def _structured_instruction_record(connection, schema, chunk_id):\n''',
+'''def _instruction_contract_quality(connection, schema, chunk_id):\n    table = schema.get("instructions")\n    if not table or not {"chunk_id", "operands_json"}.issubset(set(table["columns"])):\n        return (0, 0)\n    row = connection.execute(\n        "SELECT operands_json FROM {} WHERE chunk_id=? LIMIT 1".format(\n            _quote_identifier(table["name"])\n        ),\n        (chunk_id,),\n    ).fetchone()\n    if row is None:\n        return (0, 0)\n    try:\n        operands = json.loads(str(row["operands_json"] or "[]"))\n    except (TypeError, ValueError):\n        return (0, 0)\n    if not isinstance(operands, list):\n        return (0, 0)\n    applicability = 0\n    for item in operands:\n        if isinstance(item, dict) and isinstance(item.get("applicable_devices"), list):\n            applicability += len(item["applicable_devices"])\n    return (len([item for item in operands if isinstance(item, dict)]), applicability)\n\n\ndef _structured_instruction_record(connection, schema, chunk_id):\n''','retriever quality helper')
+replace_once('src/knowledge_retriever_core.py',
+'''        if opcode and opcode in query_term_set:\n            score += 180.0\n\n        if timer_query:\n''',
+'''        if opcode and opcode in query_term_set:\n            score += 180.0\n            operand_count, applicability_count = _instruction_contract_quality(\n                connection, schema, candidate.get("id")\n            )\n            # Prefer the more complete structured signature when two official\n            # manuals describe the same opcode.  This resolves known partial\n            # rows such as DRVA/ZRN/TBL without globally privileging a manual.\n            score += min(8, operand_count) * 90.0\n            score += min(24, applicability_count) * 4.0\n\n        if timer_query:\n''','retriever quality score')
+replace_once('src/knowledge_retriever_core.py',
+'''    candidates.sort(\n        key=lambda item: (\n            -float(item.get("score", 0.0)),\n            -int(item.get("manual_priority", 0) or 0),\n            int(item.get("pdf_page", 0) or 0),\n            str(item.get("id", "")),\n        )\n    )\n    return _select_with_budget(candidates, top_k, char_budget)\n''',
+'''    candidates.sort(\n        key=lambda item: (\n            -float(item.get("score", 0.0)),\n            -int(item.get("manual_priority", 0) or 0),\n            int(item.get("pdf_page", 0) or 0),\n            str(item.get("id", "")),\n        )\n    )\n    # Exact opcode questions should never receive two contradictory structured\n    # signatures for the same instruction.  The completeness score above\n    # decides which official row survives.\n    deduped = []\n    seen_exact_opcodes = set()\n    for candidate in candidates:\n        opcode = _normalize_text(candidate.get("instruction_opcode", "")).casefold()\n        if opcode and opcode in query_term_set:\n            if opcode in seen_exact_opcodes:\n                continue\n            seen_exact_opcodes.add(opcode)\n        deduped.append(candidate)\n    return _select_with_budget(deduped, top_k, char_budget)\n''','retriever exact opcode dedupe')
