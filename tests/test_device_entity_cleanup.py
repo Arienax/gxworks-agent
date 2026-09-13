@@ -11,6 +11,14 @@ def test_lowercase_n_constraints_do_not_become_devices():
     assert cleaned[("N512", "operand_placeholder")] == 1
 
 
+def test_layout_only_lowercase_n_number_is_dropped_not_promoted():
+    text = "Instruction Mnemonic Operation Condition | n 9 | 13\nCautions"
+    entities = Counter({("N9", "device"): 1})
+    cleaned = sanitize_device_like_entities(text, "instruction", entities)
+    assert ("N9", "device") not in cleaned
+    assert ("N9", "operand_placeholder") not in cleaned
+
+
 def test_uppercase_n_nesting_levels_are_preserved_as_nesting_syntax():
     text = "MC N 4 M0\nMCR N4\nAvailable nesting levels are N0 to N7."
     entities = Counter({("N4", "device"): 2})
