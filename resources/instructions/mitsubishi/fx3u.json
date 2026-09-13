@@ -16,6 +16,19 @@
         {"name": "pulse_output", "role": "write"}
       ],
       "notes": "FX5U projects should use the model-appropriate homing instruction such as DSZR."
+    },
+    {
+      "mnemonic": "ZRST",
+      "canonical_op": "ZONE_RESET",
+      "category": "action",
+      "semantic_kind": "function",
+      "cpu_support": ["FX3U"],
+      "arity": {"min": 2, "max": 2},
+      "operands": [
+        {"name": "start", "role": "write", "device_prefixes": ["Y", "M", "S", "T", "C", "D"]},
+        {"name": "end", "role": "write", "device_prefixes": ["Y", "M", "S", "T", "C", "D"]}
+      ],
+      "notes": "FNC 40 zone reset. Resets the inclusive range between two like devices."
     }
   ]
 }
