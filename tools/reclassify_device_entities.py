@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Reclassify device-like entity false positives in an existing schema-v3 DB.
 
-This is the migration companion to ``build_fx3u_knowledge.py``.  It is useful
+This is the migration companion to ``build_fx3u_knowledge.py``. It is useful
 when the original source PDFs are not present locally: chunk text already stored
 in SQLite contains enough evidence to reclassify the known semantic cases.
 
-The migration is semantic and idempotent.  It does not contain a blacklist of
-specific addresses.
+The migration is semantic and idempotent. It does not contain a blacklist of
+specific addresses. Surviving ``device_records`` keep their existing descriptive
+metadata; only provenance-derived fields that must change are recomputed.
 """
 from __future__ import annotations
 
@@ -39,6 +40,16 @@ DEVICE_FAMILIES = {
 
 def normalize(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
+
+
+def _load_json_list(value: Any) -> list[str]:
+    try:
+        payload = json.loads(str(value or "[]"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return []
+    if not isinstance(payload, list):
+        return []
+    return [str(item) for item in payload if str(item)]
 
 
 def _entity_counter(connection: sqlite3.Connection, chunk_id: int) -> Counter[tuple[str, str]]:
@@ -125,25 +136,107 @@ def _refresh_chunk_entity_cache(connection: sqlite3.Connection, chunk_id: int) -
     )
 
 
+def _snapshot_device_records(connection: sqlite3.Connection) -> dict[tuple[str, str], dict[str, Any]]:
+    snapshot: dict[tuple[str, str], dict[str, Any]] = {}
+    rows = connection.execute(
+        """
+        SELECT device_norm,record_type,device,prefix,description,occurrences,
+               plc_models,source_manuals_json,chunk_id
+        FROM device_records
+        """
+    ).fetchall()
+    for row in rows:
+        key = (str(row[0]), str(row[1]))
+        snapshot[key] = {
+            "device": str(row[2] or ""),
+            "prefix": str(row[3] or ""),
+            "description": str(row[4] or ""),
+            "occurrences": int(row[5] or 0),
+            "plc_models": str(row[6] or ""),
+            "source_manuals_json": str(row[7] or "[]"),
+            "chunk_id": int(row[8]) if row[8] is not None else None,
+        }
+    return snapshot
+
+
+def _remaining_provenance(
+    connection: sqlite3.Connection,
+    entity_norm: str,
+    entity_type: str,
+) -> list[tuple[int, str, str, str]]:
+    return [
+        (int(chunk_id), str(manual_id), str(plc_models or ""), str(section or ""))
+        for chunk_id, manual_id, plc_models, section in connection.execute(
+            """
+            SELECT e.chunk_id,e.manual_id,c.plc_models,c.section
+            FROM entity_index e
+            JOIN chunks c ON c.id=e.chunk_id
+            WHERE e.entity_norm=? AND e.entity_type=?
+            ORDER BY e.chunk_id
+            """,
+            (entity_norm, entity_type),
+        )
+    ]
+
+
+def _merge_csv(values: list[str]) -> str:
+    parts: set[str] = set()
+    for value in values:
+        for item in str(value or "").split(","):
+            item = item.strip()
+            if item:
+                parts.add(item)
+    return ",".join(sorted(parts))
+
+
 def _rebuild_device_records(connection: sqlite3.Connection) -> int:
+    previous = _snapshot_device_records(connection)
     connection.execute("DELETE FROM device_records")
     rows = connection.execute(
         """
-        SELECT e.entity_norm, MIN(e.entity), e.entity_type, SUM(e.occurrences),
-               MIN(e.chunk_id), GROUP_CONCAT(DISTINCT e.manual_id), MIN(c.section)
+        SELECT e.entity_norm, MIN(e.entity), e.entity_type, SUM(e.occurrences)
         FROM entity_index e
-        JOIN chunks c ON c.id=e.chunk_id
         WHERE e.entity_type IN ('device','device_range')
         GROUP BY e.entity_norm,e.entity_type
-        ORDER BY e.entity_norm
+        ORDER BY e.entity_norm,e.entity_type
         """
     ).fetchall()
     inserted = 0
-    for entity_norm, entity, entity_type, occurrences, chunk_id, manuals, section in rows:
-        prefix_match = re.match(r"(?:ER|SM|SD|TS|TC|CS|CC|[A-Z]+)", str(entity), re.I)
-        prefix = prefix_match.group(0).upper() if prefix_match else ""
-        description = normalize(section or DEVICE_FAMILIES.get(prefix, ""))
-        source_manuals = sorted(set(str(manuals or "").split(",")))
+    for entity_norm, entity, entity_type, occurrences in rows:
+        entity_norm = str(entity_norm)
+        entity_type = str(entity_type)
+        entity = str(entity)
+        key = (entity_norm, entity_type)
+        old = previous.get(key, {})
+        provenance = _remaining_provenance(connection, entity_norm, entity_type)
+        if not provenance:
+            raise RuntimeError(f"missing provenance for surviving device {key}")
+
+        prefix_match = re.match(r"(?:ER|SM|SD|TS|TC|CS|CC|[A-Z]+)", entity, re.I)
+        parsed_prefix = prefix_match.group(0).upper() if prefix_match else ""
+        prefix = str(old.get("prefix") or parsed_prefix)
+
+        old_chunk_id = old.get("chunk_id")
+        remaining_chunk_ids = {item[0] for item in provenance}
+        chunk_id = old_chunk_id if old_chunk_id in remaining_chunk_ids else provenance[0][0]
+
+        current_manuals = sorted({item[1] for item in provenance if item[1]})
+        old_manuals = _load_json_list(old.get("source_manuals_json", "[]"))
+        # Preserve the previous ordering/content when it still describes exactly
+        # the surviving provenance; otherwise recompute deterministically.
+        source_manuals = old_manuals if set(old_manuals) == set(current_manuals) else current_manuals
+
+        current_models = _merge_csv([item[2] for item in provenance])
+        old_models = str(old.get("plc_models") or "")
+        plc_models = old_models or current_models
+
+        old_description = normalize(old.get("description", ""))
+        derived_description = normalize(
+            next((item[3] for item in provenance if normalize(item[3])), "")
+            or DEVICE_FAMILIES.get(prefix, "")
+        )
+        description = old_description or derived_description
+
         connection.execute(
             """
             INSERT INTO device_records(
@@ -153,34 +246,36 @@ def _rebuild_device_records(connection: sqlite3.Connection) -> int:
             """,
             (
                 entity_norm,
-                entity,
+                str(old.get("device") or entity),
                 prefix,
                 entity_type,
                 description,
                 int(occurrences),
-                "FX3S,FX3G,FX3GC,FX3U,FX3UC",
-                json.dumps(source_manuals, separators=(",", ":")),
+                plc_models,
+                json.dumps(source_manuals, ensure_ascii=False, separators=(",", ":")),
                 chunk_id,
             ),
         )
         inserted += 1
 
     for prefix, description in DEVICE_FAMILIES.items():
+        key = (f"family:{prefix.casefold()}", "device_family")
+        old = previous.get(key, {})
         connection.execute(
             """
-            INSERT OR IGNORE INTO device_records(
+            INSERT INTO device_records(
                 device_norm,device,prefix,record_type,description,occurrences,
                 plc_models,source_manuals_json,chunk_id
             ) VALUES(?,?,?,?,?,0,?,?,NULL)
             """,
             (
-                f"family:{prefix.casefold()}",
-                prefix,
-                prefix,
+                key[0],
+                str(old.get("device") or prefix),
+                str(old.get("prefix") or prefix),
                 "device_family",
-                description,
-                "FX3S,FX3G,FX3GC,FX3U,FX3UC",
-                "[]",
+                normalize(old.get("description", "")) or description,
+                str(old.get("plc_models") or "FX3S,FX3G,FX3GC,FX3U,FX3UC"),
+                str(old.get("source_manuals_json") or "[]"),
             ),
         )
         inserted += 1
