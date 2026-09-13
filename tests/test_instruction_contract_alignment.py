@@ -6,7 +6,6 @@ from pathlib import Path
 import knowledge_retriever_core as core
 from application.field_repair import plan
 from instruction_registry import DEFAULT_INSTRUCTION_REGISTRY, generation_app_instr_mnemonics
-from resource_paths import resource_path
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -81,7 +80,7 @@ def test_field_repair_does_not_guess_from_opcode_only_contracts():
     assert "SQR" not in allowed
 
 
-def _opcode_results(opcode):
+def _opcode_instruction_results(opcode):
     return [
         item for item in core.retrieve_knowledge(
             f"FX3U {opcode} 指令的操作数和适用软元件是什么？",
@@ -90,15 +89,18 @@ def _opcode_results(opcode):
             top_k=8,
             char_budget=12000,
         )
-        if str(item.get("instruction_opcode") or "").upper() == opcode
+        if (
+            str(item.get("instruction_opcode") or "").upper() == opcode
+            and item.get("chunk_type") == "instruction"
+        )
     ]
 
 
 def test_exact_opcode_retrieval_keeps_only_most_complete_structured_signature():
-    drva = _opcode_results("DRVA")
+    drva = _opcode_instruction_results("DRVA")
     assert len(drva) == 1
     assert drva[0]["manual_id"] == "fx3_positioning_k"
 
-    tbl = _opcode_results("TBL")
+    tbl = _opcode_instruction_results("TBL")
     assert len(tbl) == 1
     assert tbl[0]["manual_id"] == "fx3_programming_r"
