@@ -67,6 +67,7 @@ jobs:
             tests/test_prompt_context_policy.py `
             tests/test_context_refresh_runtime.py `
             tests/test_runtime_diagnostics.py `
+            tests/test_runtime_diagnostics_context.py `
             tests/test_runtime_diagnostics_web.py
       - name: Keep strict validators available outside direct generation
         run: |
