@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Collect local source evidence for device records that resemble operand placeholders.
 
-This tool is deliberately diagnostic. It does not delete or rewrite device/entity rows.
-Its purpose is to separate concrete PLC address examples from PDF/OCR residue such as
-numbered operand placeholders or footnote-fused placeholder text.
+Diagnostic only: this tool never deletes or rewrites device/entity rows. It separates
+concrete PLC address examples from operand-placeholder residue and intentionally keeps
+mixed/ambiguous evidence visible for review.
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ EXAMPLE_CONTEXT_RE = re.compile(
 )
 ADDRESS_CONTEXT_RE = re.compile(
     r"device\s+(?:number|address|range)|address|register|relay|"
-    r"device\s+name|bit\s+device|word\s+device|state\s+relay",
+    r"device\s+name|bit\s+device|word\s+device|state\s+relay|pointer|label",
     re.I,
 )
 STRUCTURED_CONTEXT_RE = re.compile(
@@ -43,10 +43,16 @@ def normalize(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
+def token_source_pattern(token: str) -> str:
+    """Match normalized device tokens in source text, including PDF forms like `D 17`."""
+    match = re.fullmatch(r"([A-Z]+)(\d+)", token, re.I)
+    if not match:
+        return re.escape(token)
+    return rf"{re.escape(match.group(1))}\s*{re.escape(match.group(2))}"
+
+
 def compact_excerpt(text: str, start: int, end: int, radius: int = 220) -> str:
-    left = max(0, start - radius)
-    right = min(len(text), end + radius)
-    excerpt = text[left:right].replace("\r", "")
+    excerpt = text[max(0, start - radius):min(len(text), end + radius)].replace("\r", "")
     excerpt = re.sub(r"[ \t]+", " ", excerpt)
     excerpt = re.sub(r"\n{3,}", "\n\n", excerpt)
     return excerpt.strip()
@@ -63,27 +69,35 @@ def local_line(text: str, start: int, end: int) -> str:
 def occurrence_signals(token: str, text: str, match: re.Match[str]) -> dict[str, bool]:
     window = text[max(0, match.start() - 220):min(len(text), match.end() + 260)]
     line = local_line(text, match.start(), match.end())
-    escaped = re.escape(token)
+    token_pat = token_source_pattern(token)
     concrete_instruction_use = bool(
         re.search(
-            rf"\b[A-Z][A-Z0-9_]{{1,10}}\s+(?:[^\n]{{0,90}}\s)?{escaped}(?!{TOKEN_BOUNDARY})",
+            rf"\b(?:FNC\s*\d+\s*)?[A-Z][A-Z0-9_]{{1,10}}(?:\([^\n)]*|\s+[^\n]{{0,100}})?{token_pat}(?!{TOKEN_BOUNDARY})",
             line,
             re.I,
         )
     )
     concrete_range_use = bool(
         re.search(
-            rf"(?<!{TOKEN_BOUNDARY}){escaped}\s*(?:~|-|–|—|to|through)\s*"
+            rf"(?<!{TOKEN_BOUNDARY}){token_pat}\s*(?:~|-|–|—|to|through)\s*"
             rf"(?:ER|SM|SD|TS|TC|CS|CC|[XYMSTCDRVZPIN])\s*\d+",
             window,
             re.I,
         )
         or re.search(
             rf"(?:ER|SM|SD|TS|TC|CS|CC|[XYMSTCDRVZPIN])\s*\d+\s*"
-            rf"(?:~|-|–|—|to|through)\s*{escaped}(?!{TOKEN_BOUNDARY})",
+            rf"(?:~|-|–|—|to|through)\s*{token_pat}(?!{TOKEN_BOUNDARY})",
             window,
             re.I,
         )
+    )
+    pointer_or_label_use = bool(
+        token.startswith("P")
+        and re.search(rf"\b(?:pointer|label|CJ|CALLP?|P)\b[^\n]{{0,100}}{token_pat}", window, re.I)
+    )
+    nesting_level_use = bool(
+        token.startswith("N")
+        and re.search(rf"\b(?:nest|nesting)\b[^\n]{{0,160}}{token_pat}|{token_pat}[^\n]{{0,160}}\b(?:nest|nesting)\b", window, re.I)
     )
     return {
         "placeholder_semantics": bool(PLACEHOLDER_CONTEXT_RE.search(window)),
@@ -92,11 +106,22 @@ def occurrence_signals(token: str, text: str, match: re.Match[str]) -> dict[str,
         "structured_semantics": bool(STRUCTURED_CONTEXT_RE.search(window)),
         "concrete_instruction_use": concrete_instruction_use,
         "concrete_range_use": concrete_range_use,
+        "pointer_or_label_use": pointer_or_label_use,
+        "nesting_level_use": nesting_level_use,
     }
 
 
 def classify_signal_counts(counts: Counter[str]) -> str:
-    real = counts["concrete_instruction_use"] + counts["concrete_range_use"] + counts["example_semantics"]
+    real = sum(
+        counts[name]
+        for name in (
+            "concrete_instruction_use",
+            "concrete_range_use",
+            "example_semantics",
+            "pointer_or_label_use",
+            "nesting_level_use",
+        )
+    )
     placeholder = counts["placeholder_semantics"]
     if real and not placeholder:
         return "real_device_example_likely"
@@ -140,7 +165,10 @@ def collect(connection: sqlite3.Connection) -> dict[str, Any]:
         if not total_occ or instruction_occ / total_occ < 0.75 or not structured_hits:
             continue
 
-        token_re = re.compile(rf"(?<!{TOKEN_BOUNDARY}){re.escape(token)}(?!{TOKEN_BOUNDARY})", re.I)
+        token_re = re.compile(
+            rf"(?<!{TOKEN_BOUNDARY}){token_source_pattern(token)}(?!{TOKEN_BOUNDARY})",
+            re.I,
+        )
         signal_counts: Counter[str] = Counter()
         snippets: list[dict[str, Any]] = []
         seen_snippets: set[tuple[int, str]] = set()
@@ -166,6 +194,7 @@ def collect(connection: sqlite3.Connection) -> dict[str, Any]:
                             "chunk_type": str(chunk_type),
                             "opcode": str(opcode or ""),
                             "entity_occurrences": int(entity_occurrences),
+                            "source_spelling": match.group(0),
                             "line": line,
                             "excerpt": compact_excerpt(source, match.start(), match.end()),
                             "signals": signals,
@@ -207,13 +236,12 @@ def main() -> int:
     print("DEVICE_PLACEHOLDER_CANDIDATES", payload["candidate_count"])
     print("SUGGESTED_CLASSES", json.dumps(payload["suggested_class_counts"], ensure_ascii=False, sort_keys=True))
     for item in payload["candidates"]:
-        compact = {
+        print(json.dumps({
             "device": item["device"],
             "suggested_class": item["suggested_class"],
             "signal_counts": item["signal_counts"],
             "snippets": item["snippets"][:4],
-        }
-        print(json.dumps(compact, ensure_ascii=False, sort_keys=True))
+        }, ensure_ascii=False, sort_keys=True))
     return 0
 
 
