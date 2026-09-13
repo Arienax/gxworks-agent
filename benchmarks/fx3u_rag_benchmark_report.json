@@ -1,21 +1,21 @@
 {
   "schema_version": 1,
-  "evaluated_at_utc": "2026-09-08T11:06:52.368729+00:00",
-  "database": "D:\\download\\gx\\gxworks-agent\\resources\\knowledge\\fx3u_knowledge.sqlite",
-  "benchmark": "D:\\download\\gx\\gxworks-agent\\benchmarks\\fx3u_rag_benchmark.jsonl",
+  "evaluated_at_utc": "2026-09-13T09:46:53.783445+00:00",
+  "database": "/home/runner/work/gxworks-agent/gxworks-agent/resources/knowledge/fx3u_knowledge.sqlite",
+  "benchmark": "/home/runner/work/gxworks-agent/gxworks-agent/benchmarks/fx3u_rag_benchmark.jsonl",
   "cases": 220,
   "positive_cases": 204,
   "negative_cases": 16,
-  "recall_at_1": 0.8725,
-  "recall_at_5": 0.9804,
+  "recall_at_1": 0.8676,
+  "recall_at_5": 0.9853,
   "recall_at_10": 1.0,
-  "mrr": 0.9086,
+  "mrr": 0.9062,
   "negative_accuracy": 1.0,
   "latency_ms": {
-    "mean": 59.4,
-    "p50": 64.358,
-    "p95": 102.378,
-    "max": 238.248
+    "mean": 125.389,
+    "p50": 135.995,
+    "p95": 196.869,
+    "max": 361.472
   },
   "categories": {
     "debug_case": {

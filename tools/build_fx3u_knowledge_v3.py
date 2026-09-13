@@ -38,7 +38,7 @@ except ImportError as error:  # pragma: no cover
     raise SystemExit("pdfplumber is required to preserve tables and word geometry") from error
 
 
-BUILDER_VERSION = "3.0.2"
+BUILDER_VERSION = "3.0.3"
 SCHEMA_VERSION = 3
 TASK_TYPES = "*"
 DEFAULT_TARGET_CHARS = 4800
@@ -1008,11 +1008,22 @@ def extract_entities(
         second_prefix = (match.group(3) or first_prefix).upper()
         first_token = f"{first_prefix}{match.group(2)}"
         second_token = f"{second_prefix}{match.group(4)}"
+        # A real PLC device range cannot change device family. Text such as
+        # ``D8360-Y003`` is normally two table/prose cells flattened around a
+        # dash and must not become one device_range entity.
+        if first_prefix != second_prefix:
+            continue
         if (
-            first_prefix == second_prefix == "S"
+            first_prefix in {"S", "D", "N", "M", "P"}
             and chunk_type == "instruction"
-            and not _explicit_state_relay_context(text, first_token)
-            and not _explicit_state_relay_context(text, second_token)
+            and _operand_placeholder_context(text, match.start(), match.end())
+            and (
+                first_prefix != "S"
+                or (
+                    not _explicit_state_relay_context(text, first_token)
+                    and not _explicit_state_relay_context(text, second_token)
+                )
+            )
         ):
             entities[(first_token, "operand_placeholder")] += 1
             entities[(second_token, "operand_placeholder")] += 1
@@ -1025,11 +1036,15 @@ def extract_entities(
         entity = f"{prefix}{match.group(2)}"
         if match.group(3):
             entity += f".{match.group(3)}"
-        if prefix == "S" and int(match.group(2)) > 0:
-            is_operand_context = chunk_type == "instruction" or _operand_placeholder_context(
-                text, match.start(), match.end()
+        if prefix in {"S", "D", "N", "M", "P"} and int(match.group(2)) > 0:
+            is_operand_context = (
+                chunk_type == "instruction"
+                and _operand_placeholder_context(text, match.start(), match.end())
             )
-            if is_operand_context and not _explicit_state_relay_context(text, entity):
+            if (
+                is_operand_context
+                and (prefix != "S" or not _explicit_state_relay_context(text, entity))
+            ):
                 entities[(entity, "operand_placeholder")] += 1
                 continue
         entities[(entity, "device")] += 1
@@ -1054,10 +1069,13 @@ def extract_entities(
             continue
         if instruction_re.fullmatch(entity):
             kind = "instruction"
-        elif re.fullmatch(r"S[1-9]\d*", entity) and (
+        elif re.fullmatch(r"[SDNMP][1-9]\d*", entity) and (
             chunk_type == "instruction"
-            or _operand_placeholder_context(text, 0, len(text))
-        ) and not _explicit_state_relay_context(text, entity):
+            and _operand_placeholder_context(text, 0, len(text))
+        ) and (
+            not entity.startswith("S")
+            or not _explicit_state_relay_context(text, entity)
+        ):
             kind = "operand_placeholder"
         elif DEVICE_RE.fullmatch(entity):
             kind = "device"
@@ -1394,15 +1412,47 @@ def instruction_restrictions(pages: list[PageArtifact]) -> list[str]:
 
 
 def instruction_completion_flags(pages: list[PageArtifact]) -> list[str]:
+    """Return relays explicitly described as instruction completion flags.
+
+    A generic occurrence of the word ``flag`` is intentionally insufficient:
+    Mitsubishi instruction pages also contain zero, carry, borrow, error,
+    busy/ready, limit and control flags. Completion phrases are assigned only
+    to the nearest M8xxx relay on the same source line. This prevents a relay
+    on an adjacent PDF-table/prose line from inheriting another line's
+    completion semantics.
+    """
+    completion_semantics = re.compile(
+        r"\b(?:instruction\s+)?execution\s+complete(?:d)?\b|"
+        r"\bexecution\s+completion\s+(?:flag|relay)\b|"
+        r"\b(?:instruction|operation)\s+completion\s+(?:flag|relay)\b|"
+        r"\bcompletion\s+(?:flag|relay)\b|"
+        r"\b(?:instruction|operation)\s+(?:is\s+)?finished\b|"
+        r"\bfinished\s+(?:flag|relay)\b",
+        flags=re.I,
+    )
+    relay_re = re.compile(r"\bM8\d{3}\b", flags=re.I)
     flags: list[str] = []
+
+    def remember_nearest(context: str) -> None:
+        relay_matches = list(relay_re.finditer(context))
+        semantic_matches = list(completion_semantics.finditer(context))
+        if not relay_matches or not semantic_matches:
+            return
+        for semantic in semantic_matches:
+            semantic_center = (semantic.start() + semantic.end()) / 2
+            relay = min(
+                relay_matches,
+                key=lambda item: abs(((item.start() + item.end()) / 2) - semantic_center),
+            )
+            value = relay.group(0).upper()
+            if value not in flags:
+                flags.append(value)
+
     for page in pages:
-        text = page.clean_text
-        for match in re.finditer(r"\bM8\d{3}\b", text, flags=re.I):
-            window = text[max(0, match.start() - 100) : match.end() + 140]
-            if re.search(r"complete|completion|flag|finished", window, flags=re.I):
-                value = match.group(0).upper()
-                if value not in flags:
-                    flags.append(value)
+        for raw_line in page.clean_text.splitlines():
+            line = normalize_line(raw_line)
+            if relay_re.search(line) and completion_semantics.search(line):
+                remember_nearest(line)
     return flags
 
 
@@ -1429,9 +1479,29 @@ def sanitize_error_text(text: str) -> str:
     return value
 
 
+NO_ERROR_CODE_RANGE_RE = re.compile(
+    r"(?<![0-9A-F])(?:0x)?[3-9][0-9A-F]{3}(?:H)?\s+"
+    r"(?:to|through|[-–—~])\s+"
+    r"(?:0x)?[3-9][0-9A-F]{3}(?:H)?\s+"
+    r"(?:[-–—]\s*)?no\s+error\b",
+    flags=re.I,
+)
+
+
+def no_error_code_range_spans(text: str) -> list[tuple[int, int]]:
+    return [(match.start(), match.end()) for match in NO_ERROR_CODE_RANGE_RE.finditer(text)]
+
+
 def plausible_error_matches(text: str) -> list[re.Match[str]]:
+    # Some Mitsubishi error tables contain reserved/no-error ranges such as
+    # ``6307 to 6311 No error``. PDF text extraction makes both endpoints look
+    # like independent error codes. Exclude the whole range before slicing
+    # records so neither endpoint becomes a fake diagnostic row.
+    no_error_ranges = no_error_code_range_spans(text)
     matches: list[re.Match[str]] = []
     for match in ERROR_CODE_RE.finditer(text):
+        if any(start <= match.start() < end for start, end in no_error_ranges):
+            continue
         digits = match.group(1).upper()
         if len(digits) != 4:
             continue
@@ -1464,11 +1534,16 @@ def parse_error_records(page: PageArtifact) -> list[dict[str, Any]]:
                 flags=re.I,
             ):
                 continue
-            block_end = (
+            candidate_ends = [
                 matches[match_index + 1].start()
                 if match_index + 1 < len(matches)
                 else min(len(text), match.end() + 1800)
+            ]
+            candidate_ends.extend(
+                start for start, _end in no_error_code_range_spans(text)
+                if start > match.end()
             )
+            block_end = min(candidate_ends)
             raw_block = text[match.end() : block_end].strip()
             raw_lines = [
                 normalize_line(line)
@@ -1476,6 +1551,24 @@ def parse_error_records(page: PageArtifact) -> list[dict[str, Any]]:
                 if normalize_line(line)
             ]
             if not raw_lines:
+                continue
+            # 0000 is the explicit "No error" state in Mitsubishi error-code
+            # tables. PDF text extraction flattens the following nonzero-error
+            # row into the same text stream, so a generic block window would
+            # otherwise leak the next row's cause/action into the 0000 record.
+            if code == "0000" and re.search(r"\bno\s+error\b", raw_lines[0], flags=re.I):
+                message = re.sub(r"^[\s⎯—-]+", "", raw_lines[0]).strip()[:500]
+                records.append(
+                    {
+                        "code": code,
+                        "message": message,
+                        "cause": "",
+                        "corrective_action": "",
+                        "raw_text": message,
+                        "table_index": 0,
+                        "row_index": match_index + 1,
+                    }
+                )
                 continue
             message = raw_lines[0][:500]
             action_lines = [
