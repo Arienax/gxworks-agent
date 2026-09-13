@@ -334,6 +334,30 @@ def load_default_instruction_registry() -> InstructionRegistry:
 DEFAULT_INSTRUCTION_REGISTRY = load_default_instruction_registry()
 
 
+GENERATION_TYPED_OUTPUT_OPCODES = frozenset({"OUT", "PLS", "PLF", "END"})
+GENERATION_FORBIDDEN_APP_INSTR_CATEGORIES = frozenset(
+    {InstructionCategory.CONDITION, InstructionCategory.BRANCH_CONTROL}
+)
+
+
+def generation_app_instr_mnemonics(cpu=None):
+    """Opcodes the model may emit as APP_INSTR for the selected CPU."""
+    model = str(cpu or "").strip().upper() or None
+    result = []
+    for mnemonic in DEFAULT_INSTRUCTION_REGISTRY.known_mnemonics():
+        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(mnemonic)
+        if spec is None:
+            continue
+        if mnemonic in GENERATION_TYPED_OUTPUT_OPCODES:
+            continue
+        if spec.category in GENERATION_FORBIDDEN_APP_INSTR_CATEGORIES:
+            continue
+        if model and not spec.supports_cpu(model):
+            continue
+        result.append(mnemonic)
+    return tuple(sorted(result))
+
+
 def get_instruction_spec(
     mnemonic: Any,
     *,
@@ -352,6 +376,9 @@ def catalogued_read_write_indexes(mnemonic: Any) -> Tuple[int, ...]:
 
 __all__ = [
     "DEFAULT_INSTRUCTION_REGISTRY",
+    "GENERATION_FORBIDDEN_APP_INSTR_CATEGORIES",
+    "GENERATION_TYPED_OUTPUT_OPCODES",
+    "generation_app_instr_mnemonics",
     "InstructionCategory",
     "InstructionRegistry",
     "InstructionSpec",

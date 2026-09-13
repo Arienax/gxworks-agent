@@ -1,7 +1,12 @@
 import json
 import re
 
-from instruction_registry import DEFAULT_INSTRUCTION_REGISTRY, InstructionCategory
+from instruction_registry import (
+    DEFAULT_INSTRUCTION_REGISTRY,
+    GENERATION_FORBIDDEN_APP_INSTR_CATEGORIES,
+    GENERATION_TYPED_OUTPUT_OPCODES,
+    generation_app_instr_mnemonics,
+)
 from plc_generation_contract import APP_INSTR_OPCODE_PATTERN, MAX_LABEL_LEN
 
 
@@ -166,17 +171,9 @@ APP_INSTR_WRITE_OPERAND_INDEXES = {
     if DEFAULT_INSTRUCTION_REGISTRY.write_indexes(mnemonic)
 }
 
-_APP_INSTR_TYPED_ONLY = frozenset({"OUT", "PLS", "PLF", "END"})
-_APP_INSTR_FORBIDDEN_CATEGORIES = frozenset(
-    {InstructionCategory.CONDITION, InstructionCategory.BRANCH_CONTROL}
-)
-APP_INSTR_WHITELIST = frozenset(
-    mnemonic
-    for mnemonic in DEFAULT_INSTRUCTION_REGISTRY.known_mnemonics()
-    if mnemonic not in _APP_INSTR_TYPED_ONLY
-    and DEFAULT_INSTRUCTION_REGISTRY.category_of(mnemonic)
-    not in _APP_INSTR_FORBIDDEN_CATEGORIES
-)
+_APP_INSTR_TYPED_ONLY = GENERATION_TYPED_OUTPUT_OPCODES
+_APP_INSTR_FORBIDDEN_CATEGORIES = GENERATION_FORBIDDEN_APP_INSTR_CATEGORIES
+APP_INSTR_WHITELIST = frozenset(generation_app_instr_mnemonics())
 APP_INSTR_EXACT_OPERAND_COUNTS = {
     mnemonic: spec.min_operands
     for mnemonic in APP_INSTR_WHITELIST

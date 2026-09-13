@@ -1897,6 +1897,7 @@ class CompilerThread(LanguageScopedThread):
         revision=1,
         requirement_text="",
         repair_mode=False,
+        format_repair=False,
         allowed_rung_ids=None,
         allowed_addresses=None,
         image_attachments=None,
@@ -1921,6 +1922,7 @@ class CompilerThread(LanguageScopedThread):
         except (TypeError, ValueError):
             self.revision = 1
         self.repair_mode = bool(repair_mode)
+        self.format_repair = bool(format_repair)
         self.allowed_rung_ids = {
             int(item) for item in (allowed_rung_ids or [])
         }

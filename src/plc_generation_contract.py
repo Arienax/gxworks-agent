@@ -11,6 +11,8 @@ import copy
 import re
 from typing import Any, Mapping
 
+from instruction_registry import GENERATION_TYPED_OUTPUT_OPCODES, generation_app_instr_mnemonics
+
 
 MAX_LABEL_LEN = 64
 APP_INSTR_OPCODE_PATTERN = r"^[A-Z0-9_.$@+\-]+$"
@@ -27,7 +29,7 @@ def _array(items, minimum=0):
     return {"type": "array", "items": items, "minItems": minimum}
 
 
-def ladder_v1_schema() -> dict:
+def ladder_v1_schema(plc_model=None) -> dict:
     """Return a fresh, self-contained schema, also safe to embed in a tool."""
 
     label = {"type": ["string", "null"], "maxLength": MAX_LABEL_LEN}
@@ -61,14 +63,18 @@ def ladder_v1_schema() -> dict:
         "type": {"enum": ["TIMER", "COUNTER"]},
         "address": address, "value": token, "label": label,
     }, ["type", "address", "value"])
+    opcode_rule = {
+        "type": "string", "minLength": 1, "maxLength": 64,
+        "pattern": APP_INSTR_OPCODE_PATTERN,
+        "description": "One catalogued application opcode supported by the selected PLC; no prose or operands here.",
+    }
+    if plc_model:
+        opcode_rule["enum"] = list(generation_app_instr_mnemonics(plc_model))
+    else:
+        opcode_rule["not"] = {"enum": sorted(GENERATION_TYPED_OUTPUT_OPCODES)}
     application = _object({
         "type": {"enum": ["APP_INSTR"]},
-        "opcode": {
-            "type": "string", "minLength": 1, "maxLength": 64,
-            "pattern": APP_INSTR_OPCODE_PATTERN,
-            "not": {"enum": ["OUT", "PLS", "PLF", "END"]},
-            "description": "One catalogued application opcode supported by the context PLC; no prose or operands here.",
-        },
+        "opcode": opcode_rule,
         "operands": _array(token), "label": label,
     }, ["type", "opcode", "operands"])
     branch = _object({
@@ -93,7 +99,7 @@ def ladder_v1_schema() -> dict:
     }, ["device_comments", "rungs"]))
 
 
-def generation_output_contract(*, allow_partial=False) -> dict:
+def generation_output_contract(*, allow_partial=False, plc_model=None) -> dict:
     """Recommended API output schema; acceptance uses the shared API parser.
 
     Compatible legacy encodings are normalized before structural checks.
@@ -102,7 +108,7 @@ def generation_output_contract(*, allow_partial=False) -> dict:
     """
     return {
         "format": "ladder_v1",
-        "schema": ladder_response_schema(allow_partial=allow_partial),
+        "schema": ladder_response_schema(allow_partial=allow_partial, plc_model=plc_model),
         "validation_profile": "generation_structural",
         "acceptance": "One candidate through the shared API normalizer and structural validator. "
                       "Engineering diagnostics do not trigger automatic retries.",
@@ -287,9 +293,9 @@ def _project_logic_contracts(source, target):
         }
 
 
-def ladder_response_schema(*, allow_partial=False):
+def ladder_response_schema(*, allow_partial=False, plc_model=None):
     """Share the same generation schema with API prompts and external tools."""
-    full = ladder_v1_schema()
+    full = ladder_v1_schema(plc_model=plc_model)
     if not allow_partial:
         return full
     partial = _object({

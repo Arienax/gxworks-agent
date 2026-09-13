@@ -161,7 +161,7 @@ def _select_system_prompt(target_mode, is_edit_mode=False, user_requirement="", 
     if target_mode == "ladder":
         from plc_generation_contract import ladder_response_schema
         base = (LADDER_SYSTEM_PROMPT + "\n\n# Machine-readable output schema (authoritative structure)\n" +
-                json.dumps(ladder_response_schema(allow_partial=is_edit_mode), ensure_ascii=False,
+                json.dumps(ladder_response_schema(allow_partial=is_edit_mode, plc_model=selected_vendor), ensure_ascii=False,
                            separators=(",", ":")))
     else:
         base = _st_system_prompt_for_model(selected_vendor)
