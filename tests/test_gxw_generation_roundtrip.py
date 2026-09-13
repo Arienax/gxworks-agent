@@ -33,7 +33,13 @@ def test_native_compile_save_reload_preserves_objects_wires_and_declarations(nam
     assert all(result["checks"].values())
     assert export_object_model(p, d)["labels"] == export_object_model(q, e)["labels"]
     recorded = json.loads((ROOT / ("research/results/" + report + "-roundtrip.json")).read_text())
-    assert result == recorded["program"]
+    # Historical reports predate explicit blocks; retain their full comparison
+    # while checking the new field separately, without rewriting old evidence.
+    assert result['checks']['blocks']
+    assert len(result['before']['blocks']) == len(result['after']['blocks']) == 1
+    legacy = {key: {k: v for k, v in value.items() if k != 'blocks'}
+              for key, value in result.items()}
+    assert legacy == recorded["program"]
     assert hashlib.sha256(a).hexdigest() == recorded["source_sha256"]
     assert hashlib.sha256(b).hexdigest() == recorded["saved_sha256"]
     assert recorded["native_compile"]["errors"] == 0

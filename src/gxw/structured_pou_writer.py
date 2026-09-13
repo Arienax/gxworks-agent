@@ -15,6 +15,8 @@ from .models import (
     UnknownRecord,
 )
 from .structured_pou import (
+    BLOCK_COUNT_OFFSET,
+    PROGRAM_PREFIX_SIZE,
     BODY_SIZE_OFFSET,
     CANVAS_HEIGHT_OFFSET,
     RECORD_COUNT_OFFSET,
@@ -138,31 +140,18 @@ def _validate_source_header(program: StructuredProgram) -> None:
     if len(raw) < STRUCTURED_RECORDS_OFFSET:
         raise GXWFormatError("StructuredProgram raw source is shorter than its header")
 
-    raw_body_size = _u32(raw, BODY_SIZE_OFFSET)
-    if raw_body_size != len(raw) - STRUCTURED_RECORDS_OFFSET:
-        raise GXWFormatError(
-            "StructuredProgram raw body_size does not match the source byte length"
-        )
-
-    raw_record_count = _u32(raw, RECORD_COUNT_OFFSET)
-    source = parse_structured_pou(
-        raw,
-        logical_name=program.logical_name,
-        source_path=program.source_path,
-    )
-    if source.record_count != raw_record_count:
-        raise GXWFormatError("StructuredProgram raw record_count failed source verification")
+    parse_structured_pou(raw, logical_name=program.logical_name, source_path=program.source_path)
 
     # This relation is strongly repeated across the controlled Structured
     # Ladder/FBD corpus. The writer intentionally fails closed rather than
     # inventing values for a project variant where the invariant does not hold.
-    expected_size_like = raw_body_size + 12
+    expected_size_like = len(raw) - 83
     for offset in (SIZE_LIKE_A_OFFSET, SIZE_LIKE_B_OFFSET):
         actual = _u32(raw, offset)
         if actual != expected_size_like:
             raise GXWFormatError(
                 "unsupported Structured Program header invariant: "
-                f"0x{offset:X}=0x{actual:X}, expected body_size+12 "
+                f"0x{offset:X}=0x{actual:X}, expected len-83 "
                 f"(0x{expected_size_like:X})"
             )
 
@@ -184,42 +173,45 @@ def serialize_structured_pou(
 
     _validate_source_header(program)
 
-    serialized_records: list[bytes] = []
-    for record in program.iter_records():
-        if isinstance(record, StructuredNode):
-            serialized_records.append(serialize_structured_node(record))
-        elif isinstance(record, StructuredWire):
-            serialized_records.append(serialize_structured_wire(record))
-        elif isinstance(record, UnknownRecord):
-            serialized_records.append(record.raw)
-        else:
-            raise GXWFormatError(
-                f"unsupported Structured Program record object: {type(record).__name__}"
-            )
-
+    containers = []
+    total_records = 0
+    for block, records in program.block_records():
+        serialized_records = []
+        for record in records:
+            if isinstance(record, StructuredNode):
+                serialized_records.append(serialize_structured_node(record))
+            elif isinstance(record, StructuredWire):
+                serialized_records.append(serialize_structured_wire(record))
+            elif isinstance(record, UnknownRecord):
+                if len(record.raw) != record.record_length or len(record.raw) < 8 or (
+                    _u32(record.raw, 0), _u32(record.raw, 4)
+                ) != (record.record_length, record.record_class):
+                    raise GXWFormatError("opaque record framing disagrees with raw source")
+                serialized_records.append(record.raw)
+            else:
+                raise GXWFormatError(f"unsupported structured record: {type(record).__name__}")
+        if len(block.raw_header) != 24:
+            raise GXWFormatError("block requires a preserved 24-byte native header")
+        body = b"".join(serialized_records)
+        header = bytearray(block.raw_header)
+        struct.pack_into("<I", header, 0, 24 + len(body))
+        struct.pack_into("<I", header, 16, block.canvas_height)
+        struct.pack_into("<I", header, 20, len(serialized_records))
+        containers.append(bytes(header) + body)
+        total_records += len(serialized_records)
     if len(program.trailer) != 24 or any(program.trailer):
         raise GXWFormatError("writer only supports the observed 24-zero-byte trailer")
-
-    body = b"".join(serialized_records) + program.trailer
-    body_size = len(body)
-
-    header = bytearray(program.raw[:STRUCTURED_RECORDS_OFFSET])
-    struct.pack_into("<I", header, SIZE_LIKE_A_OFFSET, body_size + 12)
-    struct.pack_into("<I", header, SIZE_LIKE_B_OFFSET, body_size + 12)
-    struct.pack_into("<I", header, BODY_SIZE_OFFSET, body_size)
-    struct.pack_into("<I", header, CANVAS_HEIGHT_OFFSET, program.canvas_height)
-    struct.pack_into("<I", header, RECORD_COUNT_OFFSET, len(serialized_records))
-
+    header = bytearray(program.raw[:PROGRAM_PREFIX_SIZE])
+    body = b"".join(containers) + program.trailer
+    size_like = len(header) + len(body) - 83
+    struct.pack_into("<I", header, SIZE_LIKE_A_OFFSET, size_like)
+    struct.pack_into("<I", header, SIZE_LIKE_B_OFFSET, size_like)
+    struct.pack_into("<I", header, BLOCK_COUNT_OFFSET, len(containers))
     result = bytes(header) + body
-
     if verify:
-        reparsed = parse_structured_pou(
-            result,
-            logical_name=program.logical_name,
-            source_path=program.source_path,
-        )
-        if reparsed.record_count != len(serialized_records):
-            raise GXWFormatError("serialized Program.pou failed record-count verification")
+        reparsed = parse_structured_pou(result, logical_name=program.logical_name, source_path=program.source_path)
+        if reparsed.record_count != total_records or len(reparsed.blocks) != len(containers):
+            raise GXWFormatError("serialized Program.pou failed block/record-count verification")
 
     return result
 
@@ -284,6 +276,9 @@ def insert_series_contact_after(
     The controlled target is sample 48 ``X1 -> Y1`` becoming
     ``X1 -> X2 -> Y1``. More general autorouting is deliberately out of scope.
     """
+
+    if len(program.blocks) != 1:
+        raise GXWFormatError("series insertion requires one selected block")
 
     matches = [
         node

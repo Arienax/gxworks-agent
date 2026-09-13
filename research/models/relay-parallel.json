@@ -1,0 +1,71 @@
+{
+  "device_comments": {
+    "X0": "common",
+    "X1": "parallel NO",
+    "X2": "parallel NC",
+    "Y0": "first coil"
+  },
+  "rungs": [
+    {
+      "rung_id": 1,
+      "shared_inputs": [
+        {
+          "type": "NO",
+          "address": "X0"
+        }
+      ],
+      "branches": [
+        {
+          "inputs": [
+            {
+              "type": "parallel_block",
+              "branches": [
+                [
+                  {
+                    "type": "NO",
+                    "address": "X1"
+                  }
+                ],
+                [
+                  {
+                    "type": "NC",
+                    "address": "X2"
+                  }
+                ]
+              ]
+            }
+          ],
+          "outputs": [
+            {
+              "type": "COIL",
+              "address": "Y0"
+            },
+            {
+              "type": "COIL",
+              "address": "Y1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "rung_id": 2,
+      "branches": [
+        {
+          "inputs": [
+            {
+              "type": "NO",
+              "address": "X3"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "COIL",
+              "address": "Y2"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

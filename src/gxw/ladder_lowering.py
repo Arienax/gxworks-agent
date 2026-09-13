@@ -14,11 +14,13 @@ def ladder_to_object_model(program):
     nodes, wires = [], []
     model = {"schema_version": 1, "program": "1.Program.pou", "nodes": nodes, "wires": wires}
 
+    blocks = []
+    block_index = 0
     seen_wires = set()
     def wire(a, b):
         key = tuple(sorted((a, b)))
         if a != b and not a[0] == b[0] == 1 and key not in seen_wires:
-            wires.append({"start": list(a), "end": list(b)})
+            wires.append({"start": list(a), "end": list(b), "block": block_index})
             seen_wires.add(key)
 
     def contact(element, x, y):
@@ -26,7 +28,7 @@ def ladder_to_object_model(program):
         if kind not in ("NO", "NC"):
             raise GXWFormatError(f"relay conversion does not support input {kind}; use a verified FBD node")
         nodes.append({"id": f"n{len(nodes)}", "template": "contact" if kind == "NO" else "contact_nc",
-                      "symbol": element["address"], "x": x, "y": y-1})
+                      "symbol": element["address"], "x": x, "y": y-1, "block": block_index})
 
     def dimensions(inputs):
         width, height = 0, 3
@@ -62,8 +64,9 @@ def ladder_to_object_model(program):
                 current += 1
         return current
 
-    y = 3
-    for rung in ladder["rungs"]:
+    for block_index, rung in enumerate(ladder["rungs"]):
+        y = 3
+        seen_wires.clear()
         common = ([rung["header_element"]] if rung.get("header_element") else []) + rung.get("shared_inputs", [])
         junction = series(common, 1, y)
         branch_y = y
@@ -78,14 +81,16 @@ def ladder_to_object_model(program):
                     raise GXWFormatError(f"relay conversion does not support output {output.get('type')}; use a verified FBD node")
                 wire((end, branch_y), (end, output_y))
                 wire((end, output_y), (end+3, output_y))
-                nodes.append({"id": f"n{len(nodes)}", "template": "coil", "symbol": output["address"], "x": end+3, "y": output_y-1})
+                nodes.append({"id": f"n{len(nodes)}", "template": "coil", "symbol": output["address"], "x": end+3, "y": output_y-1, "block": block_index})
                 output_y += 3
             branch_y += max(dimensions(branch.get("inputs", []))[1], 3*len(branch["outputs"]))
         y = branch_y+3
+        wires.append({"start": [1, 0], "end": [1, y], "block": block_index})
+        blocks.append({"canvas_height": y})
     if not nodes:
         raise GXWFormatError("relay conversion requires at least one network")
-    wires.append({"start": [1, 0], "end": [1, y]})
-    model["canvas_height"] = y
+    model["blocks"] = blocks
+    model["canvas_height"] = sum(b["canvas_height"] for b in blocks)
     # Comments are preserved in a companion source artifact by the workbench;
     # no unverified binary comment records are synthesized here.
     return model

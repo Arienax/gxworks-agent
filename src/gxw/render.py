@@ -6,6 +6,25 @@ from .object_model import _port_names
 
 
 def render_structured_svg(program):
+    if len(program.blocks) > 1:
+        import xml.etree.ElementTree as ET
+        views = [ET.fromstring(_render_single(view)) for view in program.block_views()]
+        dimensions = [list(map(float, view.attrib['viewBox'].split())) for view in views]
+        width, height = max(d[2] for d in dimensions), sum(d[3] for d in dimensions)
+        parts = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" role="img" aria-label="Structured Ladder FBD blocks">']
+        y = 0
+        for index, (view, dim) in enumerate(zip(views, dimensions)):
+            view.set('y', str(y))
+            view.set('width', str(dim[2]))
+            view.set('height', str(dim[3]))
+            view.set('data-block-index', str(index))
+            parts.append(ET.tostring(view, encoding='unicode'))
+            y += dim[3]
+        return ''.join([*parts, '</svg>'])
+    return _render_single(program)
+
+
+def _render_single(program):
     unit, margin = 34, 42
     right = max([1, *[n.bbox.right for n in program.nodes], *[max(w.start.x, w.end.x) for w in program.wires]])
     bottom = max([program.canvas_height, *[n.bbox.bottom for n in program.nodes]])

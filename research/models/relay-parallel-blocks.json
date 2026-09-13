@@ -1,0 +1,282 @@
+{
+  "schema_version": 1,
+  "program": "1.Program.pou",
+  "nodes": [
+    {
+      "id": "n0",
+      "template": "contact",
+      "symbol": "X0",
+      "x": 3,
+      "y": 2,
+      "block": 0
+    },
+    {
+      "id": "n1",
+      "template": "contact",
+      "symbol": "X1",
+      "x": 10,
+      "y": 2,
+      "block": 0
+    },
+    {
+      "id": "n2",
+      "template": "contact_nc",
+      "symbol": "X2",
+      "x": 10,
+      "y": 5,
+      "block": 0
+    },
+    {
+      "id": "n3",
+      "template": "coil",
+      "symbol": "Y0",
+      "x": 18,
+      "y": 2,
+      "block": 0
+    },
+    {
+      "id": "n4",
+      "template": "coil",
+      "symbol": "Y1",
+      "x": 18,
+      "y": 5,
+      "block": 0
+    },
+    {
+      "id": "n5",
+      "template": "contact",
+      "symbol": "X3",
+      "x": 3,
+      "y": 2,
+      "block": 1
+    },
+    {
+      "id": "n6",
+      "template": "coil",
+      "symbol": "Y2",
+      "x": 9,
+      "y": 2,
+      "block": 1
+    }
+  ],
+  "wires": [
+    {
+      "start": [
+        1,
+        3
+      ],
+      "end": [
+        3,
+        3
+      ],
+      "block": 0
+    },
+    {
+      "start": [
+        5,
+        3
+      ],
+      "end": [
+        6,
+        3
+      ],
+      "block": 0
+    },
+    {
+      "start": [
+        6,
+        3
+      ],
+      "end": [
+        8,
+        3
+      ],
+      "block": 0
+    },
+    {
+      "start": [
+        8,
+        3
+      ],
+      "end": [
+        10,
+        3
+      ],
+      "block": 0
+    },
+    {
+      "start": [
+        12,
+        3
+      ],
+      "end": [
+        13,
+        3
+      ],
+      "block": 0
+    },
+    {
+      "start": [
+        13,
+        3
+      ],
+      "end": [
+        15,
+        3
+      ],
+      "block": 0
+    },
+    {
+      "start": [
+        6,
+        3
+      ],
+      "end": [
+        6,
+        6
+      ],
+      "block": 0
+    },
+    {
+      "start": [
+        6,
+        6
+      ],
+      "end": [
+        8,
+        6
+      ],
+      "block": 0
+    },
+    {
+      "start": [
+        8,
+        6
+      ],
+      "end": [
+        10,
+        6
+      ],
+      "block": 0
+    },
+    {
+      "start": [
+        12,
+        6
+      ],
+      "end": [
+        13,
+        6
+      ],
+      "block": 0
+    },
+    {
+      "start": [
+        13,
+        6
+      ],
+      "end": [
+        15,
+        6
+      ],
+      "block": 0
+    },
+    {
+      "start": [
+        15,
+        6
+      ],
+      "end": [
+        15,
+        3
+      ],
+      "block": 0
+    },
+    {
+      "start": [
+        15,
+        3
+      ],
+      "end": [
+        18,
+        3
+      ],
+      "block": 0
+    },
+    {
+      "start": [
+        15,
+        6
+      ],
+      "end": [
+        18,
+        6
+      ],
+      "block": 0
+    },
+    {
+      "start": [
+        1,
+        0
+      ],
+      "end": [
+        1,
+        12
+      ],
+      "block": 0
+    },
+    {
+      "start": [
+        1,
+        3
+      ],
+      "end": [
+        3,
+        3
+      ],
+      "block": 1
+    },
+    {
+      "start": [
+        5,
+        3
+      ],
+      "end": [
+        6,
+        3
+      ],
+      "block": 1
+    },
+    {
+      "start": [
+        6,
+        3
+      ],
+      "end": [
+        9,
+        3
+      ],
+      "block": 1
+    },
+    {
+      "start": [
+        1,
+        0
+      ],
+      "end": [
+        1,
+        9
+      ],
+      "block": 1
+    }
+  ],
+  "blocks": [
+    {
+      "canvas_height": 12
+    },
+    {
+      "canvas_height": 9
+    }
+  ],
+  "canvas_height": 21
+}

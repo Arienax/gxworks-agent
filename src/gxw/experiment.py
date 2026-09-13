@@ -25,8 +25,10 @@ def canonical_program(program: StructuredProgram) -> dict:
     Byte offsets and net numbering are not stable identities after editor saves.
     Repeated identities use spatial occurrence order, retained in the snapshot.
     """
+    groups = list(program.block_records())
+    membership = {r.offset: i for i, (_, records) in enumerate(groups) for r in records}
     nodes = sorted(program.nodes, key=lambda n: (n.kind_code, n.symbol, n.type_name or "",
-                                                n.bbox.top, n.bbox.left, n.bbox.bottom, n.bbox.right))
+                                                membership[n.offset], n.bbox.top, n.bbox.left, n.bbox.bottom, n.bbox.right))
     keys, counts = {}, Counter()
     for node in nodes:
         identity = (node.kind_code, node.symbol, node.type_name)
@@ -55,7 +57,13 @@ def canonical_program(program: StructuredProgram) -> dict:
                                "port_kind_code": terminal.port_kind_code,
                                "net": net_keys[terminal.net_index], "unresolved": terminal.unresolved})
     wires = sorted([sorted([[w.start.x, w.start.y], [w.end.x, w.end.y]]) for w in program.wires])
-    return {"devices": sorted([[k[0], k[1], k[2], count] for k, count in counts.items()], key=repr),
+    blocks = [{"height": block.canvas_height,
+               "nodes": sorted(keys[r.offset] for r in records if hasattr(r, "symbol")),
+               "wires": sorted(sorted([[r.start.x, r.start.y], [r.end.x, r.end.y]])
+                               for r in records if hasattr(r, "start")),
+               "unknown_records": [r.raw.hex() for r in records if hasattr(r, "record_class")]}
+              for block, records in groups]
+    return {"blocks": blocks, "devices": sorted([[k[0], k[1], k[2], count] for k, count in counts.items()], key=repr),
             "topology": sorted(topology, key=repr), "wires": wires,
             "semantic_graph": sorted(semantic_nodes, key=lambda n: n["key"]),
             "unknown_records": [r.raw.hex() for r in program.unknown_records]}
@@ -119,8 +127,8 @@ def compare_projects(before: bytes, after: bytes) -> dict:
             matcher = SequenceMatcher(a=[r["sha256"] for r in left_records],
                                       b=[r["sha256"] for r in right_records], autojunk=False)
             programs[name] = {"binary_changes": binary_diff(old, new),
-                              "counts_before": {"nodes": len(p.nodes), "wires": len(p.wires), "records": p.record_count},
-                              "counts_after": {"nodes": len(q.nodes), "wires": len(q.wires), "records": q.record_count},
+                              "counts_before": {"nodes": len(p.nodes), "wires": len(p.wires), "records": p.record_count, "blocks": len(p.blocks)},
+                              "counts_after": {"nodes": len(q.nodes), "wires": len(q.wires), "records": q.record_count, "blocks": len(q.blocks)},
                               "records_before": left_records, "records_after": right_records,
                               "record_changes": [{"operation": op, "before": left_records[i:j], "after": right_records[k:l]}
                                                  for op, i, j, k, l in matcher.get_opcodes() if op != "equal"],

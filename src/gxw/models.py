@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from pathlib import Path
 from typing import Iterable, Optional, Tuple
@@ -122,6 +122,24 @@ class UnknownRecord:
 
 
 @dataclass(frozen=True)
+class StructuredBlock:
+    """Ordered record membership with block-local coordinates.
+
+    Offsets identify records in the source (ordering keys during edits), not
+    native block IDs. The 12 unparsed header bytes remain in ``raw_header``.
+    """
+    offset: int
+    byte_length: int
+    canvas_height: int
+    record_offsets: Tuple[int, ...]
+    raw_header: bytes = field(repr=False)
+
+    @property
+    def record_count(self) -> int:
+        return len(self.record_offsets)
+
+
+@dataclass(frozen=True)
 class StructuredProgram:
     logical_name: str
     source_path: Optional[Path]
@@ -133,7 +151,42 @@ class StructuredProgram:
     unknown_records: Tuple[UnknownRecord, ...]
     trailer: bytes = field(repr=False)
     raw: bytes = field(repr=False)
+    blocks: Tuple[StructuredBlock, ...] = ()
 
     def iter_records(self) -> Iterable[object]:
         records = [*self.nodes, *self.wires, *self.unknown_records]
         return iter(sorted(records, key=lambda item: item.offset))
+
+    def block_records(self):
+        """Yield (block, records), preserving the existing single-block edit API.
+
+        Flat node/wire collections own record data. Multi-block membership must
+        partition them exactly; missing, repeated or foreign keys fail closed.
+        In a single block all records belong to it, including legacy insertions.
+        Single-block canvas_height remains the compatible program-level field.
+        """
+        records = tuple(self.iter_records())
+        by_offset = {r.offset: r for r in records}
+        if len(by_offset) != len(records):
+            raise GXWFormatError("duplicate structured record ordering key")
+        if not self.blocks:
+            raise GXWFormatError("StructuredProgram has no explicit block envelope")
+        if len(self.blocks) == 1:
+            block = replace(self.blocks[0], canvas_height=self.canvas_height,
+                            record_offsets=tuple(r.offset for r in records))
+            yield block, records
+            return
+        assigned = [offset for b in self.blocks for offset in b.record_offsets]
+        if len(assigned) != len(set(assigned)) or set(assigned) != set(by_offset):
+            raise GXWFormatError("block membership must cover every record exactly once")
+        for block in self.blocks:
+            yield block, tuple(by_offset[offset] for offset in block.record_offsets)
+
+    def block_views(self):
+        """Single-block views for algorithms that operate on a local canvas."""
+        for block, records in self.block_records():
+            yield replace(self, blocks=(block,), canvas_height=block.canvas_height,
+                          record_count=len(records), body_size=block.byte_length,
+                          nodes=tuple(r for r in records if isinstance(r, StructuredNode)),
+                          wires=tuple(r for r in records if isinstance(r, StructuredWire)),
+                          unknown_records=tuple(r for r in records if isinstance(r, UnknownRecord)))

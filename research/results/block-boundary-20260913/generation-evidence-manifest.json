@@ -1,0 +1,1706 @@
+{
+  "schema_version": 1,
+  "archive": "research\\evidence\\gxw-block-generation-20260913.zip",
+  "files": [
+    {
+      "member": "samples/R.gxw",
+      "size": 931328,
+      "sha256": "56e78a3475831781c559533bc7af1a162881bd52ca95be515e6386a240e85f05"
+    },
+    {
+      "member": "samples/R_compile.gxw",
+      "size": 935936,
+      "sha256": "082f66dd2e5f7dea4e665cbb79054a631eabed6e3fca16f5970037068e70933b"
+    },
+    {
+      "member": "screenshots/R-open.png",
+      "size": 149688,
+      "sha256": "21abbc98cede80f01ab27736601ac34d7afb6319d7c88b6a519cea37fcc54b1e"
+    },
+    {
+      "member": "screenshots/R-compile.png",
+      "size": 172488,
+      "sha256": "8cce06287dcc17f6ab0f1970fe93ec8e8bb9a6898c9fe488c317286013ca159b"
+    },
+    {
+      "member": "screenshots/R-reopen.png",
+      "size": 149709,
+      "sha256": "de29cd2d431260be99df18d38fbbd5ce2892a8f03975555e8cd1ac01fc4959c2"
+    }
+  ],
+  "GX_Works2_file_version": "1.635.0.1",
+  "CPU": "FX3U/FX3UC",
+  "native_validation": {
+    "status": "native_roundtrip_observed",
+    "open": true,
+    "compile_all": {
+      "errors": 0,
+      "warnings": 0,
+      "check_warnings": 0,
+      "codes": []
+    },
+    "save": true,
+    "close": true,
+    "reopen": true,
+    "blocks_before": 2,
+    "blocks_reopened": 2,
+    "screenshots": [
+      "screenshots/R-open.png",
+      "screenshots/R-compile.png",
+      "screenshots/R-reopen.png"
+    ]
+  },
+  "archive_sha256": "48c00d37fec1a9a1ed53ab8c14ec7c5fb618268d4beb0f93a9efd23e31113e9c",
+  "program": {
+    "checks": {
+      "blocks": true,
+      "devices": true,
+      "topology": true,
+      "wires": true,
+      "semantic_graph": true,
+      "unknown_records": true
+    },
+    "before": {
+      "blocks": [
+        {
+          "height": 12,
+          "nodes": [
+            "[3, \"X0\", null, 0]",
+            "[3, \"X1\", null, 0]",
+            "[4, \"X2\", null, 0]",
+            "[5, \"Y0\", null, 0]",
+            "[5, \"Y1\", null, 0]"
+          ],
+          "wires": [
+            [
+              [
+                1,
+                0
+              ],
+              [
+                1,
+                12
+              ]
+            ],
+            [
+              [
+                1,
+                3
+              ],
+              [
+                3,
+                3
+              ]
+            ],
+            [
+              [
+                5,
+                3
+              ],
+              [
+                6,
+                3
+              ]
+            ],
+            [
+              [
+                6,
+                3
+              ],
+              [
+                6,
+                6
+              ]
+            ],
+            [
+              [
+                6,
+                3
+              ],
+              [
+                8,
+                3
+              ]
+            ],
+            [
+              [
+                6,
+                6
+              ],
+              [
+                8,
+                6
+              ]
+            ],
+            [
+              [
+                8,
+                3
+              ],
+              [
+                10,
+                3
+              ]
+            ],
+            [
+              [
+                8,
+                6
+              ],
+              [
+                10,
+                6
+              ]
+            ],
+            [
+              [
+                12,
+                3
+              ],
+              [
+                13,
+                3
+              ]
+            ],
+            [
+              [
+                12,
+                6
+              ],
+              [
+                13,
+                6
+              ]
+            ],
+            [
+              [
+                13,
+                3
+              ],
+              [
+                15,
+                3
+              ]
+            ],
+            [
+              [
+                13,
+                6
+              ],
+              [
+                15,
+                6
+              ]
+            ],
+            [
+              [
+                15,
+                3
+              ],
+              [
+                15,
+                6
+              ]
+            ],
+            [
+              [
+                15,
+                3
+              ],
+              [
+                18,
+                3
+              ]
+            ],
+            [
+              [
+                15,
+                6
+              ],
+              [
+                18,
+                6
+              ]
+            ]
+          ],
+          "unknown_records": []
+        },
+        {
+          "height": 9,
+          "nodes": [
+            "[3, \"X3\", null, 0]",
+            "[5, \"Y2\", null, 0]"
+          ],
+          "wires": [
+            [
+              [
+                1,
+                0
+              ],
+              [
+                1,
+                9
+              ]
+            ],
+            [
+              [
+                1,
+                3
+              ],
+              [
+                3,
+                3
+              ]
+            ],
+            [
+              [
+                5,
+                3
+              ],
+              [
+                6,
+                3
+              ]
+            ],
+            [
+              [
+                6,
+                3
+              ],
+              [
+                9,
+                3
+              ]
+            ]
+          ],
+          "unknown_records": []
+        }
+      ],
+      "devices": [
+        [
+          3,
+          "X0",
+          null,
+          1
+        ],
+        [
+          3,
+          "X1",
+          null,
+          1
+        ],
+        [
+          3,
+          "X3",
+          null,
+          1
+        ],
+        [
+          4,
+          "X2",
+          null,
+          1
+        ],
+        [
+          5,
+          "Y0",
+          null,
+          1
+        ],
+        [
+          5,
+          "Y1",
+          null,
+          1
+        ],
+        [
+          5,
+          "Y2",
+          null,
+          1
+        ]
+      ],
+      "topology": [
+        [
+          [
+            "[3, \"X0\", null, 0]",
+            0
+          ]
+        ],
+        [
+          [
+            "[3, \"X0\", null, 0]",
+            1
+          ],
+          [
+            "[3, \"X1\", null, 0]",
+            0
+          ],
+          [
+            "[4, \"X2\", null, 0]",
+            0
+          ]
+        ],
+        [
+          [
+            "[3, \"X1\", null, 0]",
+            1
+          ],
+          [
+            "[4, \"X2\", null, 0]",
+            1
+          ],
+          [
+            "[5, \"Y0\", null, 0]",
+            0
+          ],
+          [
+            "[5, \"Y1\", null, 0]",
+            0
+          ]
+        ],
+        [
+          [
+            "[3, \"X3\", null, 0]",
+            0
+          ]
+        ],
+        [
+          [
+            "[3, \"X3\", null, 0]",
+            1
+          ],
+          [
+            "[5, \"Y2\", null, 0]",
+            0
+          ]
+        ],
+        [
+          [
+            "[5, \"Y0\", null, 0]",
+            1
+          ]
+        ],
+        [
+          [
+            "[5, \"Y1\", null, 0]",
+            1
+          ]
+        ],
+        [
+          [
+            "[5, \"Y2\", null, 0]",
+            1
+          ]
+        ]
+      ],
+      "wires": [
+        [
+          [
+            1,
+            0
+          ],
+          [
+            1,
+            9
+          ]
+        ],
+        [
+          [
+            1,
+            0
+          ],
+          [
+            1,
+            12
+          ]
+        ],
+        [
+          [
+            1,
+            3
+          ],
+          [
+            3,
+            3
+          ]
+        ],
+        [
+          [
+            1,
+            3
+          ],
+          [
+            3,
+            3
+          ]
+        ],
+        [
+          [
+            5,
+            3
+          ],
+          [
+            6,
+            3
+          ]
+        ],
+        [
+          [
+            5,
+            3
+          ],
+          [
+            6,
+            3
+          ]
+        ],
+        [
+          [
+            6,
+            3
+          ],
+          [
+            6,
+            6
+          ]
+        ],
+        [
+          [
+            6,
+            3
+          ],
+          [
+            8,
+            3
+          ]
+        ],
+        [
+          [
+            6,
+            3
+          ],
+          [
+            9,
+            3
+          ]
+        ],
+        [
+          [
+            6,
+            6
+          ],
+          [
+            8,
+            6
+          ]
+        ],
+        [
+          [
+            8,
+            3
+          ],
+          [
+            10,
+            3
+          ]
+        ],
+        [
+          [
+            8,
+            6
+          ],
+          [
+            10,
+            6
+          ]
+        ],
+        [
+          [
+            12,
+            3
+          ],
+          [
+            13,
+            3
+          ]
+        ],
+        [
+          [
+            12,
+            6
+          ],
+          [
+            13,
+            6
+          ]
+        ],
+        [
+          [
+            13,
+            3
+          ],
+          [
+            15,
+            3
+          ]
+        ],
+        [
+          [
+            13,
+            6
+          ],
+          [
+            15,
+            6
+          ]
+        ],
+        [
+          [
+            15,
+            3
+          ],
+          [
+            15,
+            6
+          ]
+        ],
+        [
+          [
+            15,
+            3
+          ],
+          [
+            18,
+            3
+          ]
+        ],
+        [
+          [
+            15,
+            6
+          ],
+          [
+            18,
+            6
+          ]
+        ]
+      ],
+      "semantic_graph": [
+        {
+          "key": "[3, \"X0\", null, 0]",
+          "ports": [
+            {
+              "index": 0,
+              "role": "execution_in",
+              "port_kind_code": 3,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X0\", null, 0]",
+                  0
+                ]
+              ]
+            },
+            {
+              "index": 1,
+              "role": "execution_out",
+              "port_kind_code": 2,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X0\", null, 0]",
+                  1
+                ],
+                [
+                  "[3, \"X1\", null, 0]",
+                  0
+                ],
+                [
+                  "[4, \"X2\", null, 0]",
+                  0
+                ]
+              ]
+            }
+          ],
+          "polarity": "normally_open"
+        },
+        {
+          "key": "[3, \"X1\", null, 0]",
+          "ports": [
+            {
+              "index": 0,
+              "role": "execution_in",
+              "port_kind_code": 3,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X0\", null, 0]",
+                  1
+                ],
+                [
+                  "[3, \"X1\", null, 0]",
+                  0
+                ],
+                [
+                  "[4, \"X2\", null, 0]",
+                  0
+                ]
+              ]
+            },
+            {
+              "index": 1,
+              "role": "execution_out",
+              "port_kind_code": 2,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X1\", null, 0]",
+                  1
+                ],
+                [
+                  "[4, \"X2\", null, 0]",
+                  1
+                ],
+                [
+                  "[5, \"Y0\", null, 0]",
+                  0
+                ],
+                [
+                  "[5, \"Y1\", null, 0]",
+                  0
+                ]
+              ]
+            }
+          ],
+          "polarity": "normally_open"
+        },
+        {
+          "key": "[3, \"X3\", null, 0]",
+          "ports": [
+            {
+              "index": 0,
+              "role": "execution_in",
+              "port_kind_code": 3,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X3\", null, 0]",
+                  0
+                ]
+              ]
+            },
+            {
+              "index": 1,
+              "role": "execution_out",
+              "port_kind_code": 2,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X3\", null, 0]",
+                  1
+                ],
+                [
+                  "[5, \"Y2\", null, 0]",
+                  0
+                ]
+              ]
+            }
+          ],
+          "polarity": "normally_open"
+        },
+        {
+          "key": "[4, \"X2\", null, 0]",
+          "ports": [
+            {
+              "index": 0,
+              "role": "execution_in",
+              "port_kind_code": 11,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X0\", null, 0]",
+                  1
+                ],
+                [
+                  "[3, \"X1\", null, 0]",
+                  0
+                ],
+                [
+                  "[4, \"X2\", null, 0]",
+                  0
+                ]
+              ]
+            },
+            {
+              "index": 1,
+              "role": "execution_out",
+              "port_kind_code": 2,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X1\", null, 0]",
+                  1
+                ],
+                [
+                  "[4, \"X2\", null, 0]",
+                  1
+                ],
+                [
+                  "[5, \"Y0\", null, 0]",
+                  0
+                ],
+                [
+                  "[5, \"Y1\", null, 0]",
+                  0
+                ]
+              ]
+            }
+          ],
+          "polarity": "normally_closed"
+        },
+        {
+          "key": "[5, \"Y0\", null, 0]",
+          "ports": [
+            {
+              "index": 0,
+              "role": "execution_in",
+              "port_kind_code": 3,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X1\", null, 0]",
+                  1
+                ],
+                [
+                  "[4, \"X2\", null, 0]",
+                  1
+                ],
+                [
+                  "[5, \"Y0\", null, 0]",
+                  0
+                ],
+                [
+                  "[5, \"Y1\", null, 0]",
+                  0
+                ]
+              ]
+            },
+            {
+              "index": 1,
+              "role": "unknown",
+              "port_kind_code": 0,
+              "formal": null,
+              "net": [
+                [
+                  "[5, \"Y0\", null, 0]",
+                  1
+                ]
+              ]
+            }
+          ],
+          "polarity": null
+        },
+        {
+          "key": "[5, \"Y1\", null, 0]",
+          "ports": [
+            {
+              "index": 0,
+              "role": "execution_in",
+              "port_kind_code": 3,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X1\", null, 0]",
+                  1
+                ],
+                [
+                  "[4, \"X2\", null, 0]",
+                  1
+                ],
+                [
+                  "[5, \"Y0\", null, 0]",
+                  0
+                ],
+                [
+                  "[5, \"Y1\", null, 0]",
+                  0
+                ]
+              ]
+            },
+            {
+              "index": 1,
+              "role": "unknown",
+              "port_kind_code": 0,
+              "formal": null,
+              "net": [
+                [
+                  "[5, \"Y1\", null, 0]",
+                  1
+                ]
+              ]
+            }
+          ],
+          "polarity": null
+        },
+        {
+          "key": "[5, \"Y2\", null, 0]",
+          "ports": [
+            {
+              "index": 0,
+              "role": "execution_in",
+              "port_kind_code": 3,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X3\", null, 0]",
+                  1
+                ],
+                [
+                  "[5, \"Y2\", null, 0]",
+                  0
+                ]
+              ]
+            },
+            {
+              "index": 1,
+              "role": "unknown",
+              "port_kind_code": 0,
+              "formal": null,
+              "net": [
+                [
+                  "[5, \"Y2\", null, 0]",
+                  1
+                ]
+              ]
+            }
+          ],
+          "polarity": null
+        }
+      ],
+      "unknown_records": []
+    },
+    "after": {
+      "blocks": [
+        {
+          "height": 12,
+          "nodes": [
+            "[3, \"X0\", null, 0]",
+            "[3, \"X1\", null, 0]",
+            "[4, \"X2\", null, 0]",
+            "[5, \"Y0\", null, 0]",
+            "[5, \"Y1\", null, 0]"
+          ],
+          "wires": [
+            [
+              [
+                1,
+                0
+              ],
+              [
+                1,
+                12
+              ]
+            ],
+            [
+              [
+                1,
+                3
+              ],
+              [
+                3,
+                3
+              ]
+            ],
+            [
+              [
+                5,
+                3
+              ],
+              [
+                6,
+                3
+              ]
+            ],
+            [
+              [
+                6,
+                3
+              ],
+              [
+                6,
+                6
+              ]
+            ],
+            [
+              [
+                6,
+                3
+              ],
+              [
+                8,
+                3
+              ]
+            ],
+            [
+              [
+                6,
+                6
+              ],
+              [
+                8,
+                6
+              ]
+            ],
+            [
+              [
+                8,
+                3
+              ],
+              [
+                10,
+                3
+              ]
+            ],
+            [
+              [
+                8,
+                6
+              ],
+              [
+                10,
+                6
+              ]
+            ],
+            [
+              [
+                12,
+                3
+              ],
+              [
+                13,
+                3
+              ]
+            ],
+            [
+              [
+                12,
+                6
+              ],
+              [
+                13,
+                6
+              ]
+            ],
+            [
+              [
+                13,
+                3
+              ],
+              [
+                15,
+                3
+              ]
+            ],
+            [
+              [
+                13,
+                6
+              ],
+              [
+                15,
+                6
+              ]
+            ],
+            [
+              [
+                15,
+                3
+              ],
+              [
+                15,
+                6
+              ]
+            ],
+            [
+              [
+                15,
+                3
+              ],
+              [
+                18,
+                3
+              ]
+            ],
+            [
+              [
+                15,
+                6
+              ],
+              [
+                18,
+                6
+              ]
+            ]
+          ],
+          "unknown_records": []
+        },
+        {
+          "height": 9,
+          "nodes": [
+            "[3, \"X3\", null, 0]",
+            "[5, \"Y2\", null, 0]"
+          ],
+          "wires": [
+            [
+              [
+                1,
+                0
+              ],
+              [
+                1,
+                9
+              ]
+            ],
+            [
+              [
+                1,
+                3
+              ],
+              [
+                3,
+                3
+              ]
+            ],
+            [
+              [
+                5,
+                3
+              ],
+              [
+                6,
+                3
+              ]
+            ],
+            [
+              [
+                6,
+                3
+              ],
+              [
+                9,
+                3
+              ]
+            ]
+          ],
+          "unknown_records": []
+        }
+      ],
+      "devices": [
+        [
+          3,
+          "X0",
+          null,
+          1
+        ],
+        [
+          3,
+          "X1",
+          null,
+          1
+        ],
+        [
+          3,
+          "X3",
+          null,
+          1
+        ],
+        [
+          4,
+          "X2",
+          null,
+          1
+        ],
+        [
+          5,
+          "Y0",
+          null,
+          1
+        ],
+        [
+          5,
+          "Y1",
+          null,
+          1
+        ],
+        [
+          5,
+          "Y2",
+          null,
+          1
+        ]
+      ],
+      "topology": [
+        [
+          [
+            "[3, \"X0\", null, 0]",
+            0
+          ]
+        ],
+        [
+          [
+            "[3, \"X0\", null, 0]",
+            1
+          ],
+          [
+            "[3, \"X1\", null, 0]",
+            0
+          ],
+          [
+            "[4, \"X2\", null, 0]",
+            0
+          ]
+        ],
+        [
+          [
+            "[3, \"X1\", null, 0]",
+            1
+          ],
+          [
+            "[4, \"X2\", null, 0]",
+            1
+          ],
+          [
+            "[5, \"Y0\", null, 0]",
+            0
+          ],
+          [
+            "[5, \"Y1\", null, 0]",
+            0
+          ]
+        ],
+        [
+          [
+            "[3, \"X3\", null, 0]",
+            0
+          ]
+        ],
+        [
+          [
+            "[3, \"X3\", null, 0]",
+            1
+          ],
+          [
+            "[5, \"Y2\", null, 0]",
+            0
+          ]
+        ],
+        [
+          [
+            "[5, \"Y0\", null, 0]",
+            1
+          ]
+        ],
+        [
+          [
+            "[5, \"Y1\", null, 0]",
+            1
+          ]
+        ],
+        [
+          [
+            "[5, \"Y2\", null, 0]",
+            1
+          ]
+        ]
+      ],
+      "wires": [
+        [
+          [
+            1,
+            0
+          ],
+          [
+            1,
+            9
+          ]
+        ],
+        [
+          [
+            1,
+            0
+          ],
+          [
+            1,
+            12
+          ]
+        ],
+        [
+          [
+            1,
+            3
+          ],
+          [
+            3,
+            3
+          ]
+        ],
+        [
+          [
+            1,
+            3
+          ],
+          [
+            3,
+            3
+          ]
+        ],
+        [
+          [
+            5,
+            3
+          ],
+          [
+            6,
+            3
+          ]
+        ],
+        [
+          [
+            5,
+            3
+          ],
+          [
+            6,
+            3
+          ]
+        ],
+        [
+          [
+            6,
+            3
+          ],
+          [
+            6,
+            6
+          ]
+        ],
+        [
+          [
+            6,
+            3
+          ],
+          [
+            8,
+            3
+          ]
+        ],
+        [
+          [
+            6,
+            3
+          ],
+          [
+            9,
+            3
+          ]
+        ],
+        [
+          [
+            6,
+            6
+          ],
+          [
+            8,
+            6
+          ]
+        ],
+        [
+          [
+            8,
+            3
+          ],
+          [
+            10,
+            3
+          ]
+        ],
+        [
+          [
+            8,
+            6
+          ],
+          [
+            10,
+            6
+          ]
+        ],
+        [
+          [
+            12,
+            3
+          ],
+          [
+            13,
+            3
+          ]
+        ],
+        [
+          [
+            12,
+            6
+          ],
+          [
+            13,
+            6
+          ]
+        ],
+        [
+          [
+            13,
+            3
+          ],
+          [
+            15,
+            3
+          ]
+        ],
+        [
+          [
+            13,
+            6
+          ],
+          [
+            15,
+            6
+          ]
+        ],
+        [
+          [
+            15,
+            3
+          ],
+          [
+            15,
+            6
+          ]
+        ],
+        [
+          [
+            15,
+            3
+          ],
+          [
+            18,
+            3
+          ]
+        ],
+        [
+          [
+            15,
+            6
+          ],
+          [
+            18,
+            6
+          ]
+        ]
+      ],
+      "semantic_graph": [
+        {
+          "key": "[3, \"X0\", null, 0]",
+          "ports": [
+            {
+              "index": 0,
+              "role": "execution_in",
+              "port_kind_code": 3,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X0\", null, 0]",
+                  0
+                ]
+              ]
+            },
+            {
+              "index": 1,
+              "role": "execution_out",
+              "port_kind_code": 2,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X0\", null, 0]",
+                  1
+                ],
+                [
+                  "[3, \"X1\", null, 0]",
+                  0
+                ],
+                [
+                  "[4, \"X2\", null, 0]",
+                  0
+                ]
+              ]
+            }
+          ],
+          "polarity": "normally_open"
+        },
+        {
+          "key": "[3, \"X1\", null, 0]",
+          "ports": [
+            {
+              "index": 0,
+              "role": "execution_in",
+              "port_kind_code": 3,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X0\", null, 0]",
+                  1
+                ],
+                [
+                  "[3, \"X1\", null, 0]",
+                  0
+                ],
+                [
+                  "[4, \"X2\", null, 0]",
+                  0
+                ]
+              ]
+            },
+            {
+              "index": 1,
+              "role": "execution_out",
+              "port_kind_code": 2,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X1\", null, 0]",
+                  1
+                ],
+                [
+                  "[4, \"X2\", null, 0]",
+                  1
+                ],
+                [
+                  "[5, \"Y0\", null, 0]",
+                  0
+                ],
+                [
+                  "[5, \"Y1\", null, 0]",
+                  0
+                ]
+              ]
+            }
+          ],
+          "polarity": "normally_open"
+        },
+        {
+          "key": "[3, \"X3\", null, 0]",
+          "ports": [
+            {
+              "index": 0,
+              "role": "execution_in",
+              "port_kind_code": 3,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X3\", null, 0]",
+                  0
+                ]
+              ]
+            },
+            {
+              "index": 1,
+              "role": "execution_out",
+              "port_kind_code": 2,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X3\", null, 0]",
+                  1
+                ],
+                [
+                  "[5, \"Y2\", null, 0]",
+                  0
+                ]
+              ]
+            }
+          ],
+          "polarity": "normally_open"
+        },
+        {
+          "key": "[4, \"X2\", null, 0]",
+          "ports": [
+            {
+              "index": 0,
+              "role": "execution_in",
+              "port_kind_code": 11,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X0\", null, 0]",
+                  1
+                ],
+                [
+                  "[3, \"X1\", null, 0]",
+                  0
+                ],
+                [
+                  "[4, \"X2\", null, 0]",
+                  0
+                ]
+              ]
+            },
+            {
+              "index": 1,
+              "role": "execution_out",
+              "port_kind_code": 2,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X1\", null, 0]",
+                  1
+                ],
+                [
+                  "[4, \"X2\", null, 0]",
+                  1
+                ],
+                [
+                  "[5, \"Y0\", null, 0]",
+                  0
+                ],
+                [
+                  "[5, \"Y1\", null, 0]",
+                  0
+                ]
+              ]
+            }
+          ],
+          "polarity": "normally_closed"
+        },
+        {
+          "key": "[5, \"Y0\", null, 0]",
+          "ports": [
+            {
+              "index": 0,
+              "role": "execution_in",
+              "port_kind_code": 3,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X1\", null, 0]",
+                  1
+                ],
+                [
+                  "[4, \"X2\", null, 0]",
+                  1
+                ],
+                [
+                  "[5, \"Y0\", null, 0]",
+                  0
+                ],
+                [
+                  "[5, \"Y1\", null, 0]",
+                  0
+                ]
+              ]
+            },
+            {
+              "index": 1,
+              "role": "unknown",
+              "port_kind_code": 0,
+              "formal": null,
+              "net": [
+                [
+                  "[5, \"Y0\", null, 0]",
+                  1
+                ]
+              ]
+            }
+          ],
+          "polarity": null
+        },
+        {
+          "key": "[5, \"Y1\", null, 0]",
+          "ports": [
+            {
+              "index": 0,
+              "role": "execution_in",
+              "port_kind_code": 3,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X1\", null, 0]",
+                  1
+                ],
+                [
+                  "[4, \"X2\", null, 0]",
+                  1
+                ],
+                [
+                  "[5, \"Y0\", null, 0]",
+                  0
+                ],
+                [
+                  "[5, \"Y1\", null, 0]",
+                  0
+                ]
+              ]
+            },
+            {
+              "index": 1,
+              "role": "unknown",
+              "port_kind_code": 0,
+              "formal": null,
+              "net": [
+                [
+                  "[5, \"Y1\", null, 0]",
+                  1
+                ]
+              ]
+            }
+          ],
+          "polarity": null
+        },
+        {
+          "key": "[5, \"Y2\", null, 0]",
+          "ports": [
+            {
+              "index": 0,
+              "role": "execution_in",
+              "port_kind_code": 3,
+              "formal": null,
+              "net": [
+                [
+                  "[3, \"X3\", null, 0]",
+                  1
+                ],
+                [
+                  "[5, \"Y2\", null, 0]",
+                  0
+                ]
+              ]
+            },
+            {
+              "index": 1,
+              "role": "unknown",
+              "port_kind_code": 0,
+              "formal": null,
+              "net": [
+                [
+                  "[5, \"Y2\", null, 0]",
+                  1
+                ]
+              ]
+            }
+          ],
+          "polarity": null
+        }
+      ],
+      "unknown_records": []
+    }
+  },
+  "program_byte_identical": true,
+  "program_sha256": "00b49a57cbf4dac6ef9a97488ca09c220224ca183ad31825b5392abe1b174cee"
+}

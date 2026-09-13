@@ -10,6 +10,7 @@ from .models import (
     Point,
     PortDescriptor,
     Rect,
+    StructuredBlock,
     StructuredNode,
     StructuredProgram,
     StructuredWire,
@@ -17,6 +18,10 @@ from .models import (
 )
 
 
+PROGRAM_PREFIX_SIZE = 71
+BLOCK_HEADER_SIZE = 24
+BLOCK_COUNT_OFFSET = 0x43
+# Compatibility offsets for the first block.
 STRUCTURED_RECORDS_OFFSET = 0x5F
 BODY_SIZE_OFFSET = 0x47
 CANVAS_HEIGHT_OFFSET = 0x57
@@ -175,46 +180,47 @@ def parse_structured_pou(
             "Program.pou is too short for the observed structured layout"
         )
 
-    body_size = _u32(data, BODY_SIZE_OFFSET)
-    canvas_height = _u32(data, CANVAS_HEIGHT_OFFSET)
-    record_count = _u32(data, RECORD_COUNT_OFFSET)
-
-    observed_body_size = len(data) - STRUCTURED_RECORDS_OFFSET
-    if body_size != observed_body_size:
-        raise GXWFormatError(
-            f"unsupported Program.pou layout: body-size field says {body_size}, "
-            f"actual body is {observed_body_size}"
-        )
-
-    cursor = STRUCTURED_RECORDS_OFFSET
+    block_count = _u32(data, BLOCK_COUNT_OFFSET)
+    if not 1 <= block_count <= (len(data) - PROGRAM_PREFIX_SIZE - OBSERVED_TRAILER_SIZE) // BLOCK_HEADER_SIZE:
+        raise GXWFormatError("invalid or unsupported structured block count")
+    cursor = PROGRAM_PREFIX_SIZE
     nodes: List[StructuredNode] = []
     wires: List[StructuredWire] = []
     unknown: List[UnknownRecord] = []
-
-    for record_index in range(record_count):
-        if cursor + 8 > len(data):
-            raise GXWFormatError(f"record {record_index} header is truncated")
-        record_length = _u32(data, cursor)
-        if record_length < 8 or cursor + record_length > len(data):
-            raise GXWFormatError(
-                f"invalid record length {record_length} at 0x{cursor:X}"
-            )
-        record = data[cursor : cursor + record_length]
-        record_class = _u32(record, 4)
-        if record_class == 1:
-            nodes.append(_parse_node(record, cursor))
-        elif record_class == 2:
-            wires.append(_parse_wire(record, cursor))
-        else:
-            unknown.append(
-                UnknownRecord(
-                    offset=cursor,
-                    record_length=record_length,
-                    record_class=record_class,
-                    raw=record,
-                )
-            )
-        cursor += record_length
+    blocks = []
+    for block_index in range(block_count):
+        start = cursor
+        if start + BLOCK_HEADER_SIZE > len(data) - OBSERVED_TRAILER_SIZE:
+            raise GXWFormatError("structured block header is truncated")
+        size = _u32(data, start)
+        end = start + size
+        count = _u32(data, start + 20)
+        if size < BLOCK_HEADER_SIZE or end > len(data) - OBSERVED_TRAILER_SIZE:
+            raise GXWFormatError("invalid structured block byte length")
+        if count > (size - BLOCK_HEADER_SIZE) // 8:
+            raise GXWFormatError("structured block record count exceeds capacity")
+        cursor += BLOCK_HEADER_SIZE
+        offsets = []
+        for record_index in range(count):
+            if cursor + 8 > end:
+                raise GXWFormatError(f"block {block_index} record header is truncated")
+            record_length = _u32(data, cursor)
+            if record_length < 8 or cursor + record_length > end:
+                raise GXWFormatError(f"record crosses block boundary at 0x{cursor:X}")
+            record = data[cursor:cursor + record_length]
+            record_class = _u32(record, 4)
+            if record_class == 1:
+                nodes.append(_parse_node(record, cursor))
+            elif record_class == 2:
+                wires.append(_parse_wire(record, cursor))
+            else:
+                unknown.append(UnknownRecord(cursor, record_length, record_class, record))
+            offsets.append(cursor)
+            cursor += record_length
+        if cursor != end:
+            raise GXWFormatError(f"unconsumed bytes inside block {block_index}")
+        blocks.append(StructuredBlock(start, size, _u32(data, start + 16), tuple(offsets),
+                                      data[start:start + BLOCK_HEADER_SIZE]))
 
     trailer = data[cursor:]
     if len(trailer) != OBSERVED_TRAILER_SIZE or any(trailer):
@@ -225,12 +231,13 @@ def parse_structured_pou(
     return StructuredProgram(
         logical_name=logical_name,
         source_path=source_path,
-        record_count=record_count,
-        canvas_height=canvas_height,
-        body_size=body_size,
+        record_count=sum(b.record_count for b in blocks),
+        canvas_height=sum(b.canvas_height for b in blocks),
+        body_size=sum(b.byte_length for b in blocks),
         nodes=tuple(nodes),
         wires=tuple(wires),
         unknown_records=tuple(unknown),
         trailer=trailer,
         raw=data,
+        blocks=tuple(blocks),
     )

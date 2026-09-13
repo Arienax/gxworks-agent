@@ -1,0 +1,278 @@
+{
+  "schema_version": 1,
+  "scope": "Offline FX3U Structured Ladder/FBD native block-boundary matrix and isolated M1 mutation",
+  "archive": "research\\evidence\\gxw-block-boundary-20260913.zip",
+  "files": [
+    {
+      "member": "samples/A.gxw",
+      "size": 934400,
+      "sha256": "9e5d9419ebba0c856ccb4677fc69cba2be00d59f19076b84f6bad098af75b7e8"
+    },
+    {
+      "member": "samples/B.gxw",
+      "size": 935424,
+      "sha256": "34ee375e148be6db2f27cf11f18ae412ef2e6525b23845d72361208706e2f64e"
+    },
+    {
+      "member": "samples/B_edit.gxw",
+      "size": 935424,
+      "sha256": "1485458edd1ec8422d9a21a7133c836972e8199688afa44663e83dca4a1baae0"
+    },
+    {
+      "member": "samples/C.gxw",
+      "size": 935424,
+      "sha256": "1af0c540f1cc86993e17732c5163e147ddfc21d23c7fc318fed72758ace6dc53"
+    },
+    {
+      "member": "samples/C_edit.gxw",
+      "size": 935424,
+      "sha256": "4c9f6cf4c427d546a0208435a0cb2cda668bafcbee22b9a380c2b54e7358edbe"
+    },
+    {
+      "member": "samples/D.gxw",
+      "size": 935424,
+      "sha256": "a35cab98b65bb893e891b6223d012305d2bcf7eb9f8fd03fc977c6bb0a303bad"
+    },
+    {
+      "member": "samples/D_edit.gxw",
+      "size": 935424,
+      "sha256": "0437b8288ef620a70a771c75335f9c1d7f744b7447261d960eef05701898e2b1"
+    },
+    {
+      "member": "samples/D_noedit.gxw",
+      "size": 935424,
+      "sha256": "3fb7f9c0bac65a0a5e342ca967d63a101bf302c466327f75cc2ab27cb226cf87"
+    },
+    {
+      "member": "samples/E.gxw",
+      "size": 934912,
+      "sha256": "e38d8263f926fc3b02f62710f7bd36e2bbf80bdadb98ff0b36fb1d6d768be701"
+    },
+    {
+      "member": "samples/E_edit.gxw",
+      "size": 934400,
+      "sha256": "ccbd6f2e08e65a9d987e9c6573a9f9221873eb95330d9ba85791c0c2ffe9d5aa"
+    },
+    {
+      "member": "samples/M1.gxw",
+      "size": 935424,
+      "sha256": "2c08a8a818e69ba10d26543d3547fdbf5b5248c645cf5764087864e54e40cc9f"
+    },
+    {
+      "member": "samples/M1_compile.gxw",
+      "size": 935424,
+      "sha256": "b10dfff51031ef46028021ec4595fea220c0970205d887d701fd0268cc2abbb7"
+    },
+    {
+      "member": "screenshots/A-compile.png",
+      "size": 300149,
+      "sha256": "6f4f7531a54267089e88e709112cc7e899ab0b50cf78506d6d8ff0e5bb5c556e"
+    },
+    {
+      "member": "screenshots/A-reopen.png",
+      "size": 260159,
+      "sha256": "253e567ee00ba16e5bc7ef3b917a81d33b2a7858219fe7de23a025ee4761f12b"
+    },
+    {
+      "member": "screenshots/B-compile.png",
+      "size": 159477,
+      "sha256": "d6c2f6b2e7c1469f586a7329ed9495b705a3ab35c9d997fb6cd87d419e324795"
+    },
+    {
+      "member": "screenshots/B-edit.png",
+      "size": 136307,
+      "sha256": "22ac5e5971040484ce4c53ae63d52e14446d681e936ef20222aa4f7aa934c4f3"
+    },
+    {
+      "member": "screenshots/B-reopen.png",
+      "size": 136384,
+      "sha256": "ee8fb1f8a5f5ac2eb1970f78b0e66dbb4489818927edd3b2546ad1dbf2c03e1c"
+    },
+    {
+      "member": "screenshots/C-compile.png",
+      "size": 161749,
+      "sha256": "1a88bbc071e353fcecbd84923c6ae912dacee9806ee9a8fae85cff76f3374ca6"
+    },
+    {
+      "member": "screenshots/C-edit.png",
+      "size": 140062,
+      "sha256": "dbc19c97dec77a42d0df2919f37441458e109fed25e856d9d5fd806167955547"
+    },
+    {
+      "member": "screenshots/C-reopen.png",
+      "size": 141375,
+      "sha256": "8050bfaf8b5a699c2749710ab423ce67f6a5d09e80e160b22534379eab5790d0"
+    },
+    {
+      "member": "screenshots/D-compile.png",
+      "size": 162312,
+      "sha256": "531e1b6c76f42595b8983c98479f15c5447aa4e52fc63a88b9fbac32e856e7f4"
+    },
+    {
+      "member": "screenshots/D-edit.png",
+      "size": 140743,
+      "sha256": "39dec00fd34dea4a7ea0c34b0951dfa10c9da11e7f4a1aae071d6b1ec5f21269"
+    },
+    {
+      "member": "screenshots/D-reopen.png",
+      "size": 141249,
+      "sha256": "71d0098ad4026b78ba31c5a7c95c7b8c37106dd95a8bd0dd4cea25fc94817334"
+    },
+    {
+      "member": "screenshots/E-compile.png",
+      "size": 162577,
+      "sha256": "143a26820dc9ac9f79205b7b293c3215f4d70429cc46b74c3a0bced7a7add6b5"
+    },
+    {
+      "member": "screenshots/E-edit.png",
+      "size": 140663,
+      "sha256": "3b515342a4ec8c8772590fd272724a60ea19372f0fab9b49dbd1679913ff024c"
+    },
+    {
+      "member": "screenshots/E-reopen.png",
+      "size": 139849,
+      "sha256": "40bcbd92367b996e56dc4ed59f9977871d6b62be4fe0c20b34d0c7ddf9b5f95a"
+    },
+    {
+      "member": "screenshots/M1-compile.png",
+      "size": 162302,
+      "sha256": "2dde4bd0beb228008b4e70545e38b9f0fa9a759f07f6e838fad33532d65f9d41"
+    },
+    {
+      "member": "screenshots/M1-open.png",
+      "size": 140891,
+      "sha256": "b0adddfc463595c8b93a010d4e4deef4dfb7362aa27bd34a9a70b855179562c2"
+    },
+    {
+      "member": "screenshots/M1-reopen.png",
+      "size": 140562,
+      "sha256": "6c1c0ef5869ee6afa8dec9f380f18143938088a48782e7ae5dfcb4c1e9c7f4fa"
+    }
+  ],
+  "native_validation": {
+    "A": {
+      "open": true,
+      "compile_all": {
+        "errors": 0,
+        "warnings": 0,
+        "check_warnings": 0,
+        "codes": []
+      },
+      "save": true,
+      "close": true,
+      "reopen": true,
+      "reopened_block_count": 1,
+      "screenshots": [
+        "screenshots/A-compile.png",
+        "screenshots/A-reopen.png"
+      ],
+      "status": "native_roundtrip_observed"
+    },
+    "B": {
+      "open": true,
+      "compile_all": {
+        "errors": 0,
+        "warnings": 1,
+        "check_warnings": 0,
+        "codes": [
+          "C2034"
+        ]
+      },
+      "save": true,
+      "close": true,
+      "reopen": true,
+      "reopened_block_count": 1,
+      "screenshots": [
+        "screenshots/B-compile.png",
+        "screenshots/B-reopen.png"
+      ],
+      "status": "native_roundtrip_observed"
+    },
+    "C": {
+      "open": true,
+      "compile_all": {
+        "errors": 0,
+        "warnings": 0,
+        "check_warnings": 0,
+        "codes": []
+      },
+      "save": true,
+      "close": true,
+      "reopen": true,
+      "reopened_block_count": 2,
+      "screenshots": [
+        "screenshots/C-compile.png",
+        "screenshots/C-reopen.png"
+      ],
+      "status": "native_roundtrip_observed"
+    },
+    "D": {
+      "open": true,
+      "compile_all": {
+        "errors": 0,
+        "warnings": 0,
+        "check_warnings": 0,
+        "codes": []
+      },
+      "save": true,
+      "close": true,
+      "reopen": true,
+      "reopened_block_count": 2,
+      "screenshots": [
+        "screenshots/D-compile.png",
+        "screenshots/D-reopen.png"
+      ],
+      "status": "native_roundtrip_observed"
+    },
+    "E": {
+      "open": true,
+      "compile_all": {
+        "errors": 0,
+        "warnings": 1,
+        "check_warnings": 0,
+        "codes": [
+          "C2008"
+        ]
+      },
+      "save": true,
+      "close": true,
+      "reopen": true,
+      "reopened_block_count": 2,
+      "screenshots": [
+        "screenshots/E-compile.png",
+        "screenshots/E-reopen.png"
+      ],
+      "status": "native_roundtrip_observed"
+    },
+    "M1": {
+      "open": true,
+      "compile_all": {
+        "errors": 0,
+        "warnings": 0,
+        "check_warnings": 0,
+        "codes": []
+      },
+      "save": true,
+      "close": true,
+      "reopen": true,
+      "reopened_block_count": 2,
+      "screenshots": [
+        "screenshots/M1-compile.png",
+        "screenshots/M1-reopen.png"
+      ],
+      "status": "native_roundtrip_observed"
+    }
+  },
+  "archive_sha256": "c2ef4158cb2bf84165f35b235b6262f44b802cdf3210e5b1f0fc421872b1a334",
+  "provenance": {
+    "A": "Native single-rung control from original regression/A.gxw, copied and recompiled",
+    "E": "Native A plus one empty block, Save As E.gxw",
+    "C": "Native full block copy, second block labels changed to X2/Y2; all subsequent samples use working filename E.gxw",
+    "D": "Native cut second block then paste before first; complete block payload reversal",
+    "B": "Native C order restored, cut second rung graphics, paste in first block, remove empty block; second rung y shifted +2",
+    "M1": "Research-only transplant of native C block containers into B POU; B opaque prefix retained; history synchronized; all other source/compiled streams unchanged before native open"
+  },
+  "noise_control": "D_noedit.gxw: reopen then save without editing; Program.pou identical to D.gxw",
+  "GX_Works2_file_version": "1.635.0.1",
+  "CPU": "FX3U/FX3UC"
+}

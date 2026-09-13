@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Dict, List, Tuple
 
 from .models import GXWFormatError, NodeKind, Point, StructuredProgram, StructuredWire
@@ -21,6 +21,7 @@ class ConnectivityNet:
     index: int
     ports: Tuple[PortRef, ...]
     wire_offsets: Tuple[int, ...]
+    block_index: int = 0
 
 
 @dataclass(frozen=True)
@@ -102,6 +103,15 @@ class _UnionFind:
 
 
 def build_connectivity_graph(program: StructuredProgram) -> ConnectivityGraph:
+    """Reconstruct independent nets in each native block's local canvas."""
+    nets = []
+    for block_index, view in enumerate(program.block_views()):
+        for net in _build_block_connectivity(view).nets:
+            nets.append(replace(net, index=len(nets), block_index=block_index))
+    return ConnectivityGraph(program.logical_name, tuple(nets))
+
+
+def _build_block_connectivity(program: StructuredProgram) -> ConnectivityGraph:
     """Reconstruct observed editor-grid electrical nets from nodes and wires.
 
     Verified geometry rules from controlled samples 53-58:

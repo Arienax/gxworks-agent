@@ -1,0 +1,667 @@
+{
+  "B": {
+    "sha256": "34ee375e148be6db2f27cf11f18ae412ef2e6525b23845d72361208706e2f64e",
+    "pou_sha256": "26468bebe22237caf53356288e36649dbbe1e97c885144879ed1e3a2241ec5d0",
+    "blocks": 1,
+    "truth_table": [
+      {
+        "inputs": {
+          "X1": false,
+          "X2": false
+        },
+        "outputs": {
+          "Y1": false,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X1": false,
+          "X2": true
+        },
+        "outputs": {
+          "Y1": false,
+          "Y2": true
+        }
+      },
+      {
+        "inputs": {
+          "X1": true,
+          "X2": false
+        },
+        "outputs": {
+          "Y1": true,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X1": true,
+          "X2": true
+        },
+        "outputs": {
+          "Y1": true,
+          "Y2": true
+        }
+      }
+    ]
+  },
+  "C": {
+    "sha256": "1af0c540f1cc86993e17732c5163e147ddfc21d23c7fc318fed72758ace6dc53",
+    "pou_sha256": "8f596afae2e90f61a0a4880475a5bba2bdbb4a5abfdbea0b171c0396eb9dc6e9",
+    "blocks": 2,
+    "truth_table": [
+      {
+        "inputs": {
+          "X1": false,
+          "X2": false
+        },
+        "outputs": {
+          "Y1": false,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X1": false,
+          "X2": true
+        },
+        "outputs": {
+          "Y1": false,
+          "Y2": true
+        }
+      },
+      {
+        "inputs": {
+          "X1": true,
+          "X2": false
+        },
+        "outputs": {
+          "Y1": true,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X1": true,
+          "X2": true
+        },
+        "outputs": {
+          "Y1": true,
+          "Y2": true
+        }
+      }
+    ]
+  },
+  "D": {
+    "sha256": "a35cab98b65bb893e891b6223d012305d2bcf7eb9f8fd03fc977c6bb0a303bad",
+    "pou_sha256": "28ec757dc594fda3b30f5c887d82474c8f7fd48fc8a1f6ee4819a8072d5701c2",
+    "blocks": 2,
+    "truth_table": [
+      {
+        "inputs": {
+          "X1": false,
+          "X2": false
+        },
+        "outputs": {
+          "Y1": false,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X1": false,
+          "X2": true
+        },
+        "outputs": {
+          "Y1": false,
+          "Y2": true
+        }
+      },
+      {
+        "inputs": {
+          "X1": true,
+          "X2": false
+        },
+        "outputs": {
+          "Y1": true,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X1": true,
+          "X2": true
+        },
+        "outputs": {
+          "Y1": true,
+          "Y2": true
+        }
+      }
+    ]
+  },
+  "M1": {
+    "sha256": "2c08a8a818e69ba10d26543d3547fdbf5b5248c645cf5764087864e54e40cc9f",
+    "pou_sha256": "87345059a5c72d167d24ffb444ab33bcf31992317883e6f9bc1d4a2993d9f92d",
+    "blocks": 2,
+    "truth_table": [
+      {
+        "inputs": {
+          "X1": false,
+          "X2": false
+        },
+        "outputs": {
+          "Y1": false,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X1": false,
+          "X2": true
+        },
+        "outputs": {
+          "Y1": false,
+          "Y2": true
+        }
+      },
+      {
+        "inputs": {
+          "X1": true,
+          "X2": false
+        },
+        "outputs": {
+          "Y1": true,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X1": true,
+          "X2": true
+        },
+        "outputs": {
+          "Y1": true,
+          "Y2": true
+        }
+      }
+    ]
+  },
+  "M1_compile": {
+    "sha256": "b10dfff51031ef46028021ec4595fea220c0970205d887d701fd0268cc2abbb7",
+    "pou_sha256": "87345059a5c72d167d24ffb444ab33bcf31992317883e6f9bc1d4a2993d9f92d",
+    "blocks": 2,
+    "truth_table": [
+      {
+        "inputs": {
+          "X1": false,
+          "X2": false
+        },
+        "outputs": {
+          "Y1": false,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X1": false,
+          "X2": true
+        },
+        "outputs": {
+          "Y1": false,
+          "Y2": true
+        }
+      },
+      {
+        "inputs": {
+          "X1": true,
+          "X2": false
+        },
+        "outputs": {
+          "Y1": true,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X1": true,
+          "X2": true
+        },
+        "outputs": {
+          "Y1": true,
+          "Y2": true
+        }
+      }
+    ]
+  },
+  "R": {
+    "sha256": "56e78a3475831781c559533bc7af1a162881bd52ca95be515e6386a240e85f05",
+    "pou_sha256": "00b49a57cbf4dac6ef9a97488ca09c220224ca183ad31825b5392abe1b174cee",
+    "blocks": 2,
+    "truth_table": [
+      {
+        "inputs": {
+          "X0": false,
+          "X1": false,
+          "X2": false,
+          "X3": false
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X0": false,
+          "X1": false,
+          "X2": false,
+          "X3": true
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": true
+        }
+      },
+      {
+        "inputs": {
+          "X0": false,
+          "X1": false,
+          "X2": true,
+          "X3": false
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X0": false,
+          "X1": false,
+          "X2": true,
+          "X3": true
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": true
+        }
+      },
+      {
+        "inputs": {
+          "X0": false,
+          "X1": true,
+          "X2": false,
+          "X3": false
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X0": false,
+          "X1": true,
+          "X2": false,
+          "X3": true
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": true
+        }
+      },
+      {
+        "inputs": {
+          "X0": false,
+          "X1": true,
+          "X2": true,
+          "X3": false
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X0": false,
+          "X1": true,
+          "X2": true,
+          "X3": true
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": true
+        }
+      },
+      {
+        "inputs": {
+          "X0": true,
+          "X1": false,
+          "X2": false,
+          "X3": false
+        },
+        "outputs": {
+          "Y0": true,
+          "Y1": true,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X0": true,
+          "X1": false,
+          "X2": false,
+          "X3": true
+        },
+        "outputs": {
+          "Y0": true,
+          "Y1": true,
+          "Y2": true
+        }
+      },
+      {
+        "inputs": {
+          "X0": true,
+          "X1": false,
+          "X2": true,
+          "X3": false
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X0": true,
+          "X1": false,
+          "X2": true,
+          "X3": true
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": true
+        }
+      },
+      {
+        "inputs": {
+          "X0": true,
+          "X1": true,
+          "X2": false,
+          "X3": false
+        },
+        "outputs": {
+          "Y0": true,
+          "Y1": true,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X0": true,
+          "X1": true,
+          "X2": false,
+          "X3": true
+        },
+        "outputs": {
+          "Y0": true,
+          "Y1": true,
+          "Y2": true
+        }
+      },
+      {
+        "inputs": {
+          "X0": true,
+          "X1": true,
+          "X2": true,
+          "X3": false
+        },
+        "outputs": {
+          "Y0": true,
+          "Y1": true,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X0": true,
+          "X1": true,
+          "X2": true,
+          "X3": true
+        },
+        "outputs": {
+          "Y0": true,
+          "Y1": true,
+          "Y2": true
+        }
+      }
+    ]
+  },
+  "R_compile": {
+    "sha256": "082f66dd2e5f7dea4e665cbb79054a631eabed6e3fca16f5970037068e70933b",
+    "pou_sha256": "00b49a57cbf4dac6ef9a97488ca09c220224ca183ad31825b5392abe1b174cee",
+    "blocks": 2,
+    "truth_table": [
+      {
+        "inputs": {
+          "X0": false,
+          "X1": false,
+          "X2": false,
+          "X3": false
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X0": false,
+          "X1": false,
+          "X2": false,
+          "X3": true
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": true
+        }
+      },
+      {
+        "inputs": {
+          "X0": false,
+          "X1": false,
+          "X2": true,
+          "X3": false
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X0": false,
+          "X1": false,
+          "X2": true,
+          "X3": true
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": true
+        }
+      },
+      {
+        "inputs": {
+          "X0": false,
+          "X1": true,
+          "X2": false,
+          "X3": false
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X0": false,
+          "X1": true,
+          "X2": false,
+          "X3": true
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": true
+        }
+      },
+      {
+        "inputs": {
+          "X0": false,
+          "X1": true,
+          "X2": true,
+          "X3": false
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X0": false,
+          "X1": true,
+          "X2": true,
+          "X3": true
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": true
+        }
+      },
+      {
+        "inputs": {
+          "X0": true,
+          "X1": false,
+          "X2": false,
+          "X3": false
+        },
+        "outputs": {
+          "Y0": true,
+          "Y1": true,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X0": true,
+          "X1": false,
+          "X2": false,
+          "X3": true
+        },
+        "outputs": {
+          "Y0": true,
+          "Y1": true,
+          "Y2": true
+        }
+      },
+      {
+        "inputs": {
+          "X0": true,
+          "X1": false,
+          "X2": true,
+          "X3": false
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X0": true,
+          "X1": false,
+          "X2": true,
+          "X3": true
+        },
+        "outputs": {
+          "Y0": false,
+          "Y1": false,
+          "Y2": true
+        }
+      },
+      {
+        "inputs": {
+          "X0": true,
+          "X1": true,
+          "X2": false,
+          "X3": false
+        },
+        "outputs": {
+          "Y0": true,
+          "Y1": true,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X0": true,
+          "X1": true,
+          "X2": false,
+          "X3": true
+        },
+        "outputs": {
+          "Y0": true,
+          "Y1": true,
+          "Y2": true
+        }
+      },
+      {
+        "inputs": {
+          "X0": true,
+          "X1": true,
+          "X2": true,
+          "X3": false
+        },
+        "outputs": {
+          "Y0": true,
+          "Y1": true,
+          "Y2": false
+        }
+      },
+      {
+        "inputs": {
+          "X0": true,
+          "X1": true,
+          "X2": true,
+          "X3": true
+        },
+        "outputs": {
+          "Y0": true,
+          "Y1": true,
+          "Y2": true
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,3158 @@
+{
+  "A": {
+    "gxw_sha256": "9e5d9419ebba0c856ccb4677fc69cba2be00d59f19076b84f6bad098af75b7e8",
+    "program_pou_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAAAAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "program": {
+      "status": "hypothesis_only",
+      "size": 411,
+      "sha256": "61773b83ae1ec659d2000eb9c65a0a3797f3ffe77e0acee39b224adfbc32defa",
+      "blocks": [
+        {
+          "index": 0,
+          "offset": 71,
+          "size": 316,
+          "sha256": "01a0de3bd8f2d655a1ecd2c69b3c5a0b694d6fc172a3a2d2046a4e997270d832",
+          "header_hex": "3c0100000100000000000100000000000500000005000000",
+          "candidate_height": 5,
+          "candidate_record_count": 5,
+          "records": [
+            {
+              "offset": 95,
+              "class": 1,
+              "size": 80,
+              "sha256": "94dbf0b141ef8a0e8fb944dd95e0299e2c8762c8cab407f2d3098bbd0e683a90",
+              "raw_hex": "5000000001000000030000000300000058003100000001000000000005000000020000000700000004000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X1",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 2,
+                "right": 7,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 175,
+              "class": 1,
+              "size": 80,
+              "sha256": "a8ca21608089b835ba426b3571fd69c02bea485966ddd920d6f761054491c7bf",
+              "raw_hex": "5000000001000000050000000300000059003100000001000000000008000000020000000a00000004000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y1",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 2,
+                "right": 10,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 255,
+              "class": 2,
+              "size": 44,
+              "sha256": "2e1215fc88ff0131d8de792e288025bdb91d2daf01fe669a759657cdc60b0663",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 299,
+              "class": 2,
+              "size": 44,
+              "sha256": "965afbfb166f277963d3aceef01004421eef618714f8a2eee499754d2fc8f760",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000003000000050000000300000000000000",
+              "start": {
+                "x": 1,
+                "y": 3
+              },
+              "end": {
+                "x": 5,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 343,
+              "class": 2,
+              "size": 44,
+              "sha256": "38e52b1c2e95444c19a4ec3bb77661fe4f51f18aca83e8bca1f6021a5c853fb9",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000003000000080000000300000000000000",
+              "start": {
+                "x": 7,
+                "y": 3
+              },
+              "end": {
+                "x": 8,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        }
+      ],
+      "prefix_hex": "01000000000001000000000001000a00000000000200000001000000010000000000ea0709000600050017002f000600000000000000d048010000480100000100000001000000",
+      "candidate_block_count": 1,
+      "trailer_hex": "000000000000000000000000000000000000000000000000",
+      "candidate_global_lengths": {
+        "55": 328,
+        "59": 328
+      }
+    }
+  },
+  "B": {
+    "gxw_sha256": "34ee375e148be6db2f27cf11f18ae412ef2e6525b23845d72361208706e2f64e",
+    "program_pou_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAAAA0ADQAXABcAAAAAAAAA0EACAABAAgAAAQAAAAEAAAA0AgAAAQAAAAAAAQAAAAAABgAAAAkAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAAUAAAAAEAAAADAAAAAwAAAFgAMgAAAAEAAAAAAAUAAAAEAAAABwAAAAYAAAACAAAAEAAAAAMAAAAAAAAAAQAAABAAAAACAAAAAgAAAAEAAABQAAAAAQAAAAUAAAADAAAAWQAyAAAAAQAAAAAACAAAAAQAAAAKAAAABgAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAAAAAACAAAAAQAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAEAAAAAAAAAAQAAAAYAAAAAAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAMAAAAFAAAAAwAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAAHAAAAAwAAAAgAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAEAAAAFAAAABQAAAAUAAAAAAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAABwAAAAUAAAAIAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "program": {
+      "status": "hypothesis_only",
+      "size": 659,
+      "sha256": "26468bebe22237caf53356288e36649dbbe1e97c885144879ed1e3a2241ec5d0",
+      "blocks": [
+        {
+          "index": 0,
+          "offset": 71,
+          "size": 564,
+          "sha256": "d0a0d4f5ed726c04ae5735440964d498871284eed0d15c35a12ed84e13a0edee",
+          "header_hex": "340200000100000000000100000000000600000009000000",
+          "candidate_height": 6,
+          "candidate_record_count": 9,
+          "records": [
+            {
+              "offset": 95,
+              "class": 1,
+              "size": 80,
+              "sha256": "94dbf0b141ef8a0e8fb944dd95e0299e2c8762c8cab407f2d3098bbd0e683a90",
+              "raw_hex": "5000000001000000030000000300000058003100000001000000000005000000020000000700000004000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X1",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 2,
+                "right": 7,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 175,
+              "class": 1,
+              "size": 80,
+              "sha256": "a8ca21608089b835ba426b3571fd69c02bea485966ddd920d6f761054491c7bf",
+              "raw_hex": "5000000001000000050000000300000059003100000001000000000008000000020000000a00000004000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y1",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 2,
+                "right": 10,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 255,
+              "class": 1,
+              "size": 80,
+              "sha256": "d0c3cbf4d5e9e4e23af6b71c1b817a3d3c4aad3624f695d943e09d817a287d66",
+              "raw_hex": "5000000001000000030000000300000058003200000001000000000005000000040000000700000006000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X2",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 4,
+                "right": 7,
+                "bottom": 6
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 335,
+              "class": 1,
+              "size": 80,
+              "sha256": "9f679f9db58e936fcd785f1e133395497c2b13df82fade5f502ee383725e22b5",
+              "raw_hex": "5000000001000000050000000300000059003200000001000000000008000000040000000a00000006000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y2",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 4,
+                "right": 10,
+                "bottom": 6
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 415,
+              "class": 2,
+              "size": 44,
+              "sha256": "79792ef8612651181ed63b0e5e1dc61c3581a8913372044db24987fd1ef64c5e",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000600000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 6
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 459,
+              "class": 2,
+              "size": 44,
+              "sha256": "965afbfb166f277963d3aceef01004421eef618714f8a2eee499754d2fc8f760",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000003000000050000000300000000000000",
+              "start": {
+                "x": 1,
+                "y": 3
+              },
+              "end": {
+                "x": 5,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 503,
+              "class": 2,
+              "size": 44,
+              "sha256": "38e52b1c2e95444c19a4ec3bb77661fe4f51f18aca83e8bca1f6021a5c853fb9",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000003000000080000000300000000000000",
+              "start": {
+                "x": 7,
+                "y": 3
+              },
+              "end": {
+                "x": 8,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 547,
+              "class": 2,
+              "size": 44,
+              "sha256": "93012f9d61cf6164f9952fd26a3d813f995ab6032d61ae3e3e8617fdf5a788e5",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000005000000050000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 5
+              },
+              "end": {
+                "x": 5,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 591,
+              "class": 2,
+              "size": 44,
+              "sha256": "45245f858dbe5bd6bb57edb46100b88d2c7de3aa17823be50dd2b7e8dfe75a69",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000005000000080000000500000000000000",
+              "start": {
+                "x": 7,
+                "y": 5
+              },
+              "end": {
+                "x": 8,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        }
+      ],
+      "prefix_hex": "01000000000001000000000001000a00000000000200000001000000010000000000ea07090000000d000d0017001700000000000000d040020000400200000100000001000000",
+      "candidate_block_count": 1,
+      "trailer_hex": "000000000000000000000000000000000000000000000000",
+      "candidate_global_lengths": {
+        "55": 576,
+        "59": 576
+      }
+    }
+  },
+  "B_edit": {
+    "gxw_sha256": "1485458edd1ec8422d9a21a7133c836972e8199688afa44663e83dca4a1baae0",
+    "program_pou_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAAAA0ADQAXABcAAAABAAAA0EACAABAAgAAAQAAAAEAAAA0AgAAAQAAAAAAAQAAAAAABgAAAAkAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAAUAAAAAEAAAADAAAAAwAAAFgAMgAAAAEAAAAAAAUAAAAEAAAABwAAAAYAAAACAAAAEAAAAAMAAAAAAAAAAQAAABAAAAACAAAAAgAAAAEAAABQAAAAAQAAAAUAAAADAAAAWQAyAAAAAQAAAAAACAAAAAQAAAAKAAAABgAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAAAAAACAAAAAQAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAEAAAAAAAAAAQAAAAYAAAAAAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAMAAAAFAAAAAwAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAAHAAAAAwAAAAgAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAEAAAAFAAAABQAAAAUAAAAAAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAABwAAAAUAAAAIAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "program": {
+      "status": "hypothesis_only",
+      "size": 659,
+      "sha256": "cea5ac02eccd99a6c9ec44b99e9d4a147fed8e39337dc50a82aa3c3a44cc0f3c",
+      "blocks": [
+        {
+          "index": 0,
+          "offset": 71,
+          "size": 564,
+          "sha256": "d0a0d4f5ed726c04ae5735440964d498871284eed0d15c35a12ed84e13a0edee",
+          "header_hex": "340200000100000000000100000000000600000009000000",
+          "candidate_height": 6,
+          "candidate_record_count": 9,
+          "records": [
+            {
+              "offset": 95,
+              "class": 1,
+              "size": 80,
+              "sha256": "94dbf0b141ef8a0e8fb944dd95e0299e2c8762c8cab407f2d3098bbd0e683a90",
+              "raw_hex": "5000000001000000030000000300000058003100000001000000000005000000020000000700000004000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X1",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 2,
+                "right": 7,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 175,
+              "class": 1,
+              "size": 80,
+              "sha256": "a8ca21608089b835ba426b3571fd69c02bea485966ddd920d6f761054491c7bf",
+              "raw_hex": "5000000001000000050000000300000059003100000001000000000008000000020000000a00000004000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y1",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 2,
+                "right": 10,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 255,
+              "class": 1,
+              "size": 80,
+              "sha256": "d0c3cbf4d5e9e4e23af6b71c1b817a3d3c4aad3624f695d943e09d817a287d66",
+              "raw_hex": "5000000001000000030000000300000058003200000001000000000005000000040000000700000006000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X2",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 4,
+                "right": 7,
+                "bottom": 6
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 335,
+              "class": 1,
+              "size": 80,
+              "sha256": "9f679f9db58e936fcd785f1e133395497c2b13df82fade5f502ee383725e22b5",
+              "raw_hex": "5000000001000000050000000300000059003200000001000000000008000000040000000a00000006000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y2",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 4,
+                "right": 10,
+                "bottom": 6
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 415,
+              "class": 2,
+              "size": 44,
+              "sha256": "79792ef8612651181ed63b0e5e1dc61c3581a8913372044db24987fd1ef64c5e",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000600000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 6
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 459,
+              "class": 2,
+              "size": 44,
+              "sha256": "965afbfb166f277963d3aceef01004421eef618714f8a2eee499754d2fc8f760",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000003000000050000000300000000000000",
+              "start": {
+                "x": 1,
+                "y": 3
+              },
+              "end": {
+                "x": 5,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 503,
+              "class": 2,
+              "size": 44,
+              "sha256": "38e52b1c2e95444c19a4ec3bb77661fe4f51f18aca83e8bca1f6021a5c853fb9",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000003000000080000000300000000000000",
+              "start": {
+                "x": 7,
+                "y": 3
+              },
+              "end": {
+                "x": 8,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 547,
+              "class": 2,
+              "size": 44,
+              "sha256": "93012f9d61cf6164f9952fd26a3d813f995ab6032d61ae3e3e8617fdf5a788e5",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000005000000050000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 5
+              },
+              "end": {
+                "x": 5,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 591,
+              "class": 2,
+              "size": 44,
+              "sha256": "45245f858dbe5bd6bb57edb46100b88d2c7de3aa17823be50dd2b7e8dfe75a69",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000005000000080000000500000000000000",
+              "start": {
+                "x": 7,
+                "y": 5
+              },
+              "end": {
+                "x": 8,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        }
+      ],
+      "prefix_hex": "01000000000001000000000001000a00000000000200000001000000010000000000ea07090000000d000d0017001700000001000000d040020000400200000100000001000000",
+      "candidate_block_count": 1,
+      "trailer_hex": "000000000000000000000000000000000000000000000000",
+      "candidate_global_lengths": {
+        "55": 576,
+        "59": 576
+      }
+    }
+  },
+  "C": {
+    "gxw_sha256": "1af0c540f1cc86993e17732c5163e147ddfc21d23c7fc318fed72758ace6dc53",
+    "program_pou_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAAAA0ADQAHACsAAAAAAAAA0IQCAACEAgAAAQAAAAIAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAPAEAAAEAAAAAAAEAAAAAAAUAAAAFAAAAUAAAAAEAAAADAAAAAwAAAFgAMgAAAAEAAAAAAAUAAAACAAAABwAAAAQAAAACAAAAEAAAAAMAAAAAAAAAAQAAABAAAAACAAAAAgAAAAEAAABQAAAAAQAAAAUAAAADAAAAWQAyAAAAAQAAAAAACAAAAAIAAAAKAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAAAAAACAAAAAQAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAEAAAAAAAAAAQAAAAUAAAAAAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAMAAAAFAAAAAwAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAAHAAAAAwAAAAgAAAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+    "program": {
+      "status": "hypothesis_only",
+      "size": 727,
+      "sha256": "8f596afae2e90f61a0a4880475a5bba2bdbb4a5abfdbea0b171c0396eb9dc6e9",
+      "blocks": [
+        {
+          "index": 0,
+          "offset": 71,
+          "size": 316,
+          "sha256": "01a0de3bd8f2d655a1ecd2c69b3c5a0b694d6fc172a3a2d2046a4e997270d832",
+          "header_hex": "3c0100000100000000000100000000000500000005000000",
+          "candidate_height": 5,
+          "candidate_record_count": 5,
+          "records": [
+            {
+              "offset": 95,
+              "class": 1,
+              "size": 80,
+              "sha256": "94dbf0b141ef8a0e8fb944dd95e0299e2c8762c8cab407f2d3098bbd0e683a90",
+              "raw_hex": "5000000001000000030000000300000058003100000001000000000005000000020000000700000004000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X1",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 2,
+                "right": 7,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 175,
+              "class": 1,
+              "size": 80,
+              "sha256": "a8ca21608089b835ba426b3571fd69c02bea485966ddd920d6f761054491c7bf",
+              "raw_hex": "5000000001000000050000000300000059003100000001000000000008000000020000000a00000004000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y1",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 2,
+                "right": 10,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 255,
+              "class": 2,
+              "size": 44,
+              "sha256": "2e1215fc88ff0131d8de792e288025bdb91d2daf01fe669a759657cdc60b0663",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 299,
+              "class": 2,
+              "size": 44,
+              "sha256": "965afbfb166f277963d3aceef01004421eef618714f8a2eee499754d2fc8f760",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000003000000050000000300000000000000",
+              "start": {
+                "x": 1,
+                "y": 3
+              },
+              "end": {
+                "x": 5,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 343,
+              "class": 2,
+              "size": 44,
+              "sha256": "38e52b1c2e95444c19a4ec3bb77661fe4f51f18aca83e8bca1f6021a5c853fb9",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000003000000080000000300000000000000",
+              "start": {
+                "x": 7,
+                "y": 3
+              },
+              "end": {
+                "x": 8,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "offset": 387,
+          "size": 316,
+          "sha256": "493c21b86a908006241a9f05cfc6670119be3a0fcaaffe7aa328c610fb7b61d9",
+          "header_hex": "3c0100000100000000000100000000000500000005000000",
+          "candidate_height": 5,
+          "candidate_record_count": 5,
+          "records": [
+            {
+              "offset": 411,
+              "class": 1,
+              "size": 80,
+              "sha256": "cf6814ba56dc8a062e73bdd6284174595d9acffaa8335edcc5c13c37adcea8de",
+              "raw_hex": "5000000001000000030000000300000058003200000001000000000005000000020000000700000004000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X2",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 2,
+                "right": 7,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 491,
+              "class": 1,
+              "size": 80,
+              "sha256": "4796752502d68b109cfdc67f8c354bf1cdca674f6f8d88128e0870ec61ca67e5",
+              "raw_hex": "5000000001000000050000000300000059003200000001000000000008000000020000000a00000004000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y2",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 2,
+                "right": 10,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 571,
+              "class": 2,
+              "size": 44,
+              "sha256": "2e1215fc88ff0131d8de792e288025bdb91d2daf01fe669a759657cdc60b0663",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 615,
+              "class": 2,
+              "size": 44,
+              "sha256": "965afbfb166f277963d3aceef01004421eef618714f8a2eee499754d2fc8f760",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000003000000050000000300000000000000",
+              "start": {
+                "x": 1,
+                "y": 3
+              },
+              "end": {
+                "x": 5,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 659,
+              "class": 2,
+              "size": 44,
+              "sha256": "38e52b1c2e95444c19a4ec3bb77661fe4f51f18aca83e8bca1f6021a5c853fb9",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000003000000080000000300000000000000",
+              "start": {
+                "x": 7,
+                "y": 3
+              },
+              "end": {
+                "x": 8,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        }
+      ],
+      "prefix_hex": "01000000000001000000000001000a00000000000200000001000000010000000000ea07090000000d000d0007002b00000000000000d084020000840200000100000002000000",
+      "candidate_block_count": 2,
+      "trailer_hex": "000000000000000000000000000000000000000000000000",
+      "candidate_global_lengths": {
+        "55": 644,
+        "59": 644
+      }
+    }
+  },
+  "C_edit": {
+    "gxw_sha256": "4c9f6cf4c427d546a0208435a0cb2cda668bafcbee22b9a380c2b54e7358edbe",
+    "program_pou_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAAAA0ADQAHACsAAAABAAAA0IQCAACEAgAAAQAAAAIAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAPAEAAAEAAAAAAAEAAAAAAAUAAAAFAAAAUAAAAAEAAAADAAAAAwAAAFgAMgAAAAEAAAAAAAUAAAACAAAABwAAAAQAAAACAAAAEAAAAAMAAAAAAAAAAQAAABAAAAACAAAAAgAAAAEAAABQAAAAAQAAAAUAAAADAAAAWQAyAAAAAQAAAAAACAAAAAIAAAAKAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAAAAAACAAAAAQAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAEAAAAAAAAAAQAAAAUAAAAAAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAMAAAAFAAAAAwAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAAHAAAAAwAAAAgAAAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+    "program": {
+      "status": "hypothesis_only",
+      "size": 727,
+      "sha256": "7e3af5a47f8f3e1628101205b0eee12053851bd4bed255856b8a4121ba10c491",
+      "blocks": [
+        {
+          "index": 0,
+          "offset": 71,
+          "size": 316,
+          "sha256": "01a0de3bd8f2d655a1ecd2c69b3c5a0b694d6fc172a3a2d2046a4e997270d832",
+          "header_hex": "3c0100000100000000000100000000000500000005000000",
+          "candidate_height": 5,
+          "candidate_record_count": 5,
+          "records": [
+            {
+              "offset": 95,
+              "class": 1,
+              "size": 80,
+              "sha256": "94dbf0b141ef8a0e8fb944dd95e0299e2c8762c8cab407f2d3098bbd0e683a90",
+              "raw_hex": "5000000001000000030000000300000058003100000001000000000005000000020000000700000004000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X1",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 2,
+                "right": 7,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 175,
+              "class": 1,
+              "size": 80,
+              "sha256": "a8ca21608089b835ba426b3571fd69c02bea485966ddd920d6f761054491c7bf",
+              "raw_hex": "5000000001000000050000000300000059003100000001000000000008000000020000000a00000004000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y1",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 2,
+                "right": 10,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 255,
+              "class": 2,
+              "size": 44,
+              "sha256": "2e1215fc88ff0131d8de792e288025bdb91d2daf01fe669a759657cdc60b0663",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 299,
+              "class": 2,
+              "size": 44,
+              "sha256": "965afbfb166f277963d3aceef01004421eef618714f8a2eee499754d2fc8f760",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000003000000050000000300000000000000",
+              "start": {
+                "x": 1,
+                "y": 3
+              },
+              "end": {
+                "x": 5,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 343,
+              "class": 2,
+              "size": 44,
+              "sha256": "38e52b1c2e95444c19a4ec3bb77661fe4f51f18aca83e8bca1f6021a5c853fb9",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000003000000080000000300000000000000",
+              "start": {
+                "x": 7,
+                "y": 3
+              },
+              "end": {
+                "x": 8,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "offset": 387,
+          "size": 316,
+          "sha256": "493c21b86a908006241a9f05cfc6670119be3a0fcaaffe7aa328c610fb7b61d9",
+          "header_hex": "3c0100000100000000000100000000000500000005000000",
+          "candidate_height": 5,
+          "candidate_record_count": 5,
+          "records": [
+            {
+              "offset": 411,
+              "class": 1,
+              "size": 80,
+              "sha256": "cf6814ba56dc8a062e73bdd6284174595d9acffaa8335edcc5c13c37adcea8de",
+              "raw_hex": "5000000001000000030000000300000058003200000001000000000005000000020000000700000004000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X2",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 2,
+                "right": 7,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 491,
+              "class": 1,
+              "size": 80,
+              "sha256": "4796752502d68b109cfdc67f8c354bf1cdca674f6f8d88128e0870ec61ca67e5",
+              "raw_hex": "5000000001000000050000000300000059003200000001000000000008000000020000000a00000004000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y2",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 2,
+                "right": 10,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 571,
+              "class": 2,
+              "size": 44,
+              "sha256": "2e1215fc88ff0131d8de792e288025bdb91d2daf01fe669a759657cdc60b0663",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 615,
+              "class": 2,
+              "size": 44,
+              "sha256": "965afbfb166f277963d3aceef01004421eef618714f8a2eee499754d2fc8f760",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000003000000050000000300000000000000",
+              "start": {
+                "x": 1,
+                "y": 3
+              },
+              "end": {
+                "x": 5,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 659,
+              "class": 2,
+              "size": 44,
+              "sha256": "38e52b1c2e95444c19a4ec3bb77661fe4f51f18aca83e8bca1f6021a5c853fb9",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000003000000080000000300000000000000",
+              "start": {
+                "x": 7,
+                "y": 3
+              },
+              "end": {
+                "x": 8,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        }
+      ],
+      "prefix_hex": "01000000000001000000000001000a00000000000200000001000000010000000000ea07090000000d000d0007002b00000001000000d084020000840200000100000002000000",
+      "candidate_block_count": 2,
+      "trailer_hex": "000000000000000000000000000000000000000000000000",
+      "candidate_global_lengths": {
+        "55": 644,
+        "59": 644
+      }
+    }
+  },
+  "D": {
+    "gxw_sha256": "a35cab98b65bb893e891b6223d012305d2bcf7eb9f8fd03fc977c6bb0a303bad",
+    "program_pou_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAAAA0ADQALAAUAAAAAAAAA0IQCAACEAgAAAQAAAAIAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAyAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADIAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAPAEAAAEAAAAAAAEAAAAAAAUAAAAFAAAAUAAAAAEAAAADAAAAAwAAAFgAMQAAAAEAAAAAAAUAAAACAAAABwAAAAQAAAACAAAAEAAAAAMAAAAAAAAAAQAAABAAAAACAAAAAgAAAAEAAABQAAAAAQAAAAUAAAADAAAAWQAxAAAAAQAAAAAACAAAAAIAAAAKAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAAAAAACAAAAAQAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAEAAAAAAAAAAQAAAAUAAAAAAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAMAAAAFAAAAAwAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAAHAAAAAwAAAAgAAAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+    "program": {
+      "status": "hypothesis_only",
+      "size": 727,
+      "sha256": "28ec757dc594fda3b30f5c887d82474c8f7fd48fc8a1f6ee4819a8072d5701c2",
+      "blocks": [
+        {
+          "index": 0,
+          "offset": 71,
+          "size": 316,
+          "sha256": "493c21b86a908006241a9f05cfc6670119be3a0fcaaffe7aa328c610fb7b61d9",
+          "header_hex": "3c0100000100000000000100000000000500000005000000",
+          "candidate_height": 5,
+          "candidate_record_count": 5,
+          "records": [
+            {
+              "offset": 95,
+              "class": 1,
+              "size": 80,
+              "sha256": "cf6814ba56dc8a062e73bdd6284174595d9acffaa8335edcc5c13c37adcea8de",
+              "raw_hex": "5000000001000000030000000300000058003200000001000000000005000000020000000700000004000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X2",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 2,
+                "right": 7,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 175,
+              "class": 1,
+              "size": 80,
+              "sha256": "4796752502d68b109cfdc67f8c354bf1cdca674f6f8d88128e0870ec61ca67e5",
+              "raw_hex": "5000000001000000050000000300000059003200000001000000000008000000020000000a00000004000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y2",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 2,
+                "right": 10,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 255,
+              "class": 2,
+              "size": 44,
+              "sha256": "2e1215fc88ff0131d8de792e288025bdb91d2daf01fe669a759657cdc60b0663",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 299,
+              "class": 2,
+              "size": 44,
+              "sha256": "965afbfb166f277963d3aceef01004421eef618714f8a2eee499754d2fc8f760",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000003000000050000000300000000000000",
+              "start": {
+                "x": 1,
+                "y": 3
+              },
+              "end": {
+                "x": 5,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 343,
+              "class": 2,
+              "size": 44,
+              "sha256": "38e52b1c2e95444c19a4ec3bb77661fe4f51f18aca83e8bca1f6021a5c853fb9",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000003000000080000000300000000000000",
+              "start": {
+                "x": 7,
+                "y": 3
+              },
+              "end": {
+                "x": 8,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "offset": 387,
+          "size": 316,
+          "sha256": "01a0de3bd8f2d655a1ecd2c69b3c5a0b694d6fc172a3a2d2046a4e997270d832",
+          "header_hex": "3c0100000100000000000100000000000500000005000000",
+          "candidate_height": 5,
+          "candidate_record_count": 5,
+          "records": [
+            {
+              "offset": 411,
+              "class": 1,
+              "size": 80,
+              "sha256": "94dbf0b141ef8a0e8fb944dd95e0299e2c8762c8cab407f2d3098bbd0e683a90",
+              "raw_hex": "5000000001000000030000000300000058003100000001000000000005000000020000000700000004000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X1",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 2,
+                "right": 7,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 491,
+              "class": 1,
+              "size": 80,
+              "sha256": "a8ca21608089b835ba426b3571fd69c02bea485966ddd920d6f761054491c7bf",
+              "raw_hex": "5000000001000000050000000300000059003100000001000000000008000000020000000a00000004000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y1",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 2,
+                "right": 10,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 571,
+              "class": 2,
+              "size": 44,
+              "sha256": "2e1215fc88ff0131d8de792e288025bdb91d2daf01fe669a759657cdc60b0663",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 615,
+              "class": 2,
+              "size": 44,
+              "sha256": "965afbfb166f277963d3aceef01004421eef618714f8a2eee499754d2fc8f760",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000003000000050000000300000000000000",
+              "start": {
+                "x": 1,
+                "y": 3
+              },
+              "end": {
+                "x": 5,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 659,
+              "class": 2,
+              "size": 44,
+              "sha256": "38e52b1c2e95444c19a4ec3bb77661fe4f51f18aca83e8bca1f6021a5c853fb9",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000003000000080000000300000000000000",
+              "start": {
+                "x": 7,
+                "y": 3
+              },
+              "end": {
+                "x": 8,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        }
+      ],
+      "prefix_hex": "01000000000001000000000001000a00000000000200000001000000010000000000ea07090000000d000d000b000500000000000000d084020000840200000100000002000000",
+      "candidate_block_count": 2,
+      "trailer_hex": "000000000000000000000000000000000000000000000000",
+      "candidate_global_lengths": {
+        "55": 644,
+        "59": 644
+      }
+    }
+  },
+  "D_edit": {
+    "gxw_sha256": "0437b8288ef620a70a771c75335f9c1d7f744b7447261d960eef05701898e2b1",
+    "program_pou_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAAAA0ADQALAAUAAAABAAAA0IQCAACEAgAAAQAAAAIAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAyAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADIAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAPAEAAAEAAAAAAAEAAAAAAAUAAAAFAAAAUAAAAAEAAAADAAAAAwAAAFgAMQAAAAEAAAAAAAUAAAACAAAABwAAAAQAAAACAAAAEAAAAAMAAAAAAAAAAQAAABAAAAACAAAAAgAAAAEAAABQAAAAAQAAAAUAAAADAAAAWQAxAAAAAQAAAAAACAAAAAIAAAAKAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAAAAAACAAAAAQAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAEAAAAAAAAAAQAAAAUAAAAAAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAMAAAAFAAAAAwAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAAHAAAAAwAAAAgAAAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+    "program": {
+      "status": "hypothesis_only",
+      "size": 727,
+      "sha256": "631d31499b55113556d9126fead2fb172503cab626f35c298c034fd82e9f9cca",
+      "blocks": [
+        {
+          "index": 0,
+          "offset": 71,
+          "size": 316,
+          "sha256": "493c21b86a908006241a9f05cfc6670119be3a0fcaaffe7aa328c610fb7b61d9",
+          "header_hex": "3c0100000100000000000100000000000500000005000000",
+          "candidate_height": 5,
+          "candidate_record_count": 5,
+          "records": [
+            {
+              "offset": 95,
+              "class": 1,
+              "size": 80,
+              "sha256": "cf6814ba56dc8a062e73bdd6284174595d9acffaa8335edcc5c13c37adcea8de",
+              "raw_hex": "5000000001000000030000000300000058003200000001000000000005000000020000000700000004000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X2",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 2,
+                "right": 7,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 175,
+              "class": 1,
+              "size": 80,
+              "sha256": "4796752502d68b109cfdc67f8c354bf1cdca674f6f8d88128e0870ec61ca67e5",
+              "raw_hex": "5000000001000000050000000300000059003200000001000000000008000000020000000a00000004000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y2",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 2,
+                "right": 10,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 255,
+              "class": 2,
+              "size": 44,
+              "sha256": "2e1215fc88ff0131d8de792e288025bdb91d2daf01fe669a759657cdc60b0663",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 299,
+              "class": 2,
+              "size": 44,
+              "sha256": "965afbfb166f277963d3aceef01004421eef618714f8a2eee499754d2fc8f760",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000003000000050000000300000000000000",
+              "start": {
+                "x": 1,
+                "y": 3
+              },
+              "end": {
+                "x": 5,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 343,
+              "class": 2,
+              "size": 44,
+              "sha256": "38e52b1c2e95444c19a4ec3bb77661fe4f51f18aca83e8bca1f6021a5c853fb9",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000003000000080000000300000000000000",
+              "start": {
+                "x": 7,
+                "y": 3
+              },
+              "end": {
+                "x": 8,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "offset": 387,
+          "size": 316,
+          "sha256": "01a0de3bd8f2d655a1ecd2c69b3c5a0b694d6fc172a3a2d2046a4e997270d832",
+          "header_hex": "3c0100000100000000000100000000000500000005000000",
+          "candidate_height": 5,
+          "candidate_record_count": 5,
+          "records": [
+            {
+              "offset": 411,
+              "class": 1,
+              "size": 80,
+              "sha256": "94dbf0b141ef8a0e8fb944dd95e0299e2c8762c8cab407f2d3098bbd0e683a90",
+              "raw_hex": "5000000001000000030000000300000058003100000001000000000005000000020000000700000004000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X1",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 2,
+                "right": 7,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 491,
+              "class": 1,
+              "size": 80,
+              "sha256": "a8ca21608089b835ba426b3571fd69c02bea485966ddd920d6f761054491c7bf",
+              "raw_hex": "5000000001000000050000000300000059003100000001000000000008000000020000000a00000004000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y1",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 2,
+                "right": 10,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 571,
+              "class": 2,
+              "size": 44,
+              "sha256": "2e1215fc88ff0131d8de792e288025bdb91d2daf01fe669a759657cdc60b0663",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 615,
+              "class": 2,
+              "size": 44,
+              "sha256": "965afbfb166f277963d3aceef01004421eef618714f8a2eee499754d2fc8f760",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000003000000050000000300000000000000",
+              "start": {
+                "x": 1,
+                "y": 3
+              },
+              "end": {
+                "x": 5,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 659,
+              "class": 2,
+              "size": 44,
+              "sha256": "38e52b1c2e95444c19a4ec3bb77661fe4f51f18aca83e8bca1f6021a5c853fb9",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000003000000080000000300000000000000",
+              "start": {
+                "x": 7,
+                "y": 3
+              },
+              "end": {
+                "x": 8,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        }
+      ],
+      "prefix_hex": "01000000000001000000000001000a00000000000200000001000000010000000000ea07090000000d000d000b000500000001000000d084020000840200000100000002000000",
+      "candidate_block_count": 2,
+      "trailer_hex": "000000000000000000000000000000000000000000000000",
+      "candidate_global_lengths": {
+        "55": 644,
+        "59": 644
+      }
+    }
+  },
+  "D_noedit": {
+    "gxw_sha256": "3fb7f9c0bac65a0a5e342ca967d63a101bf302c466327f75cc2ab27cb226cf87",
+    "program_pou_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAAAA0ADQALAAUAAAAAAAAA0IQCAACEAgAAAQAAAAIAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAyAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADIAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAPAEAAAEAAAAAAAEAAAAAAAUAAAAFAAAAUAAAAAEAAAADAAAAAwAAAFgAMQAAAAEAAAAAAAUAAAACAAAABwAAAAQAAAACAAAAEAAAAAMAAAAAAAAAAQAAABAAAAACAAAAAgAAAAEAAABQAAAAAQAAAAUAAAADAAAAWQAxAAAAAQAAAAAACAAAAAIAAAAKAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAAAAAACAAAAAQAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAEAAAAAAAAAAQAAAAUAAAAAAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAMAAAAFAAAAAwAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAAHAAAAAwAAAAgAAAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+    "program": {
+      "status": "hypothesis_only",
+      "size": 727,
+      "sha256": "28ec757dc594fda3b30f5c887d82474c8f7fd48fc8a1f6ee4819a8072d5701c2",
+      "blocks": [
+        {
+          "index": 0,
+          "offset": 71,
+          "size": 316,
+          "sha256": "493c21b86a908006241a9f05cfc6670119be3a0fcaaffe7aa328c610fb7b61d9",
+          "header_hex": "3c0100000100000000000100000000000500000005000000",
+          "candidate_height": 5,
+          "candidate_record_count": 5,
+          "records": [
+            {
+              "offset": 95,
+              "class": 1,
+              "size": 80,
+              "sha256": "cf6814ba56dc8a062e73bdd6284174595d9acffaa8335edcc5c13c37adcea8de",
+              "raw_hex": "5000000001000000030000000300000058003200000001000000000005000000020000000700000004000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X2",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 2,
+                "right": 7,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 175,
+              "class": 1,
+              "size": 80,
+              "sha256": "4796752502d68b109cfdc67f8c354bf1cdca674f6f8d88128e0870ec61ca67e5",
+              "raw_hex": "5000000001000000050000000300000059003200000001000000000008000000020000000a00000004000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y2",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 2,
+                "right": 10,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 255,
+              "class": 2,
+              "size": 44,
+              "sha256": "2e1215fc88ff0131d8de792e288025bdb91d2daf01fe669a759657cdc60b0663",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 299,
+              "class": 2,
+              "size": 44,
+              "sha256": "965afbfb166f277963d3aceef01004421eef618714f8a2eee499754d2fc8f760",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000003000000050000000300000000000000",
+              "start": {
+                "x": 1,
+                "y": 3
+              },
+              "end": {
+                "x": 5,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 343,
+              "class": 2,
+              "size": 44,
+              "sha256": "38e52b1c2e95444c19a4ec3bb77661fe4f51f18aca83e8bca1f6021a5c853fb9",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000003000000080000000300000000000000",
+              "start": {
+                "x": 7,
+                "y": 3
+              },
+              "end": {
+                "x": 8,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "offset": 387,
+          "size": 316,
+          "sha256": "01a0de3bd8f2d655a1ecd2c69b3c5a0b694d6fc172a3a2d2046a4e997270d832",
+          "header_hex": "3c0100000100000000000100000000000500000005000000",
+          "candidate_height": 5,
+          "candidate_record_count": 5,
+          "records": [
+            {
+              "offset": 411,
+              "class": 1,
+              "size": 80,
+              "sha256": "94dbf0b141ef8a0e8fb944dd95e0299e2c8762c8cab407f2d3098bbd0e683a90",
+              "raw_hex": "5000000001000000030000000300000058003100000001000000000005000000020000000700000004000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X1",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 2,
+                "right": 7,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 491,
+              "class": 1,
+              "size": 80,
+              "sha256": "a8ca21608089b835ba426b3571fd69c02bea485966ddd920d6f761054491c7bf",
+              "raw_hex": "5000000001000000050000000300000059003100000001000000000008000000020000000a00000004000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y1",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 2,
+                "right": 10,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 571,
+              "class": 2,
+              "size": 44,
+              "sha256": "2e1215fc88ff0131d8de792e288025bdb91d2daf01fe669a759657cdc60b0663",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 615,
+              "class": 2,
+              "size": 44,
+              "sha256": "965afbfb166f277963d3aceef01004421eef618714f8a2eee499754d2fc8f760",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000003000000050000000300000000000000",
+              "start": {
+                "x": 1,
+                "y": 3
+              },
+              "end": {
+                "x": 5,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 659,
+              "class": 2,
+              "size": 44,
+              "sha256": "38e52b1c2e95444c19a4ec3bb77661fe4f51f18aca83e8bca1f6021a5c853fb9",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000003000000080000000300000000000000",
+              "start": {
+                "x": 7,
+                "y": 3
+              },
+              "end": {
+                "x": 8,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        }
+      ],
+      "prefix_hex": "01000000000001000000000001000a00000000000200000001000000010000000000ea07090000000d000d000b000500000000000000d084020000840200000100000002000000",
+      "candidate_block_count": 2,
+      "trailer_hex": "000000000000000000000000000000000000000000000000",
+      "candidate_global_lengths": {
+        "55": 644,
+        "59": 644
+      }
+    }
+  },
+  "E": {
+    "gxw_sha256": "e38d8263f926fc3b02f62710f7bd36e2bbf80bdadb98ff0b36fb1d6d768be701",
+    "program_pou_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAAAA0ADAA0ABEAAAAAAAAA0IwBAACMAQAAAQAAAAIAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAARAAAAAEAAAAAAAEAAAAAAAUAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "program": {
+      "status": "hypothesis_only",
+      "size": 479,
+      "sha256": "d9cf7ab50add7782201a8697a588d359051a24be29380bd5c4a12b2eb1b4ef3a",
+      "blocks": [
+        {
+          "index": 0,
+          "offset": 71,
+          "size": 316,
+          "sha256": "01a0de3bd8f2d655a1ecd2c69b3c5a0b694d6fc172a3a2d2046a4e997270d832",
+          "header_hex": "3c0100000100000000000100000000000500000005000000",
+          "candidate_height": 5,
+          "candidate_record_count": 5,
+          "records": [
+            {
+              "offset": 95,
+              "class": 1,
+              "size": 80,
+              "sha256": "94dbf0b141ef8a0e8fb944dd95e0299e2c8762c8cab407f2d3098bbd0e683a90",
+              "raw_hex": "5000000001000000030000000300000058003100000001000000000005000000020000000700000004000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X1",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 2,
+                "right": 7,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 175,
+              "class": 1,
+              "size": 80,
+              "sha256": "a8ca21608089b835ba426b3571fd69c02bea485966ddd920d6f761054491c7bf",
+              "raw_hex": "5000000001000000050000000300000059003100000001000000000008000000020000000a00000004000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y1",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 2,
+                "right": 10,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 255,
+              "class": 2,
+              "size": 44,
+              "sha256": "2e1215fc88ff0131d8de792e288025bdb91d2daf01fe669a759657cdc60b0663",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 299,
+              "class": 2,
+              "size": 44,
+              "sha256": "965afbfb166f277963d3aceef01004421eef618714f8a2eee499754d2fc8f760",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000003000000050000000300000000000000",
+              "start": {
+                "x": 1,
+                "y": 3
+              },
+              "end": {
+                "x": 5,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 343,
+              "class": 2,
+              "size": 44,
+              "sha256": "38e52b1c2e95444c19a4ec3bb77661fe4f51f18aca83e8bca1f6021a5c853fb9",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000003000000080000000300000000000000",
+              "start": {
+                "x": 7,
+                "y": 3
+              },
+              "end": {
+                "x": 8,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "offset": 387,
+          "size": 68,
+          "sha256": "02e286753bfdf688882a29ca8652e71b45cfb40c908307f65a25b4bbb4a20244",
+          "header_hex": "440000000100000000000100000000000500000001000000",
+          "candidate_height": 5,
+          "candidate_record_count": 1,
+          "records": [
+            {
+              "offset": 411,
+              "class": 2,
+              "size": 44,
+              "sha256": "2e1215fc88ff0131d8de792e288025bdb91d2daf01fe669a759657cdc60b0663",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        }
+      ],
+      "prefix_hex": "01000000000001000000000001000a00000000000200000001000000010000000000ea07090000000d000c0034001100000000000000d08c0100008c0100000100000002000000",
+      "candidate_block_count": 2,
+      "trailer_hex": "000000000000000000000000000000000000000000000000",
+      "candidate_global_lengths": {
+        "55": 396,
+        "59": 396
+      }
+    }
+  },
+  "E_edit": {
+    "gxw_sha256": "ccbd6f2e08e65a9d987e9c6573a9f9221873eb95330d9ba85791c0c2ffe9d5aa",
+    "program_pou_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAAAA0ADAA0ABEAAAABAAAA0IwBAACMAQAAAQAAAAIAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAARAAAAAEAAAAAAAEAAAAAAAUAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "program": {
+      "status": "hypothesis_only",
+      "size": 479,
+      "sha256": "02865a569c58b94a27ec51569991bd5f9f5810de75d2517083e0cc4098d9898a",
+      "blocks": [
+        {
+          "index": 0,
+          "offset": 71,
+          "size": 316,
+          "sha256": "01a0de3bd8f2d655a1ecd2c69b3c5a0b694d6fc172a3a2d2046a4e997270d832",
+          "header_hex": "3c0100000100000000000100000000000500000005000000",
+          "candidate_height": 5,
+          "candidate_record_count": 5,
+          "records": [
+            {
+              "offset": 95,
+              "class": 1,
+              "size": 80,
+              "sha256": "94dbf0b141ef8a0e8fb944dd95e0299e2c8762c8cab407f2d3098bbd0e683a90",
+              "raw_hex": "5000000001000000030000000300000058003100000001000000000005000000020000000700000004000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X1",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 2,
+                "right": 7,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 175,
+              "class": 1,
+              "size": 80,
+              "sha256": "a8ca21608089b835ba426b3571fd69c02bea485966ddd920d6f761054491c7bf",
+              "raw_hex": "5000000001000000050000000300000059003100000001000000000008000000020000000a00000004000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y1",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 2,
+                "right": 10,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 255,
+              "class": 2,
+              "size": 44,
+              "sha256": "2e1215fc88ff0131d8de792e288025bdb91d2daf01fe669a759657cdc60b0663",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 299,
+              "class": 2,
+              "size": 44,
+              "sha256": "965afbfb166f277963d3aceef01004421eef618714f8a2eee499754d2fc8f760",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000003000000050000000300000000000000",
+              "start": {
+                "x": 1,
+                "y": 3
+              },
+              "end": {
+                "x": 5,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 343,
+              "class": 2,
+              "size": 44,
+              "sha256": "38e52b1c2e95444c19a4ec3bb77661fe4f51f18aca83e8bca1f6021a5c853fb9",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000003000000080000000300000000000000",
+              "start": {
+                "x": 7,
+                "y": 3
+              },
+              "end": {
+                "x": 8,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "offset": 387,
+          "size": 68,
+          "sha256": "02e286753bfdf688882a29ca8652e71b45cfb40c908307f65a25b4bbb4a20244",
+          "header_hex": "440000000100000000000100000000000500000001000000",
+          "candidate_height": 5,
+          "candidate_record_count": 1,
+          "records": [
+            {
+              "offset": 411,
+              "class": 2,
+              "size": 44,
+              "sha256": "2e1215fc88ff0131d8de792e288025bdb91d2daf01fe669a759657cdc60b0663",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        }
+      ],
+      "prefix_hex": "01000000000001000000000001000a00000000000200000001000000010000000000ea07090000000d000c0034001100000001000000d08c0100008c0100000100000002000000",
+      "candidate_block_count": 2,
+      "trailer_hex": "000000000000000000000000000000000000000000000000",
+      "candidate_global_lengths": {
+        "55": 396,
+        "59": 396
+      }
+    }
+  },
+  "M1": {
+    "gxw_sha256": "2c08a8a818e69ba10d26543d3547fdbf5b5248c645cf5764087864e54e40cc9f",
+    "program_pou_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAAAA0ADQAXABcAAAAAAAAA0IQCAACEAgAAAQAAAAIAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAPAEAAAEAAAAAAAEAAAAAAAUAAAAFAAAAUAAAAAEAAAADAAAAAwAAAFgAMgAAAAEAAAAAAAUAAAACAAAABwAAAAQAAAACAAAAEAAAAAMAAAAAAAAAAQAAABAAAAACAAAAAgAAAAEAAABQAAAAAQAAAAUAAAADAAAAWQAyAAAAAQAAAAAACAAAAAIAAAAKAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAAAAAACAAAAAQAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAEAAAAAAAAAAQAAAAUAAAAAAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAMAAAAFAAAAAwAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAAHAAAAAwAAAAgAAAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+    "program": {
+      "status": "hypothesis_only",
+      "size": 727,
+      "sha256": "87345059a5c72d167d24ffb444ab33bcf31992317883e6f9bc1d4a2993d9f92d",
+      "blocks": [
+        {
+          "index": 0,
+          "offset": 71,
+          "size": 316,
+          "sha256": "01a0de3bd8f2d655a1ecd2c69b3c5a0b694d6fc172a3a2d2046a4e997270d832",
+          "header_hex": "3c0100000100000000000100000000000500000005000000",
+          "candidate_height": 5,
+          "candidate_record_count": 5,
+          "records": [
+            {
+              "offset": 95,
+              "class": 1,
+              "size": 80,
+              "sha256": "94dbf0b141ef8a0e8fb944dd95e0299e2c8762c8cab407f2d3098bbd0e683a90",
+              "raw_hex": "5000000001000000030000000300000058003100000001000000000005000000020000000700000004000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X1",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 2,
+                "right": 7,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 175,
+              "class": 1,
+              "size": 80,
+              "sha256": "a8ca21608089b835ba426b3571fd69c02bea485966ddd920d6f761054491c7bf",
+              "raw_hex": "5000000001000000050000000300000059003100000001000000000008000000020000000a00000004000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y1",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 2,
+                "right": 10,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 255,
+              "class": 2,
+              "size": 44,
+              "sha256": "2e1215fc88ff0131d8de792e288025bdb91d2daf01fe669a759657cdc60b0663",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 299,
+              "class": 2,
+              "size": 44,
+              "sha256": "965afbfb166f277963d3aceef01004421eef618714f8a2eee499754d2fc8f760",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000003000000050000000300000000000000",
+              "start": {
+                "x": 1,
+                "y": 3
+              },
+              "end": {
+                "x": 5,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 343,
+              "class": 2,
+              "size": 44,
+              "sha256": "38e52b1c2e95444c19a4ec3bb77661fe4f51f18aca83e8bca1f6021a5c853fb9",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000003000000080000000300000000000000",
+              "start": {
+                "x": 7,
+                "y": 3
+              },
+              "end": {
+                "x": 8,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "offset": 387,
+          "size": 316,
+          "sha256": "493c21b86a908006241a9f05cfc6670119be3a0fcaaffe7aa328c610fb7b61d9",
+          "header_hex": "3c0100000100000000000100000000000500000005000000",
+          "candidate_height": 5,
+          "candidate_record_count": 5,
+          "records": [
+            {
+              "offset": 411,
+              "class": 1,
+              "size": 80,
+              "sha256": "cf6814ba56dc8a062e73bdd6284174595d9acffaa8335edcc5c13c37adcea8de",
+              "raw_hex": "5000000001000000030000000300000058003200000001000000000005000000020000000700000004000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X2",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 2,
+                "right": 7,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 491,
+              "class": 1,
+              "size": 80,
+              "sha256": "4796752502d68b109cfdc67f8c354bf1cdca674f6f8d88128e0870ec61ca67e5",
+              "raw_hex": "5000000001000000050000000300000059003200000001000000000008000000020000000a00000004000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y2",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 2,
+                "right": 10,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 571,
+              "class": 2,
+              "size": 44,
+              "sha256": "2e1215fc88ff0131d8de792e288025bdb91d2daf01fe669a759657cdc60b0663",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 615,
+              "class": 2,
+              "size": 44,
+              "sha256": "965afbfb166f277963d3aceef01004421eef618714f8a2eee499754d2fc8f760",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000003000000050000000300000000000000",
+              "start": {
+                "x": 1,
+                "y": 3
+              },
+              "end": {
+                "x": 5,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 659,
+              "class": 2,
+              "size": 44,
+              "sha256": "38e52b1c2e95444c19a4ec3bb77661fe4f51f18aca83e8bca1f6021a5c853fb9",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000003000000080000000300000000000000",
+              "start": {
+                "x": 7,
+                "y": 3
+              },
+              "end": {
+                "x": 8,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        }
+      ],
+      "prefix_hex": "01000000000001000000000001000a00000000000200000001000000010000000000ea07090000000d000d0017001700000000000000d084020000840200000100000002000000",
+      "candidate_block_count": 2,
+      "trailer_hex": "000000000000000000000000000000000000000000000000",
+      "candidate_global_lengths": {
+        "55": 644,
+        "59": 644
+      }
+    }
+  },
+  "M1_compile": {
+    "gxw_sha256": "b10dfff51031ef46028021ec4595fea220c0970205d887d701fd0268cc2abbb7",
+    "program_pou_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAAAA0ADQAXABcAAAAAAAAA0IQCAACEAgAAAQAAAAIAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAPAEAAAEAAAAAAAEAAAAAAAUAAAAFAAAAUAAAAAEAAAADAAAAAwAAAFgAMgAAAAEAAAAAAAUAAAACAAAABwAAAAQAAAACAAAAEAAAAAMAAAAAAAAAAQAAABAAAAACAAAAAgAAAAEAAABQAAAAAQAAAAUAAAADAAAAWQAyAAAAAQAAAAAACAAAAAIAAAAKAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAAAAAACAAAAAQAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAEAAAAAAAAAAQAAAAUAAAAAAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAMAAAAFAAAAAwAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAAHAAAAAwAAAAgAAAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+    "program": {
+      "status": "hypothesis_only",
+      "size": 727,
+      "sha256": "87345059a5c72d167d24ffb444ab33bcf31992317883e6f9bc1d4a2993d9f92d",
+      "blocks": [
+        {
+          "index": 0,
+          "offset": 71,
+          "size": 316,
+          "sha256": "01a0de3bd8f2d655a1ecd2c69b3c5a0b694d6fc172a3a2d2046a4e997270d832",
+          "header_hex": "3c0100000100000000000100000000000500000005000000",
+          "candidate_height": 5,
+          "candidate_record_count": 5,
+          "records": [
+            {
+              "offset": 95,
+              "class": 1,
+              "size": 80,
+              "sha256": "94dbf0b141ef8a0e8fb944dd95e0299e2c8762c8cab407f2d3098bbd0e683a90",
+              "raw_hex": "5000000001000000030000000300000058003100000001000000000005000000020000000700000004000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X1",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 2,
+                "right": 7,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 175,
+              "class": 1,
+              "size": 80,
+              "sha256": "a8ca21608089b835ba426b3571fd69c02bea485966ddd920d6f761054491c7bf",
+              "raw_hex": "5000000001000000050000000300000059003100000001000000000008000000020000000a00000004000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y1",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 2,
+                "right": 10,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 255,
+              "class": 2,
+              "size": 44,
+              "sha256": "2e1215fc88ff0131d8de792e288025bdb91d2daf01fe669a759657cdc60b0663",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 299,
+              "class": 2,
+              "size": 44,
+              "sha256": "965afbfb166f277963d3aceef01004421eef618714f8a2eee499754d2fc8f760",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000003000000050000000300000000000000",
+              "start": {
+                "x": 1,
+                "y": 3
+              },
+              "end": {
+                "x": 5,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 343,
+              "class": 2,
+              "size": 44,
+              "sha256": "38e52b1c2e95444c19a4ec3bb77661fe4f51f18aca83e8bca1f6021a5c853fb9",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000003000000080000000300000000000000",
+              "start": {
+                "x": 7,
+                "y": 3
+              },
+              "end": {
+                "x": 8,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "offset": 387,
+          "size": 316,
+          "sha256": "493c21b86a908006241a9f05cfc6670119be3a0fcaaffe7aa328c610fb7b61d9",
+          "header_hex": "3c0100000100000000000100000000000500000005000000",
+          "candidate_height": 5,
+          "candidate_record_count": 5,
+          "records": [
+            {
+              "offset": 411,
+              "class": 1,
+              "size": 80,
+              "sha256": "cf6814ba56dc8a062e73bdd6284174595d9acffaa8335edcc5c13c37adcea8de",
+              "raw_hex": "5000000001000000030000000300000058003200000001000000000005000000020000000700000004000000020000001000000003000000000000000100000010000000020000000200000001000000",
+              "kind": 3,
+              "symbol": "X2",
+              "type_name": null,
+              "bbox": {
+                "left": 5,
+                "top": 2,
+                "right": 7,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 2,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 491,
+              "class": 1,
+              "size": 80,
+              "sha256": "4796752502d68b109cfdc67f8c354bf1cdca674f6f8d88128e0870ec61ca67e5",
+              "raw_hex": "5000000001000000050000000300000059003200000001000000000008000000020000000a00000004000000020000001000000003000000000000000100000010000000000000000200000001000000",
+              "kind": 5,
+              "symbol": "Y2",
+              "type_name": null,
+              "bbox": {
+                "left": 8,
+                "top": 2,
+                "right": 10,
+                "bottom": 4
+              },
+              "ports": [
+                {
+                  "size": 16,
+                  "port_kind_code": 3,
+                  "local_x": 0,
+                  "local_y": 1
+                },
+                {
+                  "size": 16,
+                  "port_kind_code": 0,
+                  "local_x": 2,
+                  "local_y": 1
+                }
+              ]
+            },
+            {
+              "offset": 571,
+              "class": 2,
+              "size": 44,
+              "sha256": "2e1215fc88ff0131d8de792e288025bdb91d2daf01fe669a759657cdc60b0663",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000000000000010000000500000000000000",
+              "start": {
+                "x": 1,
+                "y": 0
+              },
+              "end": {
+                "x": 1,
+                "y": 5
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 615,
+              "class": 2,
+              "size": 44,
+              "sha256": "965afbfb166f277963d3aceef01004421eef618714f8a2eee499754d2fc8f760",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000100000003000000050000000300000000000000",
+              "start": {
+                "x": 1,
+                "y": 3
+              },
+              "end": {
+                "x": 5,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            },
+            {
+              "offset": 659,
+              "class": 2,
+              "size": 44,
+              "sha256": "38e52b1c2e95444c19a4ec3bb77661fe4f51f18aca83e8bca1f6021a5c853fb9",
+              "raw_hex": "2c00000002000000000000000100000000000100000000000700000003000000080000000300000000000000",
+              "start": {
+                "x": 7,
+                "y": 3
+              },
+              "end": {
+                "x": 8,
+                "y": 3
+              },
+              "prefix_fields": [
+                0,
+                1,
+                0,
+                1,
+                0
+              ],
+              "suffix": 0
+            }
+          ]
+        }
+      ],
+      "prefix_hex": "01000000000001000000000001000a00000000000200000001000000010000000000ea07090000000d000d0017001700000000000000d084020000840200000100000002000000",
+      "candidate_block_count": 2,
+      "trailer_hex": "000000000000000000000000000000000000000000000000",
+      "candidate_global_lengths": {
+        "55": 644,
+        "59": 644
+      }
+    }
+  }
+}

@@ -1,0 +1,727 @@
+{
+  "schema_version": 1,
+  "scope": "FX3U / GX Works2 1.635 Structured Ladder/FBD; first task only network/ladder-block boundaries",
+  "evidence_hash_index": "audit.json",
+  "native_policy": "Each workflow records observed steps separately; parser acceptance never implies native compilation. Historical claims retain original scope.",
+  "entries": [
+    {
+      "id": "K01",
+      "status": "confirmed",
+      "claim": "Outer CFB and nested _hdb plus current projectdatalist logical mapping resolve Structured source streams in the archived corpus.",
+      "samples": [
+        "gxw-20260910.zip:regression/A.gxw",
+        "gxw-generation-20260910.zip:relay_parallel_compile.gxw"
+      ],
+      "changed_variables": [
+        "source program across archived cases"
+      ],
+      "invariants": [
+        "FX3U structured project family"
+      ],
+      "logical_streams": [
+        "outer/_hdb",
+        "outer/projectdatalist.xml",
+        "nested/*.Program.pou"
+      ],
+      "native_validation": {
+        "source": "../gxworks_validation.json and ../relay-parallel-roundtrip.json",
+        "open": true,
+        "compile_all": true,
+        "save": true,
+        "close_reopen": true
+      },
+      "counterexamples": "none in archived corpus; stream IDs must not be hard-coded"
+    },
+    {
+      "id": "K02",
+      "status": "confirmed",
+      "claim": "Observed nodes/wires have length-delimited records, port-relative geometry, ordinary wire class 2 length 44; T endpoints connect, interior crossings do not, within the sampled diagram.",
+      "samples": [
+        "tests/fixtures/gxw_structured_54_58.json",
+        "tests/fixtures/gxw_structured_49_51.json"
+      ],
+      "changed_variables": [
+        "terminal spacing",
+        "crossing endpoint geometry",
+        "contact polarity"
+      ],
+      "invariants": [
+        "corresponding function/terminal identities and ABI in each paired control"
+      ],
+      "logical_streams": [
+        "nested/1.Program.pou"
+      ],
+      "native_validation": {
+        "open": "native editor observations recorded",
+        "compile_all": "not established for every pair",
+        "save": true,
+        "close_reopen": "not established for every pair"
+      },
+      "counterexamples": "NC left port is code 11; no universal connection-state interpretation for port code 0"
+    },
+    {
+      "id": "K03",
+      "status": "confirmed",
+      "claim": "Existing Function ABI coverage and FB instance/type separation are preserved prerequisites, not targets of this study.",
+      "samples": [
+        "tests/fixtures/gxw_structured_65_66.json",
+        "tests/fixtures/gxw_structured_67_71.json",
+        "tests/fixtures/gxw_structured_72_75.json",
+        "tests/fixtures/gxw_structured_76.json",
+        "tests/fixtures/gxw_structured_77.json"
+      ],
+      "changed_variables": [
+        "documented native interface controls",
+        "timer_a to timer_b"
+      ],
+      "invariants": [
+        "rename control keeps TON type and record geometry; other controls retain their documented scope"
+      ],
+      "logical_streams": [
+        "nested/1.Program.pou",
+        "nested/1.Labels.lh"
+      ],
+      "native_validation": {
+        "open": "native source observations",
+        "compile_all": "not established for entire ABI corpus",
+        "save": true,
+        "close_reopen": "not established for entire ABI corpus"
+      },
+      "counterexamples": "DIV_E has no -2 suffix; FB output code 0 is not necessarily ENO"
+    },
+    {
+      "id": "K04",
+      "status": "confirmed",
+      "claim": "Existing project writer, serializer and allocator generated series and explicit FB connection projects accepted by native compile/save/reopen.",
+      "samples": [
+        "gxw-20260910.zip:s.gxw",
+        "gxw-20260910.zip:sc.gxw",
+        "gxw-20260910.zip:f2.gxw",
+        "gxw-20260910.zip:f2c.gxw"
+      ],
+      "changed_variables": [
+        "documented generated series/FB connection geometry"
+      ],
+      "invariants": [
+        "baseline project identity and unrelated payload during generation"
+      ],
+      "logical_streams": [
+        "nested/1.Program.pou",
+        "outer/history.xml",
+        "outer/_hdb"
+      ],
+      "native_validation": {
+        "source": "../gxworks_validation.json",
+        "open": true,
+        "compile_all": true,
+        "save": true,
+        "close_reopen": true
+      },
+      "counterexamples": "not evidence of arbitrary networks, new POUs or arbitrary ABI"
+    },
+    {
+      "id": "K05",
+      "status": "confirmed",
+      "claim": "Program iFileSize-only synchronization restored previously missing wires; corpus metadata uses exact payload length and Base64(MD5(raw POU)).",
+      "samples": [
+        "docs/research/gxw_wire_rendering_history_isolation.md:H1/H2/H3",
+        "research/results/metadata_corpus.json"
+      ],
+      "changed_variables": [
+        "iFileSize only in H1",
+        "MD5 only in H2",
+        "both in H3"
+      ],
+      "invariants": [
+        "Program.pou",
+        "nested _hdb",
+        "allocation"
+      ],
+      "logical_streams": [
+        "outer/history.xml"
+      ],
+      "native_validation": {
+        "open": true,
+        "compile_all": "not recorded for threshold controls",
+        "save": "not recorded for threshold controls",
+        "close_reopen": "open experiments recorded"
+      },
+      "counterexamples": "MD5-only failed to restore wires; exact length equality was not required for rendering"
+    },
+    {
+      "id": "K06",
+      "status": "strongly_inferred",
+      "claim": "iFileSize influences editor loading/presentation bounds; its internal algorithm remains unknown.",
+      "samples": [
+        "docs/research/gxw_wire_rendering_history_isolation.md"
+      ],
+      "changed_variables": [
+        "iFileSize"
+      ],
+      "invariants": [
+        "POU payload and all nested streams"
+      ],
+      "logical_streams": [
+        "outer/history.xml"
+      ],
+      "native_validation": {
+        "open": true,
+        "compile_all": "not recorded",
+        "save": "not recorded",
+        "close_reopen": "open experiments recorded"
+      },
+      "counterexamples": "partial and malformed geometry prevents claiming simple exact truncation"
+    },
+    {
+      "id": "K07",
+      "status": "confirmed",
+      "claim": "Known declaration rows and growth across mini/regular/FAT capacity are already supported; not a P0 blocker.",
+      "samples": [
+        "gxw-generation-20260910.zip:dtypes.gxw",
+        "gxw-generation-20260910.zip:dconst.gxw",
+        "gxw-generation-20260910.zip:dglobal.gxw",
+        "gxw-generation-20260910.zip:auto_decl.gxw",
+        "gxw-generation-20260910.zip:auto_decl_compile.gxw"
+      ],
+      "changed_variables": [
+        "native type/class controls",
+        "1000 added BOOL declarations and renamed instances in generation acceptance"
+      ],
+      "invariants": [
+        "row templates; unchanged table fields in isolated controls"
+      ],
+      "logical_streams": [
+        "nested/1.Labels.lh",
+        "nested/Global1.gh",
+        "outer/history.xml"
+      ],
+      "native_validation": {
+        "source": "../auto-declarations-roundtrip.json",
+        "open": true,
+        "compile_all": true,
+        "save": true,
+        "close_reopen": true
+      },
+      "counterexamples": "large DIFAT synthetic tests are not native GX compile evidence"
+    },
+    {
+      "id": "K08",
+      "status": "confirmed",
+      "claim": "Existing relay_parallel generated logic compiles with C2034, survives save/reopen, and retains the recorded semantic graph.",
+      "samples": [
+        "gxw-generation-20260910.zip:relay_parallel.gxw",
+        "gxw-generation-20260910.zip:relay_parallel_compile.gxw",
+        "research/evidence/relay-parallel-compile.jpg"
+      ],
+      "changed_variables": [
+        "native compile/save of generated file"
+      ],
+      "invariants": [
+        "X0 -> (X1 OR NC X2) -> Y0/Y1; X3 -> Y2",
+        "declarations"
+      ],
+      "logical_streams": [
+        "nested/1.Program.pou",
+        "native changed streams listed in prior results"
+      ],
+      "native_validation": {
+        "source": "../relay-parallel-roundtrip.json",
+        "open": true,
+        "compile_all": {
+          "errors": 0,
+          "warnings": 1,
+          "check_warnings": 0,
+          "codes": [
+            "C2034"
+          ]
+        },
+        "save": true,
+        "close_reopen": true
+      },
+      "counterexamples": "this is not warning-free generation"
+    },
+    {
+      "id": "R01",
+      "status": "rejected",
+      "claim": "Parser and serializer self-consistency alone establishes native compile validity.",
+      "samples": [
+        "gxw-20260910.zip:b1.gxw",
+        "gxw-20260910.zip:bu.gxw",
+        "gxw-generation-20260910.zip:relay_parallel.gxw"
+      ],
+      "changed_variables": [
+        "instance declaration mismatch or unsupported block organization"
+      ],
+      "invariants": [
+        "structurally accepted POU"
+      ],
+      "logical_streams": [
+        "nested/1.Program.pou",
+        "nested/1.Labels.lh"
+      ],
+      "native_validation": {
+        "source": "../gxworks_validation.json",
+        "open": true,
+        "compile_all": "observed errors/warnings",
+        "save": true,
+        "close_reopen": "only cases explicitly recorded"
+      },
+      "counterexamples": "bu C2015; relay_parallel C2034"
+    },
+    {
+      "id": "R02",
+      "status": "rejected",
+      "claim": "Port code 0 universally means unconnected.",
+      "samples": [
+        "native samples 53/54 and 59/62"
+      ],
+      "changed_variables": [
+        "ENO attachment"
+      ],
+      "invariants": [
+        "function node record"
+      ],
+      "logical_streams": [
+        "nested/1.Program.pou"
+      ],
+      "native_validation": {
+        "open": "native editor observation",
+        "compile_all": "not recorded for paired control",
+        "save": true,
+        "close_reopen": "not recorded"
+      },
+      "counterexamples": "ENO remains code 0 while connected"
+    },
+    {
+      "id": "R03",
+      "status": "rejected",
+      "claim": "Stale MAIN.res is necessarily the current Structured source or must be hand-forged to fix the generator.",
+      "samples": [
+        "native samples 48-53",
+        "gxw-20260910.zip:s.gxw/sc.gxw"
+      ],
+      "changed_variables": [
+        "editor source and later native compilation"
+      ],
+      "invariants": [
+        "MAIN.res unchanged in precompile native source edits"
+      ],
+      "logical_streams": [
+        "nested/1.Program.pou",
+        "nested/MAIN.res (only opaque comparison)"
+      ],
+      "native_validation": {
+        "open": true,
+        "compile_all": "series control passed without manually writing res",
+        "save": true,
+        "close_reopen": true
+      },
+      "counterexamples": "source changes with byte-identical stale res; native compiler generates derived state"
+    },
+    {
+      "id": "U01",
+      "status": "confirmed",
+      "claim": "In the native A/B/C/D/E and source-only M1 controls, Program.pou has a 71-byte prefix, block count at 0x43, ordered 24-byte block headers and independent length-delimited record lists, followed by the 24-zero-byte trailer.",
+      "samples": [
+        "gxw-block-boundary-20260913.zip:samples/A.gxw",
+        "gxw-block-boundary-20260913.zip:samples/B.gxw",
+        "gxw-block-boundary-20260913.zip:samples/C.gxw",
+        "gxw-block-boundary-20260913.zip:samples/D.gxw",
+        "gxw-block-boundary-20260913.zip:samples/E.gxw",
+        "gxw-block-boundary-20260913.zip:samples/M1.gxw",
+        "gxw-block-boundary-20260913.zip:samples/M1_compile.gxw"
+      ],
+      "changed_variables": [
+        "B/C block organization including tracked local y and rail separation",
+        "C/D only complete block order",
+        "A/E add empty block; Save As metadata confound recorded",
+        "M1 only Program.pou framing/local-coordinate projection plus known history integrity"
+      ],
+      "invariants": [
+        "B/C/D devices and Boolean logic",
+        "C/D complete block bytes",
+        "M1 B opaque prefix, declarations, all non-target nested payloads including MAIN.res"
+      ],
+      "logical_streams": [
+        "nested/1.Program.pou",
+        "outer/history.xml integrity only in M1",
+        "all-stream diffs indexed in result JSON"
+      ],
+      "native_validation": {
+        "source": "evidence-manifest.json",
+        "open": true,
+        "compile_all": {
+          "B": "0/1(C2034)/0",
+          "C/D/M1": "0/0/0",
+          "E": "0/1(C2008)/0"
+        },
+        "save": true,
+        "close_reopen": true,
+        "M1_Program_pou_unchanged_after_compile_save": true
+      },
+      "counterexamples": "The old single-block body-size interpretation fails for every native multi-block control. Page/other versions are not established.",
+      "hypotheses": [
+        "H-record",
+        "H-envelope",
+        "H-other",
+        "H-geometry"
+      ]
+    },
+    {
+      "id": "U02",
+      "status": "unknown",
+      "claim": "The meaning of 12 opaque block-header bytes (+4..+15), possible stable identity and page-specific extensions remains unknown.",
+      "samples": [
+        "gxw-block-boundary-20260913.zip:samples/C.gxw",
+        "gxw-block-boundary-20260913.zip:samples/D.gxw",
+        "gxw-block-boundary-20260913.zip:samples/E.gxw"
+      ],
+      "changed_variables": [
+        "complete block order C/D",
+        "empty block A/E"
+      ],
+      "invariants": [
+        "opaque bytes equal across all observed block headers"
+      ],
+      "logical_streams": [
+        "nested/1.Program.pou"
+      ],
+      "native_validation": {
+        "source": "evidence-manifest.json",
+        "open": true,
+        "compile_all": true,
+        "save": true,
+        "close_reopen": true
+      },
+      "counterexamples": "Equal constants cannot distinguish stable identity from flags or version metadata; no identity meaning is claimed.",
+      "hypotheses": [
+        "H-identity"
+      ]
+    },
+    {
+      "id": "U03",
+      "status": "confirmed",
+      "claim": "Writer-generated relay_parallel with one independent native block per rung preserves the original Boolean logic, eliminates C2034, and retains both blocks after native compile/save/close/reopen.",
+      "samples": [
+        "gxw-generation-20260910.zip:relay_parallel.gxw",
+        "gxw-block-generation-20260913.zip:samples/R.gxw",
+        "gxw-block-generation-20260913.zip:samples/R_compile.gxw"
+      ],
+      "changed_variables": [
+        "per-rung block envelope and local coordinate placement; per-block rails"
+      ],
+      "invariants": [
+        "all device symbols and polarities",
+        "16 input combinations have identical outputs",
+        "declarations",
+        "Program.pou bytes before/after native compile/save"
+      ],
+      "logical_streams": [
+        "nested/1.Program.pou",
+        "outer/history.xml known integrity at generation",
+        "native derived changes listed separately in R-compile-diff.json"
+      ],
+      "native_validation": {
+        "source": "generation-evidence-manifest.json",
+        "status": "native_roundtrip_observed",
+        "GX_Works2": "1.635.0.1",
+        "CPU": "FX3U/FX3UC",
+        "open": true,
+        "compile_all": {
+          "errors": 0,
+          "warnings": 0,
+          "check_warnings": 0,
+          "codes": []
+        },
+        "save": true,
+        "close": true,
+        "reopen": true,
+        "reopened_blocks": 2
+      },
+      "counterexamples": "No counterexample in the controlled relay sample; unrelated ABI, page variants, N>2 native generation, CPU/version portability remain unverified."
+    },
+    {
+      "samples": [
+        "gxw-block-boundary-20260913.zip:samples/A.gxw",
+        "gxw-block-boundary-20260913.zip:samples/B.gxw",
+        "gxw-block-boundary-20260913.zip:samples/C.gxw",
+        "gxw-block-boundary-20260913.zip:samples/D.gxw",
+        "gxw-block-boundary-20260913.zip:samples/E.gxw",
+        "gxw-block-boundary-20260913.zip:samples/M1.gxw",
+        "gxw-block-boundary-20260913.zip:samples/M1_compile.gxw"
+      ],
+      "changed_variables": [
+        "controlled block organization/order/empty-block matrix",
+        "isolated M1 source-envelope transplant"
+      ],
+      "invariants": [
+        "paired devices/logic/declarations",
+        "M1 all non-target payloads"
+      ],
+      "logical_streams": [
+        "nested/1.Program.pou",
+        "outer/history.xml known integrity fields"
+      ],
+      "native_validation": {
+        "source": "evidence-manifest.json",
+        "open": true,
+        "compile_all": true,
+        "save": true,
+        "close_reopen": true
+      },
+      "counterexamples": "none within this FX3U sample family; no cross-version claim",
+      "id": "B01",
+      "status": "confirmed",
+      "claim": "Block header +0 is header-plus-record byte length; +16 is local canvas height; +20 is record count. Program 0x43 is ordered block count. Length/count checked against exact record boundaries, not guessed from one constant."
+    },
+    {
+      "samples": [
+        "gxw-block-boundary-20260913.zip:samples/A.gxw",
+        "gxw-block-boundary-20260913.zip:samples/B.gxw",
+        "gxw-block-boundary-20260913.zip:samples/C.gxw",
+        "gxw-block-boundary-20260913.zip:samples/D.gxw",
+        "gxw-block-boundary-20260913.zip:samples/E.gxw",
+        "gxw-block-boundary-20260913.zip:samples/M1.gxw",
+        "gxw-block-boundary-20260913.zip:samples/M1_compile.gxw"
+      ],
+      "changed_variables": [
+        "controlled block organization/order/empty-block matrix",
+        "isolated M1 source-envelope transplant"
+      ],
+      "invariants": [
+        "paired devices/logic/declarations",
+        "M1 all non-target payloads"
+      ],
+      "logical_streams": [
+        "nested/1.Program.pou",
+        "outer/history.xml known integrity fields"
+      ],
+      "native_validation": {
+        "source": "evidence-manifest.json",
+        "open": true,
+        "compile_all": true,
+        "save": true,
+        "close_reopen": true
+      },
+      "counterexamples": "none within this FX3U sample family; no cross-version claim",
+      "id": "B02",
+      "status": "strongly_inferred",
+      "claim": "Program DWORDs 0x37 and 0x3B both equal total Program.pou length minus 83 in all old/new controlled samples; writer rejects other source invariants. Internal purpose remains unnamed."
+    },
+    {
+      "samples": [
+        "gxw-block-boundary-20260913.zip:samples/A.gxw",
+        "gxw-block-boundary-20260913.zip:samples/B.gxw",
+        "gxw-block-boundary-20260913.zip:samples/C.gxw",
+        "gxw-block-boundary-20260913.zip:samples/D.gxw",
+        "gxw-block-boundary-20260913.zip:samples/E.gxw",
+        "gxw-block-boundary-20260913.zip:samples/M1.gxw",
+        "gxw-block-boundary-20260913.zip:samples/M1_compile.gxw"
+      ],
+      "changed_variables": [
+        "controlled block organization/order/empty-block matrix",
+        "isolated M1 source-envelope transplant"
+      ],
+      "invariants": [
+        "paired devices/logic/declarations",
+        "M1 all non-target payloads"
+      ],
+      "logical_streams": [
+        "nested/1.Program.pou",
+        "outer/history.xml known integrity fields"
+      ],
+      "native_validation": {
+        "source": "evidence-manifest.json",
+        "open": true,
+        "compile_all": true,
+        "save": true,
+        "close_reopen": true
+      },
+      "counterexamples": "none within this FX3U sample family; no cross-version claim",
+      "id": "B03",
+      "status": "confirmed",
+      "claim": "Native block order follows container sequence: D contains the exact complete block byte strings of C in reverse order, without separate per-block ordinal updates."
+    },
+    {
+      "samples": [
+        "gxw-block-boundary-20260913.zip:samples/A.gxw",
+        "gxw-block-boundary-20260913.zip:samples/B.gxw",
+        "gxw-block-boundary-20260913.zip:samples/C.gxw",
+        "gxw-block-boundary-20260913.zip:samples/D.gxw",
+        "gxw-block-boundary-20260913.zip:samples/E.gxw",
+        "gxw-block-boundary-20260913.zip:samples/M1.gxw",
+        "gxw-block-boundary-20260913.zip:samples/M1_compile.gxw"
+      ],
+      "changed_variables": [
+        "controlled block organization/order/empty-block matrix",
+        "isolated M1 source-envelope transplant"
+      ],
+      "invariants": [
+        "paired devices/logic/declarations",
+        "M1 all non-target payloads"
+      ],
+      "logical_streams": [
+        "nested/1.Program.pou",
+        "outer/history.xml known integrity fields"
+      ],
+      "native_validation": {
+        "source": "evidence-manifest.json",
+        "open": true,
+        "compile_all": true,
+        "save": true,
+        "close_reopen": true
+      },
+      "counterexamples": "none within this FX3U sample family; no cross-version claim",
+      "id": "B04",
+      "status": "confirmed",
+      "claim": "Editor geometry is local to each block. C uses identical coordinates for X1/Y1 and X2/Y2 in distinct blocks. Electrical net construction must be isolated by block."
+    },
+    {
+      "samples": [
+        "gxw-block-boundary-20260913.zip:samples/A.gxw",
+        "gxw-block-boundary-20260913.zip:samples/B.gxw",
+        "gxw-block-boundary-20260913.zip:samples/C.gxw",
+        "gxw-block-boundary-20260913.zip:samples/D.gxw",
+        "gxw-block-boundary-20260913.zip:samples/E.gxw",
+        "gxw-block-boundary-20260913.zip:samples/M1.gxw",
+        "gxw-block-boundary-20260913.zip:samples/M1_compile.gxw"
+      ],
+      "changed_variables": [
+        "controlled block organization/order/empty-block matrix",
+        "isolated M1 source-envelope transplant"
+      ],
+      "invariants": [
+        "paired devices/logic/declarations",
+        "M1 all non-target payloads"
+      ],
+      "logical_streams": [
+        "nested/1.Program.pou",
+        "outer/history.xml known integrity fields"
+      ],
+      "native_validation": {
+        "source": "evidence-manifest.json",
+        "open": true,
+        "compile_all": true,
+        "save": true,
+        "close_reopen": true
+      },
+      "counterexamples": "none within this FX3U sample family; no cross-version claim",
+      "id": "B05",
+      "status": "rejected",
+      "claim": "H-record: a new class, node kind or separator inside the node/wire list is necessary to represent these block boundaries."
+    },
+    {
+      "samples": [
+        "gxw-block-boundary-20260913.zip:samples/A.gxw",
+        "gxw-block-boundary-20260913.zip:samples/B.gxw",
+        "gxw-block-boundary-20260913.zip:samples/C.gxw",
+        "gxw-block-boundary-20260913.zip:samples/D.gxw",
+        "gxw-block-boundary-20260913.zip:samples/E.gxw",
+        "gxw-block-boundary-20260913.zip:samples/M1.gxw",
+        "gxw-block-boundary-20260913.zip:samples/M1_compile.gxw"
+      ],
+      "changed_variables": [
+        "controlled block organization/order/empty-block matrix",
+        "isolated M1 source-envelope transplant"
+      ],
+      "invariants": [
+        "paired devices/logic/declarations",
+        "M1 all non-target payloads"
+      ],
+      "logical_streams": [
+        "nested/1.Program.pou",
+        "outer/history.xml known integrity fields"
+      ],
+      "native_validation": {
+        "source": "evidence-manifest.json",
+        "open": true,
+        "compile_all": true,
+        "save": true,
+        "close_reopen": true
+      },
+      "counterexamples": "none within this FX3U sample family; no cross-version claim",
+      "id": "B06",
+      "status": "rejected",
+      "claim": "H-other: these block boundaries exist only in another source/editor stream. M1 changes only Program.pou logical payload and history integrity, yet shows two blocks and compiles without C2034."
+    },
+    {
+      "samples": [
+        "gxw-block-boundary-20260913.zip:samples/A.gxw",
+        "gxw-block-boundary-20260913.zip:samples/B.gxw",
+        "gxw-block-boundary-20260913.zip:samples/C.gxw",
+        "gxw-block-boundary-20260913.zip:samples/D.gxw",
+        "gxw-block-boundary-20260913.zip:samples/E.gxw",
+        "gxw-block-boundary-20260913.zip:samples/M1.gxw",
+        "gxw-block-boundary-20260913.zip:samples/M1_compile.gxw"
+      ],
+      "changed_variables": [
+        "controlled block organization/order/empty-block matrix",
+        "isolated M1 source-envelope transplant"
+      ],
+      "invariants": [
+        "paired devices/logic/declarations",
+        "M1 all non-target payloads"
+      ],
+      "logical_streams": [
+        "nested/1.Program.pou",
+        "outer/history.xml known integrity fields"
+      ],
+      "native_validation": {
+        "source": "evidence-manifest.json",
+        "open": true,
+        "compile_all": true,
+        "save": true,
+        "close_reopen": true
+      },
+      "counterexamples": "none within this FX3U sample family; no cross-version claim",
+      "id": "B07",
+      "status": "rejected",
+      "claim": "H-geometry-only: block count is solely inferred from the global node/wire coordinates. Native repeated local geometry is isolated by explicit framing."
+    },
+    {
+      "samples": [
+        "gxw-block-boundary-20260913.zip:samples/A.gxw",
+        "gxw-block-boundary-20260913.zip:samples/B.gxw",
+        "gxw-block-boundary-20260913.zip:samples/C.gxw",
+        "gxw-block-boundary-20260913.zip:samples/D.gxw",
+        "gxw-block-boundary-20260913.zip:samples/E.gxw",
+        "gxw-block-boundary-20260913.zip:samples/M1.gxw",
+        "gxw-block-boundary-20260913.zip:samples/M1_compile.gxw"
+      ],
+      "changed_variables": [
+        "controlled block organization/order/empty-block matrix",
+        "isolated M1 source-envelope transplant"
+      ],
+      "invariants": [
+        "paired devices/logic/declarations",
+        "M1 all non-target payloads"
+      ],
+      "logical_streams": [
+        "nested/1.Program.pou",
+        "outer/history.xml known integrity fields"
+      ],
+      "native_validation": {
+        "source": "evidence-manifest.json",
+        "open": true,
+        "compile_all": true,
+        "save": true,
+        "close_reopen": true
+      },
+      "counterexamples": "none within this FX3U sample family; no cross-version claim",
+      "id": "B08",
+      "status": "confirmed",
+      "claim": "B one-block two-rung organization triggers C2034; C and M1 two-block organization eliminates it. B and C native MAIN.res bytes are identical, treated as opaque equivalence evidence."
+    }
+  ],
+  "completion": {
+    "scope": "first requested task: native block boundaries and relay_parallel C2034",
+    "status": "complete",
+    "tests": "256 GXW tests passed",
+    "remaining_unknown": [
+      "12 opaque block header bytes",
+      "page-specific extensions",
+      "other CPU/version stability"
+    ],
+    "next_experiment": "Native C plus only one additional empty block to test N=3 framing without changing prior containers."
+  }
+}

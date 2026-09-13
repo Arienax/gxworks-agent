@@ -14,7 +14,7 @@ import re
 
 from .container_writer import validate_cfb_streams
 from .declarations import parse_declarations, edit_declarations, CLASS_CODES
-from .models import GXWFormatError, NodeKind, Point, Rect
+from .models import GXWFormatError, NodeKind, Point, Rect, StructuredBlock
 from .project_metadata import logical_mapping
 from .project_writer import build_gxw_project
 from .semantic import DEFAULT_FUNCTION_BLOCK_REGISTRY, build_semantic_model
@@ -107,11 +107,18 @@ def export_object_model(program, declarations=None):
                      "iec_address": r.iec_address, "comment": r.comment}
                     for r in doc.rows] for name, doc in (declarations or {}).items()}
     semantic = build_semantic_model(program)
-    return {"schema_version": 1, "program": program.logical_name, "canvas_height": program.canvas_height,
+    model = {"schema_version": 1, "program": program.logical_name, "canvas_height": program.canvas_height,
             "nodes": nodes, "wires": [{"source_offset": w.offset, "start": [w.start.x, w.start.y],
                                        "end": [w.end.x, w.end.y]} for w in program.wires],
             "labels": labels, "declaration_edits": {}, "unknown_record_count": len(program.unknown_records),
             "issues": [{"code": i.code, "message": i.message} for i in semantic.issues]}
+    if len(program.blocks) > 1:
+        groups = list(program.block_records())
+        membership = {r.offset: index for index, (_, records) in enumerate(groups) for r in records}
+        model["blocks"] = [{"source_offset": b.offset, "canvas_height": b.canvas_height} for b, _ in groups]
+        for item in (*model["nodes"], *model["wires"]):
+            item["block"] = membership[item["source_offset"]]
+    return model
 
 
 def _uint(value):
@@ -130,18 +137,56 @@ def build_object_program(source, model):
     if not isinstance(model, dict) or model.get("schema_version") != 1:
         raise GXWFormatError("unsupported GXW object model version")
     allowed = {"schema_version", "program", "canvas_height", "nodes", "wires", "labels",
-               "declaration_edits", "unknown_record_count", "issues"}
+               "declaration_edits", "unknown_record_count", "issues", "blocks"}
     if set(model) - allowed or model.get("program", source.logical_name) != source.logical_name:
         raise GXWFormatError("object model does not match the selected Program.pou")
     if not isinstance(model.get("nodes"), list) or not isinstance(model.get("wires"), list):
         raise GXWFormatError("nodes and wires must be lists")
+    source_groups = list(source.block_records())
+    source_blocks = {b.offset: b for b, _ in source_groups}
+    specifications = model.get("blocks")
+    if specifications is None:
+        if len(source_groups) != 1:
+            raise GXWFormatError("multi-block source requires explicit object-model blocks")
+        specifications = [{"source_offset": source_groups[0][0].offset,
+                           "canvas_height": model.get("canvas_height", source.canvas_height)}]
+    if not isinstance(specifications, list) or not specifications:
+        raise GXWFormatError("blocks must be a nonempty list")
+    block_templates, block_heights, bound_blocks = [], [], {}
+    for index, spec in enumerate(specifications):
+        if not isinstance(spec, dict) or set(spec) - {"source_offset", "canvas_height"}:
+            raise GXWFormatError("invalid structured block fields")
+        offset = spec.get("source_offset")
+        if offset is not None:
+            if type(offset) is not int or offset not in source_blocks or offset in bound_blocks:
+                raise GXWFormatError("stale or repeated source block offset")
+            bound_blocks[offset] = index
+        block_templates.append(source_blocks[offset] if offset is not None else source_groups[0][0])
+        block_heights.append(_uint(spec.get("canvas_height", source_groups[0][0].canvas_height)))
+    if 'blocks' in model and 'canvas_height' in model and _uint(model['canvas_height']) != sum(block_heights):
+        raise GXWFormatError('program canvas_height is derived from block heights')
+    # Opaque records cannot be assigned to a newly invented block or lost when
+    # a source block is omitted. Explicit source binding preserves membership.
+    membership = {}
+    for block, records in source_groups:
+        for record in records:
+            if record in source.unknown_records:
+                if block.offset not in bound_blocks:
+                    raise GXWFormatError("cannot drop or relocate a block containing unknown records")
+                membership[record.offset] = bound_blocks[block.offset]
+
+    def owner(item):
+        index = item.get("block", 0 if len(specifications) == 1 else None)
+        if type(index) is not int or not 0 <= index < len(specifications):
+            raise GXWFormatError("record requires a valid block index")
+        return index
     old_nodes = {n.offset: n for n in source.nodes}
     old_wires = {w.offset: w for w in source.wires}
     catalog = native_catalog()
     next_key = max((r.offset for r in source.iter_records()), default=0) + 1
     used, ids, nodes, wires = set(), {}, [], []
     for item in model["nodes"]:
-        if not isinstance(item, dict) or set(item) - {"id", "source_offset", "template", "symbol", "x", "y", "width", "height", "ports"}:
+        if not isinstance(item, dict) or set(item) - {"id", "source_offset", "template", "symbol", "x", "y", "width", "height", "ports", "block"}:
             raise GXWFormatError("invalid structured node fields")
         identity = item.get("id")
         if not isinstance(identity, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", identity) or identity in ids:
@@ -177,9 +222,11 @@ def build_object_program(source, model):
         node = replace(template, offset=offset, symbol=symbol, bbox=bbox)
         ids[identity] = node
         nodes.append(node)
+        membership[offset] = owner(item)
     for item in model["wires"]:
-        if not isinstance(item, dict) or set(item) - {"source_offset", "start", "end", "from", "to", "via"}:
+        if not isinstance(item, dict) or set(item) - {"source_offset", "start", "end", "from", "to", "via", "block"}:
             raise GXWFormatError("invalid structured wire fields")
+        block_index = owner(item)
         offset = item.get("source_offset")
         old = old_wires.get(offset) if type(offset) is int else None
         if offset is not None and (old is None or offset in used):
@@ -197,6 +244,8 @@ def build_object_program(source, model):
                 node = ids.get(identity)
                 if node is None or formal not in _port_names(node):
                     raise GXWFormatError(f"unknown wire endpoint: {value}")
+                if membership[node.offset] != block_index:
+                    raise GXWFormatError("named wire endpoints cannot cross block boundaries")
                 return node.port_point(_port_names(node).index(formal))
             points = [endpoint(item.get("from")), *[_point(p) for p in item.get("via", [])], endpoint(item.get("to"))]
         else:
@@ -214,9 +263,17 @@ def build_object_program(source, model):
             if old:
                 used.add(offset)
             wires.append(replace(template, offset=key, start=start, end=end))
-    height = max([_uint(model.get("canvas_height", source.canvas_height)), *[n.bbox.bottom for n in nodes],
-                  *[max(w.start.y, w.end.y) for w in wires]])
-    result = replace(source, nodes=tuple(nodes), wires=tuple(wires), canvas_height=height)
+            membership[key] = block_index
+    for n in nodes:
+        block_heights[membership[n.offset]] = max(block_heights[membership[n.offset]], n.bbox.bottom)
+    for w in wires:
+        block_heights[membership[w.offset]] = max(block_heights[membership[w.offset]], w.start.y, w.end.y)
+    records = sorted([*nodes, *wires, *source.unknown_records], key=lambda r: r.offset)
+    blocks = tuple(StructuredBlock(template.offset, template.byte_length, block_heights[index],
+                     tuple(r.offset for r in records if membership[r.offset] == index), template.raw_header)
+                   for index, template in enumerate(block_templates))
+    result = replace(source, nodes=tuple(nodes), wires=tuple(wires), blocks=blocks,
+                     canvas_height=sum(block_heights), record_count=len(records))
     # Source unknown records retain their original ordering and bytes.
     serialized = serialize_structured_pou(result)
     reparsed = parse_structured_pou(serialized, logical_name=source.logical_name)

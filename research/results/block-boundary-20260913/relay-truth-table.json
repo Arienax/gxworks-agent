@@ -1,0 +1,216 @@
+{
+  "scope": "source-graph Boolean equivalence; separate from native validation",
+  "old_blocks": 1,
+  "new_blocks": 2,
+  "all_16_assignments_match": true,
+  "table": [
+    {
+      "inputs": {
+        "X0": false,
+        "X1": false,
+        "X2": false,
+        "X3": false
+      },
+      "outputs": {
+        "Y0": false,
+        "Y1": false,
+        "Y2": false
+      }
+    },
+    {
+      "inputs": {
+        "X0": false,
+        "X1": false,
+        "X2": false,
+        "X3": true
+      },
+      "outputs": {
+        "Y0": false,
+        "Y1": false,
+        "Y2": true
+      }
+    },
+    {
+      "inputs": {
+        "X0": false,
+        "X1": false,
+        "X2": true,
+        "X3": false
+      },
+      "outputs": {
+        "Y0": false,
+        "Y1": false,
+        "Y2": false
+      }
+    },
+    {
+      "inputs": {
+        "X0": false,
+        "X1": false,
+        "X2": true,
+        "X3": true
+      },
+      "outputs": {
+        "Y0": false,
+        "Y1": false,
+        "Y2": true
+      }
+    },
+    {
+      "inputs": {
+        "X0": false,
+        "X1": true,
+        "X2": false,
+        "X3": false
+      },
+      "outputs": {
+        "Y0": false,
+        "Y1": false,
+        "Y2": false
+      }
+    },
+    {
+      "inputs": {
+        "X0": false,
+        "X1": true,
+        "X2": false,
+        "X3": true
+      },
+      "outputs": {
+        "Y0": false,
+        "Y1": false,
+        "Y2": true
+      }
+    },
+    {
+      "inputs": {
+        "X0": false,
+        "X1": true,
+        "X2": true,
+        "X3": false
+      },
+      "outputs": {
+        "Y0": false,
+        "Y1": false,
+        "Y2": false
+      }
+    },
+    {
+      "inputs": {
+        "X0": false,
+        "X1": true,
+        "X2": true,
+        "X3": true
+      },
+      "outputs": {
+        "Y0": false,
+        "Y1": false,
+        "Y2": true
+      }
+    },
+    {
+      "inputs": {
+        "X0": true,
+        "X1": false,
+        "X2": false,
+        "X3": false
+      },
+      "outputs": {
+        "Y0": true,
+        "Y1": true,
+        "Y2": false
+      }
+    },
+    {
+      "inputs": {
+        "X0": true,
+        "X1": false,
+        "X2": false,
+        "X3": true
+      },
+      "outputs": {
+        "Y0": true,
+        "Y1": true,
+        "Y2": true
+      }
+    },
+    {
+      "inputs": {
+        "X0": true,
+        "X1": false,
+        "X2": true,
+        "X3": false
+      },
+      "outputs": {
+        "Y0": false,
+        "Y1": false,
+        "Y2": false
+      }
+    },
+    {
+      "inputs": {
+        "X0": true,
+        "X1": false,
+        "X2": true,
+        "X3": true
+      },
+      "outputs": {
+        "Y0": false,
+        "Y1": false,
+        "Y2": true
+      }
+    },
+    {
+      "inputs": {
+        "X0": true,
+        "X1": true,
+        "X2": false,
+        "X3": false
+      },
+      "outputs": {
+        "Y0": true,
+        "Y1": true,
+        "Y2": false
+      }
+    },
+    {
+      "inputs": {
+        "X0": true,
+        "X1": true,
+        "X2": false,
+        "X3": true
+      },
+      "outputs": {
+        "Y0": true,
+        "Y1": true,
+        "Y2": true
+      }
+    },
+    {
+      "inputs": {
+        "X0": true,
+        "X1": true,
+        "X2": true,
+        "X3": false
+      },
+      "outputs": {
+        "Y0": true,
+        "Y1": true,
+        "Y2": false
+      }
+    },
+    {
+      "inputs": {
+        "X0": true,
+        "X1": true,
+        "X2": true,
+        "X3": true
+      },
+      "outputs": {
+        "Y0": true,
+        "Y1": true,
+        "Y2": true
+      }
+    }
+  ]
+}

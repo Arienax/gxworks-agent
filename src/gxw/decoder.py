@@ -39,7 +39,7 @@ def _node_label(node: StructuredNode) -> str:
 def describe_program(program: StructuredProgram) -> List[str]:
     lines = [
         f"Program {program.logical_name}: {len(program.nodes)} nodes, "
-        f"{len(program.wires)} wires, canvas_height={program.canvas_height}"
+        f"{len(program.wires)} wires, {len(program.blocks)} blocks, canvas_height={program.canvas_height}"
     ]
     for record in program.iter_records():
         if isinstance(record, StructuredNode):
