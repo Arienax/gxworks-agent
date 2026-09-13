@@ -92,6 +92,7 @@ jobs:
               sys.modules['pdfplumber'] = types.ModuleType('pdfplumber')
           spec = importlib.util.spec_from_file_location('fx3_builder', TOOLS / 'build_fx3u_knowledge_v3.py')
           builder = importlib.util.module_from_spec(spec)
+          sys.modules['fx3_builder'] = builder
           assert spec.loader is not None
           spec.loader.exec_module(builder)
           instruction_re = builder.compile_instruction_re(set(builder.BASE_INSTRUCTIONS))
