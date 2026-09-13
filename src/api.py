@@ -9,8 +9,8 @@ from dataclasses import replace
 from i18n import language_scoped, tr
 from response_language import TEXT_RESPONSE, preserved_annotations as source_annotations
 from workflow_response_contracts import (
-    ANALYSIS_RESPONSE, DEBUG_RESPONSE, DIAGNOSIS_RESPONSE, INSPECTION_RESPONSE,
-    LADDER_RESPONSE, PATCH_RESPONSE, ST_RESPONSE, TEST_SUITE_RESPONSE,
+    ANALYSIS_RESPONSE, DEBUG_RESPONSE, DIAGNOSIS_RESPONSE, FIELD_PATCH_RESPONSE,
+    INSPECTION_RESPONSE, LADDER_RESPONSE, PATCH_RESPONSE, ST_RESPONSE, TEST_SUITE_RESPONSE,
 )
 from approach_contracts import normalize_approach
 from draw import AdvancedSVGLadder
@@ -1567,6 +1567,22 @@ def review_ladder(
     )
 
 
+FIELD_PATCH_REPAIR_SYSTEM_PROMPT = """# PLC ladder JSON field repair
+You repair exactly one scalar field in an immutable rejected ladder candidate.
+The backend owns the full ladder and applies your patch deterministically.
+
+Return one JSON object only:
+{"schema_version":1,"mode":"field_patch","base_sha256":"...","patches":[{"path":"/...","value":"..."}]}
+
+Rules:
+- Copy base_sha256 and path exactly from the payload.
+- Return exactly one patch and only the replacement scalar value.
+- Do not return a rung, branch, ladder program, markdown or explanation.
+- Use target.context only to choose the corrected value; do not redesign control logic.
+- The provider schema is authoritative for the allowed replacement value.
+"""
+
+
 PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT = """# PLC ladder local structural repair
 You repair only the rejected ladder locations supplied in the user payload.
 Do not re-analyze the requirement, redesign the program, retrieve manuals, or
@@ -1707,6 +1723,41 @@ def _constrain_native_repair_schema(schema, repair_payload, plc_model):
     return schema
 
 
+def _native_field_patch_response_format(repair_payload):
+    target = repair_payload.get("target") if isinstance(repair_payload, dict) else None
+    if not isinstance(target, dict) or not isinstance(target.get("path"), str):
+        raise ValueError("field repair target is required")
+    value_schema = json.loads(json.dumps(target.get("value_schema") or {}))
+    if not value_schema:
+        raise ValueError("field repair value schema is required")
+    base_sha = str(repair_payload.get("base_sha256") or "")
+    schema = {
+        "type": "object",
+        "properties": {
+            "schema_version": {"type": "integer", "enum": [1]},
+            "mode": {"type": "string", "enum": ["field_patch"]},
+            "base_sha256": {"type": "string", "enum": [base_sha]},
+            "patches": {
+                "type": "array", "minItems": 1, "maxItems": 1,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "enum": [target["path"]]},
+                        "value": value_schema,
+                    },
+                    "required": ["path", "value"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["schema_version", "mode", "base_sha256", "patches"],
+        "additionalProperties": False,
+    }
+    return {"type": "json_schema", "json_schema": {
+        "name": "ladder_field_patch", "strict": True, "schema": schema,
+    }}
+
+
 def _native_partial_repair_response_format(repair_payload):
     """Build the provider-enforced partial repair schema from the shared ladder contract."""
     plc_model = str(repair_payload.get("plc_model") or "FX3U").strip().upper() or "FX3U"
@@ -1763,7 +1814,7 @@ def _native_partial_repair_response_format(repair_payload):
 def repair_ladder_response(repair_payload, model_name, effort, *, mode,
                            on_reasoning_chunk=None, on_content_chunk=None):
     """One explicit repair request that bypasses normal generation context."""
-    if mode not in {"partial", "format"}:
+    if mode not in {"field_patch", "partial", "format"}:
         raise ValueError("Unsupported ladder repair mode")
     if not isinstance(repair_payload, dict):
         raise TypeError("repair_payload must be an object")
@@ -1776,29 +1827,32 @@ def repair_ladder_response(repair_payload, model_name, effort, *, mode,
             "app_instr_forbidden_typed_opcodes": sorted(GENERATION_TYPED_OUTPUT_OPCODES),
             "dedicated_output_types": ["COIL", "PLS", "PLF", "TIMER", "COUNTER"],
         }
-    native_response_format = (
-        _native_partial_repair_response_format(repair_payload)
-        if mode == "partial" else None
-    )
-    system_prompt = (PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT
-                     if mode == "partial" else FORMAT_LADDER_REPAIR_SYSTEM_PROMPT)
-    audit_section("repair_system_prompt", system_prompt,
-                  reason="explicit_local_repair" if mode == "partial" else "explicit_format_repair",
-                  source="api")
+    if mode == "field_patch":
+        native_response_format = _native_field_patch_response_format(repair_payload)
+        system_prompt = FIELD_PATCH_REPAIR_SYSTEM_PROMPT
+        response_contract = FIELD_PATCH_RESPONSE
+        audit_reason = "explicit_field_repair"
+    elif mode == "partial":
+        native_response_format = _native_partial_repair_response_format(repair_payload)
+        system_prompt = PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT
+        response_contract = LADDER_RESPONSE
+        audit_reason = "explicit_local_repair"
+    else:
+        native_response_format = None
+        system_prompt = FORMAT_LADDER_REPAIR_SYSTEM_PROMPT
+        response_contract = LADDER_RESPONSE
+        audit_reason = "explicit_format_repair"
+    audit_section("repair_system_prompt", system_prompt, reason=audit_reason, source="api")
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": json.dumps(repair_payload, ensure_ascii=False, separators=(",", ":"))},
     ]
     response = _request_model(
-        messages,
-        model_name=model_name,
-        effort=effort,
-        stream=True,
+        messages, model_name=model_name, effort=effort, stream=True,
         options={"response_format": native_response_format} if native_response_format else None,
-        response_contract=LADDER_RESPONSE,
+        response_contract=response_contract,
         preserved_annotations=source_annotations(repair_payload),
-        on_reasoning_chunk=on_reasoning_chunk,
-        on_content_chunk=on_content_chunk,
+        on_reasoning_chunk=on_reasoning_chunk, on_content_chunk=on_content_chunk,
         fallback_to_non_stream=True,
     )
     return response.message.reasoning, response.message.content

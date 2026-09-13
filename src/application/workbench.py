@@ -340,10 +340,14 @@ class WorkbenchService:
             # again after materialization. Syntax-broken JSON has no trustworthy
             # rung identity and therefore uses the separate full-format path.
             from application.generation_repair import candidate_base
+            from application.field_repair import plan as plan_field_patch
             inherited_repair_base = (
                 candidate_base(snapshot.get("repair_baseline"))
                 if snapshot.get("repair_mode") else None
             )
+            inherited_repair_plan = (copy.deepcopy(snapshot.get("repair_plan"))
+                                     if snapshot.get("repair_mode") and isinstance(snapshot.get("repair_plan"), dict)
+                                     else None)
             inherited_local_repair = inherited_repair_base is not None
             if inherited_local_repair:
                 # A failed repair attempt is still repairing the same immutable
@@ -360,6 +364,7 @@ class WorkbenchService:
                     for item in (snapshot.get("allowed_addresses") or [])
                     if isinstance(item, str) and item.strip()
                 }
+                repair_plan = inherited_repair_plan
             else:
                 try:
                     parsed_candidate = json.loads(candidate_text)
@@ -369,7 +374,10 @@ class WorkbenchService:
                 local_repair = repair_base is not None
                 allowed_rung_ids = set()
                 allowed_addresses = set()
-            if local_repair and not inherited_local_repair:
+                repair_plan = plan_field_patch(
+                    repair_base, violations, snapshot.get("project", {}).get("plc_model", "FX3U")
+                ) if local_repair else None
+            if local_repair and not inherited_local_repair and repair_plan is None:
                 rungs = repair_base["rungs"]
                 by_index = {index: rung for index, rung in enumerate(rungs)}
                 saw_rung_path = False
@@ -413,7 +421,16 @@ class WorkbenchService:
                     )
 
         location_text = "；".join(locations) if locations else "ladder schema"
-        if local_repair:
+        if local_repair and repair_plan is not None:
+            target = repair_plan.get("target") or {}
+            repair_text = (
+                "这是用户明确确认的一次字段级 JSON 修复。不要返回梯级、分支或完整程序。"
+                "只返回 field_patch 协议对象，并且只能修改 target.path 指定的一个字段。"
+                "不要改变其他地址、参数、触点极性或结构。\n"
+                f"目标字段：{target.get('diagnostic_path') or target.get('path')}\n"
+                f"失败位置：{location_text}"
+            )
+        elif local_repair:
             rung_text = ", ".join(map(str, sorted(allowed_rung_ids))) or "无（仅允许修复注释字段）"
             retry_note = (
                 "\n上一次局部修复回复仍未通过校验。只修正下面这个 partial patch 的 JSON/结构问题，"
@@ -457,6 +474,8 @@ class WorkbenchService:
                 allowed_rung_ids=sorted(allowed_rung_ids),
                 allowed_addresses=sorted(allowed_addresses),
             )
+            if repair_plan is not None:
+                command["repair_plan"] = copy.deepcopy(repair_plan)
         return self.submit(command)
 
     def submit(self, command):
@@ -588,6 +607,7 @@ class WorkbenchService:
                 repair_mode = bool(snapshot.get("repair_mode"))
                 format_repair = bool(snapshot.get("format_repair"))
                 repair_baseline = snapshot.get("repair_baseline") if repair_mode else None
+                repair_plan = snapshot.get("repair_plan") if repair_mode else None
                 if repair_mode:
                     previous_json = copy.deepcopy(repair_baseline)
                 elif format_repair:
@@ -604,7 +624,7 @@ class WorkbenchService:
                     revision=(program or {}).get("revision", 0) + 1,
                     requirement_text=text, repair_mode=repair_mode, format_repair=format_repair,
                     allowed_rung_ids=snapshot.get("allowed_rung_ids"),
-                    allowed_addresses=snapshot.get("allowed_addresses"),
+                    allowed_addresses=snapshot.get("allowed_addresses"), repair_plan=repair_plan,
                     image_attachments=images, model_name=snapshot.get("model", {}).get("model"), response_language=language)
                 metadata = GenerationWorkflow(request, out_dir, ctx.emit, GenerationDependencies(
                     provider=provider, check_cancelled=ctx.checkpoint, preserve_rejected_candidate=True

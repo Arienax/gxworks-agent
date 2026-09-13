@@ -18,8 +18,13 @@ class RepairProvider:
             payload = _ladder()
             payload["rungs"][0]["debug_note"] = "过长说明" * 20
         else:
-            payload = {"mode": "partial", "device_comments": {},
-                       "rungs": [_ladder()["rungs"][0]], "delete_rung_ids": []}
+            request_payload = json.loads(str(request.messages[-1].content))
+            target = request_payload["target"]
+            payload = {
+                "schema_version": 1, "mode": "field_patch",
+                "base_sha256": request_payload["base_sha256"],
+                "patches": [{"path": target["path"], "value": None}],
+            }
         raw = json.dumps(payload, ensure_ascii=False)
         yield TextDelta(raw)
 
@@ -92,7 +97,9 @@ def test_structural_failure_waits_for_user_then_repairs_once(offline, tmp_path):
         assert repair_snapshot["repair_mode"] is True
         assert repair_snapshot["format_repair"] is False
         assert repair_snapshot["task_type"] == "contract_repair"
-        assert repair_snapshot["allowed_rung_ids"] == [1]
+        assert repair_snapshot["repair_plan"]["mode"] == "field_patch"
+        assert repair_snapshot["repair_plan"]["target"]["path"] == "/rungs/0/debug_note"
+        assert repair_snapshot["allowed_rung_ids"] == []
         assert repair_snapshot["context_policy"]["name"] == "minimal"
         system_prompt = str(provider.requests[1].messages[0].content)
         repair_payload = json.loads(str(provider.requests[1].messages[-1].content))
@@ -100,29 +107,21 @@ def test_structural_failure_waits_for_user_then_repairs_once(offline, tmp_path):
         assert native_format["type"] == "json_schema"
         assert native_format["json_schema"]["strict"] is True
         native_schema = native_format["json_schema"]["schema"]
-        assert native_schema["properties"]["rungs"]["items"]["properties"]["rung_id"]["enum"] == [1]
-        opcode_rule = (
-            native_schema["properties"]["rungs"]["items"]["properties"]["branches"]["items"]
-            ["properties"]["outputs"]["items"]["oneOf"][2]["properties"]["opcode"]
-        )
-        assert opcode_rule["enum"] == repair_payload["repair_contract"]["app_instr_opcode_enum"]
-        assert native_schema["properties"]["device_comments"]["additionalProperties"] is False
-        assert native_schema["properties"]["delete_rung_ids"]["maxItems"] == 0
-        assert "PLC ladder local structural repair" in system_prompt
+        assert native_schema["properties"]["mode"]["enum"] == ["field_patch"]
+        assert native_schema["properties"]["base_sha256"]["enum"] == [repair_payload["base_sha256"]]
+        patch_schema = native_schema["properties"]["patches"]["items"]
+        assert patch_schema["properties"]["path"]["enum"] == ["/rungs/0/debug_note"]
+        assert patch_schema["properties"]["value"]["maxLength"] == 64
+        assert "rungs" not in native_schema["properties"]
+        assert "PLC ladder JSON field repair" in system_prompt
         assert "工业常识模式库" not in system_prompt
         assert "Retrieved-knowledge precedence" not in system_prompt
-        assert len(system_prompt) < 5000
-        assert repair_payload["repair_mode"] == "partial"
-        contract = repair_payload["repair_contract"]
-        assert contract["plc_model"] == "FX3U"
-        assert "MOV" in contract["app_instr_opcode_enum"]
-        assert "NOT_A_REAL_OPCODE" not in contract["app_instr_opcode_enum"]
-        assert not set(contract["app_instr_forbidden_typed_opcodes"]) & set(contract["app_instr_opcode_enum"])
-        assert set(contract["app_instr_forbidden_typed_opcodes"]) == {"OUT", "PLS", "PLF", "END"}
-        assert len(json.dumps(contract, ensure_ascii=False, separators=(",", ":"))) < 3000
-        assert repair_payload["allowed_rung_ids"] == [1]
-        assert [r["rung_id"] for r in repair_payload["baseline_subset"]["rungs"]] == [1]
-        assert "用户明确确认的一次局部结构修复" in repair_payload["instruction"]
+        assert len(system_prompt) < 3000
+        assert repair_payload["repair_mode"] == "field_patch"
+        assert repair_payload["target"]["path"] == "/rungs/0/debug_note"
+        assert repair_payload["target"]["current_value"]
+        assert "baseline_subset" not in repair_payload
+        assert "用户明确确认的一次字段级 JSON 修复" in repair_payload["instruction"]
         assert "失败候选 JSON" not in repair_payload["instruction"]
         assert service.projects.project(project)["version_count"] == 1
 
@@ -138,10 +137,15 @@ class RetryRepairProvider:
             payload["rungs"][0]["debug_note"] = "过长说明" * 20
             yield TextDelta(json.dumps(payload, ensure_ascii=False))
         elif len(self.requests) == 2:
-            yield TextDelta('{"mode":"partial","device_comments":{},"rungs":[')
+            yield TextDelta('{"schema_version":1,"mode":"field_patch","patches":[')
         else:
-            yield TextDelta(json.dumps({"mode": "partial", "device_comments": {},
-                "rungs": [_ladder()["rungs"][0]], "delete_rung_ids": []}, ensure_ascii=False))
+            request_payload = json.loads(str(request.messages[-1].content))
+            target = request_payload["target"]
+            yield TextDelta(json.dumps({
+                "schema_version": 1, "mode": "field_patch",
+                "base_sha256": request_payload["base_sha256"],
+                "patches": [{"path": target["path"], "value": None}],
+            }, ensure_ascii=False))
 
 
 def test_failed_partial_repair_keeps_original_local_scope(offline, tmp_path):
@@ -170,14 +174,13 @@ def test_failed_partial_repair_keeps_original_local_scope(offline, tmp_path):
         snapshot = service.jobs._load(third)["snapshot"]
         assert snapshot["repair_mode"] is True
         assert snapshot["format_repair"] is False
-        assert snapshot["allowed_rung_ids"] == [1]
+        assert snapshot["repair_plan"]["mode"] == "field_patch"
+        assert snapshot["repair_plan"]["target"]["path"] == "/rungs/0/debug_note"
         system_prompt = str(provider.requests[2].messages[0].content)
         retry_payload = json.loads(str(provider.requests[2].messages[-1].content))
-        assert "PLC ladder local structural repair" in system_prompt
-        assert retry_payload["repair_mode"] == "partial"
-        assert retry_payload["allowed_rung_ids"] == [1]
-        assert "上一次局部修复回复仍未通过校验" in retry_payload["instruction"]
-        assert "上一次失败的局部 patch" in retry_payload["instruction"]
+        assert "PLC ladder JSON field repair" in system_prompt
+        assert retry_payload["repair_mode"] == "field_patch"
+        assert retry_payload["target"]["path"] == "/rungs/0/debug_note"
         assert service.projects.project(project)["version_count"] == 1
 
 
@@ -189,10 +192,16 @@ class FormatThenStructuralProvider:
             yield TextDelta('{"device_comments":{"X0":"Input","Y0":"Output"},"rungs":[')
         elif len(self.requests)==2:
             payload=_ladder()
-            payload["rungs"][0]["branches"][0]["outputs"]=[{"type":"APP_INSTR","opcode":"NOT_A_REAL_OPCODE","operands":["Y0"],"label":None}]
+            payload["rungs"][0]["branches"][0]["outputs"]=[{"type":"APP_INSTR","opcode":"NOT_A_REAL_OPCODE","operands":["D0","D1"],"label":None}]
             yield TextDelta(json.dumps(payload,ensure_ascii=False))
         else:
-            yield TextDelta(json.dumps({"mode":"partial","device_comments":{},"rungs":[_ladder()["rungs"][0]],"delete_rung_ids":[]},ensure_ascii=False))
+            request_payload = json.loads(str(request.messages[-1].content))
+            target = request_payload["target"]
+            yield TextDelta(json.dumps({
+                "schema_version": 1, "mode": "field_patch",
+                "base_sha256": request_payload["base_sha256"],
+                "patches": [{"path": target["path"], "value": "MOV"}],
+            },ensure_ascii=False))
 
 
 def test_one_repair_cascades_format_then_local_structure(offline,tmp_path):
@@ -213,12 +222,12 @@ def test_one_repair_cascades_format_then_local_structure(offline,tmp_path):
         assert completed["status"]=="completed",completed
         assert len(provider.requests)==3
         assert "PLC ladder JSON format repair" in str(provider.requests[1].messages[0].content)
-        assert "PLC ladder local structural repair" in str(provider.requests[2].messages[0].content)
+        assert "PLC ladder JSON field repair" in str(provider.requests[2].messages[0].content)
         followup=json.loads(str(provider.requests[2].messages[-1].content))
-        assert followup["repair_mode"]=="partial"
-        assert "NOT_A_REAL_OPCODE" not in followup["repair_contract"]["app_instr_opcode_enum"]
-        assert "MOV" in followup["repair_contract"]["app_instr_opcode_enum"]
-        assert followup["allowed_rung_ids"]==[1]
+        assert followup["repair_mode"]=="field_patch"
+        assert followup["target"]["path"]=="/rungs/0/branches/0/outputs/0/opcode"
+        assert "NOT_A_REAL_OPCODE" not in followup["target"]["value_schema"]["enum"]
+        assert "MOV" in followup["target"]["value_schema"]["enum"]
         assert service.projects.project(project)["version_count"]==1
 
 
