@@ -21,8 +21,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install offline builder dependencies
-        run: python -m pip install pypdf pdfplumber
+      - name: Install audit dependencies
+        run: python -m pip install pypdf pdfplumber pytest
       - name: Reparse malformed structured operand rows generically
         run: python tools/bootstrap_repair_dirty_structured_operands.py
       - name: Verify no global header/glyph leakage remains
