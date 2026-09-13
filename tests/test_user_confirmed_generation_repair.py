@@ -24,7 +24,7 @@ class RepairProvider:
         yield TextDelta(raw)
 
 
-def test_incremental_prompt_prefers_minimal_annotations(tmp_path):
+def test_incremental_prompt_keeps_only_partial_edit_hint(tmp_path):
     observed = {}
 
     def stream(user_input, *args, **kwargs):
@@ -41,11 +41,13 @@ def test_incremental_prompt_prefers_minimal_annotations(tmp_path):
         dependencies=GenerationDependencies(stream_response=stream),
     ).run()
     prompt = observed["input"]
-    assert "debug_note 是可选字段，默认省略" in prompt
-    assert "不要用 debug_note 记录推理" in prompt
-    assert "目标不超过48字符" in prompt
-    assert "已有 device_comments 无必要不要改写" in prompt
     assert '优先返回 mode="partial"' in prompt
+    assert "不要重复输出未修改梯级" in prompt
+    assert "输出协议纪律" not in prompt
+    assert "debug_note 是可选字段，默认省略" not in prompt
+    assert "不要用 debug_note 记录推理" not in prompt
+    assert "目标不超过48字符" not in prompt
+    assert "已有 device_comments 无必要不要改写" not in prompt
 
 
 def test_structural_failure_waits_for_user_then_repairs_once(offline, tmp_path):
