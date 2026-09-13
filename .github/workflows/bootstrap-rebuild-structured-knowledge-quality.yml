@@ -84,6 +84,9 @@ jobs:
           print('QUALITY_SEVERITY',json.dumps(q['issue_severity_counts'],ensure_ascii=False,sort_keys=True))
           print('ALIGNMENT',json.dumps(a['issue_code_counts'],ensure_ascii=False,sort_keys=True))
           print('ERROR_SEMANTICS',json.dumps(s['issue_code_counts'],ensure_ascii=False,sort_keys=True))
+          for item in q['issues'][:80]: print('QUALITY_ISSUE',json.dumps(item,ensure_ascii=False,sort_keys=True))
+          for item in a['issues'][:40]: print('ALIGNMENT_ISSUE',json.dumps(item,ensure_ascii=False,sort_keys=True))
+          for item in s['issues'][:40]: print('SEMANTIC_ISSUE',json.dumps(item,ensure_ascii=False,sort_keys=True))
           assert q['integrity_check']=='ok'
           assert q['foreign_key_violations']==0
           forbidden={
@@ -138,6 +141,7 @@ jobs:
               'baseline_detected':{
                   'operand_position_device_index_overlaps':97,
                   'cross_family_device_ranges':7,
+                  'cross_family_device_range_entity_rows':8,
                   'weak_completion_flag_semantics':199,
                   'no_error_row_bleed_records':30,
                   'no_error_range_endpoint_records':2,
