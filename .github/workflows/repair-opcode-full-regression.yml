@@ -1,0 +1,95 @@
+name: Repair Opcode Full Regression
+
+on:
+  push:
+    branches: [fix/prompt-context-slim-20260913]
+    paths:
+      - .github/workflows/repair-opcode-full-regression.yml
+
+permissions:
+  contents: read
+
+jobs:
+  windows-validation:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/prompt-context-slim-20260913
+          lfs: true
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements/web.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install project and Web test dependencies
+        run: |
+          python -m pip install -r requirements.txt -r requirements/web.txt
+          python -m pip check
+      - name: Compile Python sources
+        run: python -m compileall -q src tests
+      - name: Validate prompt budgets, generation, repair and persistence
+        run: |
+          python -m pytest -q `
+            tests/test_prompt_context_budget.py `
+            tests/test_prompt_slim_generation.py `
+            tests/test_generation_opcode_contract.py `
+            tests/test_generation_fast_path.py `
+            tests/test_generation_workflow.py `
+            tests/test_generation_repair_workflow.py `
+            tests/test_generation_rejected_json_repair.py `
+            tests/test_user_confirmed_generation_repair.py `
+            tests/test_instruction_applicability_rag.py `
+            tests/test_analysis_design_rag.py `
+            tests/test_io_protocol_and_gx_fastpath.py `
+            tests/test_generation_delivery.py `
+            tests/test_approval_modes.py `
+            tests/test_plc_core_boundary.py `
+            tests/test_plc_ir.py `
+            tests/test_application_job_errors.py `
+            tests/test_web_api.py `
+            tests/test_web_contract.py `
+            tests/test_web_frontend_state_flow.py `
+            tests/test_gx_execution_ui_and_project_delete.py `
+            tests/test_prompt_context_policy.py `
+            tests/test_context_refresh_runtime.py `
+            tests/test_runtime_diagnostics.py `
+            tests/test_runtime_diagnostics_context.py `
+            tests/test_runtime_diagnostics_web.py
+      - name: Keep strict validators available outside direct generation
+        run: |
+          python -m pytest -q `
+            tests/test_approach_contracts.py `
+            tests/test_timer_semantics_regressions.py `
+            tests/test_motion_control_regressions.py `
+            tests/test_analog_instruction_regressions.py `
+            tests/test_contract_repair_policy.py `
+            tests/test_instruction_registry.py
+      - name: Build Web frontend through repository entry point
+        run: |
+          & .\build-web.bat --no-pause
+          if ($LASTEXITCODE -ne 0) { throw 'Web frontend build failed.' }
+      - name: Exercise real HTTP/browser generation delivery
+        run: |
+          python -m pip install playwright==1.55.0
+          if ($LASTEXITCODE -ne 0) { throw 'Playwright installation failed.' }
+          python -m playwright install chromium
+          if ($LASTEXITCODE -ne 0) { throw 'Chromium installation failed.' }
+          python scripts/web_generation_e2e.py --web-dist web/dist --report web-generation-e2e.json
+          if ($LASTEXITCODE -ne 0) { throw 'Generation delivery E2E failed.' }
