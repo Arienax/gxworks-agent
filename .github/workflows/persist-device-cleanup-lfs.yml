@@ -1,0 +1,267 @@
+name: Persist device cleanup LFS database
+
+on:
+  push:
+    branches: [fix/rejected-json-repair-20260913]
+    paths:
+      - .github/workflows/persist-device-cleanup-lfs.yml
+
+permissions:
+  contents: write
+
+jobs:
+  persist-validated-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out triggering commit with LFS
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build validated migrated database copy
+        run: |
+          cp resources/knowledge/fx3u_knowledge.sqlite /tmp/device-clean.sqlite
+          python tools/reclassify_device_entities.py \
+            --database /tmp/device-clean.sqlite \
+            --report /tmp/device-clean-migration.json
+
+      - name: Verify migration, reviewed devices, and idempotence
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import sqlite3
+
+          db = '/tmp/device-clean.sqlite'
+          reviewed = {
+              'D14','D15','D24','D26','D27','D28','D29','D307','D51','D7','D9','D99',
+              'M127','M14','M16','M17','M255','M31','M599','M63',
+              'P10','P11','P12','P2','P20','P4','P5','P7','P9',
+          }
+          with sqlite3.connect(db) as con:
+              assert con.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
+              assert con.execute('PRAGMA foreign_key_check').fetchall() == []
+              assert con.execute("SELECT COUNT(*) FROM device_records WHERE prefix='N'").fetchone()[0] == 0
+              assert con.execute("SELECT COUNT(*) FROM device_records WHERE device_norm='d17'").fetchone()[0] == 0
+              present = {
+                  str(row[0]).upper()
+                  for row in con.execute('SELECT device FROM device_records')
+                  if str(row[0]).upper() in reviewed
+              }
+              assert present == reviewed, sorted(reviewed - present)
+              bad_nesting = con.execute(
+                  "SELECT entity FROM entity_index WHERE entity_type='nesting_level' "
+                  "AND entity NOT IN ('N0','N1','N2','N3','N4','N5','N6','N7')"
+              ).fetchall()
+              assert bad_nesting == [], bad_nesting[:20]
+
+          def semantic_digest(path):
+              h = hashlib.sha256()
+              with sqlite3.connect(path) as con:
+                  for query in (
+                      "SELECT entity_norm,entity,entity_type,plc_models,task_types,manual_id,chunk_id,occurrences FROM entity_index ORDER BY entity_norm,entity_type,chunk_id",
+                      "SELECT device_norm,device,prefix,record_type,description,occurrences,plc_models,source_manuals_json,chunk_id FROM device_records ORDER BY device_norm,record_type",
+                      "SELECT id,entities,entities_json FROM chunks ORDER BY id",
+                  ):
+                      for row in con.execute(query):
+                          h.update(json.dumps(row, ensure_ascii=False, separators=(',', ':')).encode('utf-8'))
+                          h.update(b'\n')
+              return h.hexdigest()
+
+          first = semantic_digest(db)
+          open('/tmp/device-clean-first-digest.txt', 'w', encoding='utf-8').write(first + '\n')
+          print('FIRST_DIGEST', first)
+          print('REVIEWED_REAL_PRESENT', len(present), '/', len(reviewed))
+          PY
+
+          python tools/reclassify_device_entities.py \
+            --database /tmp/device-clean.sqlite \
+            --report /tmp/device-clean-migration-second.json
+
+          python - <<'PY'
+          import hashlib
+          import json
+          import sqlite3
+
+          report = json.load(open('/tmp/device-clean-migration-second.json', encoding='utf-8'))
+          assert report['affected_chunks'] == 0, report
+          assert report['changed_entity_rows'] == 0, report
+          assert report['changes'] == [], report['changes'][:10]
+
+          h = hashlib.sha256()
+          with sqlite3.connect('/tmp/device-clean.sqlite') as con:
+              for query in (
+                  "SELECT entity_norm,entity,entity_type,plc_models,task_types,manual_id,chunk_id,occurrences FROM entity_index ORDER BY entity_norm,entity_type,chunk_id",
+                  "SELECT device_norm,device,prefix,record_type,description,occurrences,plc_models,source_manuals_json,chunk_id FROM device_records ORDER BY device_norm,record_type",
+                  "SELECT id,entities,entities_json FROM chunks ORDER BY id",
+              ):
+                  for row in con.execute(query):
+                      h.update(json.dumps(row, ensure_ascii=False, separators=(',', ':')).encode('utf-8'))
+                      h.update(b'\n')
+          before = open('/tmp/device-clean-first-digest.txt', encoding='utf-8').read().strip()
+          after = h.hexdigest()
+          assert before == after, (before, after)
+          print('IDEMPOTENT_DIGEST', after)
+          PY
+
+      - name: Run evidence-aware quality gates on migrated copy
+        run: |
+          python tools/audit_structured_knowledge_quality_v2.py \
+            --database /tmp/device-clean.sqlite \
+            --output /tmp/device-clean-structured-audit.json > /tmp/device-clean-structured-audit.log
+          python tools/audit_device_placeholder_evidence.py \
+            --database /tmp/device-clean.sqlite \
+            --output /tmp/device-clean-evidence.json > /tmp/device-clean-evidence.log
+          python - <<'PY'
+          import json
+          structured = json.load(open('/tmp/device-clean-structured-audit.json', encoding='utf-8'))
+          evidence = json.load(open('/tmp/device-clean-evidence.json', encoding='utf-8'))
+          errors = [item for item in structured['issues'] if item.get('severity') == 'error']
+          heuristic = [
+              item for item in structured['issues']
+              if item.get('code') == 'possible_operand_placeholder_device_record'
+          ]
+          unresolved = [
+              item for item in evidence['candidates']
+              if item['suggested_class'] in {'ambiguous', 'operand_placeholder_likely'}
+          ]
+          assert structured['integrity_check'] == 'ok'
+          assert structured['foreign_key_violations'] == 0
+          assert errors == [], errors[:20]
+          assert heuristic == [], heuristic
+          assert unresolved == [], unresolved
+          print('EVIDENCE_CANDIDATES', evidence['candidate_count'])
+          print('EVIDENCE_CLASSES', json.dumps(evidence['suggested_class_counts'], sort_keys=True))
+          PY
+
+      - name: Persist validated database and synchronize manifest
+        run: |
+          cp /tmp/device-clean.sqlite resources/knowledge/fx3u_knowledge.sqlite
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import sqlite3
+
+          db_path = 'resources/knowledge/fx3u_knowledge.sqlite'
+          manifest_path = 'resources/knowledge/manifest.json'
+          with open(manifest_path, encoding='utf-8') as fh:
+              manifest = json.load(fh)
+
+          with sqlite3.connect(db_path) as con:
+              integrity = con.execute('PRAGMA integrity_check').fetchone()[0]
+              foreign_keys = con.execute('PRAGMA foreign_key_check').fetchall()
+              entity_count = con.execute('SELECT COUNT(*) FROM entity_index').fetchone()[0]
+              device_count = con.execute('SELECT COUNT(*) FROM device_records').fetchone()[0]
+              table_map = {
+                  'chunks': 'chunks',
+                  'chunks_fts': 'chunks_fts',
+                  'debug_cases': 'debug_cases',
+                  'device_records': 'device_records',
+                  'entity_index': 'entity_index',
+                  'error_records': 'error_records',
+                  'instruction_aliases': 'instruction_aliases',
+                  'instructions': 'instructions',
+                  'manuals': 'manuals',
+                  'page_artifacts': 'page_artifacts',
+                  'tables': 'tables',
+                  'vector_embeddings': 'vector_embeddings',
+              }
+              verification_counts = {
+                  key: con.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]
+                  for key, table in table_map.items()
+              }
+
+          assert integrity == 'ok', integrity
+          assert foreign_keys == [], foreign_keys[:20]
+
+          sha = hashlib.sha256()
+          with open(db_path, 'rb') as fh:
+              for block in iter(lambda: fh.read(1024 * 1024), b''):
+                  sha.update(block)
+          database_sha256 = sha.hexdigest()
+          database_bytes = os.path.getsize(db_path)
+
+          manifest['database_bytes'] = database_bytes
+          manifest['database_sha256'] = database_sha256
+          manifest.setdefault('stats', {})['entities'] = entity_count
+          manifest.setdefault('structured', {})['devices'] = device_count
+          verification = manifest.setdefault('verification', {})
+          verification['integrity_check'] = integrity
+          verification['foreign_key_violations'] = len(foreign_keys)
+          verification.setdefault('counts', {}).update(verification_counts)
+
+          with open(manifest_path, 'w', encoding='utf-8', newline='\n') as fh:
+              json.dump(manifest, fh, ensure_ascii=False, indent=2, sort_keys=False)
+              fh.write('\n')
+
+          print('DATABASE_SHA256', database_sha256)
+          print('DATABASE_BYTES', database_bytes)
+          print('ENTITY_INDEX', entity_count)
+          print('DEVICE_RECORDS', device_count)
+          PY
+
+      - name: Verify manifest and staged LFS pointer
+        run: |
+          git add resources/knowledge/fx3u_knowledge.sqlite resources/knowledge/manifest.json
+          python - <<'PY'
+          import json
+          import re
+          import sqlite3
+          import subprocess
+
+          manifest = json.load(open('resources/knowledge/manifest.json', encoding='utf-8'))
+          pointer = subprocess.check_output(
+              ['git', 'show', ':resources/knowledge/fx3u_knowledge.sqlite'], text=True
+          )
+          oid = re.search(r'^oid sha256:([0-9a-f]{64})$', pointer, re.M)
+          size = re.search(r'^size (\d+)$', pointer, re.M)
+          assert oid, pointer
+          assert size, pointer
+          assert oid.group(1) == manifest['database_sha256'], (oid.group(1), manifest['database_sha256'])
+          assert int(size.group(1)) == manifest['database_bytes'], (size.group(1), manifest['database_bytes'])
+          assert manifest['structured']['devices'] == manifest['verification']['counts']['device_records']
+          assert manifest['stats']['entities'] == manifest['verification']['counts']['entity_index']
+          with sqlite3.connect('resources/knowledge/fx3u_knowledge.sqlite') as con:
+              assert con.execute('SELECT COUNT(*) FROM device_records').fetchone()[0] == manifest['structured']['devices']
+              assert con.execute('SELECT COUNT(*) FROM entity_index').fetchone()[0] == manifest['stats']['entities']
+          print(pointer.strip())
+          print('MANIFEST_SYNC_OK')
+          PY
+          git status --short
+
+      - name: Refuse to overwrite concurrent branch changes
+        run: |
+          git fetch origin refs/heads/fix/rejected-json-repair-20260913
+          remote_sha="$(git rev-parse FETCH_HEAD)"
+          test "$remote_sha" = "$GITHUB_SHA" || {
+            echo "Branch moved during persistence: trigger=$GITHUB_SHA remote=$remote_sha" >&2
+            exit 1
+          }
+
+      - name: Commit and push migrated LFS object
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix(rag): persist device entity cleanup database"
+          git push origin HEAD:refs/heads/fix/rejected-json-repair-20260913
+
+      - name: Upload persistence evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: persisted-device-cleanup-evidence
+          path: |
+            /tmp/device-clean-migration.json
+            /tmp/device-clean-migration-second.json
+            /tmp/device-clean-structured-audit.json
+            /tmp/device-clean-structured-audit.log
+            /tmp/device-clean-evidence.json
+            /tmp/device-clean-evidence.log
+          if-no-files-found: warn
