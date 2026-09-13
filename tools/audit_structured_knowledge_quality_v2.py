@@ -2,9 +2,9 @@
 """Evidence-aware wrapper for the schema-v3 structured knowledge audit.
 
 The legacy audit intentionally used a broad heuristic to discover suspicious
-S/D/N/M/P-number records.  After the first review that heuristic is too coarse:
+S/D/N/M/P-number records. After the first review that heuristic is too coarse:
 a chunk may contain both an operand-definition table and a concrete program
-example.  This wrapper keeps every structural/error check from the legacy audit
+example. This wrapper keeps every structural/error check from the legacy audit
 but suppresses only ``possible_operand_placeholder_device_record`` warnings when
 that exact token has concrete device/pointer evidence in its provenance.
 """
@@ -14,6 +14,7 @@ import re
 
 import audit_structured_knowledge_quality as base
 
+_LEGACY_AUDIT_DEVICES = base.audit_devices
 _TOKEN_BOUNDARY = r"[A-Z0-9_]"
 _PROGRAM_EXAMPLE_RE = re.compile(
     r"program\s+examples?|programming\s+examples?|example\s+program|"
@@ -116,7 +117,7 @@ def has_concrete_device_evidence(connection, device_norm: str, record_type: str,
 
 
 def audit_devices(connection):
-    issues, stats = base.audit_devices(connection)
+    issues, stats = _LEGACY_AUDIT_DEVICES(connection)
     kept = []
     suppressed = 0
     for item in issues:
