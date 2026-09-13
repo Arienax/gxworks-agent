@@ -1562,6 +1562,76 @@ def review_ladder(
     )
 
 
+PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT = """# PLC ladder local structural repair
+You repair only the rejected ladder locations supplied in the user payload.
+Do not re-analyze the requirement, redesign the program, retrieve manuals, or
+regenerate unrelated rungs. The backend owns the immutable full baseline and
+will merge and validate your patch.
+
+Return one pure JSON object only, exactly in partial-edit form:
+{"mode":"partial","device_comments":{},"rungs":[],"delete_rung_ids":[]}
+
+Rules:
+- `mode` must be `partial` and `delete_rung_ids` must be empty.
+- `rungs` may contain only complete replacement rungs whose rung_id is listed
+  in `allowed_rung_ids`; never add, delete, renumber, or repeat another rung.
+- Preserve control logic, addresses, operands, parameters and contact polarity
+  except for the minimum structural/protocol correction explicitly requested.
+- Use the supplied `baseline_subset` as the only program evidence.
+- `device_comments` may contain only addresses listed in `allowed_addresses`.
+- Do not output markdown, explanation, diagnostics, or a full ladder program.
+"""
+
+FORMAT_LADDER_REPAIR_SYSTEM_PROMPT = """# PLC ladder JSON format repair
+Repair JSON syntax/protocol only. Do not re-analyze the PLC requirement, retrieve
+manuals, redesign logic, or invent missing behavior. The user payload contains
+the rejected raw candidate and the parser failure location.
+
+Return one pure, complete top-level ladder JSON object only:
+{"device_comments":{},"rungs":[]}
+
+Rules:
+- Preserve every recoverable address, opcode, operand, value, rung_id, branch,
+  contact polarity, label and comment from the rejected candidate.
+- Correct only JSON syntax, delimiters, container closure and protocol shape.
+- Never emit `mode:"partial"` on this path.
+- If the text ended early, close structures whose existing content is evident;
+  do not synthesize unseen rungs or new PLC logic.
+- Do not output markdown or explanation.
+"""
+
+
+@language_scoped
+def repair_ladder_response(repair_payload, model_name, effort, *, mode,
+                           on_reasoning_chunk=None, on_content_chunk=None):
+    """One explicit repair request that bypasses normal generation context."""
+    if mode not in {"partial", "format"}:
+        raise ValueError("Unsupported ladder repair mode")
+    if not isinstance(repair_payload, dict):
+        raise TypeError("repair_payload must be an object")
+    system_prompt = (PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT
+                     if mode == "partial" else FORMAT_LADDER_REPAIR_SYSTEM_PROMPT)
+    audit_section("repair_system_prompt", system_prompt,
+                  reason="explicit_local_repair" if mode == "partial" else "explicit_format_repair",
+                  source="api")
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": json.dumps(repair_payload, ensure_ascii=False, separators=(",", ":"))},
+    ]
+    response = _request_model(
+        messages,
+        model_name=model_name,
+        effort=effort,
+        stream=True,
+        response_contract=LADDER_RESPONSE,
+        preserved_annotations=source_annotations(repair_payload),
+        on_reasoning_chunk=on_reasoning_chunk,
+        on_content_chunk=on_content_chunk,
+        fallback_to_non_stream=True,
+    )
+    return response.message.reasoning, response.message.content
+
+
 @language_scoped
 def stream_model_response(user_requirement, model_name, effort, target_mode,
                              on_reasoning_chunk=None, on_content_chunk=None,

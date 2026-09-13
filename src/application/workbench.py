@@ -602,7 +602,7 @@ class WorkbenchService:
                     task_type=snapshot.get("task_type"),
                     plc_model=project.get("plc_model", "FX3U"), program_name=(program or {}).get("program_name", "MAIN"),
                     revision=(program or {}).get("revision", 0) + 1,
-                    requirement_text=text, repair_mode=repair_mode,
+                    requirement_text=text, repair_mode=repair_mode, format_repair=format_repair,
                     allowed_rung_ids=snapshot.get("allowed_rung_ids"),
                     allowed_addresses=snapshot.get("allowed_addresses"),
                     image_attachments=images, model_name=snapshot.get("model", {}).get("model"), response_language=language)

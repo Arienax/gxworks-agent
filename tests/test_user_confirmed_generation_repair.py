@@ -92,11 +92,17 @@ def test_structural_failure_waits_for_user_then_repairs_once(offline, tmp_path):
         assert repair_snapshot["task_type"] == "contract_repair"
         assert repair_snapshot["allowed_rung_ids"] == [1]
         assert repair_snapshot["context_policy"]["name"] == "minimal"
-        second_prompt = str(provider.requests[1].messages[-1].content)
-        assert "用户明确确认的一次局部结构修复" in second_prompt
-        assert 'mode="partial"' in second_prompt
-        assert "不要重新生成完整程序" in second_prompt
-        assert "失败候选 JSON" not in second_prompt
+        system_prompt = str(provider.requests[1].messages[0].content)
+        repair_payload = json.loads(str(provider.requests[1].messages[-1].content))
+        assert "PLC ladder local structural repair" in system_prompt
+        assert "工业常识模式库" not in system_prompt
+        assert "Retrieved-knowledge precedence" not in system_prompt
+        assert len(system_prompt) < 5000
+        assert repair_payload["repair_mode"] == "partial"
+        assert repair_payload["allowed_rung_ids"] == [1]
+        assert [r["rung_id"] for r in repair_payload["baseline_subset"]["rungs"]] == [1]
+        assert "用户明确确认的一次局部结构修复" in repair_payload["instruction"]
+        assert "失败候选 JSON" not in repair_payload["instruction"]
         assert service.projects.project(project)["version_count"] == 1
 
 
@@ -144,10 +150,13 @@ def test_failed_partial_repair_keeps_original_local_scope(offline, tmp_path):
         assert snapshot["repair_mode"] is True
         assert snapshot["format_repair"] is False
         assert snapshot["allowed_rung_ids"] == [1]
-        prompt = str(provider.requests[2].messages[-1].content)
-        assert "上一次局部修复回复仍未通过校验" in prompt
-        assert "上一次失败的局部 patch" in prompt
-        assert 'mode="partial"' in prompt
+        system_prompt = str(provider.requests[2].messages[0].content)
+        retry_payload = json.loads(str(provider.requests[2].messages[-1].content))
+        assert "PLC ladder local structural repair" in system_prompt
+        assert retry_payload["repair_mode"] == "partial"
+        assert retry_payload["allowed_rung_ids"] == [1]
+        assert "上一次局部修复回复仍未通过校验" in retry_payload["instruction"]
+        assert "上一次失败的局部 patch" in retry_payload["instruction"]
         assert service.projects.project(project)["version_count"] == 1
 
 
