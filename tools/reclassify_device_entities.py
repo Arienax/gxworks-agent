@@ -198,7 +198,7 @@ def migrate(connection: sqlite3.Connection) -> dict[str, Any]:
             """
             SELECT DISTINCT e.chunk_id
             FROM entity_index e
-            WHERE e.entity_type='device'
+            WHERE e.entity_type IN ('device','device_range')
               AND (UPPER(e.entity) GLOB 'N[0-9]*' OR UPPER(e.entity) GLOB 'D[0-9]*')
             ORDER BY e.chunk_id
             """
