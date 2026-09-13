@@ -5,6 +5,7 @@ on:
     branches: [fix/rejected-json-repair-20260913]
     paths:
       - tools/audit_structured_knowledge_quality.py
+      - tools/audit_error_record_alignment.py
       - tools/build_fx3u_knowledge_v3.py
       - resources/knowledge/fx3u_knowledge.sqlite
       - resources/knowledge/manifest.json
@@ -32,6 +33,11 @@ jobs:
           python tools/audit_structured_knowledge_quality.py \
             --database resources/knowledge/fx3u_knowledge.sqlite \
             --output structured-knowledge-quality-audit.json > structured-knowledge-quality-audit.log
+      - name: Audit header-aware error table alignment
+        run: |
+          python tools/audit_error_record_alignment.py \
+            --database resources/knowledge/fx3u_knowledge.sqlite \
+            --output error-record-alignment-audit.json > error-record-alignment-audit.log
       - name: Print compact audit summary
         run: |
           python - <<'PY'
@@ -43,8 +49,19 @@ jobs:
           print('DOMAINS', json.dumps(report['issue_domain_counts'], ensure_ascii=False, sort_keys=True))
           print('CODES', json.dumps(report['issue_code_counts'], ensure_ascii=False, sort_keys=True))
           print('STATS', json.dumps(report['stats'], ensure_ascii=False, sort_keys=True))
-          print('--- FIRST 200 ISSUES ---')
-          for item in report['issues'][:200]:
+          alignment = json.load(open('error-record-alignment-audit.json', encoding='utf-8'))
+          print('ERROR_TABLE_ALIGNMENT', json.dumps({
+              'table_backed_records': alignment['table_backed_records'],
+              'aligned_records': alignment['aligned_records'],
+              'semantic_header_tables': alignment['semantic_header_tables'],
+              'severity': alignment['issue_severity_counts'],
+              'codes': alignment['issue_code_counts'],
+          }, ensure_ascii=False, sort_keys=True))
+          print('--- FIRST 120 STRUCTURED ISSUES ---')
+          for item in report['issues'][:120]:
+              print(json.dumps(item, ensure_ascii=False, sort_keys=True))
+          print('--- FIRST 120 ERROR ALIGNMENT ISSUES ---')
+          for item in alignment['issues'][:120]:
               print(json.dumps(item, ensure_ascii=False, sort_keys=True))
           PY
       - uses: actions/upload-artifact@v4
@@ -53,4 +70,6 @@ jobs:
           path: |
             structured-knowledge-quality-audit.json
             structured-knowledge-quality-audit.log
+            error-record-alignment-audit.json
+            error-record-alignment-audit.log
           if-no-files-found: error
