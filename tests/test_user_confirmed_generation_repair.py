@@ -14,9 +14,12 @@ class RepairProvider:
 
     def stream(self, request):
         self.requests.append(request)
-        payload = _ladder()
         if len(self.requests) == 1:
+            payload = _ladder()
             payload["rungs"][0]["debug_note"] = "过长说明" * 20
+        else:
+            payload = {"mode": "partial", "device_comments": {},
+                       "rungs": [_ladder()["rungs"][0]], "delete_rung_ids": []}
         raw = json.dumps(payload, ensure_ascii=False)
         yield TextDelta(raw)
 
@@ -83,10 +86,17 @@ def test_structural_failure_waits_for_user_then_repairs_once(offline, tmp_path):
         completed = client.get(f"/api/jobs/{repair_job}").json()
         assert completed["status"] == "completed", completed
         assert len(provider.requests) == 2
+        repair_snapshot = service.jobs._load(repair_job)["snapshot"]
+        assert repair_snapshot["repair_mode"] is True
+        assert repair_snapshot["format_repair"] is False
+        assert repair_snapshot["task_type"] == "contract_repair"
+        assert repair_snapshot["allowed_rung_ids"] == [1]
+        assert repair_snapshot["context_policy"]["name"] == "minimal"
         second_prompt = str(provider.requests[1].messages[-1].content)
-        assert "用户明确确认的一次结构修复" in second_prompt
-        assert "只修复" in second_prompt
-        assert "debug_note" in second_prompt
+        assert "用户明确确认的一次局部结构修复" in second_prompt
+        assert 'mode="partial"' in second_prompt
+        assert "不要重新生成完整程序" in second_prompt
+        assert "失败候选 JSON" not in second_prompt
         assert service.projects.project(project)["version_count"] == 1
 
 

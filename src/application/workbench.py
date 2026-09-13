@@ -5,6 +5,7 @@ import base64
 import copy
 import hashlib
 import json
+import re
 import tempfile
 import uuid
 from datetime import datetime, timezone
@@ -302,7 +303,7 @@ class WorkbenchService:
                 "validation": public(metadata.get("validation") or {})}
 
     def repair_generation(self, job_id, request_id):
-        """Submit one operator-confirmed model call to repair a rejected ladder shape."""
+        """Submit one operator-confirmed repair without re-running normal generation."""
         self.writable()
         record_id(request_id)
         with self.lock.thread_lock:
@@ -320,8 +321,8 @@ class WorkbenchService:
             candidate_path = contained(root / "repair_candidate.json", root)
             if not candidate_path.is_file():
                 raise ConflictError("The rejected candidate is no longer available for repair")
-            candidate = candidate_path.read_text(encoding="utf-8")
-            if not candidate.strip() or len(candidate) > 512000:
+            candidate_text = candidate_path.read_text(encoding="utf-8")
+            if not candidate_text.strip() or len(candidate_text) > 512000:
                 raise ConflictError("The rejected candidate is too large or empty")
             details = record.get("error_details") or {}
             violations = details.get("violations") if isinstance(details, dict) else []
@@ -334,15 +335,81 @@ class WorkbenchService:
                         locations.append(path + (f" ({reason})" if isinstance(reason, str) else ""))
             language = snapshot.get("response_language") if snapshot.get("response_language") in ("zh-CN", "en", "ja") else "zh-CN"
 
-        repair_text = (
-            "这是用户明确确认的一次结构修复。不要重新分析需求，也不要改变控制逻辑、地址、参数、触点极性或未出错梯级。"
-            "只修复下面失败候选的 JSON 协议/结构问题。debug_note 是可选字段，默认删除；不要用它解释推理。"
-            "label、debug_note、device_comment 单条目标不超过48字符且绝不能超过64字符。"
-            "只使用梯形图 schema 允许的字段，保持原候选的 mode 和语义，修好后只返回 JSON。\n"
-            "失败位置：" + ("；".join(locations) if locations else "ladder schema") + "\n\n"
-            "失败候选 JSON：\n" + candidate
-        )
-        return self.submit({
+            # A parseable rejected ladder is a safe repair baseline. Keep the
+            # model on a partial replacement contract and enforce the same scope
+            # again after materialization. Syntax-broken JSON has no trustworthy
+            # rung identity and therefore uses the separate full-format path.
+            try:
+                parsed_candidate = json.loads(candidate_text)
+            except (TypeError, ValueError):
+                parsed_candidate = None
+            from application.generation_repair import candidate_base
+            repair_base = candidate_base(parsed_candidate)
+            local_repair = repair_base is not None
+            allowed_rung_ids = set()
+            allowed_addresses = set()
+            if local_repair:
+                rungs = repair_base["rungs"]
+                by_index = {index: rung for index, rung in enumerate(rungs)}
+                saw_rung_path = False
+                saw_comment_path = False
+                unresolved_rung_path = False
+                for item in violations or []:
+                    path = item.get("path") if isinstance(item, dict) else None
+                    if not isinstance(path, str):
+                        continue
+                    saw_comment_path |= "device_comments" in path
+                    if "rungs" not in path:
+                        continue
+                    saw_rung_path = True
+                    match = re.search(r"rungs(?:\.|\[)(\d+)", path)
+                    if match:
+                        rung = by_index.get(int(match.group(1)))
+                        rung_id = rung.get("rung_id") if isinstance(rung, dict) else None
+                        if isinstance(rung_id, int) and not isinstance(rung_id, bool):
+                            allowed_rung_ids.add(rung_id)
+                        else:
+                            unresolved_rung_path = True
+                    else:
+                        unresolved_rung_path = True
+                if (unresolved_rung_path or (not saw_rung_path and not saw_comment_path)) and not allowed_rung_ids:
+                    allowed_rung_ids = {
+                        rung["rung_id"] for rung in rungs
+                        if isinstance(rung, dict) and isinstance(rung.get("rung_id"), int)
+                        and not isinstance(rung.get("rung_id"), bool)
+                    }
+                selected = [rung for rung in rungs if rung.get("rung_id") in allowed_rung_ids]
+                from contract_repair import patch_device_addresses
+                allowed_addresses.update(patch_device_addresses({
+                    "mode": "partial", "rungs": selected,
+                    "delete_rung_ids": [], "device_comments": {},
+                }))
+                allowed_addresses.update(
+                    str(address).strip().upper()
+                    for address in repair_base.get("device_comments", {})
+                    if isinstance(address, str) and re.fullmatch(r"[A-Za-z]+\d+", address.strip())
+                )
+
+        location_text = "；".join(locations) if locations else "ladder schema"
+        if local_repair:
+            rung_text = ", ".join(map(str, sorted(allowed_rung_ids))) or "无（仅允许修复注释字段）"
+            repair_text = (
+                "这是用户明确确认的一次局部结构修复。系统已把失败候选作为 Current version JSON 提供给你。"
+                "不要重新分析需求，不要重新生成完整程序，不要改变控制逻辑、地址、参数、触点极性或未出错梯级。"
+                "只返回一个完整可解析的 JSON 对象，并且必须使用 mode=\"partial\"。"
+                "rungs 只包含需要替换的完整梯级，delete_rung_ids 必须为空，device_comments 只列确实需要修复的现有地址。"
+                "debug_note 是可选字段，默认删除；label、debug_note、device_comment 单条不得超过64字符。\n"
+                f"允许修改的 rung_id：{rung_text}\n"
+                f"失败位置：{location_text}"
+            )
+        else:
+            repair_text = (
+                "这是用户明确确认的一次 JSON 格式修复。失败候选本身无法安全解析，因此不能执行局部 rung 合并。"
+                "不要重新分析需求，不要改变控制逻辑、地址、参数或触点极性。只补全/修正 JSON 协议与闭合结构。"
+                "返回完整 ladder JSON，不要返回 mode=\"partial\"，不要输出解释文本。\n"
+                f"失败位置：{location_text}\n\n失败候选 JSON：\n{candidate_text}"
+            )
+        command = {
             "kind": "generation",
             "project_id": project_id,
             "version_id": version_id,
@@ -351,7 +418,18 @@ class WorkbenchService:
             "response_language": language,
             "attachment_ids": [],
             "change_scope": snapshot.get("change_scope"),
-        })
+            "repair_origin_job_id": job_id,
+            "repair_mode": local_repair,
+            "format_repair": not local_repair,
+            "task_type": "contract_repair" if local_repair else "generate",
+        }
+        if local_repair:
+            command.update(
+                repair_baseline=repair_base,
+                allowed_rung_ids=sorted(allowed_rung_ids),
+                allowed_addresses=sorted(allowed_addresses),
+            )
+        return self.submit(command)
 
     def submit(self, command):
         self.writable()
@@ -390,8 +468,9 @@ class WorkbenchService:
             provider, model = self.model_factory() if requires_model else (None, {})
             snapshot["model"] = model
             snapshot["approval_consent"] = self.approval.read()
+            repair_context = "minimal" if command.get("repair_mode") or command.get("format_repair") else None
             snapshot["context_policy"] = resolve_context_policy(
-                None if requires_model else "legacy"
+                repair_context if requires_model else "legacy"
             ).snapshot()
             if command["kind"] == "debug_plan":
                 snapshot["saved_run"] = self.projects.simulator_run(project_id, context.version_id, command.get("run_id"))
@@ -478,12 +557,27 @@ class WorkbenchService:
                 metadata["artifacts"] = {k: v["path"] for k, v in fbd_payload["artifacts"].items()}
             else:
                 program = snapshot.get("program_ir")
-                request = GenerationRequest(user_input=scoped_text, effort=project.get("effort"), target_mode=project["target_mode"],
-                    previous_json=ir_to_ladder(program) if program else None, previous_ir=program,
-                    confirmed_context=project.get("confirmed_spec"), conversation_history=project.get("messages", []),
+                repair_mode = bool(snapshot.get("repair_mode"))
+                format_repair = bool(snapshot.get("format_repair"))
+                repair_baseline = snapshot.get("repair_baseline") if repair_mode else None
+                if repair_mode:
+                    previous_json = copy.deepcopy(repair_baseline)
+                elif format_repair:
+                    previous_json = None
+                else:
+                    previous_json = ir_to_ladder(program) if program else None
+                request = GenerationRequest(
+                    user_input=scoped_text, effort=project.get("effort"), target_mode=project["target_mode"],
+                    previous_json=previous_json, previous_ir=program,
+                    confirmed_context=project.get("confirmed_spec"),
+                    conversation_history=[] if (repair_mode or format_repair) else project.get("messages", []),
+                    task_type=snapshot.get("task_type"),
                     plc_model=project.get("plc_model", "FX3U"), program_name=(program or {}).get("program_name", "MAIN"),
                     revision=(program or {}).get("revision", 0) + 1,
-                    requirement_text=text, image_attachments=images, model_name=snapshot.get("model", {}).get("model"), response_language=language)
+                    requirement_text=text, repair_mode=repair_mode,
+                    allowed_rung_ids=snapshot.get("allowed_rung_ids"),
+                    allowed_addresses=snapshot.get("allowed_addresses"),
+                    image_attachments=images, model_name=snapshot.get("model", {}).get("model"), response_language=language)
                 metadata = GenerationWorkflow(request, out_dir, ctx.emit, GenerationDependencies(
                     provider=provider, check_cancelled=ctx.checkpoint, preserve_rejected_candidate=True
                 )).run()
