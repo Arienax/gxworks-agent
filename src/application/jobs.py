@@ -48,6 +48,27 @@ class JobContext:
             return copy.deepcopy(self.manager._load(self.job_id)["snapshot"])
 
     def emit(self, event_type, data=None):
+        if event_type == "context_audit" and isinstance(data, dict):
+            sections = data.get("sections") if isinstance(data.get("sections"), list) else []
+            included = [item for item in sections if isinstance(item, dict) and item.get("status") == "included"]
+            excluded = [item for item in sections if isinstance(item, dict) and item.get("status") == "excluded"]
+            retrieval = [item for item in sections if isinstance(item, dict)
+                         and str(item.get("section") or "").startswith("manual_chunk:")]
+            policy = data.get("policy") if isinstance(data.get("policy"), dict) else {}
+            messages = data.get("messages") if isinstance(data.get("messages"), list) else []
+            diagnostics.emit(
+                "context_audit", stage="model_request", policy=policy.get("name"),
+                context_request_index=data.get("request_index"),
+                message_count=len(messages), message_chars=data.get("message_text_chars"),
+                context_section_count=len(sections), included_section_count=len(included),
+                excluded_section_count=len(excluded),
+                included_section_chars=sum(item.get("chars", 0) for item in included if type(item.get("chars")) is int),
+                excluded_section_chars=sum(item.get("chars", 0) for item in excluded if type(item.get("chars")) is int),
+                retrieval_section_count=len(retrieval),
+                retrieval_context_chars=sum(item.get("chars", 0) for item in retrieval
+                                            if item.get("status") == "included" and type(item.get("chars")) is int),
+                dropped_sections=data.get("dropped_sections"),
+            )
         return self.manager.emit(self.job_id, event_type, data)
 
     def checkpoint(self):
@@ -182,8 +203,6 @@ class JobManager:
                 append_event(record, "running")
                 self._save(record)
             result = worker(JobContext(self, job_id))
-            # Cancellation is cooperative. A worker that has passed its last safe
-            # checkpoint may complete; never label an executed side effect cancelled.
             status, error_code = "completed", None
         except JobCancelled:
             status, error_code, result = "cancelled", None, None
