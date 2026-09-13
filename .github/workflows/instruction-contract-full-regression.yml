@@ -98,5 +98,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Playwright installation failed.' }
           python -m playwright install chromium
           if ($LASTEXITCODE -ne 0) { throw 'Chromium installation failed.' }
+          # Run the same browser delivery harness again on the final branch head;
+          # the previous run passed both functional cases and timed out only in
+          # the delayed-read SVG visibility wait.
           python scripts/web_generation_e2e.py --web-dist web/dist --report web-generation-e2e.json
           if ($LASTEXITCODE -ne 0) { throw 'Generation delivery E2E failed.' }
