@@ -96,11 +96,16 @@ def _opcode_instruction_results(opcode):
     ]
 
 
-def test_exact_opcode_retrieval_keeps_only_most_complete_structured_signature():
-    drva = _opcode_instruction_results("DRVA")
-    assert len(drva) == 1
-    assert drva[0]["manual_id"] == "fx3_positioning_k"
-
-    tbl = _opcode_instruction_results("TBL")
-    assert len(tbl) == 1
-    assert tbl[0]["manual_id"] == "fx3_programming_r"
+def test_exact_opcode_retrieval_uses_audited_manual_precedence():
+    expected = {
+        "DRVA": "fx3_positioning_k",
+        "DRVI": "fx3_positioning_k",
+        "DVIT": "fx3_positioning_k",
+        "PLSV": "fx3_positioning_k",
+        "ZRN": "fx3_positioning_k",
+        "TBL": "fx3_programming_r",
+    }
+    for opcode, manual_id in expected.items():
+        results = _opcode_instruction_results(opcode)
+        assert len(results) == 1, (opcode, results)
+        assert results[0]["manual_id"] == manual_id, (opcode, results[0])
