@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit device records, error records, and instruction completion flags."""
+"""Evidence-aware audit of structured PLC knowledge quality."""
 from __future__ import annotations
 import argparse
 from collections import Counter, defaultdict
@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 import sqlite3
 from typing import Any
+
+from audit_device_placeholder_evidence import (TOKEN_BOUNDARY, occurrence_signals, token_source_pattern)
 
 DEVICE_RE = re.compile(r"^(ER|SM|SD|TS|TC|CS|CC|[XYMSTCDRVZPIN])(\d+)(?:\.(\d+))?$", re.I)
 DEVICE_RANGE_RE = re.compile(r"^(ER|SM|SD|TS|TC|CS|CC|[XYMSTCDRVZPIN])(\d+)-(ER|SM|SD|TS|TC|CS|CC|[XYMSTCDRVZPIN])(\d+)$", re.I)
@@ -33,7 +35,7 @@ def normalize(value: Any) -> str:
 def token_in_text(token: str, text: str) -> bool:
     return bool(re.search(rf"(?<![A-Z0-9_]){re.escape(token)}(?![A-Z0-9_])", text or "", flags=re.I))
 
-def audit_devices(con: sqlite3.Connection):
+def _audit_devices_structural(con: sqlite3.Connection):
     issues = []
     rows = con.execute("SELECT id,device_norm,device,prefix,record_type,description,occurrences,plc_models,source_manuals_json,chunk_id FROM device_records ORDER BY id").fetchall()
     manual_ids = {row[0] for row in con.execute("SELECT manual_id FROM manuals")}
@@ -113,6 +115,123 @@ def audit_devices(con: sqlite3.Connection):
                 placeholder_like_records.append(item)
                 issues.append(issue("warning", "device_records", "possible_operand_placeholder_device_record", **item))
     return issues, {"records": len(rows), "record_types": dict(sorted(type_counts.items())), "prefix_counts": dict(sorted(prefix_counts.items())), "operand_position_leaks": len(leaked_pairs), "placeholder_like_device_records": len(placeholder_like_records)}
+
+_REAL_DEVICE_SIGNAL_NAMES = {
+    "concrete_instruction_use",
+    "concrete_range_use",
+    "pointer_or_label_use",
+    "example_semantics",
+}
+
+
+def has_concrete_device_evidence(
+    connection: sqlite3.Connection,
+    device_norm: str,
+    record_type: str,
+    token: str,
+) -> bool:
+    """Return whether this exact token has concrete PLC address/pointer evidence.
+
+    The broad S/D/N/M/P-number heuristic is only candidate discovery. Final
+    warning emission is occurrence-local and provenance-aware. N<number> is not
+    a PLC device family here; it represents operand/count or MC/MCR nesting
+    semantics and must stay outside ``device_records``.
+    """
+    token = normalize(token).upper()
+    prefix_match = re.match(r"[A-Z]+", token)
+    prefix = prefix_match.group(0) if prefix_match else ""
+    if prefix == "N":
+        return False
+
+    pattern = re.compile(
+        rf"(?<!{TOKEN_BOUNDARY}){token_source_pattern(token)}(?!{TOKEN_BOUNDARY})",
+        re.I,
+    )
+    rows = connection.execute(
+        """
+        SELECT c.text
+        FROM entity_index e
+        JOIN chunks c ON c.id=e.chunk_id
+        WHERE e.entity_norm=? AND e.entity_type=?
+        """,
+        (device_norm, record_type),
+    ).fetchall()
+    for (raw_text,) in rows:
+        source = str(raw_text or "")
+        for match in pattern.finditer(source):
+            line_start = source.rfind("\n", 0, match.start()) + 1
+            line_end = source.find("\n", match.end())
+            if line_end < 0:
+                line_end = len(source)
+            line = source[line_start:line_end]
+            # A PDF instruction-size row such as ``D | 17 steps`` can flatten
+            # to ``D 17 steps``; that occurrence is not concrete D17 evidence.
+            if re.search(rf"{re.escape(match.group(0))}\s+steps\b", line, re.I):
+                continue
+            signals = occurrence_signals(token, source, match)
+            if any(signals.get(name) for name in _REAL_DEVICE_SIGNAL_NAMES):
+                return True
+    return False
+
+
+def audit_devices(con: sqlite3.Connection):
+    """Run structural checks, then semantically adjudicate placeholder candidates."""
+    issues, stats = _audit_devices_structural(con)
+    kept = []
+    suppressed = 0
+    for item in issues:
+        if item.get("code") != "possible_operand_placeholder_device_record":
+            kept.append(item)
+            continue
+        row = con.execute(
+            "SELECT device_norm,record_type FROM device_records WHERE id=?",
+            (item.get("id"),),
+        ).fetchone()
+        if row and has_concrete_device_evidence(
+            con,
+            str(row[0]),
+            str(row[1]),
+            str(item.get("device", "")),
+        ):
+            suppressed += 1
+            continue
+        kept.append(item)
+
+    # N is semantic syntax, not a device family. Make any future regression a
+    # hard audit error even if it appears outside the old instruction heuristic.
+    existing_n_errors = {
+        int(item.get("id"))
+        for item in kept
+        if item.get("code") == "n_syntax_in_device_records" and item.get("id") is not None
+    }
+    for row_id, device, record_type in con.execute(
+        "SELECT id,device,record_type FROM device_records "
+        "WHERE prefix='N' AND record_type IN ('device','device_range') ORDER BY id"
+    ).fetchall():
+        if int(row_id) not in existing_n_errors:
+            kept.append(
+                issue(
+                    "error",
+                    "device_records",
+                    "n_syntax_in_device_records",
+                    id=int(row_id),
+                    device=str(device),
+                    record_type=str(record_type),
+                )
+            )
+
+    stats = dict(stats)
+    stats["placeholder_like_device_records"] = sum(
+        1
+        for item in kept
+        if item.get("code") == "possible_operand_placeholder_device_record"
+    )
+    stats["placeholder_warnings_suppressed_by_concrete_evidence"] = suppressed
+    stats["n_syntax_device_records"] = sum(
+        1 for item in kept if item.get("code") == "n_syntax_in_device_records"
+    )
+    return kept, stats
+
 
 def field_quality(identity, field, value):
     out, cleaned = [], normalize(value)

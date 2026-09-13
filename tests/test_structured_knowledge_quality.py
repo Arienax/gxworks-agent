@@ -118,3 +118,37 @@ def test_reserved_no_error_ranges_do_not_become_fake_error_rows():
         if normalized in {"no error", "to", "through"}:
             bad.append((manual_id, pdf_page, code, message))
     assert bad == []
+
+
+
+def test_primary_structured_quality_audit_uses_semantic_device_evidence(tmp_path):
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parents[1]
+    output = tmp_path / "structured-quality.json"
+    subprocess.run(
+        [
+            sys.executable,
+            str(root / "tools" / "audit_structured_knowledge_quality.py"),
+            "--database",
+            str(_database()),
+            "--output",
+            str(output),
+        ],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    report = json.loads(output.read_text(encoding="utf-8"))
+    device_stats = report["stats"]["device_records"]
+    unresolved = [
+        item
+        for item in report["issues"]
+        if item.get("code") == "possible_operand_placeholder_device_record"
+    ]
+    assert unresolved == []
+    assert device_stats["placeholder_like_device_records"] == 0
+    assert device_stats["placeholder_warnings_suppressed_by_concrete_evidence"] == 29
+    assert device_stats["n_syntax_device_records"] == 0
