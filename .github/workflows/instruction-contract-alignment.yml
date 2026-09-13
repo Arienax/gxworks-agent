@@ -4,16 +4,15 @@ on:
   push:
     branches: [fix/instruction-contract-alignment-20260914]
     paths:
-      - tools/apply_instruction_contract_alignment_once.py
       - tools/build_fx3u_verified_opcode_overlay.py
       - tests/test_instruction_contract_alignment.py
       - .github/workflows/instruction-contract-alignment.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  align-and-test:
+  validate:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -25,10 +24,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Apply alignment and generate verified overlay
-        run: |
-          python tools/apply_instruction_contract_alignment_once.py
-          python tools/build_fx3u_verified_opcode_overlay.py
       - name: Install dependencies
         run: python -m pip install -r requirements.txt -r requirements/web.txt
       - name: Focused regression
@@ -47,8 +42,3 @@ jobs:
             -k 'not test_st_prompt_uses_only_the_selected_model_special_device_prefixes'
           python tools/build_fx3u_verified_opcode_overlay.py --check
           git diff --check
-      - name: Commit validated alignment
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: 'fix(registry): align FX3 instruction knowledge contracts'
-          file_pattern: 'src resources/instructions/mitsubishi tests'
