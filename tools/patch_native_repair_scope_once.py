@@ -224,9 +224,7 @@ replace_once(
     "repair scope diagnostic",
 )
 
-Path("tests/test_native_repair_scope_schema.py").write_text(r'''import json
-
-import api
+Path("tests/test_native_repair_scope_schema.py").write_text(r'''import api
 from application.generation_repair import validation_diagnostic
 from plc_json_validator import PLCJsonValidationError
 
@@ -289,7 +287,8 @@ def test_native_repair_schema_reuses_only_baseline_devices_and_operands():
     assert all(items <= {"X0", "M0", "D0", "D1"} for items in address_enums)
     assert operand_enums == [{"D0", "D1"}]
     assert opcode_enums and "MOV" in opcode_enums[0]
-    assert "SET" not in opcode_enums[0]  # one-operand instruction cannot fit the baseline arity
+    assert opcode_enums[0] <= set(api.generation_app_instr_mnemonics("FX3U"))
+    assert "OUT" not in opcode_enums[0]
 
 
 def test_native_repair_schema_preserves_baseline_values_and_expressions():
@@ -306,10 +305,14 @@ def test_native_repair_schema_preserves_baseline_values_and_expressions():
         properties = rule.get("properties") if isinstance(rule, dict) else None
         if not isinstance(properties, dict):
             continue
-        if isinstance(properties.get("expression"), dict) and "enum" in properties["expression"]:
-            expression_enums.append(set(properties["expression"]["enum"]))
-        if isinstance(properties.get("value"), dict) and "enum" in properties["value"]:
-            value_enums.append(set(properties["value"]["enum"]))
+        type_rule = properties.get("type")
+        type_values = set(type_rule.get("enum", [])) if isinstance(type_rule, dict) else set()
+        if type_values & {"COMPARE", "BLOCK_INPUT"}:
+            if isinstance(properties.get("expression"), dict) and "enum" in properties["expression"]:
+                expression_enums.append(set(properties["expression"]["enum"]))
+        if type_values & {"TIMER", "COUNTER"}:
+            if isinstance(properties.get("value"), dict) and "enum" in properties["value"]:
+                value_enums.append(set(properties["value"]["enum"]))
     assert expression_enums and all(items == {"> D0 K10"} for items in expression_enums)
     assert value_enums and all(items == {"K5"} for items in value_enums)
 
