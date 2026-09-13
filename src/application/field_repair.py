@@ -62,7 +62,11 @@ def _value_schema(parent, field, plc_model, reason):
         allowed = []
         for mnemonic in generation_app_instr_mnemonics(plc_model):
             spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(mnemonic)
-            if spec is not None and spec.accepts_arity(len(operands)):
+            if (
+                spec is not None
+                and spec.contract_level == "full"
+                and spec.accepts_arity(len(operands))
+            ):
                 allowed.append(mnemonic)
         return {"type": "string", "enum": sorted(allowed)} if allowed else None
     if field in {"label", "debug_note"} and reason == "field_too_long":

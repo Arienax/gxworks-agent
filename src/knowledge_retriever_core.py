@@ -1850,6 +1850,41 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
             str(item.get("id", "")),
         )
     )
+
+    audited_instruction_precedence = {
+        "drva": "fx3_positioning_k",
+        "drvi": "fx3_positioning_k",
+        "dvit": "fx3_positioning_k",
+        "plsv": "fx3_positioning_k",
+        "zrn": "fx3_positioning_k",
+        "tbl": "fx3_programming_r",
+    }
+    if query_term_set & set(audited_instruction_precedence):
+        preferred = {}
+        for candidate in candidates:
+            opcode = _normalize_text(candidate.get("instruction_opcode", "")).casefold()
+            chunk_type = _normalize_text(candidate.get("chunk_type", "")).casefold()
+            if chunk_type != "instruction" or opcode not in query_term_set:
+                continue
+            expected_manual = audited_instruction_precedence.get(opcode)
+            if expected_manual and candidate.get("manual_id") == expected_manual and opcode not in preferred:
+                preferred[opcode] = candidate
+
+        if preferred:
+            deduped = []
+            emitted = set()
+            for candidate in candidates:
+                opcode = _normalize_text(candidate.get("instruction_opcode", "")).casefold()
+                chunk_type = _normalize_text(candidate.get("chunk_type", "")).casefold()
+                if opcode in preferred and chunk_type == "instruction":
+                    if opcode in emitted:
+                        continue
+                    deduped.append(preferred[opcode])
+                    emitted.add(opcode)
+                    continue
+                deduped.append(candidate)
+            candidates = deduped
+
     return _select_with_budget(candidates, top_k, char_budget)
 
 

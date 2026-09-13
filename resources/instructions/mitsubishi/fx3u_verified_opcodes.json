@@ -1,0 +1,1239 @@
+{
+  "schema_version": 1,
+  "vendor": "mitsubishi",
+  "description": "FX3U opcode identities verified from bundled structured manual records. Operand contracts are intentionally not hardened from partial table extraction.",
+  "instructions": [
+    {
+      "mnemonic": "ABS",
+      "canonical_op": "ABS",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC155; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "ABSD",
+      "canonical_op": "ABSD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC62; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "ACOS",
+      "canonical_op": "ACOS",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC134; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "ALT",
+      "canonical_op": "ALT",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC66; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "ANR",
+      "canonical_op": "ANR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC47; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "ANS",
+      "canonical_op": "ANS",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC46; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "ARWS",
+      "canonical_op": "ARWS",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC75; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "ASC",
+      "canonical_op": "ASC",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC76; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "ASCI",
+      "canonical_op": "ASCI",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC82; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "ASIN",
+      "canonical_op": "ASIN",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC133; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "ATAN",
+      "canonical_op": "ATAN",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC135; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "BAND",
+      "canonical_op": "BAND",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC257; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "BINDA",
+      "canonical_op": "BINDA",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC261; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "BON",
+      "canonical_op": "BON",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC44; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "BTOW",
+      "canonical_op": "BTOW",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC142; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "CCD",
+      "canonical_op": "CCD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC84; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "COMRD",
+      "canonical_op": "COMRD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC182; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "COS",
+      "canonical_op": "COS",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC131; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "CRC",
+      "canonical_op": "CRC",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC188; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "DABIN",
+      "canonical_op": "DABIN",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC260; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "DECO",
+      "canonical_op": "DECO",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC41; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "DEG",
+      "canonical_op": "DEG",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC137; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "DSW",
+      "canonical_op": "DSW",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC72; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "DUTY",
+      "canonical_op": "DUTY",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC186; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "EBCD",
+      "canonical_op": "EBCD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC118; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "EBIN",
+      "canonical_op": "EBIN",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC119; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "ENCO",
+      "canonical_op": "ENCO",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC42; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "ENEG",
+      "canonical_op": "ENEG",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC128; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "ESQR",
+      "canonical_op": "ESQR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC127; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "ESTR",
+      "canonical_op": "ESTR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC116; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "EVAL",
+      "canonical_op": "EVAL",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC117; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "EXP",
+      "canonical_op": "EXP",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC124; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "FDEL",
+      "canonical_op": "FDEL",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC210; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "FINS",
+      "canonical_op": "FINS",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC211; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "FLCMD",
+      "canonical_op": "FLCMD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC304; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "FLCRT",
+      "canonical_op": "FLCRT",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC300; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "FLRD",
+      "canonical_op": "FLRD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC303; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "FLSTRD",
+      "canonical_op": "FLSTRD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC305; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "FLWR",
+      "canonical_op": "FLWR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC302; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "HCMOV",
+      "canonical_op": "HCMOV",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC189; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "HEX",
+      "canonical_op": "HEX",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC83; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "HKY",
+      "canonical_op": "HKY",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC71; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "HOUR",
+      "canonical_op": "HOUR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC169; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "HTOS",
+      "canonical_op": "HTOS",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC164; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "INCD",
+      "canonical_op": "INCD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC63; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "INITER",
+      "canonical_op": "INITER",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC295; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "INITR",
+      "canonical_op": "INITR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC292; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "INSTR",
+      "canonical_op": "INSTR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC208; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "IST",
+      "canonical_op": "IST",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC60; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "IVBWR",
+      "canonical_op": "IVBWR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC274; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "IVCK",
+      "canonical_op": "IVCK",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC270; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "IVDR",
+      "canonical_op": "IVDR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC271; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "IVMC",
+      "canonical_op": "IVMC",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC275; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "IVRD",
+      "canonical_op": "IVRD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC272; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "IVWR",
+      "canonical_op": "IVWR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC273; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "LEFT",
+      "canonical_op": "LEFT",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC205; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "LEN",
+      "canonical_op": "LEN",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC203; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "LIMIT",
+      "canonical_op": "LIMIT",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC256; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "LOADR",
+      "canonical_op": "LOADR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC290; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "LOG10",
+      "canonical_op": "LOG10",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC126; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "LOGE",
+      "canonical_op": "LOGE",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC125; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "LOGR",
+      "canonical_op": "LOGR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC293; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "MIDR",
+      "canonical_op": "MIDR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC206; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "MIDW",
+      "canonical_op": "MIDW",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC207; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "MODBUS",
+      "canonical_op": "MODBUS",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC276; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "MTR",
+      "canonical_op": "MTR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC52; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "POP",
+      "canonical_op": "POP",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC212; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "PR",
+      "canonical_op": "PR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC77; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "PRUN",
+      "canonical_op": "PRUN",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC81; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "RAD",
+      "canonical_op": "RAD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC136; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "RBFM",
+      "canonical_op": "RBFM",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC278; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "REF",
+      "canonical_op": "REF",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC50; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "REFF",
+      "canonical_op": "REFF",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC51; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "RIGHT",
+      "canonical_op": "RIGHT",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC204; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "RND",
+      "canonical_op": "RND",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC184; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "RWER",
+      "canonical_op": "RWER",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC294; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "SAVER",
+      "canonical_op": "SAVER",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC291; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "SCL",
+      "canonical_op": "SCL",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC259; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "SCL2",
+      "canonical_op": "SCL2",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC269; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "SEGD",
+      "canonical_op": "SEGD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC73; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "SEGL",
+      "canonical_op": "SEGL",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC74; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "SER",
+      "canonical_op": "SER",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC61; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "SFL",
+      "canonical_op": "SFL",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC214; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "SFR",
+      "canonical_op": "SFR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC213; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "SFRD",
+      "canonical_op": "SFRD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC39; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "SFWR",
+      "canonical_op": "SFWR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC38; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "SIN",
+      "canonical_op": "SIN",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC130; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "SMOV",
+      "canonical_op": "SMOV",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC13; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "SORT2",
+      "canonical_op": "SORT2",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC149; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "SQR",
+      "canonical_op": "SQR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC48; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "STMR",
+      "canonical_op": "STMR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC65; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "STOH",
+      "canonical_op": "STOH",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC165; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "STR",
+      "canonical_op": "STR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC200; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "TADD",
+      "canonical_op": "TADD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC162; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "TAN",
+      "canonical_op": "TAN",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC132; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "TBL",
+      "canonical_op": "TBL",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC152; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "TCMP",
+      "canonical_op": "TCMP",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC160; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "TKY",
+      "canonical_op": "TKY",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC70; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "TRD",
+      "canonical_op": "TRD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC166; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "TSUB",
+      "canonical_op": "TSUB",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC163; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "TTMR",
+      "canonical_op": "TTMR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC64; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "TWR",
+      "canonical_op": "TWR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC167; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "TZCP",
+      "canonical_op": "TZCP",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC161; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "VAL",
+      "canonical_op": "VAL",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC201; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "VRRD",
+      "canonical_op": "VRRD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC85; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "VRSC",
+      "canonical_op": "VRSC",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC86; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "WBFM",
+      "canonical_op": "WBFM",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC279; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "WSUM",
+      "canonical_op": "WSUM",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC140; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "WTOB",
+      "canonical_op": "WTOB",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC141; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "ZONE",
+      "canonical_op": "ZONE",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC258; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "ZPOP",
+      "canonical_op": "ZPOP",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC103; operand semantics remain retrieval-only."
+    },
+    {
+      "mnemonic": "ZPUSH",
+      "canonical_op": "ZPUSH",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only",
+      "notes": "Opcode identity verified from fx3_programming_r FNC102; operand semantics remain retrieval-only."
+    }
+  ]
+}

@@ -86,6 +86,7 @@ class InstructionSpec:
     min_operands: Optional[int] = None
     max_operands: Optional[int] = None
     cpu_support: frozenset[str] = field(default_factory=frozenset)
+    contract_level: str = "full"
     notes: str = ""
 
     @classmethod
@@ -112,6 +113,9 @@ class InstructionSpec:
             raise ValueError(
                 f"{mnemonic}: invalid semantic kind {semantic_text!r}"
             ) from exc
+        contract_level = str(payload.get("contract_level") or "full").strip().lower()
+        if contract_level not in {"full", "opcode_only"}:
+            raise ValueError(f"{mnemonic}: invalid contract_level {contract_level!r}")
 
         arity = payload.get("arity") or {}
         if not isinstance(arity, Mapping):
@@ -149,6 +153,7 @@ class InstructionSpec:
                 for item in (payload.get("cpu_support") or [])
                 if str(item).strip()
             ),
+            contract_level=contract_level,
             notes=str(payload.get("notes") or "").strip(),
         )
 
@@ -324,6 +329,9 @@ def load_default_instruction_registry() -> InstructionRegistry:
     for directory in _candidate_catalog_directories():
         paths = tuple(directory / name for name in required)
         if all(path.is_file() for path in paths):
+            verified = directory / "fx3u_verified_opcodes.json"
+            if verified.is_file():
+                paths = paths + (verified,)
             return InstructionRegistry.from_files(paths)
     searched = "\n - ".join(str(item) for item in _candidate_catalog_directories())
     raise RuntimeError(

@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "vendor": "mitsubishi",
+  "description": "Structured instruction candidates intentionally excluded from generation until opcode identity/signature is verified.",
+  "entries": [
+    {
+      "opcode": "BK",
+      "status": "retrieval_only",
+      "reason": "no_exact_fnc_heading_identity",
+      "evidence": [
+        {
+          "manual_id": "fx3_programming_r",
+          "fnc_number": "192",
+          "title": "25.1 FNC192 – BK+ / Block Data Addition"
+        }
+      ]
+    },
+    {
+      "opcode": "DIS",
+      "status": "retrieval_only",
+      "reason": "no_exact_fnc_heading_identity",
+      "evidence": [
+        {
+          "manual_id": "fx3_programming_r",
+          "fnc_number": "144",
+          "title": "4-bit Grouping of Word Data"
+        }
+      ]
+    },
+    {
+      "opcode": "FLDE",
+      "status": "retrieval_only",
+      "reason": "no_exact_fnc_heading_identity",
+      "evidence": [
+        {
+          "manual_id": "fx3_programming_r",
+          "fnc_number": "301",
+          "title": "34.2 FNC301 – FLDEL / File delete·CF card format"
+        }
+      ]
+    },
+    {
+      "opcode": "FLDEL",
+      "status": "retrieval_only",
+      "reason": "no_exact_fnc_heading_identity",
+      "evidence": [
+        {
+          "manual_id": "fx3_programming_r",
+          "fnc_number": "301",
+          "title": "34.2.1 Detailed explanation of setting data"
+        }
+      ]
+    },
+    {
+      "opcode": "UNI",
+      "status": "retrieval_only",
+      "reason": "no_exact_fnc_heading_identity",
+      "evidence": [
+        {
+          "manual_id": "fx3_programming_r",
+          "fnc_number": "143",
+          "title": "4-bi t Linking of Word Data"
+        }
+      ]
+    }
+  ]
+}
