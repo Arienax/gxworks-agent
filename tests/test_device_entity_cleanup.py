@@ -27,6 +27,17 @@ def test_uppercase_n_nesting_levels_are_preserved_as_nesting_syntax():
     assert cleaned[("N4", "nesting_level")] >= 2
 
 
+def test_semantic_cleanup_is_idempotent():
+    text = (
+        'N: Number of store points plus "1" 2 n 512\n'
+        'MC N4 M0\nMCR N4\nAvailable nesting levels are N0 to N7.'
+    )
+    initial = Counter({("N512", "device"): 1, ("N4", "device"): 2})
+    once = sanitize_device_like_entities(text, "instruction", initial)
+    twice = sanitize_device_like_entities(text, "instruction", once)
+    assert once == twice
+
+
 def test_instruction_step_count_is_not_data_register():
     text = "FNC 62\nABSD\n9 steps ABSD\nD 17 steps DABSD Continuous"
     entities = Counter({("D17", "device"): 1, ("ABSD", "instruction"): 1})
