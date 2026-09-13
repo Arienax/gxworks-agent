@@ -33,7 +33,7 @@ new = '''    for match in DEVICE_RANGE_RE.finditer(text):
         second_prefix = (match.group(3) or first_prefix).upper()
         first_token = f"{first_prefix}{match.group(2)}"
         second_token = f"{second_prefix}{match.group(4)}"
-        # A real PLC device range cannot change device family.  Text such as
+        # A real PLC device range cannot change device family. Text such as
         # ``D8360-Y003`` is normally two table/prose cells flattened around a
         # dash and must not become one device_range entity.
         if first_prefix != second_prefix:
@@ -119,7 +119,7 @@ new = '''def instruction_completion_flags(pages: list[PageArtifact]) -> list[str
 
     A generic occurrence of the word ``flag`` is intentionally insufficient:
     Mitsubishi instruction pages also contain zero, carry, borrow, error,
-    busy/ready, limit and control flags.  Relay-local line segments keep an
+    busy/ready, limit and control flags. Relay-local line segments keep an
     adjacent status row from inheriting the semantics of a completion row.
     """
     completion_semantics = re.compile(
@@ -160,6 +160,37 @@ new = '''def instruction_completion_flags(pages: list[PageArtifact]) -> list[str
     return flags
 '''
 assert text.count(old) == 1, 'completion flag parser block not found exactly once'
+text = text.replace(old, new, 1)
+
+old = '''            if not raw_lines:
+                continue
+            message = raw_lines[0][:500]
+            action_lines = [
+'''
+new = '''            if not raw_lines:
+                continue
+            # 0000 is the explicit "No error" state in Mitsubishi error-code
+            # tables. PDF text extraction flattens the following nonzero-error
+            # row into the same text stream, so a generic block window would
+            # otherwise leak the next row's cause/action into the 0000 record.
+            if code == "0000" and re.search(r"\\bno\\s+error\\b", raw_lines[0], flags=re.I):
+                message = re.sub(r"^[\\s⎯—-]+", "", raw_lines[0]).strip()[:500]
+                records.append(
+                    {
+                        "code": code,
+                        "message": message,
+                        "cause": "",
+                        "corrective_action": "",
+                        "raw_text": message,
+                        "table_index": 0,
+                        "row_index": match_index + 1,
+                    }
+                )
+                continue
+            message = raw_lines[0][:500]
+            action_lines = [
+'''
+assert text.count(old) == 1, 'strict error no-error insertion point not found exactly once'
 text = text.replace(old, new, 1)
 
 assert text != original
