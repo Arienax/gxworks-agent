@@ -24,7 +24,9 @@ jobs:
       - name: Install builder dependencies
         run: python -m pip install pypdf pdfplumber
       - name: Patch builder, backfill SQLite, and patch retriever
-        run: python tools/bootstrap_structured_instruction_fix.py
+        run: |
+          python tools/bootstrap_structured_instruction_fix.py
+          python tools/bootstrap_fix_generated_retriever.py
       - name: Verify structured retrieval
         env:
           PYTHONPATH: src
@@ -36,7 +38,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/bootstrap-repair-localization.yml tools/bootstrap_structured_instruction_fix.py
+          git rm .github/workflows/bootstrap-repair-localization.yml tools/bootstrap_structured_instruction_fix.py tools/bootstrap_fix_generated_retriever.py
           git add tools/build_fx3u_knowledge_v3.py src/knowledge_retriever_core.py resources/knowledge/fx3u_knowledge.sqlite resources/knowledge/manifest.json
           git commit -m "fix(rag): extract structured instruction device applicability"
           git push origin HEAD:fix/rejected-json-repair-20260913
