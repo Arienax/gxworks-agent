@@ -40,6 +40,7 @@ from prompt_context_policy import (
 from plc_json_validator import PLCJsonValidationError, parse_device_address
 from hardware_profiles import ensure_hardware_questions
 from instruction_registry import GENERATION_TYPED_OUTPUT_OPCODES, generation_app_instr_mnemonics
+from plc_generation_contract import ladder_response_schema
 from pattern_library import (
     assemble_prompt,
     build_workflow_prompt,
@@ -1607,6 +1608,57 @@ Rules:
 """
 
 
+def _native_partial_repair_response_format(repair_payload):
+    """Build the provider-enforced partial repair schema from the shared ladder contract."""
+    plc_model = str(repair_payload.get("plc_model") or "FX3U").strip().upper() or "FX3U"
+    combined = ladder_response_schema(allow_partial=True, plc_model=plc_model)
+    schema = combined["oneOf"][1]
+    schema["required"] = ["mode", "device_comments", "rungs", "delete_rung_ids"]
+    schema["properties"]["delete_rung_ids"]["maxItems"] = 0
+
+    allowed_rung_ids = sorted({
+        int(item) for item in (repair_payload.get("allowed_rung_ids") or [])
+        if not isinstance(item, bool)
+    })
+    rung_array = schema["properties"]["rungs"]
+    if allowed_rung_ids:
+        rung_array["minItems"] = 1
+        rung_array["maxItems"] = len(allowed_rung_ids)
+        rung_array["items"]["properties"]["rung_id"] = {
+            "type": "integer", "enum": allowed_rung_ids,
+        }
+        # Structural rung repair must not opportunistically rewrite comments.
+        schema["properties"]["device_comments"] = {
+            "type": "object", "properties": {}, "required": [],
+            "additionalProperties": False,
+        }
+    else:
+        rung_array["maxItems"] = 0
+        allowed_addresses = sorted({
+            str(item).strip().upper() for item in (repair_payload.get("allowed_addresses") or [])
+            if str(item).strip()
+        })
+        comment_properties = {
+            address: {"type": "string", "maxLength": 64}
+            for address in allowed_addresses
+        }
+        schema["properties"]["device_comments"] = {
+            "type": "object",
+            "properties": comment_properties,
+            "required": allowed_addresses,
+            "additionalProperties": False,
+        }
+
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "ladder_partial_repair",
+            "strict": True,
+            "schema": schema,
+        },
+    }
+
+
 @language_scoped
 def repair_ladder_response(repair_payload, model_name, effort, *, mode,
                            on_reasoning_chunk=None, on_content_chunk=None):
@@ -1624,6 +1676,10 @@ def repair_ladder_response(repair_payload, model_name, effort, *, mode,
             "app_instr_forbidden_typed_opcodes": sorted(GENERATION_TYPED_OUTPUT_OPCODES),
             "dedicated_output_types": ["COIL", "PLS", "PLF", "TIMER", "COUNTER"],
         }
+    native_response_format = (
+        _native_partial_repair_response_format(repair_payload)
+        if mode == "partial" else None
+    )
     system_prompt = (PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT
                      if mode == "partial" else FORMAT_LADDER_REPAIR_SYSTEM_PROMPT)
     audit_section("repair_system_prompt", system_prompt,
@@ -1638,6 +1694,7 @@ def repair_ladder_response(repair_payload, model_name, effort, *, mode,
         model_name=model_name,
         effort=effort,
         stream=True,
+        options={"response_format": native_response_format} if native_response_format else None,
         response_contract=LADDER_RESPONSE,
         preserved_annotations=source_annotations(repair_payload),
         on_reasoning_chunk=on_reasoning_chunk,

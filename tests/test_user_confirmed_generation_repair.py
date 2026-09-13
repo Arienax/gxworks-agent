@@ -96,6 +96,18 @@ def test_structural_failure_waits_for_user_then_repairs_once(offline, tmp_path):
         assert repair_snapshot["context_policy"]["name"] == "minimal"
         system_prompt = str(provider.requests[1].messages[0].content)
         repair_payload = json.loads(str(provider.requests[1].messages[-1].content))
+        native_format = provider.requests[1].options["response_format"]
+        assert native_format["type"] == "json_schema"
+        assert native_format["json_schema"]["strict"] is True
+        native_schema = native_format["json_schema"]["schema"]
+        assert native_schema["properties"]["rungs"]["items"]["properties"]["rung_id"]["enum"] == [1]
+        opcode_rule = (
+            native_schema["properties"]["rungs"]["items"]["properties"]["branches"]["items"]
+            ["properties"]["outputs"]["items"]["oneOf"][2]["properties"]["opcode"]
+        )
+        assert opcode_rule["enum"] == repair_payload["repair_contract"]["app_instr_opcode_enum"]
+        assert native_schema["properties"]["device_comments"]["additionalProperties"] is False
+        assert native_schema["properties"]["delete_rung_ids"]["maxItems"] == 0
         assert "PLC ladder local structural repair" in system_prompt
         assert "工业常识模式库" not in system_prompt
         assert "Retrieved-knowledge precedence" not in system_prompt
