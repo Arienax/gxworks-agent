@@ -1,0 +1,47 @@
+name: Inspect nonzero no-error record context
+
+on:
+  push:
+    branches: [fix/rejected-json-repair-20260913]
+    paths: [.github/workflows/inspect-error-6311-context.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/rejected-json-repair-20260913
+          lfs: true
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Print 6311 source and neighboring records
+        run: |
+          python - <<'PY'
+          import re, sqlite3
+          con=sqlite3.connect('resources/knowledge/fx3u_knowledge.sqlite')
+          rows=con.execute("SELECT id,error_code,message,cause,corrective_action,raw_text,manual_id,pdf_page,row_index FROM error_records WHERE manual_id='fxcpu_device_common_l' AND pdf_page=259 ORDER BY row_index,id").fetchall()
+          print('RECORDS PAGE 259')
+          for row in rows:
+              print(row[:5], 'RAW=', repr((row[5] or '')[:500]), 'ROW=', row[8])
+          page=con.execute("SELECT clean_text FROM page_artifacts WHERE manual_id='fxcpu_device_common_l' AND pdf_page=259").fetchone()[0]
+          print('\nSOURCE CONTEXT 6311')
+          for m in re.finditer(r'(?<![A-Z0-9])6311(?:H)?(?![A-Z0-9])',page or '',re.I):
+              print(re.sub(r'\s+',' ',(page or '')[max(0,m.start()-500):m.end()+900]).strip())
+          print('\nPLAUSIBLE CODES ORDER')
+          pat=re.compile(r'(?<![0-9A-F])(?:0x)?([0-9A-F]{4})(H)?(?![0-9A-F])',re.I)
+          values=[]
+          for m in pat.finditer(page or ''):
+              digits=m.group(1).upper()
+              if digits!='0000' and not re.search(r'[A-F]',digits) and digits[:1] not in set('3456789'):
+                  continue
+              values.append((m.start(),digits+('H' if m.group(2) else ''), re.sub(r'\s+',' ',(page or '')[m.end():m.end()+90]).strip()))
+          for item in values: print(item)
+          con.close()
+          PY
