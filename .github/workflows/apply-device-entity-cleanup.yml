@@ -1,0 +1,193 @@
+name: Apply device entity cleanup
+
+on:
+  push:
+    branches: [fix/rejected-json-repair-20260913]
+    paths:
+      - .github/workflows/apply-device-entity-cleanup.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-device-entity-cleanup-fix-rejected-json-repair-20260913
+  cancel-in-progress: false
+
+jobs:
+  migrate-validate-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/rejected-json-repair-20260913
+          lfs: true
+          fetch-depth: 1
+          persist-credentials: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install validation dependencies
+        run: python -m pip install --disable-pip-version-check pytest==9.1.1 numpy==2.3.2
+
+      - name: Record baseline release metrics
+        run: |
+          python - <<'PY'
+          import json
+          manifest = json.load(open('resources/knowledge/manifest.json', encoding='utf-8'))
+          baseline = manifest.get('retrieval', {}).get('benchmark', {})
+          json.dump(baseline, open('/tmp/baseline-benchmark.json','w',encoding='utf-8'), ensure_ascii=False, indent=2)
+          print('BASELINE', json.dumps(baseline, sort_keys=True))
+          PY
+
+      - name: Apply semantic entity migration
+        run: |
+          python tools/reclassify_device_entities.py \
+            --database resources/knowledge/fx3u_knowledge.sqlite \
+            --report /tmp/device-entity-cleanup-migration.json
+
+      - name: Enforce migrated database invariants
+        run: |
+          python - <<'PY'
+          import json, sqlite3
+          db = 'resources/knowledge/fx3u_knowledge.sqlite'
+          with sqlite3.connect(db) as con:
+              assert con.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
+              assert con.execute('PRAGMA foreign_key_check').fetchall() == []
+              assert con.execute("SELECT COUNT(*) FROM device_records WHERE prefix='N'").fetchone()[0] == 0
+              assert con.execute("SELECT COUNT(*) FROM device_records WHERE device_norm='d17'").fetchone()[0] == 0
+              known_real = {
+                  'D14','D15','D24','D26','D27','D28','D29','D307','D51','D7','D9','D99',
+                  'M127','M14','M16','M17','M255','M31','M599','M63',
+                  'P10','P11','P12','P2','P20','P4','P5','P7','P9',
+              }
+              present = {str(row[0]).upper() for row in con.execute('SELECT device FROM device_records')}
+              missing = sorted(known_real - present)
+              assert not missing, missing
+          report = json.load(open('/tmp/device-entity-cleanup-migration.json', encoding='utf-8'))
+          assert report['affected_chunks'] > 0, report
+          assert report['changed_entity_rows'] > 0, report
+          print('MIGRATION_SUMMARY', json.dumps({k:v for k,v in report.items() if k != 'changes'}, sort_keys=True))
+          PY
+
+      - name: Run primary structured quality audit
+        run: |
+          python tools/audit_structured_knowledge_quality_v2.py \
+            --database resources/knowledge/fx3u_knowledge.sqlite \
+            --output structured-knowledge-quality-audit.json > /tmp/structured-knowledge-quality-audit.log
+          python - <<'PY'
+          import json
+          report = json.load(open('structured-knowledge-quality-audit.json', encoding='utf-8'))
+          assert report['integrity_check'] == 'ok'
+          assert report['foreign_key_violations'] == 0
+          assert report['issues'] == [], report['issues'][:20]
+          print('AUDIT_SEVERITY', json.dumps(report['issue_severity_counts'], sort_keys=True))
+          print('AUDIT_CODES', json.dumps(report['issue_code_counts'], sort_keys=True))
+          print('DEVICE_STATS', json.dumps(report['stats']['device_records'], sort_keys=True))
+          PY
+
+      - name: Run structured knowledge regression tests
+        run: |
+          python -m pytest -q \
+            tests/test_device_entity_cleanup.py \
+            tests/test_structured_knowledge_quality.py
+
+      - name: Run canonical RAG benchmark against migrated database
+        run: |
+          cp resources/knowledge/manifest.json /tmp/benchmark-manifest.json
+          python tools/evaluate_rag_benchmark.py \
+            --database resources/knowledge/fx3u_knowledge.sqlite \
+            --benchmark benchmarks/fx3u_rag_benchmark.jsonl \
+            --output /tmp/device-clean-rag-benchmark.json \
+            --manifest /tmp/benchmark-manifest.json \
+            --fail-under-recall-10 1.0
+          python - <<'PY'
+          import json
+          baseline = json.load(open('/tmp/baseline-benchmark.json', encoding='utf-8'))
+          current = json.load(open('/tmp/device-clean-rag-benchmark.json', encoding='utf-8'))
+          assert current['cases'] == 220, current['cases']
+          assert current['recall_at_10'] == 1.0, current['recall_at_10']
+          assert current['negative_accuracy'] == 1.0, current['negative_accuracy']
+          if baseline.get('recall_at_5') is not None:
+              assert current['recall_at_5'] >= float(baseline['recall_at_5']) - 0.01, (baseline, current)
+          print('BENCHMARK', json.dumps({
+              key: current[key] for key in (
+                  'cases','recall_at_1','recall_at_5','recall_at_10','mrr','negative_accuracy'
+              )
+          }, sort_keys=True))
+          PY
+
+      - name: Verify second migration is a no-op
+        run: |
+          python tools/reclassify_device_entities.py \
+            --database resources/knowledge/fx3u_knowledge.sqlite \
+            --report /tmp/device-entity-cleanup-second.json
+          python - <<'PY'
+          import json
+          report = json.load(open('/tmp/device-entity-cleanup-second.json', encoding='utf-8'))
+          assert report['affected_chunks'] == 0, report['affected_chunks']
+          assert report['changed_entity_rows'] == 0, report['changed_entity_rows']
+          assert report['changes'] == [], report['changes'][:10]
+          print('SECOND_MIGRATION', json.dumps({k:v for k,v in report.items() if k != 'changes'}, sort_keys=True))
+          PY
+
+      - name: Refresh database-derived manifest fields
+        run: |
+          python tools/refresh_knowledge_manifest.py \
+            --database resources/knowledge/fx3u_knowledge.sqlite \
+            --manifest resources/knowledge/manifest.json \
+            --migration-name device_entity_semantic_cleanup_v1
+
+      - name: Verify manifest and LFS state
+        run: |
+          python - <<'PY'
+          import hashlib, json, pathlib, sqlite3
+          db = pathlib.Path('resources/knowledge/fx3u_knowledge.sqlite')
+          manifest = json.load(open('resources/knowledge/manifest.json', encoding='utf-8'))
+          digest = hashlib.sha256(db.read_bytes()).hexdigest()
+          assert manifest['database_sha256'] == digest
+          assert manifest['database_bytes'] == db.stat().st_size
+          with sqlite3.connect(db) as con:
+              entity_count = con.execute('SELECT COUNT(*) FROM entity_index').fetchone()[0]
+              device_count = con.execute('SELECT COUNT(*) FROM device_records').fetchone()[0]
+          assert manifest['verification']['counts']['entity_index'] == entity_count
+          assert manifest['verification']['counts']['device_records'] == device_count
+          assert manifest['structured']['devices'] == device_count
+          print('MANIFEST_DB_SHA256', digest)
+          print('MANIFEST_ENTITY_COUNT', entity_count)
+          print('MANIFEST_DEVICE_COUNT', device_count)
+          PY
+          git lfs ls-files resources/knowledge/fx3u_knowledge.sqlite
+          git check-attr filter diff merge text -- resources/knowledge/fx3u_knowledge.sqlite
+          git lfs status
+
+      - name: Commit migrated database to fix branch only
+        env:
+          BRANCH: fix/rejected-json-repair-20260913
+        run: |
+          test "$(git branch --show-current)" = "$BRANCH"
+          git fetch origin "$BRANCH"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/$BRANCH)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add resources/knowledge/fx3u_knowledge.sqlite \
+                  resources/knowledge/manifest.json \
+                  structured-knowledge-quality-audit.json
+          git diff --cached --stat
+          git diff --cached --quiet && { echo 'No migration changes to commit'; exit 0; }
+          git commit -m "fix(rag): remove device entity contamination [skip ci]"
+          git push origin "HEAD:$BRANCH"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: applied-device-entity-cleanup-validation
+          path: |
+            /tmp/device-entity-cleanup-migration.json
+            /tmp/device-entity-cleanup-second.json
+            /tmp/device-clean-rag-benchmark.json
+            /tmp/structured-knowledge-quality-audit.log
+          if-no-files-found: ignore
