@@ -105,3 +105,16 @@ def test_no_error_records_do_not_absorb_following_error_row_semantics():
         if normalized_raw.casefold() != "no error":
             bad.append((manual_id, pdf_page, "raw_text", raw_text))
     assert bad == []
+
+
+def test_reserved_no_error_ranges_do_not_become_fake_error_rows():
+    with sqlite3.connect(_database()) as connection:
+        rows = connection.execute(
+            "SELECT manual_id,pdf_page,error_code,message FROM error_records WHERE error_code_norm <> '0000'"
+        ).fetchall()
+    bad = []
+    for manual_id, pdf_page, code, message in rows:
+        normalized = re.sub(r"^[\s⎯—-]+", "", str(message or "")).strip().casefold()
+        if normalized in {"no error", "to", "through"}:
+            bad.append((manual_id, pdf_page, code, message))
+    assert bad == []
