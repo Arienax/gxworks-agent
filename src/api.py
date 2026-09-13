@@ -39,6 +39,7 @@ from prompt_context_policy import (
 )
 from plc_json_validator import PLCJsonValidationError, parse_device_address
 from hardware_profiles import ensure_hardware_questions
+from instruction_registry import GENERATION_TYPED_OUTPUT_OPCODES, generation_app_instr_mnemonics
 from pattern_library import (
     assemble_prompt,
     build_workflow_prompt,
@@ -1579,6 +1580,11 @@ Rules:
   except for the minimum structural/protocol correction explicitly requested.
 - Use the supplied `baseline_subset` as the only program evidence.
 - `device_comments` may contain only addresses listed in `allowed_addresses`.
+- For every `APP_INSTR`, `opcode` MUST be one exact value from
+  `repair_contract.app_instr_opcode_enum`; never invent, translate, or alias a mnemonic.
+- Values in `repair_contract.app_instr_forbidden_typed_opcodes` must NOT be emitted as
+  `APP_INSTR`; represent them with the dedicated output types listed in
+  `repair_contract.dedicated_output_types`.
 - Do not output markdown, explanation, diagnostics, or a full ladder program.
 """
 
@@ -1609,6 +1615,15 @@ def repair_ladder_response(repair_payload, model_name, effort, *, mode,
         raise ValueError("Unsupported ladder repair mode")
     if not isinstance(repair_payload, dict):
         raise TypeError("repair_payload must be an object")
+    repair_payload = dict(repair_payload)
+    if mode == "partial":
+        plc_model = str(repair_payload.get("plc_model") or "FX3U").strip().upper() or "FX3U"
+        repair_payload["repair_contract"] = {
+            "plc_model": plc_model,
+            "app_instr_opcode_enum": list(generation_app_instr_mnemonics(plc_model)),
+            "app_instr_forbidden_typed_opcodes": sorted(GENERATION_TYPED_OUTPUT_OPCODES),
+            "dedicated_output_types": ["COIL", "PLS", "PLF", "TIMER", "COUNTER"],
+        }
     system_prompt = (PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT
                      if mode == "partial" else FORMAT_LADDER_REPAIR_SYSTEM_PROMPT)
     audit_section("repair_system_prompt", system_prompt,

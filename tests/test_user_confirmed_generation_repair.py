@@ -101,6 +101,13 @@ def test_structural_failure_waits_for_user_then_repairs_once(offline, tmp_path):
         assert "Retrieved-knowledge precedence" not in system_prompt
         assert len(system_prompt) < 5000
         assert repair_payload["repair_mode"] == "partial"
+        contract = repair_payload["repair_contract"]
+        assert contract["plc_model"] == "FX3U"
+        assert "MOV" in contract["app_instr_opcode_enum"]
+        assert "NOT_A_REAL_OPCODE" not in contract["app_instr_opcode_enum"]
+        assert not set(contract["app_instr_forbidden_typed_opcodes"]) & set(contract["app_instr_opcode_enum"])
+        assert set(contract["app_instr_forbidden_typed_opcodes"]) == {"OUT", "PLS", "PLF", "END"}
+        assert len(json.dumps(contract, ensure_ascii=False, separators=(",", ":"))) < 3000
         assert repair_payload["allowed_rung_ids"] == [1]
         assert [r["rung_id"] for r in repair_payload["baseline_subset"]["rungs"]] == [1]
         assert "用户明确确认的一次局部结构修复" in repair_payload["instruction"]
@@ -197,6 +204,8 @@ def test_one_repair_cascades_format_then_local_structure(offline,tmp_path):
         assert "PLC ladder local structural repair" in str(provider.requests[2].messages[0].content)
         followup=json.loads(str(provider.requests[2].messages[-1].content))
         assert followup["repair_mode"]=="partial"
+        assert "NOT_A_REAL_OPCODE" not in followup["repair_contract"]["app_instr_opcode_enum"]
+        assert "MOV" in followup["repair_contract"]["app_instr_opcode_enum"]
         assert followup["allowed_rung_ids"]==[1]
         assert service.projects.project(project)["version_count"]==1
 
