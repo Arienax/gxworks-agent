@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   patch:
-    if: github.event.head_commit.message == 'bootstrap: run generic structured instruction fix'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -31,34 +30,8 @@ jobs:
           PYTHONPATH: src
         run: |
           python -m compileall -q src tools/build_fx3u_knowledge_v3.py
-          python - <<'PY'
-          import knowledge_retriever_core as core
-
-          results = core.retrieve_knowledge(
-              'FX3U FMOV 指令的操作数、适用软元件和主要限制是什么？',
-              plc_model='FX3U',
-              task_type='generate',
-              top_k=5,
-              char_budget=9000,
-          )
-          assert results
-          text = '\n'.join(item['text'] for item in results[:3])
-          print(text[:6000])
-          assert '[STRUCTURED INSTRUCTION RECORD]' in text
-          assert 'applicable=' in text
-          assert 'KnM' in text
-
-          reset_results = core.retrieve_knowledge(
-              'FX3U 批量清零连续 M 软元件区间应该使用什么指令？',
-              plc_model='FX3U',
-              task_type='generate',
-              top_k=5,
-              char_budget=9000,
-          )
-          print('\n--- reset query ---\n')
-          print('\n'.join(item['text'] for item in reset_results[:3])[:6000])
-          assert any(str(item.get('instruction_opcode', '')).upper() == 'ZRST' for item in reset_results[:5])
-          PY
+          python -c "import knowledge_retriever_core as c; r=c.retrieve_knowledge('FX3U FMOV 指令的操作数、适用软元件和主要限制是什么？',plc_model='FX3U',task_type='generate',top_k=5,char_budget=9000); t='\\n'.join(x['text'] for x in r[:3]); print(t[:6000]); assert r and '[STRUCTURED INSTRUCTION RECORD]' in t and 'applicable=' in t and 'KnM' in t"
+          python -c "import knowledge_retriever_core as c; r=c.retrieve_knowledge('FX3U 批量清零连续 M 软元件区间应该使用什么指令？',plc_model='FX3U',task_type='generate',top_k=5,char_budget=9000); print('\\n'.join(x['text'] for x in r[:3])[:6000]); assert any(str(x.get('instruction_opcode','')).upper()=='ZRST' for x in r[:5])"
       - name: Commit branch-only fix
         run: |
           git config user.name "github-actions[bot]"
