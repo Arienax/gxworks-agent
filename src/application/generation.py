@@ -14,7 +14,7 @@ import api
 from application.base import model_call
 from application.jobs import JobCancelled
 from application.generation_repair import (
-    GenerationError, GenerationValidationError,
+    GenerationError, GenerationValidationError, candidate_base, validation_diagnostic,
 )
 from i18n import get_language, language_context, tr
 from config_manager import get_active_model_name, load_full_config
@@ -432,16 +432,63 @@ class GenerationWorkflow:
                 (self.output_dir / "repair_candidate.json").write_text(json_str, encoding="utf-8")
 
             validation_errors = (PLCJsonValidationError, PLCIRValidationError, json.JSONDecodeError)
+
+            def cascade_format_repair(error):
+                nonlocal prepared_candidate, repair_attempts
+                if not self.format_repair or not isinstance(error, (PLCJsonValidationError, PLCIRValidationError)):
+                    return None
+                try:
+                    base = candidate_base(json.loads(json_str))
+                except json.JSONDecodeError:
+                    return None
+                if base is None:
+                    return None
+                import re
+                diagnostic = validation_diagnostic(error)
+                path = str(diagnostic.get("path") or "")
+                match = re.search(r"(?:^|\.)rungs\.(\d+)(?:\.|$)", path)
+                if not match:
+                    return None
+                index = int(match.group(1))
+                if index >= len(base["rungs"]):
+                    return None
+                rung = base["rungs"][index]
+                rung_id = rung.get("rung_id") if isinstance(rung, dict) else None
+                if isinstance(rung_id, bool) or not isinstance(rung_id, int):
+                    return None
+                from contract_repair import patch_device_addresses
+                addresses = sorted(patch_device_addresses({"mode":"partial","device_comments":{},"rungs":[rung],"delete_rung_ids":[]}))
+                payload = {"repair_mode":"partial","plc_model":self.plc_model,
+                    "instruction":f"JSON 格式已经恢复，但结构校验仍发现局部协议错误。只修复该梯级的协议/结构表示，不改变控制语义、地址、参数或触点极性。错误位置：{path}；原因：{diagnostic.get('reason','invalid_ladder_structure')}",
+                    "allowed_rung_ids":[rung_id],"allowed_addresses":addresses,
+                    "baseline_subset":{"device_comments":{},"rungs":[copy.deepcopy(rung)]}}
+                self._emit("progress", {"stage":"structural_repair","severity":"warning",
+                    "message":tr('JSON 格式已恢复；正在对新暴露的局部结构错误执行一次有界修复。')})
+                def on_reasoning(token): self._emit("reasoning", token)
+                def on_content(token): self._emit("content", token)
+                if self.dependencies.repair_response is not None:
+                    _r, local_text = model_call(self.dependencies.repair_response, payload, self.model_name, self.effort, mode="partial", on_reasoning_chunk=on_reasoning, on_content_chunk=on_content)
+                else:
+                    _r, local_text = model_call(api.repair_ladder_response, payload, self.model_name, self.effort, mode="partial", on_reasoning_chunk=on_reasoning, on_content_chunk=on_content)
+                partial = json.loads(clean_json_text(local_text))
+                prepared_candidate = prepare_ladder_candidate(partial, plc_model=self.plc_model, program_name=self.program_name, revision=self.revision,
+                    confirmed_spec=self.confirmed_context, previous_ladder=base, repair_mode=True, allowed_rung_ids={rung_id},
+                    allowed_addresses=set(addresses), task_type="contract_repair", on_progress=emit_parsing_progress)
+                validation_messages.extend(prepared_candidate["validation_messages"])
+                repair_attempts += 1
+                return prepared_candidate["ladder"]
+
             try:
                 parsed_json = parse_candidate(json_str)
             except validation_errors as error:
-                # No hidden semantic re-generation loop. Preserve the rejected
-                # candidate privately so an operator can explicitly request one repair.
-                persist_repair_candidate()
-                raise GenerationValidationError(
-                    [error], attempts=0, max_attempts=0, language=self.response_language,
-                    stop_reason="final_validation",
-                ) from error
+                try:
+                    parsed_json = cascade_format_repair(error)
+                except validation_errors as followup_error:
+                    persist_repair_candidate()
+                    raise GenerationValidationError([followup_error], attempts=1, max_attempts=1, language=self.response_language, stop_reason="explicit_repair_followup_failed") from followup_error
+                if parsed_json is None:
+                    persist_repair_candidate()
+                    raise GenerationValidationError([error], attempts=0, max_attempts=0, language=self.response_language, stop_reason="final_validation") from error
 
             if self.target_mode == "ladder":
                 program_ir = prepared_candidate["program_ir"]

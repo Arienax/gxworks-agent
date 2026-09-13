@@ -160,6 +160,45 @@ def test_failed_partial_repair_keeps_original_local_scope(offline, tmp_path):
         assert service.projects.project(project)["version_count"] == 1
 
 
+class FormatThenStructuralProvider:
+    def __init__(self): self.requests=[]
+    def stream(self, request):
+        self.requests.append(request)
+        if len(self.requests)==1:
+            yield TextDelta('{"device_comments":{"X0":"Input","Y0":"Output"},"rungs":[')
+        elif len(self.requests)==2:
+            payload=_ladder()
+            payload["rungs"][0]["branches"][0]["outputs"]=[{"type":"APP_INSTR","opcode":"NOT_A_REAL_OPCODE","operands":["Y0"],"label":None}]
+            yield TextDelta(json.dumps(payload,ensure_ascii=False))
+        else:
+            yield TextDelta(json.dumps({"mode":"partial","device_comments":{},"rungs":[_ladder()["rungs"][0]],"delete_rung_ids":[]},ensure_ascii=False))
+
+
+def test_one_repair_cascades_format_then_local_structure(offline,tmp_path):
+    provider=FormatThenStructuralProvider()
+    service=WorkbenchService(tmp_path/"workspace",tmp_path/"state",model_factory=lambda:(provider,{"model":"offline"}))
+    with TestClient(_app(service.store.base_dir,service.state_dir,service=service),base_url=ORIGIN) as client:
+        headers=_login(client)
+        project=client.post("/api/projects",json={"name":"format-cascade"},headers=headers).json()["id"]
+        service.store.set_confirmed_spec(project,{"summary":"X0 controls Y0","io_table":[],"parameters":[]})
+        first=client.post("/api/jobs",headers=headers,json={"project_id":project,"kind":"generation","request_id":"format-bad","text":"X0 controls Y0","response_language":"zh-CN"}).json()["id"]
+        service.jobs._futures[first].result(timeout=15)
+        assert client.get(f"/api/jobs/{first}").json()["status"]=="failed"
+        response=client.post(f"/api/jobs/{first}/repair",headers=headers,json={"request_id":"format-cascade-once"})
+        assert response.status_code==202,response.text
+        job=response.json()["id"]
+        service.jobs._futures[job].result(timeout=15)
+        completed=client.get(f"/api/jobs/{job}").json()
+        assert completed["status"]=="completed",completed
+        assert len(provider.requests)==3
+        assert "PLC ladder JSON format repair" in str(provider.requests[1].messages[0].content)
+        assert "PLC ladder local structural repair" in str(provider.requests[2].messages[0].content)
+        followup=json.loads(str(provider.requests[2].messages[-1].content))
+        assert followup["repair_mode"]=="partial"
+        assert followup["allowed_rung_ids"]==[1]
+        assert service.projects.project(project)["version_count"]==1
+
+
 def test_failure_ui_offers_explicit_repair_not_fake_automatic_attempts():
     text = open("web/src/features/JobFailure.tsx", encoding="utf-8").read()
     assert "让 AI 修复" in text
