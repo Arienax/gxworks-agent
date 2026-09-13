@@ -35,10 +35,17 @@ _NUMBERS = {'request_index', 'attempt_index', 'message_count', 'message_chars', 
             'output_tokens', 'total_tokens', 'reasoning_tokens', 'max_tokens',
             'max_completion_tokens', 'elapsed_ms', 'status_code', 'line', 'column',
             'position', 'original_line', 'original_column', 'original_position',
-            'exception_count', 'event_count'}
+            'exception_count', 'event_count', 'system_messages', 'user_messages',
+            'assistant_messages', 'tool_messages', 'system_chars', 'user_chars',
+            'assistant_chars', 'tool_chars', 'image_count', 'raw_chars',
+            'distance_from_end', 'decoded_prefix_chars', 'suffix_chars', 'key_count',
+            'rung_count', 'device_comment_count', 'violation_count', 'attempt_count',
+            'max_attempts'}
 _BOOLEANS = {'stream', 'refusal_present', 'finish_seen', 'at_or_near_end', 'fenced',
-             'bom', 'traceback_truncated', 'content_present'}
-_IDS = {'model', 'provider', 'contract', 'error_type', 'code', 'function'}
+             'bom', 'traceback_truncated', 'content_present', 'prefix_complete_object',
+             'punctuation_only_tail'}
+_IDS = {'model', 'provider', 'contract', 'error_type', 'code', 'function',
+        'stop_reason', 'tail_class'}
 _ENUMS = {
     'stage': {'workflow', 'model_request', 'provider_transport', 'response_acceptance', 'publication'},
     'status': {'completed', 'failed', 'cancelled', 'interrupted', 'running'},
@@ -61,7 +68,10 @@ _ENUMS = {
                    'Invalid \\escape', 'Invalid \\uXXXX escape', 'Unexpected UTF-8 BOM (decode using utf-8-sig)'},
     'reason': {'invalid_json_object', 'invalid_prose_field', 'invalid_code_field',
                'unsupported_script', 'non_english_script', 'japanese_script',
-               'latin_prose', 'ambiguous_han_only'},
+               'latin_prose', 'ambiguous_han_only', 'invalid_shared_input',
+               'invalid_ladder_structure', 'field_too_long', 'repair_base_invalid',
+               'repair_identity_invalid', 'repair_shape_invalid', 'repair_scope_violation',
+               'repair_no_progress'},
 }
 
 
@@ -93,6 +103,8 @@ def _safe_fields(fields):
                 result[key] = value
         elif key == 'content_sha256' and isinstance(value, str) and re.fullmatch('[a-f0-9]{64}', value):
             result[key] = value
+        elif key == 'path' and isinstance(value, str) and re.fullmatch(r'[A-Za-z0-9_$.[\]-]{1,180}', value):
+            result[key] = value
         elif key == 'json' and isinstance(value, dict):
             result[key] = _safe_fields(value)
         elif key in ('exceptions', 'frames', 'violations') and isinstance(value, (list, tuple)):
@@ -107,11 +119,7 @@ def _safe_fields(fields):
 
 
 def json_diagnostic(content):
-    """Inspect using the same fence handling as response_language.inspect_response.
-
-    Coordinates include both the parsed JSON and the original model content.
-    No surrounding characters, property names or values are returned.
-    """
+    """Inspect JSON shape and coordinates without recording any source text."""
     text = content if isinstance(content, str) else ''
     raw = text.strip()
     offset = len(text) - len(text.lstrip())
@@ -123,18 +131,48 @@ def json_diagnostic(content):
         inner = raw.split('\n', 1)[1].rsplit('```', 1)[0]
         offset += raw.index('\n') + 1 + len(inner) - len(inner.lstrip())
         raw = inner.strip()
-    result = {'envelope': envelope, 'fenced': fenced, 'bom': raw.startswith('\ufeff')}
+    result = {'envelope': envelope, 'fenced': fenced, 'bom': raw.startswith('\ufeff'),
+              'raw_chars': len(raw)}
+
+    def add_object_shape(payload):
+        if not isinstance(payload, dict):
+            return
+        result['key_count'] = len(payload)
+        if isinstance(payload.get('rungs'), list):
+            result['rung_count'] = len(payload['rungs'])
+        if isinstance(payload.get('device_comments'), dict):
+            result['device_comment_count'] = len(payload['device_comments'])
+
     try:
         payload = json.loads(raw)
         result.update(json_status='valid_object' if isinstance(payload, dict) else 'non_object',
                       root_type=type(payload).__name__)
+        add_object_shape(payload)
     except json.JSONDecodeError as exc:
         original = min(len(text), offset + exc.pos)
         result.update(json_status='empty' if not raw else 'syntax_error', json_error=exc.msg,
                       line=exc.lineno, column=exc.colno, position=exc.pos,
                       original_position=original, original_line=text.count('\n', 0, original) + 1,
                       original_column=original - text.rfind('\n', 0, original),
+                      distance_from_end=max(0, len(raw) - exc.pos),
                       at_or_near_end=exc.pos >= max(0, len(raw) - 8))
+        if exc.msg == 'Extra data':
+            try:
+                prefix, end = json.JSONDecoder().raw_decode(raw)
+            except (json.JSONDecodeError, RecursionError, ValueError):
+                prefix, end = None, 0
+            if isinstance(prefix, dict):
+                suffix = raw[end:].strip()
+                if suffix.startswith(('{', '[')):
+                    tail_class = 'second_json'
+                elif any(char.isalnum() or char in "\"'" for char in suffix):
+                    tail_class = 'semantic'
+                else:
+                    tail_class = 'punctuation'
+                result.update(prefix_complete_object=True, decoded_prefix_chars=end,
+                              suffix_chars=len(suffix), tail_class=tail_class,
+                              punctuation_only_tail=tail_class == 'punctuation')
+                add_object_shape(prefix)
     except (RecursionError, ValueError):
         result.update(json_status='too_deep')
     return _safe_fields(result)
@@ -225,12 +263,28 @@ def begin_request(request, provider):
         return
     session.request_index += 1
     _attempt.set(0)
-    # Strings only: do not call repr()/str() on image or tool payload objects.
-    total = sum(len(m.content) for m in request.messages if isinstance(getattr(m, 'content', None), str))
+    stats = {'system_messages': 0, 'user_messages': 0, 'assistant_messages': 0,
+             'tool_messages': 0, 'system_chars': 0, 'user_chars': 0,
+             'assistant_chars': 0, 'tool_chars': 0, 'image_count': 0}
+    roles = {'SystemMessage': 'system', 'UserMessage': 'user',
+             'AssistantMessage': 'assistant', 'ToolResult': 'tool'}
+    total = 0
+    for message in request.messages:
+        role = roles.get(type(message).__name__)
+        content = getattr(message, 'content', None)
+        chars = len(content) if isinstance(content, str) else 0
+        total += chars
+        if role:
+            stats[role + '_messages'] += 1
+            stats[role + '_chars'] += chars
+        images = getattr(message, 'images', ())
+        if isinstance(images, (list, tuple)):
+            stats['image_count'] += len(images)
     emit('model_request', stage='model_request', model=request.model,
          provider=type(provider).__name__, contract=request.response_contract.name,
          format=request.response_contract.format, stream=request.stream,
-         message_count=len(request.messages), message_chars=total, tool_count=len(request.tools))
+         message_count=len(request.messages), message_chars=total,
+         tool_count=len(request.tools), **stats)
 
 
 def begin_attempt():
@@ -267,9 +321,26 @@ def exception_record(error, *, event='workflow_exception', stage='workflow'):
                 name = 'external/' + Path(frame.f_code.co_filename).name
             frames.append({'file': name, 'line': tb.tb_lineno, 'function': frame.f_code.co_name})
             tb = tb.tb_next
-        chain.append({'error_type':type(error).__name__, 'code':getattr(error, 'code', ''),
-                      'status_code':getattr(error, 'status_code', None), 'frames':frames[-32:],
-                      'traceback_truncated':len(frames) > 32})
+        item = {'error_type': type(error).__name__, 'code': getattr(error, 'code', ''),
+                'status_code': getattr(error, 'status_code', None), 'frames': frames[-32:],
+                'traceback_truncated': len(frames) > 32}
+        detail = getattr(error, 'diagnostics', None)
+        if isinstance(detail, dict):
+            for key in ('violation_count', 'attempt_count', 'max_attempts', 'stop_reason'):
+                item[key] = detail.get(key)
+            if isinstance(detail.get('violations'), list):
+                item['violations'] = detail['violations'][:32]
+        raw_violations = getattr(error, 'violations', None)
+        if isinstance(raw_violations, (list, tuple)):
+            item['violation_count'] = len(raw_violations)
+            item['violations'] = [
+                {'path': getattr(value, 'path', ''), 'reason': getattr(value, 'reason', '')}
+                for value in raw_violations[:32]
+            ]
+        if isinstance(error, json.JSONDecodeError):
+            item.update(json_error=error.msg, line=error.lineno,
+                        column=error.colno, position=error.pos)
+        chain.append(item)
         error = error.__cause__ or error.__context__
     emit(event, stage=stage, exceptions=chain, exception_count=len(chain))
 
@@ -306,6 +377,17 @@ def export_diagnostics(state_dir, job):
     from application.job_errors import public_error_details
     meta['error_details'] = public_error_details(job.get('error_details'))
     meta['error_code'] = _identifier(job.get('error_code') or 'none')
+    failure_analysis = {}
+    for event_name in ('model_request', 'provider_result', 'model_response',
+                       'response_rejected', 'workflow_exception'):
+        matched = next((item for item in reversed(records) if item.get('event') == event_name), None)
+        if matched is not None:
+            failure_analysis[event_name] = {
+                key: value for key, value in matched.items()
+                if key not in {'schema_version', 'event', 'timestamp', 'job_id'}
+            }
+    if failure_analysis:
+        meta['failure_analysis'] = failure_analysis
     # Capture release identity only; never serialize the environment/config.
     roots = [Path(sys.executable).parent] if getattr(sys, 'frozen', False) else [_ROOT.parent]
     for root in roots:
@@ -320,11 +402,12 @@ def export_diagnostics(state_dir, job):
     text = json.dumps(meta, ensure_ascii=False, indent=2) + '\n'
     guide = ('GXWorks task diagnostics\n\n'
              'This archive contains metadata only, not model replies, prompts, API keys or PLC projects.\n'
-             'Read summary.json, then diagnostics.jsonl in chronological order.\n'
-             'Find response_rejected/model_response for JSON line, column and parser error;\n'
+             'Read summary.json failure_analysis first, then diagnostics.jsonl in chronological order.\n'
+             'model_request shows per-role character counts and image count without message text.\n'
+             'model_response JSON diagnostics show parser position, distance from end, complete-object prefix status, tail class/length and ladder shape counts.\n'
+             'workflow_exception includes source file/function/line plus validation attempts, stop_reason and safe violation paths when available.\n'
              'provider_result contains finish_reason when the provider actually supplied it.\n'
              'unknown / finish_seen=false is not evidence of token truncation.\n'
-             'workflow_exception contains source file, function and line, but no locals/code/message.\n'
              'not_captured means this job predates diagnostic instrumentation; reproduce once on the new build.\n'
              'Output is not uploaded automatically. Inspect before sharing.\n')
     target = io.BytesIO()
