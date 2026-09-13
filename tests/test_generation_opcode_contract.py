@@ -1,6 +1,7 @@
 from instruction_registry import generation_app_instr_mnemonics
 from plc_generation_contract import ladder_response_schema
 from plc_generation_context import _select_system_prompt
+from plc_json_validator import APP_INSTR_WHITELIST
 
 
 def _opcode_rule(schema):
@@ -17,6 +18,8 @@ def test_model_specific_app_instr_enum_matches_registry():
     assert fx3 and fx5
     assert _opcode_rule(ladder_response_schema(plc_model="FX3U"))["enum"] == list(fx3)
     assert _opcode_rule(ladder_response_schema(plc_model="FX5U"))["enum"] == list(fx5)
+    assert set(fx3) <= APP_INSTR_WHITELIST
+    assert set(fx5) <= APP_INSTR_WHITELIST
     for forbidden in ("OUT", "PLS", "PLF", "END", "NOT_A_REAL_OPCODE"):
         assert forbidden not in fx3
         assert forbidden not in fx5
