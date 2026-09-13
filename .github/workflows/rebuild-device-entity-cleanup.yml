@@ -8,7 +8,7 @@ on:
       - tools/build_fx3u_knowledge_clean.py
       - tools/build_fx3u_knowledge.py
       - tools/reclassify_device_entities.py
-      - tools/audit_structured_knowledge_quality_v2.py
+      - tools/audit_structured_knowledge_quality.py
       - tests/test_device_entity_cleanup.py
       - .github/workflows/rebuild-device-entity-cleanup.yml
   workflow_dispatch:
@@ -216,7 +216,7 @@ jobs:
 
       - name: Audit migrated database with primary evidence-aware audit
         run: |
-          python tools/audit_structured_knowledge_quality_v2.py \
+          python tools/audit_structured_knowledge_quality.py \
             --database /tmp/device-clean.sqlite \
             --output /tmp/device-clean-structured-audit.json > /tmp/device-clean-structured-audit.log
           python - <<'PY'
