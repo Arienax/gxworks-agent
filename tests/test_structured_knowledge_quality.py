@@ -79,3 +79,29 @@ def test_completion_flags_exclude_generic_status_relays():
 
 def test_manual_specific_execution_complete_flag_is_preserved():
     assert "M8012" in _flags("ZRN", "fxcpu_basic_applied_m")
+
+
+def test_no_error_records_do_not_absorb_following_error_row_semantics():
+    with sqlite3.connect(_database()) as connection:
+        rows = connection.execute(
+            """
+            SELECT manual_id,pdf_page,message,cause,corrective_action,raw_text
+            FROM error_records
+            WHERE error_code_norm='0000'
+            ORDER BY manual_id,pdf_page,id
+            """
+        ).fetchall()
+    assert rows
+    bad = []
+    for manual_id, pdf_page, message, cause, corrective_action, raw_text in rows:
+        normalized_message = re.sub(r"^[\s⎯—-]+", "", str(message or "")).strip()
+        if normalized_message.casefold() != "no error":
+            bad.append((manual_id, pdf_page, "message", message))
+        if str(cause or "").strip():
+            bad.append((manual_id, pdf_page, "cause", cause))
+        if str(corrective_action or "").strip():
+            bad.append((manual_id, pdf_page, "corrective_action", corrective_action))
+        normalized_raw = re.sub(r"^[\s⎯—-]+", "", str(raw_text or "")).strip()
+        if normalized_raw.casefold() != "no error":
+            bad.append((manual_id, pdf_page, "raw_text", raw_text))
+    assert bad == []
