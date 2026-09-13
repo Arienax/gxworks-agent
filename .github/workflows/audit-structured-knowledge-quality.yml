@@ -5,6 +5,7 @@ on:
     branches: [fix/rejected-json-repair-20260913]
     paths:
       - tools/audit_structured_knowledge_quality.py
+      - tools/audit_structured_knowledge_quality_v2.py
       - tools/audit_device_placeholder_evidence.py
       - tools/audit_error_record_alignment.py
       - tools/audit_error_record_semantics.py
@@ -33,7 +34,7 @@ jobs:
           python-version: '3.12'
       - name: Audit device records, error records, and completion flags
         run: |
-          python tools/audit_structured_knowledge_quality.py \
+          python tools/audit_structured_knowledge_quality_v2.py \
             --database resources/knowledge/fx3u_knowledge.sqlite \
             --output structured-knowledge-quality-audit.json > structured-knowledge-quality-audit.log
       - name: Collect device placeholder evidence
