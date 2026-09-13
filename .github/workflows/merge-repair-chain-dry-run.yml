@@ -1,0 +1,35 @@
+name: Inspect repair chain merge
+
+on:
+  push:
+    branches: [fix/prompt-context-slim-20260913]
+    paths:
+      - .github/workflows/merge-repair-chain-dry-run.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/prompt-context-slim-20260913
+          fetch-depth: 0
+      - name: Inspect merge
+        shell: bash
+        run: |
+          git fetch origin fix/rejected-json-repair-20260913
+          set +e
+          git merge --no-commit --no-ff 939477426ca6b1b5ba8ae32597f1babc49ed5af9
+          rc=$?
+          set -e
+          echo "merge_rc=$rc"
+          echo "--- status ---"
+          git status --short
+          echo "--- conflicts ---"
+          git diff --name-only --diff-filter=U || true
+          echo "--- conflict markers ---"
+          git grep -n '^<<<<<<<\|^=======\|^>>>>>>>' -- . || true
+          exit 0
