@@ -34,5 +34,5 @@ jobs:
       - name: Commit validated repair scope fix
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: fix(repair): constrain native repair to baseline scope
+          commit_message: "fix(repair): constrain native repair to baseline scope"
           file_pattern: src tests
