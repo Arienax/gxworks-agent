@@ -52,6 +52,7 @@ jobs:
             tests/test_generation_repair_workflow.py `
             tests/test_generation_rejected_json_repair.py `
             tests/test_user_confirmed_generation_repair.py `
+            tests/test_instruction_applicability_rag.py `
             tests/test_analysis_design_rag.py `
             tests/test_io_protocol_and_gx_fastpath.py `
             tests/test_generation_delivery.py `
