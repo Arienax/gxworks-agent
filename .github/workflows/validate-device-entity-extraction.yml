@@ -125,6 +125,39 @@ jobs:
         run: python -m pip install pypdf pdfplumber numpy==2.3.2 pytest==9.1.1
       - name: Run extraction regression tests
         run: python -m pytest -q tests/test_device_entity_extraction_rules.py
+      - name: Download pinned official manual sources
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+          import urllib.request
+
+          config_path = Path('resources/knowledge/sources.json')
+          payload = json.loads(config_path.read_text(encoding='utf-8'))
+          for item in payload['manuals']:
+              destination = config_path.parent / item['file']
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              request = urllib.request.Request(
+                  item['official_url'],
+                  headers={'User-Agent': 'Mozilla/5.0 gxworks-agent knowledge-build'},
+              )
+              digest = hashlib.sha256()
+              size = 0
+              with urllib.request.urlopen(request, timeout=180) as response, destination.open('wb') as stream:
+                  while True:
+                      block = response.read(1024 * 1024)
+                      if not block:
+                          break
+                      stream.write(block)
+                      digest.update(block)
+                      size += len(block)
+              actual = digest.hexdigest()
+              expected = item['sha256'].lower()
+              if actual != expected:
+                  raise SystemExit(f"SHA256 mismatch for {item['id']}: {actual} != {expected}")
+              print(f"verified {item['id']} {size} bytes {actual}")
+          PY
       - name: Rebuild candidate SQLite
         run: python tools/build_fx3u_knowledge_v3.py
       - name: Restore supporting corpus and dense index
@@ -155,6 +188,7 @@ jobs:
           print('DEVICE_REPAIR_OK', len(keep))
           PY
       - name: Upload candidate patch and audit
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: device-entity-extraction-candidate
@@ -164,4 +198,4 @@ jobs:
             tools/audit_structured_knowledge_quality.py
             tests/test_device_entity_extraction_rules.py
             rebuilt-audit.json
-          if-no-files-found: error
+          if-no-files-found: warn
