@@ -28,7 +28,7 @@ _ROOT = Path(__file__).resolve().parent
 _active = ContextVar('runtime_diagnostics', default=None)
 _attempt = ContextVar('diagnostic_attempt', default=0)
 _ALLOWED_EVENTS = {'job_started', 'job_finished', 'model_request', 'provider_request', 'provider_result', 'attempt_finished',
-                   'model_response', 'response_rejected', 'model_accepted',
+                   'model_response', 'response_rejected', 'model_accepted', 'context_audit',
                    'provider_exception', 'workflow_exception', 'logging_limit'}
 _NUMBERS = {'request_index', 'attempt_index', 'message_count', 'message_chars', 'tool_count',
             'content_chars', 'reasoning_chars', 'chunk_count', 'choice_count', 'input_tokens',
@@ -40,7 +40,10 @@ _NUMBERS = {'request_index', 'attempt_index', 'message_count', 'message_chars', 
             'assistant_chars', 'tool_chars', 'image_count', 'raw_chars',
             'distance_from_end', 'decoded_prefix_chars', 'suffix_chars', 'key_count',
             'rung_count', 'device_comment_count', 'violation_count', 'attempt_count',
-            'max_attempts'}
+            'max_attempts', 'context_request_index', 'context_section_count',
+            'included_section_count', 'excluded_section_count', 'included_section_chars',
+            'excluded_section_chars', 'retrieval_section_count', 'retrieval_context_chars',
+            'dropped_sections'}
 _BOOLEANS = {'stream', 'refusal_present', 'finish_seen', 'at_or_near_end', 'fenced',
              'bom', 'traceback_truncated', 'content_present', 'prefix_complete_object',
              'punctuation_only_tail'}
@@ -110,7 +113,6 @@ def _safe_fields(fields):
         elif key in ('exceptions', 'frames', 'violations') and isinstance(value, (list, tuple)):
             result[key] = [_safe_fields(item) for item in value[:32] if isinstance(item, dict)]
         elif key == 'file' and isinstance(value, str):
-            # Export only source-relative file locations, never filesystem roots.
             if re.fullmatch(r'(src|external)/[A-Za-z0-9_./-]{1,180}', value) and '..' not in value:
                 result[key] = value
         elif key == 'timestamp' and isinstance(value, str) and re.fullmatch(r'[0-9T:.+Z-]{10,40}', value):
@@ -216,7 +218,6 @@ class DiagnosticSession:
                 if os.name != 'nt':
                     path.parent.chmod(0o700)
                 size = path.stat().st_size if path.exists() else 0
-                # Reserve room for error + completion even for unusually long agent runs.
                 if size >= _MAX_FILE - 48 * 1024 and event not in {'workflow_exception', 'job_finished'}:
                     self.limited = True
                     return
@@ -354,7 +355,6 @@ def export_diagnostics(state_dir, job):
     if path.is_file():
         if path.stat().st_size > _MAX_FILE:
             raise ValueError('Diagnostic file exceeds export limit')
-        # Reproject at export: a hand-edited/corrupt log must not become an arbitrary file download.
         with path.open(encoding='utf-8') as stream:
             for line in stream:
                 try:
@@ -369,7 +369,6 @@ def export_diagnostics(state_dir, job):
             else:
                 capture_status = ('export_truncated' if valid_count > _MAX_EXPORT_LINES else
                                   'captured' if records else 'unreadable')
-    # Do not include job.result or the input snapshot. They can contain user data.
     meta = {'schema_version':_SCHEMA, 'job_id':job_id, 'capture_status':capture_status,
             'job':_safe_fields({key: job.get(key) for key in ('kind', 'status', 'project_id', 'version_id')}),
             'event_count':len(records), 'content_included':False, 'keys_included':False,
@@ -378,7 +377,7 @@ def export_diagnostics(state_dir, job):
     meta['error_details'] = public_error_details(job.get('error_details'))
     meta['error_code'] = _identifier(job.get('error_code') or 'none')
     failure_analysis = {}
-    for event_name in ('model_request', 'provider_result', 'model_response',
+    for event_name in ('model_request', 'context_audit', 'provider_result', 'model_response',
                        'response_rejected', 'workflow_exception'):
         matched = next((item for item in reversed(records) if item.get('event') == event_name), None)
         if matched is not None:
@@ -388,7 +387,6 @@ def export_diagnostics(state_dir, job):
             }
     if failure_analysis:
         meta['failure_analysis'] = failure_analysis
-    # Capture release identity only; never serialize the environment/config.
     roots = [Path(sys.executable).parent] if getattr(sys, 'frozen', False) else [_ROOT.parent]
     for root in roots:
         info = root / 'build-info.json'
@@ -403,6 +401,7 @@ def export_diagnostics(state_dir, job):
     guide = ('GXWorks task diagnostics\n\n'
              'This archive contains metadata only, not model replies, prompts, API keys or PLC projects.\n'
              'Read summary.json failure_analysis first, then diagnostics.jsonl in chronological order.\n'
+             'context_audit shows context policy, included/excluded section counts and RAG manual chunk character totals without source text.\n'
              'model_request shows per-role character counts and image count without message text.\n'
              'model_response JSON diagnostics show parser position, distance from end, complete-object prefix status, tail class/length and ladder shape counts.\n'
              'workflow_exception includes source file/function/line plus validation attempts, stop_reason and safe violation paths when available.\n'
