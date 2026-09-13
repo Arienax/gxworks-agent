@@ -1,7 +1,9 @@
 """Synchronous generation orchestration shared by desktop and local services.
 
 No GUI, workspace activation, GX automation or simulator operations belong here.
-Model response acceptance remains inside api/collect_response before callbacks.
+Model response acceptance remains inside api/collect_response before callbacks,
+but ladder JSON syntax rejections may be retained privately for deterministic
+cleanup or an explicit operator-confirmed repair.
 """
 from dataclasses import dataclass, fields
 from pathlib import Path
@@ -126,14 +128,82 @@ class GenerationWorkflow:
 
         Once the user has confirmed the specification, this workflow does not
         reinterpret that intent with approach heuristics, regex-derived semantic
-        requirements, or hidden model repair loops.  Strong semantic/static
+        requirements, or hidden model repair loops. Strong semantic/static
         checks remain available to Review, simulator and GX execution paths.
+
+        A completed ladder response rejected *only* for invalid JSON syntax is
+        treated differently from transport/language/schema-field rejection: its
+        raw candidate is retained privately, because it can either be repaired
+        deterministically (for a redundant closing delimiter) or exposed through
+        the existing explicit repair flow without paying for the whole generation
+        again.
         """
         try:
             import json
 
             def emit_parsing_progress(message):
                 self._emit("progress", {"stage": "parsing", "message": str(message)})
+
+            def clean_json_text(value):
+                text = str(value or "").strip()
+                if text.startswith("```"):
+                    text = text.split("\n", 1)[1] if "\n" in text else ""
+                if text.endswith("```"):
+                    text = text.rsplit("\n", 1)[0]
+                return text.strip()
+
+            def rejected_json_candidate(error):
+                """Return the private raw ladder candidate for JSON-only rejection.
+
+                The collector deliberately withholds rejected bytes from normal
+                callbacks/publication. Generation may still stage those same bytes
+                privately so the operator can repair them explicitly. No other
+                response-acceptance failure is downgraded here.
+                """
+                from model_provider import ResponseRejectedError
+
+                if not isinstance(error, ResponseRejectedError):
+                    return None
+                if [(item.path, item.reason) for item in error.violations] != [
+                    ("content", "invalid_json_object")
+                ]:
+                    return None
+                raw_response = getattr(error, "raw_response", None)
+                message = getattr(raw_response, "message", None)
+                content = getattr(message, "content", None)
+                if not isinstance(content, str) or not content.strip():
+                    return None
+                return clean_json_text(content)
+
+            def trim_redundant_json_tail(candidate):
+                """Remove only a tiny redundant closing-delimiter tail.
+
+                This is intentionally narrower than a generic JSON fixer. It
+                accepts the exact safe case seen in production: a complete JSON
+                object followed by one or a few stray '}' / ']' characters. It
+                never drops prose, a second object, or arbitrary trailing data.
+                """
+                try:
+                    json.loads(candidate)
+                    return candidate, False
+                except json.JSONDecodeError as error:
+                    if error.msg != "Extra data":
+                        return candidate, False
+
+                stripped = candidate.lstrip()
+                try:
+                    value, end = json.JSONDecoder().raw_decode(stripped)
+                except json.JSONDecodeError:
+                    return candidate, False
+                suffix = stripped[end:].strip()
+                if (
+                    not isinstance(value, dict)
+                    or not suffix
+                    or len(suffix) > 8
+                    or any(char not in "}]" for char in suffix)
+                ):
+                    return candidate, False
+                return stripped[:end], True
 
             self.output_dir.mkdir(parents=True, exist_ok=True)
             validation_messages = []
@@ -179,43 +249,87 @@ class GenerationWorkflow:
                 streaming_succeeded = True
             except Exception as stream_err:
                 from model_provider import ResponseRejectedError
-                if isinstance(stream_err, (ResponseRejectedError, JobCancelled)):
+
+                if isinstance(stream_err, JobCancelled):
                     raise
-                self._emit("progress", {
-                    "stage": "fallback",
-                    "severity": "warning",
-                    "message": tr('流式调用失败，切换普通模式：{v0}', v0=stream_err),
-                })
-                print(tr('流式调用失败，降级至普通模式: {v0}', v0=stream_err))
+                rejected_candidate = (
+                    rejected_json_candidate(stream_err)
+                    if self.target_mode == "ladder"
+                    else None
+                )
+                if rejected_candidate is not None:
+                    # The provider completed successfully; only the JSON syntax
+                    # acceptance gate failed. Keep the bytes private and let the
+                    # generation parser decide whether a safe local cleanup is
+                    # possible. Otherwise it becomes an explicit repairable job.
+                    full_content = rejected_candidate
+                    streaming_succeeded = True
+                    self._emit("progress", {
+                        "stage": "format_recovery",
+                        "severity": "warning",
+                        "message": tr('模型回复 JSON 格式验收失败；正在检查是否可安全恢复，否则保留候选供显式修复。'),
+                    })
+                elif isinstance(stream_err, ResponseRejectedError):
+                    raise
+                else:
+                    self._emit("progress", {
+                        "stage": "fallback",
+                        "severity": "warning",
+                        "message": tr('流式调用失败，切换普通模式：{v0}', v0=stream_err),
+                    })
+                    print(tr('流式调用失败，降级至普通模式: {v0}', v0=stream_err))
 
             # Transport fallback is not a semantic repair. It obtains the same
             # requested candidate once when streaming itself failed.
             if streaming_succeeded and full_content:
-                json_str = full_content.strip()
-                if json_str.startswith("```"):
-                    json_str = json_str.split("\n", 1)[1]
-                if json_str.endswith("```"):
-                    json_str = json_str.rsplit("\n", 1)[0]
-                json_str = json_str.strip()
+                json_str = clean_json_text(full_content)
             else:
-                json_str = model_call(
-                    self.dependencies.generate_json or api.generate_model_json,
-                    model_user_input,
-                    self.model_name,
-                    self.effort,
-                    self.target_mode,
-                    is_edit_mode=is_edit_mode,
-                    conversation_history=self.conversation_history,
-                    confirmed_context=self.confirmed_context,
-                    persist_history=False,
-                    task_type=self.task_type,
-                    current_version_json=self.current_version_json,
-                    plc_model=self.plc_model,
-                    image_attachments=self.image_attachments,
-                )
+                try:
+                    json_str = model_call(
+                        self.dependencies.generate_json or api.generate_model_json,
+                        model_user_input,
+                        self.model_name,
+                        self.effort,
+                        self.target_mode,
+                        is_edit_mode=is_edit_mode,
+                        conversation_history=self.conversation_history,
+                        confirmed_context=self.confirmed_context,
+                        persist_history=False,
+                        task_type=self.task_type,
+                        current_version_json=self.current_version_json,
+                        plc_model=self.plc_model,
+                        image_attachments=self.image_attachments,
+                    )
+                except Exception as fallback_err:
+                    if isinstance(fallback_err, JobCancelled):
+                        raise
+                    rejected_candidate = (
+                        rejected_json_candidate(fallback_err)
+                        if self.target_mode == "ladder"
+                        else None
+                    )
+                    if rejected_candidate is None:
+                        raise
+                    json_str = rejected_candidate
+                    self._emit("progress", {
+                        "stage": "format_recovery",
+                        "severity": "warning",
+                        "message": tr('普通模式回复 JSON 格式验收失败；正在检查是否可安全恢复，否则保留候选供显式修复。'),
+                    })
 
             if not json_str:
                 raise GenerationError(tr('大模型未返回合法数据'))
+
+            # Do not pay for another model call when the response is already one
+            # complete object plus a redundant terminal bracket/brace. Anything
+            # less obvious remains a failure and is offered to explicit repair.
+            json_str, local_tail_repair = trim_redundant_json_tail(json_str)
+            if local_tail_repair:
+                validation_messages.append(tr('已移除模型 JSON 末尾多余的闭合符号'))
+                self._emit("progress", {
+                    "stage": "format_recovered",
+                    "message": tr('已安全移除 JSON 末尾多余闭合符号；继续解析候选程序。'),
+                })
 
             prepared_candidate = None
 
