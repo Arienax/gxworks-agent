@@ -1,22 +1,22 @@
-import copy
 import json
 
 import pytest
 
 import api
-from inspection_engine import review_ladder
+from ladder_repair import (
+    normalize_app_instr_out_outputs,
+    normalize_legacy_counter_outputs,
+)
 from pattern_library import classify_request, load_library
 from plc_json_validator import PLCJsonValidationError, validate_ladder_full
+from plc_workflow_review import review_ladder
 
 
-def _ladder(*rungs, comments=None):
-    return {"device_comments": comments or {}, "rungs": list(rungs)}
-
-
-def _output_rung(rung_id, output, inputs=None):
+def _output_rung(rung_id, output, *, inputs=None, header=None, note=""):
     return {
         "rung_id": rung_id,
-        "header_element": None,
+        "debug_note": note,
+        "header_element": header,
         "shared_inputs": [],
         "branches": [
             {
@@ -29,104 +29,202 @@ def _output_rung(rung_id, output, inputs=None):
     }
 
 
-def test_timer_must_have_reachable_reset_path():
+def _ladder(*rungs, comments=None):
+    return {"device_comments": comments or {}, "rungs": list(rungs)}
+
+
+def test_timer_and_counter_have_distinct_json_types():
     data = _ladder(
         _output_rung(
             1,
-            {"type": "TIMER", "address": "T0", "value": "K10", "label": "常开定时器"},
-            inputs=[{"type": "NO", "address": "M8000", "label": "RUN常ON"}],
-        ),
-        comments={"M8000": "RUN常ON", "T0": "常开定时器"},
-    )
-
-    with pytest.raises(PLCJsonValidationError, match="cannot reset"):
-        validate_ladder_full(data, "FX3U")
-
-
-def test_timer_reset_path_can_be_created_by_control_state():
-    data = _ladder(
-        _output_rung(
-            1,
-            {"type": "TIMER", "address": "T0", "value": "K10", "label": "定时器"},
-            inputs=[{"type": "NO", "address": "M0", "label": "阶段"}],
-        ),
-        comments={"M0": "阶段", "T0": "定时器"},
-    )
-    validate_ladder_full(data, "FX3U")
-
-
-def test_timer_self_nc_oscillator_is_rejected_as_scan_dependent():
-    data = _ladder(
-        _output_rung(
-            1,
-            {"type": "TIMER", "address": "T0", "value": "K10", "label": "闪烁定时"},
-            inputs=[{"type": "NC", "address": "T0", "label": "自复位"}],
-        ),
-        comments={"T0": "闪烁定时"},
-    )
-
-    with pytest.raises(PLCJsonValidationError, match="scan-dependent"):
-        validate_ladder_full(data, "FX3U")
-    assert any(item.category == "timer_oscillator" for item in review_ladder(data))
-
-
-def test_timer_enable_from_its_own_done_contact_is_rejected():
-    data = _ladder(
-        _output_rung(
-            1,
-            {"type": "TIMER", "address": "T0", "value": "K10", "label": "错误定时"},
-            inputs=[{"type": "NO", "address": "T0", "label": "完成"}],
-        ),
-        comments={"T0": "错误定时"},
-    )
-
-    with pytest.raises(PLCJsonValidationError, match="self-reference"):
-        validate_ladder_full(data, "FX3U")
-
-
-def test_two_phase_timer_oscillator_has_explicit_state_reset_paths():
-    data = _ladder(
-        _output_rung(
-            1,
-            {"type": "TIMER", "address": "T0", "value": "K5", "label": "OFF相"},
-            inputs=[{"type": "NC", "address": "M0", "label": "OFF相"}],
+            {"type": "TIMER", "address": "T0", "value": "K10", "label": "延时"},
+            inputs=[{"type": "NO", "address": "X0", "label": "运行"}],
         ),
         _output_rung(
             2,
-            {"type": "APP_INSTR", "opcode": "SET", "operands": ["M0"], "label": "进入ON相"},
-            inputs=[{"type": "NO", "address": "T0", "label": "OFF相完成"}],
+            {"type": "COUNTER", "address": "C0", "value": "K5", "label": "计数"},
+            inputs=[{"type": "P", "address": "X1", "label": "计数脉冲"}],
         ),
-        _output_rung(
-            3,
-            {"type": "TIMER", "address": "T1", "value": "K5", "label": "ON相"},
-            inputs=[{"type": "NO", "address": "M0", "label": "ON相"}],
-        ),
-        _output_rung(
-            4,
-            {"type": "APP_INSTR", "opcode": "RST", "operands": ["M0"], "label": "返回OFF相"},
-            inputs=[{"type": "NO", "address": "T1", "label": "ON相完成"}],
-        ),
-        comments={"M0": "闪烁相位", "T0": "OFF相", "T1": "ON相"},
     )
 
-    validate_ladder_full(data, "FX3U")
-    findings = review_ladder(data)
-    assert not any(item.category == "timer_oscillator" for item in findings)
+    assert validate_ladder_full(data, "FX3U") is data
 
 
-def test_held_coil_toggle_is_rejected_as_fake_scan_toggle():
+@pytest.mark.parametrize(
+    ("output_type", "address"),
+    (("TIMER", "C0"), ("COUNTER", "T0")),
+)
+def test_timer_counter_address_mismatch_is_rejected(output_type, address):
     data = _ladder(
         _output_rung(
             1,
-            {"type": "APP_INSTR", "opcode": "SET", "operands": ["M30"], "label": "置位"},
-            inputs=[{"type": "NC", "address": "M30", "label": "反相"}],
-        ),
+            {"type": output_type, "address": address, "value": "K5", "label": ""},
+            inputs=[{"type": "NO", "address": "X0", "label": ""}],
+        )
+    )
+
+    with pytest.raises(PLCJsonValidationError):
+        validate_ladder_full(data, "FX3U")
+
+
+def test_legacy_timer_c_counter_is_converted_before_new_validation():
+    legacy = _ladder(
         _output_rung(
-            2,
-            {"type": "APP_INSTR", "opcode": "RST", "operands": ["M30"], "label": "复位"},
-            inputs=[{"type": "NO", "address": "M30", "label": "本身"}],
+            1,
+            {"type": "TIMER", "address": "C1", "value": "K10", "label": "累计"},
+            inputs=[{"type": "P", "address": "X0", "label": "计数脉冲"}],
+        )
+    )
+
+    normalized, addresses = normalize_legacy_counter_outputs(legacy)
+
+    assert addresses == ["C1"]
+    assert normalized["rungs"][0]["branches"][0]["outputs"][0]["type"] == "COUNTER"
+    assert legacy["rungs"][0]["branches"][0]["outputs"][0]["type"] == "TIMER"
+    validate_ladder_full(normalized, "FX3U")
+
+
+@pytest.mark.parametrize(
+    ("operands", "expected_type", "expected_address"),
+    (
+        (["Y0"], "COIL", "Y0"),
+        (["M10"], "COIL", "M10"),
+        (["T2", "K50"], "TIMER", "T2"),
+        (["C3", "K8"], "COUNTER", "C3"),
+    ),
+)
+def test_app_instr_out_is_normalized_to_typed_output(
+    operands, expected_type, expected_address
+):
+    legacy = _ladder(
+        _output_rung(
+            1,
+            {
+                "type": "APP_INSTR",
+                "opcode": "OUT",
+                "operands": operands,
+                "label": "模型误用的 OUT",
+            },
+            inputs=[{"type": "NO", "address": "X0", "label": "使能"}],
+        )
+    )
+
+    normalized, converted = normalize_app_instr_out_outputs(legacy)
+    output = normalized["rungs"][0]["branches"][0]["outputs"][0]
+
+    assert output["type"] == expected_type
+    assert output["address"] == expected_address
+    assert output["label"] == "模型误用的 OUT"
+    if len(operands) == 2:
+        assert output["value"] == operands[1]
+    assert converted
+    assert legacy["rungs"][0]["branches"][0]["outputs"][0]["type"] == "APP_INSTR"
+    validate_ladder_full(normalized, "FX3U")
+
+
+def test_ambiguous_app_instr_out_is_left_for_precise_hard_rejection():
+    malformed = _ladder(
+        _output_rung(
+            1,
+            {
+                "type": "APP_INSTR",
+                "opcode": "OUT",
+                "operands": ["X0"],
+                "label": "输入不能作为线圈",
+            },
+        )
+    )
+
+    normalized, converted = normalize_app_instr_out_outputs(malformed)
+
+    assert converted == []
+    with pytest.raises(PLCJsonValidationError, match="typed COIL, TIMER, or COUNTER"):
+        validate_ladder_full(normalized, "FX3U")
+
+
+def test_m8000_timer_cannot_be_used_as_a_blink_oscillator():
+    data = _ladder(
+        _output_rung(
+            1,
+            {"type": "TIMER", "address": "T3", "value": "K5", "label": "1Hz闪烁"},
+            inputs=[{"type": "NO", "address": "M8000", "label": "运行常通"}],
         ),
-        comments={"M30": "翻转状态"},
+        comments={"T3": "闪烁定时器"},
+    )
+
+    with pytest.raises(PLCJsonValidationError, match="stays done instead of oscillating"):
+        validate_ladder_full(data, "FX3U")
+
+    findings = review_ladder(data, plc_model="FX3U")
+    assert any(
+        item.category == "timer_oscillator"
+        and item.address == "T3"
+        and item.severity == "error"
+        for item in findings
+    )
+
+
+def test_m8000_power_on_delay_and_state_gated_delay_remain_valid():
+    power_on_delay = _ladder(
+        _output_rung(
+            1,
+            {"type": "TIMER", "address": "T0", "value": "K10", "label": "上电延时"},
+            inputs=[{"type": "NO", "address": "M8000", "label": "运行常通"}],
+        )
+    )
+    state_delay = _ladder(
+        _output_rung(
+            1,
+            {"type": "TIMER", "address": "T1", "value": "K30", "label": "步骤延时"},
+            inputs=[{"type": "NO", "address": "M8000", "label": "运行常通"}],
+            header={"type": "BLOCK_INPUT", "expression": "= D0 K1", "label": "步骤1"},
+        )
+    )
+
+    validate_ladder_full(power_on_delay, "FX3U")
+    validate_ladder_full(state_delay, "FX3U")
+    assert not any(item.category == "timer_oscillator" for item in review_ladder(power_on_delay))
+
+
+def test_same_edge_complementary_set_reset_is_not_a_valid_toggle():
+    data = _ladder(
+        {
+            "rung_id": 1,
+            "debug_note": "用SET/RST模拟ALT翻转",
+            "header_element": None,
+            "shared_inputs": [
+                {"type": "NO", "address": "Y12", "label": "使能"},
+                {"type": "P", "address": "T3", "label": "到时上升沿"},
+            ],
+            "branches": [
+                {
+                    "branch_id": 1,
+                    "y_offset_level": 0,
+                    "inputs": [{"type": "NC", "address": "M30", "label": "当前OFF"}],
+                    "outputs": [
+                        {
+                            "type": "APP_INSTR",
+                            "opcode": "SET",
+                            "operands": ["M30"],
+                            "label": "置位",
+                        }
+                    ],
+                },
+                {
+                    "branch_id": 2,
+                    "y_offset_level": 1,
+                    "inputs": [{"type": "NO", "address": "M30", "label": "当前ON"}],
+                    "outputs": [
+                        {
+                            "type": "APP_INSTR",
+                            "opcode": "RST",
+                            "operands": ["M30"],
+                            "label": "复位",
+                        }
+                    ],
+                },
+            ],
+        }
     )
 
     with pytest.raises(PLCJsonValidationError, match="do not safely toggle M30"):
@@ -151,7 +249,7 @@ def test_clock_relay_contact_is_the_valid_one_hertz_blink_shape():
     assert not any(item.category == "timer_oscillator" for item in review_ladder(data))
 
 
-def test_generation_prompt_keeps_timer_semantics_without_legacy_run_relay_example():
+def test_generation_prompt_keeps_timer_semantics_ahead_of_rag_context():
     classification = classify_request("FX3U M3 以1Hz闪烁，M4以0.5Hz闪烁")
     prompt = api._select_system_prompt(
         "ladder",
