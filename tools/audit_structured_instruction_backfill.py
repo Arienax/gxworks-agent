@@ -3,9 +3,9 @@
 
 The audit compares a baseline SQLite knowledge database with a candidate database,
 then inspects only instruction rows whose operands_json changed from [] to a
-non-empty structured value.  It deliberately avoids opcode-specific allow/deny
-rules: checks are based on record shape, manual evidence, semantic descriptions,
-and cross-manual consistency.
+non-empty structured value. It avoids opcode-specific rules: checks are based on
+record shape, source-table evidence, semantic descriptions, and cross-manual
+consistency.
 """
 
 from __future__ import annotations
@@ -19,7 +19,9 @@ import sqlite3
 from typing import Any
 
 RAW_BIT_FAMILIES = {"X", "Y", "M", "S"}
+DEVICE_HEADER_TOKENS = {"X", "Y", "M", "T", "C", "S", "D", "R", "V", "Z", "K", "H", "E", "P"}
 PLACEHOLDER_RE = re.compile(r"^[A-Z](?:\d{0,3})?$")
+BLANK_MARKERS = {"", "<blank>", "blank", "-", "—"}
 
 
 def _load_rows(path: Path) -> dict[tuple[str, str], dict[str, Any]]:
@@ -77,6 +79,10 @@ def _normalized_device_set(item: dict[str, Any]) -> set[str]:
     return {str(value).strip() for value in values if str(value).strip()}
 
 
+def _is_blank(value: str) -> bool:
+    return str(value or "").strip().casefold() in BLANK_MARKERS
+
+
 def _issue(severity: str, code: str, row: dict[str, Any], **details: Any) -> dict[str, Any]:
     return {
         "severity": severity,
@@ -113,13 +119,35 @@ def audit_record(connection: sqlite3.Connection, row: dict[str, Any]) -> list[di
             issues.append(_issue("error", "execution_pin_as_operand", row, index=index, position=position))
         if position and position not in evidence_upper:
             issues.append(_issue("error", "operand_missing_from_source_evidence", row, index=index, position=position))
-        if not description and not data_type and not devices:
-            issues.append(_issue("warning", "operand_has_no_semantics", row, index=index, position=position))
+
+        description_blank = _is_blank(description)
+        data_type_blank = _is_blank(data_type)
+        if description_blank and data_type_blank and not devices:
+            issues.append(_issue("warning", "operand_has_no_semantics", row, index=index, position=position, description=description))
+        if description and description_blank:
+            issues.append(_issue("error", "blank_marker_used_as_description", row, index=index, position=position, description=description))
         if isinstance(item.get("applicable_devices"), list) and not devices:
             issues.append(_issue("warning", "empty_applicable_device_list", row, index=index, position=position))
 
+        # Device-family header cells are common in Applicable-devices matrices.
+        # If one was emitted as an operand with no independent semantics, the
+        # parser almost certainly consumed a header row as an operand row.
+        if position in DEVICE_HEADER_TOKENS and position not in {"S", "D"}:
+            if description_blank and data_type_blank and not devices:
+                issues.append(
+                    _issue(
+                        "error",
+                        "device_header_misread_as_operand",
+                        row,
+                        index=index,
+                        position=position,
+                        description=description,
+                    )
+                )
+
         semantic = f"{description} {data_type}".casefold()
-        if "word device" in semantic:
+        word_only = "word device" in semantic and "bit or word" not in semantic and "bit/word" not in semantic
+        if word_only:
             raw_bits = sorted(devices.intersection(RAW_BIT_FAMILIES))
             if raw_bits:
                 issues.append(
@@ -133,7 +161,7 @@ def audit_record(connection: sqlite3.Connection, row: dict[str, Any]) -> list[di
                         description=description,
                     )
                 )
-        if re.search(r"\b(bit device|head bit)\b", semantic) and devices:
+        if re.search(r"\b(bit device|head bit)\b", semantic) and "bit or word" not in semantic and devices:
             if not devices.intersection(RAW_BIT_FAMILIES):
                 issues.append(
                     _issue(
@@ -147,8 +175,6 @@ def audit_record(connection: sqlite3.Connection, row: dict[str, Any]) -> list[di
                     )
                 )
 
-        # The applicability matrix is compact.  Very large sets usually indicate
-        # a header-row alignment failure rather than a real operand capability.
         if len(devices) > 16:
             issues.append(
                 _issue(
@@ -251,10 +277,27 @@ def main() -> int:
         for item in row.get("operands_json") or []
         if isinstance(item, dict)
     )
+    examples_by_position: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in changed:
+        for item in row.get("operands_json") or []:
+            if not isinstance(item, dict):
+                continue
+            position = str(item.get("position") or "").upper()
+            if len(examples_by_position[position]) < 6:
+                examples_by_position[position].append(
+                    {
+                        "manual_id": row["manual_id"],
+                        "opcode": row["opcode"],
+                        "description": item.get("description", ""),
+                        "data_type": item.get("data_type", ""),
+                        "applicable_devices": item.get("applicable_devices", []),
+                    }
+                )
     report = {
         "backfilled_records": len(changed),
         "manual_counts": dict(sorted(manual_counts.items())),
         "operand_position_counts": dict(sorted(position_counts.items())),
+        "examples_by_position": dict(sorted(examples_by_position.items())),
         "issue_severity_counts": dict(sorted(severity_counts.items())),
         "issue_code_counts": dict(sorted(code_counts.items())),
         "issues": issues,
@@ -264,8 +307,6 @@ def main() -> int:
     if args.output:
         args.output.write_text(rendered, encoding="utf-8")
     print(rendered)
-    # Audit findings are data to review, not an automatic build failure.  The
-    # caller decides which generic extraction defects should become blockers.
     return 0
 
 
