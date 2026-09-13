@@ -31,6 +31,8 @@ jobs:
           python-version: '3.12'
       - name: Install offline builder dependencies
         run: python -m pip install pypdf pdfplumber
+      - name: Refine generic parser alignment and audit checks
+        run: python tools/bootstrap_refine_structured_operand_alignment.py
       - name: Repair bootstrap module loading
         run: |
           python - <<'PY'
@@ -90,7 +92,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/bootstrap-fix-structured-operand-alignment.yml tools/bootstrap_fix_structured_operand_alignment.py
+          git rm .github/workflows/bootstrap-fix-structured-operand-alignment.yml tools/bootstrap_fix_structured_operand_alignment.py tools/bootstrap_refine_structured_operand_alignment.py
           git add tools/build_fx3u_knowledge_v3.py resources/knowledge/fx3u_knowledge.sqlite resources/knowledge/manifest.json tools/audit_structured_instruction_backfill.py
           git commit -m "fix(rag): align structured operand rows with manual tables"
           git push origin HEAD:fix/rejected-json-repair-20260913
