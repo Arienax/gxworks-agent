@@ -5,7 +5,6 @@ on:
     branches: [fix/rejected-json-repair-20260913]
     paths:
       - tools/audit_structured_knowledge_quality.py
-      - tools/audit_structured_knowledge_quality_v2.py
       - tools/audit_device_placeholder_evidence.py
       - tools/audit_error_record_alignment.py
       - tools/audit_error_record_semantics.py
@@ -26,7 +25,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: fix/rejected-json-repair-20260913
           lfs: true
           fetch-depth: 1
       - uses: actions/setup-python@v5
@@ -34,7 +32,7 @@ jobs:
           python-version: '3.12'
       - name: Audit device records, error records, and completion flags
         run: |
-          python tools/audit_structured_knowledge_quality_v2.py \
+          python tools/audit_structured_knowledge_quality.py \
             --database resources/knowledge/fx3u_knowledge.sqlite \
             --output structured-knowledge-quality-audit.json > structured-knowledge-quality-audit.log
       - name: Collect device placeholder evidence
@@ -99,9 +97,21 @@ jobs:
           print('--- FIRST 80 ERROR SEMANTIC ISSUES ---')
           for item in semantic['issues'][:80]: print(json.dumps(item, ensure_ascii=False, sort_keys=True))
 
+          device_placeholder_warnings = [
+              item for item in report['issues']
+              if item.get('code') == 'possible_operand_placeholder_device_record'
+          ]
+          unresolved_device_evidence = [
+              item for item in evidence['candidates']
+              if item.get('suggested_class') in {'ambiguous', 'operand_placeholder_likely'}
+          ]
           assert report['integrity_check'] == 'ok'
           assert report['foreign_key_violations'] == 0
           assert not [item for item in report['issues'] if item['severity'] == 'error']
+          assert device_placeholder_warnings == [], device_placeholder_warnings
+          assert unresolved_device_evidence == [], unresolved_device_evidence
+          assert report['stats']['device_records']['placeholder_like_device_records'] == 0
+          assert report['stats']['device_records']['n_syntax_device_records'] == 0
           assert not [item for item in alignment['issues'] if item['severity'] == 'error']
           assert not [item for item in semantic['issues'] if item['severity'] == 'error']
           forbidden = {
