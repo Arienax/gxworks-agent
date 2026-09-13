@@ -119,8 +119,9 @@ new = '''def instruction_completion_flags(pages: list[PageArtifact]) -> list[str
 
     A generic occurrence of the word ``flag`` is intentionally insufficient:
     Mitsubishi instruction pages also contain zero, carry, borrow, error,
-    busy/ready, limit and control flags. Relay-local line segments keep an
-    adjacent status row from inheriting the semantics of a completion row.
+    busy/ready, limit and control flags. Completion phrases are assigned to the
+    nearest M8xxx relay on the same source line, which prevents a nearby status
+    relay from inheriting another relay's completion semantics.
     """
     completion_semantics = re.compile(
         r"\\b(?:instruction\\s+)?execution\\s+complete(?:d)?\\b|"
@@ -133,30 +134,45 @@ new = '''def instruction_completion_flags(pages: list[PageArtifact]) -> list[str
     )
     relay_re = re.compile(r"\\bM8\\d{3}\\b", flags=re.I)
     flags: list[str] = []
+
+    def remember_nearest(context: str, allowed_relays: set[str] | None = None) -> None:
+        relay_matches = list(relay_re.finditer(context))
+        semantic_matches = list(completion_semantics.finditer(context))
+        if not relay_matches or not semantic_matches:
+            return
+        for semantic in semantic_matches:
+            semantic_center = (semantic.start() + semantic.end()) / 2
+            candidates = [
+                relay for relay in relay_matches
+                if allowed_relays is None or relay.group(0).upper() in allowed_relays
+            ]
+            if not candidates:
+                continue
+            relay = min(
+                candidates,
+                key=lambda item: abs(((item.start() + item.end()) / 2) - semantic_center),
+            )
+            value = relay.group(0).upper()
+            if value not in flags:
+                flags.append(value)
+
     for page in pages:
-        lines = page.clean_text.splitlines()
-        for line_index, raw_line in enumerate(lines):
-            line = normalize_line(raw_line)
-            matches = list(relay_re.finditer(line))
-            for index, match in enumerate(matches):
-                left = 0 if index == 0 else (matches[index - 1].end() + match.start()) // 2
-                right = len(line) if index + 1 == len(matches) else (match.end() + matches[index + 1].start()) // 2
-                context = line[left:right]
-                if not completion_semantics.search(context):
-                    neighbors: list[str] = [context]
-                    if line_index > 0:
-                        previous = normalize_line(lines[line_index - 1])
-                        if not relay_re.search(previous):
-                            neighbors.insert(0, previous)
-                    if line_index + 1 < len(lines):
-                        following = normalize_line(lines[line_index + 1])
-                        if not relay_re.search(following):
-                            neighbors.append(following)
-                    context = " ".join(value for value in neighbors if value)
-                if completion_semantics.search(context):
-                    value = match.group(0).upper()
-                    if value not in flags:
-                        flags.append(value)
+        lines = [normalize_line(line) for line in page.clean_text.splitlines()]
+        for line_index, line in enumerate(lines):
+            relays = {match.group(0).upper() for match in relay_re.finditer(line)}
+            if not relays:
+                continue
+            if completion_semantics.search(line):
+                remember_nearest(line, relays)
+                continue
+            parts: list[str] = []
+            if line_index > 0 and not relay_re.search(lines[line_index - 1]):
+                parts.append(lines[line_index - 1])
+            parts.append(line)
+            if line_index + 1 < len(lines) and not relay_re.search(lines[line_index + 1]):
+                parts.append(lines[line_index + 1])
+            context = " ".join(part for part in parts if part)
+            remember_nearest(context, relays)
     return flags
 '''
 assert text.count(old) == 1, 'completion flag parser block not found exactly once'
