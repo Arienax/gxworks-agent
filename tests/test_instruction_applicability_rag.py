@@ -35,8 +35,8 @@ def test_structured_operand_applicability_is_extracted_from_official_tables():
     assert "M" in first.get("applicable_devices", [])
 
 
-def test_structured_operand_rows_do_not_leak_applicable_device_headers():
-    """Applicable-device matrix headers must never become operand records."""
+def test_structured_operand_rows_are_globally_well_formed():
+    """Manual-table headers and PDF extraction debris must not become operands."""
     with sqlite3.connect(_database()) as connection:
         rows = connection.execute(
             "SELECT manual_id,opcode,operands_json FROM instructions WHERE operands_json <> '[]'"
@@ -46,19 +46,32 @@ def test_structured_operand_rows_do_not_leak_applicable_device_headers():
     for manual_id, opcode, payload in rows:
         for item in json.loads(payload or "[]"):
             if not isinstance(item, dict):
+                bad.append((manual_id, opcode, "operand_not_object", repr(item)))
                 continue
-            position = str(item.get("position") or "").upper()
+            position = str(item.get("position") or "").strip().upper()
             description = str(item.get("description") or "").strip()
+            data_type = str(item.get("data_type") or "").strip()
+            devices = item.get("applicable_devices") or []
+
             if position == "X":
-                bad.append((manual_id, opcode, position, description))
+                bad.append((manual_id, opcode, "device_header_as_operand", position))
             if description.casefold() in {"<blank>", "blank"}:
-                bad.append((manual_id, opcode, position, description))
+                bad.append((manual_id, opcode, "blank_description", description))
             if description and re.fullmatch(
                 r"(?:(?:\[GLYPH-[0-9A-F]+\]|\(cid:\d+\))\d*\s*)+",
                 description,
                 flags=re.I,
             ):
-                bad.append((manual_id, opcode, position, description))
+                bad.append((manual_id, opcode, "glyph_only_description", description))
+            if description and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", description) and len(description) <= 3:
+                bad.append((manual_id, opcode, "table_token_description", description))
+            if description and len(description) < 24:
+                words = re.findall(r"[A-Za-z]+", description)
+                if words and not any(len(word) >= 4 for word in words) and not re.search(r"\d{2,}", description):
+                    bad.append((manual_id, opcode, "low_quality_description", description))
+            if not description and not data_type and not devices:
+                bad.append((manual_id, opcode, "operand_has_no_semantics", position))
+
     assert bad == []
 
 
