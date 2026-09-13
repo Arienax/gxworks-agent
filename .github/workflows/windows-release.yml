@@ -2,7 +2,6 @@ name: Windows Web Release
 
 # Ordinary source pushes do not publish. The marker is only for an explicitly
 # requested bootstrap release; later releases use a v* tag or workflow_dispatch.
-# Bootstrap prerelease trigger: 2026-09-13.
 on:
   push:
     branches: [main, fix/generation-result-refresh]
