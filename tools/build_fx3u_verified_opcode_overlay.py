@@ -49,11 +49,15 @@ def _strong_identity(opcode, row):
     }
     if opcode not in variants:
         return False
-    text = " ".join((str(row.get("title") or ""), str(row.get("summary") or ""))).upper()
-    # Require an exact FNC heading identity.  This rejects extraction aliases
-    # such as FLDE when the heading is FLDEL, and BK when the heading is BK+.
-    pattern = rf"FNC\s*0*{re.escape(fnc)}\s*[–—\-:/]*\s*{re.escape(opcode)}(?=\s|/|$)"
-    return bool(re.search(pattern, text, flags=re.I))
+    # Use the section title, not the summary.  Summary text may contain OCR
+    # splits such as "FLDE L" that can make a prefix look like a real opcode.
+    # The next-character guard also rejects BK when the official heading is BK+.
+    title = str(row.get("title") or "").upper()
+    pattern = (
+        rf"FNC\s*0*{re.escape(fnc)}\s*[–—\-:/]*\s*"
+        rf"{re.escape(opcode)}(?![A-Z0-9_+\-])"
+    )
+    return bool(re.search(pattern, title, flags=re.I))
 
 
 def build(database=DEFAULT_DB):
