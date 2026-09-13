@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install offline build dependencies
+      - name: Install offline repair dependencies
         run: python -m pip install pypdf pdfplumber numpy pytest
       - name: Patch generic structured knowledge extractors
         run: |
@@ -55,19 +55,16 @@ jobs:
           print('synthetic completion flags',flags)
           print('synthetic error codes',range_codes)
           PY
-          python -m compileall -q tools/build_fx3u_knowledge_v3.py
-      - name: Rebuild authoritative and supporting knowledge stores
-        run: |
-          python tools/build_fx3u_knowledge_v3.py
-          python tools/import_design_patterns.py
-          python tools/import_gxw2_skill.py
-          python tools/tune_gxw2_skill_ranking.py
-          python tools/build_dense_embeddings.py
-      - name: Evaluate rebuilt retrieval corpus
+          python -m compileall -q tools/build_fx3u_knowledge_v3.py tools/bootstrap_repair_structured_knowledge_inplace.py
+      - name: Repair prebuilt corpus from stored authoritative artifacts
+        run: python tools/bootstrap_repair_structured_knowledge_inplace.py
+      - name: Rebuild dense embeddings for changed chunks
+        run: python tools/build_dense_embeddings.py
+      - name: Evaluate repaired retrieval corpus
         env:
           PYTHONPATH: src
         run: python tools/evaluate_rag_benchmark.py --fail-under-recall-10 0.98
-      - name: Audit rebuilt structured knowledge
+      - name: Audit repaired structured knowledge
         run: |
           python tools/audit_structured_knowledge_quality.py \
             --database resources/knowledge/fx3u_knowledge.sqlite \
@@ -94,7 +91,7 @@ jobs:
               'completion_flags:weak_completion_semantics',
           }
           assert not forbidden.intersection(q['issue_code_counts']), q['issue_code_counts']
-          assert not [x for x in q['issues'] if x['domain']=='error_records' and x['severity']=='error']
+          assert not [x for x in q['issues'] if x['severity']=='error']
           assert not [x for x in a['issues'] if x['severity']=='error']
           assert not [x for x in s['issues'] if x['severity']=='error']
           con=sqlite3.connect('resources/knowledge/fx3u_knowledge.sqlite')
@@ -107,18 +104,37 @@ jobs:
           PYTHONPATH: src
         run: |
           python -m pytest -q tests/test_instruction_applicability_rag.py tests/test_structured_knowledge_quality.py
-      - name: Record audit summary in manifest
+      - name: Record audit summary and refreshed counts in manifest
         run: |
           python - <<'PY'
-          import json
+          import json, sqlite3
           from pathlib import Path
           path=Path('resources/knowledge/manifest.json')
           manifest=json.loads(path.read_text(encoding='utf-8'))
           quality=json.load(open('structured-knowledge-quality-audit.json',encoding='utf-8'))
           alignment=json.load(open('error-record-alignment-audit.json',encoding='utf-8'))
           semantic=json.load(open('error-record-semantic-audit.json',encoding='utf-8'))
+          con=sqlite3.connect('resources/knowledge/fx3u_knowledge.sqlite')
+          counts={
+              'chunks': con.execute('SELECT COUNT(*) FROM chunks').fetchone()[0],
+              'chunks_fts': con.execute('SELECT COUNT(*) FROM chunks_fts').fetchone()[0],
+              'device_records': con.execute('SELECT COUNT(*) FROM device_records').fetchone()[0],
+              'entity_index': con.execute('SELECT COUNT(*) FROM entity_index').fetchone()[0],
+              'error_records': con.execute('SELECT COUNT(*) FROM error_records').fetchone()[0],
+              'instructions': con.execute('SELECT COUNT(*) FROM instructions').fetchone()[0],
+              'instruction_aliases': con.execute('SELECT COUNT(*) FROM instruction_aliases').fetchone()[0],
+              'vector_embeddings': con.execute('SELECT COUNT(*) FROM vector_embeddings').fetchone()[0],
+          }
+          con.close()
+          manifest['builder_version']='3.0.3'
+          manifest.setdefault('stats',{})['entities']=counts['entity_index']
+          manifest.setdefault('structured',{})['devices']=counts['device_records']
+          manifest['structured']['errors']=counts['error_records']
+          manifest['structured']['instructions']=counts['instructions']
+          manifest.setdefault('verification',{}).setdefault('counts',{}).update(counts)
           manifest['structured_knowledge_quality_audit']={
-              'method':'generic source-driven audit of device records, error records, and completion flags',
+              'method':'generic source-driven audit and repair of device records, error records, and completion flags',
+              'source':'stored authoritative page_artifacts/tables plus structured instruction records',
               'baseline_detected':{
                   'operand_position_device_index_overlaps':97,
                   'cross_family_device_ranges':7,
@@ -126,8 +142,8 @@ jobs:
                   'no_error_row_bleed_records':30,
                   'no_error_range_endpoint_records':2,
               },
-              'post_rebuild_issue_severity_counts':quality['issue_severity_counts'],
-              'post_rebuild_issue_code_counts':quality['issue_code_counts'],
+              'post_repair_issue_severity_counts':quality['issue_severity_counts'],
+              'post_repair_issue_code_counts':quality['issue_code_counts'],
               'device_stats':quality['stats']['device_records'],
               'error_stats':quality['stats']['error_records'],
               'completion_flag_stats':quality['stats']['completion_flags'],
@@ -147,11 +163,11 @@ jobs:
           }
           path.write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
           PY
-      - name: Commit rebuilt corpus and permanent guards
+      - name: Commit repaired corpus and permanent guards
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm -f .github/workflows/bootstrap-rebuild-structured-knowledge-quality.yml tools/bootstrap_patch_structured_knowledge_quality.py tools/bootstrap_patch_error_code_ranges.py
+          git rm -f .github/workflows/bootstrap-rebuild-structured-knowledge-quality.yml tools/bootstrap_patch_structured_knowledge_quality.py tools/bootstrap_patch_error_code_ranges.py tools/bootstrap_repair_structured_knowledge_inplace.py
           git rm -f .github/workflows/inspect-completion-flag-contexts.yml .github/workflows/inspect-error-0000-contexts.yml .github/workflows/inspect-error-6311-context.yml || true
           git add -A
           git status --short
