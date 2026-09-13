@@ -30,6 +30,9 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install test dependency
+        run: python -m pip install pytest
+
       - name: Unit-test semantic cleanup
         run: python -m pytest -q tests/test_device_entity_cleanup.py
 
