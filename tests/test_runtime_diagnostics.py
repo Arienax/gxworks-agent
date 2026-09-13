@@ -7,7 +7,8 @@ from concurrent.futures import ThreadPoolExecutor
 import zipfile
 import pytest
 import runtime_diagnostics as d
-from model_provider import (OpenAICompatibleProvider, ModelRequest, UserMessage,
+from application.generation_repair import GenerationValidationError
+from model_provider import (OpenAICompatibleProvider, ModelRequest, SystemMessage, UserMessage,
     ResponseRejectedError, ResponseContract, collect_response, ModelProviderError)
 
 
@@ -56,6 +57,54 @@ def test_json_locations_include_original_fence_and_leading_whitespace():
     assert value['fenced'] is True
 
 
+def test_extra_data_reports_complete_object_shape_and_tail_class_without_content():
+    value = d.json_diagnostic('{"device_comments":{},"rungs":[{"rung_id":1}]};')
+    assert value['json_status'] == 'syntax_error'
+    assert value['json_error'] == 'Extra data'
+    assert value['prefix_complete_object'] is True
+    assert value['punctuation_only_tail'] is True
+    assert value['tail_class'] == 'punctuation'
+    assert value['suffix_chars'] == 1
+    assert value['rung_count'] == 1
+    assert value['device_comment_count'] == 0
+    assert value['distance_from_end'] == 1
+    semantic = d.json_diagnostic('{"rungs":[]}x')
+    assert semantic['prefix_complete_object'] is True
+    assert semantic['tail_class'] == 'semantic'
+    second = d.json_diagnostic('{"rungs":[]}{"rungs":[]}')
+    assert second['prefix_complete_object'] is True
+    assert second['tail_class'] == 'second_json'
+    raw = json.dumps([value, semantic, second])
+    assert 'rung_id' not in raw and 'device_comments' not in raw
+
+
+def test_model_request_records_role_sizes_without_message_text(tmp_path):
+    req = ModelRequest((SystemMessage('SYSTEM_PRIVATE'), UserMessage('USER_PRIVATE')),
+                       model='fixture-model', response_contract=ResponseContract('ladder','json'))
+    with d.diagnostic_scope(tmp_path,'job_test'):
+        d.begin_request(req, object())
+    event = next(x for x in rows(tmp_path) if x['event']=='model_request')
+    assert event['system_messages'] == 1 and event['user_messages'] == 1
+    assert event['system_chars'] == len('SYSTEM_PRIVATE')
+    assert event['user_chars'] == len('USER_PRIVATE')
+    assert event['message_chars'] == len('SYSTEM_PRIVATE') + len('USER_PRIVATE')
+    assert 'SYSTEM_PRIVATE' not in json.dumps(event) and 'USER_PRIVATE' not in json.dumps(event)
+
+
+def test_generation_validation_exception_records_attempts_stop_and_paths(tmp_path):
+    cause = json.JSONDecodeError('Extra data', '{};', 2)
+    failure = GenerationValidationError([cause], attempts=0, max_attempts=0,
+                                        language='zh-CN', stop_reason='final_validation')
+    with d.diagnostic_scope(tmp_path,'job_test'):
+        d.exception_record(failure)
+    item = next(x for x in rows(tmp_path) if x['event']=='workflow_exception')['exceptions'][0]
+    assert item['attempt_count'] == 0 and item['max_attempts'] == 0
+    assert item['stop_reason'] == 'final_validation'
+    assert item['violation_count'] == 1
+    assert item['violations'][0]['reason'] == 'invalid_json_object'
+    assert item['violations'][0]['path'].startswith('content$')
+
+
 @pytest.mark.parametrize('stream', [False,True])
 @pytest.mark.parametrize('finish', ['length','stop','content_filter','insufficient_system_resource',None])
 def test_raw_adapter_finish_and_rejection_are_observed_not_repaired(tmp_path,stream,finish):
@@ -79,6 +128,10 @@ def test_raw_adapter_finish_and_rejection_are_observed_not_repaired(tmp_path,str
     assert result['finish_seen'] == (finish is not None)
     assert next(x for x in log if x['event']=='model_response')['json']['json_status']=='syntax_error'
     assert any(x['event']=='response_rejected' for x in log)
+    exception = next(x for x in log if x['event']=='workflow_exception')['exceptions'][0]
+    assert exception['violation_count'] >= 1
+    assert exception['violations'][0]['path'] == 'content'
+    assert exception['violations'][0]['reason'] == 'invalid_json_object'
     assert len(calls)==1 and emitted==[]
     raw=json.dumps(log)
     assert all(secret not in raw for secret in ['PRIVATE_RESPONSE','PRIVATE_REASONING','PRIVATE_PROMPT','PRIVATE_CREDENTIAL','PRIVATE_ENDPOINT'])
@@ -132,7 +185,9 @@ def test_export_reprojects_log_and_never_reads_snapshot_config_or_body(tmp_path)
         assert set(z.namelist())=={'summary.json','diagnostics.jsonl','README.txt'}
         payload=''.join(z.read(n).decode() for n in z.namelist())
         assert 'PRIVATE_' not in payload
-        assert json.loads(z.read('summary.json'))['capture_status']=='captured'
+        summary = json.loads(z.read('summary.json'))
+        assert summary['capture_status']=='captured'
+        assert 'model_request' in summary['failure_analysis']
 
 
 def test_old_job_export_does_not_fabricate_evidence(tmp_path):
