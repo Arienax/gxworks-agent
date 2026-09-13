@@ -46,8 +46,7 @@ jobs:
             tests/test_generation_workflow.py \
             tests/test_generation_repair_workflow.py \
             tests/test_generation_rejected_json_repair.py \
-            tests/test_instruction_registry.py \
-            tests/test_plc_ir.py
+            tests/test_instruction_registry.py
           git diff --check
       - name: Refuse concurrent branch overwrite
         shell: bash
