@@ -22,7 +22,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: fix/rejected-json-repair-20260913
           lfs: true
           fetch-depth: 1
 
@@ -43,7 +42,7 @@ jobs:
             --database /tmp/device-clean.sqlite \
             --report /tmp/device-clean-migration.json
 
-      - name: Verify false positives are gone and real examples survive
+      - name: Verify false positives are gone and reviewed real examples survive
         run: |
           python - <<'PY'
           import sqlite3
@@ -65,20 +64,28 @@ jobs:
               ).fetchall()
               assert d17 == [], d17
 
-              known_real = {'D307', 'M599', 'P10', 'P11', 'P12'}
-              present = {
-                  row[0].upper()
-                  for row in con.execute(
-                      "SELECT device FROM device_records WHERE UPPER(device) IN ('D307','M599','P10','P11','P12')"
-                  )
+              known_real = {
+                  'D14','D15','D24','D26','D27','D28','D29','D307','D51','D7','D9','D99',
+                  'M127','M14','M16','M17','M255','M31','M599','M63',
+                  'P10','P11','P12','P2','P20','P4','P5','P7','P9',
               }
-              assert known_real <= present, (known_real, present)
+              present = {
+                  str(row[0]).upper()
+                  for row in con.execute("SELECT device FROM device_records")
+                  if str(row[0]).upper() in known_real
+              }
+              assert known_real <= present, sorted(known_real - present)
 
               nesting = con.execute(
                   "SELECT entity,SUM(occurrences) FROM entity_index "
                   "WHERE entity_type='nesting_level' GROUP BY entity ORDER BY entity"
               ).fetchall()
               assert nesting, 'expected MC/MCR nesting_level entities'
+              bad_nesting = [
+                  row for row in nesting
+                  if not (row[0].startswith('N') and row[0][1:].isdigit() and 0 <= int(row[0][1:]) <= 7)
+              ]
+              assert bad_nesting == [], bad_nesting[:20]
 
               operand_n = con.execute(
                   "SELECT entity,SUM(occurrences) FROM entity_index "
@@ -89,7 +96,7 @@ jobs:
               print('INTEGRITY', integrity)
               print('N_DEVICE_RECORDS', n_devices)
               print('D17_DEVICE_RECORDS', d17)
-              print('KNOWN_REAL_PRESENT', sorted(present))
+              print('REVIEWED_REAL_PRESENT', len(present), '/', len(known_real))
               print('NESTING_LEVEL_SAMPLE', nesting[:20])
               print('OPERAND_N_SAMPLE', operand_n)
           PY
