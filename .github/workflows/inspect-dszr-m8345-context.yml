@@ -1,0 +1,46 @@
+name: Inspect DSZR M8345 completion context
+
+on:
+  push:
+    branches: [fix/rejected-json-repair-20260913]
+    paths: [.github/workflows/inspect-dszr-m8345-context.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/rejected-json-repair-20260913
+          lfs: true
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Print DSZR M8345 contexts
+        run: |
+          python - <<'PY'
+          import json,re,sqlite3
+          con=sqlite3.connect('resources/knowledge/fx3u_knowledge.sqlite')
+          row=con.execute("SELECT source_pages_json FROM instructions WHERE manual_id='fx3_positioning_k' AND opcode_norm='dszr'").fetchone()
+          pages=json.loads(row[0] or '[]')
+          print('PAGES',pages)
+          for page in pages:
+              text=con.execute("SELECT clean_text FROM page_artifacts WHERE manual_id='fx3_positioning_k' AND pdf_page=?",(page,)).fetchone()[0]
+              hits=list(re.finditer(r'(?<![A-Z0-9_])M8345(?![A-Z0-9_])',text or '',re.I))
+              if not hits: continue
+              print('\nPAGE',page,'HITS',len(hits))
+              lines=(text or '').splitlines()
+              for i,line in enumerate(lines):
+                  if re.search(r'(?<![A-Z0-9_])M8345(?![A-Z0-9_])',line,re.I):
+                      print('LINE',i,repr(line))
+                      for j in range(max(0,i-2),min(len(lines),i+3)):
+                          print(' ',j,repr(lines[j]))
+              for m in hits[:6]:
+                  print('CTX',re.sub(r'\s+',' ',(text or '')[max(0,m.start()-250):m.end()+350]).strip())
+          con.close()
+          PY
