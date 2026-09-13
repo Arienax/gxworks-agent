@@ -39,7 +39,10 @@ from prompt_context_policy import (
 )
 from plc_json_validator import PLCJsonValidationError, parse_device_address
 from hardware_profiles import ensure_hardware_questions
-from instruction_registry import GENERATION_TYPED_OUTPUT_OPCODES, generation_app_instr_mnemonics
+from instruction_registry import (
+    DEFAULT_INSTRUCTION_REGISTRY, GENERATION_TYPED_OUTPUT_OPCODES,
+    generation_app_instr_mnemonics,
+)
 from plc_generation_contract import ladder_response_schema
 from pattern_library import (
     assemble_prompt,
@@ -1608,6 +1611,102 @@ Rules:
 """
 
 
+def _repair_baseline_tokens(repair_payload):
+    """Collect immutable engineering tokens already present in the repair slice."""
+    result = {"addresses": set(), "operands": set(), "values": set(),
+              "expressions": set(), "app_instr_arities": set()}
+
+    def walk(value):
+        if isinstance(value, dict):
+            address = value.get("address")
+            if isinstance(address, str) and address.strip():
+                result["addresses"].add(address.strip().upper())
+            expression = value.get("expression")
+            if isinstance(expression, str) and expression.strip():
+                result["expressions"].add(expression.strip())
+            preset = value.get("value")
+            if isinstance(preset, str) and preset.strip():
+                result["values"].add(preset.strip())
+            operands = value.get("operands")
+            if isinstance(operands, list):
+                tokens = [str(item).strip() for item in operands if isinstance(item, str) and str(item).strip()]
+                result["operands"].update(tokens)
+                if value.get("type") == "APP_INSTR":
+                    result["app_instr_arities"].add(len(operands))
+            for nested in value.values():
+                walk(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                walk(nested)
+
+    walk(repair_payload.get("baseline_subset") or {})
+    result["addresses"].update(
+        str(item).strip().upper()
+        for item in (repair_payload.get("allowed_addresses") or [])
+        if str(item).strip()
+    )
+    return result
+
+
+def _constrain_native_repair_schema(schema, repair_payload, plc_model):
+    """Prevent a local repair from inventing devices/parameters outside its baseline."""
+    tokens = _repair_baseline_tokens(repair_payload)
+    addresses = sorted(tokens["addresses"])
+    operands = sorted(tokens["operands"])
+    values = sorted(tokens["values"])
+    expressions = sorted(tokens["expressions"])
+    arities = sorted(tokens["app_instr_arities"])
+
+    def visit(rule):
+        if isinstance(rule, list):
+            for child in rule:
+                visit(child)
+            return
+        if not isinstance(rule, dict):
+            return
+
+        properties = rule.get("properties")
+        if isinstance(properties, dict):
+            type_rule = properties.get("type")
+            type_values = set(type_rule.get("enum", [])) if isinstance(type_rule, dict) else set()
+            if "address" in properties and addresses:
+                properties["address"]["enum"] = addresses
+            if "expression" in properties and expressions:
+                properties["expression"]["enum"] = expressions
+            if "value" in properties and values:
+                properties["value"]["enum"] = values
+            if "APP_INSTR" in type_values:
+                opcode_rule = properties.get("opcode")
+                operand_rule = properties.get("operands")
+                if isinstance(opcode_rule, dict) and arities:
+                    compatible = []
+                    for mnemonic in generation_app_instr_mnemonics(plc_model):
+                        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(mnemonic)
+                        if spec is not None and any(spec.accepts_arity(count) for count in arities):
+                            compatible.append(mnemonic)
+                    if compatible:
+                        opcode_rule["enum"] = compatible
+                if isinstance(operand_rule, dict):
+                    if operands:
+                        # ladder_v1_schema reuses the generic token rule for
+                        # TIMER/COUNTER values and APP_INSTR operands. Detach
+                        # the operand item rule before adding an enum so this
+                        # local repair constraint cannot mutate timer presets.
+                        operand_rule["items"] = dict(operand_rule.get("items") or {})
+                        operand_rule["items"]["enum"] = operands
+                    if len(arities) == 1:
+                        operand_rule["minItems"] = arities[0]
+                        operand_rule["maxItems"] = arities[0]
+            for child in properties.values():
+                visit(child)
+        for key in ("oneOf", "anyOf", "allOf"):
+            visit(rule.get(key))
+        visit(rule.get("items"))
+
+    visit(schema)
+    return schema
+
+
 def _native_partial_repair_response_format(repair_payload):
     """Build the provider-enforced partial repair schema from the shared ladder contract."""
     plc_model = str(repair_payload.get("plc_model") or "FX3U").strip().upper() or "FX3U"
@@ -1632,6 +1731,7 @@ def _native_partial_repair_response_format(repair_payload):
             "type": "object", "properties": {}, "required": [],
             "additionalProperties": False,
         }
+        _constrain_native_repair_schema(schema, repair_payload, plc_model)
     else:
         rung_array["maxItems"] = 0
         allowed_addresses = sorted({

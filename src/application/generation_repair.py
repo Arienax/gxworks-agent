@@ -153,6 +153,7 @@ def validation_diagnostic(error):
               "invalid_json_object" if isinstance(error, json.JSONDecodeError) else
               "invalid_shared_input" if "shared_inputs" in safe and "parallel_block" in text else
               "field_too_long" if ("must be <=" in text or "invalid text length" in text) else
+              "repair_scope_violation" if ("evidence-external" in text or "out-of-scope" in text) else
               "invalid_ladder_structure")
     return {"path": "content$" + ("." + ".".join(safe) if safe else ""), "reason": reason}
 
