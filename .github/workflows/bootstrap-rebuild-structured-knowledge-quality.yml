@@ -28,10 +28,10 @@ jobs:
       - name: Smoke test patched entity and completion parsers
         run: |
           python - <<'PY'
-          import importlib.util, re
+          import importlib.util, re, sys
           from types import SimpleNamespace
           spec=importlib.util.spec_from_file_location('builder','tools/build_fx3u_knowledge_v3.py')
-          b=importlib.util.module_from_spec(spec); spec.loader.exec_module(b)
+          b=importlib.util.module_from_spec(spec); sys.modules[spec.name]=b; spec.loader.exec_module(b)
           instruction_re=re.compile(r'RBFM|DRVA',re.I)
           text='''[STRUCTURED INSTRUCTION RECORD]\nOPERANDS: M1: unit | M2: buffer | N1: count | N2: points | D1: destination\nD8360-Y003 table cells\n'''
           entities=b.extract_entities(text,instruction_re,chunk_type='instruction')
