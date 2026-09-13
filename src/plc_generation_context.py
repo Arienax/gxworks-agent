@@ -328,13 +328,16 @@ def _current_version_context(user_requirement, current_version_json, *, target_m
 
     selected_rungs = [copy.deepcopy(rungs[index]) for index in sorted(selected) if isinstance(rungs[index], dict)]
     selected_addresses = {address for rung in selected_rungs for address in _rung_addresses(rung)}
-    selected_comments = {address: comments[address] for address in comments
-                         if str(address).upper() in selected_addresses}
+    if contract_repair and not explicit_ids:
+        selected_comments = copy.deepcopy(comments)
+    else:
+        selected_comments = {address: comments[address] for address in comments
+                             if str(address).upper() in selected_addresses}
 
     if contract_repair:
         payload = {"device_comments": selected_comments, "rungs": selected_rungs}
         text = ("# Immutable repair baseline slice\n"
-                "Only these backend-authorized rungs are shown. Unshown rungs remain immutable and local.\n" +
+                "Only backend-authorized repair evidence is shown. Unshown program content remains immutable and local.\n" +
                 json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
         return text, payload
 
@@ -394,4 +397,8 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
 
 
 def generation_user_input(user_input, *, is_edit_mode=False, target_mode="ladder", repair_mode=False):
-    return str(user_input or "")
+    text = str(user_input or "")
+    if target_mode == "ladder" and is_edit_mode and not repair_mode:
+        return ('优先返回 mode="partial"，只列修改/新增的完整梯级；不要重复输出未修改梯级。\n'
+                '用户修改要求：\n' + text)
+    return text
