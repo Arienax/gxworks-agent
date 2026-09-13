@@ -1,0 +1,151 @@
+name: Integrate repair chain into prompt branch
+
+on:
+  push:
+    branches: [fix/prompt-context-slim-20260913]
+    paths:
+      - .github/workflows/integrate-repair-chain.yml
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/prompt-context-slim-20260913
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Merge validated repair chain
+        shell: bash
+        run: |
+          echo "$(git rev-parse HEAD)" > /tmp/start_sha
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin fix/rejected-json-repair-20260913
+          git merge --no-commit --no-ff 939477426ca6b1b5ba8ae32597f1babc49ed5af9
+      - name: Add desktop compatibility and model-specific opcode contract
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if text.count(old) != 1:
+                  raise SystemExit(f'{label}: expected one anchor, found {text.count(old)}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          replace_once(
+              'src/main.py',
+              '        repair_mode=False,\n        allowed_rung_ids=None,\n',
+              '        repair_mode=False,\n        format_repair=False,\n        allowed_rung_ids=None,\n',
+              'CompilerThread format_repair argument',
+          )
+          replace_once(
+              'src/main.py',
+              '        self.repair_mode = bool(repair_mode)\n        self.allowed_rung_ids = {\n',
+              '        self.repair_mode = bool(repair_mode)\n        self.format_repair = bool(format_repair)\n        self.allowed_rung_ids = {\n',
+              'CompilerThread format_repair state',
+          )
+
+          registry = Path('src/instruction_registry.py')
+          text = registry.read_text(encoding='utf-8')
+          anchor = 'DEFAULT_INSTRUCTION_REGISTRY = load_default_instruction_registry()\n\n\ndef get_instruction_spec('
+          block = '''DEFAULT_INSTRUCTION_REGISTRY = load_default_instruction_registry()\n\n\nGENERATION_TYPED_OUTPUT_OPCODES = frozenset({"OUT", "PLS", "PLF", "END"})\nGENERATION_FORBIDDEN_APP_INSTR_CATEGORIES = frozenset(\n    {InstructionCategory.CONDITION, InstructionCategory.BRANCH_CONTROL}\n)\n\n\ndef generation_app_instr_mnemonics(cpu=None):\n    """Opcodes the model may emit as APP_INSTR for the selected CPU."""\n    model = str(cpu or "").strip().upper() or None\n    result = []\n    for mnemonic in DEFAULT_INSTRUCTION_REGISTRY.known_mnemonics():\n        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(mnemonic)\n        if spec is None:\n            continue\n        if mnemonic in GENERATION_TYPED_OUTPUT_OPCODES:\n            continue\n        if spec.category in GENERATION_FORBIDDEN_APP_INSTR_CATEGORIES:\n            continue\n        if model and not spec.supports_cpu(model):\n            continue\n        result.append(mnemonic)\n    return tuple(sorted(result))\n\n\ndef get_instruction_spec('''
+          if text.count(anchor) != 1:
+              raise SystemExit('instruction registry anchor mismatch')
+          text = text.replace(anchor, block, 1)
+          old_all = '    "DEFAULT_INSTRUCTION_REGISTRY",\n    "InstructionCategory",\n'
+          new_all = '    "DEFAULT_INSTRUCTION_REGISTRY",\n    "GENERATION_FORBIDDEN_APP_INSTR_CATEGORIES",\n    "GENERATION_TYPED_OUTPUT_OPCODES",\n    "generation_app_instr_mnemonics",\n    "InstructionCategory",\n'
+          if text.count(old_all) != 1:
+              raise SystemExit('instruction registry __all__ anchor mismatch')
+          registry.write_text(text.replace(old_all, new_all, 1), encoding='utf-8')
+
+          validator = Path('src/plc_json_validator.py')
+          text = validator.read_text(encoding='utf-8')
+          text = text.replace(
+              'from instruction_registry import DEFAULT_INSTRUCTION_REGISTRY, InstructionCategory\n',
+              'from instruction_registry import (\n    DEFAULT_INSTRUCTION_REGISTRY,\n    GENERATION_FORBIDDEN_APP_INSTR_CATEGORIES,\n    GENERATION_TYPED_OUTPUT_OPCODES,\n    generation_app_instr_mnemonics,\n)\n',
+              1,
+          )
+          old = '''_APP_INSTR_TYPED_ONLY = frozenset({"OUT", "PLS", "PLF", "END"})\n_APP_INSTR_FORBIDDEN_CATEGORIES = frozenset(\n    {InstructionCategory.CONDITION, InstructionCategory.BRANCH_CONTROL}\n)\nAPP_INSTR_WHITELIST = frozenset(\n    mnemonic\n    for mnemonic in DEFAULT_INSTRUCTION_REGISTRY.known_mnemonics()\n    if mnemonic not in _APP_INSTR_TYPED_ONLY\n    and DEFAULT_INSTRUCTION_REGISTRY.category_of(mnemonic)\n    not in _APP_INSTR_FORBIDDEN_CATEGORIES\n)\n'''
+          new = '''_APP_INSTR_TYPED_ONLY = GENERATION_TYPED_OUTPUT_OPCODES\n_APP_INSTR_FORBIDDEN_CATEGORIES = GENERATION_FORBIDDEN_APP_INSTR_CATEGORIES\nAPP_INSTR_WHITELIST = frozenset(generation_app_instr_mnemonics())\n'''
+          if text.count(old) != 1:
+              raise SystemExit('validator APP_INSTR block mismatch')
+          validator.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          contract = Path('src/plc_generation_contract.py')
+          text = contract.read_text(encoding='utf-8')
+          import_anchor = 'from typing import Any, Mapping\n\n\nMAX_LABEL_LEN'
+          import_repl = 'from typing import Any, Mapping\n\nfrom instruction_registry import GENERATION_TYPED_OUTPUT_OPCODES, generation_app_instr_mnemonics\n\n\nMAX_LABEL_LEN'
+          if text.count(import_anchor) != 1:
+              raise SystemExit('generation contract import anchor mismatch')
+          text = text.replace(import_anchor, import_repl, 1)
+          text = text.replace('def ladder_v1_schema() -> dict:', 'def ladder_v1_schema(plc_model=None) -> dict:', 1)
+          old_application = '''    application = _object({\n        "type": {"enum": ["APP_INSTR"]},\n        "opcode": {\n            "type": "string", "minLength": 1, "maxLength": 64,\n            "pattern": APP_INSTR_OPCODE_PATTERN,\n            "not": {"enum": ["OUT", "PLS", "PLF", "END"]},\n            "description": "One catalogued application opcode supported by the context PLC; no prose or operands here.",\n        },\n        "operands": _array(token), "label": label,\n    }, ["type", "opcode", "operands"])\n'''
+          new_application = '''    opcode_rule = {\n        "type": "string", "minLength": 1, "maxLength": 64,\n        "pattern": APP_INSTR_OPCODE_PATTERN,\n        "description": "One catalogued application opcode supported by the selected PLC; no prose or operands here.",\n    }\n    if plc_model:\n        opcode_rule["enum"] = list(generation_app_instr_mnemonics(plc_model))\n    else:\n        opcode_rule["not"] = {"enum": sorted(GENERATION_TYPED_OUTPUT_OPCODES)}\n    application = _object({\n        "type": {"enum": ["APP_INSTR"]},\n        "opcode": opcode_rule,\n        "operands": _array(token), "label": label,\n    }, ["type", "opcode", "operands"])\n'''
+          if text.count(old_application) != 1:
+              raise SystemExit('generation contract application anchor mismatch')
+          text = text.replace(old_application, new_application, 1)
+          text = text.replace(
+              'def generation_output_contract(*, allow_partial=False) -> dict:',
+              'def generation_output_contract(*, allow_partial=False, plc_model=None) -> dict:',
+              1,
+          )
+          text = text.replace(
+              '"schema": ladder_response_schema(allow_partial=allow_partial),',
+              '"schema": ladder_response_schema(allow_partial=allow_partial, plc_model=plc_model),',
+              1,
+          )
+          text = text.replace(
+              'def ladder_response_schema(*, allow_partial=False):\n    """Share the same generation schema with API prompts and external tools."""\n    full = ladder_v1_schema()\n',
+              'def ladder_response_schema(*, allow_partial=False, plc_model=None):\n    """Share the same generation schema with API prompts and external tools."""\n    full = ladder_v1_schema(plc_model=plc_model)\n',
+              1,
+          )
+          contract.write_text(text, encoding='utf-8')
+
+          replace_once(
+              'src/plc_generation_context.py',
+              'json.dumps(ladder_response_schema(allow_partial=is_edit_mode), ensure_ascii=False,\n',
+              'json.dumps(ladder_response_schema(allow_partial=is_edit_mode, plc_model=selected_vendor), ensure_ascii=False,\n',
+              'model-specific ladder schema',
+          )
+
+          Path('tests/test_generation_opcode_contract.py').write_text(r'''from instruction_registry import generation_app_instr_mnemonics\nfrom plc_generation_contract import ladder_response_schema\nfrom plc_generation_context import _select_system_prompt\n\n\ndef _opcode_rule(schema):\n    full = schema["oneOf"][0] if "oneOf" in schema else schema\n    return (full["properties"]["rungs"]["items"]["properties"]["branches"]["items"]\n            ["properties"]["outputs"]["items"]["oneOf"][2]["properties"]["opcode"])\n\n\ndef test_model_specific_app_instr_enum_matches_registry():\n    fx3 = tuple(generation_app_instr_mnemonics("FX3U"))\n    fx5 = tuple(generation_app_instr_mnemonics("FX5U"))\n    assert fx3 and fx5\n    assert _opcode_rule(ladder_response_schema(plc_model="FX3U"))["enum"] == list(fx3)\n    assert _opcode_rule(ladder_response_schema(plc_model="FX5U"))["enum"] == list(fx5)\n    for forbidden in ("OUT", "PLS", "PLF", "END", "NOT_A_REAL_OPCODE"):\n        assert forbidden not in fx3\n        assert forbidden not in fx5\n    assert set(fx3) != set(fx5), "CPU-specific catalogue must constrain at least one opcode"\n\n\ndef test_normal_generation_prompt_exposes_only_catalogued_fx3u_opcodes():\n    prompt = _select_system_prompt("ladder", plc_model="FX3U")\n    rule = _opcode_rule(ladder_response_schema(plc_model="FX3U"))\n    assert '"enum":[' in prompt\n    assert "NOT_A_REAL_OPCODE" not in prompt\n    assert "OUT" not in rule["enum"]\n    assert len(rule["enum"]) >= 10\n''', encoding='utf-8')
+          PY
+      - name: Install focused dependencies
+        run: python -m pip install -r requirements.txt -r requirements/web.txt
+      - name: Validate integrated prompt and repair paths
+        shell: bash
+        run: |
+          python -m compileall -q src tests
+          python -m pytest -q \
+            tests/test_prompt_context_budget.py \
+            tests/test_prompt_slim_generation.py \
+            tests/test_generation_opcode_contract.py \
+            tests/test_user_confirmed_generation_repair.py \
+            tests/test_generation_workflow.py \
+            tests/test_generation_repair_workflow.py \
+            tests/test_generation_rejected_json_repair.py \
+            tests/test_instruction_registry.py \
+            tests/test_plc_ir.py
+          git diff --check
+      - name: Refuse concurrent branch overwrite
+        shell: bash
+        run: |
+          git fetch origin fix/prompt-context-slim-20260913
+          test "$(git rev-parse origin/fix/prompt-context-slim-20260913)" = "$(cat /tmp/start_sha)"
+      - name: Commit merged repair chain and root fix
+        shell: bash
+        run: |
+          git add src tests
+          git diff --cached --check
+          git commit -m "merge(repair): integrate repair chain and constrain generated opcodes"
+          git push origin HEAD:fix/prompt-context-slim-20260913
