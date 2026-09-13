@@ -1,6 +1,6 @@
 {
   "build_seconds": 612.671,
-  "builder_version": "3.0.0",
+  "builder_version": "3.0.1",
   "built_at_utc": "2026-08-09T06:25:40.448275+00:00",
   "chunk_strategy": {
     "cross_page_within_section": true,
@@ -10,7 +10,7 @@
   },
   "database": "fx3u_knowledge.sqlite",
   "database_bytes": 140795904,
-  "database_sha256": "65fdafae7a622d2e1eb648e32273bca4520e956f79ce17c6b583b1800b70bbf6",
+  "database_sha256": "49e72265d23a0f4e17bd9efa906b23a389f3052c4183af26d0221dd0c7957939",
   "external_sources": [
     {
       "chunks": 1448,
@@ -380,5 +380,10 @@
       "source_file": "design_patterns.json",
       "source_sha256": "dc4a723346b541029d29226113c16a98079e04a2029f0c2196ab3f7ad1031fe0"
     }
-  ]
+  ],
+  "structured_instruction_backfill": {
+    "method": "generic operand/applicable-device matrix extraction",
+    "source": "authoritative page_artifacts and tables",
+    "changed_empty_instruction_rows": 157
+  }
 }

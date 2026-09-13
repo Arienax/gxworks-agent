@@ -38,7 +38,7 @@ except ImportError as error:  # pragma: no cover
     raise SystemExit("pdfplumber is required to preserve tables and word geometry") from error
 
 
-BUILDER_VERSION = "3.0.0"
+BUILDER_VERSION = "3.0.1"
 SCHEMA_VERSION = 3
 TASK_TYPES = "*"
 DEFAULT_TARGET_CHARS = 4800
@@ -1069,77 +1069,150 @@ def extract_entities(
     return entities
 
 
-def parse_operand_schema(pages: list[PageArtifact]) -> list[dict[str, str]]:
-    operands: list[dict[str, str]] = []
-    seen: set[str] = set()
+def _operand_name(value: str) -> str:
+    """Normalize operand placeholders printed in Mitsubishi instruction tables."""
+    token = normalize_line(str(value or "")).strip()
+    if not token or token.upper() in {"EN", "ENO"}:
+        return ""
+    if not re.fullmatch(r"[A-Za-z](?:\d{0,3})?", token):
+        return ""
+    return token.upper()
+
+
+def _device_column_name(value: str) -> str:
+    """Normalize one column label from an Applicable devices matrix."""
+    token = normalize_line(str(value or ""))
+    token = re.sub(r"\[GLYPH-[0-9A-F]+\]|\(cid:\d+\)", "", token, flags=re.I)
+    token = re.sub(r"\s+", "", token)
+    if not token or token.casefold() in {"<blank>", "blank"}:
+        return ""
+    upper = token.upper()
+    if upper in {"X", "Y", "M", "T", "C", "S", "D", "R", "V", "Z", "K", "H", "E", "P"}:
+        return upper
+    if re.fullmatch(r"KN[XYMS]", upper):
+        return "Kn" + upper[2:]
+    if upper in {"D.B", "DB"}:
+        return "D.b"
+    if upper.startswith("U") and "\\G" in upper:
+        return "U\\G"
+    if upper.startswith("MODIF"):
+        return "Modifier"
+    if token.startswith('"'):
+        return "String"
+    return ""
+
+
+def _applicable_devices_by_operand(page: PageArtifact) -> dict[str, set[str]]:
+    """Decode official Applicable-devices matrices without opcode-specific rules."""
+    found: dict[str, set[str]] = defaultdict(set)
+    for table in page.tables:
+        rows = table.get("rows") or []
+        if not rows:
+            continue
+        best_index = -1
+        best_headers: dict[int, str] = {}
+        for row_index, row in enumerate(rows[:8]):
+            headers = {
+                index: name
+                for index, cell in enumerate(row)
+                if (name := _device_column_name(cell))
+            }
+            if len(headers) > len(best_headers):
+                best_index, best_headers = row_index, headers
+        if len(best_headers) < 4:
+            continue
+        for row in rows[best_index + 1:]:
+            operand = next(
+                (_operand_name(cell) for cell in row[:4] if _operand_name(cell)),
+                "",
+            )
+            if not operand:
+                continue
+            for column, device in best_headers.items():
+                if column >= len(row):
+                    continue
+                marker = normalize_line(str(row[column] or ""))
+                if marker and marker.casefold() not in {"<blank>", "blank", "-", "—"}:
+                    found[operand].add(device)
+    return found
+
+
+def parse_operand_schema(pages: list[PageArtifact]) -> list[dict[str, Any]]:
+    """Extract operand meaning, data type and applicable device families.
+
+    The extractor is table-driven.  Instruction-specific facts remain in the
+    authoritative Mitsubishi manual/SQLite instead of being copied into prompts.
+    """
+    operands: list[dict[str, Any]] = []
+    by_name: dict[str, dict[str, Any]] = {}
+    applicability: dict[str, set[str]] = defaultdict(set)
+
+    def remember(name: str, description: str = "", data_type: str = "") -> None:
+        if not name:
+            return
+        current = by_name.get(name)
+        if current is None:
+            current = {"position": name, "description": description, "data_type": data_type}
+            operands.append(current)
+            by_name[name] = current
+        else:
+            if description and not current.get("description"):
+                current["description"] = description
+            if data_type and not current.get("data_type"):
+                current["data_type"] = data_type
+
+    type_pattern = re.compile(
+        r"\b(?:ANY(?:16|32|_SIMPLE)|bit|binary|word|double\s*word|integer|real|bool|string)\b",
+        flags=re.I,
+    )
     for page in pages[:4]:
-        in_set_data = False
+        for name, devices in _applicable_devices_by_operand(page).items():
+            applicability[name].update(devices)
+
+        in_operands = False
         for raw_line in page.compact_layout.splitlines():
             line = normalize_line(raw_line.replace("|", " | "))
-            if re.search(r"\bSet data\b", line, flags=re.I):
-                in_set_data = True
+            if re.search(r"\bSet data\b|\bOperand\s+Type\b|^Variable\s*\|", line, flags=re.I):
+                in_operands = True
                 continue
-            if in_set_data and re.search(r"Applicable devices|Explanation of function", line, flags=re.I):
+            if in_operands and re.search(
+                r"Applicable devices|Explanation of function|Function and operation explanation",
+                line,
+                flags=re.I,
+            ):
                 break
-            if not in_set_data:
+            if not in_operands:
                 continue
-            match = re.match(r"^(S\d+|D)\s*\|\s*(.+)$", raw_line.strip(), flags=re.I)
+            match = re.match(r"^([A-Za-z](?:\d{0,3})?)\s*\|\s*(.+)$", raw_line.strip())
             if not match:
                 continue
-            name = match.group(1).upper()
-            if name in seen:
+            name = _operand_name(match.group(1))
+            if not name:
                 continue
             cells = [normalize_line(value) for value in match.group(2).split("|") if normalize_line(value)]
             description = cells[0] if cells else ""
-            data_type = next(
-                (
-                    value
-                    for value in cells[1:]
-                    if re.search(
-                        r"\b(?:bit|binary|word|double\s*word|integer|real|bool|string)\b",
-                        value,
-                        flags=re.I,
-                    )
-                ),
-                cells[-1] if len(cells) > 1 else "",
-            )
-            operands.append(
-                {"position": name, "description": description, "data_type": data_type}
-            )
-            seen.add(name)
+            data_type = next((value for value in cells[1:] if type_pattern.search(value)), "")
+            remember(name, description, data_type)
 
         for table in page.tables:
             table_text = str(table.get("text", ""))
-            if not re.search(r"Operand\s+Type", table_text, flags=re.I):
+            if not re.search(r"Operand\s+Type|Variable", table_text, flags=re.I):
                 continue
             for row in table.get("rows", [])[1:]:
                 cells = [normalize_line(value) for value in row]
-                name = next((value.upper() for value in cells[:4] if re.fullmatch(r"S\d+|D", value, re.I)), "")
-                if not name or name in seen:
+                name = next((_operand_name(value) for value in cells[:5] if _operand_name(value)), "")
+                if not name:
                     continue
-                meaningful = [value for value in cells if value and value.upper() != name]
-                semantic_type = next(
-                    (
-                        value
-                        for value in meaningful[1:]
-                        if re.search(
-                            r"\b(?:bit|binary|word|double\s*word|integer|real|bool|string)\b",
-                            value,
-                            flags=re.I,
-                        )
-                    ),
-                    meaningful[-1] if len(meaningful) > 1 else "",
-                )
-                operands.append(
-                    {
-                        "position": name,
-                        "description": meaningful[0] if meaningful else "",
-                        "data_type": semantic_type,
-                    }
-                )
-                seen.add(name)
-    return operands
+                meaningful = [value for value in cells if value and _operand_name(value) != name]
+                description = meaningful[0] if meaningful else ""
+                data_type = next((value for value in meaningful[1:] if type_pattern.search(value)), "")
+                remember(name, description, data_type)
 
+    for name, devices in applicability.items():
+        remember(name)
+        if devices:
+            by_name[name]["applicable_devices"] = sorted(devices)
+    return operands
 
 def instruction_summary(pages: list[PageArtifact]) -> str:
     text = "\n".join(page.clean_text for page in pages[:2])
@@ -1886,8 +1959,10 @@ def insert_instruction_records(
             operand_summary = "; ".join(
                 f"{item.get('position', '')}: {item.get('description', '')}"
                 + (f" [{item.get('data_type')}]" if item.get("data_type") else "")
+                + (" applicable=" + ",".join(item.get("applicable_devices") or [])
+                   if item.get("applicable_devices") else "")
                 for item in operands
-            )[:520]
+            )[:900]
             restriction_summary = " | ".join(restrictions[:2])[:260]
             structured_lines = ["[STRUCTURED INSTRUCTION RECORD]"]
             if operand_summary:

@@ -1405,6 +1405,76 @@ def _chunk_result(row, meta, path, plc_model, task_type):
     }
 
 
+def _structured_instruction_record(connection, schema, chunk_id):
+    """Render authoritative instruction fields from SQLite at retrieval time."""
+    table = schema.get("instructions")
+    if not table:
+        return ""
+    required = {"chunk_id", "opcode", "operands_json", "restrictions_json"}
+    if not required.issubset(set(table["columns"])):
+        return ""
+    selected = ["opcode", "operands_json", "restrictions_json"]
+    if "completion_flags_json" in table["columns"]:
+        selected.append("completion_flags_json")
+    row = connection.execute(
+        "SELECT {} FROM {} WHERE chunk_id=? LIMIT 1".format(
+            ",".join(_quote_identifier(column) for column in selected),
+            _quote_identifier(table["name"]),
+        ),
+        (chunk_id,),
+    ).fetchone()
+    if row is None:
+        return ""
+    try:
+        operands = json.loads(str(row["operands_json"] or "[]"))
+    except (TypeError, ValueError):
+        operands = []
+    try:
+        restrictions = json.loads(str(row["restrictions_json"] or "[]"))
+    except (TypeError, ValueError):
+        restrictions = []
+    flags = []
+    if "completion_flags_json" in selected:
+        try:
+            flags = json.loads(str(row["completion_flags_json"] or "[]"))
+        except (TypeError, ValueError):
+            flags = []
+    lines = ["[STRUCTURED INSTRUCTION RECORD]", f"INSTRUCTION: {row['opcode']}"]
+    rendered = []
+    for item in operands if isinstance(operands, list) else []:
+        if not isinstance(item, dict):
+            continue
+        part = f"{item.get('position', '')}: {item.get('description', '')}".strip()
+        if item.get("data_type"):
+            part += f" [{item['data_type']}]"
+        devices = item.get("applicable_devices") or []
+        if isinstance(devices, list) and devices:
+            part += " applicable=" + ",".join(str(value) for value in devices)
+        if part:
+            rendered.append(part)
+    if rendered:
+        lines.append("OPERANDS: " + "; ".join(rendered))
+    if flags:
+        lines.append("COMPLETION_FLAGS: " + ", ".join(str(value) for value in flags))
+    if restrictions:
+        lines.append("KEY_RESTRICTIONS: " + " | ".join(str(value) for value in restrictions[:3]))
+    return "\n".join(lines) if len(lines) > 2 else ""
+
+
+def _augment_structured_instruction(connection, schema, result):
+    if result is None:
+        return None
+    prefix = _structured_instruction_record(connection, schema, result.get("id"))
+    if not prefix:
+        return result
+    enriched = dict(result)
+    body = str(enriched.get("text") or "")
+    if body.startswith("[STRUCTURED INSTRUCTION RECORD]"):
+        _old, separator, remainder = body.partition("\n\n")
+        body = remainder if separator else ""
+    enriched["text"] = prefix + ("\n\n" + body if body else "")
+    return enriched
+
 def _format_result_block(result):
     citation = {
         "id": result.get("id", ""),
@@ -1521,6 +1591,8 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
     for reference in structured_refs:
         row = rows.get((reference["kind"], str(reference["value"])))
         result = _chunk_result(row, meta, path, plc_model, task_type)
+        if reference["match_type"] == "structured_instruction":
+            result = _augment_structured_instruction(connection, schema, result)
         if reference["match_type"] == "manual_instruction" and (
             result is None or not _alias_occurs(result["text"], reference["matched"])
         ):
