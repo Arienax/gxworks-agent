@@ -54,6 +54,8 @@ def main() -> int:
                 issues.append({"severity":"error","code":"0000_raw_text_row_bleed","raw_text":clean(raw)[:700],**identity})
         elif normalized_message.casefold() == "no error":
             issues.append({"severity":"error","code":"nonzero_code_has_no_error_message","message":clean(message),**identity})
+        elif normalized_message.casefold() in {"to", "through"}:
+            issues.append({"severity":"error","code":"range_connector_as_error_message","message":clean(message),**identity})
 
         # The strict text parser intentionally uses a broad source window. A
         # stored field containing another plausible four-digit error code is a
