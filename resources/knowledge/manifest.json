@@ -10,7 +10,7 @@
   },
   "database": "fx3u_knowledge.sqlite",
   "database_bytes": 141312000,
-  "database_sha256": "856869184c4d76c18d1492385493553b81cd93b37a02121fd79dc1a38ad79b35",
+  "database_sha256": "17eb31020b38c882695bcd23dd8108e7f36000548601510a52b703e81e7def7a",
   "external_sources": [
     {
       "chunks": 1448,
@@ -301,7 +301,7 @@
   "stats": {
     "characters": 14101920,
     "debug_chunks": 26,
-    "entities": 68756,
+    "entities": 67835,
     "manual_chunks": 4682,
     "pages": 3064,
     "tables": 7324,
@@ -309,7 +309,7 @@
   },
   "structured": {
     "debug_cases": 26,
-    "devices": 2244,
+    "devices": 2184,
     "errors": 376,
     "instructions": 285
   },
@@ -318,12 +318,12 @@
       "chunks": 4714,
       "chunks_fts": 4714,
       "debug_cases": 26,
-      "device_records": 2244,
-      "entity_index": 68756,
+      "device_records": 2184,
+      "entity_index": 67835,
       "error_records": 376,
       "instruction_aliases": 905,
       "instructions": 285,
-      "manuals": 9,
+      "manuals": 10,
       "page_artifacts": 3064,
       "tables": 7324,
       "vector_embeddings": 4714
