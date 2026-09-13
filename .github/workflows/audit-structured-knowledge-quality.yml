@@ -6,6 +6,7 @@ on:
     paths:
       - tools/audit_structured_knowledge_quality.py
       - tools/audit_error_record_alignment.py
+      - tools/audit_error_record_semantics.py
       - tools/build_fx3u_knowledge_v3.py
       - resources/knowledge/fx3u_knowledge.sqlite
       - resources/knowledge/manifest.json
@@ -38,18 +39,24 @@ jobs:
           python tools/audit_error_record_alignment.py \
             --database resources/knowledge/fx3u_knowledge.sqlite \
             --output error-record-alignment-audit.json > error-record-alignment-audit.log
+      - name: Audit strict error row semantic bleed
+        run: |
+          python tools/audit_error_record_semantics.py \
+            --database resources/knowledge/fx3u_knowledge.sqlite \
+            --output error-record-semantic-audit.json > error-record-semantic-audit.log
       - name: Print compact audit summary
         run: |
           python - <<'PY'
           import json
           report = json.load(open('structured-knowledge-quality-audit.json', encoding='utf-8'))
+          alignment = json.load(open('error-record-alignment-audit.json', encoding='utf-8'))
+          semantic = json.load(open('error-record-semantic-audit.json', encoding='utf-8'))
           print('INTEGRITY', report['integrity_check'])
           print('FK_VIOLATIONS', report['foreign_key_violations'])
           print('SEVERITY', json.dumps(report['issue_severity_counts'], ensure_ascii=False, sort_keys=True))
           print('DOMAINS', json.dumps(report['issue_domain_counts'], ensure_ascii=False, sort_keys=True))
           print('CODES', json.dumps(report['issue_code_counts'], ensure_ascii=False, sort_keys=True))
           print('STATS', json.dumps(report['stats'], ensure_ascii=False, sort_keys=True))
-          alignment = json.load(open('error-record-alignment-audit.json', encoding='utf-8'))
           print('ERROR_TABLE_ALIGNMENT', json.dumps({
               'table_backed_records': alignment['table_backed_records'],
               'aligned_records': alignment['aligned_records'],
@@ -57,12 +64,18 @@ jobs:
               'severity': alignment['issue_severity_counts'],
               'codes': alignment['issue_code_counts'],
           }, ensure_ascii=False, sort_keys=True))
-          print('--- FIRST 120 STRUCTURED ISSUES ---')
-          for item in report['issues'][:120]:
-              print(json.dumps(item, ensure_ascii=False, sort_keys=True))
-          print('--- FIRST 120 ERROR ALIGNMENT ISSUES ---')
-          for item in alignment['issues'][:120]:
-              print(json.dumps(item, ensure_ascii=False, sort_keys=True))
+          print('ERROR_SEMANTICS', json.dumps({
+              'records': semantic['records'],
+              'no_error_records': semantic['no_error_records'],
+              'severity': semantic['issue_severity_counts'],
+              'codes': semantic['issue_code_counts'],
+          }, ensure_ascii=False, sort_keys=True))
+          print('--- FIRST 80 STRUCTURED ISSUES ---')
+          for item in report['issues'][:80]: print(json.dumps(item, ensure_ascii=False, sort_keys=True))
+          print('--- FIRST 80 ERROR ALIGNMENT ISSUES ---')
+          for item in alignment['issues'][:80]: print(json.dumps(item, ensure_ascii=False, sort_keys=True))
+          print('--- FIRST 80 ERROR SEMANTIC ISSUES ---')
+          for item in semantic['issues'][:80]: print(json.dumps(item, ensure_ascii=False, sort_keys=True))
           PY
       - uses: actions/upload-artifact@v4
         with:
@@ -72,4 +85,6 @@ jobs:
             structured-knowledge-quality-audit.log
             error-record-alignment-audit.json
             error-record-alignment-audit.log
+            error-record-semantic-audit.json
+            error-record-semantic-audit.log
           if-no-files-found: error
