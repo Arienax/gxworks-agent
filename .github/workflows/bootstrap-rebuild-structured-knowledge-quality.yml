@@ -24,8 +24,10 @@ jobs:
       - name: Install offline build dependencies
         run: python -m pip install pypdf pdfplumber numpy pytest
       - name: Patch generic structured knowledge extractors
-        run: python tools/bootstrap_patch_structured_knowledge_quality.py
-      - name: Smoke test patched entity and completion parsers
+        run: |
+          python tools/bootstrap_patch_structured_knowledge_quality.py
+          python tools/bootstrap_patch_error_code_ranges.py
+      - name: Smoke test patched structured parsers
         run: |
           python - <<'PY'
           import importlib.util, re, sys
@@ -45,8 +47,13 @@ jobs:
           flags=b.instruction_completion_flags(pages)
           assert 'M8012' in flags and 'M8029' in flags, flags
           assert not {'M8067','M8020','M8329'}.intersection(flags), flags
+          range_matches=b.plausible_error_matches('6306 Monitoring timeout error 6307 to 6311 No error 6312 Parallel link character error')
+          range_codes=[m.group(1).upper() for m in range_matches]
+          assert '6306' in range_codes and '6312' in range_codes, range_codes
+          assert '6307' not in range_codes and '6311' not in range_codes, range_codes
           print('synthetic entities',entities)
           print('synthetic completion flags',flags)
+          print('synthetic error codes',range_codes)
           PY
           python -m compileall -q tools/build_fx3u_knowledge_v3.py
       - name: Rebuild authoritative and supporting knowledge stores
@@ -117,6 +124,7 @@ jobs:
                   'cross_family_device_ranges':7,
                   'weak_completion_flag_semantics':199,
                   'no_error_row_bleed_records':30,
+                  'no_error_range_endpoint_records':2,
               },
               'post_rebuild_issue_severity_counts':quality['issue_severity_counts'],
               'post_rebuild_issue_code_counts':quality['issue_code_counts'],
@@ -143,8 +151,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm -f .github/workflows/bootstrap-rebuild-structured-knowledge-quality.yml tools/bootstrap_patch_structured_knowledge_quality.py
-          git rm -f .github/workflows/inspect-completion-flag-contexts.yml .github/workflows/inspect-error-0000-contexts.yml || true
+          git rm -f .github/workflows/bootstrap-rebuild-structured-knowledge-quality.yml tools/bootstrap_patch_structured_knowledge_quality.py tools/bootstrap_patch_error_code_ranges.py
+          git rm -f .github/workflows/inspect-completion-flag-contexts.yml .github/workflows/inspect-error-0000-contexts.yml .github/workflows/inspect-error-6311-context.yml || true
           git add -A
           git status --short
           git commit -m "fix(rag): clean structured knowledge extraction semantics"
