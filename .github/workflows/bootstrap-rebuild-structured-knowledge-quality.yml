@@ -47,13 +47,25 @@ jobs:
           flags=b.instruction_completion_flags(pages)
           assert 'M8012' in flags and 'M8029' in flags, flags
           assert not {'M8067','M8020','M8329'}.intersection(flags), flags
-          range_matches=b.plausible_error_matches('6306 Monitoring timeout error 6307 to 6311 No error 6312 Parallel link character error')
-          range_codes=[m.group(1).upper() for m in range_matches]
-          assert '6306' in range_codes and '6312' in range_codes, range_codes
-          assert '6307' not in range_codes and '6311' not in range_codes, range_codes
+          split_pages=[SimpleNamespace(clean_text='For details on the "Instruction execution complete" flag, refer to Subsection 4.7.4.\n*1. This step assumes the DOG signal logic reverse relay (M8345) is off. If this flag is on, reverse the expression.')]
+          split_flags=b.instruction_completion_flags(split_pages)
+          assert 'M8345' not in split_flags, split_flags
+          error_page=SimpleNamespace(
+              chunk_type='error',
+              outline_path='Error Code List and Action',
+              clean_text='6306 Monitoring timeout error\n6307 to 6311 No error\n6312 Parallel link character error',
+              tables=[],
+          )
+          error_records=b.parse_error_records(error_page)
+          error_codes=[item['code'] for item in error_records]
+          assert '6306' in error_codes and '6312' in error_codes, error_records
+          assert '6307' not in error_codes and '6311' not in error_codes, error_records
+          row_6306=next(item for item in error_records if item['code']=='6306')
+          assert '6307' not in row_6306['raw_text'] and '6311' not in row_6306['raw_text'], row_6306
           print('synthetic entities',entities)
           print('synthetic completion flags',flags)
-          print('synthetic error codes',range_codes)
+          print('split completion flags',split_flags)
+          print('synthetic error records',error_records)
           PY
           python -m compileall -q tools/build_fx3u_knowledge_v3.py tools/bootstrap_repair_structured_knowledge_inplace.py
       - name: Repair prebuilt corpus from stored authoritative artifacts
@@ -172,7 +184,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git rm -f .github/workflows/bootstrap-rebuild-structured-knowledge-quality.yml tools/bootstrap_patch_structured_knowledge_quality.py tools/bootstrap_patch_error_code_ranges.py tools/bootstrap_repair_structured_knowledge_inplace.py
-          git rm -f .github/workflows/inspect-completion-flag-contexts.yml .github/workflows/inspect-error-0000-contexts.yml .github/workflows/inspect-error-6311-context.yml || true
+          git rm -f .github/workflows/inspect-completion-flag-contexts.yml .github/workflows/inspect-error-0000-contexts.yml .github/workflows/inspect-error-6311-context.yml .github/workflows/inspect-dszr-m8345-context.yml || true
           git add -A
           git status --short
           git commit -m "fix(rag): clean structured knowledge extraction semantics"
