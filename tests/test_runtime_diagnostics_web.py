@@ -35,7 +35,14 @@ def test_failed_job_has_downloadable_log_without_private_content(tmp_path,monkey
         assert result.status_code==202,result.text
         jid=result.json()['id'];service.jobs._futures[jid].result(timeout=30)
         job=c.get('/api/jobs/'+jid).json()
-        assert job['status']=='failed' and job['error_code']=='response_rejected'
+        # Completed ladder replies rejected only for JSON syntax are retained as
+        # private repair candidates, so the generation UI can offer explicit
+        # repair instead of throwing away the entire model result.
+        assert job['status']=='failed' and job['error_code']=='generation_validation_failed'
+        assert job['error_details']['violations'][0]['reason']=='invalid_json_object'
+        candidate=service.state_dir/'staging'/jid/'repair_candidate.json'
+        assert candidate.is_file()
+        assert candidate.read_text(encoding='utf-8')=='{"rungs": [PRIVATE_INCOMPLETE'
         assert service.projects.project(pid)['version_count']==0 and p.calls==1
         response=c.get(f'/api/jobs/{jid}/diagnostics')
         assert response.status_code==200 and response.headers['content-type']=='application/zip'
