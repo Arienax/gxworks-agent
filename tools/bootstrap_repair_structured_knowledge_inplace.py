@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One-shot repair of the prebuilt knowledge DB from stored authoritative artifacts.
 
-The source PDFs are intentionally not required.  The checked-in database already
+The source PDFs are intentionally not required. The checked-in database already
 contains page_artifacts/tables extracted from those manuals, so this script
 recomputes the affected structured stores from that authoritative intermediate
 representation after the generic builder parsers have been patched.
@@ -68,9 +68,35 @@ def strip_structured_prefix(text: str) -> str:
     return parts[1] if len(parts) == 2 else ''
 
 
+def normalize_structured_operand_entities(entities: Counter, operands: list[dict]) -> int:
+    """Prefer structured operand meaning over device meaning in its own chunk.
+
+    Tokens such as D1/M1/N1 are syntactically valid PLC devices, but inside the
+    authoritative structured instruction record they are operand placeholders.
+    PDF prose elsewhere in the same chunk can mention the same spelling and
+    otherwise make the entity index ambiguous. The structured operand schema is
+    the stronger source for the instruction chunk, so collapse that overlap.
+    """
+    changed = 0
+    for item in operands:
+        if not isinstance(item, dict):
+            continue
+        position = str(item.get('position') or '').strip().upper()
+        if not position or not b.DEVICE_RE.fullmatch(position):
+            continue
+        device_key = (position, 'device')
+        placeholder_key = (position, 'operand_placeholder')
+        device_count = int(entities.pop(device_key, 0))
+        if device_count:
+            entities[placeholder_key] += device_count
+            changed += 1
+    return changed
+
+
 def reparse_completion_flags_and_instruction_chunks(con: sqlite3.Connection, instruction_re) -> dict:
     changed_flags = 0
     changed_chunks = 0
+    normalized_operand_entity_keys = 0
     seen_chunks: set[int] = set()
     duplicate_chunks: Counter[int] = Counter(
         int(row[0]) for row in con.execute('SELECT chunk_id FROM instructions WHERE chunk_id IS NOT NULL')
@@ -136,6 +162,7 @@ def reparse_completion_flags_and_instruction_chunks(con: sqlite3.Connection, ins
         if enhanced_text != str(old_text or ''):
             changed_chunks += 1
         entities = b.extract_entities(enhanced_text, instruction_re, chunk_type=str(chunk_type or 'instruction'))
+        normalized_operand_entity_keys += normalize_structured_operand_entities(entities, operands)
         entity_tokens = sorted({entity for entity, _kind in entities})
         entity_json = [
             {'entity': entity, 'type': kind, 'occurrences': count}
@@ -173,6 +200,7 @@ def reparse_completion_flags_and_instruction_chunks(con: sqlite3.Connection, ins
         'instructions': len(rows),
         'completion_flags_changed': changed_flags,
         'instruction_chunks_changed': changed_chunks,
+        'normalized_operand_entity_keys': normalized_operand_entity_keys,
         'duplicate_instruction_chunk_ids': dict(duplicate_chunks),
     }
 
