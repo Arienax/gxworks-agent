@@ -1,0 +1,475 @@
+name: Bootstrap repair localization
+
+on:
+  push:
+    branches: [fix/rejected-json-repair-20260913]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message == 'bootstrap: localize repair context and guard GX device-range warnings'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/rejected-json-repair-20260913
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Patch repair flow, UI provenance, and FX validation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, got {count}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # 1) Explicit structural repair: localize valid-JSON failures to the bad rung(s).
+          p = Path('src/application/workbench.py')
+          text = p.read_text(encoding='utf-8')
+          start = text.index('    def repair_generation(self, job_id, request_id):')
+          end = text.index('\n    def submit(self, command):', start)
+          new_func = '''    def repair_generation(self, job_id, request_id):
+              """Submit one operator-confirmed repair without replaying unrelated rungs."""
+              self.writable()
+              record_id(request_id)
+              with self.lock.thread_lock:
+                  if not self.jobs:
+                      raise KeyError(job_id)
+                  record = self.jobs._load(record_id(job_id))
+                  if (record.get("kind") != "generation" or record.get("status") != "failed"
+                          or record.get("error_code") != "generation_validation_failed"):
+                      raise ConflictError("Only a failed structural generation can be repaired")
+                  snapshot = copy.deepcopy(record.get("snapshot") or {})
+                  self._check_snapshot(snapshot)
+                  project_id = snapshot["project_id"]
+                  version_id = snapshot.get("version_id")
+                  root = contained(self.state_dir / "staging" / record_id(job_id), self.state_dir / "staging")
+                  candidate_path = contained(root / "repair_candidate.json", root)
+                  if not candidate_path.is_file():
+                      raise ConflictError("The rejected candidate is no longer available for repair")
+                  candidate = candidate_path.read_text(encoding="utf-8")
+                  if not candidate.strip() or len(candidate) > 512000:
+                      raise ConflictError("The rejected candidate is too large or empty")
+                  details = record.get("error_details") or {}
+                  violations = details.get("violations") if isinstance(details, dict) else []
+                  locations = []
+                  for item in violations or []:
+                      if isinstance(item, dict):
+                          path = item.get("path")
+                          reason = item.get("reason")
+                          if isinstance(path, str):
+                              locations.append(path + (f" ({reason})" if isinstance(reason, str) else ""))
+                  language = snapshot.get("response_language") if snapshot.get("response_language") in ("zh-CN", "en", "ja") else "zh-CN"
+
+                  # A structurally rejected but syntactically valid candidate can be repaired
+                  # rung-locally. The complete candidate stays in private staging and is never
+                  # copied into the model prompt. Unparseable JSON still needs the legacy full
+                  # format-repair path because there is no trustworthy merge identity yet.
+                  safe_base = None
+                  try:
+                      from application.generation_repair import candidate_base
+                      safe_base = candidate_base(json.loads(candidate))
+                  except (ValueError, TypeError, RecursionError):
+                      safe_base = None
+
+                  target_indexes = []
+                  if safe_base is not None:
+                      import re
+                      for item in violations or []:
+                          if not isinstance(item, dict):
+                              continue
+                          path = str(item.get("path") or "")
+                          match = re.search(r"\\.rungs(?:\\.|\\[)(\\d+)", path)
+                          if match:
+                              target_indexes.append(int(match.group(1)))
+                      target_indexes = sorted(set(target_indexes))
+
+                  target_rungs = []
+                  if safe_base is not None and 0 < len(target_indexes) <= 8:
+                      rungs = safe_base.get("rungs") or []
+                      if all(0 <= index < len(rungs) for index in target_indexes):
+                          target_rungs = [copy.deepcopy(rungs[index]) for index in target_indexes]
+                      if any(not isinstance(rung.get("rung_id"), int) for rung in target_rungs):
+                          target_rungs = []
+
+                  internal = {}
+                  if target_rungs:
+                      from contract_repair import patch_device_addresses
+                      allowed_addresses = sorted(patch_device_addresses({
+                          "device_comments": {}, "rungs": target_rungs,
+                      }))
+                      allowed_set = set(allowed_addresses)
+                      comments = {
+                          address: value
+                          for address, value in (safe_base.get("device_comments") or {}).items()
+                          if str(address).strip().upper() in allowed_set
+                      }
+                      localized = {
+                          "mode": "partial",
+                          "device_comments": comments,
+                          "rungs": target_rungs,
+                          "delete_rung_ids": [],
+                      }
+                      repair_text = (
+                          "这是用户明确确认的一次局部结构修复。不要重新分析需求，也不要改变控制逻辑、地址、参数、触点极性或未出错梯级。"
+                          "只修复下面列出的失败梯级。系统会把你的结果在本地合并回完整失败候选，所以不要重复输出其他梯级。"
+                          "必须返回 mode=\\\"partial\\\"，device_comments 只保留确有必要修改的已有地址，delete_rung_ids 必须为空。"
+                          "rungs 只返回需要替换的完整梯级并保持原 rung_id。debug_note 默认删除，不要用它解释推理。"
+                          "label、debug_note、device_comment 单条目标不超过48字符且绝不能超过64字符。只返回 JSON。\\n"
+                          "失败位置：" + ("；".join(locations) if locations else "ladder schema") + "\\n\\n"
+                          "待修复梯级（仅这些内容会提供给模型）：\\n"
+                          + json.dumps(localized, ensure_ascii=False, separators=(",", ":"))
+                      )
+                      internal = {
+                          "repair_source_job_id": job_id,
+                          "repair_rung_ids": sorted(rung["rung_id"] for rung in target_rungs),
+                          "repair_allowed_addresses": allowed_addresses,
+                      }
+                  else:
+                      repair_text = (
+                          "这是用户明确确认的一次格式/结构修复。不要重新分析需求，也不要改变控制逻辑、地址、参数或触点极性。"
+                          "当前失败候选无法安全定位成可合并的具体梯级，因此仅本次提供完整候选。"
+                          "只修复 JSON 协议/结构问题。debug_note 默认删除；label、debug_note、device_comment 单条目标不超过48字符且绝不能超过64字符。"
+                          "保持原候选语义，修好后只返回完整 JSON。\\n"
+                          "失败位置：" + ("；".join(locations) if locations else "ladder schema") + "\\n\\n"
+                          "失败候选 JSON：\\n" + candidate
+                      )
+
+              return self.submit({
+                  "kind": "generation",
+                  "project_id": project_id,
+                  "version_id": version_id,
+                  "request_id": request_id,
+                  "text": repair_text,
+                  "response_language": language,
+                  "attachment_ids": [],
+                  "change_scope": snapshot.get("change_scope"),
+                  **internal,
+              })
+'''
+          p.write_text(text[:start] + new_func + text[end:], encoding='utf-8')
+
+          # 2) The repair model sees only target rungs; the complete failed candidate is
+          # re-read privately and used only as the local merge base.
+          p = Path('src/application/workbench.py')
+          text = p.read_text(encoding='utf-8')
+          old = '''                program = snapshot.get("program_ir")
+                  request = GenerationRequest(user_input=scoped_text, effort=project.get("effort"), target_mode=project["target_mode"],
+                      previous_json=ir_to_ladder(program) if program else None, previous_ir=program,
+                      confirmed_context=project.get("confirmed_spec"), conversation_history=project.get("messages", []),
+                      plc_model=project.get("plc_model", "FX3U"), program_name=(program or {}).get("program_name", "MAIN"),
+                      revision=(program or {}).get("revision", 0) + 1,
+                      requirement_text=text, image_attachments=images, model_name=snapshot.get("model", {}).get("model"), response_language=language)
+                  metadata = GenerationWorkflow(request, out_dir, ctx.emit, GenerationDependencies(
+                      provider=provider, check_cancelled=ctx.checkpoint, preserve_rejected_candidate=True
+                  )).run()
+'''.replace('                  request', '                request').replace('                      previous', '                    previous').replace('                      confirmed', '                    confirmed').replace('                      plc_model', '                    plc_model').replace('                      revision', '                    revision').replace('                      requirement', '                    requirement').replace('                  metadata', '                metadata').replace('                      provider', '                    provider').replace('                  )).run()', '                )).run()')
+          # The source file uses the compact formatting below; use a stable slice instead.
+          block_start = text.index('                program = snapshot.get("program_ir")', text.index('elif kind == "generation":'))
+          block_end = text.index('            ctx.checkpoint()', block_start)
+          new_block = '''                program = snapshot.get("program_ir")
+                  repair_source_job = snapshot.get("repair_source_job_id")
+                  repair_base = None
+                  repair_context = None
+                  repair_rung_ids = {int(item) for item in (snapshot.get("repair_rung_ids") or [])}
+                  repair_allowed_addresses = {
+                      str(item).strip().upper()
+                      for item in (snapshot.get("repair_allowed_addresses") or [])
+                      if str(item).strip()
+                  }
+                  if repair_source_job:
+                      from application.generation_repair import candidate_base
+                      source_root = contained(self.state_dir / "staging" / record_id(repair_source_job), self.state_dir / "staging")
+                      source_path = contained(source_root / "repair_candidate.json", source_root)
+                      if not source_path.is_file():
+                          raise ConflictError("The rejected candidate is no longer available for localized repair")
+                      try:
+                          repair_base = candidate_base(json.loads(source_path.read_text(encoding="utf-8")))
+                      except (ValueError, TypeError, RecursionError):
+                          repair_base = None
+                      if repair_base is None:
+                          raise ConflictError("The rejected candidate cannot be used as a local repair base")
+                      selected = [copy.deepcopy(rung) for rung in repair_base["rungs"]
+                                  if rung.get("rung_id") in repair_rung_ids]
+                      if {rung.get("rung_id") for rung in selected} != repair_rung_ids:
+                          raise ConflictError("Localized repair rung identity no longer matches the rejected candidate")
+                      comments = {
+                          address: value
+                          for address, value in repair_base.get("device_comments", {}).items()
+                          if str(address).strip().upper() in repair_allowed_addresses
+                      }
+                      repair_context = {"device_comments": comments, "rungs": selected}
+
+                  request = GenerationRequest(
+                      user_input=scoped_text, effort=project.get("effort"), target_mode=project["target_mode"],
+                      previous_json=repair_base if repair_base is not None else (ir_to_ladder(program) if program else None),
+                      current_version_json=repair_context,
+                      previous_ir=None if repair_base is not None else program,
+                      confirmed_context=project.get("confirmed_spec"),
+                      conversation_history=[] if repair_base is not None else project.get("messages", []),
+                      task_type="structural_repair" if repair_base is not None else None,
+                      repair_mode=repair_base is not None,
+                      allowed_rung_ids=repair_rung_ids,
+                      allowed_addresses=repair_allowed_addresses,
+                      plc_model=project.get("plc_model", "FX3U"), program_name=(program or {}).get("program_name", "MAIN"),
+                      revision=(program or {}).get("revision", 0) + 1,
+                      requirement_text=text, image_attachments=images,
+                      model_name=snapshot.get("model", {}).get("model"), response_language=language,
+                  )
+                  metadata = GenerationWorkflow(request, out_dir, ctx.emit, GenerationDependencies(
+                      provider=provider, check_cancelled=ctx.checkpoint, preserve_rejected_candidate=True
+                  )).run()
+'''.replace('\n                  ', '\n                ')
+          p.write_text(text[:block_start] + new_block + text[block_end:], encoding='utf-8')
+
+          # 3) Structural repair cannot delete a target rung or silently change its devices.
+          replace_once('src/plc_generation.py',
+          '''        if task_type == "contract_repair":
+              if parsed.get("delete_rung_ids"):
+                  raise PLCJsonValidationError("$.delete_rung_ids: contract repair may not delete existing rungs")
+              if allowed_devices:
+                  outside_devices = patch_device_addresses(parsed) - allowed_devices
+                  if outside_devices:
+                      raise PLCJsonValidationError("$.rungs: contract repair introduced out-of-scope devices " + ", ".join(sorted(outside_devices)))
+''',
+          '''        if task_type in {"contract_repair", "structural_repair"}:
+              if parsed.get("delete_rung_ids"):
+                  raise PLCJsonValidationError(f"$.delete_rung_ids: {task_type} may not delete existing rungs")
+              if allowed_devices:
+                  outside_devices = patch_device_addresses(parsed) - allowed_devices
+                  if outside_devices:
+                      raise PLCJsonValidationError("$.rungs: repair introduced out-of-scope devices " + ", ".join(sorted(outside_devices)))
+''')
+
+          # 4) GX warning root cause guard: FMOV is word fill. Bare M/Y/S operands are
+          # bits, not word destinations. Bit ranges should be cleared with ZRST.
+          p = Path('src/plc_json_validator.py')
+          text = p.read_text(encoding='utf-8')
+          marker = '''def _validate_comments(comments, path, plc_model="FX3U"):
+'''
+          helper = '''def _validate_fill_move_operands(opcode, operands, path, plc_model="FX3U"):
+              if opcode not in {"FMOV", "FMOVP", "DFMOV", "DFMOVP"} or len(operands) < 2:
+                  return
+              for index, role in ((0, "source"), (1, "destination")):
+                  operand = operands[index]
+                  parsed = parse_device_address(operand, plc_model) if isinstance(operand, str) else None
+                  if parsed is not None and parsed[0] in {"X", "Y", "M", "SM", "S"}:
+                      hint = ("; use ZRST start end when the intent is to clear a contiguous bit range"
+                              if role == "destination" else "")
+                      _fail(
+                          f"{path}.operands[{index}]",
+                          f"{opcode} {role} must be a word device or a digit-specified bit group; "
+                          f"{operand} is a single bit device{hint}",
+                      )
+
+
+'''
+          if marker not in text:
+              raise SystemExit('validator insertion marker missing')
+          text = text.replace(marker, helper + marker, 1)
+          call = '''        _validate_shift_operands(opcode, operands, path, plc_model)
+'''
+          if text.count(call) != 1:
+              raise SystemExit('shift validation call marker missing')
+          text = text.replace(call, call + '        _validate_fill_move_operands(opcode, operands, path, plc_model)\n', 1)
+          p.write_text(text, encoding='utf-8')
+
+          # Catalogue ZRST so the model can use the PLC-native bit-range reset that
+          # Mitsubishi documents for clearing shift registers.
+          replace_once('resources/instructions/mitsubishi/common.json',
+          '    {"mnemonic":"RST","canonical_op":"RESET","category":"action","semantic_kind":"function","operands":[{"name":"destination","role":"write"}]},\n',
+          '    {"mnemonic":"RST","canonical_op":"RESET","category":"action","semantic_kind":"function","operands":[{"name":"destination","role":"write"}]},\n    {"mnemonic":"ZRST","canonical_op":"ZONE_RESET","category":"action","semantic_kind":"function","arity":{"min":2,"max":2},"operands":[{"name":"start","role":"write","data_type":"bit"},{"name":"end","role":"write","data_type":"bit"}]},\n')
+
+          # Tell generation the same rule before validation, so ordinary outputs do
+          # not repeatedly fail on a known GX Works2 device-range warning pattern.
+          replace_once('src/plc_generation_context.py',
+          '''        '已有 device_comments 无必要不要改写。label、debug_note、device_comment 单条文本目标不超过48字符，'
+              '硬上限64字符；返回前自行检查字段名和文本长度。\\n\\n'
+''',
+          '''        '已有 device_comments 无必要不要改写。label、debug_note、device_comment 单条文本目标不超过48字符，'
+              '硬上限64字符；返回前自行检查字段名和文本长度。'
+              'FX3U 连续位软元件清零使用 ZRST 起始地址 结束地址；FMOV 是字/字组填充，禁止用 FMOV K0 M100 K80 这类裸 M 位地址清零。\\n\\n'
+''')
+
+          # 5) Keep the old ladder visible during repair, but label its provenance.
+          p = Path('web/src/App.tsx')
+          text = p.read_text(encoding='utf-8')
+          old_state = '''  const [diagnosticJobId, setDiagnosticJobId] = useState("");
+            const [outputRetry, setOutputRetry] = useState(0);
+'''.replace('            const', '  const')
+          new_state = '''  const [diagnosticJobId, setDiagnosticJobId] = useState("");
+            const [repairDisplay, setRepairDisplay] = useState<{ jobId: string; versionId: string } | null>(null);
+            const [outputRetry, setOutputRetry] = useState(0);
+'''.replace('            const', '  const')
+          if old_state not in text:
+              raise SystemExit('App repair state marker missing')
+          text = text.replace(old_state, new_state, 1)
+          text = text.replace('    setDiagnosticJobId("");\n    setVersionDrawing(null);', '    setDiagnosticJobId("");\n    setRepairDisplay(null);\n    setVersionDrawing(null);', 1)
+
+          old_repair = '''    const repaired = await api<Job>(`/jobs/${encodeURIComponent(job.id)}/repair`, "POST", { request_id: key() });
+              if (activeProjectRef.current !== pid) return;
+              setEvents([]);
+              setJobId(repaired.id);
+              setJobs((old) => [repaired, ...old.filter((item) => item.id !== repaired.id)]);
+              setPanel("agent");
+'''.replace('              ', '    ')
+          new_repair = '''    const repaired = await api<Job>(`/jobs/${encodeURIComponent(job.id)}/repair`, "POST", { request_id: key() });
+              if (activeProjectRef.current !== pid) return;
+              previewEpoch.current += 1;
+              setPreview(null);
+              setSelectedProposal(null);
+              setDiagnosticJobId("");
+              setRepairDisplay({ jobId: repaired.id, versionId: vid });
+              setEvents([]);
+              setJobId(repaired.id);
+              setJobs((old) => [repaired, ...old.filter((item) => item.id !== repaired.id)]);
+              setPanel("agent");
+'''.replace('              ', '    ')
+          if old_repair not in text:
+              raise SystemExit('App repair handler marker missing')
+          text = text.replace(old_repair, new_repair, 1)
+
+          # Clear provenance if the operator deliberately chooses another version.
+          old_click = '''                  setDiagnosticJobId("");
+                            setVersionDrawing(null);
+                            setVid(v.id);
+'''.replace('                            ', '                  ')
+          new_click = '''                  setDiagnosticJobId("");
+                            setRepairDisplay(null);
+                            setVersionDrawing(null);
+                            setVid(v.id);
+'''.replace('                            ', '                  ')
+          if old_click not in text:
+              raise SystemExit('App version click marker missing')
+          text = text.replace(old_click, new_click, 1)
+
+          banner_anchor = '''        {diagnosticJobId && (
+'''
+          banner = '''        {repairDisplay && currentJob?.id === repairDisplay.jobId && currentJob.status !== "completed" && (
+              <div className="preview-banner" role="status">
+                <ShieldCheck size={16} />
+                <strong>{t(currentJob.status === "failed" ? "AI 修复失败，未修改工程" : "AI 修复中")}</strong>
+                <span>{t(currentJob.status === "failed"
+                  ? "下方仍显示修复前的已保存版本；失败候选没有覆盖工程。"
+                  : "下方暂时仍显示修复前的已保存版本；只有修复成功并保存新版本后才会切换。")}</span>
+                {repairDisplay.versionId && <code>{repairDisplay.versionId}</code>}
+              </div>
+            )}
+'''.replace('              ', '          ')
+          if banner_anchor not in text:
+              raise SystemExit('App banner marker missing')
+          text = text.replace(banner_anchor, banner + banner_anchor, 1)
+          p.write_text(text, encoding='utf-8')
+
+          # 6) Update explicit-repair fixture for the new partial-only repair contract.
+          p = Path('tests/test_user_confirmed_generation_repair.py')
+          text = p.read_text(encoding='utf-8')
+          old_provider = '''    def stream(self, request):
+              self.requests.append(request)
+              payload = _ladder()
+              if len(self.requests) == 1:
+                  payload["rungs"][0]["debug_note"] = "过长说明" * 20
+              raw = json.dumps(payload, ensure_ascii=False)
+              yield TextDelta(raw)
+'''.replace('              ', '        ')
+          new_provider = '''    def stream(self, request):
+              self.requests.append(request)
+              ladder = _ladder()
+              if len(self.requests) == 1:
+                  ladder["rungs"][0]["debug_note"] = "过长说明" * 20
+                  payload = ladder
+              else:
+                  payload = {"mode": "partial", "device_comments": {},
+                             "rungs": [ladder["rungs"][0]], "delete_rung_ids": []}
+              raw = json.dumps(payload, ensure_ascii=False)
+              yield TextDelta(raw)
+'''.replace('              ', '        ')
+          if old_provider not in text:
+              raise SystemExit('RepairProvider fixture marker missing')
+          text = text.replace(old_provider, new_provider, 1)
+          old_assert = '''        assert "用户明确确认的一次结构修复" in second_prompt
+                  assert "只修复" in second_prompt
+                  assert "debug_note" in second_prompt
+'''.replace('                  ', '        ')
+          new_assert = '''        assert "用户明确确认的一次局部结构修复" in second_prompt
+                  assert "只修复" in second_prompt
+                  assert "debug_note" in second_prompt
+                  assert "失败候选 JSON" not in second_prompt
+                  assert "待修复梯级（仅这些内容会提供给模型）" in second_prompt
+'''.replace('                  ', '        ')
+          if old_assert not in text:
+              raise SystemExit('repair assertions marker missing')
+          text = text.replace(old_assert, new_assert, 1)
+          text = text.replace('    assert "已执行结构修复" not in text\n', '    assert "已执行结构修复" not in text\n    app = open("web/src/App.tsx", encoding="utf-8").read()\n    assert "AI 修复失败，未修改工程" in app\n    assert "失败候选没有覆盖工程" in app\n', 1)
+          p.write_text(text, encoding='utf-8')
+
+          # Regression: the exact warning-producing FMOV form is rejected, while
+          # the three SFTL virtual tracks remain valid and ZRST is catalogued.
+          Path('tests/test_fx3u_shift_register_generation.py').write_text(r'''import pytest
+
+from instruction_registry import DEFAULT_INSTRUCTION_REGISTRY
+from plc_json_validator import PLCJsonValidationError, validate_ladder_candidate_structure
+
+
+def ladder_with(opcode, operands):
+    return {
+        "device_comments": {},
+        "rungs": [{
+            "rung_id": 1, "header_element": None, "shared_inputs": [],
+            "branches": [{
+                "branch_id": 1, "y_offset_level": 0,
+                "inputs": [{"type": "NO", "address": "M0"}],
+                "outputs": [{"type": "APP_INSTR", "opcode": opcode, "operands": operands}],
+            }],
+        }],
+    }
+
+
+def test_virtual_track_sftl_ranges_are_valid_for_fx3u():
+    for destination in ("M100", "M200", "M300"):
+        validate_ladder_candidate_structure(
+            ladder_with("SFTL", ["M4", destination, "K80", "K1"]), "FX3U"
+        )
+
+
+def test_fmov_cannot_use_bare_m_bit_as_word_destination():
+    with pytest.raises(PLCJsonValidationError, match="ZRST"):
+        validate_ladder_candidate_structure(
+            ladder_with("FMOV", ["K0", "M100", "K80"]), "FX3U"
+        )
+
+
+def test_zrst_is_catalogued_and_accepts_bit_range():
+    assert DEFAULT_INSTRUCTION_REGISTRY.is_known("ZRST")
+    validate_ladder_candidate_structure(
+        ladder_with("ZRST", ["M100", "M179"]), "FX3U"
+    )
+''', encoding='utf-8')
+
+          # Run syntax checks before the bootstrap commit. Full Windows CI runs next.
+          import py_compile
+          for file in [
+              'src/application/workbench.py', 'src/plc_generation.py',
+              'src/plc_json_validator.py', 'src/plc_generation_context.py',
+          ]:
+              py_compile.compile(file, doraise=True)
+          PY
+      - name: Commit branch-only patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/bootstrap-repair-localization.yml
+          git add src/application/workbench.py src/plc_generation.py src/plc_json_validator.py src/plc_generation_context.py resources/instructions/mitsubishi/common.json web/src/App.tsx tests/test_user_confirmed_generation_repair.py tests/test_fx3u_shift_register_generation.py
+          git commit -m "fix(generation): localize repair and reject invalid FMOV bit ranges"
+          git push origin HEAD:fix/rejected-json-repair-20260913
