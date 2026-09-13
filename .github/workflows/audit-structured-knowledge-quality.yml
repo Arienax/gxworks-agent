@@ -5,6 +5,7 @@ on:
     branches: [fix/rejected-json-repair-20260913]
     paths:
       - tools/audit_structured_knowledge_quality.py
+      - tools/audit_device_placeholder_evidence.py
       - tools/audit_error_record_alignment.py
       - tools/audit_error_record_semantics.py
       - tools/build_fx3u_knowledge_v3.py
@@ -35,6 +36,11 @@ jobs:
           python tools/audit_structured_knowledge_quality.py \
             --database resources/knowledge/fx3u_knowledge.sqlite \
             --output structured-knowledge-quality-audit.json > structured-knowledge-quality-audit.log
+      - name: Collect device placeholder evidence
+        run: |
+          python tools/audit_device_placeholder_evidence.py \
+            --database resources/knowledge/fx3u_knowledge.sqlite \
+            --output device-placeholder-evidence.json > device-placeholder-evidence.log
       - name: Audit header-aware error table alignment
         run: |
           python tools/audit_error_record_alignment.py \
@@ -50,6 +56,7 @@ jobs:
           python - <<'PY'
           import json
           report = json.load(open('structured-knowledge-quality-audit.json', encoding='utf-8'))
+          evidence = json.load(open('device-placeholder-evidence.json', encoding='utf-8'))
           alignment = json.load(open('error-record-alignment-audit.json', encoding='utf-8'))
           semantic = json.load(open('error-record-semantic-audit.json', encoding='utf-8'))
           print('INTEGRITY', report['integrity_check'])
@@ -58,6 +65,10 @@ jobs:
           print('DOMAINS', json.dumps(report['issue_domain_counts'], ensure_ascii=False, sort_keys=True))
           print('CODES', json.dumps(report['issue_code_counts'], ensure_ascii=False, sort_keys=True))
           print('STATS', json.dumps(report['stats'], ensure_ascii=False, sort_keys=True))
+          print('DEVICE_PLACEHOLDER_EVIDENCE', json.dumps({
+              'candidate_count': evidence['candidate_count'],
+              'suggested_class_counts': evidence['suggested_class_counts'],
+          }, ensure_ascii=False, sort_keys=True))
           print('ERROR_TABLE_ALIGNMENT', json.dumps({
               'table_backed_records': alignment['table_backed_records'],
               'aligned_records': alignment['aligned_records'],
@@ -73,6 +84,15 @@ jobs:
           }, ensure_ascii=False, sort_keys=True))
           print('--- FIRST 80 STRUCTURED ISSUES ---')
           for item in report['issues'][:80]: print(json.dumps(item, ensure_ascii=False, sort_keys=True))
+          print('--- DEVICE PLACEHOLDER EVIDENCE ---')
+          for item in evidence['candidates']:
+              compact = {
+                  'device': item['device'],
+                  'suggested_class': item['suggested_class'],
+                  'signal_counts': item['signal_counts'],
+                  'snippets': item['snippets'][:4],
+              }
+              print(json.dumps(compact, ensure_ascii=False, sort_keys=True))
           print('--- FIRST 80 ERROR ALIGNMENT ISSUES ---')
           for item in alignment['issues'][:80]: print(json.dumps(item, ensure_ascii=False, sort_keys=True))
           print('--- FIRST 80 ERROR SEMANTIC ISSUES ---')
@@ -95,6 +115,8 @@ jobs:
           path: |
             structured-knowledge-quality-audit.json
             structured-knowledge-quality-audit.log
+            device-placeholder-evidence.json
+            device-placeholder-evidence.log
             error-record-alignment-audit.json
             error-record-alignment-audit.log
             error-record-semantic-audit.json
