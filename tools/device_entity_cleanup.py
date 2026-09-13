@@ -27,6 +27,20 @@ _N_DEVICE_RANGE_RE = re.compile(r"^N\d+-N\d+$", re.I)
 _LOWER_N_VALUE_RE = re.compile(r"(?<![A-Za-z0-9_])n\s+(\d{1,4})(?![A-Za-z0-9_])")
 _UPPER_N_VALUE_RE = re.compile(r"(?<![A-Za-z0-9_])N\s*(\d{1,3})(?![A-Za-z0-9_])")
 
+# A lowercase n is promoted to operand_placeholder only when the local source
+# actually describes an operand/count. This avoids turning PDF page/sidebar
+# fragments such as ``n 9`` into a different kind of structured noise.
+_N_OPERAND_CONTEXT_RE = re.compile(
+    r"operand|set\s+data|source\s+data|destination\s+data|"
+    r"number\s+of\s+(?:points|bytes|words|bits|characters|lines|stores?)|"
+    r"(?:store|transfer|shift|rotate|comparison)\s+(?:points|count)|"
+    r"points\s+(?:transferred|shifted|stored)|"
+    r"\bn\s+(?:bits|points|bytes|words|characters|lines)\b|"
+    r"(?:1\s*[≤<]\s*)?n\s*[≤<]|[≤<]\s*n\s*[≤<]|"
+    r"操作数|设定数据|点数|字节数|字数|位数",
+    re.I,
+)
+
 # A device designator in the left column followed by an instruction step count
 # is a layout artifact, e.g. ``D | 17 steps | DABSD`` -> ``D 17 steps DABSD``.
 _D_STEP_COUNT_RE = re.compile(
@@ -65,6 +79,10 @@ def _is_nesting_level(text: str, match: re.Match[str]) -> bool:
     return len([value for value in nearby_n_values if 0 <= value <= 7]) >= 3
 
 
+def _is_lower_n_operand(text: str, match: re.Match[str]) -> bool:
+    return bool(_N_OPERAND_CONTEXT_RE.search(_window(text, match.start(), match.end(), 220)))
+
+
 def sanitize_device_like_entities(
     text: str,
     chunk_type: str,
@@ -89,6 +107,8 @@ def sanitize_device_like_entities(
 
     if chunk_type == "instruction":
         for match in _LOWER_N_VALUE_RE.finditer(text):
+            if not _is_lower_n_operand(text, match):
+                continue
             token = f"N{int(match.group(1))}"
             cleaned[(token, "operand_placeholder")] += 1
 
