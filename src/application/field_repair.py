@@ -13,6 +13,7 @@ import json
 import re
 
 from application.generation_repair import RepairAssemblyError, candidate_base
+from instruction_registry import DEFAULT_INSTRUCTION_REGISTRY, generation_app_instr_mnemonics
 from plc_generation_contract import MAX_LABEL_LEN
 
 MODE = "field_patch"
@@ -79,7 +80,7 @@ def _value_schema(parent, field, reason):
 
 
 def _target(saved, row, segments, *, strategy, current_value=None,
-            value_schema=None, deterministic_value=None):
+            value_schema=None, deterministic_value=None, context=None):
     path = _pointer(segments) if segments else "/rungs"
     target = {
         "path": path,
@@ -91,6 +92,8 @@ def _target(saved, row, segments, *, strategy, current_value=None,
     }
     if strategy == "deterministic":
         target["deterministic_value"] = copy.deepcopy(deterministic_value)
+    if isinstance(context, dict) and context:
+        target["context"] = copy.deepcopy(context)
     return {
         "schema_version": SCHEMA_VERSION,
         "mode": MODE,
@@ -110,6 +113,61 @@ def _blocked(saved, row, segments=None, current_value=None):
     )
 
 
+def _edit_distance_at_most_one(left, right):
+    left = str(left or "").upper()
+    right = str(right or "").upper()
+    if left == right:
+        return True
+    if abs(len(left) - len(right)) > 1:
+        return False
+    if len(left) == len(right):
+        return sum(a != b for a, b in zip(left, right)) == 1
+    if len(left) > len(right):
+        left, right = right, left
+    i = j = differences = 0
+    while i < len(left) and j < len(right):
+        if left[i] == right[j]:
+            i += 1
+            j += 1
+            continue
+        differences += 1
+        if differences > 1:
+            return False
+        j += 1
+    return True
+
+
+def _opcode_repair_candidates(observed, operands, plc_model):
+    """Return evidence-bounded opcode replacements without semantic guessing."""
+    token = str(observed or "").strip().upper()
+    if not token:
+        return [], "none", False
+    count = len(operands) if isinstance(operands, list) else 0
+    allowed = []
+    for mnemonic in generation_app_instr_mnemonics(plc_model):
+        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(mnemonic)
+        if spec is not None and spec.accepts_arity(count):
+            allowed.append(mnemonic)
+    allowed_set = set(allowed)
+    strict = []
+    if token.startswith("DD"):
+        candidate = token[1:]
+        if candidate in allowed_set:
+            strict.append(candidate)
+    if token.endswith("PP"):
+        candidate = token[:-1]
+        if candidate in allowed_set and candidate not in strict:
+            strict.append(candidate)
+    if len(strict) == 1:
+        return strict, "modifier_normalization", True
+    if strict:
+        return sorted(strict), "modifier_normalization", False
+    nearby = sorted(mnemonic for mnemonic in allowed if _edit_distance_at_most_one(token, mnemonic))
+    if 0 < len(nearby) <= 8:
+        return nearby, "single_edit_catalog_match", False
+    return [], "none", False
+
+
 def plan(base, violations, plc_model="FX3U"):
     """Plan one deterministic scalar fix or classify the sole structural fallback.
 
@@ -117,7 +175,6 @@ def plan(base, violations, plc_model="FX3U"):
     else either has a deterministic scalar correction or remains blocked, so a
     generic validator path can never widen into a whole-rung rewrite.
     """
-    del plc_model
     saved = candidate_base(base)
     rows = [row for row in (violations or []) if isinstance(row, dict)]
     if saved is None:
@@ -143,6 +200,31 @@ def plan(base, violations, plc_model="FX3U"):
         return _blocked(saved, row, segments)
 
     leaf = segments[-1]
+    if (
+        leaf == "opcode" and isinstance(parent, dict)
+        and str(parent.get("type") or "").upper() == "APP_INSTR"
+    ):
+        observed = str(row.get("observed_opcode") or current or "").strip().upper()
+        operands = parent.get("operands") if isinstance(parent.get("operands"), list) else []
+        candidates, basis, deterministic = _opcode_repair_candidates(observed, operands, plc_model)
+        if candidates:
+            context = {
+                "mutable_field": "opcode",
+                "observed_opcode": observed,
+                "candidate_basis": basis,
+                "allowed_values": list(candidates),
+                "immutable_operands": copy.deepcopy(operands),
+            }
+            return _target(
+                saved, row, segments,
+                strategy="deterministic" if deterministic else "constrained_model",
+                current_value=current,
+                value_schema={"type": "string", "enum": list(candidates)},
+                deterministic_value=candidates[0] if deterministic else None,
+                context=context,
+            )
+        return _blocked(saved, row, segments, current)
+
     if isinstance(leaf, str):
         rule = _value_schema(parent, leaf, reason)
         if rule is not None:
@@ -161,9 +243,8 @@ def plan(base, violations, plc_model="FX3U"):
                 deterministic_value=deterministic_value,
             )
 
-    # Container paths, opcodes, addresses, operands, values and polarity are not
-    # repair recipes. Keep the original diagnostic and require manual/regeneration
-    # context instead of asking a model to infer semantics.
+    # Every unproven field remains frozen. Address/operand/value/polarity
+    # errors stay blocked until a validator supplies a bounded replacement set.
     return _blocked(saved, row, segments, current)
 
 

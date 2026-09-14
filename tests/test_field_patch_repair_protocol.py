@@ -55,6 +55,52 @@ def test_opcode_failure_is_blocked_instead_of_guessing_a_mnemonic():
     assert rejected.value.reason == "invalid_ladder_structure"
 
 
+
+def test_duplicate_modifier_opcode_is_repaired_deterministically():
+    base = _base()
+    output = base["rungs"][0]["branches"][0]["outputs"][0]
+    output["opcode"] = "DDADDP"
+    output["operands"] = ["D0", "D2", "D4"]
+    repair = plan(base, [{
+        "path": "content$.rungs.0.branches.0.outputs.0.opcode",
+        "reason": "invalid_ladder_structure",
+        "observed_opcode": "DDADDP",
+    }], "FX3U")
+    target = repair["target"]
+    assert target["strategy"] == "deterministic"
+    assert target["value_schema"]["enum"] == ["DADDP"]
+    assert target["deterministic_value"] == "DADDP"
+    assert target["context"]["candidate_basis"] == "modifier_normalization"
+    result = apply(base, deterministic_response(_payload(repair)), repair)
+    fixed = result["rungs"][0]["branches"][0]["outputs"][0]
+    assert fixed["opcode"] == "DADDP"
+    assert fixed["operands"] == ["D0", "D2", "D4"]
+
+
+def test_ambiguous_opcode_unlocks_only_the_reported_field_with_small_enum():
+    base = _base()
+    output = base["rungs"][0]["branches"][0]["outputs"][0]
+    output["opcode"] = "MOVQ"
+    repair = plan(base, [{
+        "path": "content$.rungs.0.branches.0.outputs.0.opcode",
+        "reason": "invalid_ladder_structure",
+        "observed_opcode": "MOVQ",
+    }], "FX3U")
+    target = repair["target"]
+    assert target["strategy"] == "constrained_model"
+    assert target["value_schema"]["enum"] == ["MOV", "MOVP"]
+    assert target["context"]["immutable_operands"] == ["D0", "D1"]
+    response = {
+        "schema_version": 1,
+        "mode": "field_patch",
+        "base_sha256": repair["base_sha256"],
+        "patches": [{"path": target["path"], "value": "MOVP"}],
+    }
+    result = apply(base, response, repair)
+    fixed = result["rungs"][0]["branches"][0]["outputs"][0]
+    assert fixed["opcode"] == "MOVP"
+    assert fixed["operands"] == ["D0", "D1"]
+
 def test_long_debug_note_is_truncated_deterministically():
     base = _base()
     original = copy.deepcopy(base)

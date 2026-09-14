@@ -517,14 +517,24 @@ class WorkbenchService:
                 snapshot["fbd_program"] = context.version.get("program_name")
             # Resolve files and credentials at submission, never later from mutable UI state.
             images = self._attachments(project_id, command.get("attachment_ids", []))
-            requires_model = command["kind"] not in ("gx_read", "gx_inspect") and (command["kind"] != "review" or command.get("deep", True))
+            repair_plan = command.get("repair_plan") if isinstance(command.get("repair_plan"), dict) else {}
+            repair_target = repair_plan.get("target") if isinstance(repair_plan.get("target"), dict) else {}
+            deterministic_generation_repair = (
+                command["kind"] == "generation"
+                and repair_plan.get("mode") == "field_patch"
+                and repair_target.get("strategy") == "deterministic"
+            )
+            requires_model = (
+                command["kind"] not in ("gx_read", "gx_inspect")
+                and (command["kind"] != "review" or command.get("deep", True))
+                and not deterministic_generation_repair
+            )
             provider, model = self.model_factory() if requires_model else (None, {})
             snapshot["model"] = model
             snapshot["approval_consent"] = self.approval.read()
             repair_context = "minimal" if command.get("repair_mode") or command.get("format_repair") else None
-            snapshot["context_policy"] = resolve_context_policy(
-                repair_context if requires_model else "legacy"
-            ).snapshot()
+            policy_name = repair_context if repair_context else (None if requires_model else "legacy")
+            snapshot["context_policy"] = resolve_context_policy(policy_name).snapshot()
             if command["kind"] == "debug_plan":
                 snapshot["saved_run"] = self.projects.simulator_run(project_id, context.version_id, command.get("run_id"))
 

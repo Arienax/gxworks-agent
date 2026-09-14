@@ -230,6 +230,7 @@ class GenerationWorkflow:
             repair_call = self.target_mode == "ladder" and (self.repair_mode or self.format_repair)
             repair_payload = None
             repair_kind = "format"
+            deterministic_field_patch = False
             if repair_call:
                 if self.repair_mode and isinstance(self.repair_plan, dict) and self.repair_plan.get("mode") == "field_patch":
                     repair_kind = "field_patch"
@@ -240,6 +241,9 @@ class GenerationWorkflow:
                         "base_sha256": self.repair_plan.get("base_sha256"),
                         "target": copy.deepcopy(self.repair_plan.get("target") or {}),
                     }
+                    deterministic_field_patch = (
+                        repair_payload["target"].get("strategy") == "deterministic"
+                    )
                 elif self.repair_mode:
                     repair_kind = "partial"
                     baseline = self.previous_json if isinstance(self.previous_json, dict) else {}
@@ -271,7 +275,17 @@ class GenerationWorkflow:
 
                 self._emit("progress", {"stage": "connecting", "message": tr('正在连接模型')})
                 if repair_call:
-                    if self.dependencies.repair_response is not None:
+                    if deterministic_field_patch:
+                        from application.field_repair import deterministic_response
+                        local_response = deterministic_response(repair_payload)
+                        if local_response is None:
+                            raise GenerationError(tr('确定性字段修复计划无效'))
+                        full_content = json.dumps(local_response, ensure_ascii=False)
+                        self._emit("progress", {
+                            "stage": "deterministic_field_repair",
+                            "message": tr('已根据唯一校验证据确定性修复字段；未调用模型。'),
+                        })
+                    elif self.dependencies.repair_response is not None:
                         _reasoning, full_content = model_call(
                             self.dependencies.repair_response, repair_payload, self.model_name, self.effort,
                             mode=repair_kind,

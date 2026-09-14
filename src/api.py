@@ -1578,7 +1578,9 @@ Rules:
 - Copy base_sha256 and path exactly from the payload.
 - Return exactly one patch and only the replacement scalar value.
 - Do not return a rung, branch, ladder program, markdown or explanation.
-- Use target.context only to choose the corrected value; do not redesign control logic.
+- Only `target.path` is mutable. Every other ladder field is immutable.
+- `target.context` contains validator evidence and immutable sibling values.
+- If `target.value_schema.enum` exists, it is exhaustive; choose only from it.
 - The provider schema is authoritative for the allowed replacement value.
 """
 
@@ -1596,8 +1598,9 @@ Rules:
 - `mode` must be `partial` and `delete_rung_ids` must be empty.
 - `rungs` may contain only complete replacement rungs whose rung_id is listed
   in `allowed_rung_ids`; never add, delete, renumber, or repeat another rung.
-- Preserve control logic, addresses, operands, parameters and contact polarity
-  except for the minimum structural/protocol correction explicitly requested.
+- This partial path repairs structure/protocol only. Validator-proven scalar
+  semantic errors are repaired separately through field_patch. Preserve control
+  logic, addresses, opcodes, operands, parameters and contact polarity here.
 - Use the supplied `baseline_subset` as the only program evidence.
 - `device_comments` may contain only addresses listed in `allowed_addresses`.
 - `repair_contract.app_instr_instances` is the exhaustive immutable APP_INSTR
