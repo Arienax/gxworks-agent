@@ -197,7 +197,7 @@ def test_format_repair_does_not_guess_invalid_opcode_or_fall_back_to_whole_rung(
         service.jobs._futures[job].result(timeout=15)
         failed = client.get(f"/api/jobs/{job}").json()
         assert failed["status"] == "failed"
-        assert failed["error_details"]["violations"][0]["reason"] == "repair_scope_violation"
+        assert failed["error_details"]["violations"][0]["reason"] == "invalid_ladder_structure"
         assert len(provider.requests) == 2
         assert service.projects.project(project)["version_count"] == 0
 
