@@ -51,7 +51,15 @@ class ModelProgressReporter:
         self.preview_characters = 0
         self.preview_truncated = False
 
+    def _checkpoint(self):
+        checkpoint = getattr(self.ctx, "checkpoint", None)
+        if callable(checkpoint):
+            checkpoint()
+
     def __call__(self, progress):
+        # Cancellation is transport control, not presentation. Check before the
+        # 400 ms UI throttle so every raw provider event can terminate a stream.
+        self._checkpoint()
         now = self.clock()
         if progress.phase == "waiting":
             self.request_number += 1
@@ -63,6 +71,7 @@ class ModelProgressReporter:
         self.last_time = now
 
     def preview(self, update):
+        self._checkpoint()
         if update.kind == "start":
             self.preview_buffer = {"reasoning": [], "content": []}
             self.preview_characters = 0
