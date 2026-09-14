@@ -165,6 +165,25 @@ def _json_object(text):
     return value
 
 
+def _strict_generation_projection(confirmed_spec):
+    """Expose structured confirmed facts, not Agent-A implementation prose.
+
+    ``description`` and ``generation_guide`` originate as model-authored proposal
+    text. They used to become a second hidden semantic channel after the user
+    confirmed the review draft, so a phrase such as "DMOV K0 increment" could
+    still steer Agent B even after the corresponding hard opcode constraint was
+    removed. Agent B needs the selected approach id plus its structured contract;
+    prose stays on the Agent-A/review side of the boundary.
+    """
+    projected = public_generation_specification(confirmed_spec) or {}
+    selected = projected.get("selected_approach")
+    if isinstance(selected, dict):
+        selected.pop("name", None)
+        selected.pop("description", None)
+        selected.pop("generation_guide", None)
+    return projected
+
+
 def generate_confirmed_ladder(
     confirmed_spec,
     plc_model="FX3U",
@@ -177,7 +196,7 @@ def generate_confirmed_ladder(
     import api
 
     model = str(plc_model or "FX3U").strip().upper() or "FX3U"
-    projected = public_generation_specification(confirmed_spec) or {}
+    projected = _strict_generation_projection(confirmed_spec)
     if not projected:
         raise ValueError("confirmed generation specification is empty")
 
