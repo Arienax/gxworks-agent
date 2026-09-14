@@ -201,9 +201,19 @@ def test_format_repair_does_not_guess_invalid_opcode_or_fall_back_to_whole_rung(
         assert len(provider.requests) == 2
         assert service.projects.project(project)["version_count"] == 0
 
+        blocked = client.post(
+            f"/api/jobs/{job}/repair",
+            headers=headers,
+            json={"request_id": "opcode-repair-must-stop"},
+        )
+        assert blocked.status_code == 409, blocked.text
+        assert len(provider.requests) == 2, "blocked semantic repair must not create another model job"
+
 
 def test_failure_ui_offers_explicit_repair_not_fake_automatic_attempts():
     text = open("web/src/features/JobFailure.tsx", encoding="utf-8").read()
     assert "让 AI 修复" in text
+    assert "repairableGenerationFailure(job)" in text
     assert "系统没有自动再次调用模型" in text
+    assert "系统不会猜测修复" in text
     assert "已执行结构修复" not in text

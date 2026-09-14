@@ -56,6 +56,7 @@ const words: Record<string, [string, string]> = {
   "在仿真页设置输入时刻和期望输出。执行遵循工作区审批设置，环境不可用时会保留未验证状态。": ["Set input timing and expected outputs on the Simulation page. Execution follows workspace approval settings; results remain unverified when the environment is unavailable.", "シミュレーションページで入力時刻と期待する出力を設定します。実行はワークスペースの承認設定に従い、環境が利用できない場合は未検証の状態を維持します。"],
   "梯形图候选结构不符合协议，未接受任何程序。": ["The ladder candidate does not meet the structural protocol. No program was accepted.", "ラダー候補の構造がプロトコルに適合していないため、プログラムは承認されていません。"],
   "系统没有自动再次调用模型。可由你确认后仅修复当前候选的结构问题。": ["The model was not called again automatically. You can confirm a repair limited to structural issues in the current candidate.", "モデルの自動再呼び出しは行っていません。確認後、現在の候補の構造上の問題だけを修復できます。"],
+  "该错误涉及指令、地址或参数语义，系统不会猜测修复；请重新生成候选或手动修改。": ["This error involves instruction, address, or parameter semantics. The system will not guess a repair; regenerate the candidate or edit it manually.", "このエラーは命令、アドレス、またはパラメータの意味に関係します。推測による修復は行わないため、候補を再生成するか手動で修正してください。"],
   "让 AI 修复": ["Repair with AI", "AIで修復"],
   "下载错误诊断日志": ["Download error diagnostics", "エラー診断ログをダウンロード"],
   "任务编号": ["Task ID", "タスクID"],

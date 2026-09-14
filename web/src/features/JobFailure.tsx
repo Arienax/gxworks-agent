@@ -31,6 +31,18 @@ const errorMessages: Record<string, string> = {
   generation_failed: "生成流程失败，确认规格和已有版本未被修改。",
 };
 
+function repairableGenerationFailure(job: Job) {
+  const rows = job.error_details?.violations || [];
+  if (rows.length !== 1) return false;
+  const violation = rows[0];
+  if (violation.reason === "invalid_json_object" || violation.reason === "invalid_shared_input") return true;
+  const leaf = violation.path.split(".").at(-1) || "";
+  if (violation.reason === "field_too_long")
+    return leaf === "label" || leaf === "debug_note" || leaf.startsWith("comment[");
+  return violation.reason === "invalid_ladder_structure" &&
+    (leaf === "branch_id" || leaf === "y_offset_level");
+}
+
 function FailureMessage({ job, t }: { job: Job; t: (key: string) => string }) {
   if (!job.error_code) return null;
   if (job.error_code === "generation_validation_failed") return <div className="job-failure" role="alert">
@@ -38,7 +50,9 @@ function FailureMessage({ job, t }: { job: Job; t: (key: string) => string }) {
     {job.error_details?.violations?.map((violation, i) => <p key={i}>
       <code>{violation.path}</code><br /><span>{t(reasons[violation.reason] || "回复内容不符合要求")}</span>
     </p>)}
-    <p className="muted">{t("系统没有自动再次调用模型。可由你确认后仅修复当前候选的结构问题。")}</p>
+    <p className="muted">{t(repairableGenerationFailure(job)
+      ? "系统没有自动再次调用模型。可由你确认后仅修复当前候选的结构问题。"
+      : "该错误涉及指令、地址或参数语义，系统不会猜测修复；请重新生成候选或手动修改。")}</p>
   </div>;
   if (job.error_code === "change_scope_violation") return <p className="error-text" role="alert">{t("候选超出允许修改的范围。请查看任务详情，调整范围或重新生成。")}</p>;
   if (job.error_code !== "response_rejected") return <p className="error-text">{t(errorMessages[job.error_code] || job.error_code)}</p>;
@@ -60,7 +74,7 @@ export function JobFailure({ job, busy, onRepair, t }: {
   t: (key: string) => string;
 }) {
   if (!job.error_code) return null;
-  const repairable = job.kind === "generation" && job.error_code === "generation_validation_failed" && !!onRepair;
+  const repairable = job.kind === "generation" && job.error_code === "generation_validation_failed" && repairableGenerationFailure(job) && !!onRepair;
   return <section>
     <FailureMessage job={job} t={t} />
     {repairable && <Button disabled={busy} onClick={onRepair}>{t("让 AI 修复")}</Button>}

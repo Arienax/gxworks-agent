@@ -1858,6 +1858,49 @@ def repair_ladder_response(repair_payload, model_name, effort, *, mode,
     return response.message.reasoning, response.message.content
 
 
+def _native_ladder_generation_options(plc_model, *, allow_partial=False):
+    """Use the current ladder contract when the selected profile already uses native JSON Schema.
+
+    Profiles that use json_object/text keep their existing transport behavior.
+    This only replaces a persisted/native json_schema so its opcode enum cannot
+    drift behind the registry enforced by final PLC validation.
+    """
+    provider = _workflow_provider()
+    profile = getattr(provider, "profile", None)
+    if not isinstance(profile, dict):
+        return None
+    response_format = None
+    for key in ("generationDefaults", "requestOverrides"):
+        source = profile.get(key)
+        if isinstance(source, dict) and "response_format" in source:
+            response_format = source.get("response_format")
+    if not (isinstance(response_format, dict) and response_format.get("type") == "json_schema"):
+        return None
+
+    selected_model = str(plc_model or "FX3U").strip().upper() or "FX3U"
+    schema = ladder_response_schema(
+        allow_partial=bool(allow_partial),
+        plc_model=selected_model,
+    )
+    name = "ladder_candidate"
+    if allow_partial:
+        # Ordinary edit generation prefers a partial candidate. Use that branch
+        # directly so providers do not have to support a top-level oneOf.
+        schema = json.loads(json.dumps(schema["oneOf"][1]))
+        schema["required"] = ["mode", "device_comments", "rungs", "delete_rung_ids"]
+        name = "ladder_partial_candidate"
+    return {
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": name,
+                "strict": True,
+                "schema": schema,
+            },
+        }
+    }
+
+
 @language_scoped
 def stream_model_response(user_requirement, model_name, effort, target_mode,
                              on_reasoning_chunk=None, on_content_chunk=None,
@@ -1894,11 +1937,16 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
         image_attachments=image_attachments,
     )
 
+    native_options = (
+        _native_ladder_generation_options(plc_model, allow_partial=is_edit_mode)
+        if target_mode == "ladder" else None
+    )
     response = _request_model(
         messages,
         model_name=model_name,
         effort=effort,
         stream=True,
+        options=native_options,
         response_contract=LADDER_RESPONSE if target_mode == "ladder" else ST_RESPONSE,
         preserved_annotations=source_annotations(current_version_json, confirmed_spec, confirmed_context),
         on_reasoning_chunk=on_reasoning_chunk,
@@ -1950,12 +1998,17 @@ def generate_model_json(user_requirement: str, model_name: str, effort: str,
         image_attachments=image_attachments,
     )
 
+    native_options = (
+        _native_ladder_generation_options(plc_model, allow_partial=is_edit_mode)
+        if target_mode == "ladder" else None
+    )
     try:
         response = _request_model(
             messages,
             model_name=model_name,
             effort=effort,
             stream=False,
+            options=native_options,
             request_timeout=request_timeout,
             max_retries=max_retries,
             response_contract=LADDER_RESPONSE if target_mode == "ladder" else ST_RESPONSE,

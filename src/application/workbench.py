@@ -377,6 +377,12 @@ class WorkbenchService:
                 repair_plan = plan_field_patch(
                     repair_base, violations, snapshot.get("project", {}).get("plc_model", "FX3U")
                 ) if local_repair else None
+            if local_repair and isinstance(repair_plan, dict):
+                target = repair_plan.get("target") or {}
+                if target.get("strategy") == "blocked":
+                    raise ConflictError(
+                        "该校验错误涉及指令、地址或参数语义，局部修复不会猜测修改；请重新生成候选或手动修正。"
+                    )
             if local_repair and not inherited_local_repair and repair_plan is None:
                 rungs = repair_base["rungs"]
                 by_index = {index: rung for index, rung in enumerate(rungs)}

@@ -487,6 +487,12 @@ class OpenAICompatibleProvider:
 
     def _request_params(self, request: ModelRequest) -> Dict[str, Any]:
         request = with_response_language(request)
+        response_format_unset = object()
+        explicit_response_format = (
+            copy.deepcopy(request.options["response_format"])
+            if "response_format" in request.options
+            else response_format_unset
+        )
         params = _deep_merge(
             self.profile.get("generationDefaults") or {},
             request.options or {},
@@ -522,6 +528,14 @@ class OpenAICompatibleProvider:
         if extra_body:
             params["extra_body"] = extra_body
         params = _deep_merge(params, self.profile.get("requestOverrides") or {})
+        # A workflow-specific response contract must beat a persisted/profile-level
+        # response_format. Otherwise an old native schema can accept values that
+        # the current PLC validator rejects after the model response is accepted.
+        if explicit_response_format is not response_format_unset:
+            if explicit_response_format is None:
+                params.pop("response_format", None)
+            else:
+                params["response_format"] = explicit_response_format
 
         params["model"] = request.model or str(self.profile.get("model") or "")
         params["messages"] = [_wire_message(item) for item in request.messages]
