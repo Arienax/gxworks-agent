@@ -16,7 +16,7 @@ jobs:
         env:
           PYTHONPATH: src
         run: |
-          python - <<'PY'
+          python - <<'PY' > agent-b-metrics.txt
           import json
           from application.generation_agent import _GENERATION_REQUEST, _strict_generation_projection
           from plc_generation_context import build_generation_instructions
@@ -46,3 +46,8 @@ jobs:
           print('CONFIRMED_CHARS=', len(json.dumps(projected, ensure_ascii=False, separators=(',', ':'))))
           print('PROMPT_HEAD=', prompt[:500].replace('\n','\\n'))
           PY
+          cat agent-b-metrics.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-b-metrics
+          path: agent-b-metrics.txt
