@@ -1,0 +1,269 @@
+name: Fix recurring opcode repair loop
+
+on:
+  push:
+    branches: [fix/prompt-context-slim-20260913]
+    paths:
+      - .github/workflows/fix-opcode-repair-loop-20260914.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/prompt-context-slim-20260913
+          fetch-depth: 0
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Apply bounded repair-loop patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def read(path):
+              return Path(path).read_text(encoding='utf-8')
+
+          def write(path, text):
+              Path(path).write_text(text, encoding='utf-8')
+
+          def replace_once(path, old, new):
+              text = read(path)
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, found {count}: {old[:80]!r}')
+              write(path, text.replace(old, new, 1))
+
+          def replace_in_function(path, function_name, old, new):
+              text = read(path)
+              marker = f'def {function_name}('
+              start = text.index(marker)
+              next_def = text.find('\n\ndef ', start + len(marker))
+              next_decorated = text.find('\n\n@', start + len(marker))
+              ends = [value for value in (next_def, next_decorated) if value != -1]
+              end = min(ends) if ends else len(text)
+              block = text[start:end]
+              count = block.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}:{function_name}: expected one match, found {count}')
+              block = block.replace(old, new, 1)
+              write(path, text[:start] + block + text[end:])
+
+          # 1) A blocked semantic field plan must never be submitted as a repair job.
+          replace_once(
+              'src/application/workbench.py',
+              '            if local_repair and not inherited_local_repair and repair_plan is None:\n',
+              '''            if local_repair and isinstance(repair_plan, dict):\n                target = repair_plan.get("target") or {}\n                if target.get("strategy") == "blocked":\n                    raise ConflictError(\n                        "该校验错误涉及指令、地址或参数语义，局部修复不会猜测修改；请重新生成候选或手动修正。"\n                    )\n            if local_repair and not inherited_local_repair and repair_plan is None:\n''',
+          )
+
+          # 2) Workflow-level response_format is authoritative over stale profile overrides.
+          replace_once(
+              'src/model_provider.py',
+              '''        params = _deep_merge(\n            self.profile.get("generationDefaults") or {},\n            request.options or {},\n        )\n''',
+              '''        response_format_unset = object()\n        explicit_response_format = (\n            copy.deepcopy(request.options["response_format"])\n            if "response_format" in request.options\n            else response_format_unset\n        )\n        params = _deep_merge(\n            self.profile.get("generationDefaults") or {},\n            request.options or {},\n        )\n''',
+          )
+          replace_once(
+              'src/model_provider.py',
+              '''        params = _deep_merge(params, self.profile.get("requestOverrides") or {})\n\n        params["model"] = request.model or str(self.profile.get("model") or "")\n''',
+              '''        params = _deep_merge(params, self.profile.get("requestOverrides") or {})\n        # A workflow-specific response contract must beat a persisted/profile-level\n        # response_format. Otherwise an old native schema can accept values that\n        # the current PLC validator rejects after the model response is accepted.\n        if explicit_response_format is not response_format_unset:\n            if explicit_response_format is None:\n                params.pop("response_format", None)\n            else:\n                params["response_format"] = explicit_response_format\n\n        params["model"] = request.model or str(self.profile.get("model") or "")\n''',
+          )
+
+          # 3) When a profile already opts into native json_schema, replace any stale\n          # ladder schema with the current PLC-model-specific generation contract.
+          api_path = 'src/api.py'
+          api_text = read(api_path)
+          marker = '@language_scoped\ndef stream_model_response('
+          if marker not in api_text:
+              raise SystemExit('api.py: stream_model_response marker missing')
+          helper = '''def _native_ladder_generation_options(plc_model, *, allow_partial=False):\n    """Use the current ladder contract when the selected profile already uses native JSON Schema.\n\n    Profiles that use json_object/text keep their existing transport behavior.\n    This only replaces a persisted/native json_schema so its opcode enum cannot\n    drift behind the registry enforced by final PLC validation.\n    """\n    provider = _workflow_provider()\n    profile = getattr(provider, "profile", None)\n    if not isinstance(profile, dict):\n        return None\n    response_format = None\n    for key in ("generationDefaults", "requestOverrides"):\n        source = profile.get(key)\n        if isinstance(source, dict) and "response_format" in source:\n            response_format = source.get("response_format")\n    if not (isinstance(response_format, dict) and response_format.get("type") == "json_schema"):\n        return None\n\n    selected_model = str(plc_model or "FX3U").strip().upper() or "FX3U"\n    schema = ladder_response_schema(\n        allow_partial=bool(allow_partial),\n        plc_model=selected_model,\n    )\n    name = "ladder_candidate"\n    if allow_partial:\n        # Ordinary edit generation prefers a partial candidate. Use that branch\n        # directly so providers do not have to support a top-level oneOf.\n        schema = json.loads(json.dumps(schema["oneOf"][1]))\n        schema["required"] = ["mode", "device_comments", "rungs", "delete_rung_ids"]\n        name = "ladder_partial_candidate"\n    return {\n        "response_format": {\n            "type": "json_schema",\n            "json_schema": {\n                "name": name,\n                "strict": True,\n                "schema": schema,\n            },\n        }\n    }\n\n\n'''
+          api_text = api_text.replace(marker, helper + marker, 1)
+          write(api_path, api_text)
+
+          replace_in_function(
+              'src/api.py',
+              'stream_model_response',
+              '''    response = _request_model(\n        messages,\n        model_name=model_name,\n        effort=effort,\n        stream=True,\n        response_contract=LADDER_RESPONSE if target_mode == "ladder" else ST_RESPONSE,\n''',
+              '''    native_options = (\n        _native_ladder_generation_options(plc_model, allow_partial=is_edit_mode)\n        if target_mode == "ladder" else None\n    )\n    response = _request_model(\n        messages,\n        model_name=model_name,\n        effort=effort,\n        stream=True,\n        options=native_options,\n        response_contract=LADDER_RESPONSE if target_mode == "ladder" else ST_RESPONSE,\n''',
+          )
+          replace_in_function(
+              'src/api.py',
+              'generate_model_json',
+              '''    try:\n        response = _request_model(\n            messages,\n            model_name=model_name,\n            effort=effort,\n            stream=False,\n''',
+              '''    native_options = (\n        _native_ladder_generation_options(plc_model, allow_partial=is_edit_mode)\n        if target_mode == "ladder" else None\n    )\n    try:\n        response = _request_model(\n            messages,\n            model_name=model_name,\n            effort=effort,\n            stream=False,\n            options=native_options,\n''',
+          )
+
+          # 4) Do not advertise a guaranteed-to-fail Repair button for semantic errors.
+          failure_path = 'web/src/features/JobFailure.tsx'
+          failure_text = read(failure_path)
+          failure_text = failure_text.replace(
+              'function FailureMessage({ job, t }: { job: Job; t: (key: string) => string }) {',
+              '''function repairableGenerationFailure(job: Job) {\n  const rows = job.error_details?.violations || [];\n  if (rows.length !== 1) return false;\n  const violation = rows[0];\n  if (violation.reason === "invalid_json_object" || violation.reason === "invalid_shared_input") return true;\n  const leaf = violation.path.split(".").at(-1) || "";\n  if (violation.reason === "field_too_long")\n    return leaf === "label" || leaf === "debug_note" || leaf.startsWith("comment[");\n  return violation.reason === "invalid_ladder_structure" &&\n    (leaf === "branch_id" || leaf === "y_offset_level");\n}\n\nfunction FailureMessage({ job, t }: { job: Job; t: (key: string) => string }) {''',
+              1,
+          )
+          old_message = '<p className="muted">{t("系统没有自动再次调用模型。可由你确认后仅修复当前候选的结构问题。")}</p>'
+          new_message = '''<p className="muted">{t(repairableGenerationFailure(job)\n      ? "系统没有自动再次调用模型。可由你确认后仅修复当前候选的结构问题。"\n      : "该错误涉及指令、地址或参数语义，系统不会猜测修复；请重新生成候选或手动修改。")}</p>'''
+          if failure_text.count(old_message) != 1:
+              raise SystemExit('JobFailure.tsx: repair message marker mismatch')
+          failure_text = failure_text.replace(old_message, new_message, 1)
+          old_repairable = '  const repairable = job.kind === "generation" && job.error_code === "generation_validation_failed" && !!onRepair;'
+          new_repairable = '  const repairable = job.kind === "generation" && job.error_code === "generation_validation_failed" && repairableGenerationFailure(job) && !!onRepair;'
+          if failure_text.count(old_repairable) != 1:
+              raise SystemExit('JobFailure.tsx: repairable marker mismatch')
+          failure_text = failure_text.replace(old_repairable, new_repairable, 1)
+          write(failure_path, failure_text)
+
+          replace_once(
+              'web/src/i18n.ts',
+              '  "系统没有自动再次调用模型。可由你确认后仅修复当前候选的结构问题。": ["The model was not called again automatically. You can confirm a repair limited to structural issues in the current candidate.", "モデルの自動再呼び出しは行っていません。確認後、現在の候補の構造上の問題だけを修復できます。"],\n',
+              '  "系统没有自动再次调用模型。可由你确认后仅修复当前候选的结构问题。": ["The model was not called again automatically. You can confirm a repair limited to structural issues in the current candidate.", "モデルの自動再呼び出しは行っていません。確認後、現在の候補の構造上の問題だけを修復できます。"],\n  "该错误涉及指令、地址或参数语义，系统不会猜测修复；请重新生成候选或手动修改。": ["This error involves instruction, address, or parameter semantics. The system will not guess a repair; regenerate the candidate or edit it manually.", "このエラーは命令、アドレス、またはパラメータの意味に関係します。推測による修復は行わないため、候補を再生成するか手動で修正してください。"],\n',
+          )
+
+          # 5) Lock the exact dead-loop regression: a format repair that ends in an\n          # invalid opcode may fail once, but a second Repair request must be rejected.
+          test_path = 'tests/test_user_confirmed_generation_repair.py'
+          test_text = read(test_path)
+          old = '''        assert failed["status"] == "failed"\n        assert failed["error_details"]["violations"][0]["reason"] == "invalid_ladder_structure"\n        assert len(provider.requests) == 2\n        assert service.projects.project(project)["version_count"] == 0\n'''
+          new = '''        assert failed["status"] == "failed"\n        assert failed["error_details"]["violations"][0]["reason"] == "invalid_ladder_structure"\n        assert len(provider.requests) == 2\n        assert service.projects.project(project)["version_count"] == 0\n\n        blocked = client.post(\n            f"/api/jobs/{job}/repair",\n            headers=headers,\n            json={"request_id": "opcode-repair-must-stop"},\n        )\n        assert blocked.status_code == 409, blocked.text\n        assert len(provider.requests) == 2, "blocked semantic repair must not create another model job"\n'''
+          if test_text.count(old) != 1:
+              raise SystemExit('test_user_confirmed_generation_repair.py: opcode block mismatch')
+          test_text = test_text.replace(old, new, 1)
+          old_ui = '''    assert "让 AI 修复" in text\n    assert "系统没有自动再次调用模型" in text\n    assert "已执行结构修复" not in text\n'''
+          new_ui = '''    assert "让 AI 修复" in text\n    assert "repairableGenerationFailure(job)" in text\n    assert "系统没有自动再次调用模型" in text\n    assert "系统不会猜测修复" in text\n    assert "已执行结构修复" not in text\n'''
+          if test_text.count(old_ui) != 1:
+              raise SystemExit('test_user_confirmed_generation_repair.py: UI block mismatch')
+          write(test_path, test_text.replace(old_ui, new_ui, 1))
+
+          # 6) Regression tests for current native opcode enum and response_format precedence.
+          provider_test_path = 'tests/test_model_provider.py'
+          provider_tests = read(provider_test_path)
+          addition = r'''
+
+
+def test_ladder_generation_replaces_stale_native_schema_with_current_opcode_contract(monkeypatch):
+    captured = {}
+    profile = _profile("zhipu-glm-5.3-flash")
+    profile["requestOverrides"]["response_format"] = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "stale_ladder",
+            "strict": True,
+            "schema": {"type": "object"},
+        },
+    }
+    monkeypatch.setattr(api, "_workflow_provider", lambda: SimpleNamespace(profile=profile))
+    monkeypatch.setattr(
+        api,
+        "_prepare_api_call",
+        lambda *args, **kwargs: ([{"role": "system", "content": "system"}], [], False),
+    )
+
+    def request(messages, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(message=SimpleNamespace(reasoning="", content='{"device_comments":{},"rungs":[]}'))
+
+    monkeypatch.setattr(api, "_request_model", request)
+    api.stream_model_response(
+        "X0 controls Y0", "offline", "low", "ladder", plc_model="FX3U"
+    )
+
+    native = captured["options"]["response_format"]
+    assert native["type"] == "json_schema"
+    assert native["json_schema"]["name"] == "ladder_candidate"
+    schema = native["json_schema"]["schema"]
+
+    def app_instr_rule(value):
+        if isinstance(value, dict):
+            properties = value.get("properties")
+            if isinstance(properties, dict):
+                type_rule = properties.get("type")
+                if isinstance(type_rule, dict) and type_rule.get("const") == "APP_INSTR":
+                    return value
+            for child in value.values():
+                found = app_instr_rule(child)
+                if found is not None:
+                    return found
+        elif isinstance(value, list):
+            for child in value:
+                found = app_instr_rule(child)
+                if found is not None:
+                    return found
+        return None
+
+    rule = app_instr_rule(schema)
+    assert rule is not None
+    allowed = set(rule["properties"]["opcode"]["enum"])
+    assert "MOV" in allowed
+    assert "NOT_A_REAL_OPCODE" not in allowed
+    assert "FLDE" not in allowed
+    assert "OUT" not in allowed
+
+
+def test_workflow_response_format_overrides_stale_profile_request_override():
+    profile = _profile("zhipu-glm-5.3-flash")
+    stale = {
+        "type": "json_schema",
+        "json_schema": {"name": "stale", "strict": True, "schema": {"type": "object"}},
+    }
+    profile["requestOverrides"]["response_format"] = stale
+    provider = OpenAICompatibleProvider(profile, "key", client=_Client([iter([])]))
+    requested = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "current",
+            "strict": True,
+            "schema": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    }
+    params = provider._request_params(
+        ModelRequest((UserMessage("generate"),), options={"response_format": requested}, stream=True)
+    )
+    assert params["response_format"] == requested
+
+    params = provider._request_params(
+        ModelRequest((UserMessage("plain"),), options={"response_format": None}, stream=True)
+    )
+    assert "response_format" not in params
+'''
+          if 'test_ladder_generation_replaces_stale_native_schema_with_current_opcode_contract' in provider_tests:
+              raise SystemExit('test_model_provider.py: regression already present')
+          write(provider_test_path, provider_tests.rstrip() + addition + '\n')
+          PY
+      - name: Install Python dependencies
+        run: |
+          python -m pip install -r requirements.txt -r requirements/web.txt
+          python -m pip check
+      - name: Run focused Python regression
+        run: |
+          python -m compileall -q src tests
+          python -m pytest -q \
+            tests/test_user_confirmed_generation_repair.py \
+            tests/test_model_provider.py \
+            tests/test_generation_fast_path.py \
+            tests/test_instruction_contract_alignment.py
+          python tools/build_fx3u_verified_opcode_overlay.py --check
+      - name: Build Web frontend
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+      - name: Verify patch cleanliness
+        run: git diff --check
+      - name: Commit tested fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/application/workbench.py src/api.py src/model_provider.py \
+            web/src/features/JobFailure.tsx web/src/i18n.ts \
+            tests/test_user_confirmed_generation_repair.py tests/test_model_provider.py
+          git commit -m "fix: stop recurring blocked opcode repair loop"
+          git push origin HEAD:fix/prompt-context-slim-20260913
