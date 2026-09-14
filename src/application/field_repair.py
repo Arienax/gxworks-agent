@@ -119,43 +119,39 @@ def plan(base, violations, plc_model="FX3U"):
     that path: they return a blocked plan so no model is asked to guess an
     opcode, address, operand, preset, polarity, or other engineering meaning.
     """
-    del plc_model  # field repair is intentionally independent of instruction catalogues
+    del plc_model
     saved = candidate_base(base)
     rows = [row for row in (violations or []) if isinstance(row, dict)]
-    if saved is None or len(rows) != 1:
+    if saved is None:
         return None
+    if len(rows) != 1:
+        row = rows[0] if rows else {
+            "path": "content$.rungs", "reason": "invalid_ladder_structure",
+        }
+        return _blocked(saved, row, _segments(row.get("path")))
     row = rows[0]
     reason = str(row.get("reason") or "invalid_ladder_structure")
     segments = _segments(row.get("path"))
-
-    # parallel_block in shared_inputs is the canonical example of a genuine
-    # representation error that can require moving a subtree between containers.
     if reason == "invalid_shared_input":
         return None
-
     if not segments or segments[0] != "rungs":
         return _blocked(saved, row, segments)
-
     try:
         current = _lookup(saved, segments)
         parent = _lookup(saved, segments[:-1])
     except KeyError:
         return _blocked(saved, row, segments)
-
-    # A diagnostic that points at a list/object container is structural. This is
-    # the only generic route into whole-rung fallback.
     if isinstance(current, (dict, list)):
         leaf = segments[-1]
         if isinstance(leaf, str) and leaf in _STRUCTURAL_FIELDS:
             return None
         return _blocked(saved, row, segments)
-
     leaf = segments[-1]
     if isinstance(leaf, str):
         rule = _value_schema(parent, leaf, reason)
         if rule is not None:
             if leaf in _OPTIONAL_TEXT_FIELDS:
-                deterministic_value = None
+                deterministic_value = current[:MAX_LABEL_LEN] if isinstance(current, str) else None
             else:
                 branch_index = _branch_index(segments)
                 if branch_index is None:
@@ -168,15 +164,10 @@ def plan(base, violations, plc_model="FX3U"):
                 value_schema=rule,
                 deterministic_value=deterministic_value,
             )
-
-    # Everything else at scalar granularity is semantic or ambiguous. Most
-    # importantly, APP_INSTR.opcode is never converted into a list of plausible
-    # mnemonics for an LLM to choose from.
     return _blocked(saved, row, segments, current)
 
 
 def deterministic_response(repair_payload):
-    """Materialize a field-patch protocol response without calling a model."""
     if not isinstance(repair_payload, dict) or repair_payload.get("repair_mode") != MODE:
         return None
     target = repair_payload.get("target")
@@ -186,9 +177,6 @@ def deterministic_response(repair_payload):
     if strategy == "deterministic":
         value = copy.deepcopy(target.get("deterministic_value"))
     elif strategy == "blocked":
-        # ``apply`` rejects blocked plans before this placeholder can touch the
-        # candidate. Keeping a syntactically valid response lets the normal
-        # validation pipeline report a scoped repair failure without a model call.
         value = None
     else:
         return None
@@ -231,7 +219,6 @@ def _check_value(value, rule):
 
 
 def apply(base, response, repair_plan):
-    """Apply one authorized deterministic patch to an immutable baseline."""
     saved = candidate_base(base)
     if saved is None or not isinstance(repair_plan, dict) or repair_plan.get("mode") != MODE:
         raise RepairAssemblyError("$.base_sha256", "repair_base_invalid")
