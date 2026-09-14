@@ -259,22 +259,23 @@ def test_stream_failure_records_metadata_and_original_cause(tmp_path):
     assert 'PRIVATE_CREDENTIAL' not in json.dumps(records)
 
 
-def test_export_reprojects_log_and_never_reads_snapshot_config_or_body(tmp_path):
-    with d.diagnostic_scope(tmp_path,'job_test'):
-        d.emit('model_request', model='fixture-model', prompt='PRIVATE_PROMPT', api_key='PRIVATE_KEY')
-    path=tmp_path/'diagnostics/job_test.jsonl'
-    with path.open('a') as f:
-        f.write(json.dumps({'schema_version':1,'event':'model_request','job_id':'job_test',
-                'model':'sk-PRIVATE_CREDENTIAL','api_key':'PRIVATE_KEY','prompt':'PRIVATE_PROMPT'})+'\n')
-    job={'id':'job_test','status':'failed','kind':'generation','snapshot':{'password':'PRIVATE_PASSWORD'}}
-    with zipfile.ZipFile(io.BytesIO(d.export_diagnostics(tmp_path,job))) as z:
-        assert set(z.namelist())=={'summary.json','diagnostics.jsonl','README.txt'}
-        payload=''.join(z.read(n).decode() for n in z.namelist())
-        assert 'PRIVATE_' not in payload
+def test_export_includes_operator_details_but_redacts_sensitive_fields(tmp_path):
+    with d.diagnostic_scope(tmp_path, 'job_test'):
+        d.emit('model_request', model='fixture-model')
+    job = {'id':'job_test','status':'failed','kind':'generation',
+           'snapshot':{'password':'do-not-export','text':'operator requirement'}}
+    with zipfile.ZipFile(io.BytesIO(d.export_diagnostics(tmp_path, job))) as z:
+        assert set(z.namelist()) == {
+            'summary.json','diagnostics.jsonl','job.json','transcript.jsonl',
+            'operator_actions.jsonl','README.txt'
+        }
+        exported_job = json.loads(z.read('job.json'))
+        assert exported_job['snapshot']['text'] == 'operator requirement'
+        assert exported_job['snapshot']['password'] == '<redacted>'
         summary = json.loads(z.read('summary.json'))
-        assert summary['capture_status']=='captured'
+        assert summary['capture_status'] == 'captured'
+        assert summary['content_included'] is True
         assert 'model_request' in summary['failure_analysis']
-
 
 def test_old_job_export_does_not_fabricate_evidence(tmp_path):
     with zipfile.ZipFile(io.BytesIO(d.export_diagnostics(tmp_path,{'id':'job_old'}))) as z:

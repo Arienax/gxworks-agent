@@ -1,8 +1,8 @@
-"""Bounded per-job diagnostic logs. Never store prompts, replies, keys or locals.
+"""Bounded diagnostic metadata plus operator-only detailed trace sidecars.
 
-This module observes failures only: it does not repair, retry, accept, execute or
-change model messages. Files live in private application state, not the PLC
-workspace. Logging failures must never replace the original workflow outcome.
+Structured metadata remains small and sanitized. Detailed job inputs, model I/O
+and operator actions are stored separately under private application state with
+credential/binary redaction. Logging never changes workflow behavior.
 """
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ import sys
 import threading
 import time
 import zipfile
+import runtime_trace
 
 _SCHEMA = 1
 _MAX_FILE = 512 * 1024
@@ -274,12 +275,25 @@ def emit(event, **fields):
         session.write(event, **fields)
 
 
+def record_operator_action(state_dir, action, **fields):
+    try:
+        return runtime_trace.record_operator_action(state_dir, action, **fields)
+    except Exception:
+        return False
+
+
 def begin_request(request, provider):
     session = _active.get()
     if session is None:
         return
     session.request_index += 1
     _attempt.set(0)
+    try:
+        runtime_trace.record_model_request(
+            session.state_dir, session.job_id, session.request_index, _attempt.get(), request, provider
+        )
+    except Exception:
+        pass
     stats = {'system_messages': 0, 'user_messages': 0, 'assistant_messages': 0,
              'tool_messages': 0, 'system_chars': 0, 'user_chars': 0,
              'assistant_chars': 0, 'tool_chars': 0, 'image_count': 0}
@@ -310,8 +324,15 @@ def begin_attempt():
 
 
 def response_received(raw, request):
-    if _active.get() is None:
+    session = _active.get()
+    if session is None:
         return
+    try:
+        runtime_trace.record_model_response(
+            session.state_dir, session.job_id, session.request_index, _attempt.get(), raw, request
+        )
+    except Exception:
+        pass
     content = raw.message.content
     emit('model_response', stage='response_acceptance', stream=raw.stream,
          content_chars=len(content), reasoning_chars=len(raw.message.reasoning),
@@ -365,8 +386,8 @@ def exception_record(error, *, event='workflow_exception', stage='workflow'):
     emit(event, stage=stage, exceptions=chain, exception_count=len(chain))
 
 
-def _export_private_job_snapshot(state_dir, job_id):
-    """Read only the persisted job snapshot needed for an operator diagnostic export."""
+def _export_private_job_record(state_dir, job_id):
+    """Read the persisted job record for an operator-authorized diagnostic export."""
     try:
         from application.workspace import contained, read_json, record_id
         state = Path(state_dir).resolve()
@@ -377,10 +398,15 @@ def _export_private_job_snapshot(state_dir, job_id):
         record = read_json(path)
         if not isinstance(record, dict) or record.get("id") != job_id:
             return None
-        snapshot = record.get("snapshot")
-        return snapshot if isinstance(snapshot, dict) else None
+        return record
     except (KeyError, ValueError, OSError, TypeError):
         return None
+
+
+def _export_private_job_snapshot(state_dir, job_id):
+    record = _export_private_job_record(state_dir, job_id)
+    snapshot = record.get("snapshot") if isinstance(record, dict) else None
+    return snapshot if isinstance(snapshot, dict) else None
 
 
 def _export_job_snapshot(state_dir, job):
@@ -469,7 +495,7 @@ def _enrich_export_opcode_context(records, state_dir, job):
 
 
 def export_diagnostics(state_dir, job):
-    """Export one authorized job only; no configuration, events, prompts or sources."""
+    """Export one operator-authorized job with metadata and detailed local evidence."""
     job_id = job['id']
     path = _path(state_dir, job_id)
     records, capture_status = deque(maxlen=_MAX_EXPORT_LINES), 'not_captured'
@@ -492,6 +518,15 @@ def export_diagnostics(state_dir, job):
                 capture_status = ('export_truncated' if valid_count > _MAX_EXPORT_LINES else
                                   'captured' if records else 'unreadable')
     records = _enrich_export_opcode_context(records, state_dir, job)
+    private_job = _export_private_job_record(state_dir, job_id)
+    job_record = runtime_trace.sanitize(private_job or job)
+    snapshot = private_job.get("snapshot") if isinstance(private_job, dict) else None
+    project_id = (snapshot or {}).get("project_id") if isinstance(snapshot, dict) else job.get("project_id")
+    transcript = runtime_trace.load_transcript(state_dir, job_id)
+    operator_actions = runtime_trace.load_operator_actions(
+        state_dir, project_id=project_id, job_id=job_id
+    )
+
     def contains_observed_opcode(value):
         if isinstance(value, dict):
             return ('observed_opcode' in value or 'baseline_opcode' in value
@@ -503,7 +538,9 @@ def export_diagnostics(state_dir, job):
 
     meta = {'schema_version':_SCHEMA, 'job_id':job_id, 'capture_status':capture_status,
             'job':_safe_fields({key: job.get(key) for key in ('kind', 'status', 'project_id', 'version_id')}),
-            'event_count':len(records), 'content_included':False, 'keys_included':False,
+            'event_count':len(records),
+            'transcript_count':len(transcript), 'operator_action_count':len(operator_actions),
+            'content_included':bool(job_record or transcript or operator_actions), 'keys_included':False,
             'validation_values_included':any(contains_observed_opcode(item) for item in records),
             'captured_after_upgrade_only':True}
     from application.job_errors import public_error_details
@@ -532,20 +569,21 @@ def export_diagnostics(state_dir, job):
                 pass
     text = json.dumps(meta, ensure_ascii=False, indent=2) + '\n'
     guide = ('GXWorks task diagnostics\n\n'
-             'This archive contains metadata only, not model replies, prompts, API keys or PLC projects.\n'
-             'Read summary.json failure_analysis first, then diagnostics.jsonl in chronological order.\n'
-             'context_audit shows context policy, included/excluded section counts and RAG manual chunk character totals without source text.\n'
-             'model_request shows per-role character counts and image count without message text.\n'
-             'model_response JSON diagnostics show parser position, distance from end, complete-object prefix status, tail class/length and ladder shape counts.\n'
-             'workflow_exception includes source file/function/line plus validation attempts, stop_reason and safe violation paths when available.\n'
-             'For APP_INSTR opcode validation failures only, baseline_app_instrs records up to 32 APP_INSTR identities from the allowed repair baseline scope (rung_id, branch_id, output_index, opcode only); baseline_opcode remains only when that list has one entry; observed_opcode records the exact rejected mnemonic; allowed_by_registry reports whether it is generation-allowed. Operands, addresses and reply bodies remain excluded.\n'
-             'provider_result contains finish_reason when the provider actually supplied it.\n'
-             'unknown / finish_seen=false is not evidence of token truncation.\n'
-             'not_captured means this job predates diagnostic instrumentation; reproduce once on the new build.\n'
+             'This operator-only archive contains the job timeline and model I/O needed to reproduce failures.\n'
+             'summary.json: compact failure summary and capture status.\n'
+             'diagnostics.jsonl: sanitized structured metadata in chronological order.\n'
+             'job.json: persisted job snapshot, status, result and event timeline, with credentials/binaries redacted.\n'
+             'transcript.jsonl: actual model messages, reasoning, final content, tool calls, request options and usage.\n'
+             'operator_actions.jsonl: relevant specification/job actions recorded for this project/job.\n'
+             'API credentials, Authorization values and image/binary bodies are not included.\n'
+             'Model/user text is included because this export is explicitly operator-only and downloaded on demand.\n'
              'Output is not uploaded automatically. Inspect before sharing.\n')
     target = io.BytesIO()
     with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as archive:
         archive.writestr('summary.json', text)
         archive.writestr('diagnostics.jsonl', ''.join(json.dumps(r,ensure_ascii=False)+'\n' for r in records))
+        archive.writestr('job.json', json.dumps(job_record, ensure_ascii=False, indent=2) + '\n')
+        archive.writestr('transcript.jsonl', ''.join(json.dumps(r,ensure_ascii=False)+'\n' for r in transcript))
+        archive.writestr('operator_actions.jsonl', ''.join(json.dumps(r,ensure_ascii=False)+'\n' for r in operator_actions))
         archive.writestr('README.txt', guide)
     return target.getvalue()

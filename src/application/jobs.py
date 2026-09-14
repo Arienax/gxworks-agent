@@ -161,6 +161,11 @@ class JobManager:
                       "last_sequence": 0, "events": [], "result": None, "error_code": None, "error_details": None}
             append_event(record, "queued")
             self._save(record)
+            diagnostics.record_operator_action(
+                self.state_dir, "job_submit", project_id=frozen.get("project_id"),
+                job_id=record["id"], payload={"kind": kind, "request_id": request_id, "snapshot": frozen},
+                result={"status": "queued"},
+            )
             self._futures[record["id"]] = self._executor.submit(self._run, record["id"], worker)
             return self._public(record)
 
@@ -233,6 +238,12 @@ class JobManager:
                 record.update(cancel_requested=True, status="cancelling")
                 append_event(record, "cancelling")
                 self._save(record)
+            snapshot = record.get("snapshot") if isinstance(record.get("snapshot"), dict) else {}
+            diagnostics.record_operator_action(
+                self.state_dir, "job_cancel", project_id=snapshot.get("project_id"),
+                job_id=job_id, result={"status": record.get("status"),
+                                       "cancel_requested": bool(record.get("cancel_requested"))},
+            )
             return self._public(record)
 
     def shutdown(self, wait=True):

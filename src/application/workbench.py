@@ -8,6 +8,7 @@ import json
 import re
 import tempfile
 import uuid
+import runtime_diagnostics as diagnostics
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -146,6 +147,14 @@ class WorkbenchService:
         from confirmed_spec import canonicalize_confirmed_spec, validate_spec_draft
         from plc_ir import canonical_sha256
         self.writable()
+
+        def audited(result):
+            diagnostics.record_operator_action(
+                self.state_dir, "spec_update", project_id=project_id,
+                payload={"spec": spec, "expected_hash": expected_hash}, result=result,
+            )
+            return result
+
         with self.lock.thread_lock:
             project = self.projects.raw_project(project_id)
             current = project.get("confirmed_spec")
@@ -153,14 +162,14 @@ class WorkbenchService:
                 raise ConflictError("确认规格已变化，请重新加载。")
             issues = validate_spec_draft(spec, project.get("plc_model"))
             if issues.get("errors"):
-                return {"valid": False, "issues": public(issues)}
+                return audited({"valid": False, "issues": public(issues)})
             normalized = canonicalize_confirmed_spec(spec)
             issues = validate_spec_draft(normalized, project.get("plc_model"))
             if issues.get("errors"):
-                return {"valid": False, "issues": public(issues)}
+                return audited({"valid": False, "issues": public(issues)})
             self.store.set_confirmed_spec(project_id, normalized)
             persisted = self.projects.raw_project(project_id)["confirmed_spec"]
-            return {"valid": True, "spec": public(persisted), "hash": canonical_sha256(persisted)}
+            return audited({"valid": True, "spec": public(persisted), "hash": canonical_sha256(persisted)})
 
     def upload_attachment(self, project_id, filename, data_base64):
         from session_store import detect_image_media_type
