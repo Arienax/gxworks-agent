@@ -22,6 +22,56 @@ from plc_json_validator import (
 
 
 GENERATION_VALIDATION_PROFILE = "generation_structural"
+_SIMPLE_PARALLEL_INPUT_TYPES = frozenset({
+    "NO", "NC", "P", "F", "RISING", "FALLING", "COMPARE", "BLOCK_INPUT",
+})
+
+
+def _normalize_parallel_branch_containers(ladder):
+    """Restore one omitted container level in ``parallel_block.branches``.
+
+    The ladder contract represents a parallel block as a list of branch lists.
+    Some schema-compatible providers flatten a singleton branch to the simple
+    input object itself. Wrapping only known simple-input objects is purely
+    representational: order, polarity, addresses and expressions are unchanged.
+    Unknown values and nested parallel blocks remain untouched for the validator
+    to reject.
+    """
+    normalized = 0
+    rungs = ladder.get("rungs") if isinstance(ladder, dict) else None
+    if not isinstance(rungs, list):
+        return normalized
+    for rung in rungs:
+        if not isinstance(rung, dict):
+            continue
+        branches = rung.get("branches")
+        if not isinstance(branches, list):
+            continue
+        for branch in branches:
+            if not isinstance(branch, dict):
+                continue
+            inputs = branch.get("inputs")
+            if not isinstance(inputs, list):
+                continue
+            for element in inputs:
+                if not isinstance(element, dict) or element.get("type") != "parallel_block":
+                    continue
+                parallel_branches = element.get("branches")
+                if not isinstance(parallel_branches, list):
+                    continue
+                repaired = []
+                changed = False
+                for parallel_branch in parallel_branches:
+                    if (isinstance(parallel_branch, dict)
+                            and parallel_branch.get("type") in _SIMPLE_PARALLEL_INPUT_TYPES):
+                        repaired.append([parallel_branch])
+                        normalized += 1
+                        changed = True
+                    else:
+                        repaired.append(parallel_branch)
+                if changed:
+                    element["branches"] = repaired
+    return normalized
 
 
 def _normalize_legacy_blocks(ladder):
@@ -95,6 +145,9 @@ def prepare_ladder_candidate(
     progress = on_progress or (lambda _message: None)
     messages = []
     progress(tr('正在解析模型输出：规范化梯形图协议'))
+    parallel_branches = _normalize_parallel_branch_containers(parsed)
+    if parallel_branches:
+        messages.append(tr('已补齐 parallel_block 分支容器层级：') + str(parallel_branches))
     _normalize_legacy_blocks(parsed)
     parsed, counters = normalize_legacy_counter_outputs(parsed)
     if counters:
