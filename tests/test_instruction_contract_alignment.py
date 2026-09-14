@@ -6,10 +6,33 @@ from pathlib import Path
 import knowledge_retriever_core as core
 from application.field_repair import plan
 from instruction_registry import DEFAULT_INSTRUCTION_REGISTRY, generation_app_instr_mnemonics
+from plc_json_validator import validate_ladder_full
 
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "resources" / "instructions" / "mitsubishi"
+
+
+def _app_ladder(opcode, operands):
+    return {
+        "device_comments": {},
+        "rungs": [{
+            "rung_id": 1,
+            "header_element": None,
+            "shared_inputs": [],
+            "branches": [{
+                "branch_id": 1,
+                "y_offset_level": 0,
+                "inputs": [],
+                "outputs": [{
+                    "type": "APP_INSTR",
+                    "opcode": opcode,
+                    "operands": list(operands),
+                    "label": None,
+                }],
+            }],
+        }],
+    }
 
 
 def test_generated_verified_opcode_overlay_is_current():
@@ -61,6 +84,17 @@ def test_source_manual_reviewed_fx3u_contracts_are_generation_safe():
     for opcode in ("BK", "FLDE", "FLDEL"):
         assert DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode) is None
         assert opcode not in allowed
+
+
+def test_manual_reviewed_opcodes_pass_the_full_ladder_validator():
+    cases = (
+        ("UNI", ["D0", "D10", "K4"]),
+        ("DIS", ["D0", "D10", "K4"]),
+        ("BK+", ["D0", "D10", "D20", "K4"]),
+    )
+    for opcode, operands in cases:
+        ladder = _app_ladder(opcode, operands)
+        assert validate_ladder_full(ladder, plc_model="FX3U") is ladder
 
 
 def test_manual_reviewed_quarantine_reasons_are_explicit():
