@@ -1,0 +1,32 @@
+name: Repair opcode context diagnostics
+
+on:
+  push:
+    branches: [fix/prompt-context-slim-20260913]
+    paths:
+      - .github/workflows/repair-opcode-context-validation-20260914.yml
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/prompt-context-slim-20260913
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply diagnostics patch
+        run: python tools/_tmp_add_repair_opcode_context_20260914.py
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt -r requirements/web.txt
+      - name: Test diagnostics
+        run: |
+          python -m compileall -q src tests
+          python -m pytest -q tests/test_runtime_diagnostics.py tests/test_generation_repair_workflow.py tests/test_generation_fast_path.py tests/test_generation_opcode_contract.py tests/test_application_job_errors.py
+          git diff --check
