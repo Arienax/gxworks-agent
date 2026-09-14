@@ -14,7 +14,7 @@ import api
 from application.base import model_call
 from application.jobs import JobCancelled
 from application.generation_repair import (
-    GenerationError, GenerationValidationError, candidate_base, validation_diagnostic,
+    GenerationError, GenerationValidationError,
 )
 from i18n import get_language, language_context, tr
 from config_manager import get_active_model_name, load_full_config
@@ -47,7 +47,6 @@ class GenerationRequest:
     format_repair: bool = False
     allowed_rung_ids: object = None
     allowed_addresses: object = None
-    repair_plan: object = None
     image_attachments: object = None
     model_name: Optional[str] = None
     response_language: Optional[str] = None
@@ -103,7 +102,6 @@ class GenerationWorkflow:
             for item in (self.allowed_addresses or [])
             if str(item).strip()
         }
-        self.repair_plan = copy.deepcopy(self.repair_plan) if isinstance(self.repair_plan, dict) else None
         self.image_attachments = tuple(self.image_attachments or ())
         if self.model_name is None:
             try:
@@ -229,25 +227,15 @@ class GenerationWorkflow:
             )
             repair_call = self.target_mode == "ladder" and (self.repair_mode or self.format_repair)
             repair_payload = None
-            repair_kind = "format"
             if repair_call:
-                if self.repair_mode and isinstance(self.repair_plan, dict) and self.repair_plan.get("mode") == "field_patch":
-                    repair_kind = "field_patch"
-                    repair_payload = {
-                        "repair_mode": "field_patch",
-                        "plc_model": self.plc_model,
-                        "instruction": model_user_input,
-                        "base_sha256": self.repair_plan.get("base_sha256"),
-                        "target": copy.deepcopy(self.repair_plan.get("target") or {}),
-                    }
-                elif self.repair_mode:
-                    repair_kind = "partial"
+                if self.repair_mode:
                     baseline = self.previous_json if isinstance(self.previous_json, dict) else {}
                     selected_rungs = [copy.deepcopy(rung) for rung in baseline.get("rungs", [])
                                       if isinstance(rung, dict) and rung.get("rung_id") in self.allowed_rung_ids]
                     comments = baseline.get("device_comments", {}) if isinstance(baseline.get("device_comments"), dict) else {}
                     repair_payload = {
-                        "repair_mode": "partial", "plc_model": self.plc_model,
+                        "repair_mode": "partial",
+                        "plc_model": self.plc_model,
                         "instruction": model_user_input,
                         "allowed_rung_ids": sorted(self.allowed_rung_ids),
                         "allowed_addresses": sorted(self.allowed_addresses),
@@ -258,8 +246,11 @@ class GenerationWorkflow:
                         },
                     }
                 else:
-                    repair_payload = {"repair_mode": "format", "plc_model": self.plc_model,
-                                      "instruction": model_user_input}
+                    repair_payload = {
+                        "repair_mode": "format",
+                        "plc_model": self.plc_model,
+                        "instruction": model_user_input,
+                    }
             try:
                 stream_model_response = self.dependencies.stream_response or api.stream_model_response
 
@@ -274,7 +265,7 @@ class GenerationWorkflow:
                     if self.dependencies.repair_response is not None:
                         _reasoning, full_content = model_call(
                             self.dependencies.repair_response, repair_payload, self.model_name, self.effort,
-                            mode=repair_kind,
+                            mode="partial" if self.repair_mode else "format",
                             on_reasoning_chunk=on_reasoning, on_content_chunk=on_content,
                         )
                     elif self.dependencies.provider is None and self.dependencies.stream_response is not None:
@@ -292,7 +283,7 @@ class GenerationWorkflow:
                     else:
                         _reasoning, full_content = model_call(
                             api.repair_ladder_response, repair_payload, self.model_name, self.effort,
-                            mode=repair_kind,
+                            mode="partial" if self.repair_mode else "format",
                             on_reasoning_chunk=on_reasoning, on_content_chunk=on_content,
                         )
                 else:
@@ -415,24 +406,14 @@ class GenerationWorkflow:
                 if not isinstance(parsed, dict):
                     raise PLCJsonValidationError("$: expected JSON object")
                 if self.target_mode == "ladder":
-                    if self.repair_mode and isinstance(self.repair_plan, dict) and self.repair_plan.get("mode") == "field_patch":
-                        from application.field_repair import apply as apply_field_patch
-                        parsed = apply_field_patch(self.previous_json, parsed, self.repair_plan)
-                        prepared_candidate = prepare_ladder_candidate(
-                            parsed, plc_model=self.plc_model, program_name=self.program_name,
-                            revision=self.revision, confirmed_spec=self.confirmed_context,
-                            previous_ladder=None, repair_mode=False, task_type=self.task_type,
-                            on_progress=emit_parsing_progress,
-                        )
-                    else:
-                        prepared_candidate = prepare_ladder_candidate(
-                            parsed, plc_model=self.plc_model, program_name=self.program_name,
-                            revision=self.revision, confirmed_spec=self.confirmed_context,
-                            previous_ladder=self.previous_json, repair_mode=self.repair_mode,
-                            allowed_rung_ids=self.allowed_rung_ids,
-                            allowed_addresses=self.allowed_addresses, task_type=self.task_type,
-                            on_progress=emit_parsing_progress,
-                        )
+                    prepared_candidate = prepare_ladder_candidate(
+                        parsed, plc_model=self.plc_model, program_name=self.program_name,
+                        revision=self.revision, confirmed_spec=self.confirmed_context,
+                        previous_ladder=self.previous_json, repair_mode=self.repair_mode,
+                        allowed_rung_ids=self.allowed_rung_ids,
+                        allowed_addresses=self.allowed_addresses, task_type=self.task_type,
+                        on_progress=emit_parsing_progress,
+                    )
                     validation_messages.extend(prepared_candidate["validation_messages"])
                     return prepared_candidate["ladder"]
                 emit_parsing_progress(tr('正在解析模型输出：校验 ST 结构'))
@@ -451,90 +432,16 @@ class GenerationWorkflow:
                 (self.output_dir / "repair_candidate.json").write_text(json_str, encoding="utf-8")
 
             validation_errors = (PLCJsonValidationError, PLCIRValidationError, json.JSONDecodeError)
-
-            def cascade_format_repair(error):
-                nonlocal prepared_candidate, repair_attempts
-                if not self.format_repair or not isinstance(error, (PLCJsonValidationError, PLCIRValidationError)):
-                    return None
-                try:
-                    base = candidate_base(json.loads(json_str))
-                except json.JSONDecodeError:
-                    return None
-                if base is None:
-                    return None
-                import re
-                diagnostic = validation_diagnostic(error)
-                path = str(diagnostic.get("path") or "")
-                from application.field_repair import apply as apply_field_patch, plan as plan_field_patch
-                field_plan = plan_field_patch(base, [diagnostic], self.plc_model)
-                if field_plan is not None:
-                    payload = {
-                        "repair_mode": "field_patch", "plc_model": self.plc_model,
-                        "instruction": f"JSON 格式已经恢复，但字段校验失败。只修复指定字段。错误位置：{path}；原因：{diagnostic.get('reason','invalid_ladder_structure')}",
-                        "base_sha256": field_plan["base_sha256"],
-                        "target": copy.deepcopy(field_plan["target"]),
-                    }
-                    self._emit("progress", {"stage": "field_repair", "severity": "warning",
-                        "message": tr('JSON 格式已恢复；正在对新暴露的字段错误执行一次精确修复。')})
-                    def on_field_reasoning(token): self._emit("reasoning", token)
-                    def on_field_content(token): self._emit("content", token)
-                    repair_fn = self.dependencies.repair_response or api.repair_ladder_response
-                    _r, local_text = model_call(repair_fn, payload, self.model_name, self.effort,
-                        mode="field_patch", on_reasoning_chunk=on_field_reasoning,
-                        on_content_chunk=on_field_content)
-                    patch = json.loads(clean_json_text(local_text))
-                    patched = apply_field_patch(base, patch, field_plan)
-                    prepared_candidate = prepare_ladder_candidate(
-                        patched, plc_model=self.plc_model, program_name=self.program_name,
-                        revision=self.revision, confirmed_spec=self.confirmed_context,
-                        previous_ladder=None, repair_mode=False, task_type="contract_repair",
-                        on_progress=emit_parsing_progress)
-                    validation_messages.extend(prepared_candidate["validation_messages"])
-                    repair_attempts += 1
-                    return prepared_candidate["ladder"]
-                match = re.search(r"(?:^|\.)rungs\.(\d+)(?:\.|$)", path)
-                if not match:
-                    return None
-                index = int(match.group(1))
-                if index >= len(base["rungs"]):
-                    return None
-                rung = base["rungs"][index]
-                rung_id = rung.get("rung_id") if isinstance(rung, dict) else None
-                if isinstance(rung_id, bool) or not isinstance(rung_id, int):
-                    return None
-                from contract_repair import patch_device_addresses
-                addresses = sorted(patch_device_addresses({"mode":"partial","device_comments":{},"rungs":[rung],"delete_rung_ids":[]}))
-                payload = {"repair_mode":"partial","plc_model":self.plc_model,
-                    "instruction":f"JSON 格式已经恢复，但结构校验仍发现局部协议错误。只修复该梯级的协议/结构表示，不改变控制语义、地址、参数或触点极性。错误位置：{path}；原因：{diagnostic.get('reason','invalid_ladder_structure')}",
-                    "allowed_rung_ids":[rung_id],"allowed_addresses":addresses,
-                    "baseline_subset":{"device_comments":{},"rungs":[copy.deepcopy(rung)]}}
-                self._emit("progress", {"stage":"structural_repair","severity":"warning",
-                    "message":tr('JSON 格式已恢复；正在对新暴露的局部结构错误执行一次有界修复。')})
-                def on_reasoning(token): self._emit("reasoning", token)
-                def on_content(token): self._emit("content", token)
-                if self.dependencies.repair_response is not None:
-                    _r, local_text = model_call(self.dependencies.repair_response, payload, self.model_name, self.effort, mode="partial", on_reasoning_chunk=on_reasoning, on_content_chunk=on_content)
-                else:
-                    _r, local_text = model_call(api.repair_ladder_response, payload, self.model_name, self.effort, mode="partial", on_reasoning_chunk=on_reasoning, on_content_chunk=on_content)
-                partial = json.loads(clean_json_text(local_text))
-                prepared_candidate = prepare_ladder_candidate(partial, plc_model=self.plc_model, program_name=self.program_name, revision=self.revision,
-                    confirmed_spec=self.confirmed_context, previous_ladder=base, repair_mode=True, allowed_rung_ids={rung_id},
-                    allowed_addresses=set(addresses), task_type="contract_repair", on_progress=emit_parsing_progress)
-                validation_messages.extend(prepared_candidate["validation_messages"])
-                repair_attempts += 1
-                return prepared_candidate["ladder"]
-
             try:
                 parsed_json = parse_candidate(json_str)
             except validation_errors as error:
-                try:
-                    parsed_json = cascade_format_repair(error)
-                except validation_errors as followup_error:
-                    persist_repair_candidate()
-                    raise GenerationValidationError([followup_error], attempts=1, max_attempts=1, language=self.response_language, stop_reason="explicit_repair_followup_failed") from followup_error
-                if parsed_json is None:
-                    persist_repair_candidate()
-                    raise GenerationValidationError([error], attempts=0, max_attempts=0, language=self.response_language, stop_reason="final_validation") from error
+                # No hidden semantic re-generation loop. Preserve the rejected
+                # candidate privately so an operator can explicitly request one repair.
+                persist_repair_candidate()
+                raise GenerationValidationError(
+                    [error], attempts=0, max_attempts=0, language=self.response_language,
+                    stop_reason="final_validation",
+                ) from error
 
             if self.target_mode == "ladder":
                 program_ir = prepared_candidate["program_ir"]

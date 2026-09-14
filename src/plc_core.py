@@ -320,6 +320,7 @@ def accept_candidate_patch(store: Any, action: Mapping[str, Any]) -> Mapping[str
         validate_ladder_candidate_structure(
             ir_to_ladder(candidate),
             plc_model=str((candidate.get("plc") or {}).get("cpu") or "FX3U"),
+            require_catalogued_instructions=False,
         )
     if canonical_sha256(candidate) != str(action.get("candidate_ir_sha256") or ""):
         raise ValueError("候选补丁内容已变化，请重新生成。")

@@ -197,6 +197,7 @@ class ProposalService:
                         validate_ladder_candidate_structure(
                             ir_to_ladder(payload["_candidate_ir"]),
                             plc_model=str((payload["_candidate_ir"].get("plc") or {}).get("cpu") or "FX3U"),
+                            require_catalogued_instructions=False,
                         )
                     candidate_hash = canonical_sha256(payload["_candidate_ir"])
                     if payload.get("candidate_ir_sha256") not in (None, candidate_hash):

@@ -128,7 +128,9 @@ def prepare_ladder_candidate(
     if parsed.get("mode") == "partial":
         if previous_ladder is None:
             raise PLCJsonValidationError('$.mode: received "partial" without a previous ladder')
-        validate_ladder_partial_structure(parsed, plc_model=plc_model)
+        validate_ladder_partial_structure(
+            parsed, plc_model=plc_model, require_catalogued_instructions=False
+        )
         normalization_scope = {rung["rung_id"] for rung in parsed.get("rungs", [])}
         parsed = materialize_partial(previous_ladder, parsed)
     elif previous_ladder is not None:
@@ -141,10 +143,14 @@ def prepare_ladder_candidate(
     if not parsed.get("rungs"):
         raise PLCJsonValidationError("$.rungs: generated program must not be empty")
     progress(tr('正在解析模型输出：检查结构与地址'))
-    validate_ladder_candidate_structure(parsed, plc_model=plc_model, require_catalogued_instructions=True)
+    validate_ladder_candidate_structure(
+        parsed, plc_model=plc_model, require_catalogued_instructions=False
+    )
     from plc_condition_normalizer import normalize_shared_conditions
     parsed, normalization = normalize_shared_conditions(parsed, allowed_rung_ids=normalization_scope)
-    validate_ladder_candidate_structure(parsed, plc_model=plc_model, require_catalogued_instructions=True)
+    validate_ladder_candidate_structure(
+        parsed, plc_model=plc_model, require_catalogued_instructions=False
+    )
 
     semantics = []
     if isinstance(confirmed_spec, dict) and isinstance(confirmed_spec.get("execution_semantics"), list):
