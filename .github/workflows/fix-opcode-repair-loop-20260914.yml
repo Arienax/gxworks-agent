@@ -28,7 +28,9 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - name: Apply bounded repair-loop patch
-        run: python tools/_tmp_fix_opcode_repair_loop_20260914.py
+        run: |
+          python tools/_tmp_fix_opcode_repair_loop_20260914.py
+          python tools/_tmp_fix_opcode_schema_test_20260914.py
       - name: Install Python dependencies
         run: |
           python -m pip install -r requirements.txt -r requirements/web.txt
