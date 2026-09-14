@@ -1,0 +1,27 @@
+name: Temporary Hybrid Compact Validation
+on:
+  push:
+    branches: [feat/comprehensive-runtime-diagnostics-20260914]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -q pytest -r requirements/web.txt
+      - name: Compile recovery path
+        run: python -m compileall -q src/application/compact_alias.py src/application/format_patch_repair.py src/application/rejected_generation_preview.py tests/test_hybrid_compact_recovery.py
+      - name: Run focused recovery regressions
+        env:
+          PYTHONPATH: src
+        run: |
+          python -m pytest -q \
+            tests/test_hybrid_compact_recovery.py \
+            tests/test_format_patch_repair.py \
+            tests/test_repair_render_delivery.py \
+            tests/test_rejected_generation_delivery.py \
+            tests/test_generation_rejected_json_repair.py
