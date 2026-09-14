@@ -2,41 +2,33 @@ name: Registry smoke test
 
 on:
   push:
-    branches: [fix/prompt-context-slim-20260913]
     paths:
+      - "src/instruction_registry.py"
+      - "src/plc_json_validator.py"
+      - "src/plc_ir.py"
+      - "src/gxworks2/csv_importer.py"
+      - "resources/instructions/**"
+      - "tests/test_instruction_registry.py"
       - ".github/workflows/registry-smoke.yml"
-
-permissions:
-  contents: write
+  pull_request:
+    paths:
+      - "src/instruction_registry.py"
+      - "src/plc_json_validator.py"
+      - "src/plc_ir.py"
+      - "src/gxworks2/csv_importer.py"
+      - "resources/instructions/**"
+      - "tests/test_instruction_registry.py"
 
 jobs:
   registry-smoke:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.11"]
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: fix/prompt-context-slim-20260913
-          fetch-depth: 0
-          lfs: true
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-      - name: Apply diagnostics patch
-        run: python tools/_tmp_expand_baseline_app_instrs_20260914.py
-      - name: Install dependencies
-        run: python -m pip install -r requirements.txt -r requirements/web.txt
-      - name: Test diagnostics
-        run: |
-          python -m compileall -q src tests
-          python -m pytest -q tests/test_runtime_diagnostics.py tests/test_runtime_diagnostics_web.py tests/test_application_job_errors.py
-          git diff --check
-      - name: Commit validated diagnostics and restore CI
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout HEAD~2 -- .github/workflows/registry-smoke.yml
-          git rm tools/_tmp_expand_baseline_app_instrs_20260914.py
-          git add src/runtime_diagnostics.py tests/test_runtime_diagnostics.py .github/workflows/registry-smoke.yml
-          git commit -m "feat(diagnostics): export repair baseline APP_INSTR identities"
-          git push origin HEAD:fix/prompt-context-slim-20260913
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install pytest
+      - run: pytest -q tests/test_instruction_registry.py

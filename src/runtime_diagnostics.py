@@ -393,37 +393,52 @@ def _export_job_snapshot(state_dir, job):
     return _export_private_job_snapshot(state_dir, job_id)
 
 
-def _export_repair_baseline_opcode(snapshot):
+def _export_repair_baseline_app_instrs(snapshot):
+    """Return bounded APP_INSTR identity metadata from the repair baseline only."""
     if not isinstance(snapshot, dict) or not snapshot.get("repair_mode"):
-        return None
+        return []
     baseline = snapshot.get("repair_baseline")
     if not isinstance(baseline, dict):
-        return None
+        return []
     allowed_ids = {
         int(value) for value in (snapshot.get("allowed_rung_ids") or [])
         if isinstance(value, int) and not isinstance(value, bool)
     }
-    opcodes = set()
+    entries = []
     for rung in baseline.get("rungs") or []:
         if not isinstance(rung, dict):
             continue
-        if allowed_ids and rung.get("rung_id") not in allowed_ids:
+        rung_id = rung.get("rung_id")
+        if allowed_ids and rung_id not in allowed_ids:
             continue
         for branch in rung.get("branches") or []:
             if not isinstance(branch, dict):
                 continue
-            for output in branch.get("outputs") or []:
+            branch_id = branch.get("branch_id")
+            for output_index, output in enumerate(branch.get("outputs") or []):
                 if not isinstance(output, dict) or output.get("type") != "APP_INSTR":
                     continue
-                opcode = output.get("opcode")
-                if isinstance(opcode, str) and opcode.strip():
-                    opcodes.add(opcode.strip().upper())
-    return next(iter(opcodes)) if len(opcodes) == 1 else None
+                opcode = _safe_opcode(output.get("opcode"))
+                if opcode is None:
+                    continue
+                entry = {"output_index": output_index, "opcode": opcode}
+                if isinstance(rung_id, int) and not isinstance(rung_id, bool):
+                    entry["rung_id"] = rung_id
+                if isinstance(branch_id, int) and not isinstance(branch_id, bool):
+                    entry["branch_id"] = branch_id
+                entries.append(entry)
+                if len(entries) >= 32:
+                    return entries
+    return entries
 
 
 def _enrich_export_opcode_context(records, state_dir, job):
     snapshot = _export_job_snapshot(state_dir, job)
-    baseline_opcode = _export_repair_baseline_opcode(snapshot)
+    baseline_app_instrs = _export_repair_baseline_app_instrs(snapshot)
+    baseline_opcode = (
+        baseline_app_instrs[0].get("opcode")
+        if len(baseline_app_instrs) == 1 else None
+    )
     project = snapshot.get("project") if isinstance(snapshot, dict) else None
     plc_model = project.get("plc_model") if isinstance(project, dict) else None
     allowed = None
@@ -444,6 +459,8 @@ def _enrich_export_opcode_context(records, state_dir, job):
                 observed = violation.get("observed_opcode")
                 if not isinstance(observed, str) or not observed:
                     continue
+                if baseline_app_instrs:
+                    violation["baseline_app_instrs"] = [dict(item) for item in baseline_app_instrs]
                 if baseline_opcode is not None:
                     violation["baseline_opcode"] = baseline_opcode
                 if allowed is not None:
@@ -478,6 +495,7 @@ def export_diagnostics(state_dir, job):
     def contains_observed_opcode(value):
         if isinstance(value, dict):
             return ('observed_opcode' in value or 'baseline_opcode' in value
+                    or 'baseline_app_instrs' in value
                     or any(contains_observed_opcode(item) for item in value.values()))
         if isinstance(value, (list, tuple)):
             return any(contains_observed_opcode(item) for item in value)
@@ -520,7 +538,7 @@ def export_diagnostics(state_dir, job):
              'model_request shows per-role character counts and image count without message text.\n'
              'model_response JSON diagnostics show parser position, distance from end, complete-object prefix status, tail class/length and ladder shape counts.\n'
              'workflow_exception includes source file/function/line plus validation attempts, stop_reason and safe violation paths when available.\n'
-             'For APP_INSTR opcode validation failures only, baseline_opcode records one unambiguous opcode from the saved repair baseline, observed_opcode records the exact rejected mnemonic, and allowed_by_registry reports whether the observed mnemonic is generation-allowed for the selected PLC model; operands, addresses and reply bodies remain excluded.\n'
+             'For APP_INSTR opcode validation failures only, baseline_app_instrs records up to 32 APP_INSTR identities from the allowed repair baseline scope (rung_id, branch_id, output_index, opcode only); baseline_opcode remains only when that list has one entry; observed_opcode records the exact rejected mnemonic; allowed_by_registry reports whether it is generation-allowed. Operands, addresses and reply bodies remain excluded.\n'
              'provider_result contains finish_reason when the provider actually supplied it.\n'
              'unknown / finish_seen=false is not evidence of token truncation.\n'
              'not_captured means this job predates diagnostic instrumentation; reproduce once on the new build.\n'

@@ -126,14 +126,24 @@ def test_invalid_app_instr_opcode_is_exported_as_bounded_observed_value(tmp_path
         d.exception_record(failure)
 
     baseline = json.loads(json.dumps(ladder))
-    baseline["rungs"][0]["branches"][0]["outputs"][0]["opcode"] = "DADD"
-    job = {
-        "id": "job_test", "status": "failed", "kind": "generation",
+    outputs = baseline["rungs"][0]["branches"][0]["outputs"]
+    outputs[0]["opcode"] = "DADD"
+    outputs.append({
+        "type": "APP_INSTR", "opcode": "MOV",
+        "operands": ["PRIVATE_SECOND_OPERAND"], "label": None,
+    })
+    private_record = {
+        "id": "job_test",
         "snapshot": {
             "repair_mode": True, "repair_baseline": baseline, "allowed_rung_ids": [1],
             "project": {"plc_model": "FX3U"},
         },
     }
+    jobs_dir = tmp_path / "jobs"
+    jobs_dir.mkdir()
+    (jobs_dir / "job_test.json").write_text(json.dumps(private_record), encoding="utf-8")
+    # Match the real HTTP path: the exporter receives a public job without snapshot.
+    job = {"id": "job_test", "status": "failed", "kind": "generation"}
     with zipfile.ZipFile(io.BytesIO(d.export_diagnostics(tmp_path, job))) as archive:
         summary = json.loads(archive.read("summary.json"))
         log = archive.read("diagnostics.jsonl").decode()
@@ -141,13 +151,20 @@ def test_invalid_app_instr_opcode_is_exported_as_bounded_observed_value(tmp_path
     assert summary["validation_values_included"] is True
     workflow = summary["failure_analysis"]["workflow_exception"]
     violation = workflow["exceptions"][0]["violations"][0]
-    assert violation["baseline_opcode"] == "DADD"
+    assert violation["baseline_app_instrs"] == [
+        {"output_index": 0, "opcode": "DADD", "rung_id": 1, "branch_id": 1},
+        {"output_index": 1, "opcode": "MOV", "rung_id": 1, "branch_id": 1},
+    ]
+    assert "baseline_opcode" not in violation
     assert violation["observed_opcode"] == "NOT_A_REAL_OPCODE"
     assert violation["allowed_by_registry"] is False
-    assert '"baseline_opcode": "DADD"' in log
+    assert '"baseline_app_instrs"' in log
+    assert '"opcode": "DADD"' in log
+    assert '"opcode": "MOV"' in log
     assert '"observed_opcode": "NOT_A_REAL_OPCODE"' in log
     assert '"allowed_by_registry": false' in log
     assert "PRIVATE_OPERAND" not in payload
+    assert "PRIVATE_SECOND_OPERAND" not in payload
 
 
 def test_observed_opcode_diagnostic_redacts_secret_like_tokens(tmp_path):
