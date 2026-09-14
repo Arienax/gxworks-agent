@@ -51,6 +51,7 @@ jobs:
             tests/test_generation_opcode_contract.py `
             tests/test_field_patch_repair_protocol.py `
             tests/test_format_patch_repair.py `
+            tests/test_hybrid_compact_recovery.py `
             tests/test_repair_render_delivery.py `
             tests/test_generation_fast_path.py `
             tests/test_generation_workflow.py `
