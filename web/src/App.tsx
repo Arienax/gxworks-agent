@@ -659,8 +659,9 @@ export default function App() {
     if (kind === "generation") setText("");
   }
   async function repairFailedGeneration(job: Job) {
-    if (job.kind !== "generation" || job.error_code !== "generation_validation_failed") return;
-    if (!window.confirm(t("将调用模型一次，仅修复当前候选的结构/协议错误，不重新分析需求。继续吗？"))) return;
+    const savedInvalid = job.kind === "generation" && job.status === "completed" && job.result?.status === "saved_invalid";
+    if ((job.kind !== "generation" || job.error_code !== "generation_validation_failed") && !savedInvalid) return;
+    if (!window.confirm(t("只修复当前候选的局部格式/结构错误，不重新分析需求，也不重写完整程序。继续吗？"))) return;
     const repaired = await api<Job>(`/jobs/${encodeURIComponent(job.id)}/repair`, "POST", { request_id: key() });
     if (activeProjectRef.current !== pid) return;
     setEvents([]);
@@ -1474,6 +1475,7 @@ export default function App() {
                   <GenerationResult result={generationResult} busy={busy || loading}
                     onOpen={() => void guarded(() => openGenerationResult())}
                     onRetry={() => { setOutputRetry((n) => n + 1); void reloadProjectSilently(pid); }}
+                    onRepair={() => { if (currentJob) void guarded(() => repairFailedGeneration(currentJob)); }}
                     onSpec={() => setPanel("spec")} t={t} />
                   <JobFailure job={currentJob} busy={!canWrite}
                     onRepair={() => void guarded(() => repairFailedGeneration(currentJob))} t={t} />

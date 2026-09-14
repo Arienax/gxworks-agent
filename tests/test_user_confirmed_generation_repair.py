@@ -150,7 +150,7 @@ def test_user_confirmed_unique_opcode_repair_is_model_free(offline, tmp_path):
         assert service.projects.project(project)["version_count"] == 1
 
 
-class FormatThenStructuralProvider:
+class FormatRewriteProvider:
     def __init__(self):
         self.requests = []
 
@@ -160,110 +160,40 @@ class FormatThenStructuralProvider:
             yield TextDelta('{"device_comments":{"X0":"Input","Y0":"Output"},"rungs":[')
             return
         if len(self.requests) == 2:
-            payload = _ladder()
-            payload["rungs"][0]["shared_inputs"] = [{
-                "type": "parallel_block",
-                "branches": [
-                    [{"type": "NO", "address": "X0", "label": None}],
-                    [{"type": "NO", "address": "X1", "label": None}],
-                ],
-            }]
-            payload["rungs"][0]["branches"][0]["inputs"] = []
-            payload["device_comments"]["X1"] = "Input 2"
-            yield TextDelta(json.dumps(payload, ensure_ascii=False))
+            # Deliberately violate the new repair contract. The backend must
+            # reject this attempted whole-program rewrite rather than adopting it.
+            yield TextDelta(json.dumps(_ladder(), ensure_ascii=False))
             return
-        request_payload = json.loads(str(request.messages[-1].content))
-        rung = copy.deepcopy(request_payload["baseline_subset"]["rungs"][0])
-        parallel = rung["shared_inputs"].pop(0)
-        rung["branches"][0]["inputs"].append(parallel)
-        yield TextDelta(json.dumps({
-            "mode": "partial", "device_comments": {},
-            "rungs": [rung], "delete_rung_ids": [],
-        }, ensure_ascii=False))
+        raise AssertionError("format repair must never request another full-program rewrite")
 
 
-def test_format_repair_may_escalate_only_to_structure_only_rung_repair(offline, tmp_path):
-    provider = FormatThenStructuralProvider()
+def test_format_repair_rejects_model_whole_program_rewrite(offline, tmp_path):
+    provider = FormatRewriteProvider()
     service = WorkbenchService(
         tmp_path / "workspace", tmp_path / "state",
         model_factory=lambda: (provider, {"model": "offline"}),
     )
     with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
         headers = _login(client)
-        project = client.post("/api/projects", json={"name": "format-structural"}, headers=headers).json()["id"]
+        project = client.post("/api/projects", json={"name": "format-local-only"}, headers=headers).json()["id"]
         service.store.set_confirmed_spec(project, {"summary": "X0 controls Y0", "io_table": [], "parameters": []})
         first = client.post("/api/jobs", headers=headers, json={
-            "project_id": project, "kind": "generation", "request_id": "format-bad-structural",
+            "project_id": project, "kind": "generation", "request_id": "format-local-only-bad",
             "text": "X0 controls Y0", "response_language": "zh-CN",
         }).json()["id"]
         service.jobs._futures[first].result(timeout=15)
-        response = client.post(f"/api/jobs/{first}/repair", headers=headers, json={"request_id": "format-structural-once"})
-        assert response.status_code == 202, response.text
-        job = response.json()["id"]
-        service.jobs._futures[job].result(timeout=15)
-        completed = client.get(f"/api/jobs/{job}").json()
-        assert completed["status"] == "completed", completed
-        assert len(provider.requests) == 3
-        assert "PLC ladder JSON format repair" in str(provider.requests[1].messages[0].content)
-        assert "structural representation repair" in str(provider.requests[2].messages[0].content)
-        structural_payload = json.loads(str(provider.requests[2].messages[-1].content))
-        assert structural_payload["repair_mode"] == "partial"
-        assert "repair_contract" not in structural_payload
-        assert service.projects.project(project)["version_count"] == 1
-
-
-class FormatThenOpcodeProvider:
-    def __init__(self):
-        self.requests = []
-
-    def stream(self, request):
-        self.requests.append(request)
-        if len(self.requests) == 1:
-            yield TextDelta('{"device_comments":{"X0":"Input","Y0":"Output"},"rungs":[')
-            return
-        if len(self.requests) == 2:
-            payload = _ladder()
-            payload["rungs"][0]["branches"][0]["outputs"] = [{
-                "type": "APP_INSTR", "opcode": "NOT_A_REAL_OPCODE",
-                "operands": ["D0", "D1"], "label": None,
-            }]
-            yield TextDelta(json.dumps(payload, ensure_ascii=False))
-            return
-        raise AssertionError("invalid opcode must not trigger a semantic repair model call")
-
-
-def test_format_repair_does_not_guess_invalid_opcode_or_fall_back_to_whole_rung(offline, tmp_path):
-    provider = FormatThenOpcodeProvider()
-    service = WorkbenchService(
-        tmp_path / "workspace", tmp_path / "state",
-        model_factory=lambda: (provider, {"model": "offline"}),
-    )
-    with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
-        project = client.post("/api/projects", json={"name": "format-opcode"}, headers=headers).json()["id"]
-        service.store.set_confirmed_spec(project, {"summary": "X0 controls Y0", "io_table": [], "parameters": []})
-        first = client.post("/api/jobs", headers=headers, json={
-            "project_id": project, "kind": "generation", "request_id": "format-bad-opcode",
-            "text": "X0 controls Y0", "response_language": "zh-CN",
-        }).json()["id"]
-        service.jobs._futures[first].result(timeout=15)
-        response = client.post(f"/api/jobs/{first}/repair", headers=headers, json={"request_id": "format-opcode-once"})
+        response = client.post(f"/api/jobs/{first}/repair", headers=headers, json={"request_id": "format-local-only-repair"})
         assert response.status_code == 202, response.text
         job = response.json()["id"]
         service.jobs._futures[job].result(timeout=15)
         failed = client.get(f"/api/jobs/{job}").json()
         assert failed["status"] == "failed"
-        assert failed["error_details"]["violations"][0]["reason"] == "invalid_ladder_structure"
         assert len(provider.requests) == 2
+        prompt = str(provider.requests[1].messages[0].content)
+        assert "local format patch" in prompt
+        assert "Never output the full repaired JSON" in prompt
+        assert "complete top-level ladder JSON" not in prompt
         assert service.projects.project(project)["version_count"] == 0
-
-        blocked = client.post(
-            f"/api/jobs/{job}/repair",
-            headers=headers,
-            json={"request_id": "opcode-repair-must-stop"},
-        )
-        assert blocked.status_code == 409, blocked.text
-        assert len(provider.requests) == 2, "blocked semantic repair must not create another model job"
 
 
 def test_failure_ui_offers_explicit_repair_not_fake_automatic_attempts():

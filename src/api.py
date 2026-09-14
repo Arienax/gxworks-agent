@@ -1615,22 +1615,10 @@ Rules:
 - Do not output markdown, explanation, diagnostics, or a full ladder program.
 """
 
-FORMAT_LADDER_REPAIR_SYSTEM_PROMPT = """# PLC ladder JSON format repair
-Repair JSON syntax/protocol only. Do not re-analyze the PLC requirement, retrieve
-manuals, redesign logic, or invent missing behavior. The user payload contains
-the rejected raw candidate and the parser failure location.
-
-Return one pure, complete top-level ladder JSON object only:
-{"device_comments":{},"rungs":[]}
-
-Rules:
-- Preserve every recoverable address, opcode, operand, value, rung_id, branch,
-  contact polarity, label and comment from the rejected candidate.
-- Correct only JSON syntax, delimiters, container closure and protocol shape.
-- Never emit `mode:"partial"` on this path.
-- If the text ended early, close structures whose existing content is evident;
-  do not synthesize unseen rungs or new PLC logic.
-- Do not output markdown or explanation.
+FORMAT_LADDER_REPAIR_SYSTEM_PROMPT = """# Legacy compatibility name
+Full-program format rewriting is disabled. Production format repair uses only
+deterministic recovery or a bounded local syntax patch. Never return a complete
+ladder from a format-repair model call.
 """
 
 
@@ -1830,6 +1818,16 @@ def repair_ladder_response(repair_payload, model_name, effort, *, mode,
     if not isinstance(repair_payload, dict):
         raise TypeError("repair_payload must be an object")
     repair_payload = dict(repair_payload)
+    if mode == "format":
+        # Compatibility name only: the model is never allowed to rewrite the
+        # whole ladder. Deterministic recovery runs first, then at most a small
+        # syntax-only before/after patch is requested and applied locally.
+        from application.format_patch_repair import format_repair_response
+        return format_repair_response(
+            repair_payload, model_name, effort,
+            on_reasoning_chunk=on_reasoning_chunk,
+            on_content_chunk=on_content_chunk,
+        )
     if mode == "partial":
         plc_model = str(repair_payload.get("plc_model") or "FX3U").strip().upper() or "FX3U"
         baseline_tokens = _repair_baseline_tokens(repair_payload)

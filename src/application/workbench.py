@@ -319,12 +319,36 @@ class WorkbenchService:
             if not self.jobs:
                 raise KeyError(job_id)
             record = self.jobs._load(record_id(job_id))
-            if (record.get("kind") != "generation" or record.get("status") != "failed"
-                    or record.get("error_code") != "generation_validation_failed"):
-                raise ConflictError("Only a failed structural generation can be repaired")
+            failed_validation = (
+                record.get("kind") == "generation"
+                and record.get("status") == "failed"
+                and record.get("error_code") == "generation_validation_failed"
+            )
+            saved_invalid = (
+                record.get("kind") == "generation"
+                and record.get("status") == "completed"
+                and isinstance(record.get("result"), dict)
+                and record["result"].get("status") == "saved_invalid"
+                and isinstance(record["result"].get("version_id"), str)
+            )
+            if not (failed_validation or saved_invalid):
+                raise ConflictError("Only a rejected generation candidate can be repaired")
             snapshot = copy.deepcopy(record.get("snapshot") or {})
-            self._check_snapshot(snapshot)
             project_id = snapshot["project_id"]
+            if saved_invalid:
+                # Preserving an invalid candidate intentionally activates a
+                # diagnostic version. Accept that one known state transition,
+                # but reject unrelated project/spec changes before repairing.
+                current = self.projects.raw_project(project_id)
+                frozen = snapshot.get("project") or {}
+                preserved_id = record["result"]["version_id"]
+                if current.get("active_version_id") != preserved_id or any(
+                    current.get(key) != frozen.get(key)
+                    for key in ("confirmed_spec", "target_mode", "plc_model")
+                ):
+                    raise ConflictError("错误候选保存后工程状态已变化，请重新生成或选择当前候选。")
+            else:
+                self._check_snapshot(snapshot)
             version_id = snapshot.get("version_id")
             root = contained(self.state_dir / "staging" / record_id(job_id), self.state_dir / "staging")
             candidate_path = contained(root / "repair_candidate.json", root)
@@ -334,6 +358,14 @@ class WorkbenchService:
             if not candidate_text.strip() or len(candidate_text) > 512000:
                 raise ConflictError("The rejected candidate is too large or empty")
             details = record.get("error_details") or {}
+            if saved_invalid and not details:
+                try:
+                    preserved_output = self.output(job_id)
+                    preserved_validation = ((preserved_output.get("generation") or {}).get("validation") or {})
+                    if isinstance(preserved_validation, dict):
+                        details = preserved_validation
+                except (KeyError, ValueError, OSError):
+                    details = {}
             violations = details.get("violations") if isinstance(details, dict) else []
             locations = []
             for item in violations or []:
@@ -464,9 +496,9 @@ class WorkbenchService:
             )
         else:
             repair_text = (
-                "这是用户明确确认的一次 JSON 格式修复。失败候选本身无法安全解析，因此不能执行局部 rung 合并。"
-                "不要重新分析需求，不要改变控制逻辑、地址、参数或触点极性。只补全/修正 JSON 协议与闭合结构。"
-                "返回完整 ladder JSON，不要返回 mode=\"partial\"，不要输出解释文本。\n"
+                "这是用户明确确认的一次局部 JSON 格式修复。完整失败候选由系统持有，严禁模型重写完整程序。"
+                "先执行确定性语法恢复；只有仍有歧义时才允许模型返回 format_patch 的短 before/after 文本替换。"
+                "不得返回 ladder、rungs、branch 或任何完整候选，不得改变地址、指令、参数、触点极性或控制语义。\n"
                 f"失败位置：{location_text}\n\n失败候选 JSON：\n{candidate_text}"
             )
         command = {
@@ -481,7 +513,7 @@ class WorkbenchService:
             "repair_origin_job_id": job_id,
             "repair_mode": local_repair,
             "format_repair": not local_repair,
-            "task_type": "contract_repair" if local_repair else "generate",
+            "task_type": "contract_repair",
         }
         if local_repair:
             command.update(
