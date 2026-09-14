@@ -134,6 +134,17 @@ def _strict_ladder(candidate: str) -> tuple[dict[str, Any], dict[str, Any]]:
             last_error = ValueError("candidate must be one JSON object")
             continue
         if isinstance(parsed.get("rungs"), list):
+            try:
+                from application.compact_alias import expand_hybrid_compact_ladder
+                alias = expand_hybrid_compact_ladder(parsed)
+            except Exception as error:
+                last_error = error
+                continue
+            if alias is not None:
+                return alias, {
+                    "source_format": "compact_alias_ladder",
+                    "syntax_repairs": repair_count if text == repaired else 0,
+                }
             return parsed, {
                 "source_format": "ladder_v1",
                 "syntax_repairs": repair_count if text == repaired else 0,
