@@ -26,6 +26,7 @@ jobs:
         run: |
           python tools/_tmp_evidence_scoped_repair_20260914.py
           python tools/_tmp_evidence_scoped_repair_tests_20260914.py
+          python tools/_tmp_evidence_scoped_repair_fix_20260914.py
       - name: Install dependencies
         run: python -m pip install -r requirements.txt -r requirements/web.txt
       - name: Test evidence-scoped repair
@@ -38,7 +39,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout 574fdb3b31bad01525b9587e4df3fbdea066992c -- .github/workflows/registry-smoke.yml
-          git rm tools/_tmp_evidence_scoped_repair_20260914.py tools/_tmp_evidence_scoped_repair_tests_20260914.py
-          git add src/application/field_repair.py src/application/generation.py src/application/workbench.py src/api.py tests/test_field_patch_repair_protocol.py tests/test_user_confirmed_generation_repair.py .github/workflows/registry-smoke.yml
+          git rm tools/_tmp_evidence_scoped_repair_20260914.py tools/_tmp_evidence_scoped_repair_tests_20260914.py tools/_tmp_evidence_scoped_repair_fix_20260914.py
+          git add src/application/field_repair.py src/application/generation.py src/application/workbench.py src/application/job_errors.py src/api.py tests/test_field_patch_repair_protocol.py tests/test_user_confirmed_generation_repair.py .github/workflows/registry-smoke.yml
           git commit -m "fix: repair only validator-proven fields"
           git push origin HEAD:fix/prompt-context-slim-20260913
