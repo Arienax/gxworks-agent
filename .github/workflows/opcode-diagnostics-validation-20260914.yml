@@ -23,7 +23,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Apply diagnostics patch
-        run: python tools/_tmp_add_opcode_diagnostics_20260914.py
+        run: |
+          python tools/_tmp_add_opcode_diagnostics_20260914.py
+          python tools/_tmp_fix_opcode_diagnostics_patcher_20260914.py
       - name: Install dependencies
         run: |
           python -m pip install -r requirements.txt -r requirements/web.txt
