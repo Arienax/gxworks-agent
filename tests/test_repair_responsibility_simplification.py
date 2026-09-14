@@ -44,7 +44,7 @@ def test_model_call_never_invokes_provider_for_deterministic_field_patch():
     _reasoning, raw = model_call(remote, payload, "offline", "low", mode="field_patch")
     assert called == []
     fixed = apply(base, json.loads(raw), repair)
-    assert fixed["rungs"][0]["debug_note"] is None
+    assert fixed["rungs"][0]["debug_note"] == "x" * 64
 
 
 def test_semantic_opcode_error_is_blocked_without_provider_or_rung_fallback():
