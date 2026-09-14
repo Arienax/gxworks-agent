@@ -2,8 +2,8 @@
 
 Field repair is intentionally deterministic. Scalar engineering fields that
 cannot be inferred without changing PLC semantics are marked blocked instead of
-being offered to an LLM. Structural/container errors return ``None`` so the
-separate, tightly-scoped rung repair path may handle them.
+being offered to an LLM. The only whole-rung fallback currently authorized is
+a parallel_block misplaced in shared_inputs.
 """
 from __future__ import annotations
 
@@ -18,7 +18,6 @@ from plc_generation_contract import MAX_LABEL_LEN
 MODE = "field_patch"
 SCHEMA_VERSION = 1
 
-_STRUCTURAL_FIELDS = frozenset({"header_element", "shared_inputs", "branches", "inputs", "outputs"})
 _OPTIONAL_TEXT_FIELDS = frozenset({"label", "debug_note"})
 
 
@@ -112,12 +111,11 @@ def _blocked(saved, row, segments=None, current_value=None):
 
 
 def plan(base, violations, plc_model="FX3U"):
-    """Plan one deterministic scalar fix or classify a true structural repair.
+    """Plan one deterministic scalar fix or classify the sole structural fallback.
 
-    ``None`` is reserved for container/placement errors that may require a
-    whole-rung structural rewrite. Semantic scalar fields never fall through to
-    that path: they return a blocked plan so no model is asked to guess an
-    opcode, address, operand, preset, polarity, or other engineering meaning.
+    ``None`` is reserved for ``parallel_block`` in ``shared_inputs``. Everything
+    else either has a deterministic scalar correction or remains blocked, so a
+    generic validator path can never widen into a whole-rung rewrite.
     """
     del plc_model
     saved = candidate_base(base)
@@ -132,8 +130,10 @@ def plan(base, violations, plc_model="FX3U"):
     row = rows[0]
     reason = str(row.get("reason") or "invalid_ladder_structure")
     segments = _segments(row.get("path"))
+
     if reason == "invalid_shared_input":
         return None
+
     if not segments or segments[0] != "rungs":
         return _blocked(saved, row, segments)
     try:
@@ -141,11 +141,7 @@ def plan(base, violations, plc_model="FX3U"):
         parent = _lookup(saved, segments[:-1])
     except KeyError:
         return _blocked(saved, row, segments)
-    if isinstance(current, (dict, list)):
-        leaf = segments[-1]
-        if isinstance(leaf, str) and leaf in _STRUCTURAL_FIELDS:
-            return None
-        return _blocked(saved, row, segments)
+
     leaf = segments[-1]
     if isinstance(leaf, str):
         rule = _value_schema(parent, leaf, reason)
@@ -164,10 +160,15 @@ def plan(base, violations, plc_model="FX3U"):
                 value_schema=rule,
                 deterministic_value=deterministic_value,
             )
+
+    # Container paths, opcodes, addresses, operands, values and polarity are not
+    # repair recipes. Keep the original diagnostic and require manual/regeneration
+    # context instead of asking a model to infer semantics.
     return _blocked(saved, row, segments, current)
 
 
 def deterministic_response(repair_payload):
+    """Materialize a field-patch response without calling a model."""
     if not isinstance(repair_payload, dict) or repair_payload.get("repair_mode") != MODE:
         return None
     target = repair_payload.get("target")
@@ -177,6 +178,8 @@ def deterministic_response(repair_payload):
     if strategy == "deterministic":
         value = copy.deepcopy(target.get("deterministic_value"))
     elif strategy == "blocked":
+        # ``apply`` will re-raise the original diagnostic. The placeholder keeps
+        # the protocol syntactically local while guaranteeing zero model calls.
         value = None
     else:
         return None
@@ -218,7 +221,18 @@ def _check_value(value, rule):
         raise RepairAssemblyError("$.patches[0].value", "repair_shape_invalid")
 
 
+def _blocked_error(target):
+    path = str(target.get("diagnostic_path") or "$")
+    if path.startswith("content$"):
+        path = "$" + path[len("content$"):]
+    elif not path.startswith("$"):
+        path = "$"
+    reason = str(target.get("reason") or "invalid_ladder_structure")
+    return RepairAssemblyError(path, reason)
+
+
 def apply(base, response, repair_plan):
+    """Apply one authorized deterministic patch to an immutable baseline."""
     saved = candidate_base(base)
     if saved is None or not isinstance(repair_plan, dict) or repair_plan.get("mode") != MODE:
         raise RepairAssemblyError("$.base_sha256", "repair_base_invalid")
@@ -226,7 +240,7 @@ def apply(base, response, repair_plan):
         raise RepairAssemblyError("$.base_sha256", "repair_base_invalid")
     target = repair_plan.get("target") or {}
     if target.get("strategy") == "blocked":
-        raise RepairAssemblyError("$.patches[0].path", "repair_scope_violation")
+        raise _blocked_error(target)
     required = {"schema_version", "mode", "base_sha256", "patches"}
     if not isinstance(response, dict) or set(response) != required:
         raise RepairAssemblyError("$", "repair_shape_invalid")
