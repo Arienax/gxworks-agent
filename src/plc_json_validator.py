@@ -278,8 +278,11 @@ def should_auto_repair_validation_error(error):
     return not isinstance(error, ApproachContractValidationError)
 
 
-def _fail(path, message):
-    raise PLCJsonValidationError(f"{path}: {message}")
+def _fail(path, message, *, observed_opcode=None):
+    error = PLCJsonValidationError(f"{path}: {message}")
+    if isinstance(observed_opcode, str) and observed_opcode:
+        error.observed_opcode = observed_opcode
+    raise error
 
 
 def normalize_plc_model(plc_model="FX3U"):
@@ -632,18 +635,18 @@ def _validate_element(
         operands = elem.get("operands", [])
         _require_list(operands, f"{path}.operands")
         opcode = str(opcode).strip().upper()
+        def fail_opcode(message):
+            _fail(f"{path}.opcode", message, observed_opcode=opcode)
         if len(opcode) > 64 or not APP_INSTR_OPCODE_RE.fullmatch(opcode):
-            _fail(f"{path}.opcode", f"invalid APP_INSTR opcode token {opcode!r}")
+            fail_opcode(f"invalid APP_INSTR opcode token {opcode!r}")
         if opcode in _APP_INSTR_TYPED_ONLY:
             if opcode == "OUT":
-                _fail(
-                    f"{path}.opcode",
+                fail_opcode(
                     "OUT is represented by the typed COIL, TIMER, or COUNTER "
                     "output object in this JSON schema; it must not be encoded "
                     "as APP_INSTR",
                 )
-            _fail(
-                f"{path}.opcode",
+            fail_opcode(
                 f"{opcode} has a dedicated ladder representation and must not "
                 "be encoded as APP_INSTR",
             )
@@ -651,32 +654,28 @@ def _validate_element(
         spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode)
         if spec is None:
             if require_catalogued_instructions:
-                _fail(
-                    f"{path}.opcode",
+                fail_opcode(
                     f"unsupported APP_INSTR opcode {opcode!r}; add a verified "
                     "instruction definition to the registry before generation",
                 )
         else:
             if spec.category in _APP_INSTR_FORBIDDEN_CATEGORIES:
-                _fail(
-                    f"{path}.opcode",
+                fail_opcode(
                     f"{opcode} is a {spec.category.value} instruction and cannot "
                     "be represented as an APP_INSTR output",
                 )
             model = normalize_plc_model(plc_model)
             if not spec.supports_cpu(model):
                 if model == "FX5U" and opcode == "ZRN":
-                    _fail(f"{path}.opcode", "ZRN is not supported by FX5U; use DSZR")
+                    fail_opcode("ZRN is not supported by FX5U; use DSZR")
                 if model == "FX3U" and (
                     opcode in {"DRVTBL", "DRVMUL"} or opcode.startswith("MC_")
                 ):
-                    _fail(
-                        f"{path}.opcode",
+                    fail_opcode(
                         f"{opcode} is an FX5U instruction and is not supported by FX3U",
                     )
                 supported = ", ".join(sorted(spec.cpu_support)) or "another CPU family"
-                _fail(
-                    f"{path}.opcode",
+                fail_opcode(
                     f"{opcode} is not supported by {model}; catalogue support: {supported}",
                 )
             if not spec.accepts_arity(len(operands)):

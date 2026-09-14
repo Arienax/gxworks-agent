@@ -90,6 +90,18 @@ def _number(value):
     return max(0, min(value, 10**12)) if type(value) is int else None
 
 
+def _safe_opcode(value):
+    if not isinstance(value, str):
+        return None
+    token = value.strip().upper()
+    if not re.fullmatch(r"[A-Z0-9_.$@+\-]{1,64}", token):
+        return "redacted"
+    lowered = token.lower()
+    if any(marker in lowered for marker in ("sk-", "bearer", "secret", "private", "api_key", "token", "password")):
+        return "redacted"
+    return token
+
+
 def _safe_fields(fields):
     result = {}
     for key, value in fields.items():
@@ -97,6 +109,10 @@ def _safe_fields(fields):
             result[key] = _number(value)
         elif key in _BOOLEANS and type(value) is bool:
             result[key] = value
+        elif key == 'observed_opcode':
+            safe_opcode = _safe_opcode(value)
+            if safe_opcode is not None:
+                result[key] = safe_opcode
         elif key in _IDS:
             result[key] = _identifier(value)
         elif key in _ENUMS:
@@ -325,6 +341,9 @@ def exception_record(error, *, event='workflow_exception', stage='workflow'):
         item = {'error_type': type(error).__name__, 'code': getattr(error, 'code', ''),
                 'status_code': getattr(error, 'status_code', None), 'frames': frames[-32:],
                 'traceback_truncated': len(frames) > 32}
+        observed_opcode = getattr(error, 'observed_opcode', None)
+        if observed_opcode is not None:
+            item['observed_opcode'] = observed_opcode
         detail = getattr(error, 'diagnostics', None)
         if isinstance(detail, dict):
             for key in ('violation_count', 'attempt_count', 'max_attempts', 'stop_reason'):
@@ -369,9 +388,17 @@ def export_diagnostics(state_dir, job):
             else:
                 capture_status = ('export_truncated' if valid_count > _MAX_EXPORT_LINES else
                                   'captured' if records else 'unreadable')
+    def contains_observed_opcode(value):
+        if isinstance(value, dict):
+            return 'observed_opcode' in value or any(contains_observed_opcode(item) for item in value.values())
+        if isinstance(value, (list, tuple)):
+            return any(contains_observed_opcode(item) for item in value)
+        return False
+
     meta = {'schema_version':_SCHEMA, 'job_id':job_id, 'capture_status':capture_status,
             'job':_safe_fields({key: job.get(key) for key in ('kind', 'status', 'project_id', 'version_id')}),
             'event_count':len(records), 'content_included':False, 'keys_included':False,
+            'validation_values_included':any(contains_observed_opcode(item) for item in records),
             'captured_after_upgrade_only':True}
     from application.job_errors import public_error_details
     meta['error_details'] = public_error_details(job.get('error_details'))
@@ -405,6 +432,7 @@ def export_diagnostics(state_dir, job):
              'model_request shows per-role character counts and image count without message text.\n'
              'model_response JSON diagnostics show parser position, distance from end, complete-object prefix status, tail class/length and ladder shape counts.\n'
              'workflow_exception includes source file/function/line plus validation attempts, stop_reason and safe violation paths when available.\n'
+             'For APP_INSTR opcode validation failures only, observed_opcode records the exact normalized mnemonic rejected by the validator (max 64 characters); operands, addresses and reply bodies remain excluded.\n'
              'provider_result contains finish_reason when the provider actually supplied it.\n'
              'unknown / finish_seen=false is not evidence of token truncation.\n'
              'not_captured means this job predates diagnostic instrumentation; reproduce once on the new build.\n'

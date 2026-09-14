@@ -8,6 +8,7 @@ import zipfile
 import pytest
 import runtime_diagnostics as d
 from application.generation_repair import GenerationValidationError
+from plc_json_validator import PLCJsonValidationError, validate_ladder_candidate_structure
 from model_provider import (OpenAICompatibleProvider, ModelRequest, SystemMessage, UserMessage,
     ResponseRejectedError, ResponseContract, collect_response, ModelProviderError)
 
@@ -89,6 +90,61 @@ def test_model_request_records_role_sizes_without_message_text(tmp_path):
     assert event['user_chars'] == len('USER_PRIVATE')
     assert event['message_chars'] == len('SYSTEM_PRIVATE') + len('USER_PRIVATE')
     assert 'SYSTEM_PRIVATE' not in json.dumps(event) and 'USER_PRIVATE' not in json.dumps(event)
+
+
+
+def test_invalid_app_instr_opcode_is_exported_as_bounded_observed_value(tmp_path):
+    ladder = {
+        "device_comments": {},
+        "rungs": [{
+            "rung_id": 1,
+            "header_element": None,
+            "shared_inputs": [],
+            "branches": [{
+                "branch_id": 1,
+                "y_offset_level": 0,
+                "inputs": [],
+                "outputs": [{
+                    "type": "APP_INSTR",
+                    "opcode": "NOT_A_REAL_OPCODE",
+                    "operands": ["PRIVATE_OPERAND"],
+                    "label": None,
+                }],
+            }],
+        }],
+    }
+    with pytest.raises(PLCJsonValidationError) as caught:
+        validate_ladder_candidate_structure(
+            ladder, plc_model="FX3U", require_catalogued_instructions=True,
+        )
+    assert caught.value.observed_opcode == "NOT_A_REAL_OPCODE"
+    failure = GenerationValidationError(
+        [caught.value], attempts=0, max_attempts=0,
+        language="zh-CN", stop_reason="final_validation",
+    )
+    with d.diagnostic_scope(tmp_path, "job_test"):
+        d.exception_record(failure)
+
+    job = {"id": "job_test", "status": "failed", "kind": "generation"}
+    with zipfile.ZipFile(io.BytesIO(d.export_diagnostics(tmp_path, job))) as archive:
+        summary = json.loads(archive.read("summary.json"))
+        log = archive.read("diagnostics.jsonl").decode()
+        payload = archive.read("summary.json").decode() + log + archive.read("README.txt").decode()
+    assert summary["validation_values_included"] is True
+    workflow = summary["failure_analysis"]["workflow_exception"]
+    assert workflow["exceptions"][0]["violations"][0]["observed_opcode"] == "NOT_A_REAL_OPCODE"
+    assert '"observed_opcode": "NOT_A_REAL_OPCODE"' in log
+    assert "PRIVATE_OPERAND" not in payload
+
+
+def test_observed_opcode_diagnostic_redacts_secret_like_tokens(tmp_path):
+    error = PLCJsonValidationError("$.rungs[0].branches[0].outputs[0].opcode: invalid")
+    error.observed_opcode = "SK-PRIVATE_TOKEN"
+    with d.diagnostic_scope(tmp_path, "job_test"):
+        d.exception_record(error)
+    item = next(x for x in rows(tmp_path) if x["event"] == "workflow_exception")["exceptions"][0]
+    assert item["observed_opcode"] == "redacted"
+    assert "PRIVATE_TOKEN" not in json.dumps(rows(tmp_path))
 
 
 def test_generation_validation_exception_records_attempts_stop_and_paths(tmp_path):
