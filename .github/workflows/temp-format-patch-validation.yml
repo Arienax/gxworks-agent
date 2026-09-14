@@ -17,13 +17,14 @@ jobs:
           node-version: '22'
       - run: python -m pip install -q pytest -r requirements/web.txt
       - name: Compile
-        run: python -m compileall -q src/application/base.py src/application/format_patch_repair.py src/application/workbench.py src/api.py tests/test_format_patch_repair.py
+        run: python -m compileall -q src/application/base.py src/application/format_patch_repair.py src/application/workbench.py src/api.py tests/test_format_patch_repair.py tests/test_repair_render_delivery.py
       - name: Run repair and delivery regressions
         env:
           PYTHONPATH: src
         run: |
           python -m pytest -q \
             tests/test_format_patch_repair.py \
+            tests/test_repair_render_delivery.py \
             tests/test_user_confirmed_generation_repair.py \
             tests/test_generation_rejected_json_repair.py \
             tests/test_rejected_generation_delivery.py \
