@@ -4,10 +4,14 @@ from api import _normalize_analysis_result
 from application.generation_agent import (
     _FirstJSONObjectProvider,
     _GENERATION_REQUEST,
+    _build_agent_b_prompt,
+    _compact_response_schema,
+    _expand_compact_ladder,
     _strict_generation_projection,
 )
 from confirmed_spec import build_review_draft
 from model_provider import ModelRequest, TextDelta, UserMessage
+from plc_json_validator import validate_ladder_candidate_structure
 
 
 class _DuplicateJsonProvider:
@@ -75,10 +79,106 @@ def test_agent_b_stream_stops_after_first_complete_json_object():
 
 
 def test_agent_b_prompt_makes_input_or_and_single_json_rules_explicit():
-    assert "parallel_block" in _GENERATION_REQUEST
     assert "输入条件的 OR" in _GENERATION_REQUEST
     assert "不得把 (A OR B) -> 同一输出 拆成多个 output branch/多个 branches" in _GENERATION_REQUEST
     assert "不得在同一次 completion 中自检后再重写或追加第二份完整 JSON" in _GENERATION_REQUEST
+
+
+def test_compact_agent_b_expands_or_compare_timer_and_app_instruction():
+    projected = {
+        "io_table": [
+            {"address": "X1", "label": "入口检测"},
+            {"address": "Y3", "label": "转向臂"},
+        ]
+    }
+    compact = {
+        "r": [
+            {
+                "b": [
+                    {
+                        "i": [
+                            "NO X1",
+                            {"or": [["NO M20"], ["NO M21"], ["NO M22"]]},
+                        ],
+                        "o": ["COIL Y3"],
+                    }
+                ]
+            },
+            {"b": [{"i": [">= D0 K1", "<= D0 K3"], "o": ["MOV K1 D10"]}]},
+            {"b": [{"i": ["NO X2"], "o": ["TIMER T0 K10"]}]},
+        ]
+    }
+
+    ladder = _expand_compact_ladder(compact, projected)
+    first = ladder["rungs"][0]["branches"][0]
+
+    assert first["inputs"][1] == {
+        "type": "parallel_block",
+        "branches": [
+            [{"type": "NO", "address": "M20"}],
+            [{"type": "NO", "address": "M21"}],
+            [{"type": "NO", "address": "M22"}],
+        ],
+    }
+    assert ladder["rungs"][1]["branches"][0]["inputs"] == [
+        {"type": "COMPARE", "expression": ">= D0 K1"},
+        {"type": "COMPARE", "expression": "<= D0 K3"},
+    ]
+    assert ladder["rungs"][1]["branches"][0]["outputs"] == [
+        {"type": "APP_INSTR", "opcode": "MOV", "operands": ["K1", "D10"]}
+    ]
+    assert ladder["rungs"][2]["branches"][0]["outputs"] == [
+        {"type": "TIMER", "address": "T0", "value": "K10"}
+    ]
+    assert ladder["device_comments"] == {"X1": "入口检测", "Y3": "转向臂"}
+    assert [rung["rung_id"] for rung in ladder["rungs"]] == [1, 2, 3]
+    assert first["branch_id"] == 1 and first["y_offset_level"] == 0
+    validate_ladder_candidate_structure(
+        ladder, plc_model="FX3U", require_catalogued_instructions=True
+    )
+
+
+def test_compact_transport_schema_does_not_embed_full_opcode_catalog():
+    schema_text = json.dumps(_compact_response_schema(), ensure_ascii=False, separators=(",", ":"))
+    assert len(schema_text) < 2000
+    assert "opcode" not in schema_text
+    assert "device_comments" not in schema_text
+    assert "branch_id" not in schema_text
+    assert "y_offset_level" not in schema_text
+
+
+def test_compact_agent_b_output_is_materially_smaller_than_expanded_ladder():
+    compact = {
+        "r": [
+            {"b": [{"i": ["NO X1", "NC M1"], "o": [f"COIL M{i}"]}]}
+            for i in range(1, 31)
+        ]
+    }
+    full = _expand_compact_ladder(compact, {})
+    compact_size = len(json.dumps(compact, separators=(",", ":")))
+    full_size = len(json.dumps(full, separators=(",", ":")))
+    assert compact_size < full_size * 0.55
+
+
+def test_agent_b_prompt_is_confirmed_spec_scoped_not_generic_model_dump(monkeypatch):
+    import application.generation_agent as agent
+
+    monkeypatch.setattr(agent, "_build_knowledge_context", lambda *args, **kwargs: "")
+    projected = {
+        "summary": "1~3 为 A 类，4~6 为 B 类，7~9 为 C 类",
+        "selected_approach": {
+            "approach_id": "direct",
+            "generation_contract": {"required_structures": ["direct_logic"]},
+        },
+        "io_table": [{"address": "X1", "label": "检测"}, {"address": "Y0", "label": "输送带"}],
+    }
+    prompt = _build_agent_b_prompt(projected, "FX3U")
+
+    assert json.dumps(projected, ensure_ascii=False, separators=(",", ":")) in prompt
+    assert "FX3U-4DA" not in prompt
+    assert "FX3U-2HSY-ADP" not in prompt
+    assert "Machine-readable output schema" not in prompt
+    assert len(prompt) < 5000
 
 
 def test_agent_a_cannot_drop_verbatim_classification_or_promote_guessed_contract():
