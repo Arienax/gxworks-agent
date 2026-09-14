@@ -30,7 +30,7 @@ def _full_ladder(count=49):
 
 
 def test_explicit_repair_accepts_flattened_singleton_parallel_branches():
-    """Provider may omit only the inner singleton arrays required by the contract."""
+    """A repair response may omit only the inner singleton arrays required by the contract."""
     baseline = _full_ladder()
     target = baseline["rungs"][43]
     target["shared_inputs"] = [{
