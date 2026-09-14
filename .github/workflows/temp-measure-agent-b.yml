@@ -45,6 +45,7 @@ jobs:
           knowledge = _build_knowledge_context(_GENERATION_REQUEST, plc_model='FX3U', task_type='generate',
               confirmed_context=projected, evidence=None)
           profile = _build_model_context('FX3U', projected, compact=bool(knowledge))
+          compact_profile = _build_model_context('FX3U', projected, compact=True)
           confirmed_block = _with_confirmed_context('', projected)
           prompt = build_generation_instructions(_GENERATION_REQUEST, plc_model='FX3U', target_mode='ladder',
               is_edit_mode=False, task_type='generate', confirmed_context=projected, current_version_json=None)
@@ -53,11 +54,12 @@ jobs:
           print('SCHEMA_CHARS=', len(compact_schema))
           print('SCHEMA_OCCURRENCES_IN_PROMPT=', prompt.count(compact_schema))
           print('PROFILE_CONTEXT_CHARS=', len(profile))
+          print('COMPACT_PROFILE_CONTEXT_CHARS=', len(compact_profile))
           print('KNOWLEDGE_CONTEXT_CHARS=', len(knowledge))
           print('CONFIRMED_BLOCK_CHARS=', len(confirmed_block))
           print('FX3U_OPCODE_ENUM_COUNT=', len(generation_app_instr_mnemonics('FX3U')))
           print('CONFIRMED_CHARS=', len(json.dumps(projected, ensure_ascii=False, separators=(',', ':'))))
-          print('PROMPT_HEAD=', prompt[:500].replace('\n','\\n'))
+          print('COMPACT_PROFILE=', compact_profile.replace('\n','\\n'))
           PY
           cat agent-b-metrics.txt
       - uses: actions/upload-artifact@v4
