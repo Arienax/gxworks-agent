@@ -1,5 +1,6 @@
 """Small callback/language boundary for synchronous application workflows."""
 import copy
+import json
 
 from i18n import get_language, language_context
 
@@ -8,8 +9,29 @@ class WorkflowError(RuntimeError):
     pass
 
 
+def _repair_short_circuit(function, args, kwargs):
+    """Keep deterministic fields local and semantic-free structural repair narrow."""
+    mode = kwargs.get("mode")
+    if mode == "field_patch" and args and isinstance(args[0], dict):
+        from application.field_repair import deterministic_response
+        response = deterministic_response(args[0])
+        if response is not None:
+            return "", json.dumps(response, ensure_ascii=False, separators=(",", ":"))
+    if (
+        mode == "partial"
+        and getattr(function, "__module__", "") == "api"
+        and getattr(function, "__name__", "") == "repair_ladder_response"
+    ):
+        from application.repair_policy import structural_repair_response
+        return structural_repair_response(*args, **kwargs)
+    return None
+
+
 def model_call(function, *args, **kwargs):
-    """Guard only a model invocation; local engineering errors keep their detail."""
+    """Guard model invocations while deterministic repair stays model-free."""
+    local = _repair_short_circuit(function, args, kwargs)
+    if local is not None:
+        return local
     from model_provider import ResponseRejectedError, public_model_error
     try:
         return function(*args, **kwargs)

@@ -1,4 +1,10 @@
-"""Minimal path-addressed repair for rejected ladder JSON."""
+"""Minimal path-addressed repair for rejected ladder JSON.
+
+Field repair is intentionally deterministic. Scalar engineering fields that
+cannot be inferred without changing PLC semantics are marked blocked instead of
+being offered to an LLM. Structural/container errors return ``None`` so the
+separate, tightly-scoped rung repair path may handle them.
+"""
 from __future__ import annotations
 
 import copy
@@ -7,11 +13,13 @@ import json
 import re
 
 from application.generation_repair import RepairAssemblyError, candidate_base
-from instruction_registry import DEFAULT_INSTRUCTION_REGISTRY, generation_app_instr_mnemonics
 from plc_generation_contract import MAX_LABEL_LEN
 
 MODE = "field_patch"
 SCHEMA_VERSION = 1
+
+_STRUCTURAL_FIELDS = frozenset({"header_element", "shared_inputs", "branches", "inputs", "outputs"})
+_OPTIONAL_TEXT_FIELDS = frozenset({"label", "debug_note"})
 
 
 def base_sha256(value):
@@ -54,22 +62,15 @@ def _pointer(segments):
     return "/" + "/".join(str(x).replace("~", "~0").replace("/", "~1") for x in segments)
 
 
-def _value_schema(parent, field, plc_model, reason):
-    if field == "opcode" and isinstance(parent, dict) and parent.get("type") == "APP_INSTR":
-        operands = parent.get("operands")
-        if not isinstance(operands, list):
-            return None
-        allowed = []
-        for mnemonic in generation_app_instr_mnemonics(plc_model):
-            spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(mnemonic)
-            if (
-                spec is not None
-                and spec.contract_level == "full"
-                and spec.accepts_arity(len(operands))
-            ):
-                allowed.append(mnemonic)
-        return {"type": "string", "enum": sorted(allowed)} if allowed else None
-    if field in {"label", "debug_note"} and reason == "field_too_long":
+def _branch_index(segments):
+    for index, segment in enumerate(segments[:-1]):
+        if segment == "branches" and isinstance(segments[index + 1], int):
+            return segments[index + 1]
+    return None
+
+
+def _value_schema(parent, field, reason):
+    if field in _OPTIONAL_TEXT_FIELDS and reason == "field_too_long":
         return {"type": ["string", "null"], "maxLength": MAX_LABEL_LEN}
     if field == "branch_id":
         return {"type": "integer", "minimum": 1}
@@ -78,36 +79,124 @@ def _value_schema(parent, field, plc_model, reason):
     return None
 
 
+def _target(saved, row, segments, *, strategy, current_value=None,
+            value_schema=None, deterministic_value=None):
+    path = _pointer(segments) if segments else "/rungs"
+    target = {
+        "path": path,
+        "diagnostic_path": str(row.get("path") or ""),
+        "reason": str(row.get("reason") or "invalid_ladder_structure"),
+        "current_value": copy.deepcopy(current_value),
+        "strategy": strategy,
+        "value_schema": copy.deepcopy(value_schema or {"type": "null"}),
+    }
+    if strategy == "deterministic":
+        target["deterministic_value"] = copy.deepcopy(deterministic_value)
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "mode": MODE,
+        "base_sha256": base_sha256(saved),
+        "target": target,
+    }
+
+
+def _blocked(saved, row, segments=None, current_value=None):
+    """Return a non-LLM plan that explicitly refuses semantic guessing."""
+    safe_segments = segments if segments else ["rungs"]
+    return _target(
+        saved, row, safe_segments,
+        strategy="blocked",
+        current_value=current_value,
+        value_schema={"type": "null"},
+    )
+
+
 def plan(base, violations, plc_model="FX3U"):
-    """Plan exactly one safe scalar patch; structural cases return None."""
+    """Plan one deterministic scalar fix or classify a true structural repair.
+
+    ``None`` is reserved for container/placement errors that may require a
+    whole-rung structural rewrite. Semantic scalar fields never fall through to
+    that path: they return a blocked plan so no model is asked to guess an
+    opcode, address, operand, preset, polarity, or other engineering meaning.
+    """
+    del plc_model  # field repair is intentionally independent of instruction catalogues
     saved = candidate_base(base)
     rows = [row for row in (violations or []) if isinstance(row, dict)]
     if saved is None or len(rows) != 1:
         return None
     row = rows[0]
+    reason = str(row.get("reason") or "invalid_ladder_structure")
     segments = _segments(row.get("path"))
-    if not segments or segments[0] != "rungs" or not isinstance(segments[-1], str):
+
+    # parallel_block in shared_inputs is the canonical example of a genuine
+    # representation error that can require moving a subtree between containers.
+    if reason == "invalid_shared_input":
         return None
+
+    if not segments or segments[0] != "rungs":
+        return _blocked(saved, row, segments)
+
     try:
         current = _lookup(saved, segments)
         parent = _lookup(saved, segments[:-1])
     except KeyError:
+        return _blocked(saved, row, segments)
+
+    # A diagnostic that points at a list/object container is structural. This is
+    # the only generic route into whole-rung fallback.
+    if isinstance(current, (dict, list)):
+        leaf = segments[-1]
+        if isinstance(leaf, str) and leaf in _STRUCTURAL_FIELDS:
+            return None
+        return _blocked(saved, row, segments)
+
+    leaf = segments[-1]
+    if isinstance(leaf, str):
+        rule = _value_schema(parent, leaf, reason)
+        if rule is not None:
+            if leaf in _OPTIONAL_TEXT_FIELDS:
+                deterministic_value = None
+            else:
+                branch_index = _branch_index(segments)
+                if branch_index is None:
+                    return _blocked(saved, row, segments, current)
+                deterministic_value = branch_index + 1 if leaf == "branch_id" else branch_index
+            return _target(
+                saved, row, segments,
+                strategy="deterministic",
+                current_value=current,
+                value_schema=rule,
+                deterministic_value=deterministic_value,
+            )
+
+    # Everything else at scalar granularity is semantic or ambiguous. Most
+    # importantly, APP_INSTR.opcode is never converted into a list of plausible
+    # mnemonics for an LLM to choose from.
+    return _blocked(saved, row, segments, current)
+
+
+def deterministic_response(repair_payload):
+    """Materialize a field-patch protocol response without calling a model."""
+    if not isinstance(repair_payload, dict) or repair_payload.get("repair_mode") != MODE:
         return None
-    rule = _value_schema(parent, segments[-1], str(plc_model or "FX3U").upper(), row.get("reason"))
-    if rule is None:
+    target = repair_payload.get("target")
+    if not isinstance(target, dict):
+        return None
+    strategy = target.get("strategy")
+    if strategy == "deterministic":
+        value = copy.deepcopy(target.get("deterministic_value"))
+    elif strategy == "blocked":
+        # ``apply`` rejects blocked plans before this placeholder can touch the
+        # candidate. Keeping a syntactically valid response lets the normal
+        # validation pipeline report a scoped repair failure without a model call.
+        value = None
+    else:
         return None
     return {
         "schema_version": SCHEMA_VERSION,
         "mode": MODE,
-        "base_sha256": base_sha256(saved),
-        "target": {
-            "path": _pointer(segments),
-            "diagnostic_path": str(row.get("path") or ""),
-            "reason": str(row.get("reason") or "invalid_ladder_structure"),
-            "current_value": copy.deepcopy(current),
-            "context": copy.deepcopy(parent) if segments[-1] == "opcode" else {"field": segments[-1]},
-            "value_schema": copy.deepcopy(rule),
-        },
+        "base_sha256": repair_payload.get("base_sha256"),
+        "patches": [{"path": target.get("path"), "value": value}],
     }
 
 
@@ -142,12 +231,15 @@ def _check_value(value, rule):
 
 
 def apply(base, response, repair_plan):
-    """Apply one authorized patch to an immutable baseline."""
+    """Apply one authorized deterministic patch to an immutable baseline."""
     saved = candidate_base(base)
     if saved is None or not isinstance(repair_plan, dict) or repair_plan.get("mode") != MODE:
         raise RepairAssemblyError("$.base_sha256", "repair_base_invalid")
     if base_sha256(saved) != repair_plan.get("base_sha256"):
         raise RepairAssemblyError("$.base_sha256", "repair_base_invalid")
+    target = repair_plan.get("target") or {}
+    if target.get("strategy") == "blocked":
+        raise RepairAssemblyError("$.patches[0].path", "repair_scope_violation")
     required = {"schema_version", "mode", "base_sha256", "patches"}
     if not isinstance(response, dict) or set(response) != required:
         raise RepairAssemblyError("$", "repair_shape_invalid")
@@ -161,7 +253,6 @@ def apply(base, response, repair_plan):
     patch = patches[0]
     if set(patch) != {"path", "value"}:
         raise RepairAssemblyError("$.patches[0]", "repair_shape_invalid")
-    target = repair_plan.get("target") or {}
     if patch.get("path") != target.get("path"):
         raise RepairAssemblyError("$.patches[0].path", "repair_scope_violation")
     _check_value(patch.get("value"), target.get("value_schema") or {})

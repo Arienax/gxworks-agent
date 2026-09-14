@@ -8,6 +8,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+from collections import Counter
 from pathlib import Path
 
 from application.generation_repair import check_candidate_containers, materialize_partial
@@ -46,6 +47,79 @@ def _normalize_legacy_blocks(ladder):
                     replacement["label"] = output["label"]
                 output.clear()
                 output.update(replacement)
+
+
+def _common_semantic_signature(element):
+    if not isinstance(element, dict):
+        return None
+    return json.dumps(
+        {
+            key: copy.deepcopy(element[key])
+            for key in ("type", "address", "expression", "opcode", "operands", "value")
+            if key in element
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _leaf_semantic_signatures(element):
+    """Flatten representation-only parallel containers into semantic leaf tokens."""
+    if not isinstance(element, dict):
+        return []
+    if str(element.get("type") or "").casefold() == "parallel_block":
+        result = []
+        for branch in element.get("branches", []) or []:
+            if isinstance(branch, list):
+                for child in branch:
+                    result.extend(_leaf_semantic_signatures(child))
+        return result
+    signature = _common_semantic_signature(element)
+    return [signature] if signature is not None else []
+
+
+def _rung_semantic_tokens(rung):
+    """Return a multiset of engineering tokens, independent of container layout."""
+    tokens = []
+    if not isinstance(rung, dict):
+        return Counter()
+    header = rung.get("header_element")
+    if isinstance(header, dict):
+        tokens.extend(_leaf_semantic_signatures(header))
+    for element in rung.get("shared_inputs", []) or []:
+        tokens.extend(_leaf_semantic_signatures(element))
+    for branch in rung.get("branches", []) or []:
+        if not isinstance(branch, dict):
+            continue
+        for element in branch.get("inputs", []) or []:
+            tokens.extend(_leaf_semantic_signatures(element))
+        for element in branch.get("outputs", []) or []:
+            tokens.extend(_leaf_semantic_signatures(element))
+    return Counter(tokens)
+
+
+def _enforce_structural_repair_semantics(previous_ladder, submitted_partial):
+    """Whole-rung fallback may rearrange structure, never engineering meaning."""
+    if not isinstance(previous_ladder, dict) or not isinstance(submitted_partial, dict):
+        return
+    baseline = {
+        rung.get("rung_id"): rung
+        for rung in previous_ladder.get("rungs", []) or []
+        if isinstance(rung, dict) and isinstance(rung.get("rung_id"), int)
+        and not isinstance(rung.get("rung_id"), bool)
+    }
+    for rung in submitted_partial.get("rungs", []) or []:
+        if not isinstance(rung, dict):
+            continue
+        rung_id = rung.get("rung_id")
+        original = baseline.get(rung_id)
+        if original is None:
+            continue
+        if _rung_semantic_tokens(original) != _rung_semantic_tokens(rung):
+            raise PLCJsonValidationError(
+                f"$.rungs: contract repair changed out-of-scope semantic tokens in rung {rung_id}"
+            )
 
 
 def normalization_summary(report):
@@ -92,6 +166,7 @@ def prepare_ladder_candidate(
     """
     parsed = copy.deepcopy(candidate)
     check_candidate_containers(parsed)
+    submitted = copy.deepcopy(parsed)
     progress = on_progress or (lambda _message: None)
     messages = []
     progress(tr('正在解析模型输出：规范化梯形图协议'))
@@ -123,6 +198,7 @@ def prepare_ladder_candidate(
                 outside_devices = patch_device_addresses(parsed) - allowed_devices
                 if outside_devices:
                     raise PLCJsonValidationError("$.rungs: contract repair introduced out-of-scope devices " + ", ".join(sorted(outside_devices)))
+            _enforce_structural_repair_semantics(previous_ladder, submitted)
 
     normalization_scope = None
     if parsed.get("mode") == "partial":
