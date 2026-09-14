@@ -55,7 +55,7 @@ def test_opcode_failure_is_blocked_instead_of_guessing_a_mnemonic():
     assert rejected.value.reason == "repair_scope_violation"
 
 
-def test_long_debug_note_is_removed_deterministically():
+def test_long_debug_note_is_truncated_deterministically():
     base = _base()
     original = copy.deepcopy(base)
     base["rungs"][0]["debug_note"] = "x" * 100
@@ -64,13 +64,13 @@ def test_long_debug_note_is_removed_deterministically():
         "reason": "field_too_long",
     }], "FX3U")
     assert repair["target"]["strategy"] == "deterministic"
-    assert repair["target"]["deterministic_value"] is None
+    assert repair["target"]["deterministic_value"] == "x" * 64
     assert repair["target"]["value_schema"]["maxLength"] == 64
     response = deterministic_response(_payload(repair))
     result = apply(base, response, repair)
-    assert result["rungs"][0]["debug_note"] is None
+    assert result["rungs"][0]["debug_note"] == "x" * 64
     expected = copy.deepcopy(original)
-    expected["rungs"][0]["debug_note"] = None
+    expected["rungs"][0]["debug_note"] = "x" * 64
     assert result == expected
 
 
@@ -98,6 +98,15 @@ def test_true_container_error_is_the_only_whole_rung_fallback_class():
         "reason": "invalid_shared_input",
     }], "FX3U")
     assert repair is None
+
+
+def test_multiple_or_ambiguous_diagnostics_do_not_expand_to_whole_rung():
+    base = _base()
+    repair = plan(base, [
+        {"path": "content$.rungs.0.debug_note", "reason": "field_too_long"},
+        {"path": "content$.rungs.0.branches.0.outputs.0.opcode", "reason": "invalid_ladder_structure"},
+    ])
+    assert repair["target"]["strategy"] == "blocked"
 
 
 def test_field_patch_rejects_wrong_path_or_baseline():
