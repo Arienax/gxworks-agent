@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import json
 
+from model_provider import TextDelta
 from plc_generation_context import build_generation_instructions, public_generation_specification
 from plc_generation_contract import ladder_response_schema
 from response_language import preserved_annotations
@@ -19,8 +20,114 @@ from workflow_response_contracts import LADDER_RESPONSE
 _GENERATION_REQUEST = (
     "根据已经由用户确认的规格生成完整 ladder_v1 JSON。"
     "不得重新分析需求、提出问题或改变已确认 I/O、触点极性、参数和所选方案。"
-    "只返回最终梯形图 JSON。"
+    "输入条件的 OR 必须在同一个输出分支的 branch.inputs 中使用 parallel_block 表示；"
+    "不得把 (A OR B) -> 同一输出 拆成多个 output branch/多个 branches 来表达。"
+    "shared_inputs 只放所有分支共同串联的输入，parallel_block 不得放入 shared_inputs，且不得嵌套。"
+    "只返回一份最终梯形图 JSON；顶层对象闭合后立即结束回复，"
+    "不得在同一次 completion 中自检后再重写或追加第二份完整 JSON。"
 )
+
+
+class _FirstJSONObjectStream:
+    """Cut a streamed response after its first complete top-level JSON object.
+
+    Some OpenAI-compatible models emit a complete large JSON object and then
+    immediately self-correct by emitting the whole object again. Waiting for the
+    provider finish signal spends the second copy's tokens before normal response
+    validation can reject the resulting ``{} {}`` payload. Agent B has a stricter
+    contract: exactly one top-level object. Once that first object closes, no later
+    bytes can be part of the accepted answer, so stop consuming them locally.
+
+    If the response does not begin with an object or its delimiters become
+    inconsistent, switch to pass-through mode and let the normal collector/schema
+    validator produce the authoritative rejection instead of trying to repair it.
+    """
+
+    def __init__(self):
+        self.started = False
+        self.finished = False
+        self.passthrough = False
+        self.in_string = False
+        self.escaped = False
+        self.stack = []
+
+    def feed(self, text):
+        value = str(text or "")
+        if not value or self.finished:
+            return "", self.finished
+        if self.passthrough:
+            return value, False
+
+        emitted = []
+        for index, char in enumerate(value):
+            emitted.append(char)
+            if not self.started:
+                if char.isspace():
+                    continue
+                if char != "{":
+                    self.passthrough = True
+                    emitted.extend(value[index + 1 :])
+                    return "".join(emitted), False
+                self.started = True
+                self.stack.append("}")
+                continue
+
+            if self.in_string:
+                if self.escaped:
+                    self.escaped = False
+                elif char == "\\":
+                    self.escaped = True
+                elif char == '"':
+                    self.in_string = False
+                continue
+
+            if char == '"':
+                self.in_string = True
+            elif char == "{":
+                self.stack.append("}")
+            elif char == "[":
+                self.stack.append("]")
+            elif char in "}]":
+                if not self.stack or char != self.stack[-1]:
+                    self.passthrough = True
+                    emitted.extend(value[index + 1 :])
+                    return "".join(emitted), False
+                self.stack.pop()
+                if not self.stack:
+                    self.finished = True
+                    return "".join(emitted), True
+
+        return "".join(emitted), False
+
+
+class _FirstJSONObjectProvider:
+    """Streaming-only facade that prevents a second full Agent-B JSON copy."""
+
+    def __init__(self, provider):
+        self._provider = provider
+        self.profile = getattr(provider, "profile", {})
+
+    def stream(self, request):
+        if not request.stream:
+            yield from self._provider.stream(request)
+            return
+
+        scanner = _FirstJSONObjectStream()
+        iterator = iter(self._provider.stream(request))
+        try:
+            for event in iterator:
+                if isinstance(event, TextDelta) and not scanner.passthrough:
+                    text, complete = scanner.feed(event.text)
+                    if text:
+                        yield TextDelta(text)
+                    if complete:
+                        return
+                else:
+                    yield event
+        finally:
+            close = getattr(iterator, "close", None)
+            if callable(close):
+                close()
 
 
 def _response_options(plc_model, provider):
@@ -86,18 +193,20 @@ def generate_confirmed_ladder(
     if on_stage:
         on_stage("confirmed_spec_generation", "正在根据已确认规格一次生成完整梯形图")
 
-    provider = api._workflow_provider()
-    response = api._request_model(
-        [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": _GENERATION_REQUEST},
-        ],
-        model_name=model_name,
-        effort=effort,
-        stream=True,
-        max_retries=0,
-        options=_response_options(model, provider),
-        response_contract=LADDER_RESPONSE,
-        preserved_annotations=preserved_annotations(projected),
-    )
+    base_provider = api._workflow_provider()
+    provider = _FirstJSONObjectProvider(base_provider)
+    with api.provider_scope(provider, model_name=model_name):
+        response = api._request_model(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": _GENERATION_REQUEST},
+            ],
+            model_name=model_name,
+            effort=effort,
+            stream=True,
+            max_retries=0,
+            options=_response_options(model, provider),
+            response_contract=LADDER_RESPONSE,
+            preserved_annotations=preserved_annotations(projected),
+        )
     return {"ladder": _json_object(response.message.content), "model_calls": 1}
