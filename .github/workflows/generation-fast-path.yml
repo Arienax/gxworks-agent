@@ -50,14 +50,16 @@ jobs:
             tests/test_instruction_contract_alignment.py `
             tests/test_generation_opcode_contract.py `
             tests/test_field_patch_repair_protocol.py `
+            tests/test_format_patch_repair.py `
+            tests/test_repair_render_delivery.py `
             tests/test_generation_fast_path.py `
             tests/test_generation_workflow.py `
             tests/test_confirmed_generation_regressions_20260914.py `
             tests/test_model_stream_cancellation.py `
-            tests/test_rejected_generation_delivery.py `
             tests/test_generation_repair_workflow.py `
             tests/test_generation_rejected_json_repair.py `
             tests/test_user_confirmed_generation_repair.py `
+            tests/test_rejected_generation_delivery.py `
             tests/test_instruction_applicability_rag.py `
             tests/test_analysis_design_rag.py `
             tests/test_io_protocol_and_gx_fastpath.py `
