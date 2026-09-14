@@ -52,6 +52,7 @@ jobs:
             tests/test_field_patch_repair_protocol.py `
             tests/test_generation_fast_path.py `
             tests/test_generation_workflow.py `
+            tests/test_confirmed_generation_regressions_20260914.py `
             tests/test_generation_repair_workflow.py `
             tests/test_generation_rejected_json_repair.py `
             tests/test_user_confirmed_generation_repair.py `
