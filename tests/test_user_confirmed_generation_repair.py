@@ -273,3 +273,61 @@ def test_failure_ui_offers_explicit_repair_not_fake_automatic_attempts():
     assert "系统没有自动再次调用模型" in text
     assert "系统不会猜测修复" in text
     assert "已执行结构修复" not in text
+
+
+
+class BatchModifierTypoProvider:
+    def __init__(self):
+        self.requests = []
+
+    def stream(self, request):
+        self.requests.append(request)
+        if len(self.requests) != 1:
+            raise AssertionError("batch deterministic repair must not call provider again")
+        payload = _ladder()
+        payload["rungs"][0]["branches"][0]["outputs"] = [
+            {"type": "APP_INSTR", "opcode": "DDADDP", "operands": ["D0", "D2", "D4"], "label": None},
+            {"type": "APP_INSTR", "opcode": "DDMOVP", "operands": ["D10", "D12"], "label": None},
+        ]
+        yield TextDelta(json.dumps(payload, ensure_ascii=False))
+
+
+def test_user_sees_all_opcode_errors_once_and_one_repair_fixes_all(offline, tmp_path):
+    provider = BatchModifierTypoProvider()
+    factory_calls = []
+
+    def factory():
+        factory_calls.append(1)
+        return provider, {"model": "offline"}
+
+    service = WorkbenchService(
+        tmp_path / "workspace", tmp_path / "state", model_factory=factory,
+    )
+    with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
+        headers = _login(client)
+        project = client.post("/api/projects", json={"name": "batch-opcode-repair"}, headers=headers).json()["id"]
+        service.store.set_confirmed_spec(project, {"summary": "two calculations", "io_table": [], "parameters": []})
+        first = client.post("/api/jobs", headers=headers, json={
+            "project_id": project, "kind": "generation", "request_id": "bad-two-modifiers",
+            "text": "two calculations", "response_language": "zh-CN",
+        }).json()["id"]
+        service.jobs._futures[first].result(timeout=15)
+        failed = client.get(f"/api/jobs/{first}").json()
+        assert failed["status"] == "failed"
+        observed = {row.get("observed_opcode") for row in failed["error_details"]["violations"]}
+        assert {"DDADDP", "DDMOVP"} <= observed
+        assert failed["error_details"]["violation_count"] >= 2
+        assert len(provider.requests) == 1 and len(factory_calls) == 1
+
+        response = client.post(f"/api/jobs/{first}/repair", headers=headers, json={"request_id": "fix-two-modifiers"})
+        assert response.status_code == 202, response.text
+        repair_job = response.json()["id"]
+        service.jobs._futures[repair_job].result(timeout=15)
+        completed = client.get(f"/api/jobs/{repair_job}").json()
+        assert completed["status"] == "completed", completed
+        assert len(provider.requests) == 1
+        assert len(factory_calls) == 1
+        snapshot = service.jobs._load(repair_job)["snapshot"]
+        targets = snapshot["repair_plan"]["targets"]
+        assert [target["deterministic_value"] for target in targets] == ["DADDP", "DMOVP"]
+        assert service.projects.project(project)["version_count"] == 1

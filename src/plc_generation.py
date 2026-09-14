@@ -16,7 +16,7 @@ from i18n import tr
 from ladder_repair import normalize_app_instr_out_outputs, normalize_legacy_counter_outputs
 from plc_ir import build_plc_ir, ir_to_ladder, validate_plc_ir
 from plc_json_validator import (
-    PLCJsonValidationError, validate_ladder_candidate_structure,
+    PLCJsonValidationError, raise_ladder_candidate_structure_errors,
     validate_ladder_partial_structure,
 )
 
@@ -244,10 +244,14 @@ def prepare_ladder_candidate(
     if not parsed.get("rungs"):
         raise PLCJsonValidationError("$.rungs: generated program must not be empty")
     progress(tr('正在解析模型输出：检查结构与地址'))
-    validate_ladder_candidate_structure(parsed, plc_model=plc_model, require_catalogued_instructions=True)
+    raise_ladder_candidate_structure_errors(
+        parsed, plc_model=plc_model, require_catalogued_instructions=True
+    )
     from plc_condition_normalizer import normalize_shared_conditions
     parsed, normalization = normalize_shared_conditions(parsed, allowed_rung_ids=normalization_scope)
-    validate_ladder_candidate_structure(parsed, plc_model=plc_model, require_catalogued_instructions=True)
+    raise_ladder_candidate_structure_errors(
+        parsed, plc_model=plc_model, require_catalogued_instructions=True
+    )
 
     semantics = []
     if isinstance(confirmed_spec, dict) and isinstance(confirmed_spec.get("execution_semantics"), list):

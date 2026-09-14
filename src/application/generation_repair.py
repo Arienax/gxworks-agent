@@ -162,13 +162,28 @@ def validation_diagnostic(error):
     return row
 
 
+def _flatten_validation_errors(errors):
+    result = []
+    stack = list(errors or ())
+    while stack:
+        error = stack.pop(0)
+        nested = getattr(error, "errors", None)
+        if isinstance(nested, (list, tuple)) and nested:
+            stack[0:0] = list(nested)
+        else:
+            result.append(error)
+    return result
+
+
 class GenerationValidationError(GenerationError):
     def __init__(self, errors, *, attempts, language, stop_reason="attempt_limit",
                  max_attempts=MAX_VALIDATION_REPAIRS):
-        rows = [validation_diagnostic(error) for error in errors][-16:]
+        flattened = _flatten_validation_errors(errors)
+        rows = [validation_diagnostic(error) for error in flattened[:16]]
+        total = len(flattened)
         self.diagnostics = {"response_language": language, "contract_name": "ladder",
             "diagnostic_id": hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()[:16],
-            "violations": rows, "violation_count": len(rows), "truncated": False,
+            "violations": rows, "violation_count": total, "truncated": total > len(rows),
             "stage": "generation_validation", "attempt_count": attempts,
             "max_attempts": max_attempts, "stop_reason": stop_reason}
         super().__init__("梯形图候选未通过硬校验；未接受任何程序。" +

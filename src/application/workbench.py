@@ -378,11 +378,35 @@ class WorkbenchService:
                     repair_base, violations, snapshot.get("project", {}).get("plc_model", "FX3U")
                 ) if local_repair else None
             if local_repair and isinstance(repair_plan, dict):
-                target = repair_plan.get("target") or {}
-                if target.get("strategy") == "blocked":
+                targets = repair_plan.get("targets")
+                if not isinstance(targets, list):
+                    target = repair_plan.get("target")
+                    targets = [target] if isinstance(target, dict) else []
+                if repair_plan.get("mode") in {"blocked_batch"} or any(
+                    isinstance(target, dict) and target.get("strategy") == "blocked"
+                    for target in targets
+                ):
                     raise ConflictError(
-                        "该校验错误涉及指令、地址或参数语义，局部修复不会猜测修改；请重新生成候选或手动修正。"
+                        "本次校验已一次性发现多个问题，其中至少一个语义字段没有唯一或有界修复证据；系统不会猜测修改。"
                     )
+                if repair_plan.get("mode") == "composite":
+                    from application.field_repair import apply as apply_field_patch, deterministic_response
+                    payload = {
+                        "repair_mode": "field_patch",
+                        "base_sha256": repair_plan.get("base_sha256"),
+                        "targets": copy.deepcopy(targets),
+                    }
+                    response = deterministic_response(payload)
+                    if response is None:
+                        raise ConflictError("混合结构/字段修复包含非确定性语义修改，系统不会拆成多轮猜测。")
+                    field_plan = {
+                        "schema_version": repair_plan.get("schema_version", 1),
+                        "mode": "composite",
+                        "base_sha256": repair_plan.get("base_sha256"),
+                        "targets": copy.deepcopy(targets),
+                    }
+                    repair_base = apply_field_patch(repair_base, response, field_plan)
+                    repair_plan = None
             if local_repair and not inherited_local_repair and repair_plan is None:
                 rungs = repair_base["rungs"]
                 by_index = {index: rung for index, rung in enumerate(rungs)}
@@ -428,12 +452,19 @@ class WorkbenchService:
 
         location_text = "；".join(locations) if locations else "ladder schema"
         if local_repair and repair_plan is not None:
-            target = repair_plan.get("target") or {}
+            targets = repair_plan.get("targets")
+            if not isinstance(targets, list):
+                target = repair_plan.get("target")
+                targets = [target] if isinstance(target, dict) else []
+            target_text = "；".join(
+                str(target.get("diagnostic_path") or target.get("path") or "")
+                for target in targets if isinstance(target, dict)
+            )
             repair_text = (
                 "这是用户明确确认的一次字段级 JSON 修复。不要返回梯级、分支或完整程序。"
-                "只返回 field_patch 协议对象，并且只能修改 target.path 指定的一个字段。"
+                "只返回 field_patch 协议对象，并且只能修改 targets 中明确列出的字段；所有其他字段冻结。"
                 "不要改变其他地址、参数、触点极性或结构。\n"
-                f"目标字段：{target.get('diagnostic_path') or target.get('path')}\n"
+                f"目标字段：{target_text}\n"
                 f"失败位置：{location_text}"
             )
         elif local_repair:
@@ -518,11 +549,18 @@ class WorkbenchService:
             # Resolve files and credentials at submission, never later from mutable UI state.
             images = self._attachments(project_id, command.get("attachment_ids", []))
             repair_plan = command.get("repair_plan") if isinstance(command.get("repair_plan"), dict) else {}
-            repair_target = repair_plan.get("target") if isinstance(repair_plan.get("target"), dict) else {}
+            repair_targets = repair_plan.get("targets")
+            if not isinstance(repair_targets, list):
+                repair_target = repair_plan.get("target")
+                repair_targets = [repair_target] if isinstance(repair_target, dict) else []
             deterministic_generation_repair = (
                 command["kind"] == "generation"
                 and repair_plan.get("mode") == "field_patch"
-                and repair_target.get("strategy") == "deterministic"
+                and bool(repair_targets)
+                and all(
+                    isinstance(target, dict) and target.get("strategy") == "deterministic"
+                    for target in repair_targets
+                )
             )
             requires_model = (
                 command["kind"] not in ("gx_read", "gx_inspect")

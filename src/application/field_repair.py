@@ -168,43 +168,32 @@ def _opcode_repair_candidates(observed, operands, plc_model):
     return [], "none", False
 
 
-def plan(base, violations, plc_model="FX3U"):
-    """Plan one deterministic scalar fix or classify the sole structural fallback.
-
-    ``None`` is reserved for ``parallel_block`` in ``shared_inputs``. Everything
-    else either has a deterministic scalar correction or remains blocked, so a
-    generic validator path can never widen into a whole-rung rewrite.
-    """
-    saved = candidate_base(base)
-    rows = [row for row in (violations or []) if isinstance(row, dict)]
-    if saved is None:
-        return None
-    if len(rows) != 1:
-        row = rows[0] if rows else {
-            "path": "content$.rungs", "reason": "invalid_ladder_structure",
-        }
-        return _blocked(saved, row, _segments(row.get("path")))
-    row = rows[0]
+def _plan_single_target(saved, row, plc_model):
     reason = str(row.get("reason") or "invalid_ladder_structure")
     segments = _segments(row.get("path"))
 
     if reason == "invalid_shared_input":
         return None
-
     if not segments or segments[0] != "rungs":
-        return _blocked(saved, row, segments)
+        return _blocked(saved, row, segments)["target"]
     try:
         current = _lookup(saved, segments)
         parent = _lookup(saved, segments[:-1])
     except KeyError:
-        return _blocked(saved, row, segments)
+        return _blocked(saved, row, segments)["target"]
 
     leaf = segments[-1]
     if (
         leaf == "opcode" and isinstance(parent, dict)
         and str(parent.get("type") or "").upper() == "APP_INSTR"
     ):
-        observed = str(row.get("observed_opcode") or current or "").strip().upper()
+        observed_evidence = row.get("observed_opcode")
+        observed = str(observed_evidence or current or "").strip().upper()
+        # A generic error path is not evidence that a catalogued opcode is a
+        # typo. Only a validator-proven rejected opcode, or an actually unknown
+        # current token, may enter mnemonic candidate generation.
+        if not observed_evidence and DEFAULT_INSTRUCTION_REGISTRY.resolve(observed) is not None:
+            return _blocked(saved, row, segments, current)["target"]
         operands = parent.get("operands") if isinstance(parent.get("operands"), list) else []
         candidates, basis, deterministic = _opcode_repair_candidates(observed, operands, plc_model)
         if candidates:
@@ -222,8 +211,8 @@ def plan(base, violations, plc_model="FX3U"):
                 value_schema={"type": "string", "enum": list(candidates)},
                 deterministic_value=candidates[0] if deterministic else None,
                 context=context,
-            )
-        return _blocked(saved, row, segments, current)
+            )["target"]
+        return _blocked(saved, row, segments, current)["target"]
 
     if isinstance(leaf, str):
         rule = _value_schema(parent, leaf, reason)
@@ -233,7 +222,7 @@ def plan(base, violations, plc_model="FX3U"):
             else:
                 branch_index = _branch_index(segments)
                 if branch_index is None:
-                    return _blocked(saved, row, segments, current)
+                    return _blocked(saved, row, segments, current)["target"]
                 deterministic_value = branch_index + 1 if leaf == "branch_id" else branch_index
             return _target(
                 saved, row, segments,
@@ -241,34 +230,98 @@ def plan(base, violations, plc_model="FX3U"):
                 current_value=current,
                 value_schema=rule,
                 deterministic_value=deterministic_value,
-            )
+            )["target"]
 
-    # Every unproven field remains frozen. Address/operand/value/polarity
-    # errors stay blocked until a validator supplies a bounded replacement set.
-    return _blocked(saved, row, segments, current)
+    return _blocked(saved, row, segments, current)["target"]
+
+
+def _plan_targets(plan):
+    if not isinstance(plan, dict):
+        return []
+    targets = plan.get("targets")
+    if isinstance(targets, list):
+        return [item for item in targets if isinstance(item, dict)]
+    target = plan.get("target")
+    return [target] if isinstance(target, dict) else []
+
+
+def plan(base, violations, plc_model="FX3U"):
+    """Plan all independent validator-proven repairs from one validation pass.
+
+    Pure structural shared-input errors still use the bounded whole-rung path.
+    Scalar violations are batched into one field_patch. A mixed structure +
+    scalar case becomes composite only when every scalar correction is already
+    deterministic; the caller can apply those locally before one structure call.
+    """
+    saved = candidate_base(base)
+    rows = [row for row in (violations or []) if isinstance(row, dict)]
+    if saved is None:
+        return None
+    if not rows:
+        row = {"path": "content$.rungs", "reason": "invalid_ladder_structure"}
+        return _blocked(saved, row, ["rungs"])
+
+    targets = []
+    structural = []
+    for row in rows:
+        target = _plan_single_target(saved, row, plc_model)
+        if target is None:
+            structural.append(copy.deepcopy(row))
+        else:
+            targets.append(target)
+
+    if structural:
+        if not targets:
+            return None
+        if all(target.get("strategy") == "deterministic" for target in targets):
+            return {
+                "schema_version": SCHEMA_VERSION,
+                "mode": "composite",
+                "base_sha256": base_sha256(saved),
+                "targets": targets,
+                "structural_violations": structural,
+            }
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "mode": "blocked_batch",
+            "base_sha256": base_sha256(saved),
+            "targets": targets,
+            "structural_violations": structural,
+        }
+
+    result = {
+        "schema_version": SCHEMA_VERSION,
+        "mode": MODE,
+        "base_sha256": base_sha256(saved),
+        "targets": targets,
+    }
+    if len(targets) == 1:
+        result["target"] = copy.deepcopy(targets[0])
+    return result
 
 
 def deterministic_response(repair_payload):
-    """Materialize a field-patch response without calling a model."""
+    """Materialize every deterministic field patch without calling a model."""
     if not isinstance(repair_payload, dict) or repair_payload.get("repair_mode") != MODE:
         return None
-    target = repair_payload.get("target")
-    if not isinstance(target, dict):
+    targets = _plan_targets(repair_payload)
+    if not targets:
         return None
-    strategy = target.get("strategy")
-    if strategy == "deterministic":
-        value = copy.deepcopy(target.get("deterministic_value"))
-    elif strategy == "blocked":
-        # ``apply`` will re-raise the original diagnostic. The placeholder keeps
-        # the protocol syntactically local while guaranteeing zero model calls.
-        value = None
-    else:
-        return None
+    patches = []
+    for target in targets:
+        strategy = target.get("strategy")
+        if strategy == "deterministic":
+            value = copy.deepcopy(target.get("deterministic_value"))
+        elif strategy == "blocked":
+            value = None
+        else:
+            return None
+        patches.append({"path": target.get("path"), "value": value})
     return {
         "schema_version": SCHEMA_VERSION,
         "mode": MODE,
         "base_sha256": repair_payload.get("base_sha256"),
-        "patches": [{"path": target.get("path"), "value": value}],
+        "patches": patches,
     }
 
 
@@ -313,15 +366,19 @@ def _blocked_error(target):
 
 
 def apply(base, response, repair_plan):
-    """Apply one authorized deterministic patch to an immutable baseline."""
+    """Apply one authorized batch of path-addressed patches to an immutable baseline."""
     saved = candidate_base(base)
-    if saved is None or not isinstance(repair_plan, dict) or repair_plan.get("mode") != MODE:
+    if saved is None or not isinstance(repair_plan, dict) or repair_plan.get("mode") not in {MODE, "composite"}:
         raise RepairAssemblyError("$.base_sha256", "repair_base_invalid")
     if base_sha256(saved) != repair_plan.get("base_sha256"):
         raise RepairAssemblyError("$.base_sha256", "repair_base_invalid")
-    target = repair_plan.get("target") or {}
-    if target.get("strategy") == "blocked":
-        raise _blocked_error(target)
+    targets = _plan_targets(repair_plan)
+    if not targets:
+        raise RepairAssemblyError("$.patches", "repair_shape_invalid")
+    blocked = next((target for target in targets if target.get("strategy") == "blocked"), None)
+    if blocked is not None:
+        raise _blocked_error(blocked)
+
     required = {"schema_version", "mode", "base_sha256", "patches"}
     if not isinstance(response, dict) or set(response) != required:
         raise RepairAssemblyError("$", "repair_shape_invalid")
@@ -330,24 +387,34 @@ def apply(base, response, repair_plan):
     if response.get("base_sha256") != repair_plan.get("base_sha256"):
         raise RepairAssemblyError("$.base_sha256", "repair_base_invalid")
     patches = response.get("patches")
-    if not isinstance(patches, list) or len(patches) != 1 or not isinstance(patches[0], dict):
+    if not isinstance(patches, list) or len(patches) != len(targets):
         raise RepairAssemblyError("$.patches", "repair_shape_invalid")
-    patch = patches[0]
-    if set(patch) != {"path", "value"}:
-        raise RepairAssemblyError("$.patches[0]", "repair_shape_invalid")
-    if patch.get("path") != target.get("path"):
-        raise RepairAssemblyError("$.patches[0].path", "repair_scope_violation")
-    _check_value(patch.get("value"), target.get("value_schema") or {})
-    segments = _pointer_segments(target["path"])
-    current = _lookup(saved, segments)
-    if current == patch.get("value"):
-        raise RepairAssemblyError("$.patches[0].value", "repair_no_progress")
-    parent = _lookup(saved, segments[:-1])
-    leaf = segments[-1]
-    if isinstance(leaf, int):
-        parent[leaf] = copy.deepcopy(patch["value"])
-    else:
-        if not isinstance(parent, dict) or leaf not in parent:
-            raise RepairAssemblyError("$.patches[0].path", "repair_scope_violation")
-        parent[leaf] = copy.deepcopy(patch["value"])
+    if any(not isinstance(item, dict) or set(item) != {"path", "value"} for item in patches):
+        raise RepairAssemblyError("$.patches", "repair_shape_invalid")
+
+    by_path = {target.get("path"): target for target in targets}
+    if None in by_path or len(by_path) != len(targets):
+        raise RepairAssemblyError("$.patches", "repair_scope_violation")
+    patch_paths = [patch.get("path") for patch in patches]
+    if len(set(patch_paths)) != len(patch_paths) or set(patch_paths) != set(by_path):
+        raise RepairAssemblyError("$.patches", "repair_scope_violation")
+
+    changed = False
+    for patch in patches:
+        target = by_path[patch["path"]]
+        _check_value(patch.get("value"), target.get("value_schema") or {})
+        segments = _pointer_segments(target["path"])
+        current = _lookup(saved, segments)
+        if current != patch.get("value"):
+            changed = True
+        parent = _lookup(saved, segments[:-1])
+        leaf = segments[-1]
+        if isinstance(leaf, int):
+            parent[leaf] = copy.deepcopy(patch["value"])
+        else:
+            if not isinstance(parent, dict) or leaf not in parent:
+                raise RepairAssemblyError("$.patches", "repair_scope_violation")
+            parent[leaf] = copy.deepcopy(patch["value"])
+    if not changed:
+        raise RepairAssemblyError("$.patches", "repair_no_progress")
     return saved

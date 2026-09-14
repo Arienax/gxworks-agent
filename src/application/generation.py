@@ -234,15 +234,22 @@ class GenerationWorkflow:
             if repair_call:
                 if self.repair_mode and isinstance(self.repair_plan, dict) and self.repair_plan.get("mode") == "field_patch":
                     repair_kind = "field_patch"
+                    targets = self.repair_plan.get("targets")
+                    if not isinstance(targets, list):
+                        target = self.repair_plan.get("target")
+                        targets = [target] if isinstance(target, dict) else []
                     repair_payload = {
                         "repair_mode": "field_patch",
                         "plc_model": self.plc_model,
                         "instruction": model_user_input,
                         "base_sha256": self.repair_plan.get("base_sha256"),
-                        "target": copy.deepcopy(self.repair_plan.get("target") or {}),
+                        "targets": copy.deepcopy(targets),
                     }
-                    deterministic_field_patch = (
-                        repair_payload["target"].get("strategy") == "deterministic"
+                    if len(targets) == 1:
+                        repair_payload["target"] = copy.deepcopy(targets[0])
+                    deterministic_field_patch = bool(targets) and all(
+                        isinstance(target, dict) and target.get("strategy") == "deterministic"
+                        for target in targets
                     )
                 elif self.repair_mode:
                     repair_kind = "partial"

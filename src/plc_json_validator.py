@@ -257,6 +257,18 @@ class PLCJsonValidationError(ValueError):
     pass
 
 
+class PLCJsonValidationAggregateError(PLCJsonValidationError):
+    """Multiple independent structural violations from one candidate pass."""
+
+    def __init__(self, errors):
+        self.errors = tuple(
+            error for error in (errors or ())
+            if isinstance(error, PLCJsonValidationError)
+        )
+        first = self.errors[0] if self.errors else PLCJsonValidationError("$: invalid ladder structure")
+        super().__init__(str(first))
+
+
 class ApproachContractValidationError(PLCJsonValidationError):
     """A generated candidate violates the user-confirmed implementation contract."""
 
@@ -1434,6 +1446,198 @@ def find_unverified_app_instructions(data):
                         }
                     )
     return findings
+
+
+def collect_ladder_candidate_structure_errors(
+    data,
+    plc_model="FX3U",
+    *,
+    require_catalogued_instructions=True,
+    limit=16,
+):
+    """Collect independent model-facing ladder violations in one bounded pass.
+
+    Existing validators remain fail-fast. This collector invokes them at safe
+    subtree boundaries so a malformed element cannot corrupt traversal of its
+    siblings. At most one error is collected from each individual element call,
+    while later rungs/branches/elements continue to be checked.
+    """
+    errors = []
+    limit = max(1, min(int(limit or 16), 64))
+
+    def capture(callable_, *args, **kwargs):
+        if len(errors) >= limit:
+            return False
+        try:
+            callable_(*args, **kwargs)
+            return True
+        except PLCJsonValidationError as error:
+            errors.append(error)
+            return False
+
+    def fail(path, message):
+        if len(errors) >= limit:
+            return
+        try:
+            _fail(path, message)
+        except PLCJsonValidationError as error:
+            errors.append(error)
+
+    try:
+        model = normalize_plc_model(plc_model)
+    except PLCJsonValidationError as error:
+        return [error]
+
+    if not isinstance(data, dict):
+        capture(_require_dict, data, "$")
+        return errors
+
+    allowed = {"device_comments", "rungs"}
+    extra = set(data) - allowed
+    missing = allowed - set(data)
+    if extra:
+        fail("$", f"unexpected top-level fields: {sorted(extra)}")
+    if missing:
+        fail("$", f"missing top-level fields: {sorted(missing)}")
+    if len(errors) >= limit:
+        return errors
+
+    comments = data.get("device_comments")
+    if isinstance(comments, dict):
+        for addr, comment in comments.items():
+            if len(errors) >= limit:
+                break
+            if not isinstance(addr, str) or not addr:
+                fail(f"$.device_comments.{addr!r}", "device address must be a non-empty string")
+            else:
+                capture(_validate_device_address, addr, f"$.device_comments.{addr}", model)
+            capture(_check_text_length, comment, f"$.device_comments.{addr}")
+    else:
+        capture(_require_dict, comments, "$.device_comments")
+
+    rungs = data.get("rungs")
+    if not isinstance(rungs, list):
+        capture(_require_list, rungs, "$.rungs")
+        return errors
+
+    seen_ids = set()
+    for rung_idx, rung in enumerate(rungs):
+        if len(errors) >= limit:
+            break
+        rung_path = f"$.rungs[{rung_idx}]"
+        if not isinstance(rung, dict):
+            capture(_require_dict, rung, rung_path)
+            continue
+
+        rung_id = rung.get("rung_id")
+        if "rung_id" not in rung:
+            fail(f"{rung_path}.rung_id", "missing required field")
+        elif not isinstance(rung_id, int) or isinstance(rung_id, bool):
+            fail(f"{rung_path}.rung_id", "expected integer")
+        else:
+            if rung_id in seen_ids:
+                fail(f"{rung_path}.rung_id", f"duplicate rung_id {rung_id}")
+            seen_ids.add(rung_id)
+
+        if rung.get("debug_note") is not None:
+            capture(_check_text_length, rung.get("debug_note"), f"{rung_path}.debug_note")
+
+        header = rung.get("header_element")
+        if header is not None:
+            capture(
+                _validate_element,
+                header,
+                f"{rung_path}.header_element",
+                VALID_INPUT_TYPES - {"parallel_block"},
+                plc_model=model,
+                require_catalogued_instructions=require_catalogued_instructions,
+            )
+
+        shared_inputs = rung.get("shared_inputs", [])
+        if isinstance(shared_inputs, list):
+            for elem_idx, elem in enumerate(shared_inputs):
+                capture(
+                    _validate_element,
+                    elem,
+                    f"{rung_path}.shared_inputs[{elem_idx}]",
+                    VALID_INPUT_TYPES - {"parallel_block"},
+                    plc_model=model,
+                    require_catalogued_instructions=require_catalogued_instructions,
+                )
+                if len(errors) >= limit:
+                    break
+        else:
+            capture(_require_list, shared_inputs, f"{rung_path}.shared_inputs")
+
+        branches = rung.get("branches")
+        if not isinstance(branches, list):
+            capture(_require_list, branches, f"{rung_path}.branches")
+            continue
+        for branch_idx, branch in enumerate(branches):
+            if len(errors) >= limit:
+                break
+            branch_path = f"{rung_path}.branches[{branch_idx}]"
+            if not isinstance(branch, dict):
+                capture(_require_dict, branch, branch_path)
+                continue
+            if "branch_id" in branch and (
+                not isinstance(branch["branch_id"], int)
+                or isinstance(branch["branch_id"], bool)
+            ):
+                fail(f"{branch_path}.branch_id", "expected integer")
+
+            inputs = branch.get("inputs", [])
+            if isinstance(inputs, list):
+                for elem_idx, elem in enumerate(inputs):
+                    capture(
+                        _validate_element,
+                        elem,
+                        f"{branch_path}.inputs[{elem_idx}]",
+                        VALID_INPUT_TYPES,
+                        plc_model=model,
+                        require_catalogued_instructions=require_catalogued_instructions,
+                    )
+                    if len(errors) >= limit:
+                        break
+            else:
+                capture(_require_list, inputs, f"{branch_path}.inputs")
+
+            outputs = branch.get("outputs", [])
+            if isinstance(outputs, list):
+                for elem_idx, elem in enumerate(outputs):
+                    capture(
+                        _validate_element,
+                        elem,
+                        f"{branch_path}.outputs[{elem_idx}]",
+                        VALID_OUTPUT_TYPES,
+                        is_output=True,
+                        plc_model=model,
+                        require_catalogued_instructions=require_catalogued_instructions,
+                    )
+                    if len(errors) >= limit:
+                        break
+            else:
+                capture(_require_list, outputs, f"{branch_path}.outputs")
+
+    return errors
+
+
+def raise_ladder_candidate_structure_errors(
+    data,
+    plc_model="FX3U",
+    *,
+    require_catalogued_instructions=True,
+    limit=16,
+):
+    errors = collect_ladder_candidate_structure_errors(
+        data,
+        plc_model,
+        require_catalogued_instructions=require_catalogued_instructions,
+        limit=limit,
+    )
+    if errors:
+        raise PLCJsonValidationAggregateError(errors)
+    return data
 
 
 def validate_ladder_candidate_structure(

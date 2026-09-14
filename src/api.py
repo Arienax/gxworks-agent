@@ -1575,8 +1575,8 @@ Return one JSON object only:
 {"schema_version":1,"mode":"field_patch","base_sha256":"...","patches":[{"path":"/...","value":"..."}]}
 
 Rules:
-- Copy base_sha256 and path exactly from the payload.
-- Return exactly one patch and only the replacement scalar value.
+- Copy base_sha256 and every target path exactly from the payload.
+- Return exactly one patch for every target and no other path.
 - Do not return a rung, branch, ladder program, markdown or explanation.
 - Only `target.path` is mutable. Every other ladder field is immutable.
 - `target.context` contains validator evidence and immutable sibling values.
@@ -1735,13 +1735,28 @@ def _constrain_native_repair_schema(schema, repair_payload, plc_model):
 
 
 def _native_field_patch_response_format(repair_payload):
-    target = repair_payload.get("target") if isinstance(repair_payload, dict) else None
-    if not isinstance(target, dict) or not isinstance(target.get("path"), str):
-        raise ValueError("field repair target is required")
-    value_schema = json.loads(json.dumps(target.get("value_schema") or {}))
-    if not value_schema:
-        raise ValueError("field repair value schema is required")
+    targets = repair_payload.get("targets") if isinstance(repair_payload, dict) else None
+    if not isinstance(targets, list):
+        target = repair_payload.get("target") if isinstance(repair_payload, dict) else None
+        targets = [target] if isinstance(target, dict) else []
+    targets = [target for target in targets if isinstance(target, dict)]
+    if not targets or any(not isinstance(target.get("path"), str) for target in targets):
+        raise ValueError("field repair targets are required")
     base_sha = str(repair_payload.get("base_sha256") or "")
+    choices = []
+    for target in targets:
+        value_schema = json.loads(json.dumps(target.get("value_schema") or {}))
+        if not value_schema:
+            raise ValueError("field repair value schema is required")
+        choices.append({
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "enum": [target["path"]]},
+                "value": value_schema,
+            },
+            "required": ["path", "value"],
+            "additionalProperties": False,
+        })
     schema = {
         "type": "object",
         "properties": {
@@ -1749,16 +1764,8 @@ def _native_field_patch_response_format(repair_payload):
             "mode": {"type": "string", "enum": ["field_patch"]},
             "base_sha256": {"type": "string", "enum": [base_sha]},
             "patches": {
-                "type": "array", "minItems": 1, "maxItems": 1,
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string", "enum": [target["path"]]},
-                        "value": value_schema,
-                    },
-                    "required": ["path", "value"],
-                    "additionalProperties": False,
-                },
+                "type": "array", "minItems": len(targets), "maxItems": len(targets),
+                "items": {"oneOf": choices},
             },
         },
         "required": ["schema_version", "mode", "base_sha256", "patches"],

@@ -31,11 +31,18 @@ def _base():
 
 
 def _payload(repair):
-    return {
+    targets = repair.get("targets")
+    if not isinstance(targets, list):
+        target = repair.get("target")
+        targets = [target] if isinstance(target, dict) else []
+    payload = {
         "repair_mode": "field_patch",
         "base_sha256": repair["base_sha256"],
-        "target": copy.deepcopy(repair["target"]),
+        "targets": copy.deepcopy(targets),
     }
+    if len(targets) == 1:
+        payload["target"] = copy.deepcopy(targets[0])
+    return payload
 
 
 def test_opcode_failure_is_blocked_instead_of_guessing_a_mnemonic():
@@ -148,11 +155,14 @@ def test_true_container_error_is_the_only_whole_rung_fallback_class():
 
 def test_multiple_or_ambiguous_diagnostics_do_not_expand_to_whole_rung():
     base = _base()
+    base["rungs"][0]["debug_note"] = "x" * 100
     repair = plan(base, [
         {"path": "content$.rungs.0.debug_note", "reason": "field_too_long"},
         {"path": "content$.rungs.0.branches.0.outputs.0.opcode", "reason": "invalid_ladder_structure"},
     ])
-    assert repair["target"]["strategy"] == "blocked"
+    assert repair["mode"] == "field_patch"
+    assert [target["strategy"] for target in repair["targets"]] == ["deterministic", "blocked"]
+    assert all(target["path"].startswith("/rungs/0/") for target in repair["targets"])
 
 
 def test_field_patch_rejects_wrong_path_or_baseline():
@@ -171,3 +181,40 @@ def test_field_patch_rejects_wrong_path_or_baseline():
     with pytest.raises(RepairAssemblyError):
         apply(base, response, repair)
     assert repair["base_sha256"] == base_sha256(base)
+
+
+
+def test_multiple_validator_proven_modifier_errors_are_batched_deterministically():
+    base = _base()
+    base["rungs"][0]["branches"][0]["outputs"] = [
+        {"type": "APP_INSTR", "opcode": "DDADDP", "operands": ["D0", "D2", "D4"], "label": None},
+        {"type": "APP_INSTR", "opcode": "DDMOVP", "operands": ["D10", "D12"], "label": None},
+    ]
+    repair = plan(base, [
+        {"path": "content$.rungs.0.branches.0.outputs.0.opcode", "reason": "invalid_ladder_structure", "observed_opcode": "DDADDP"},
+        {"path": "content$.rungs.0.branches.0.outputs.1.opcode", "reason": "invalid_ladder_structure", "observed_opcode": "DDMOVP"},
+    ], "FX3U")
+    assert repair["mode"] == "field_patch"
+    assert [target["strategy"] for target in repair["targets"]] == ["deterministic", "deterministic"]
+    assert [target["deterministic_value"] for target in repair["targets"]] == ["DADDP", "DMOVP"]
+    response = deterministic_response(_payload(repair))
+    assert len(response["patches"]) == 2
+    result = apply(base, response, repair)
+    outputs = result["rungs"][0]["branches"][0]["outputs"]
+    assert [output["opcode"] for output in outputs] == ["DADDP", "DMOVP"]
+
+
+def test_multiple_independent_scalar_repairs_keep_unproven_fields_frozen():
+    base = _base()
+    base["rungs"][0]["debug_note"] = "x" * 100
+    base["rungs"][0]["branches"][0]["outputs"][0]["opcode"] = "DDMOVP"
+    base["rungs"][0]["branches"][0]["outputs"][0]["operands"] = ["D0", "D2"]
+    repair = plan(base, [
+        {"path": "content$.rungs.0.debug_note", "reason": "field_too_long"},
+        {"path": "content$.rungs.0.branches.0.outputs.0.opcode", "reason": "invalid_ladder_structure", "observed_opcode": "DDMOVP"},
+    ], "FX3U")
+    result = apply(base, deterministic_response(_payload(repair)), repair)
+    assert result["rungs"][0]["debug_note"] == "x" * 64
+    output = result["rungs"][0]["branches"][0]["outputs"][0]
+    assert output["opcode"] == "DMOVP"
+    assert output["operands"] == ["D0", "D2"]
