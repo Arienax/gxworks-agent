@@ -1,9 +1,11 @@
 import json
+from types import SimpleNamespace
 
 from api import _normalize_analysis_result
 from application.generation_agent import (
     _FirstJSONObjectProvider,
     _GENERATION_REQUEST,
+    _STREAM_IDLE_TIMEOUT_SECONDS,
     _strict_generation_projection,
 )
 from confirmed_spec import build_review_draft
@@ -79,6 +81,31 @@ def test_agent_b_prompt_makes_input_or_and_single_json_rules_explicit():
     assert "输入条件的 OR" in _GENERATION_REQUEST
     assert "不得把 (A OR B) -> 同一输出 拆成多个 output branch/多个 branches" in _GENERATION_REQUEST
     assert "不得在同一次 completion 中自检后再重写或追加第二份完整 JSON" in _GENERATION_REQUEST
+
+
+def test_agent_b_stream_has_inactivity_timeout(monkeypatch):
+    import api
+    import application.generation_agent as agent
+
+    class Provider:
+        profile = {"capabilities": {}}
+
+    seen = {}
+    monkeypatch.setattr(agent, "_strict_generation_projection", lambda _spec: {"project_goal": "test"})
+    monkeypatch.setattr(agent, "build_generation_instructions", lambda *_args, **_kwargs: "system")
+    monkeypatch.setattr(api, "_workflow_provider", lambda: Provider())
+
+    def fake_request(_messages, **kwargs):
+        seen.update(kwargs)
+        return SimpleNamespace(message=SimpleNamespace(content='{"rungs":[]}'))
+
+    monkeypatch.setattr(api, "_request_model", fake_request)
+    result = agent.generate_confirmed_ladder({"confirmed": True})
+
+    assert result["model_calls"] == 1
+    assert seen["stream"] is True
+    assert seen["request_timeout"] == _STREAM_IDLE_TIMEOUT_SECONDS == 90.0
+    assert seen["max_retries"] == 0
 
 
 def test_agent_a_cannot_drop_verbatim_classification_or_promote_guessed_contract():
