@@ -1,11 +1,12 @@
 """Narrow model boundary for the rare whole-rung structural repair path.
 
-Only representation/container errors reach this module. The prompt and native
-schema preserve baseline engineering tokens; deterministic validation performs
-an independent semantic-token equality check before merge.
+Only the explicitly-recognized shared-input representation error reaches this
+module. The model may relocate containers, but branch behavior is compared
+against the immutable baseline before the response is accepted.
 """
 from __future__ import annotations
 
+import copy
 import json
 
 
@@ -18,10 +19,11 @@ Return one pure JSON object in partial-edit form:
 
 Hard rules:
 - Only rung_id values in allowed_rung_ids may appear; never add/delete/renumber rungs.
-- Preserve every leaf element's type/polarity, address, expression, APP_INSTR opcode,
-  operands, timer/counter preset, and output target exactly as baseline_subset.
-- You may only move/re-nest existing elements between shared_inputs/branches/inputs,
-  repair branch container shape, and renumber branch_id/y_offset_level to match order.
+- Preserve every branch's effective condition-to-output relationship exactly.
+- Preserve every element type/polarity, address, expression, APP_INSTR opcode,
+  operands, timer/counter preset, output target, branch order and output order.
+- To repair a parallel_block in shared_inputs, relocate existing conditions only;
+  do not invent, remove, swap or reinterpret any condition or output.
 - Do not choose a different opcode because it looks more plausible or compatible.
 - device_comments must stay empty and delete_rung_ids must stay empty.
 - Return JSON only; no explanation or markdown.
@@ -71,9 +73,83 @@ def _restrict_opcode_schema(native_format, opcodes):
     return native_format
 
 
+def _element_semantics(element):
+    if not isinstance(element, dict):
+        return None
+    if str(element.get("type") or "").casefold() == "parallel_block":
+        return {
+            "type": "parallel_block",
+            "branches": [
+                [_element_semantics(child) for child in branch]
+                for branch in (element.get("branches") or [])
+                if isinstance(branch, list)
+            ],
+        }
+    return {
+        key: copy.deepcopy(element[key])
+        for key in ("type", "address", "expression", "opcode", "operands", "value")
+        if key in element
+    }
+
+
+def _rung_behavior_signature(rung):
+    """Normalize shared inputs as a prefix while preserving branch associations."""
+    if not isinstance(rung, dict):
+        return None
+    shared = [
+        _element_semantics(element)
+        for element in (rung.get("shared_inputs") or [])
+        if isinstance(element, dict)
+    ]
+    branches = []
+    for branch in rung.get("branches", []) or []:
+        if not isinstance(branch, dict):
+            return None
+        branches.append({
+            "inputs": shared + [
+                _element_semantics(element)
+                for element in (branch.get("inputs") or [])
+                if isinstance(element, dict)
+            ],
+            "outputs": [
+                _element_semantics(element)
+                for element in (branch.get("outputs") or [])
+                if isinstance(element, dict)
+            ],
+        })
+    return {
+        "header_element": _element_semantics(rung.get("header_element")),
+        "branches": branches,
+    }
+
+
+def _assert_structure_only_response(payload, content):
+    """Reject token-preserving but behavior-changing whole-rung rewrites."""
+    candidate = json.loads(str(content or "").strip())
+    if not isinstance(candidate, dict):
+        raise ValueError("structural repair response must be an object")
+    baseline = {
+        rung.get("rung_id"): rung
+        for rung in ((payload.get("baseline_subset") or {}).get("rungs") or [])
+        if isinstance(rung, dict) and isinstance(rung.get("rung_id"), int)
+        and not isinstance(rung.get("rung_id"), bool)
+    }
+    for rung in candidate.get("rungs", []) or []:
+        if not isinstance(rung, dict):
+            raise ValueError("structural repair returned an invalid rung")
+        rung_id = rung.get("rung_id")
+        original = baseline.get(rung_id)
+        if original is None:
+            raise ValueError("structural repair returned an out-of-scope rung")
+        if _rung_behavior_signature(original) != _rung_behavior_signature(rung):
+            raise ValueError(
+                f"structural repair changed condition/output behavior in rung {rung_id}"
+            )
+
+
 def structural_repair_response(repair_payload, model_name, effort, *, mode="partial",
                                on_reasoning_chunk=None, on_content_chunk=None):
-    """Call the model only for a structure-only rung rewrite with frozen semantics."""
+    """Call the model only for a structure-only rung rewrite with frozen behavior."""
     if mode != "partial" or not isinstance(repair_payload, dict):
         raise ValueError("structural repair requires a partial repair payload")
     import api
@@ -103,4 +179,5 @@ def structural_repair_response(repair_payload, model_name, effort, *, mode="part
         on_content_chunk=on_content_chunk,
         fallback_to_non_stream=True,
     )
+    _assert_structure_only_response(payload, response.message.content)
     return response.message.reasoning, response.message.content
