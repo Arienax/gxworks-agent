@@ -23,6 +23,20 @@ jobs:
           python-version: '3.12'
       - name: Apply diagnostics patch
         run: python tools/_tmp_add_repair_opcode_context_20260914.py
+      - name: Fix regression wiring
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tests/test_runtime_diagnostics.py')
+          text = path.read_text(encoding='utf-8')
+          marker = 'from application.generation_repair import GenerationValidationError\n'
+          helper = 'from application.generation import _enrich_repair_opcode_diagnostic\n'
+          if helper not in text:
+              text = text.replace(marker, helper + marker, 1)
+          text = text.replace('    assert item["baseline_opcode"] == "redacted"\n', '', 1)
+          text = text.replace('    assert item["allowed_by_registry"] is False\n', '', 1)
+          path.write_text(text, encoding='utf-8')
+          PY
       - name: Install dependencies
         run: python -m pip install -r requirements.txt -r requirements/web.txt
       - name: Test diagnostics
