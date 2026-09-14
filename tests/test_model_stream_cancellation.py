@@ -1,10 +1,14 @@
 """Operator cancellation must truncate model streaming, not become a model error."""
 
+from types import SimpleNamespace
+
 import pytest
 
 from application.jobs import JobCancelled
+from application.model_progress import ModelProgressReporter
 from model_provider import (
     ModelRequest,
+    ResponseProgress,
     TextDelta,
     UserMessage,
     collect_response,
@@ -40,6 +44,33 @@ def test_operator_cancel_escapes_collector_and_truncates_stream():
 
     assert provider.closed is True
     assert provider.reached_second_chunk is False
+
+
+def test_progress_throttling_does_not_delay_cancellation_check():
+    cancelled = [False]
+    emitted = []
+
+    def checkpoint():
+        if cancelled[0]:
+            raise JobCancelled()
+
+    reporter = ModelProgressReporter(
+        SimpleNamespace(
+            checkpoint=checkpoint,
+            emit=lambda kind, data: emitted.append((kind, data)),
+        ),
+        clock=lambda: 0.0,
+        interval=10.0,
+    )
+    reporter(ResponseProgress("receiving", 1))
+    cancelled[0] = True
+
+    # Same phase/time would normally be suppressed by the presentation throttle.
+    # Cancellation is checked first and therefore still aborts immediately.
+    with pytest.raises(JobCancelled):
+        reporter(ResponseProgress("receiving", 2))
+
+    assert len(emitted) == 1
 
 
 def test_job_cancel_signal_is_control_flow_not_an_ordinary_model_exception():
