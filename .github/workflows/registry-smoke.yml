@@ -27,6 +27,7 @@ jobs:
           python tools/_tmp_collect_validation_20260914.py
           python tools/_tmp_batch_repair_20260914.py
           python tools/_tmp_batch_repair_tests_20260914.py
+          python tools/_tmp_batch_repair_fix_20260914.py
       - name: Install dependencies
         run: python -m pip install -r requirements.txt -r requirements/web.txt
       - name: Test collected batch repair
@@ -39,7 +40,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout d436ec7feba4029c91a113b300cd10a9c02df068 -- .github/workflows/registry-smoke.yml
-          git rm tools/_tmp_collect_validation_20260914.py tools/_tmp_batch_repair_20260914.py tools/_tmp_batch_repair_tests_20260914.py
+          git rm tools/_tmp_collect_validation_20260914.py tools/_tmp_batch_repair_20260914.py tools/_tmp_batch_repair_tests_20260914.py tools/_tmp_batch_repair_fix_20260914.py
           git add src/plc_json_validator.py src/plc_generation.py src/application/generation_repair.py src/application/field_repair.py src/application/generation.py src/application/workbench.py src/api.py tests/test_generation_validation_collector.py tests/test_field_patch_repair_protocol.py tests/test_user_confirmed_generation_repair.py .github/workflows/registry-smoke.yml
           git commit -m "fix: collect and batch generation repair violations"
           git push origin HEAD:fix/prompt-context-slim-20260913
