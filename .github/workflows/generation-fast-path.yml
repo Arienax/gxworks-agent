@@ -72,7 +72,9 @@ jobs:
             tests/test_runtime_diagnostics.py `
             tests/test_runtime_diagnostics_context.py `
             tests/test_runtime_diagnostics_web.py
+          if ($LASTEXITCODE -ne 0) { throw 'Generation fast-path pytest failed.' }
           python tools/build_fx3u_verified_opcode_overlay.py --check
+          if ($LASTEXITCODE -ne 0) { throw 'Verified opcode overlay check failed.' }
       - name: Keep strict validators available outside direct generation
         run: |
           python -m pytest -q `
