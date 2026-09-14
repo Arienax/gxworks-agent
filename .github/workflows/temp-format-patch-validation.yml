@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: '22'
       - run: python -m pip install -q pytest -r requirements/web.txt
-      - name: Compile
+      - name: Compile current repair path
         run: python -m compileall -q src/application/base.py src/application/format_patch_repair.py src/application/workbench.py src/api.py tests/test_format_patch_repair.py tests/test_repair_render_delivery.py
       - name: Run repair and delivery regressions
         env:
