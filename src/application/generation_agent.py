@@ -27,12 +27,6 @@ _GENERATION_REQUEST = (
     "不得在同一次 completion 中自检后再重写或追加第二份完整 JSON。"
 )
 
-# The OpenAI-compatible client forwards this as its HTTP timeout. For streaming
-# responses the read timeout is an inactivity bound, so a large program may keep
-# generating for longer than this as long as bytes continue to arrive. A stalled
-# SSE/socket must not leave a generation job running indefinitely.
-_STREAM_IDLE_TIMEOUT_SECONDS = 90.0
-
 
 class _FirstJSONObjectStream:
     """Cut a streamed response after its first complete top-level JSON object.
@@ -229,7 +223,6 @@ def generate_confirmed_ladder(
             model_name=model_name,
             effort=effort,
             stream=True,
-            request_timeout=_STREAM_IDLE_TIMEOUT_SECONDS,
             max_retries=0,
             options=_response_options(model, provider),
             response_contract=LADDER_RESPONSE,
