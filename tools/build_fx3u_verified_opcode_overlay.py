@@ -2,9 +2,10 @@
 """Build conservative FX3U opcode-identity coverage from structured manual data.
 
 This tool deliberately does NOT promote extracted operand tables into hard
-arity/write/device rules.  A structured row may be a partial table slice.  The
+arity/write/device rules. A structured row may be a partial table slice. The
 output only verifies that an opcode itself exists for FX3U; detailed semantics
-remain retrieval-backed until separately verified.
+remain retrieval-backed until separately verified against the Mitsubishi source
+manual.
 """
 from __future__ import annotations
 
@@ -19,6 +20,35 @@ DEFAULT_DB = ROOT / "resources" / "knowledge" / "fx3u_knowledge.sqlite"
 CATALOG_DIR = ROOT / "resources" / "instructions" / "mitsubishi"
 DEFAULT_OUTPUT = CATALOG_DIR / "fx3u_verified_opcodes.json"
 DEFAULT_QUARANTINE = CATALOG_DIR / "fx3u_instruction_quarantine.json"
+
+# These cases were checked directly against Mitsubishi source manuals instead
+# of being inferred from the extracted SQLite rows.
+MANUAL_REVIEWED_QUARANTINE = {
+    "BK": {
+        "status": "retrieval_only",
+        "reason": "manual_review_alias",
+        "correct_mnemonic": "BK+",
+        "manual": "JY997D16601",
+        "section": "25.1 FNC192 BK+ / Block Data Addition",
+        "notes": "Bare BK is not the Mitsubishi mnemonic. Use BK+; BK remains quarantined as an extraction alias.",
+    },
+    "FLDE": {
+        "status": "retrieval_only",
+        "reason": "manual_review_alias",
+        "correct_mnemonic": "FLDEL",
+        "manual": "JY997D16601",
+        "section": "34.2 FNC301 FLDEL / File delete-CF card format",
+        "notes": "FLDE is a truncated extraction alias of FLDEL and must never enter the generation opcode enum.",
+    },
+    "FLDEL": {
+        "status": "retrieval_only",
+        "reason": "manual_verified_hardware_gated",
+        "correct_mnemonic": "FLDEL",
+        "manual": "JY997D35401",
+        "section": "8.4 FNC301 FLDEL / File delete-CF card format",
+        "notes": "FLDEL is real, but requires FX3U-CF-ADP and FX3U/FX3UC Ver.2.61 or later. Keep retrieval-only until the generation contract can enforce hardware/version capabilities.",
+    },
+}
 
 
 def _json(value, fallback):
@@ -49,7 +79,7 @@ def _strong_identity(opcode, row):
     }
     if opcode not in variants:
         return False
-    # Use the section title, not the summary.  Summary text may contain OCR
+    # Use the section title, not the summary. Summary text may contain OCR
     # splits such as "FLDE L" that can make a prefix look like a real opcode.
     # The next-character guard also rejects BK when the official heading is BK+.
     title = str(row.get("title") or "").upper()
@@ -58,6 +88,17 @@ def _strong_identity(opcode, row):
         rf"{re.escape(opcode)}(?![A-Z0-9_+\-])"
     )
     return bool(re.search(pattern, title, flags=re.I))
+
+
+def _evidence(candidates):
+    return [
+        {
+            "manual_id": str(row.get("manual_id") or ""),
+            "fnc_number": str(row.get("fnc_number") or ""),
+            "title": str(row.get("title") or ""),
+        }
+        for row in candidates
+    ]
 
 
 def build(database=DEFAULT_DB):
@@ -80,20 +121,22 @@ def build(database=DEFAULT_DB):
     verified = []
     quarantine = []
     for opcode, candidates in sorted(grouped.items()):
+        reviewed = MANUAL_REVIEWED_QUARANTINE.get(opcode)
+        if reviewed is not None:
+            quarantine.append({
+                "opcode": opcode,
+                **reviewed,
+                "evidence": _evidence(candidates),
+            })
+            continue
+
         evidence = [row for row in candidates if _strong_identity(opcode, row)]
         if not evidence:
             quarantine.append({
                 "opcode": opcode,
                 "status": "retrieval_only",
                 "reason": "no_exact_fnc_heading_identity",
-                "evidence": [
-                    {
-                        "manual_id": str(row.get("manual_id") or ""),
-                        "fnc_number": str(row.get("fnc_number") or ""),
-                        "title": str(row.get("title") or ""),
-                    }
-                    for row in candidates
-                ],
+                "evidence": _evidence(candidates),
             })
             continue
         best = max(
@@ -125,7 +168,7 @@ def build(database=DEFAULT_DB):
     quarantine_payload = {
         "schema_version": 1,
         "vendor": "mitsubishi",
-        "description": "Structured instruction candidates intentionally excluded from generation until opcode identity/signature is verified.",
+        "description": "Structured instruction candidates intentionally excluded from generation until opcode identity/signature and required capabilities are verified.",
         "entries": quarantine,
     }
     return overlay, quarantine_payload
@@ -145,13 +188,22 @@ def main():
     overlay, quarantine = build(args.database)
     outputs = ((args.output, _text(overlay)), (args.quarantine, _text(quarantine)))
     if args.check:
-        mismatches = [str(path) for path, text in outputs if not path.is_file() or path.read_text(encoding="utf-8") != text]
+        mismatches = [
+            str(path)
+            for path, text in outputs
+            if not path.is_file() or path.read_text(encoding="utf-8") != text
+        ]
         if mismatches:
-            raise SystemExit("generated instruction contract files are stale: " + ", ".join(mismatches))
+            raise SystemExit(
+                "generated instruction contract files are stale: " + ", ".join(mismatches)
+            )
     else:
         for path, text in outputs:
             path.write_text(text, encoding="utf-8")
-    print(json.dumps({"verified_opcode_identities": len(overlay["instructions"]), "quarantined": len(quarantine["entries"])}, ensure_ascii=False))
+    print(json.dumps({
+        "verified_opcode_identities": len(overlay["instructions"]),
+        "quarantined": len(quarantine["entries"]),
+    }, ensure_ascii=False))
 
 
 if __name__ == "__main__":
