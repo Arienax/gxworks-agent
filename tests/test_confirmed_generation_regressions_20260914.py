@@ -4,6 +4,7 @@ from api import _normalize_analysis_result
 from application.generation_agent import (
     _FirstJSONObjectProvider,
     _GENERATION_REQUEST,
+    _strict_generation_projection,
 )
 from confirmed_spec import build_review_draft
 from model_provider import ModelRequest, TextDelta, UserMessage
@@ -96,6 +97,23 @@ def test_agent_a_cannot_drop_verbatim_classification_or_promote_guessed_contract
     assert "hardware_counter" not in contract["required_structures"]
     assert "data_register_counter" not in contract["required_structures"]
     assert contract["required_structures"] == ["direct_logic"]
+
+
+def test_agent_b_receives_structured_approach_contract_but_not_agent_a_prose():
+    normalized = _normalize_analysis_result(
+        _bad_analysis(),
+        plc_model="FX3U",
+        user_text="分类规则必须严格保留：1~3 为 A 类，4~6 为 B 类，7~9 为 C 类。",
+    )
+    draft = build_review_draft(normalized)
+    projected = _strict_generation_projection(draft)
+    selected = projected["selected_approach"]
+
+    assert selected["approach_id"] == "model_guess"
+    assert selected["generation_contract"]["required_structures"] == ["direct_logic"]
+    assert "name" not in selected
+    assert "description" not in selected
+    assert "generation_guide" not in selected
 
 
 def test_agent_a_low_level_opcode_survives_only_when_user_explicitly_names_it():
