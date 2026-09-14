@@ -3,8 +3,8 @@
 This module is intentionally outside the acceptance path except for one narrowly
 scoped syntax recovery: when a compact Agent-B token is missing only its closing
 quote immediately before a JSON delimiter, the missing byte is deterministic and
-may be restored before the ordinary validators run. Every other salvage path is
-diagnostic-only and can never turn a rejected candidate into an accepted program.
+may be restored. Every other salvage path is diagnostic-only and can never turn
+a rejected candidate into a validated program.
 """
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from typing import Any, Mapping
 
 _DIAGNOSTIC_ARTIFACTS = {
     "json": "diagnostic_ladder.json",
+    "ir": "diagnostic_program.ir.json",
     "svg": "diagnostic_ladder.svg",
     "program_csv": "diagnostic_program.csv",
     "comment_csv": "diagnostic_comments.csv",
@@ -74,8 +75,8 @@ def recover_compact_for_validation(raw_text: str, *, confirmed_spec=None) -> tup
     """Recover only a complete compact response using deterministic syntax repair.
 
     No rung may be dropped or altered here. Success returns the ordinary full
-    ladder_v1 candidate, which must still pass the normal structural/instruction
-    validators before it can be saved.
+    ladder_v1 candidate, which still has to pass the normal validators before it
+    can be considered valid.
     """
     original = _clean_json_text(raw_text)
     repaired, count = _repair_compact_json(original)
@@ -94,7 +95,7 @@ def _compact_rows_from_fragments(text: str) -> list[dict[str, Any]]:
     """Recover individually parseable compact rungs from a broken top-level array.
 
     This is display-only salvage. Rungs that cannot be parsed are omitted and
-    the preview is explicitly marked partial; they are never accepted or saved.
+    the preview is explicitly marked partial; they are never accepted as valid.
     """
     marker = re.search(r'"r"\s*:\s*\[', text)
     if not marker:
@@ -227,44 +228,83 @@ def recover_rejected_ladder(raw_text: str, *, confirmed_spec=None) -> tuple[dict
     return ladder, info
 
 
-def materialize_rejected_preview(raw_text: str, output_dir, *, confirmed_spec=None, plc_model="FX3U") -> dict[str, Any]:
-    """Render SVG/CSV/JSON for a rejected candidate, never an accepted program."""
+def _diagnostic_program(ladder: Mapping[str, Any], *, plc_model="FX3U", program_name="MAIN", revision=1,
+                        confirmed_spec=None) -> dict[str, Any]:
+    """Build internally consistent IR without re-running blocking ladder checks."""
+    from plc_ir import build_plc_ir, validate_plc_ir
+
+    program = build_plc_ir(
+        ladder,
+        plc_model=str(plc_model or "FX3U").strip().upper() or "FX3U",
+        program_name=str(program_name or "MAIN").strip() or "MAIN",
+        revision=revision,
+        confirmed_spec=confirmed_spec if isinstance(confirmed_spec, Mapping) else None,
+    )
+    # Validate only IR self-consistency. The ladder is intentionally already known
+    # to be rejected by the ordinary generation validator.
+    validate_plc_ir(program, validate_ladder=False)
+    return program
+
+
+def render_diagnostic_program(program: Mapping[str, Any], output_dir) -> dict[str, str]:
+    """Render a rejected diagnostic IR without applying blocking ladder validation."""
+    from plc_ir import ir_to_ladder, validate_plc_ir
+    from draw import AdvancedSVGLadder, generate_gx_works2_csv
+
+    directory = Path(output_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    validate_plc_ir(program, validate_ladder=False)
+    ladder = ir_to_ladder(program)
+    names = diagnostic_artifact_names()
+    ladder_text = json.dumps(ladder, ensure_ascii=False, indent=2)
+    (directory / names["json"]).write_text(ladder_text, encoding="utf-8")
+    (directory / names["ir"]).write_text(json.dumps(program, ensure_ascii=False, indent=2), encoding="utf-8")
+    drawer = AdvancedSVGLadder()
+    (directory / names["svg"]).write_text(drawer.generate_ladder(ladder_text), encoding="utf-8")
+    csv_ok = bool(generate_gx_works2_csv(
+        ladder,
+        str(directory / names["program_csv"]),
+        str(directory / names["comment_csv"]),
+    ))
+    artifacts = {"json": names["json"], "ir": names["ir"], "svg": names["svg"]}
+    if csv_ok:
+        artifacts.update(program_csv=names["program_csv"], comment_csv=names["comment_csv"])
+    return artifacts
+
+
+def materialize_rejected_preview(raw_text: str, output_dir, *, confirmed_spec=None, plc_model="FX3U",
+                                 program_name="MAIN", revision=1) -> dict[str, Any]:
+    """Render SVG/CSV/IR/JSON for a rejected candidate, never mark it valid."""
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
     ladder, recovery = recover_rejected_ladder(raw_text, confirmed_spec=confirmed_spec)
-    text = json.dumps(ladder, ensure_ascii=False, indent=2)
-
-    names = diagnostic_artifact_names()
-    (directory / names["json"]).write_text(text, encoding="utf-8")
-
-    from draw import AdvancedSVGLadder, generate_gx_works2_csv
-    drawer = AdvancedSVGLadder()
-    svg = drawer.generate_ladder(text)
-    (directory / names["svg"]).write_text(svg, encoding="utf-8")
-
-    csv_ok = False
-    if str(plc_model or "FX3U").strip().upper().startswith("FX"):
-        csv_ok = bool(generate_gx_works2_csv(
-            ladder,
-            str(directory / names["program_csv"]),
-            str(directory / names["comment_csv"]),
-        ))
-    artifacts = {"json": names["json"], "svg": names["svg"]}
-    if csv_ok:
-        artifacts.update(program_csv=names["program_csv"], comment_csv=names["comment_csv"])
+    program = _diagnostic_program(
+        ladder,
+        plc_model=plc_model,
+        program_name=program_name,
+        revision=revision,
+        confirmed_spec=confirmed_spec,
+    )
+    artifacts = render_diagnostic_program(program, directory)
+    if not all(key in artifacts for key in ("json", "ir", "svg", "program_csv", "comment_csv")):
+        raise ValueError("diagnostic candidate did not produce the complete GX artifact set")
     return {
         "target_mode": "ladder",
         "diagnostic_only": True,
-        "validation_profile": "rejected_diagnostic",
+        "validation_profile": "generation_structural",
+        "program_name": str(program_name or "MAIN"),
+        "revision": int(program.get("revision", 1)),
+        "ir_sha256": __import__("plc_ir").canonical_sha256(program),
+        "ladder_sha256": program["source"]["ladder_sha256"],
         "validation": {
             "status": "invalid_candidate",
             "profile": "rejected_diagnostic",
             "messages": [
-                "候选未通过正式校验；以下梯形图和 CSV 仅用于检查模型实际输出，不会自动保存、导入或执行。"
+                "候选未通过正式校验；梯形图和 CSV 已保留，可继续发送到 GX Works2 检查黄色错误。"
             ],
         },
         "artifacts": artifacts,
-        "width": int(getattr(drawer, "width", 0)),
-        "height": int(getattr(drawer, "height", 0)),
+        "width": 0,
+        "height": 0,
         "recovery": recovery,
     }
