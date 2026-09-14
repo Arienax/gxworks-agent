@@ -228,6 +228,16 @@ class GenerationWorkflow:
                 target_mode=self.target_mode, repair_mode=(self.repair_mode or self.format_repair),
             )
             repair_call = self.target_mode == "ladder" and (self.repair_mode or self.format_repair)
+            confirmed_generation_call = (
+                not repair_call
+                and self.target_mode == "ladder"
+                and not is_edit_mode
+                and isinstance(self.confirmed_context, dict)
+                and bool(self.confirmed_context)
+                and self.dependencies.stream_response is None
+                and self.dependencies.generate_json is None
+            )
+            generation_agent_metadata = None
             repair_payload = None
             repair_kind = "format"
             deterministic_field_patch = False
@@ -309,6 +319,30 @@ class GenerationWorkflow:
                             mode=repair_kind,
                             on_reasoning_chunk=on_reasoning, on_content_chunk=on_content,
                         )
+                elif confirmed_generation_call:
+                    from application.generation_agent import generate_confirmed_ladder
+
+                    result = model_call(
+                        generate_confirmed_ladder,
+                        self.confirmed_context,
+                        self.plc_model,
+                        model_name=self.model_name,
+                        effort=self.effort,
+                        on_stage=lambda stage, message: self._emit(
+                            "progress", {"stage": stage, "message": message}
+                        ),
+                    )
+                    full_content = json.dumps(
+                        result["ladder"], ensure_ascii=False, separators=(",", ":")
+                    )
+                    generation_agent_metadata = {
+                        "mode": "confirmed_spec",
+                        "model_calls": int(result.get("model_calls", 1)),
+                    }
+                    validation_messages.append(
+                        tr('已由独立生成 Agent 根据确认规格一次生成完整 ladder_v1')
+                    )
+                    on_content(full_content)
                 else:
                     _reasoning, full_content = model_call(
                         stream_model_response,
@@ -356,6 +390,10 @@ class GenerationWorkflow:
                 elif repair_call:
                     # Explicit repair has its own transport fallback inside the dedicated API.
                     # Never fall back into a normal full generation request.
+                    raise
+                elif confirmed_generation_call:
+                    # Agent B is one full-ladder request. Never pay for a second
+                    # full generation after a failed confirmed-spec request.
                     raise
                 else:
                     self._emit("progress", {
@@ -566,6 +604,7 @@ class GenerationWorkflow:
                 return {
                     "target_mode": "ladder",
                     "repair_attempts": repair_attempts,
+                    "first_pass_pipeline": generation_agent_metadata or {"mode": "direct"},
                     "validation_profile": "generation_structural",
                     "program_name": self.program_name,
                     "revision": self.revision,
