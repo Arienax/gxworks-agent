@@ -52,7 +52,7 @@ def test_opcode_failure_is_blocked_instead_of_guessing_a_mnemonic():
     response = deterministic_response(_payload(repair))
     with pytest.raises(RepairAssemblyError) as rejected:
         apply(base, response, repair)
-    assert rejected.value.reason == "repair_scope_violation"
+    assert rejected.value.reason == "invalid_ladder_structure"
 
 
 def test_long_debug_note_is_truncated_deterministically():
