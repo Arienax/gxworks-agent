@@ -124,6 +124,8 @@ jobs:
       - name: Browser E2E
         shell: pwsh
         run: |
+          # Rerun unchanged browser harness on the same reviewed contracts; the
+          # previous run timed out before the mocked generation reached spec-editor.
           python -m pip install playwright==1.55.0
           python -m playwright install chromium
           python scripts/web_generation_e2e.py --web-dist web/dist --report web-generation-e2e.json
