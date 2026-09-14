@@ -84,7 +84,7 @@ def test_confirmed_generation_uses_one_isolated_agent_call(tmp_path):
     assert len(provider.requests) == 1
     sent = "\n".join(str(getattr(message, "content", "")) for message in provider.requests[0].messages)
     assert "RAW USER REQUIREMENT MUST NOT REACH GENERATOR" not in sent
-    assert "OLD ANALYSIS HISTORY MUST NOT REACH_GENERATOR" not in sent
+    assert "OLD ANALYSIS HISTORY MUST NOT REACH GENERATOR" not in sent
     assert "MUST_NOT_REACH_GENERATOR" not in sent
     assert "X0" in sent and "Y0" in sent
     assert provider.requests[0].stream is True
