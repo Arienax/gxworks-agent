@@ -202,6 +202,7 @@ def prepare_ladder_candidate(
 
     allowed_ids = set(allowed_rung_ids or ())
     allowed_devices = {str(item).strip().upper() for item in (allowed_addresses or ())}
+    structural_only = _has_invalid_shared_parallel(previous_ladder)
     if repair_mode:
         if parsed.get("mode") != "partial":
             raise PLCJsonValidationError('$.mode: repair must return "partial"')
@@ -216,7 +217,11 @@ def prepare_ladder_candidate(
         if task_type == "contract_repair":
             if parsed.get("delete_rung_ids"):
                 raise PLCJsonValidationError("$.delete_rung_ids: contract repair may not delete existing rungs")
-            if allowed_devices:
+            # For structure-only relocation, behavior equality below is stronger
+            # than the legacy address extractor, which does not inspect invalid
+            # shared_inputs containers. Keep the ordinary address scope for all
+            # semantic contract repairs.
+            if allowed_devices and not structural_only:
                 outside_devices = patch_device_addresses(parsed) - allowed_devices
                 if outside_devices:
                     raise PLCJsonValidationError("$.rungs: contract repair introduced out-of-scope devices " + ", ".join(sorted(outside_devices)))
