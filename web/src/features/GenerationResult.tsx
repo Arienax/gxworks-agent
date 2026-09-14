@@ -25,13 +25,16 @@ export function useGenerationResult(job: Job | undefined, retry: number) {
   const value = result.id === id ? result.value : undefined;
   const metadata = value?.generation && typeof value.generation === "object" && !Array.isArray(value.generation)
     ? value.generation as Output : undefined;
+  const validation = metadata?.validation && typeof metadata.validation === "object" && !Array.isArray(metadata.validation)
+    ? metadata.validation as Output : undefined;
   const blocked = job?.result?.status === "contract_mismatch" || value?.status === "contract_mismatch" || !!metadata?.contract_mismatch;
+  const invalidCandidate = value?.status === "saved_invalid" || validation?.status === "invalid_candidate";
   const proposalId = typeof value?.proposal_id === "string" ? value.proposal_id
     : typeof job?.result?.proposal_id === "string" ? job.result.proposal_id : "";
   const versionId = typeof value?.version_id === "string" ? value.version_id
     : typeof job?.result?.version_id === "string" ? job.result.version_id : "";
   const loading = !!id && !versionId && !proposalId && !blocked && (!result.error || result.id !== id) && !value;
-  return { id, value, metadata, blocked, proposalId, versionId, loading,
+  return { id, value, metadata, blocked, invalidCandidate, proposalId, versionId, loading,
     error: result.id === id ? result.error : undefined };
 }
 
@@ -57,6 +60,10 @@ export function GenerationResult({ result, busy, onOpen, onRetry, onSpec, t }: {
       <p>{t("可以查看受阻候选及诊断；不能接受、导入或运行该候选。")}</p>
       <Button disabled={busy} onClick={onOpen}>{t("查看受阻候选")}</Button>{" "}
       <Button disabled={busy} onClick={onSpec}>{t("检查确认规格")}</Button>
+    </> : result.versionId && result.invalidCandidate ? <>
+      <p className="error-text" role="status">{t("候选存在校验错误，但梯形图和 CSV 已保留。")}</p>
+      <p>{t("可以查看、导出并直接发送到 GX Works2；GX 中的黄色错误用于继续定位问题。")}</p>
+      <Button disabled={busy} onClick={onOpen}>{t("查看错误候选")}</Button>
     </> : result.versionId ? <>
       <p>{t("程序已校验并自动保存，可直接导出文件。")}</p>
       <Button disabled={busy} onClick={onOpen}>{t("查看程序")}</Button>
