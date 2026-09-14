@@ -99,6 +99,159 @@ _VFD_CONTROL_METHOD_OPTIONS = (
     "高速脉冲频率给定（需晶体管输出及变频器支持）",
 )
 
+# Agent A proposes implementation candidates, but its low-level implementation
+# guesses are not user-confirmed facts.  Close every structured contract before
+# it reaches ``normalize_approach`` so omitted fields cannot be re-inferred from
+# free-form generation_guide prose and silently promoted into hard constraints.
+_ANALYSIS_CONTRACT_VALUE_FIELDS = (
+    "required_opcodes",
+    "forbidden_opcodes",
+    "required_devices",
+    "forbidden_devices",
+    "required_structures",
+    "forbidden_structures",
+)
+_ANALYSIS_CONTRACT_GROUP_FIELDS = (
+    "any_of_opcode_groups",
+    "any_of_structure_groups",
+)
+_ANALYSIS_OPCODE_FIELDS = ("required_opcodes", "forbidden_opcodes")
+_ANALYSIS_DEVICE_FIELDS = ("required_devices", "forbidden_devices")
+_COUNTER_STRUCTURES = {"hardware_counter", "data_register_counter"}
+_VERBATIM_REQUIREMENT_MARKER = "【当前用户明确要求（逐字保留）】"
+_COUNTER_INTENT_RE = re.compile(
+    r"计数|计次|次数|counter|(?<![A-Za-z])count(?:ing|s|ed)?(?![A-Za-z])",
+    re.IGNORECASE,
+)
+
+
+def _requirement_mentions_token(requirement, token):
+    value = str(token or "").strip()
+    if not value:
+        return False
+    return bool(
+        re.search(
+            rf"(?<![A-Za-z0-9_]){re.escape(value)}(?![A-Za-z0-9_])",
+            str(requirement or ""),
+            re.IGNORECASE,
+        )
+    )
+
+
+def _string_list(value):
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, (list, tuple)):
+        return []
+    result = []
+    for item in value:
+        text = str(item or "").strip()
+        if text and text not in result:
+            result.append(text)
+    return result
+
+
+def _preserve_verbatim_requirement(result, user_text):
+    requirement = str(user_text or "").strip()
+    if not requirement:
+        return
+    block = _VERBATIM_REQUIREMENT_MARKER + "\n" + requirement
+    summary = str(result.get("summary") or "").strip()
+    if block not in summary:
+        result["summary"] = (summary + "\n\n" if summary else "") + block
+
+
+def _sanitize_analysis_approaches(result, user_text):
+    """Prevent Agent-A guesses from becoming hard confirmed constraints.
+
+    Explicit low-level opcodes/devices survive only when the user's own request
+    names them.  High-level architecture remains available for approach choice,
+    except counter structures when the request contains no counter intent at all.
+    Every contract field is materialized, including empty lists, which blocks the
+    legacy generation_guide inference path from recreating removed constraints.
+    """
+    requirement = str(user_text or "").strip()
+    approaches = result.get("approaches")
+    if not requirement or not isinstance(approaches, list):
+        return
+
+    has_counter_intent = bool(_COUNTER_INTENT_RE.search(requirement))
+    sanitized = []
+    dropped = 0
+    for raw_approach in approaches:
+        if not isinstance(raw_approach, dict):
+            continue
+        approach = copy.deepcopy(raw_approach)
+        raw_contract = approach.get("generation_contract")
+        contract = copy.deepcopy(raw_contract) if isinstance(raw_contract, dict) else {}
+
+        for field in _ANALYSIS_CONTRACT_VALUE_FIELDS:
+            contract[field] = _string_list(contract.get(field))
+        for field in _ANALYSIS_CONTRACT_GROUP_FIELDS:
+            groups = contract.get(field)
+            contract[field] = [
+                _string_list(group)
+                for group in groups
+                if isinstance(group, (list, tuple)) and _string_list(group)
+            ] if isinstance(groups, (list, tuple)) else []
+
+        for field in _ANALYSIS_OPCODE_FIELDS:
+            contract[field] = [
+                token for token in contract[field]
+                if _requirement_mentions_token(requirement, token)
+            ]
+        for field in _ANALYSIS_DEVICE_FIELDS:
+            contract[field] = [
+                token for token in contract[field]
+                if _requirement_mentions_token(requirement, token)
+            ]
+        contract["any_of_opcode_groups"] = [
+            [token for token in group if _requirement_mentions_token(requirement, token)]
+            for group in contract["any_of_opcode_groups"]
+        ]
+        contract["any_of_opcode_groups"] = [
+            group for group in contract["any_of_opcode_groups"] if group
+        ]
+
+        if not has_counter_intent:
+            for field in ("required_structures", "forbidden_structures"):
+                contract[field] = [
+                    item for item in contract[field]
+                    if item.casefold() not in _COUNTER_STRUCTURES
+                ]
+            contract["any_of_structure_groups"] = [
+                [item for item in group if item.casefold() not in _COUNTER_STRUCTURES]
+                for group in contract["any_of_structure_groups"]
+            ]
+            contract["any_of_structure_groups"] = [
+                group for group in contract["any_of_structure_groups"] if group
+            ]
+
+        contract["source"] = "analysis_sanitized"
+        approach["generation_contract"] = contract
+        has_constraint = any(
+            contract.get(field)
+            for field in (*_ANALYSIS_CONTRACT_VALUE_FIELDS, *_ANALYSIS_CONTRACT_GROUP_FIELDS)
+        )
+        if has_constraint:
+            sanitized.append(approach)
+        else:
+            dropped += 1
+
+    result["approaches"] = sanitized
+    if dropped:
+        diagnostics = result.get("format_diagnostics")
+        diagnostics = list(diagnostics) if isinstance(diagnostics, list) else []
+        diagnostics.append(
+            {
+                "code": "analysis_approach_hard_constraints_removed",
+                "path": "approaches",
+                "message": "已丢弃仅由模型低层猜测构成、没有用户证据的硬约束方案。",
+                "count": dropped,
+            }
+        )
+        result["format_diagnostics"] = diagnostics
+
 
 def _analysis_text(analysis, user_text=""):
     try:
@@ -291,6 +444,10 @@ def ensure_hardware_questions(analysis, plc_model="FX3U", user_text=""):
     receive stable IDs so they remain hardware facts during canonicalization.
     """
     result = copy.deepcopy(analysis or {})
+    if str(user_text or "").strip():
+        _preserve_verbatim_requirement(result, user_text)
+        _sanitize_analysis_approaches(result, user_text)
+
     existing_flags = result.get("hardware_requirements")
     if not str(user_text or "").strip() and isinstance(existing_flags, dict):
         flags = {
