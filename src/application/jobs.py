@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import uuid
 import threading
 import time
@@ -20,7 +21,7 @@ class JobCancelled(BaseException):
     """Control-flow signal for an operator-requested cancellation.
 
     Cancellation must cross model/provider ``except Exception`` boundaries
-    unchanged.  Treating it as an ordinary Exception used to make the response
+    unchanged. Treating it as an ordinary Exception used to make the response
     collector translate an operator cancel into a model-provider failure after
     waiting for the stream to finish.
     """
@@ -55,7 +56,7 @@ class JobContext:
 
     def emit(self, event_type, data=None):
         # Model progress/preview events are emitted while the provider stream is
-        # being consumed.  Checking here makes those live events the cancellation
+        # being consumed. Checking here makes those live events the cancellation
         # boundary instead of waiting until generation parsing/validation ends.
         self.checkpoint()
         if event_type == "context_audit" and isinstance(data, dict):
@@ -188,6 +189,151 @@ class JobManager:
             self._save(record)
             return copy.deepcopy(event)
 
+    def _preserve_rejected_generation(self, job_id, error):
+        """Turn a rejected ladder into a visible/exportable diagnostic version.
+
+        Validation still remains failed on the version metadata. The distinction is
+        that a bad candidate is no longer discarded: if enough model-authored
+        structure can be recovered, we render SVG and GX CSV, store an internally
+        consistent IR for navigation, activate the diagnostic version, and let the
+        existing GX-import path send those CSVs to GX Works2 for native diagnostics.
+        """
+        from application.generation_repair import GenerationValidationError
+
+        if not isinstance(error, GenerationValidationError):
+            return None
+        with self._record_lock:
+            record = self._load(job_id)
+            if record.get("kind") != "generation":
+                return None
+            snapshot = copy.deepcopy(record.get("snapshot") or {})
+
+        staging = contained(self.state_dir / "staging" / record_id(job_id), self.state_dir)
+        candidate_path = contained(staging / "repair_candidate.json", staging)
+        if not candidate_path.is_file():
+            return None
+        candidate_text = candidate_path.read_text(encoding="utf-8")
+        if not candidate_text.strip() or len(candidate_text) > 512000:
+            return None
+
+        project_snapshot = snapshot.get("project") if isinstance(snapshot.get("project"), dict) else {}
+        program_snapshot = snapshot.get("program_ir") if isinstance(snapshot.get("program_ir"), dict) else {}
+        project_id = snapshot.get("project_id")
+        if not isinstance(project_id, str) or not project_id:
+            return None
+        plc_model = str(project_snapshot.get("plc_model") or "FX3U")
+        program_name = str(program_snapshot.get("program_name") or "MAIN")
+        revision = int(program_snapshot.get("revision") or 0) + 1
+        confirmed_spec = copy.deepcopy(project_snapshot.get("confirmed_spec"))
+
+        try:
+            from application.rejected_generation_preview import materialize_rejected_preview
+
+            metadata = materialize_rejected_preview(
+                candidate_text,
+                staging,
+                confirmed_spec=confirmed_spec,
+                plc_model=plc_model,
+                program_name=program_name,
+                revision=revision,
+            )
+        except Exception as salvage_error:
+            diagnostics.exception_record(salvage_error)
+            return None
+
+        validation = metadata.setdefault("validation", {})
+        validation["violations"] = copy.deepcopy(error.diagnostics.get("violations", []))
+        validation["diagnostic_id"] = error.diagnostics.get("diagnostic_id")
+        validation["stop_reason"] = error.diagnostics.get("stop_reason")
+        validation["original_failure_stage"] = error.diagnostics.get("stage")
+
+        version_id = None
+        try:
+            from session_store import SessionStore
+
+            with self.lock.thread_lock:
+                self.lock.require_acquired()
+                store = SessionStore(base_dir=self.lock.workspace, create=False)
+                current = store.get_project(project_id)
+                if not isinstance(current, dict):
+                    return None
+                frozen = project_snapshot
+                if any(current.get(key) != frozen.get(key)
+                       for key in ("active_version_id", "confirmed_spec", "target_mode", "plc_model")):
+                    return None
+                base_version_id = snapshot.get("version_id")
+                if base_version_id:
+                    current_base = store.get_version(project_id, base_version_id)
+                    if current_base != snapshot.get("version"):
+                        return None
+
+                version_id, output_dir = store.prepare_version(project_id)
+                copied_artifacts = {}
+                for name, filename in (metadata.get("artifacts") or {}).items():
+                    relative = Path(str(filename))
+                    if (relative.is_absolute() or not relative.parts or ".." in relative.parts
+                            or ":" in str(relative)):
+                        raise ValueError("Invalid diagnostic artifact path")
+                    source = contained(staging / relative, staging)
+                    if not source.is_file():
+                        raise ValueError("Diagnostic artifact is missing")
+                    destination = contained(output_dir / relative, output_dir)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_bytes(source.read_bytes())
+                    copied_artifacts[str(name)] = str(relative).replace("\\", "/")
+
+                required = {"json", "ir", "svg", "program_csv", "comment_csv"}
+                if not required.issubset(copied_artifacts):
+                    raise ValueError("Diagnostic generation did not produce the full GX artifact set")
+                program = json.loads((output_dir / copied_artifacts["ir"]).read_text(encoding="utf-8"))
+                version_metadata = store._ir_metadata(program)
+                version_metadata.update(
+                    target_mode="ladder",
+                    plc_model=plc_model,
+                    program_name=program_name,
+                    revision=revision,
+                    artifacts=copied_artifacts,
+                    validation_profile="generation_structural",
+                    validation=copy.deepcopy(validation),
+                    summary="模型候选存在校验错误；已保留梯形图与 GX CSV",
+                    lifecycle_status="diagnostic",
+                    parent_version_id=base_version_id,
+                    confirmed_spec_snapshot=copy.deepcopy(confirmed_spec),
+                    confirmed_spec_hash=(canonical_hash(confirmed_spec) if confirmed_spec is not None else None),
+                    generation_metadata={
+                        "diagnostic_only": True,
+                        "recovery": copy.deepcopy(metadata.get("recovery") or {}),
+                    },
+                )
+                version = store.complete_version(project_id, version_id, version_metadata, activate=True)
+        except Exception as save_error:
+            diagnostics.exception_record(save_error)
+            if version_id is not None:
+                try:
+                    from session_store import SessionStore
+                    with self.lock.thread_lock:
+                        store = SessionStore(base_dir=self.lock.workspace, create=False)
+                        if store.get_version(project_id, version_id) is None:
+                            store.discard_version(project_id, version_id)
+                except Exception:
+                    pass
+            return None
+
+        output = {
+            "generation": metadata,
+            "version_id": version["id"],
+            "status": "saved_invalid",
+        }
+        atomic_json(self.state_dir / "outputs" / (record_id(job_id) + ".json"), output)
+        diagnostics.emit(
+            "invalid_candidate_preserved",
+            stage="generation_delivery",
+            version_id=version["id"],
+            validation_status="invalid_candidate",
+            gx_csv_available=True,
+        )
+        return {"version_id": version["id"], "status": "saved_invalid"}
+
     def _run(self, job_id, worker):
         with self._record_lock:
             initial = self._load(job_id)
@@ -223,18 +369,22 @@ class JobManager:
             status, error_code, result = "cancelled", None, None
         except Exception as exc:
             diagnostics.exception_record(exc)
-            safe_codes = {"ResponseRejectedError": "response_rejected", "ConflictError": "input_conflict",
-                          "ContextUnavailableError": "context_unavailable", "ChangeScopeError": "change_scope_violation"}
-            status, error_code, result = "failed", safe_codes.get(type(exc).__name__, "job_failed"), None
-            error_details = acceptance_error_details(exc)
-            if error_details is not None:
-                error_code = "response_rejected"
+            preserved = self._preserve_rejected_generation(job_id, exc)
+            if preserved is not None:
+                status, error_code, error_details, result = "completed", None, None, preserved
             else:
-                error_details = generation_error_details(exc)
+                safe_codes = {"ResponseRejectedError": "response_rejected", "ConflictError": "input_conflict",
+                              "ContextUnavailableError": "context_unavailable", "ChangeScopeError": "change_scope_violation"}
+                status, error_code, result = "failed", safe_codes.get(type(exc).__name__, "job_failed"), None
+                error_details = acceptance_error_details(exc)
                 if error_details is not None:
-                    error_code = "generation_validation_failed"
+                    error_code = "response_rejected"
                 else:
-                    error_code = workflow_error_code(exc) or error_code
+                    error_details = generation_error_details(exc)
+                    if error_details is not None:
+                        error_code = "generation_validation_failed"
+                    else:
+                        error_code = workflow_error_code(exc) or error_code
         with self._record_lock:
             record = self._load(job_id)
             record.update(status=status, error_code=error_code, error_details=error_details, result=public_payload(result))
