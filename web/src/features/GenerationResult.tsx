@@ -40,11 +40,12 @@ export function useGenerationResult(job: Job | undefined, retry: number) {
 
 export type GenerationResultState = ReturnType<typeof useGenerationResult>;
 
-export function GenerationResult({ result, busy, onOpen, onRetry, onSpec, t }: {
+export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSpec, t }: {
   result: GenerationResultState;
   busy: boolean;
   onOpen: () => void;
   onRetry: () => void;
+  onRepair: () => void;
   onSpec: () => void;
   t: (key: string) => string;
 }) {
@@ -63,7 +64,8 @@ export function GenerationResult({ result, busy, onOpen, onRetry, onSpec, t }: {
     </> : result.versionId && result.invalidCandidate ? <>
       <p className="error-text" role="status">{t("候选存在校验错误，但梯形图和 CSV 已保留。")}</p>
       <p>{t("可以查看、导出并直接发送到 GX Works2；GX 中的黄色错误用于继续定位问题。")}</p>
-      <Button disabled={busy} onClick={onOpen}>{t("查看错误候选")}</Button>
+      <Button disabled={busy} onClick={onOpen}>{t("查看错误候选")}</Button>{" "}
+      <Button disabled={busy} onClick={onRepair}>{t("局部修复")}</Button>
     </> : result.versionId ? <>
       <p>{t("程序已校验并自动保存，可直接导出文件。")}</p>
       <Button disabled={busy} onClick={onOpen}>{t("查看程序")}</Button>
