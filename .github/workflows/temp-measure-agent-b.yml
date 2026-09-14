@@ -1,0 +1,48 @@
+name: Temporary Agent B Request Measurement
+on:
+  push:
+    branches: [feat/comprehensive-runtime-diagnostics-20260914]
+permissions:
+  contents: read
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Measure prompt and schema
+        env:
+          PYTHONPATH: src
+        run: |
+          python - <<'PY'
+          import json
+          from application.generation_agent import _GENERATION_REQUEST, _strict_generation_projection
+          from plc_generation_context import build_generation_instructions
+          from plc_generation_contract import ladder_response_schema
+          from instruction_registry import generation_app_instr_mnemonics
+
+          confirmed = {
+              'summary': '分类规则必须严格保留：1~3 为 A 类，4~6 为 B 类，7~9 为 C 类。',
+              'selected_approach': {'approach_id':'direct','generation_contract':{
+                  'required_opcodes': [], 'forbidden_opcodes': [], 'required_devices': [],
+                  'forbidden_devices': [], 'required_structures':['direct_logic'],
+                  'forbidden_structures': [], 'any_of_opcode_groups': [], 'any_of_structure_groups': []}},
+              'io_table': [
+                  {'address':'X0','kind':'X','label':'输入'}, {'address':'Y0','kind':'Y','label':'输出'}
+              ],
+              'parameters': [], 'execution_semantics': []
+          }
+          projected = _strict_generation_projection(confirmed)
+          schema = ladder_response_schema(allow_partial=False, plc_model='FX3U')
+          prompt = build_generation_instructions(_GENERATION_REQUEST, plc_model='FX3U', target_mode='ladder',
+              is_edit_mode=False, task_type='generate', confirmed_context=projected, current_version_json=None)
+          compact_schema = json.dumps(schema, ensure_ascii=False, separators=(',', ':'))
+          print('PROMPT_CHARS=', len(prompt))
+          print('SCHEMA_CHARS=', len(compact_schema))
+          print('SCHEMA_OCCURRENCES_IN_PROMPT=', prompt.count(compact_schema))
+          print('FX3U_OPCODE_ENUM_COUNT=', len(generation_app_instr_mnemonics('FX3U')))
+          print('CONFIRMED_CHARS=', len(json.dumps(projected, ensure_ascii=False, separators=(',', ':'))))
+          print('PROMPT_HEAD=', prompt[:500].replace('\n','\\n'))
+          PY
