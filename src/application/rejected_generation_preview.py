@@ -184,8 +184,18 @@ def recover_rejected_ladder(raw_text: str, *, confirmed_spec=None) -> tuple[dict
     partial = False
     omitted_rungs = 0
     if isinstance(parsed, Mapping) and "rungs" in parsed:
-        ladder = dict(parsed)
-        source_format = "ladder_v1"
+        alias = None
+        try:
+            from application.compact_alias import expand_hybrid_compact_ladder
+            alias = expand_hybrid_compact_ladder(parsed, confirmed_spec)
+        except Exception:
+            alias = None
+        if alias is not None:
+            ladder = alias
+            source_format = "compact_alias_ladder"
+        else:
+            ladder = dict(parsed)
+            source_format = "ladder_v1"
     elif isinstance(parsed, Mapping) and "r" in parsed:
         source_format = "compact_ladder"
         try:
