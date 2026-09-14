@@ -9,6 +9,31 @@ class WorkflowError(RuntimeError):
     pass
 
 
+def _structural_repair_payload(value):
+    """Recognize the one whole-rung fallback that is currently justified.
+
+    Semantic contract repair also uses mode=partial, so mode alone must never
+    redirect those calls into the structure-only prompt.  A parallel block in
+    shared_inputs is explicit representation evidence and does not require
+    guessing PLC intent.
+    """
+    if not isinstance(value, dict):
+        return False
+    baseline = value.get("baseline_subset")
+    if not isinstance(baseline, dict):
+        return False
+    for rung in baseline.get("rungs", []) or []:
+        if not isinstance(rung, dict):
+            continue
+        for element in rung.get("shared_inputs", []) or []:
+            if (
+                isinstance(element, dict)
+                and str(element.get("type") or "").casefold() == "parallel_block"
+            ):
+                return True
+    return False
+
+
 def _repair_short_circuit(function, args, kwargs):
     """Keep deterministic fields local and semantic-free structural repair narrow."""
     mode = kwargs.get("mode")
@@ -19,6 +44,8 @@ def _repair_short_circuit(function, args, kwargs):
             return "", json.dumps(response, ensure_ascii=False, separators=(",", ":"))
     if (
         mode == "partial"
+        and args
+        and _structural_repair_payload(args[0])
         and getattr(function, "__module__", "") == "api"
         and getattr(function, "__name__", "") == "repair_ladder_response"
     ):
