@@ -1,10 +1,10 @@
 """Best-effort rendering for rejected ladder generations.
 
-This module is intentionally outside the acceptance path.  It never turns a
-rejected candidate into an accepted/saved program.  Its only job is to recover
-as much model-authored ladder structure as is deterministic enough to display
-and export for diagnosis, so validation failures do not erase the operator's
-ability to inspect the generated program.
+This module is intentionally outside the acceptance path except for one narrowly
+scoped syntax recovery: when a compact Agent-B token is missing only its closing
+quote immediately before a JSON delimiter, the missing byte is deterministic and
+may be restored before the ordinary validators run. Every other salvage path is
+diagnostic-only and can never turn a rejected candidate into an accepted program.
 """
 from __future__ import annotations
 
@@ -22,11 +22,9 @@ _DIAGNOSTIC_ARTIFACTS = {
     "comment_csv": "diagnostic_comments.csv",
 }
 
-# Compact Agent-B values are deliberately token-like and never need literal
-# JSON delimiters.  If a provider drops only the closing quote before a list or
-# object delimiter, restoring that quote is deterministic and does not invent
-# PLC semantics.  This covers a recurring GLM streaming failure where a family
-# of comparison strings ended as `> D220 D106]]` instead of `> D220 D106"]]`.
+# Compact Agent-B values are token-like and never need literal JSON delimiters.
+# If a provider drops only the closing quote before a list/object delimiter,
+# restoring that quote is deterministic and does not invent PLC semantics.
 _COMPACT_UNCLOSED_VALUE = re.compile(
     r'("(?:NO|NC|P|F|RISING|FALLING|COIL|PLS|PLF|TIMER|COUNTER|'
     r'[<>]=?|==|<>|[A-Z][A-Z0-9_.$@+\-]*) [^"\[\]\{\},]+)'
@@ -55,34 +53,8 @@ def _repair_compact_json(text: str) -> tuple[str, int]:
         return candidate, 0
     except (TypeError, ValueError):
         pass
-
     repaired, count = _COMPACT_UNCLOSED_VALUE.subn(r'\1"', candidate)
     return repaired, count
-
-
-def _compact_rows_from_fragments(text: str) -> list[dict[str, Any]]:
-    """Recover individually parseable compact rungs from a broken top-level array.
-
-    This is display-only salvage.  Rungs that cannot be parsed are omitted and
-    the preview is explicitly marked partial; they are never accepted or saved.
-    """
-    marker = re.search(r'"r"\s*:\s*\[', text)
-    if not marker:
-        return []
-    body = text[marker.end():]
-    # A compact rung starts with h/s/b. Nested branch objects start with i/o and
-    # OR blocks start with or, so these anchors are specific enough for salvage.
-    starts = [m.start() for m in re.finditer(r'\{\s*"(?:h|s|b)"\s*:', body)]
-    rows: list[dict[str, Any]] = []
-    decoder = json.JSONDecoder()
-    for start in starts:
-        try:
-            value, _end = decoder.raw_decode(body[start:])
-        except (TypeError, ValueError):
-            continue
-        if isinstance(value, dict) and isinstance(value.get("b"), list):
-            rows.append(value)
-    return rows
 
 
 def _projected_spec(confirmed_spec: Any) -> dict[str, Any]:
@@ -96,6 +68,49 @@ def _projected_spec(confirmed_spec: Any) -> dict[str, Any]:
 def _expand_compact(compact: Mapping[str, Any], confirmed_spec: Any) -> dict[str, Any]:
     from application.generation_agent import _expand_compact_ladder
     return _expand_compact_ladder(dict(compact), _projected_spec(confirmed_spec))
+
+
+def recover_compact_for_validation(raw_text: str, *, confirmed_spec=None) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Recover only a complete compact response using deterministic syntax repair.
+
+    No rung may be dropped or altered here. Success returns the ordinary full
+    ladder_v1 candidate, which must still pass the normal structural/instruction
+    validators before it can be saved.
+    """
+    original = _clean_json_text(raw_text)
+    repaired, count = _repair_compact_json(original)
+    parsed = json.loads(repaired)
+    if not isinstance(parsed, Mapping) or set(parsed) != {"r"}:
+        raise ValueError("response is not one complete compact ladder")
+    ladder = _expand_compact(parsed, confirmed_spec)
+    return ladder, {
+        "source_format": "compact_ladder",
+        "syntax_quote_repairs": count,
+        "original_json_valid": repaired == original,
+    }
+
+
+def _compact_rows_from_fragments(text: str) -> list[dict[str, Any]]:
+    """Recover individually parseable compact rungs from a broken top-level array.
+
+    This is display-only salvage. Rungs that cannot be parsed are omitted and
+    the preview is explicitly marked partial; they are never accepted or saved.
+    """
+    marker = re.search(r'"r"\s*:\s*\[', text)
+    if not marker:
+        return []
+    body = text[marker.end():]
+    starts = [m.start() for m in re.finditer(r'\{\s*"(?:h|s|b)"\s*:', body)]
+    rows: list[dict[str, Any]] = []
+    decoder = json.JSONDecoder()
+    for start in starts:
+        try:
+            value, _end = decoder.raw_decode(body[start:])
+        except (TypeError, ValueError):
+            continue
+        if isinstance(value, dict) and isinstance(value.get("b"), list):
+            rows.append(value)
+    return rows
 
 
 def _sanitize_ladder(ladder: Any) -> dict[str, Any]:
@@ -196,8 +211,7 @@ def recover_rejected_ladder(raw_text: str, *, confirmed_spec=None) -> tuple[dict
             if parse_error is not None:
                 raise parse_error
             raise ValueError("rejected response has no recoverable ladder structure")
-        compact = {"r": rows}
-        ladder = _expand_compact(compact, confirmed_spec)
+        ladder = _expand_compact({"r": rows}, confirmed_spec)
         partial = True
 
     ladder = _sanitize_ladder(ladder)
@@ -235,6 +249,9 @@ def materialize_rejected_preview(raw_text: str, output_dir, *, confirmed_spec=No
             str(directory / names["program_csv"]),
             str(directory / names["comment_csv"]),
         ))
+    artifacts = {"json": names["json"], "svg": names["svg"]}
+    if csv_ok:
+        artifacts.update(program_csv=names["program_csv"], comment_csv=names["comment_csv"])
     return {
         "target_mode": "ladder",
         "diagnostic_only": True,
@@ -246,8 +263,7 @@ def materialize_rejected_preview(raw_text: str, output_dir, *, confirmed_spec=No
                 "候选未通过正式校验；以下梯形图和 CSV 仅用于检查模型实际输出，不会自动保存、导入或执行。"
             ],
         },
-        "artifacts": {key: value for key, value in names.items()
-                      if key in {"json", "svg"} or csv_ok},
+        "artifacts": artifacts,
         "width": int(getattr(drawer, "width", 0)),
         "height": int(getattr(drawer, "height", 0)),
         "recovery": recovery,
