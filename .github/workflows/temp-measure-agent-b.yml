@@ -1,30 +1,36 @@
-name: Temporary Agent B Request Measurement
+name: Temporary Agent B Compact Validation
 on:
   push:
     branches: [feat/comprehensive-runtime-diagnostics-20260914]
 permissions:
   contents: read
 jobs:
-  measure:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Measure prompt and schema
+      - run: python -m pip install pytest
+      - name: Compile changed generation code
+        run: python -m compileall -q src/application/generation_agent.py tests/test_confirmed_generation_regressions_20260914.py
+      - name: Run compact Agent B and generation regressions
+        env:
+          PYTHONPATH: src
+        run: |
+          python -m pytest -q \
+            tests/test_confirmed_generation_regressions_20260914.py \
+            tests/test_generation_fast_path.py \
+            tests/test_generation_workflow.py \
+            tests/test_generation_repair_workflow.py
+      - name: Measure new Agent B request size
         env:
           PYTHONPATH: src
         run: |
           python - <<'PY' > agent-b-metrics.txt
           import json
-          from application.generation_agent import _GENERATION_REQUEST, _strict_generation_projection
-          from plc_generation_context import (
-              build_generation_instructions, _select_system_prompt, _build_model_context,
-              _build_knowledge_context, _with_confirmed_context,
-          )
-          from plc_generation_contract import ladder_response_schema
-          from instruction_registry import generation_app_instr_mnemonics
+          import application.generation_agent as agent
 
           confirmed = {
               'summary': '分类规则必须严格保留：1~3 为 A 类，4~6 为 B 类，7~9 为 C 类。',
@@ -37,32 +43,26 @@ jobs:
               ],
               'parameters': [], 'execution_semantics': []
           }
-          projected = _strict_generation_projection(confirmed)
-          schema = ladder_response_schema(allow_partial=False, plc_model='FX3U')
-          compact_schema = json.dumps(schema, ensure_ascii=False, separators=(',', ':'))
-          selected = _select_system_prompt('ladder', is_edit_mode=False, user_requirement=_GENERATION_REQUEST,
-              task_type='generate', plc_model='FX3U', confirmed_context=projected)
-          knowledge = _build_knowledge_context(_GENERATION_REQUEST, plc_model='FX3U', task_type='generate',
-              confirmed_context=projected, evidence=None)
-          profile = _build_model_context('FX3U', projected, compact=bool(knowledge))
-          compact_profile = _build_model_context('FX3U', projected, compact=True)
-          confirmed_block = _with_confirmed_context('', projected)
-          prompt = build_generation_instructions(_GENERATION_REQUEST, plc_model='FX3U', target_mode='ladder',
-              is_edit_mode=False, task_type='generate', confirmed_context=projected, current_version_json=None)
-          print('PROMPT_CHARS=', len(prompt))
-          print('SELECTED_PROMPT_CHARS=', len(selected))
-          print('SCHEMA_CHARS=', len(compact_schema))
-          print('SCHEMA_OCCURRENCES_IN_PROMPT=', prompt.count(compact_schema))
-          print('PROFILE_CONTEXT_CHARS=', len(profile))
-          print('COMPACT_PROFILE_CONTEXT_CHARS=', len(compact_profile))
-          print('KNOWLEDGE_CONTEXT_CHARS=', len(knowledge))
-          print('CONFIRMED_BLOCK_CHARS=', len(confirmed_block))
-          print('FX3U_OPCODE_ENUM_COUNT=', len(generation_app_instr_mnemonics('FX3U')))
-          print('CONFIRMED_CHARS=', len(json.dumps(projected, ensure_ascii=False, separators=(',', ':'))))
-          print('COMPACT_PROFILE=', compact_profile.replace('\n','\\n'))
+          projected = agent._strict_generation_projection(confirmed)
+          original_knowledge = agent._build_knowledge_context
+          agent._build_knowledge_context = lambda *args, **kwargs: ''
+          try:
+              prompt = agent._build_agent_b_prompt(projected, 'FX3U')
+          finally:
+              agent._build_knowledge_context = original_knowledge
+          schema = json.dumps(agent._compact_response_schema(), ensure_ascii=False, separators=(',', ':'))
+          compact = {'r':[{'b':[{'i':['NO X0',{'or':[['NO M20'],['NO M21'],['NO M22']]}], 'o':['COIL Y0']}]}]}
+          full = agent._expand_compact_ladder(compact, projected)
+          compact_text = json.dumps(compact, ensure_ascii=False, separators=(',', ':'))
+          full_text = json.dumps(full, ensure_ascii=False, separators=(',', ':'))
+          print('AGENT_B_PROMPT_CHARS=', len(prompt))
+          print('COMPACT_SCHEMA_CHARS=', len(schema))
+          print('SAMPLE_COMPACT_CHARS=', len(compact_text))
+          print('SAMPLE_EXPANDED_CHARS=', len(full_text))
+          print('OUTPUT_RATIO=', round(len(compact_text) / len(full_text), 4))
           PY
           cat agent-b-metrics.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: agent-b-metrics
+          name: agent-b-compact-metrics
           path: agent-b-metrics.txt
