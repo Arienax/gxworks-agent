@@ -46,7 +46,7 @@ _NUMBERS = {'request_index', 'attempt_index', 'message_count', 'message_chars', 
             'dropped_sections'}
 _BOOLEANS = {'stream', 'refusal_present', 'finish_seen', 'at_or_near_end', 'fenced',
              'bom', 'traceback_truncated', 'content_present', 'prefix_complete_object',
-             'punctuation_only_tail'}
+             'punctuation_only_tail', 'allowed_by_registry'}
 _IDS = {'model', 'provider', 'contract', 'error_type', 'code', 'function',
         'stop_reason', 'tail_class'}
 _ENUMS = {
@@ -109,7 +109,7 @@ def _safe_fields(fields):
             result[key] = _number(value)
         elif key in _BOOLEANS and type(value) is bool:
             result[key] = value
-        elif key == 'observed_opcode':
+        elif key in ('baseline_opcode', 'observed_opcode'):
             safe_opcode = _safe_opcode(value)
             if safe_opcode is not None:
                 result[key] = safe_opcode
@@ -365,6 +365,65 @@ def exception_record(error, *, event='workflow_exception', stage='workflow'):
     emit(event, stage=stage, exceptions=chain, exception_count=len(chain))
 
 
+def _export_repair_baseline_opcode(job):
+    snapshot = job.get("snapshot") if isinstance(job, dict) else None
+    if not isinstance(snapshot, dict) or not snapshot.get("repair_mode"):
+        return None
+    baseline = snapshot.get("repair_baseline")
+    if not isinstance(baseline, dict):
+        return None
+    allowed_ids = {
+        int(value) for value in (snapshot.get("allowed_rung_ids") or [])
+        if isinstance(value, int) and not isinstance(value, bool)
+    }
+    opcodes = set()
+    for rung in baseline.get("rungs") or []:
+        if not isinstance(rung, dict):
+            continue
+        if allowed_ids and rung.get("rung_id") not in allowed_ids:
+            continue
+        for branch in rung.get("branches") or []:
+            if not isinstance(branch, dict):
+                continue
+            for output in branch.get("outputs") or []:
+                if not isinstance(output, dict) or output.get("type") != "APP_INSTR":
+                    continue
+                opcode = output.get("opcode")
+                if isinstance(opcode, str) and opcode.strip():
+                    opcodes.add(opcode.strip().upper())
+    return next(iter(opcodes)) if len(opcodes) == 1 else None
+
+
+def _enrich_export_opcode_context(records, job):
+    baseline_opcode = _export_repair_baseline_opcode(job)
+    snapshot = job.get("snapshot") if isinstance(job, dict) else None
+    project = snapshot.get("project") if isinstance(snapshot, dict) else None
+    plc_model = project.get("plc_model") if isinstance(project, dict) else None
+    allowed = None
+    try:
+        from instruction_registry import generation_app_instr_mnemonics
+        allowed = set(generation_app_instr_mnemonics(plc_model or "FX3U"))
+    except Exception:
+        allowed = None
+    for record in records:
+        if not isinstance(record, dict) or record.get("event") != "workflow_exception":
+            continue
+        for exception in record.get("exceptions") or []:
+            if not isinstance(exception, dict):
+                continue
+            for violation in exception.get("violations") or []:
+                if not isinstance(violation, dict):
+                    continue
+                observed = violation.get("observed_opcode")
+                if not isinstance(observed, str) or not observed:
+                    continue
+                if baseline_opcode is not None:
+                    violation["baseline_opcode"] = baseline_opcode
+                if allowed is not None:
+                    violation["allowed_by_registry"] = observed.upper() in allowed
+    return records
+
+
 def export_diagnostics(state_dir, job):
     """Export one authorized job only; no configuration, events, prompts or sources."""
     job_id = job['id']
@@ -388,9 +447,11 @@ def export_diagnostics(state_dir, job):
             else:
                 capture_status = ('export_truncated' if valid_count > _MAX_EXPORT_LINES else
                                   'captured' if records else 'unreadable')
+    records = _enrich_export_opcode_context(records, job)
     def contains_observed_opcode(value):
         if isinstance(value, dict):
-            return 'observed_opcode' in value or any(contains_observed_opcode(item) for item in value.values())
+            return ('observed_opcode' in value or 'baseline_opcode' in value
+                    or any(contains_observed_opcode(item) for item in value.values()))
         if isinstance(value, (list, tuple)):
             return any(contains_observed_opcode(item) for item in value)
         return False
@@ -432,7 +493,7 @@ def export_diagnostics(state_dir, job):
              'model_request shows per-role character counts and image count without message text.\n'
              'model_response JSON diagnostics show parser position, distance from end, complete-object prefix status, tail class/length and ladder shape counts.\n'
              'workflow_exception includes source file/function/line plus validation attempts, stop_reason and safe violation paths when available.\n'
-             'For APP_INSTR opcode validation failures only, observed_opcode records the exact normalized mnemonic rejected by the validator (max 64 characters); operands, addresses and reply bodies remain excluded.\n'
+             'For APP_INSTR opcode validation failures only, baseline_opcode records one unambiguous opcode from the saved repair baseline, observed_opcode records the exact rejected mnemonic, and allowed_by_registry reports whether the observed mnemonic is generation-allowed for the selected PLC model; operands, addresses and reply bodies remain excluded.\n'
              'provider_result contains finish_reason when the provider actually supplied it.\n'
              'unknown / finish_seen=false is not evidence of token truncation.\n'
              'not_captured means this job predates diagnostic instrumentation; reproduce once on the new build.\n'

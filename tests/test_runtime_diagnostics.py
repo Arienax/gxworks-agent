@@ -125,15 +125,28 @@ def test_invalid_app_instr_opcode_is_exported_as_bounded_observed_value(tmp_path
     with d.diagnostic_scope(tmp_path, "job_test"):
         d.exception_record(failure)
 
-    job = {"id": "job_test", "status": "failed", "kind": "generation"}
+    baseline = json.loads(json.dumps(ladder))
+    baseline["rungs"][0]["branches"][0]["outputs"][0]["opcode"] = "DADD"
+    job = {
+        "id": "job_test", "status": "failed", "kind": "generation",
+        "snapshot": {
+            "repair_mode": True, "repair_baseline": baseline, "allowed_rung_ids": [1],
+            "project": {"plc_model": "FX3U"},
+        },
+    }
     with zipfile.ZipFile(io.BytesIO(d.export_diagnostics(tmp_path, job))) as archive:
         summary = json.loads(archive.read("summary.json"))
         log = archive.read("diagnostics.jsonl").decode()
         payload = archive.read("summary.json").decode() + log + archive.read("README.txt").decode()
     assert summary["validation_values_included"] is True
     workflow = summary["failure_analysis"]["workflow_exception"]
-    assert workflow["exceptions"][0]["violations"][0]["observed_opcode"] == "NOT_A_REAL_OPCODE"
+    violation = workflow["exceptions"][0]["violations"][0]
+    assert violation["baseline_opcode"] == "DADD"
+    assert violation["observed_opcode"] == "NOT_A_REAL_OPCODE"
+    assert violation["allowed_by_registry"] is False
+    assert '"baseline_opcode": "DADD"' in log
     assert '"observed_opcode": "NOT_A_REAL_OPCODE"' in log
+    assert '"allowed_by_registry": false' in log
     assert "PRIVATE_OPERAND" not in payload
 
 
