@@ -54,6 +54,7 @@ jobs:
             tests/test_generation_workflow.py `
             tests/test_confirmed_generation_regressions_20260914.py `
             tests/test_model_stream_cancellation.py `
+            tests/test_rejected_generation_delivery.py `
             tests/test_generation_repair_workflow.py `
             tests/test_generation_rejected_json_repair.py `
             tests/test_user_confirmed_generation_repair.py `
