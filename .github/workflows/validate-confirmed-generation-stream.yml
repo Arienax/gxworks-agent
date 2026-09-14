@@ -1,0 +1,54 @@
+name: Validate Confirmed Generation Streaming
+
+on:
+  push:
+    branches: [feat/comprehensive-runtime-diagnostics-20260914]
+    paths:
+      - 'src/application/generation_agent.py'
+      - 'tests/test_generation_agent_boundary.py'
+      - '.github/workflows/validate-confirmed-generation-stream.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/comprehensive-runtime-diagnostics-20260914
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements/web.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements.txt -r requirements/web.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed.' }
+      - name: Compile
+        run: |
+          python -m compileall -q src tests
+          if ($LASTEXITCODE -ne 0) { throw 'Compilation failed.' }
+      - name: Validate confirmed generation boundary
+        run: |
+          python -m pytest -q tests/test_generation_agent_boundary.py tests/test_generation_workflow.py tests/test_model_presentation.py
+          if ($LASTEXITCODE -ne 0) { throw 'Generation streaming regression failed.' }
+      - name: Remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/validate-confirmed-generation-stream.yml
+          git commit -m "chore(ci): remove temporary streaming validation"
+          git push origin HEAD:feat/comprehensive-runtime-diagnostics-20260914
