@@ -11,6 +11,7 @@ from application.format_patch_repair import (
     apply_format_patch,
     format_repair_response,
 )
+from application.generation import GenerationDependencies, GenerationRequest, GenerationWorkflow
 
 
 def _payload(candidate):
@@ -113,3 +114,32 @@ def test_failed_patch_request_returns_original_candidate_for_renderable_failure(
 
     assert reasoning == ""
     assert content == raw
+
+
+def test_deterministically_repaired_compact_candidate_always_renders_svg_and_csv(monkeypatch, tmp_path):
+    broken = '{"r":[{"b":[{"i":["NO X0","> D220 D106],"o":["COIL Y0"]}]}]}'
+    monkeypatch.setattr(api, "_request_model", lambda *a, **k: pytest.fail("repair should be local"))
+    request = GenerationRequest(
+        user_input=(
+            "这是用户明确确认的一次 JSON 格式修复。\n"
+            "失败位置：content$.r[0]\n\n失败候选 JSON：\n" + broken
+        ),
+        target_mode="ladder",
+        format_repair=True,
+        confirmed_context={"summary": "X0 controls Y0", "io_table": [], "parameters": []},
+        plc_model="FX3U",
+        model_name="offline-model",
+    )
+
+    result = GenerationWorkflow(
+        request,
+        tmp_path,
+        dependencies=GenerationDependencies(),
+    ).run()
+
+    assert result["target_mode"] == "ladder"
+    assert result["validation"]["status"] == "candidate_ready"
+    for artifact in ("svg", "program_csv", "comment_csv"):
+        path = tmp_path / result["artifacts"][artifact]
+        assert path.is_file() and path.stat().st_size > 0
+    assert "<svg" in (tmp_path / result["artifacts"]["svg"]).read_text(encoding="utf-8")
