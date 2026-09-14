@@ -365,8 +365,35 @@ def exception_record(error, *, event='workflow_exception', stage='workflow'):
     emit(event, stage=stage, exceptions=chain, exception_count=len(chain))
 
 
-def _export_repair_baseline_opcode(job):
+def _export_private_job_snapshot(state_dir, job_id):
+    """Read only the persisted job snapshot needed for an operator diagnostic export."""
+    try:
+        from application.workspace import contained, read_json, record_id
+        state = Path(state_dir).resolve()
+        directory = contained(state / "jobs", state)
+        path = contained(directory / (record_id(job_id, "job") + ".json"), directory)
+        if not path.is_file() or path.is_symlink():
+            return None
+        record = read_json(path)
+        if not isinstance(record, dict) or record.get("id") != job_id:
+            return None
+        snapshot = record.get("snapshot")
+        return snapshot if isinstance(snapshot, dict) else None
+    except (KeyError, ValueError, OSError, TypeError):
+        return None
+
+
+def _export_job_snapshot(state_dir, job):
     snapshot = job.get("snapshot") if isinstance(job, dict) else None
+    if isinstance(snapshot, dict):
+        return snapshot
+    job_id = job.get("id") if isinstance(job, dict) else None
+    if not isinstance(job_id, str):
+        return None
+    return _export_private_job_snapshot(state_dir, job_id)
+
+
+def _export_repair_baseline_opcode(snapshot):
     if not isinstance(snapshot, dict) or not snapshot.get("repair_mode"):
         return None
     baseline = snapshot.get("repair_baseline")
@@ -394,9 +421,9 @@ def _export_repair_baseline_opcode(job):
     return next(iter(opcodes)) if len(opcodes) == 1 else None
 
 
-def _enrich_export_opcode_context(records, job):
-    baseline_opcode = _export_repair_baseline_opcode(job)
-    snapshot = job.get("snapshot") if isinstance(job, dict) else None
+def _enrich_export_opcode_context(records, state_dir, job):
+    snapshot = _export_job_snapshot(state_dir, job)
+    baseline_opcode = _export_repair_baseline_opcode(snapshot)
     project = snapshot.get("project") if isinstance(snapshot, dict) else None
     plc_model = project.get("plc_model") if isinstance(project, dict) else None
     allowed = None
@@ -447,7 +474,7 @@ def export_diagnostics(state_dir, job):
             else:
                 capture_status = ('export_truncated' if valid_count > _MAX_EXPORT_LINES else
                                   'captured' if records else 'unreadable')
-    records = _enrich_export_opcode_context(records, job)
+    records = _enrich_export_opcode_context(records, state_dir, job)
     def contains_observed_opcode(value):
         if isinstance(value, dict):
             return ('observed_opcode' in value or 'baseline_opcode' in value
