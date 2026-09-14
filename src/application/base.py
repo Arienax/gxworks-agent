@@ -29,11 +29,11 @@ def _repair_short_circuit(function, args, kwargs):
 
 def model_call(function, *args, **kwargs):
     """Guard model invocations while deterministic repair stays model-free."""
-    local = _repair_short_circuit(function, args, kwargs)
-    if local is not None:
-        return local
     from model_provider import ResponseRejectedError, public_model_error
     try:
+        local = _repair_short_circuit(function, args, kwargs)
+        if local is not None:
+            return local
         return function(*args, **kwargs)
     except ResponseRejectedError:
         raise
