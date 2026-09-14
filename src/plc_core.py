@@ -141,8 +141,6 @@ class PLCCore:
         result["before_network_order"] = list(old)
         result["after_network_order"] = list(new)
         result["network_order_changed"] = list(old) != list(new)
-        # Include metadata and non-network semantics instead of silently treating
-        # an unchanged network list as an unchanged program.
         result["property_changes"] = {
             key: {"before": copy.deepcopy(old_program.get(key)), "after": copy.deepcopy(after.get(key))}
             for key in sorted(old_program.keys() | after.keys())
@@ -217,6 +215,7 @@ class PLCCore:
         """Prepare one generated full/partial ladder through the API fast path."""
         from plc_generation import prepare_ladder_candidate
         from plc_ir import ir_to_ladder
+        from plc_json_validator import validate_ladder_candidate_structure
 
         if not isinstance(ladder, Mapping):
             raise TypeError("ladder must be an object")
@@ -234,6 +233,13 @@ class PLCCore:
             previous_ladder=previous_ladder,
         )
         program_ir = prepared["program_ir"]
+        # The workbench generation workflow intentionally uses a structural
+        # profile that tolerates an incomplete local vendor catalogue. PLCCore's
+        # direct candidate API remains the strict engineering boundary.
+        validate_ladder_candidate_structure(
+            ir_to_ladder(program_ir), plc_model=plc_model,
+            require_catalogued_instructions=True,
+        )
         validation = {"valid": True, "profile": prepared["validation_profile"],
                       "messages": prepared["validation_messages"],
                       **self.get_diagnostics(program_ir)}
@@ -270,7 +276,6 @@ class PLCCore:
 
         structural = validation_profile == "generation_structural"
         def render(target: Path) -> Mapping[str, Any]:
-            # Generation shares the API renderer; explicit Debug keeps strict.
             if structural:
                 from plc_generation import render_generation_artifacts
                 artifacts = render_generation_artifacts(program, target)["artifacts"]
