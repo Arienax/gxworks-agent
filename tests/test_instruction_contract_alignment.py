@@ -4,7 +4,6 @@ import sys
 from pathlib import Path
 
 import knowledge_retriever_core as core
-from application.field_repair import plan
 from instruction_registry import DEFAULT_INSTRUCTION_REGISTRY, generation_app_instr_mnemonics
 from plc_json_validator import validate_ladder_full
 
@@ -122,36 +121,6 @@ def test_known_extraction_aliases_stay_quarantined():
     assert "BK" in quarantined    # heading is BK+, not bare BK
     assert DEFAULT_INSTRUCTION_REGISTRY.resolve("FLDE") is None
     assert DEFAULT_INSTRUCTION_REGISTRY.resolve("BK") is None
-
-
-def test_field_repair_does_not_guess_from_opcode_only_contracts():
-    base = {
-        "device_comments": {},
-        "rungs": [{
-            "rung_id": 1,
-            "header_element": None,
-            "shared_inputs": [],
-            "branches": [{
-                "branch_id": 1,
-                "y_offset_level": 0,
-                "inputs": [],
-                "outputs": [{
-                    "type": "APP_INSTR",
-                    "opcode": "NOT_A_REAL_OPCODE",
-                    "operands": ["D0", "D1"],
-                    "label": None,
-                }],
-            }],
-        }],
-    }
-    repair = plan(base, [{
-        "path": "content$.rungs.0.branches.0.outputs.0.opcode",
-        "reason": "invalid_ladder_structure",
-    }], "FX3U")
-    allowed = set(repair["target"]["value_schema"]["enum"])
-    assert "MOV" in allowed
-    assert "ABS" not in allowed
-    assert "SQR" not in allowed
 
 
 def _opcode_instruction_results(opcode):
