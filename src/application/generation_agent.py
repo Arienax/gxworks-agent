@@ -66,7 +66,7 @@ def generate_confirmed_ladder(
     effort=None,
     on_stage=None,
 ):
-    """Make exactly one model request for one complete ladder_v1 candidate."""
+    """Make exactly one streaming model request for one complete ladder_v1 candidate."""
     import api
 
     model = str(plc_model or "FX3U").strip().upper() or "FX3U"
@@ -94,7 +94,7 @@ def generate_confirmed_ladder(
         ],
         model_name=model_name,
         effort=effort,
-        stream=False,
+        stream=True,
         max_retries=0,
         options=_response_options(model, provider),
         response_contract=LADDER_RESPONSE,
