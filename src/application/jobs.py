@@ -16,8 +16,14 @@ from .workspace import (ConflictError, atomic_json, bind_workspace_state, canoni
                         private_state_dir, public_payload, read_json, record_id)
 
 
-class JobCancelled(Exception):
-    """Raised only at an explicit safe checkpoint."""
+class JobCancelled(BaseException):
+    """Control-flow signal for an operator-requested cancellation.
+
+    Cancellation must cross model/provider ``except Exception`` boundaries
+    unchanged.  Treating it as an ordinary Exception used to make the response
+    collector translate an operator cancel into a model-provider failure after
+    waiting for the stream to finish.
+    """
 
 
 _ACTIVE = frozenset({"queued", "running", "cancelling"})
@@ -48,6 +54,10 @@ class JobContext:
             return copy.deepcopy(self.manager._load(self.job_id)["snapshot"])
 
     def emit(self, event_type, data=None):
+        # Model progress/preview events are emitted while the provider stream is
+        # being consumed.  Checking here makes those live events the cancellation
+        # boundary instead of waiting until generation parsing/validation ends.
+        self.checkpoint()
         if event_type == "context_audit" and isinstance(data, dict):
             sections = data.get("sections") if isinstance(data.get("sections"), list) else []
             included = [item for item in sections if isinstance(item, dict) and item.get("status") == "included"]
