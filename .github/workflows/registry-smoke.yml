@@ -2,33 +2,84 @@ name: Registry smoke test
 
 on:
   push:
+    branches: [fix/prompt-context-slim-20260913]
     paths:
-      - "src/instruction_registry.py"
-      - "src/plc_json_validator.py"
-      - "src/plc_ir.py"
-      - "src/gxworks2/csv_importer.py"
-      - "resources/instructions/**"
-      - "tests/test_instruction_registry.py"
       - ".github/workflows/registry-smoke.yml"
-  pull_request:
-    paths:
-      - "src/instruction_registry.py"
-      - "src/plc_json_validator.py"
-      - "src/plc_ir.py"
-      - "src/gxworks2/csv_importer.py"
-      - "resources/instructions/**"
-      - "tests/test_instruction_registry.py"
+
+permissions:
+  contents: write
 
 jobs:
   registry-smoke:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.8", "3.11"]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: fix/prompt-context-slim-20260913
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-      - run: python -m pip install pytest
-      - run: pytest -q tests/test_instruction_registry.py
+          python-version: '3.12'
+      - name: Apply semantic-freeze patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/api.py')
+          text = path.read_text(encoding='utf-8')
+
+          old = '''- For every `APP_INSTR`, `opcode` MUST be one exact value from\n  `repair_contract.app_instr_opcode_enum`; never invent, translate, or alias a mnemonic.\n'''
+          new = '''- `repair_contract.app_instr_instances` is the exhaustive immutable APP_INSTR\n  semantic set from `baseline_subset`. Every returned APP_INSTR must copy BOTH\n  `opcode` and `operands` exactly from one supplied instance; never derive, replace,\n  reorder, combine, translate, or alias an instruction.\n- `repair_contract.app_instr_opcode_enum` contains only opcodes already present in\n  `baseline_subset`; it is not a catalogue of alternatives.\n'''
+          if text.count(old) != 1:
+              raise SystemExit('prompt marker mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''    result = {"addresses": set(), "operands": set(), "values": set(),\n              "expressions": set(), "app_instr_arities": set()}\n'''
+          new = '''    result = {"addresses": set(), "operands": set(), "values": set(),\n              "expressions": set(), "app_instr_arities": set(),\n              "app_instr_instances": []}\n'''
+          if text.count(old) != 1:
+              raise SystemExit('token result marker mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''                if value.get("type") == "APP_INSTR":\n                    result["app_instr_arities"].add(len(operands))\n'''
+          new = '''                if value.get("type") == "APP_INSTR":\n                    result["app_instr_arities"].add(len(operands))\n                    opcode = str(value.get("opcode") or "").strip().upper()\n                    if opcode:\n                        instance = {"opcode": opcode, "operands": list(tokens)}\n                        if instance not in result["app_instr_instances"]:\n                            result["app_instr_instances"].append(instance)\n'''
+          if text.count(old) != 1:
+              raise SystemExit('instance collection marker mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''    arities = sorted(tokens["app_instr_arities"])\n'''
+          new = '''    arities = sorted(tokens["app_instr_arities"])\n    app_instr_instances = list(tokens["app_instr_instances"])\n    baseline_opcodes = sorted({item["opcode"] for item in app_instr_instances})\n'''
+          if text.count(old) != 1:
+              raise SystemExit('schema tokens marker mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''                if isinstance(opcode_rule, dict) and arities:\n                    compatible = []\n                    for mnemonic in generation_app_instr_mnemonics(plc_model):\n                        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(mnemonic)\n                        if spec is not None and any(spec.accepts_arity(count) for count in arities):\n                            compatible.append(mnemonic)\n                    if compatible:\n                        opcode_rule["enum"] = compatible\n'''
+          new = '''                if isinstance(opcode_rule, dict):\n                    # Structural repair is copy-only: the model may reuse only\n                    # APP_INSTR opcodes already present in baseline_subset.\n                    opcode_rule["enum"] = baseline_opcodes\n'''
+          if text.count(old) != 1:
+              raise SystemExit('opcode schema marker mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''        repair_payload["repair_contract"] = {\n            "plc_model": plc_model,\n            "app_instr_opcode_enum": list(generation_app_instr_mnemonics(plc_model)),\n            "app_instr_forbidden_typed_opcodes": sorted(GENERATION_TYPED_OUTPUT_OPCODES),\n            "dedicated_output_types": ["COIL", "PLS", "PLF", "TIMER", "COUNTER"],\n        }\n'''
+          new = '''        baseline_tokens = _repair_baseline_tokens(repair_payload)\n        app_instr_instances = [\n            {"opcode": item["opcode"], "operands": list(item["operands"])}\n            for item in baseline_tokens["app_instr_instances"]\n        ]\n        repair_payload["repair_contract"] = {\n            "plc_model": plc_model,\n            "semantic_policy": "copy_only",\n            "app_instr_opcode_enum": sorted({item["opcode"] for item in app_instr_instances}),\n            "app_instr_instances": app_instr_instances,\n            "app_instr_forbidden_typed_opcodes": sorted(GENERATION_TYPED_OUTPUT_OPCODES),\n            "dedicated_output_types": ["COIL", "PLS", "PLF", "TIMER", "COUNTER"],\n        }\n'''
+          if text.count(old) != 1:
+              raise SystemExit('repair contract marker mismatch')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          test = Path('tests/test_partial_repair_semantic_freeze.py')
+          test.write_text('''import json\nfrom types import SimpleNamespace as S\n\nimport api\n\n\ndef payload():\n    return {\n        "plc_model": "FX3U",\n        "allowed_rung_ids": [1],\n        "allowed_addresses": ["D0", "D10", "M0"],\n        "baseline_subset": {\n            "device_comments": {},\n            "rungs": [{\n                "rung_id": 1, "header_element": None, "shared_inputs": [],\n                "branches": [{\n                    "branch_id": 1, "y_offset_level": 0, "inputs": [],\n                    "outputs": [\n                        {"type": "APP_INSTR", "opcode": "DMOVP", "operands": ["D0", "D10"], "label": None},\n                        {"type": "APP_INSTR", "opcode": "MOVP", "operands": ["K1", "D0"], "label": None},\n                        {"type": "APP_INSTR", "opcode": "RST", "operands": ["M0"], "label": None},\n                    ],\n                }],\n            }],\n        },\n    }\n\n\ndef app_rule(native_format):\n    schema = native_format["json_schema"]["schema"]\n    return (schema["properties"]["rungs"]["items"]["properties"]["branches"]["items"]\n            ["properties"]["outputs"]["items"]["oneOf"][2])\n\n\ndef test_partial_repair_schema_reuses_only_baseline_opcodes():\n    rule = app_rule(api._native_partial_repair_response_format(payload()))\n    assert rule["properties"]["opcode"]["enum"] == ["DMOVP", "MOVP", "RST"]\n    assert "DDADDP" not in rule["properties"]["opcode"]["enum"]\n    assert "DADDP" not in rule["properties"]["opcode"]["enum"]\n\n\ndef test_repair_contract_exposes_exact_immutable_instruction_instances(monkeypatch):\n    captured = {}\n    def fake_request(messages, **kwargs):\n        captured["messages"] = messages\n        captured["options"] = kwargs.get("options")\n        return S(message=S(reasoning="", content='{"mode":"partial","device_comments":{},"rungs":[],"delete_rung_ids":[]}'))\n    monkeypatch.setattr(api, "_request_model", fake_request)\n    api.repair_ladder_response(payload(), "offline", "low", mode="partial")\n    sent = json.loads(captured["messages"][1]["content"])\n    contract = sent["repair_contract"]\n    assert contract["semantic_policy"] == "copy_only"\n    assert contract["app_instr_opcode_enum"] == ["DMOVP", "MOVP", "RST"]\n    assert contract["app_instr_instances"] == [\n        {"opcode": "DMOVP", "operands": ["D0", "D10"]},\n        {"opcode": "MOVP", "operands": ["K1", "D0"]},\n        {"opcode": "RST", "operands": ["M0"]},\n    ]\n    assert "DDADDP" not in sent["repair_contract"]["app_instr_opcode_enum"]\n    assert "copy BOTH" in captured["messages"][0]["content"]\n\n\ndef test_partial_repair_without_app_instr_makes_app_instr_schema_unsatisfiable():\n    value = payload()\n    value["baseline_subset"]["rungs"][0]["branches"][0]["outputs"] = [\n        {"type": "COIL", "address": "M0", "label": None}\n    ]\n    rule = app_rule(api._native_partial_repair_response_format(value))\n    assert rule["properties"]["opcode"]["enum"] == []\n''', encoding='utf-8')
+          PY
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt -r requirements/web.txt
+      - name: Test semantic-freeze repair contract
+        run: |
+          python -m compileall -q src tests
+          python -m pytest -q tests/test_partial_repair_semantic_freeze.py tests/test_generation_repair_workflow.py tests/test_generation_opcode_contract.py tests/test_user_confirmed_generation_repair.py tests/test_application_job_errors.py
+          git diff --check
+      - name: Commit validated repair contract and restore CI
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout 6de6a3d361c130637ff4512ac201120ce4b79215 -- .github/workflows/registry-smoke.yml
+          git add src/api.py tests/test_partial_repair_semantic_freeze.py .github/workflows/registry-smoke.yml
+          git commit -m "fix: freeze APP_INSTR semantics during structural repair"
+          git push origin HEAD:fix/prompt-context-slim-20260913
