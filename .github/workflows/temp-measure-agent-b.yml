@@ -19,7 +19,10 @@ jobs:
           python - <<'PY' > agent-b-metrics.txt
           import json
           from application.generation_agent import _GENERATION_REQUEST, _strict_generation_projection
-          from plc_generation_context import build_generation_instructions
+          from plc_generation_context import (
+              build_generation_instructions, _select_system_prompt, _build_model_context,
+              _build_knowledge_context, _with_confirmed_context,
+          )
           from plc_generation_contract import ladder_response_schema
           from instruction_registry import generation_app_instr_mnemonics
 
@@ -36,12 +39,22 @@ jobs:
           }
           projected = _strict_generation_projection(confirmed)
           schema = ladder_response_schema(allow_partial=False, plc_model='FX3U')
+          compact_schema = json.dumps(schema, ensure_ascii=False, separators=(',', ':'))
+          selected = _select_system_prompt('ladder', is_edit_mode=False, user_requirement=_GENERATION_REQUEST,
+              task_type='generate', plc_model='FX3U', confirmed_context=projected)
+          knowledge = _build_knowledge_context(_GENERATION_REQUEST, plc_model='FX3U', task_type='generate',
+              confirmed_context=projected, evidence=None)
+          profile = _build_model_context('FX3U', projected, compact=bool(knowledge))
+          confirmed_block = _with_confirmed_context('', projected)
           prompt = build_generation_instructions(_GENERATION_REQUEST, plc_model='FX3U', target_mode='ladder',
               is_edit_mode=False, task_type='generate', confirmed_context=projected, current_version_json=None)
-          compact_schema = json.dumps(schema, ensure_ascii=False, separators=(',', ':'))
           print('PROMPT_CHARS=', len(prompt))
+          print('SELECTED_PROMPT_CHARS=', len(selected))
           print('SCHEMA_CHARS=', len(compact_schema))
           print('SCHEMA_OCCURRENCES_IN_PROMPT=', prompt.count(compact_schema))
+          print('PROFILE_CONTEXT_CHARS=', len(profile))
+          print('KNOWLEDGE_CONTEXT_CHARS=', len(knowledge))
+          print('CONFIRMED_BLOCK_CHARS=', len(confirmed_block))
           print('FX3U_OPCODE_ENUM_COUNT=', len(generation_app_instr_mnemonics('FX3U')))
           print('CONFIRMED_CHARS=', len(json.dumps(projected, ensure_ascii=False, separators=(',', ':'))))
           print('PROMPT_HEAD=', prompt[:500].replace('\n','\\n'))
