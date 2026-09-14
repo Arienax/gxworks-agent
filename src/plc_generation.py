@@ -8,7 +8,6 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-from collections import Counter
 from pathlib import Path
 
 from application.generation_repair import check_candidate_containers, materialize_partial
@@ -49,58 +48,81 @@ def _normalize_legacy_blocks(ladder):
                 output.update(replacement)
 
 
-def _common_semantic_signature(element):
+def _has_invalid_shared_parallel(ladder):
+    """Return True only for the explicit structure-only fallback we recognize."""
+    if not isinstance(ladder, dict):
+        return False
+    for rung in ladder.get("rungs", []) or []:
+        if not isinstance(rung, dict):
+            continue
+        for element in rung.get("shared_inputs", []) or []:
+            if (
+                isinstance(element, dict)
+                and str(element.get("type") or "").casefold() == "parallel_block"
+            ):
+                return True
+    return False
+
+
+def _element_semantics(element):
     if not isinstance(element, dict):
         return None
-    return json.dumps(
-        {
-            key: copy.deepcopy(element[key])
-            for key in ("type", "address", "expression", "opcode", "operands", "value")
-            if key in element
-        },
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-
-
-def _leaf_semantic_signatures(element):
-    """Flatten representation-only parallel containers into semantic leaf tokens."""
-    if not isinstance(element, dict):
-        return []
     if str(element.get("type") or "").casefold() == "parallel_block":
-        result = []
-        for branch in element.get("branches", []) or []:
-            if isinstance(branch, list):
-                for child in branch:
-                    result.extend(_leaf_semantic_signatures(child))
-        return result
-    signature = _common_semantic_signature(element)
-    return [signature] if signature is not None else []
+        return {
+            "type": "parallel_block",
+            "branches": [
+                [_element_semantics(child) for child in branch]
+                for branch in (element.get("branches") or [])
+                if isinstance(branch, list)
+            ],
+        }
+    return {
+        key: copy.deepcopy(element[key])
+        for key in ("type", "address", "expression", "opcode", "operands", "value")
+        if key in element
+    }
 
 
-def _rung_semantic_tokens(rung):
-    """Return a multiset of engineering tokens, independent of container layout."""
-    tokens = []
+def _rung_behavior_signature(rung):
+    """Ignore storage location only; preserve condition/output associations."""
     if not isinstance(rung, dict):
-        return Counter()
-    header = rung.get("header_element")
-    if isinstance(header, dict):
-        tokens.extend(_leaf_semantic_signatures(header))
-    for element in rung.get("shared_inputs", []) or []:
-        tokens.extend(_leaf_semantic_signatures(element))
+        return None
+    shared = [
+        _element_semantics(element)
+        for element in (rung.get("shared_inputs") or [])
+        if isinstance(element, dict)
+    ]
+    branches = []
     for branch in rung.get("branches", []) or []:
         if not isinstance(branch, dict):
-            continue
-        for element in branch.get("inputs", []) or []:
-            tokens.extend(_leaf_semantic_signatures(element))
-        for element in branch.get("outputs", []) or []:
-            tokens.extend(_leaf_semantic_signatures(element))
-    return Counter(tokens)
+            return None
+        branches.append({
+            "inputs": shared + [
+                _element_semantics(element)
+                for element in (branch.get("inputs") or [])
+                if isinstance(element, dict)
+            ],
+            "outputs": [
+                _element_semantics(element)
+                for element in (branch.get("outputs") or [])
+                if isinstance(element, dict)
+            ],
+        })
+    return {
+        "header_element": _element_semantics(rung.get("header_element")),
+        "branches": branches,
+    }
 
 
 def _enforce_structural_repair_semantics(previous_ladder, submitted_partial):
-    """Whole-rung fallback may rearrange structure, never engineering meaning."""
+    """Structure-only fallback may relocate storage, never change rung behavior.
+
+    Semantic generation-contract repair also uses task_type=contract_repair.
+    Therefore this guard activates from concrete invalid-shared-input evidence,
+    not from the task type name.
+    """
+    if not _has_invalid_shared_parallel(previous_ladder):
+        return
     if not isinstance(previous_ladder, dict) or not isinstance(submitted_partial, dict):
         return
     baseline = {
@@ -116,9 +138,9 @@ def _enforce_structural_repair_semantics(previous_ladder, submitted_partial):
         original = baseline.get(rung_id)
         if original is None:
             continue
-        if _rung_semantic_tokens(original) != _rung_semantic_tokens(rung):
+        if _rung_behavior_signature(original) != _rung_behavior_signature(rung):
             raise PLCJsonValidationError(
-                f"$.rungs: contract repair changed out-of-scope semantic tokens in rung {rung_id}"
+                f"$.rungs: structural repair changed condition/output behavior in rung {rung_id}"
             )
 
 
