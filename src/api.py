@@ -1600,8 +1600,12 @@ Rules:
   except for the minimum structural/protocol correction explicitly requested.
 - Use the supplied `baseline_subset` as the only program evidence.
 - `device_comments` may contain only addresses listed in `allowed_addresses`.
-- For every `APP_INSTR`, `opcode` MUST be one exact value from
-  `repair_contract.app_instr_opcode_enum`; never invent, translate, or alias a mnemonic.
+- `repair_contract.app_instr_instances` is the exhaustive immutable APP_INSTR
+  semantic set from `baseline_subset`. Every returned APP_INSTR must copy BOTH
+  `opcode` and `operands` exactly from one supplied instance; never derive, replace,
+  reorder, combine, translate, or alias an instruction.
+- `repair_contract.app_instr_opcode_enum` contains only opcodes already present in
+  `baseline_subset`; it is not a catalogue of alternatives.
 - Values in `repair_contract.app_instr_forbidden_typed_opcodes` must NOT be emitted as
   `APP_INSTR`; represent them with the dedicated output types listed in
   `repair_contract.dedicated_output_types`.
@@ -1630,7 +1634,8 @@ Rules:
 def _repair_baseline_tokens(repair_payload):
     """Collect immutable engineering tokens already present in the repair slice."""
     result = {"addresses": set(), "operands": set(), "values": set(),
-              "expressions": set(), "app_instr_arities": set()}
+              "expressions": set(), "app_instr_arities": set(),
+              "app_instr_instances": []}
 
     def walk(value):
         if isinstance(value, dict):
@@ -1649,6 +1654,11 @@ def _repair_baseline_tokens(repair_payload):
                 result["operands"].update(tokens)
                 if value.get("type") == "APP_INSTR":
                     result["app_instr_arities"].add(len(operands))
+                    opcode = str(value.get("opcode") or "").strip().upper()
+                    if opcode:
+                        instance = {"opcode": opcode, "operands": list(tokens)}
+                        if instance not in result["app_instr_instances"]:
+                            result["app_instr_instances"].append(instance)
             for nested in value.values():
                 walk(nested)
         elif isinstance(value, list):
@@ -1672,6 +1682,8 @@ def _constrain_native_repair_schema(schema, repair_payload, plc_model):
     values = sorted(tokens["values"])
     expressions = sorted(tokens["expressions"])
     arities = sorted(tokens["app_instr_arities"])
+    app_instr_instances = list(tokens["app_instr_instances"])
+    baseline_opcodes = sorted({item["opcode"] for item in app_instr_instances})
 
     def visit(rule):
         if isinstance(rule, list):
@@ -1694,14 +1706,10 @@ def _constrain_native_repair_schema(schema, repair_payload, plc_model):
             if "APP_INSTR" in type_values:
                 opcode_rule = properties.get("opcode")
                 operand_rule = properties.get("operands")
-                if isinstance(opcode_rule, dict) and arities:
-                    compatible = []
-                    for mnemonic in generation_app_instr_mnemonics(plc_model):
-                        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(mnemonic)
-                        if spec is not None and any(spec.accepts_arity(count) for count in arities):
-                            compatible.append(mnemonic)
-                    if compatible:
-                        opcode_rule["enum"] = compatible
+                if isinstance(opcode_rule, dict):
+                    # Structural repair is copy-only: the model may reuse only
+                    # APP_INSTR opcodes already present in baseline_subset.
+                    opcode_rule["enum"] = baseline_opcodes
                 if isinstance(operand_rule, dict):
                     if operands:
                         # ladder_v1_schema reuses the generic token rule for
@@ -1821,9 +1829,16 @@ def repair_ladder_response(repair_payload, model_name, effort, *, mode,
     repair_payload = dict(repair_payload)
     if mode == "partial":
         plc_model = str(repair_payload.get("plc_model") or "FX3U").strip().upper() or "FX3U"
+        baseline_tokens = _repair_baseline_tokens(repair_payload)
+        app_instr_instances = [
+            {"opcode": item["opcode"], "operands": list(item["operands"])}
+            for item in baseline_tokens["app_instr_instances"]
+        ]
         repair_payload["repair_contract"] = {
             "plc_model": plc_model,
-            "app_instr_opcode_enum": list(generation_app_instr_mnemonics(plc_model)),
+            "semantic_policy": "copy_only",
+            "app_instr_opcode_enum": sorted({item["opcode"] for item in app_instr_instances}),
+            "app_instr_instances": app_instr_instances,
             "app_instr_forbidden_typed_opcodes": sorted(GENERATION_TYPED_OUTPUT_OPCODES),
             "dedicated_output_types": ["COIL", "PLS", "PLF", "TIMER", "COUNTER"],
         }
