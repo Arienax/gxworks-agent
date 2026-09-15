@@ -1,8 +1,10 @@
+import copy
 import csv
 import json
 import xml.etree.ElementTree as ET
 
 from draw import AdvancedSVGLadder, generate_gx_works2_csv
+from gxworks2.native_export import lower_large_parallel_blocks_for_gxworks2
 
 
 def _read_program_rows(path):
@@ -16,6 +18,21 @@ def _instruction_rows(path):
         for row in _read_program_rows(path)[3:]
         if len(row) >= 4 and str(row[2] or "").strip()
     ]
+
+
+def _out_terminated_blocks(instructions):
+    blocks = []
+    current = []
+    for row in instructions:
+        op = str(row[2] or "").strip().upper()
+        if op == "END":
+            break
+        current.append(row)
+        if op == "OUT":
+            blocks.append(current)
+            current = []
+    assert not current
+    return blocks
 
 
 def test_fx3u_step_labels_account_for_pls_and_inc(tmp_path):
@@ -146,7 +163,7 @@ def test_svg_wraps_m100_m115_after_m110_with_k0_pair():
     assert by_text["M13"][0][1] + 85 == by_text["RST M12"][0][1]
 
 
-def _range_network(output, low, high, pulse_low, pulse_high):
+def _range_network(rung_id, output, low, high, pulse_low, pulse_high):
     branches = []
     for index in range(16):
         branches.append(
@@ -175,7 +192,7 @@ def _range_network(output, low, high, pulse_low, pulse_high):
             ]
         )
     return {
-        "rung_id": 1,
+        "rung_id": rung_id,
         "debug_note": "",
         "header_element": None,
         "shared_inputs": [],
@@ -190,25 +207,79 @@ def _range_network(output, low, high, pulse_low, pulse_high):
     }
 
 
-def test_16_way_orb_range_network_is_preserved_for_m30_m31_m32(tmp_path):
-    cases = [
-        ("M30", "K1", "K3", "D101", "D102"),
-        ("M31", "K4", "K6", "D103", "D104"),
-        ("M32", "K7", "K9", "D105", "D106"),
-    ]
-    for case_index, case in enumerate(cases):
-        program = tmp_path / f"program-{case_index}.csv"
-        comments = tmp_path / f"comments-{case_index}.csv"
-        rung = _range_network(*case)
-        assert generate_gx_works2_csv(
-            {"device_comments": {}, "rungs": [rung]},
-            program,
-            comments,
-        )
-        instructions = _instruction_rows(program)
-        ops = [row[2] for row in instructions]
+def test_large_orb_networks_are_split_into_gxworks2_convertible_blocks(tmp_path):
+    program = tmp_path / "program.csv"
+    comments = tmp_path / "comments.csv"
+    ladder = {
+        "device_comments": {},
+        "rungs": [
+            _range_network(492, "M30", "K1", "K3", "D101", "D102"),
+            _range_network(844, "M31", "K4", "K6", "D103", "D104"),
+            _range_network(1196, "M32", "K7", "K9", "D105", "D106"),
+        ],
+    }
 
-        assert instructions[0][2:4] == ["LD", "M100"]
-        assert ops.count("ORB") == 15
-        assert instructions[-2][2:4] == ["OUT", case[0]]
-        assert instructions[-2][0] == "351"
+    assert generate_gx_works2_csv(ladder, program, comments)
+    instructions = _instruction_rows(program)
+    blocks = _out_terminated_blocks(instructions)
+
+    assert len(blocks) == 15
+    assert [len(block) for block in blocks] == [24, 24, 24, 24, 5] * 3
+    assert max(map(len, blocks)) <= 24
+
+    target_blocks = [
+        block for block in blocks if block[-1][3] in {"M30", "M31", "M32"}
+    ]
+    assert [block[-1][3] for block in target_blocks] == ["M30", "M31", "M32"]
+    for block in target_blocks:
+        assert [row[2] for row in block] == ["LD", "OR", "OR", "OR", "OUT"]
+
+    helper_outputs = [
+        block[-1][3]
+        for block in blocks
+        if block[-1][3] not in {"M30", "M31", "M32"}
+    ]
+    assert len(helper_outputs) == 12
+    assert len(set(helper_outputs)) == 12
+    assert all(address.startswith("M") for address in helper_outputs)
+    assert all(0 <= int(address[1:]) <= 7679 for address in helper_outputs)
+
+    operands = [row[3] for row in instructions]
+    for address in (f"M{index}" for index in range(100, 116)):
+        assert sum(address in value.split() for value in operands) == 3
+
+
+def test_export_lowering_is_copy_only_and_skips_used_high_m_relay():
+    ladder = {
+        "device_comments": {"M7679": "reserved by user"},
+        "rungs": [
+            _range_network(492, "M30", "K1", "K3", "D101", "D102"),
+        ],
+    }
+    original = copy.deepcopy(ladder)
+
+    lowered = lower_large_parallel_blocks_for_gxworks2(ladder)
+
+    assert ladder == original
+    assert len(lowered["rungs"]) == 5
+
+    helper_outputs = [
+        rung["branches"][0]["outputs"][0]["address"]
+        for rung in lowered["rungs"][:-1]
+    ]
+    assert helper_outputs == ["M7678", "M7677", "M7676", "M7675"]
+
+    final_inputs = lowered["rungs"][-1]["branches"][0]["inputs"][0]
+    assert final_inputs["type"] == "parallel_block"
+    assert [
+        branch[0]["address"] for branch in final_inputs["branches"]
+    ] == helper_outputs
+
+    first_devices = []
+    for helper_rung in lowered["rungs"][:-1]:
+        helper_block = helper_rung["branches"][0]["inputs"][0]
+        assert len(helper_block["branches"]) == 4
+        first_devices.extend(
+            branch[0]["address"] for branch in helper_block["branches"]
+        )
+    assert first_devices == [f"M{index}" for index in range(100, 116)]
