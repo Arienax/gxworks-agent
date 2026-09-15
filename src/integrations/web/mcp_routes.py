@@ -1,5 +1,12 @@
-"""Operator-only product onboarding routes for local MCP clients."""
+"""Operator-only product onboarding routes for local MCP clients.
+
+This module also hosts the small deterministic saved-IR export endpoint because
+it is registered from the same application bootstrap hook and requires no new
+model/job plumbing.
+"""
 from __future__ import annotations
+
+from fastapi.responses import Response
 
 from application.projects import public
 from application.mcp_integrations import MCPIntegrationError
@@ -70,3 +77,20 @@ def register_mcp_routes(app, service, security) -> None:
                 "message": public(str(error)),
                 "project_id": command.project_id,
             }
+
+    @app.get("/api/projects/{project_id}/versions/{version_id}/exports/gxworks2-csv")
+    def fresh_gxworks2_csv(project_id: str, version_id: str):
+        """Download a fresh CSV pair from the saved IR without calling a model."""
+        from application.fresh_exports import build_gxworks2_csv_bundle
+
+        data = build_gxworks2_csv_bundle(service.projects, project_id, version_id)
+        filename = f"gxworks2-csv-{version_id}.zip"
+        return Response(
+            data,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
