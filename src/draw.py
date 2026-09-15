@@ -8,12 +8,18 @@
 from draw_native_wrap_20260915 import *  # noqa: F401,F403
 from draw_native_wrap_20260915 import (
     AdvancedSVGLadder,
+    _NATIVE_STEP_DELTA_AFTER,
     generate_gx_works2_csv as _generate_native_wrapped_csv,
 )
 from gxworks2.native_export import (
     GXNativeLoweringError,
     lower_large_parallel_blocks_for_gxworks2,
 )
+
+# The legacy exporter advances application instructions by one list-program
+# step. FX3U SFTL/SFTLP are 9-step instructions, so the native-label repair
+# needs eight additional steps after either opcode.
+_NATIVE_STEP_DELTA_AFTER.update({"SFTL": 8, "SFTLP": 8})
 
 
 def generate_gx_works2_csv(
