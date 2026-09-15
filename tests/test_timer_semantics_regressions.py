@@ -258,8 +258,8 @@ def test_generation_prompt_keeps_timer_semantics_ahead_of_rag_context():
         plc_model="FX3U",
     )
 
-    assert "M8000" in prompt
-    assert "不能" in prompt and "闪烁" in prompt
+    assert "普通 T 定时器必须存在会变 OFF 的使能/复位路径" in prompt
+    assert "RUN 常 ON 继电器不能单独构成周期振荡" in prompt
     assert "TIMER" in prompt and "COUNTER" in prompt
     assert "example_timer_clock" in classification["matched_ids"]
     assert "pattern_d" not in classification["matched_ids"]

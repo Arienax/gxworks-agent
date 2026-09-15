@@ -530,3 +530,110 @@ def test_real_request_parameters_keep_language_and_native_schema_before_acceptan
     assert "response_language" not in params  # It is not an OpenAI wire option.
     assert "English (en)" in params["messages"][0]["content"]
     assert params["messages"][1]["content"] == "请分析 X0"
+
+
+def test_ladder_generation_replaces_stale_native_schema_with_current_opcode_contract(monkeypatch):
+    captured = {}
+    profile = _profile("zhipu-glm-5.3-flash")
+    profile["requestOverrides"]["response_format"] = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "stale_ladder",
+            "strict": True,
+            "schema": {"type": "object"},
+        },
+    }
+    monkeypatch.setattr(api, "_workflow_provider", lambda: SimpleNamespace(profile=profile))
+    monkeypatch.setattr(
+        api,
+        "_prepare_api_call",
+        lambda *args, **kwargs: ([{"role": "system", "content": "system"}], [], False),
+    )
+
+    def request(messages, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            message=SimpleNamespace(
+                reasoning="",
+                content='{"device_comments":{},"rungs":[]}',
+            )
+        )
+
+    monkeypatch.setattr(api, "_request_model", request)
+    api.stream_model_response(
+        "X0 controls Y0", "offline", "low", "ladder", plc_model="FX3U"
+    )
+
+    native = captured["options"]["response_format"]
+    assert native["type"] == "json_schema"
+    assert native["json_schema"]["name"] == "ladder_candidate"
+    schema = native["json_schema"]["schema"]
+
+    def app_instr_rule(value):
+        if isinstance(value, dict):
+            properties = value.get("properties")
+            if isinstance(properties, dict):
+                opcode_rule = properties.get("opcode")
+                if isinstance(opcode_rule, dict) and isinstance(opcode_rule.get("enum"), list):
+                    return value
+            for child in value.values():
+                found = app_instr_rule(child)
+                if found is not None:
+                    return found
+        elif isinstance(value, list):
+            for child in value:
+                found = app_instr_rule(child)
+                if found is not None:
+                    return found
+        return None
+
+    rule = app_instr_rule(schema)
+    assert rule is not None
+    allowed = set(rule["properties"]["opcode"]["enum"])
+    assert "MOV" in allowed
+    assert "NOT_A_REAL_OPCODE" not in allowed
+    assert "FLDE" not in allowed
+    assert "OUT" not in allowed
+
+
+def test_workflow_response_format_overrides_stale_profile_request_override():
+    profile = _profile("zhipu-glm-5.3-flash")
+    stale = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "stale",
+            "strict": True,
+            "schema": {"type": "object"},
+        },
+    }
+    profile["requestOverrides"]["response_format"] = stale
+    provider = OpenAICompatibleProvider(profile, "key", client=_Client([iter([])]))
+    requested = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "current",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False,
+            },
+        },
+    }
+    params = provider._request_params(
+        ModelRequest(
+            (UserMessage("generate"),),
+            options={"response_format": requested},
+            stream=True,
+        )
+    )
+    assert params["response_format"] == requested
+
+    params = provider._request_params(
+        ModelRequest(
+            (UserMessage("plain"),),
+            options={"response_format": None},
+            stream=True,
+        )
+    )
+    assert "response_format" not in params

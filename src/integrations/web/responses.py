@@ -188,6 +188,9 @@ class ResponseViolation(PublicResource):
                     "ambiguous_han_only", "invalid_prose_field", "invalid_json_object", "invalid_code_field", "invalid_response",
                     "invalid_shared_input", "invalid_ladder_structure", "field_too_long", "repair_base_invalid",
                     "repair_identity_invalid", "repair_shape_invalid", "repair_scope_violation", "repair_no_progress"]
+    observed_opcode: str | None = Field(
+        default=None, max_length=64, pattern=r"^[A-Z0-9_.$@+\-]+$"
+    )
 
 
 class JobErrorDetails(PublicResource):

@@ -1,6 +1,6 @@
 {
   "build_seconds": 612.671,
-  "builder_version": "3.0.0",
+  "builder_version": "3.0.3",
   "built_at_utc": "2026-08-09T06:25:40.448275+00:00",
   "chunk_strategy": {
     "cross_page_within_section": true,
@@ -9,8 +9,8 @@
     "target_chars": 4800
   },
   "database": "fx3u_knowledge.sqlite",
-  "database_bytes": 140795904,
-  "database_sha256": "65fdafae7a622d2e1eb648e32273bca4520e956f79ce17c6b583b1800b70bbf6",
+  "database_bytes": 141312000,
+  "database_sha256": "17eb31020b38c882695bcd23dd8108e7f36000548601510a52b703e81e7def7a",
   "external_sources": [
     {
       "chunks": 1448,
@@ -260,24 +260,24 @@
       "cases": 220,
       "positive_cases": 204,
       "negative_cases": 16,
-      "recall_at_1": 0.8725,
-      "recall_at_5": 0.9804,
+      "recall_at_1": 0.8676,
+      "recall_at_5": 0.9853,
       "recall_at_10": 1.0,
-      "mrr": 0.9086,
+      "mrr": 0.9062,
       "negative_accuracy": 1.0,
       "latency_ms": {
-        "mean": 59.4,
-        "p50": 64.358,
-        "p95": 102.378,
-        "max": 238.248
+        "mean": 125.389,
+        "p50": 135.995,
+        "p95": 196.869,
+        "max": 361.472
       },
-      "evaluated_at_utc": "2026-09-08T11:06:52.368729+00:00",
+      "evaluated_at_utc": "2026-09-13T09:46:53.783445+00:00",
       "report": "fx3u_rag_benchmark_report.json"
     },
     "bm25_fts5": true,
     "dense_artifact": "fx3u_dense_lsa.npz",
-    "dense_artifact_bytes": 8475420,
-    "dense_artifact_sha256": "f1265dcf55444c2383cea0b8231732e5a01fc4c4a038b84f21a654bb7e418331",
+    "dense_artifact_bytes": 8474514,
+    "dense_artifact_sha256": "c63822dfcba3651ce4250f0caa5c81c2298e32456f26337977b5f371c460543f",
     "dense_embeddings": true,
     "dense_model": {
       "schema_version": 1,
@@ -286,8 +286,8 @@
       "dimensions": 192,
       "features": 8192,
       "chunks": 4714,
-      "corpus_sha256": "d7f6833c08cfe1dedf751ce37eb3a740fa152e1b1da11989b69e4d82d0727487",
-      "built_at_utc": "2026-09-11T15:33:53.890362+00:00",
+      "corpus_sha256": "36b8d6f8ca6e185726ac98733a78462ce4dc348d01ff57addff78752bebf53d1",
+      "built_at_utc": "2026-09-13T09:46:25.064113+00:00",
       "normalization": "l2",
       "runtime": "numpy_lazy_local"
     },
@@ -301,7 +301,7 @@
   "stats": {
     "characters": 14101920,
     "debug_chunks": 26,
-    "entities": 68985,
+    "entities": 67835,
     "manual_chunks": 4682,
     "pages": 3064,
     "tables": 7324,
@@ -309,21 +309,21 @@
   },
   "structured": {
     "debug_cases": 26,
-    "devices": 2199,
-    "errors": 378,
+    "devices": 2184,
+    "errors": 376,
     "instructions": 285
   },
   "verification": {
     "counts": {
-      "chunks": 4708,
-      "chunks_fts": 4708,
+      "chunks": 4714,
+      "chunks_fts": 4714,
       "debug_cases": 26,
-      "device_records": 2199,
-      "entity_index": 68985,
-      "error_records": 378,
+      "device_records": 2184,
+      "entity_index": 67835,
+      "error_records": 376,
       "instruction_aliases": 905,
       "instructions": 285,
-      "manuals": 9,
+      "manuals": 10,
       "page_artifacts": 3064,
       "tables": 7324,
       "vector_embeddings": 4714
@@ -380,5 +380,152 @@
       "source_file": "design_patterns.json",
       "source_sha256": "dc4a723346b541029d29226113c16a98079e04a2029f0c2196ab3f7ad1031fe0"
     }
-  ]
+  ],
+  "structured_instruction_backfill": {
+    "method": "generic operand/applicable-device matrix extraction",
+    "source": "authoritative page_artifacts and tables",
+    "changed_empty_instruction_rows": 157
+  },
+  "structured_instruction_alignment_fix": {
+    "method": "definition-table/signature alignment plus applicable-device matrix extraction",
+    "source": "authoritative page_artifacts and tables",
+    "baseline_empty_rows": 170,
+    "originally_backfilled_rows": 157,
+    "recomputed_nonempty_rows": 149,
+    "recomputed_empty_rows": 21,
+    "changed_rows": 147
+  },
+  "structured_instruction_dirty_cleanup": {
+    "method": "generic reparse of malformed structured operand rows from authoritative page tables",
+    "dirty_rows_before": 6,
+    "repaired_rows": 6,
+    "unresolved_rows": 0,
+    "repaired": [
+      {
+        "manual_id": "fx3_positioning_k",
+        "opcode": "ZRN"
+      },
+      {
+        "manual_id": "fx3_programming_r",
+        "opcode": "ADD"
+      },
+      {
+        "manual_id": "fx3_programming_r",
+        "opcode": "CML"
+      },
+      {
+        "manual_id": "fx3_programming_r",
+        "opcode": "ECMP"
+      },
+      {
+        "manual_id": "fx3_programming_r",
+        "opcode": "HSZ"
+      },
+      {
+        "manual_id": "fx3_programming_r",
+        "opcode": "TCMP"
+      }
+    ]
+  },
+  "structured_instruction_global_cleanup": {
+    "method": "generic auditor-selected reparse from authoritative page tables",
+    "selected_rows": 2,
+    "repaired_rows": 2,
+    "unresolved_rows": 0,
+    "repaired": [
+      {
+        "manual_id": "fx3_programming_r",
+        "opcode": "LIMIT"
+      },
+      {
+        "manual_id": "fx3_programming_r",
+        "opcode": "MIDR"
+      }
+    ]
+  },
+  "structured_knowledge_quality_audit": {
+    "method": "generic source-driven audit and repair of device records, error records, and completion flags",
+    "source": "stored authoritative page_artifacts/tables plus structured instruction records",
+    "baseline_detected": {
+      "operand_position_device_index_overlaps": 97,
+      "cross_family_device_ranges": 7,
+      "cross_family_device_range_entity_rows": 8,
+      "weak_completion_flag_semantics": 199,
+      "no_error_row_bleed_records": 30,
+      "no_error_range_endpoint_records": 2
+    },
+    "post_repair_issue_severity_counts": {
+      "warning": 34
+    },
+    "post_repair_issue_code_counts": {
+      "device_records:possible_operand_placeholder_device_record": 34
+    },
+    "device_stats": {
+      "records": 2244,
+      "record_types": {
+        "device": 2142,
+        "device_family": 13,
+        "device_range": 89
+      },
+      "prefix_counts": {
+        "C": 196,
+        "CC": 21,
+        "CS": 8,
+        "D": 569,
+        "ER": 76,
+        "I": 35,
+        "M": 592,
+        "N": 59,
+        "P": 52,
+        "R": 152,
+        "S": 122,
+        "SD": 8,
+        "SM": 6,
+        "T": 62,
+        "TC": 15,
+        "TS": 9,
+        "V": 32,
+        "X": 122,
+        "Y": 83,
+        "Z": 25
+      },
+      "operand_position_leaks": 0,
+      "placeholder_like_device_records": 34
+    },
+    "error_stats": {
+      "records": 376,
+      "manual_counts": {
+        "fx3_programming_r": 124,
+        "fxcpu_device_common_l": 252
+      },
+      "unique_codes": 129,
+      "codes_repeated_more_than_four_times": {
+        "0000": 30
+      },
+      "weak_context_records": 0
+    },
+    "completion_flag_stats": {
+      "instructions": 285,
+      "instructions_with_flags": 32,
+      "flag_counts": {
+        "M8012": 1,
+        "M8029": 30,
+        "M8138": 1,
+        "M8329": 2
+      }
+    },
+    "error_table_alignment": {
+      "table_backed_records": 0,
+      "aligned_records": 0,
+      "semantic_header_tables": 0,
+      "issue_severity_counts": {},
+      "issue_code_counts": {}
+    },
+    "error_semantic_audit": {
+      "records": 376,
+      "no_error_records": 30,
+      "issue_severity_counts": {},
+      "issue_code_counts": {}
+    }
+  }
 }

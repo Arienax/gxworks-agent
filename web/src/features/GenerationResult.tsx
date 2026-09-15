@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Job, Json } from "../api/client";
-import { api } from "../api/client";
+import { api, freshGxCsvUrl } from "../api/client";
 import { Button } from "../components/ui";
 
 type Output = Record<string, Json>;
@@ -25,23 +25,27 @@ export function useGenerationResult(job: Job | undefined, retry: number) {
   const value = result.id === id ? result.value : undefined;
   const metadata = value?.generation && typeof value.generation === "object" && !Array.isArray(value.generation)
     ? value.generation as Output : undefined;
+  const validation = metadata?.validation && typeof metadata.validation === "object" && !Array.isArray(metadata.validation)
+    ? metadata.validation as Output : undefined;
   const blocked = job?.result?.status === "contract_mismatch" || value?.status === "contract_mismatch" || !!metadata?.contract_mismatch;
+  const invalidCandidate = value?.status === "saved_invalid" || validation?.status === "invalid_candidate";
   const proposalId = typeof value?.proposal_id === "string" ? value.proposal_id
     : typeof job?.result?.proposal_id === "string" ? job.result.proposal_id : "";
   const versionId = typeof value?.version_id === "string" ? value.version_id
     : typeof job?.result?.version_id === "string" ? job.result.version_id : "";
   const loading = !!id && !versionId && !proposalId && !blocked && (!result.error || result.id !== id) && !value;
-  return { id, value, metadata, blocked, proposalId, versionId, loading,
+  return { id, projectId: job?.project_id || "", value, metadata, blocked, invalidCandidate, proposalId, versionId, loading,
     error: result.id === id ? result.error : undefined };
 }
 
 export type GenerationResultState = ReturnType<typeof useGenerationResult>;
 
-export function GenerationResult({ result, busy, onOpen, onRetry, onSpec, t }: {
+export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSpec, t }: {
   result: GenerationResultState;
   busy: boolean;
   onOpen: () => void;
   onRetry: () => void;
+  onRepair: () => void;
   onSpec: () => void;
   t: (key: string) => string;
 }) {
@@ -49,6 +53,15 @@ export function GenerationResult({ result, busy, onOpen, onRetry, onSpec, t }: {
   const mismatch = result.metadata?.contract_mismatch;
   const detail = mismatch && typeof mismatch === "object" && !Array.isArray(mismatch)
     ? mismatch as Output : undefined;
+  const freshCsv = result.projectId && result.versionId ? (
+    <Button
+      disabled={busy}
+      onClick={() => window.location.assign(freshGxCsvUrl(result.projectId, result.versionId))}
+      title={t("不调用模型，直接从已保存程序重新生成 CSV")}
+    >
+      {t("重新导出 GX Works2 CSV")}
+    </Button>
+  ) : null;
   return <section className="generation-result" aria-label={t("生成结果")}>
     {result.blocked ? <>
       <p className="error-text" role="status">{t("候选与确认方案冲突，未创建可接受的程序。")}</p>
@@ -57,9 +70,16 @@ export function GenerationResult({ result, busy, onOpen, onRetry, onSpec, t }: {
       <p>{t("可以查看受阻候选及诊断；不能接受、导入或运行该候选。")}</p>
       <Button disabled={busy} onClick={onOpen}>{t("查看受阻候选")}</Button>{" "}
       <Button disabled={busy} onClick={onSpec}>{t("检查确认规格")}</Button>
+    </> : result.versionId && result.invalidCandidate ? <>
+      <p className="error-text" role="status">{t("候选存在校验错误，但梯形图和 CSV 已保留。")}</p>
+      <p>{t("可以查看、导出并直接发送到 GX Works2；GX 中的黄色错误用于继续定位问题。")}</p>
+      <Button disabled={busy} onClick={onOpen}>{t("查看错误候选")}</Button>{" "}
+      {freshCsv}{" "}
+      <Button disabled={busy} onClick={onRepair}>{t("局部修复")}</Button>
     </> : result.versionId ? <>
       <p>{t("程序已校验并自动保存，可直接导出文件。")}</p>
-      <Button disabled={busy} onClick={onOpen}>{t("查看程序")}</Button>
+      <Button disabled={busy} onClick={onOpen}>{t("查看程序")}</Button>{" "}
+      {freshCsv}
     </> : result.proposalId ? <>
       <p>{t("这是旧版生成的草稿，可打开后保存。")}</p>
       <Button disabled={busy} onClick={onOpen}>{t("查看旧草稿")}</Button>

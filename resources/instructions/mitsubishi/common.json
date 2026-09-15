@@ -48,8 +48,8 @@
     {"mnemonic":"OUT","canonical_op":"COIL","category":"action","semantic_kind":"coil","operands":[{"name":"destination","role":"write"},{"name":"preset","role":"read"}]},
     {"mnemonic":"PLS","canonical_op":"PULSE_RISING","category":"action","semantic_kind":"coil","operands":[{"name":"destination","role":"write","data_type":"bit"}]},
     {"mnemonic":"PLF","canonical_op":"PULSE_FALLING","category":"action","semantic_kind":"coil","operands":[{"name":"destination","role":"write","data_type":"bit"}]},
-    {"mnemonic":"SET","canonical_op":"SET","category":"action","semantic_kind":"function","operands":[{"name":"destination","role":"write"}]},
-    {"mnemonic":"RST","canonical_op":"RESET","category":"action","semantic_kind":"function","operands":[{"name":"destination","role":"write"}]},
+    {"mnemonic":"SET","canonical_op":"SET","category":"action","semantic_kind":"function","arity":{"min":1,"max":1},"operands":[{"name":"destination","role":"write"}]},
+    {"mnemonic":"RST","canonical_op":"RESET","category":"action","semantic_kind":"function","arity":{"min":1,"max":1},"operands":[{"name":"destination","role":"write"}]},
 
     {"mnemonic":"MOV","canonical_op":"MOVE","category":"action","semantic_kind":"function","operands":[{"name":"source","role":"read","data_type":"word"},{"name":"destination","role":"write","data_type":"word"}]},
     {"mnemonic":"DMOV","canonical_op":"MOVE","category":"action","semantic_kind":"function","operands":[{"name":"source","role":"read","data_type":"dword"},{"name":"destination","role":"write","data_type":"dword"}]},

@@ -1897,8 +1897,10 @@ class CompilerThread(LanguageScopedThread):
         revision=1,
         requirement_text="",
         repair_mode=False,
+        format_repair=False,
         allowed_rung_ids=None,
         allowed_addresses=None,
+        repair_plan=None,
         image_attachments=None,
     ):
         super().__init__()
@@ -1921,6 +1923,7 @@ class CompilerThread(LanguageScopedThread):
         except (TypeError, ValueError):
             self.revision = 1
         self.repair_mode = bool(repair_mode)
+        self.format_repair = bool(format_repair)
         self.allowed_rung_ids = {
             int(item) for item in (allowed_rung_ids or [])
         }
@@ -1929,6 +1932,7 @@ class CompilerThread(LanguageScopedThread):
             for item in (allowed_addresses or [])
             if str(item).strip()
         }
+        self.repair_plan = copy.deepcopy(repair_plan) if isinstance(repair_plan, dict) else None
         self.image_attachments = tuple(image_attachments or ())
         # 从配置文件读取默认模型
         try:

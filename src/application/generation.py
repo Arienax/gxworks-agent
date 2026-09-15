@@ -1,7 +1,9 @@
 """Synchronous generation orchestration shared by desktop and local services.
 
 No GUI, workspace activation, GX automation or simulator operations belong here.
-Model response acceptance remains inside api/collect_response before callbacks.
+Model response acceptance remains inside api/collect_response before callbacks,
+but ladder JSON syntax rejections may be retained privately for deterministic
+cleanup or an explicit operator-confirmed repair.
 """
 from dataclasses import dataclass, fields
 from pathlib import Path
@@ -12,7 +14,7 @@ import api
 from application.base import model_call
 from application.jobs import JobCancelled
 from application.generation_repair import (
-    GenerationError, GenerationValidationError,
+    GenerationError, GenerationValidationError, candidate_base, validation_diagnostic,
 )
 from i18n import get_language, language_context, tr
 from config_manager import get_active_model_name, load_full_config
@@ -42,8 +44,10 @@ class GenerationRequest:
     revision: int = 1
     requirement_text: str = ""
     repair_mode: bool = False
+    format_repair: bool = False
     allowed_rung_ids: object = None
     allowed_addresses: object = None
+    repair_plan: object = None
     image_attachments: object = None
     model_name: Optional[str] = None
     response_language: Optional[str] = None
@@ -59,6 +63,7 @@ class GenerationDependencies:
     """Inject model calls or a provider snapshot; defaults use the accepted API."""
     stream_response: Optional[Callable] = None
     generate_json: Optional[Callable] = None
+    repair_response: Optional[Callable] = None
     provider: object = None
     check_cancelled: Optional[Callable] = None
     preserve_rejected_candidate: bool = False
@@ -89,12 +94,16 @@ class GenerationWorkflow:
         except (TypeError, ValueError):
             self.revision = 1
         self.repair_mode = bool(self.repair_mode)
+        self.format_repair = bool(self.format_repair)
+        if self.repair_mode and self.format_repair:
+            raise ValueError("repair_mode and format_repair are mutually exclusive")
         self.allowed_rung_ids = {int(item) for item in (self.allowed_rung_ids or [])}
         self.allowed_addresses = {
             str(item).strip().upper()
             for item in (self.allowed_addresses or [])
             if str(item).strip()
         }
+        self.repair_plan = copy.deepcopy(self.repair_plan) if isinstance(self.repair_plan, dict) else None
         self.image_attachments = tuple(self.image_attachments or ())
         if self.model_name is None:
             try:
@@ -126,14 +135,84 @@ class GenerationWorkflow:
 
         Once the user has confirmed the specification, this workflow does not
         reinterpret that intent with approach heuristics, regex-derived semantic
-        requirements, or hidden model repair loops.  Strong semantic/static
+        requirements, or hidden model repair loops. Strong semantic/static
         checks remain available to Review, simulator and GX execution paths.
+
+        A completed ladder response rejected *only* for invalid JSON syntax is
+        treated differently from transport/language/schema-field rejection: its
+        raw candidate is retained privately, because it can either be repaired
+        deterministically (for a redundant closing delimiter) or exposed through
+        the existing explicit repair flow without paying for the whole generation
+        again.
         """
         try:
             import json
 
             def emit_parsing_progress(message):
                 self._emit("progress", {"stage": "parsing", "message": str(message)})
+
+            def clean_json_text(value):
+                text = str(value or "").strip()
+                if text.startswith("```"):
+                    text = text.split("\n", 1)[1] if "\n" in text else ""
+                if text.endswith("```"):
+                    text = text.rsplit("\n", 1)[0]
+                return text.strip()
+
+            def rejected_json_candidate(error):
+                """Return the private raw ladder candidate for JSON-only rejection.
+
+                The collector deliberately withholds rejected bytes from normal
+                callbacks/publication. Generation may still stage those same bytes
+                privately so the operator can repair them explicitly. No other
+                response-acceptance failure is downgraded here.
+                """
+                from model_provider import ResponseRejectedError
+
+                if not isinstance(error, ResponseRejectedError):
+                    return None
+                if [(item.path, item.reason) for item in error.violations] != [
+                    ("content", "invalid_json_object")
+                ]:
+                    return None
+                raw_response = getattr(error, "raw_response", None)
+                message = getattr(raw_response, "message", None)
+                content = getattr(message, "content", None)
+                if not isinstance(content, str) or not content.strip():
+                    return None
+                return clean_json_text(content)
+
+            def trim_redundant_json_tail(candidate):
+                """Remove only a tiny non-semantic tail after a complete object.
+
+                This is intentionally narrower than a generic JSON fixer. A
+                complete top-level object may be followed by a few punctuation
+                characters emitted by the model (for example `}`, `]`, `,`, `;`,
+                `.`, a backtick, or CJK punctuation). We never discard letters,
+                digits, quotes, or a second object/array because those may carry
+                semantic content that must remain an explicit repair candidate.
+                """
+                try:
+                    json.loads(candidate)
+                    return candidate, False
+                except json.JSONDecodeError as error:
+                    if error.msg != "Extra data":
+                        return candidate, False
+
+                stripped = candidate.lstrip()
+                try:
+                    value, end = json.JSONDecoder().raw_decode(stripped)
+                except json.JSONDecodeError:
+                    return candidate, False
+                suffix = stripped[end:].strip()
+                if (
+                    not isinstance(value, dict)
+                    or not suffix
+                    or len(suffix) > 8
+                    or any(char.isalnum() or char in "{[\"'" for char in suffix)
+                ):
+                    return candidate, False
+                return stripped[:end], True
 
             self.output_dir.mkdir(parents=True, exist_ok=True)
             validation_messages = []
@@ -146,8 +225,55 @@ class GenerationWorkflow:
             from plc_generation_context import generation_user_input
             model_user_input = generation_user_input(
                 self.user_input, is_edit_mode=is_edit_mode,
-                target_mode=self.target_mode, repair_mode=self.repair_mode,
+                target_mode=self.target_mode, repair_mode=(self.repair_mode or self.format_repair),
             )
+            repair_call = self.target_mode == "ladder" and (self.repair_mode or self.format_repair)
+            confirmed_generation_call = (
+                not repair_call
+                and self.target_mode == "ladder"
+                and not is_edit_mode
+                and isinstance(self.confirmed_context, dict)
+                and bool(self.confirmed_context)
+                and self.dependencies.stream_response is None
+                and self.dependencies.generate_json is None
+            )
+            generation_agent_metadata = None
+            repair_payload = None
+            repair_kind = "format"
+            deterministic_field_patch = False
+            if repair_call:
+                if self.repair_mode and isinstance(self.repair_plan, dict) and self.repair_plan.get("mode") == "field_patch":
+                    repair_kind = "field_patch"
+                    repair_payload = {
+                        "repair_mode": "field_patch",
+                        "plc_model": self.plc_model,
+                        "instruction": model_user_input,
+                        "base_sha256": self.repair_plan.get("base_sha256"),
+                        "target": copy.deepcopy(self.repair_plan.get("target") or {}),
+                    }
+                    deterministic_field_patch = (
+                        repair_payload["target"].get("strategy") == "deterministic"
+                    )
+                elif self.repair_mode:
+                    repair_kind = "partial"
+                    baseline = self.previous_json if isinstance(self.previous_json, dict) else {}
+                    selected_rungs = [copy.deepcopy(rung) for rung in baseline.get("rungs", [])
+                                      if isinstance(rung, dict) and rung.get("rung_id") in self.allowed_rung_ids]
+                    comments = baseline.get("device_comments", {}) if isinstance(baseline.get("device_comments"), dict) else {}
+                    repair_payload = {
+                        "repair_mode": "partial", "plc_model": self.plc_model,
+                        "instruction": model_user_input,
+                        "allowed_rung_ids": sorted(self.allowed_rung_ids),
+                        "allowed_addresses": sorted(self.allowed_addresses),
+                        "baseline_subset": {
+                            "device_comments": {key: value for key, value in comments.items()
+                                                if str(key).strip().upper() in self.allowed_addresses},
+                            "rungs": selected_rungs,
+                        },
+                    }
+                else:
+                    repair_payload = {"repair_mode": "format", "plc_model": self.plc_model,
+                                      "instruction": model_user_input}
             try:
                 stream_model_response = self.dependencies.stream_response or api.stream_model_response
 
@@ -158,64 +284,179 @@ class GenerationWorkflow:
                     self._emit("content", token)
 
                 self._emit("progress", {"stage": "connecting", "message": tr('正在连接模型')})
-                _reasoning, full_content = model_call(
-                    stream_model_response,
-                    model_user_input,
-                    self.model_name,
-                    self.effort,
-                    self.target_mode,
-                    on_reasoning_chunk=on_reasoning,
-                    on_content_chunk=on_content,
-                    is_edit_mode=is_edit_mode,
-                    conversation_history=self.conversation_history,
-                    confirmed_context=self.confirmed_context,
-                    persist_history=False,
-                    task_type=self.task_type,
-                    current_version_json=self.current_version_json,
-                    plc_model=self.plc_model,
-                    image_attachments=self.image_attachments,
-                )
+                if repair_call:
+                    if deterministic_field_patch:
+                        from application.field_repair import deterministic_response
+                        local_response = deterministic_response(repair_payload)
+                        if local_response is None:
+                            raise GenerationError(tr('确定性字段修复计划无效'))
+                        full_content = json.dumps(local_response, ensure_ascii=False)
+                        self._emit("progress", {
+                            "stage": "deterministic_field_repair",
+                            "message": tr('已根据唯一校验证据确定性修复字段；未调用模型。'),
+                        })
+                    elif self.dependencies.repair_response is not None:
+                        _reasoning, full_content = model_call(
+                            self.dependencies.repair_response, repair_payload, self.model_name, self.effort,
+                            mode=repair_kind,
+                            on_reasoning_chunk=on_reasoning, on_content_chunk=on_content,
+                        )
+                    elif self.dependencies.provider is None and self.dependencies.stream_response is not None:
+                        # Keep injectable/offline tests compatible without routing production repair
+                        # back through the normal generation prompt builder.
+                        _reasoning, full_content = model_call(
+                            self.dependencies.stream_response,
+                            json.dumps(repair_payload, ensure_ascii=False),
+                            self.model_name, self.effort, "ladder",
+                            on_reasoning_chunk=on_reasoning, on_content_chunk=on_content,
+                            is_edit_mode=True, conversation_history=[], confirmed_context=None,
+                            persist_history=False, task_type="contract_repair",
+                            current_version_json=None, plc_model=self.plc_model, image_attachments=(),
+                        )
+                    else:
+                        _reasoning, full_content = model_call(
+                            api.repair_ladder_response, repair_payload, self.model_name, self.effort,
+                            mode=repair_kind,
+                            on_reasoning_chunk=on_reasoning, on_content_chunk=on_content,
+                        )
+                elif confirmed_generation_call:
+                    from application.generation_agent import generate_confirmed_ladder
+
+                    result = model_call(
+                        generate_confirmed_ladder,
+                        self.confirmed_context,
+                        self.plc_model,
+                        model_name=self.model_name,
+                        effort=self.effort,
+                        on_stage=lambda stage, message: self._emit(
+                            "progress", {"stage": stage, "message": message}
+                        ),
+                    )
+                    full_content = json.dumps(
+                        result["ladder"], ensure_ascii=False, separators=(",", ":")
+                    )
+                    generation_agent_metadata = {
+                        "mode": "confirmed_spec",
+                        "model_calls": int(result.get("model_calls", 1)),
+                    }
+                    validation_messages.append(
+                        tr('已由独立生成 Agent 根据确认规格一次生成完整 ladder_v1')
+                    )
+                    on_content(full_content)
+                else:
+                    _reasoning, full_content = model_call(
+                        stream_model_response,
+                        model_user_input,
+                        self.model_name,
+                        self.effort,
+                        self.target_mode,
+                        on_reasoning_chunk=on_reasoning,
+                        on_content_chunk=on_content,
+                        is_edit_mode=is_edit_mode,
+                        conversation_history=self.conversation_history,
+                        confirmed_context=self.confirmed_context,
+                        persist_history=False,
+                        task_type=self.task_type,
+                        current_version_json=self.current_version_json,
+                        plc_model=self.plc_model,
+                        image_attachments=self.image_attachments,
+                    )
                 emit_parsing_progress(tr('正在解析模型输出：清理流式文本'))
                 streaming_succeeded = True
             except Exception as stream_err:
                 from model_provider import ResponseRejectedError
-                if isinstance(stream_err, (ResponseRejectedError, JobCancelled)):
+
+                if isinstance(stream_err, JobCancelled):
                     raise
-                self._emit("progress", {
-                    "stage": "fallback",
-                    "severity": "warning",
-                    "message": tr('流式调用失败，切换普通模式：{v0}', v0=stream_err),
-                })
-                print(tr('流式调用失败，降级至普通模式: {v0}', v0=stream_err))
+                rejected_candidate = (
+                    rejected_json_candidate(stream_err)
+                    if self.target_mode == "ladder"
+                    else None
+                )
+                if rejected_candidate is not None:
+                    # The provider completed successfully; only the JSON syntax
+                    # acceptance gate failed. Keep the bytes private and let the
+                    # generation parser decide whether a safe local cleanup is
+                    # possible. Otherwise it becomes an explicit repairable job.
+                    full_content = rejected_candidate
+                    streaming_succeeded = True
+                    self._emit("progress", {
+                        "stage": "format_recovery",
+                        "severity": "warning",
+                        "message": tr('模型回复 JSON 格式验收失败；正在检查是否可安全恢复，否则保留候选供显式修复。'),
+                    })
+                elif isinstance(stream_err, ResponseRejectedError):
+                    raise
+                elif repair_call:
+                    # Explicit repair has its own transport fallback inside the dedicated API.
+                    # Never fall back into a normal full generation request.
+                    raise
+                elif confirmed_generation_call:
+                    # Agent B is one full-ladder request. Never pay for a second
+                    # full generation after a failed confirmed-spec request.
+                    raise
+                else:
+                    self._emit("progress", {
+                        "stage": "fallback",
+                        "severity": "warning",
+                        "message": tr('流式调用失败，切换普通模式：{v0}', v0=stream_err),
+                    })
+                    print(tr('流式调用失败，降级至普通模式: {v0}', v0=stream_err))
+
+            if repair_call and (not streaming_succeeded or not full_content):
+                raise GenerationError(tr('修复调用未返回候选 JSON'))
 
             # Transport fallback is not a semantic repair. It obtains the same
             # requested candidate once when streaming itself failed.
             if streaming_succeeded and full_content:
-                json_str = full_content.strip()
-                if json_str.startswith("```"):
-                    json_str = json_str.split("\n", 1)[1]
-                if json_str.endswith("```"):
-                    json_str = json_str.rsplit("\n", 1)[0]
-                json_str = json_str.strip()
+                json_str = clean_json_text(full_content)
             else:
-                json_str = model_call(
-                    self.dependencies.generate_json or api.generate_model_json,
-                    model_user_input,
-                    self.model_name,
-                    self.effort,
-                    self.target_mode,
-                    is_edit_mode=is_edit_mode,
-                    conversation_history=self.conversation_history,
-                    confirmed_context=self.confirmed_context,
-                    persist_history=False,
-                    task_type=self.task_type,
-                    current_version_json=self.current_version_json,
-                    plc_model=self.plc_model,
-                    image_attachments=self.image_attachments,
-                )
+                try:
+                    json_str = model_call(
+                        self.dependencies.generate_json or api.generate_model_json,
+                        model_user_input,
+                        self.model_name,
+                        self.effort,
+                        self.target_mode,
+                        is_edit_mode=is_edit_mode,
+                        conversation_history=self.conversation_history,
+                        confirmed_context=self.confirmed_context,
+                        persist_history=False,
+                        task_type=self.task_type,
+                        current_version_json=self.current_version_json,
+                        plc_model=self.plc_model,
+                        image_attachments=self.image_attachments,
+                    )
+                except Exception as fallback_err:
+                    if isinstance(fallback_err, JobCancelled):
+                        raise
+                    rejected_candidate = (
+                        rejected_json_candidate(fallback_err)
+                        if self.target_mode == "ladder"
+                        else None
+                    )
+                    if rejected_candidate is None:
+                        raise
+                    json_str = rejected_candidate
+                    self._emit("progress", {
+                        "stage": "format_recovery",
+                        "severity": "warning",
+                        "message": tr('普通模式回复 JSON 格式验收失败；正在检查是否可安全恢复，否则保留候选供显式修复。'),
+                    })
 
             if not json_str:
                 raise GenerationError(tr('大模型未返回合法数据'))
+
+            # Do not pay for another model call when the response is already one
+            # complete object plus a redundant terminal bracket/brace. Anything
+            # less obvious remains a failure and is offered to explicit repair.
+            json_str, local_tail_repair = trim_redundant_json_tail(json_str)
+            if local_tail_repair:
+                validation_messages.append(tr('已移除模型 JSON 末尾多余的闭合符号'))
+                self._emit("progress", {
+                    "stage": "format_recovered",
+                    "message": tr('已安全移除 JSON 末尾多余闭合符号；继续解析候选程序。'),
+                })
 
             prepared_candidate = None
 
@@ -226,14 +467,24 @@ class GenerationWorkflow:
                 if not isinstance(parsed, dict):
                     raise PLCJsonValidationError("$: expected JSON object")
                 if self.target_mode == "ladder":
-                    prepared_candidate = prepare_ladder_candidate(
-                        parsed, plc_model=self.plc_model, program_name=self.program_name,
-                        revision=self.revision, confirmed_spec=self.confirmed_context,
-                        previous_ladder=self.previous_json, repair_mode=self.repair_mode,
-                        allowed_rung_ids=self.allowed_rung_ids,
-                        allowed_addresses=self.allowed_addresses, task_type=self.task_type,
-                        on_progress=emit_parsing_progress,
-                    )
+                    if self.repair_mode and isinstance(self.repair_plan, dict) and self.repair_plan.get("mode") == "field_patch":
+                        from application.field_repair import apply as apply_field_patch
+                        parsed = apply_field_patch(self.previous_json, parsed, self.repair_plan)
+                        prepared_candidate = prepare_ladder_candidate(
+                            parsed, plc_model=self.plc_model, program_name=self.program_name,
+                            revision=self.revision, confirmed_spec=self.confirmed_context,
+                            previous_ladder=None, repair_mode=False, task_type=self.task_type,
+                            on_progress=emit_parsing_progress,
+                        )
+                    else:
+                        prepared_candidate = prepare_ladder_candidate(
+                            parsed, plc_model=self.plc_model, program_name=self.program_name,
+                            revision=self.revision, confirmed_spec=self.confirmed_context,
+                            previous_ladder=self.previous_json, repair_mode=self.repair_mode,
+                            allowed_rung_ids=self.allowed_rung_ids,
+                            allowed_addresses=self.allowed_addresses, task_type=self.task_type,
+                            on_progress=emit_parsing_progress,
+                        )
                     validation_messages.extend(prepared_candidate["validation_messages"])
                     return prepared_candidate["ladder"]
                 emit_parsing_progress(tr('正在解析模型输出：校验 ST 结构'))
@@ -252,16 +503,90 @@ class GenerationWorkflow:
                 (self.output_dir / "repair_candidate.json").write_text(json_str, encoding="utf-8")
 
             validation_errors = (PLCJsonValidationError, PLCIRValidationError, json.JSONDecodeError)
+
+            def cascade_format_repair(error):
+                nonlocal prepared_candidate, repair_attempts
+                if not self.format_repair or not isinstance(error, (PLCJsonValidationError, PLCIRValidationError)):
+                    return None
+                try:
+                    base = candidate_base(json.loads(json_str))
+                except json.JSONDecodeError:
+                    return None
+                if base is None:
+                    return None
+                import re
+                diagnostic = validation_diagnostic(error)
+                path = str(diagnostic.get("path") or "")
+                from application.field_repair import apply as apply_field_patch, plan as plan_field_patch
+                field_plan = plan_field_patch(base, [diagnostic], self.plc_model)
+                if field_plan is not None:
+                    payload = {
+                        "repair_mode": "field_patch", "plc_model": self.plc_model,
+                        "instruction": f"JSON 格式已经恢复，但字段校验失败。只修复指定字段。错误位置：{path}；原因：{diagnostic.get('reason','invalid_ladder_structure')}",
+                        "base_sha256": field_plan["base_sha256"],
+                        "target": copy.deepcopy(field_plan["target"]),
+                    }
+                    self._emit("progress", {"stage": "field_repair", "severity": "warning",
+                        "message": tr('JSON 格式已恢复；正在对新暴露的字段错误执行一次精确修复。')})
+                    def on_field_reasoning(token): self._emit("reasoning", token)
+                    def on_field_content(token): self._emit("content", token)
+                    repair_fn = self.dependencies.repair_response or api.repair_ladder_response
+                    _r, local_text = model_call(repair_fn, payload, self.model_name, self.effort,
+                        mode="field_patch", on_reasoning_chunk=on_field_reasoning,
+                        on_content_chunk=on_field_content)
+                    patch = json.loads(clean_json_text(local_text))
+                    patched = apply_field_patch(base, patch, field_plan)
+                    prepared_candidate = prepare_ladder_candidate(
+                        patched, plc_model=self.plc_model, program_name=self.program_name,
+                        revision=self.revision, confirmed_spec=self.confirmed_context,
+                        previous_ladder=None, repair_mode=False, task_type="contract_repair",
+                        on_progress=emit_parsing_progress)
+                    validation_messages.extend(prepared_candidate["validation_messages"])
+                    repair_attempts += 1
+                    return prepared_candidate["ladder"]
+                match = re.search(r"(?:^|\.)rungs\.(\d+)(?:\.|$)", path)
+                if not match:
+                    return None
+                index = int(match.group(1))
+                if index >= len(base["rungs"]):
+                    return None
+                rung = base["rungs"][index]
+                rung_id = rung.get("rung_id") if isinstance(rung, dict) else None
+                if isinstance(rung_id, bool) or not isinstance(rung_id, int):
+                    return None
+                from contract_repair import patch_device_addresses
+                addresses = sorted(patch_device_addresses({"mode":"partial","device_comments":{},"rungs":[rung],"delete_rung_ids":[]}))
+                payload = {"repair_mode":"partial","plc_model":self.plc_model,
+                    "instruction":f"JSON 格式已经恢复，但结构校验仍发现局部协议错误。只修复该梯级的协议/结构表示，不改变控制语义、地址、参数或触点极性。错误位置：{path}；原因：{diagnostic.get('reason','invalid_ladder_structure')}",
+                    "allowed_rung_ids":[rung_id],"allowed_addresses":addresses,
+                    "baseline_subset":{"device_comments":{},"rungs":[copy.deepcopy(rung)]}}
+                self._emit("progress", {"stage":"structural_repair","severity":"warning",
+                    "message":tr('JSON 格式已恢复；正在对新暴露的局部结构错误执行一次有界修复。')})
+                def on_reasoning(token): self._emit("reasoning", token)
+                def on_content(token): self._emit("content", token)
+                if self.dependencies.repair_response is not None:
+                    _r, local_text = model_call(self.dependencies.repair_response, payload, self.model_name, self.effort, mode="partial", on_reasoning_chunk=on_reasoning, on_content_chunk=on_content)
+                else:
+                    _r, local_text = model_call(api.repair_ladder_response, payload, self.model_name, self.effort, mode="partial", on_reasoning_chunk=on_reasoning, on_content_chunk=on_content)
+                partial = json.loads(clean_json_text(local_text))
+                prepared_candidate = prepare_ladder_candidate(partial, plc_model=self.plc_model, program_name=self.program_name, revision=self.revision,
+                    confirmed_spec=self.confirmed_context, previous_ladder=base, repair_mode=True, allowed_rung_ids={rung_id},
+                    allowed_addresses=set(addresses), task_type="contract_repair", on_progress=emit_parsing_progress)
+                validation_messages.extend(prepared_candidate["validation_messages"])
+                repair_attempts += 1
+                return prepared_candidate["ladder"]
+
             try:
                 parsed_json = parse_candidate(json_str)
             except validation_errors as error:
-                # No hidden semantic re-generation loop. Preserve the rejected
-                # candidate privately so an operator can explicitly request one repair.
-                persist_repair_candidate()
-                raise GenerationValidationError(
-                    [error], attempts=0, max_attempts=0, language=self.response_language,
-                    stop_reason="final_validation",
-                ) from error
+                try:
+                    parsed_json = cascade_format_repair(error)
+                except validation_errors as followup_error:
+                    persist_repair_candidate()
+                    raise GenerationValidationError([followup_error], attempts=1, max_attempts=1, language=self.response_language, stop_reason="explicit_repair_followup_failed") from followup_error
+                if parsed_json is None:
+                    persist_repair_candidate()
+                    raise GenerationValidationError([error], attempts=0, max_attempts=0, language=self.response_language, stop_reason="final_validation") from error
 
             if self.target_mode == "ladder":
                 program_ir = prepared_candidate["program_ir"]
@@ -279,6 +604,7 @@ class GenerationWorkflow:
                 return {
                     "target_mode": "ladder",
                     "repair_attempts": repair_attempts,
+                    "first_pass_pipeline": generation_agent_metadata or {"mode": "direct"},
                     "validation_profile": "generation_structural",
                     "program_name": self.program_name,
                     "revision": self.revision,

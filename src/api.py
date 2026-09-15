@@ -9,14 +9,15 @@ from dataclasses import replace
 from i18n import language_scoped, tr
 from response_language import TEXT_RESPONSE, preserved_annotations as source_annotations
 from workflow_response_contracts import (
-    ANALYSIS_RESPONSE, DEBUG_RESPONSE, DIAGNOSIS_RESPONSE, INSPECTION_RESPONSE,
-    LADDER_RESPONSE, PATCH_RESPONSE, ST_RESPONSE, TEST_SUITE_RESPONSE,
+    ANALYSIS_RESPONSE, DEBUG_RESPONSE, DIAGNOSIS_RESPONSE, FIELD_PATCH_RESPONSE,
+    INSPECTION_RESPONSE, LADDER_RESPONSE, PATCH_RESPONSE, ST_RESPONSE, TEST_SUITE_RESPONSE,
 )
 from approach_contracts import normalize_approach
 from draw import AdvancedSVGLadder
 from config_manager import get_api_key, get_model_profile, load_full_config
 from model_provider import (
     ImageAttachment,
+    ModelProviderError,
     ModelRequest,
     ResponseRejectedError,
     UserMessage,
@@ -39,6 +40,11 @@ from prompt_context_policy import (
 )
 from plc_json_validator import PLCJsonValidationError, parse_device_address
 from hardware_profiles import ensure_hardware_questions
+from instruction_registry import (
+    DEFAULT_INSTRUCTION_REGISTRY, GENERATION_TYPED_OUTPUT_OPCODES,
+    generation_app_instr_mnemonics,
+)
+from plc_generation_contract import ladder_response_schema
 from pattern_library import (
     assemble_prompt,
     build_workflow_prompt,
@@ -655,7 +661,7 @@ def analyze_requirement(
         print(f"阶段1 分析完成: {result.get('summary', '')[:80]}...")
         return result
 
-    except ResponseRejectedError:
+    except ModelProviderError:
         raise
     except Exception as e:
         print(f"阶段1 分析失败: {e}")
@@ -736,7 +742,7 @@ def analyze_requirement_streaming(
         print(f"阶段1 分析完成: {result.get('summary', '')[:80]}...")
         return result
 
-    except ResponseRejectedError:
+    except ModelProviderError:
         raise
     except Exception as e:
         print(f"阶段1 流式分析失败: {e}")
@@ -1562,6 +1568,356 @@ def review_ladder(
     )
 
 
+FIELD_PATCH_REPAIR_SYSTEM_PROMPT = """# PLC ladder JSON field repair
+You repair exactly one scalar field in an immutable rejected ladder candidate.
+The backend owns the full ladder and applies your patch deterministically.
+
+Return one JSON object only:
+{"schema_version":1,"mode":"field_patch","base_sha256":"...","patches":[{"path":"/...","value":"..."}]}
+
+Rules:
+- Copy base_sha256 and path exactly from the payload.
+- Return exactly one patch and only the replacement scalar value.
+- Do not return a rung, branch, ladder program, markdown or explanation.
+- Only `target.path` is mutable. Every other ladder field is immutable.
+- `target.context` contains validator evidence and immutable sibling values.
+- If `target.value_schema.enum` exists, it is exhaustive; choose only from it.
+- The provider schema is authoritative for the allowed replacement value.
+"""
+
+
+PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT = """# PLC ladder local structural repair
+You repair only the rejected ladder locations supplied in the user payload.
+Do not re-analyze the requirement, redesign the program, retrieve manuals, or
+regenerate unrelated rungs. The backend owns the immutable full baseline and
+will merge and validate your patch.
+
+Return one pure JSON object only, exactly in partial-edit form:
+{"mode":"partial","device_comments":{},"rungs":[],"delete_rung_ids":[]}
+
+Rules:
+- `mode` must be `partial` and `delete_rung_ids` must be empty.
+- `rungs` may contain only complete replacement rungs whose rung_id is listed
+  in `allowed_rung_ids`; never add, delete, renumber, or repeat another rung.
+- This partial path repairs structure/protocol only. Validator-proven scalar
+  semantic errors are repaired separately through field_patch. Preserve control
+  logic, addresses, opcodes, operands, parameters and contact polarity here.
+- Use the supplied `baseline_subset` as the only program evidence.
+- `device_comments` may contain only addresses listed in `allowed_addresses`.
+- `repair_contract.app_instr_instances` is the exhaustive immutable APP_INSTR
+  semantic set from `baseline_subset`. Every returned APP_INSTR must copy BOTH
+  `opcode` and `operands` exactly from one supplied instance; never derive, replace,
+  reorder, combine, translate, or alias an instruction.
+- `repair_contract.app_instr_opcode_enum` contains only opcodes already present in
+  `baseline_subset`; it is not a catalogue of alternatives.
+- Values in `repair_contract.app_instr_forbidden_typed_opcodes` must NOT be emitted as
+  `APP_INSTR`; represent them with the dedicated output types listed in
+  `repair_contract.dedicated_output_types`.
+- Do not output markdown, explanation, diagnostics, or a full ladder program.
+"""
+
+FORMAT_LADDER_REPAIR_SYSTEM_PROMPT = """# Legacy compatibility name
+Full-program format rewriting is disabled. Production format repair uses only
+deterministic recovery or a bounded local syntax patch. Never return a complete
+ladder from a format-repair model call.
+"""
+
+
+def _repair_baseline_tokens(repair_payload):
+    """Collect immutable engineering tokens already present in the repair slice."""
+    result = {"addresses": set(), "operands": set(), "values": set(),
+              "expressions": set(), "app_instr_arities": set(),
+              "app_instr_instances": []}
+
+    def walk(value):
+        if isinstance(value, dict):
+            address = value.get("address")
+            if isinstance(address, str) and address.strip():
+                result["addresses"].add(address.strip().upper())
+            expression = value.get("expression")
+            if isinstance(expression, str) and expression.strip():
+                result["expressions"].add(expression.strip())
+            preset = value.get("value")
+            if isinstance(preset, str) and preset.strip():
+                result["values"].add(preset.strip())
+            operands = value.get("operands")
+            if isinstance(operands, list):
+                tokens = [str(item).strip() for item in operands if isinstance(item, str) and str(item).strip()]
+                result["operands"].update(tokens)
+                if value.get("type") == "APP_INSTR":
+                    result["app_instr_arities"].add(len(operands))
+                    opcode = str(value.get("opcode") or "").strip().upper()
+                    if opcode:
+                        instance = {"opcode": opcode, "operands": list(tokens)}
+                        if instance not in result["app_instr_instances"]:
+                            result["app_instr_instances"].append(instance)
+            for nested in value.values():
+                walk(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                walk(nested)
+
+    walk(repair_payload.get("baseline_subset") or {})
+    result["addresses"].update(
+        str(item).strip().upper()
+        for item in (repair_payload.get("allowed_addresses") or [])
+        if str(item).strip()
+    )
+    return result
+
+
+def _constrain_native_repair_schema(schema, repair_payload, plc_model):
+    """Prevent a local repair from inventing devices/parameters outside its baseline."""
+    tokens = _repair_baseline_tokens(repair_payload)
+    addresses = sorted(tokens["addresses"])
+    operands = sorted(tokens["operands"])
+    values = sorted(tokens["values"])
+    expressions = sorted(tokens["expressions"])
+    arities = sorted(tokens["app_instr_arities"])
+    app_instr_instances = list(tokens["app_instr_instances"])
+    baseline_opcodes = sorted({item["opcode"] for item in app_instr_instances})
+
+    def visit(rule):
+        if isinstance(rule, list):
+            for child in rule:
+                visit(child)
+            return
+        if not isinstance(rule, dict):
+            return
+
+        properties = rule.get("properties")
+        if isinstance(properties, dict):
+            type_rule = properties.get("type")
+            type_values = set(type_rule.get("enum", [])) if isinstance(type_rule, dict) else set()
+            if "address" in properties and addresses:
+                properties["address"]["enum"] = addresses
+            if "expression" in properties and expressions:
+                properties["expression"]["enum"] = expressions
+            if "value" in properties and values:
+                properties["value"]["enum"] = values
+            if "APP_INSTR" in type_values:
+                opcode_rule = properties.get("opcode")
+                operand_rule = properties.get("operands")
+                if isinstance(opcode_rule, dict):
+                    # Structural repair is copy-only: the model may reuse only
+                    # APP_INSTR opcodes already present in baseline_subset.
+                    opcode_rule["enum"] = baseline_opcodes
+                if isinstance(operand_rule, dict):
+                    if operands:
+                        # ladder_v1_schema reuses the generic token rule for
+                        # TIMER/COUNTER values and APP_INSTR operands. Detach
+                        # the operand item rule before adding an enum so this
+                        # local repair constraint cannot mutate timer presets.
+                        operand_rule["items"] = dict(operand_rule.get("items") or {})
+                        operand_rule["items"]["enum"] = operands
+                    if len(arities) == 1:
+                        operand_rule["minItems"] = arities[0]
+                        operand_rule["maxItems"] = arities[0]
+            for child in properties.values():
+                visit(child)
+        for key in ("oneOf", "anyOf", "allOf"):
+            visit(rule.get(key))
+        visit(rule.get("items"))
+
+    visit(schema)
+    return schema
+
+
+def _native_field_patch_response_format(repair_payload):
+    target = repair_payload.get("target") if isinstance(repair_payload, dict) else None
+    if not isinstance(target, dict) or not isinstance(target.get("path"), str):
+        raise ValueError("field repair target is required")
+    value_schema = json.loads(json.dumps(target.get("value_schema") or {}))
+    if not value_schema:
+        raise ValueError("field repair value schema is required")
+    base_sha = str(repair_payload.get("base_sha256") or "")
+    schema = {
+        "type": "object",
+        "properties": {
+            "schema_version": {"type": "integer", "enum": [1]},
+            "mode": {"type": "string", "enum": ["field_patch"]},
+            "base_sha256": {"type": "string", "enum": [base_sha]},
+            "patches": {
+                "type": "array", "minItems": 1, "maxItems": 1,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "enum": [target["path"]]},
+                        "value": value_schema,
+                    },
+                    "required": ["path", "value"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["schema_version", "mode", "base_sha256", "patches"],
+        "additionalProperties": False,
+    }
+    return {"type": "json_schema", "json_schema": {
+        "name": "ladder_field_patch", "strict": True, "schema": schema,
+    }}
+
+
+def _native_partial_repair_response_format(repair_payload):
+    """Build the provider-enforced partial repair schema from the shared ladder contract."""
+    plc_model = str(repair_payload.get("plc_model") or "FX3U").strip().upper() or "FX3U"
+    combined = ladder_response_schema(allow_partial=True, plc_model=plc_model)
+    schema = combined["oneOf"][1]
+    schema["required"] = ["mode", "device_comments", "rungs", "delete_rung_ids"]
+    schema["properties"]["delete_rung_ids"]["maxItems"] = 0
+
+    allowed_rung_ids = sorted({
+        int(item) for item in (repair_payload.get("allowed_rung_ids") or [])
+        if not isinstance(item, bool)
+    })
+    rung_array = schema["properties"]["rungs"]
+    if allowed_rung_ids:
+        rung_array["minItems"] = 1
+        rung_array["maxItems"] = len(allowed_rung_ids)
+        rung_array["items"]["properties"]["rung_id"] = {
+            "type": "integer", "enum": allowed_rung_ids,
+        }
+        # Structural rung repair must not opportunistically rewrite comments.
+        schema["properties"]["device_comments"] = {
+            "type": "object", "properties": {}, "required": [],
+            "additionalProperties": False,
+        }
+        _constrain_native_repair_schema(schema, repair_payload, plc_model)
+    else:
+        rung_array["maxItems"] = 0
+        allowed_addresses = sorted({
+            str(item).strip().upper() for item in (repair_payload.get("allowed_addresses") or [])
+            if str(item).strip()
+        })
+        comment_properties = {
+            address: {"type": "string", "maxLength": 64}
+            for address in allowed_addresses
+        }
+        schema["properties"]["device_comments"] = {
+            "type": "object",
+            "properties": comment_properties,
+            "required": allowed_addresses,
+            "additionalProperties": False,
+        }
+
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "ladder_partial_repair",
+            "strict": True,
+            "schema": schema,
+        },
+    }
+
+
+@language_scoped
+def repair_ladder_response(repair_payload, model_name, effort, *, mode,
+                           on_reasoning_chunk=None, on_content_chunk=None):
+    """One explicit repair request that bypasses normal generation context."""
+    if mode not in {"field_patch", "partial", "format"}:
+        raise ValueError("Unsupported ladder repair mode")
+    if not isinstance(repair_payload, dict):
+        raise TypeError("repair_payload must be an object")
+    repair_payload = dict(repair_payload)
+    if mode == "format":
+        # Compatibility name only: the model is never allowed to rewrite the
+        # whole ladder. Deterministic recovery runs first, then at most a small
+        # syntax-only before/after patch is requested and applied locally.
+        from application.format_patch_repair import format_repair_response
+        return format_repair_response(
+            repair_payload, model_name, effort,
+            on_reasoning_chunk=on_reasoning_chunk,
+            on_content_chunk=on_content_chunk,
+        )
+    if mode == "partial":
+        plc_model = str(repair_payload.get("plc_model") or "FX3U").strip().upper() or "FX3U"
+        baseline_tokens = _repair_baseline_tokens(repair_payload)
+        app_instr_instances = [
+            {"opcode": item["opcode"], "operands": list(item["operands"])}
+            for item in baseline_tokens["app_instr_instances"]
+        ]
+        repair_payload["repair_contract"] = {
+            "plc_model": plc_model,
+            "semantic_policy": "copy_only",
+            "app_instr_opcode_enum": sorted({item["opcode"] for item in app_instr_instances}),
+            "app_instr_instances": app_instr_instances,
+            "app_instr_forbidden_typed_opcodes": sorted(GENERATION_TYPED_OUTPUT_OPCODES),
+            "dedicated_output_types": ["COIL", "PLS", "PLF", "TIMER", "COUNTER"],
+        }
+    if mode == "field_patch":
+        native_response_format = _native_field_patch_response_format(repair_payload)
+        system_prompt = FIELD_PATCH_REPAIR_SYSTEM_PROMPT
+        response_contract = FIELD_PATCH_RESPONSE
+        audit_reason = "explicit_field_repair"
+    elif mode == "partial":
+        native_response_format = _native_partial_repair_response_format(repair_payload)
+        system_prompt = PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT
+        response_contract = LADDER_RESPONSE
+        audit_reason = "explicit_local_repair"
+    else:
+        native_response_format = None
+        system_prompt = FORMAT_LADDER_REPAIR_SYSTEM_PROMPT
+        response_contract = LADDER_RESPONSE
+        audit_reason = "explicit_format_repair"
+    audit_section("repair_system_prompt", system_prompt, reason=audit_reason, source="api")
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": json.dumps(repair_payload, ensure_ascii=False, separators=(",", ":"))},
+    ]
+    response = _request_model(
+        messages, model_name=model_name, effort=effort, stream=True,
+        options={"response_format": native_response_format} if native_response_format else None,
+        response_contract=response_contract,
+        preserved_annotations=source_annotations(repair_payload),
+        on_reasoning_chunk=on_reasoning_chunk, on_content_chunk=on_content_chunk,
+        fallback_to_non_stream=True,
+    )
+    return response.message.reasoning, response.message.content
+
+
+def _native_ladder_generation_options(plc_model, *, allow_partial=False):
+    """Use the current ladder contract when the selected profile already uses native JSON Schema.
+
+    Profiles that use json_object/text keep their existing transport behavior.
+    This only replaces a persisted/native json_schema so its opcode enum cannot
+    drift behind the registry enforced by final PLC validation.
+    """
+    provider = _workflow_provider()
+    profile = getattr(provider, "profile", None)
+    if not isinstance(profile, dict):
+        return None
+    response_format = None
+    for key in ("generationDefaults", "requestOverrides"):
+        source = profile.get(key)
+        if isinstance(source, dict) and "response_format" in source:
+            response_format = source.get("response_format")
+    if not (isinstance(response_format, dict) and response_format.get("type") == "json_schema"):
+        return None
+
+    selected_model = str(plc_model or "FX3U").strip().upper() or "FX3U"
+    schema = ladder_response_schema(
+        allow_partial=bool(allow_partial),
+        plc_model=selected_model,
+    )
+    name = "ladder_candidate"
+    if allow_partial:
+        # Ordinary edit generation prefers a partial candidate. Use that branch
+        # directly so providers do not have to support a top-level oneOf.
+        schema = json.loads(json.dumps(schema["oneOf"][1]))
+        schema["required"] = ["mode", "device_comments", "rungs", "delete_rung_ids"]
+        name = "ladder_partial_candidate"
+    return {
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": name,
+                "strict": True,
+                "schema": schema,
+            },
+        }
+    }
+
+
 @language_scoped
 def stream_model_response(user_requirement, model_name, effort, target_mode,
                              on_reasoning_chunk=None, on_content_chunk=None,
@@ -1598,11 +1954,16 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
         image_attachments=image_attachments,
     )
 
+    native_options = (
+        _native_ladder_generation_options(plc_model, allow_partial=is_edit_mode)
+        if target_mode == "ladder" else None
+    )
     response = _request_model(
         messages,
         model_name=model_name,
         effort=effort,
         stream=True,
+        options=native_options,
         response_contract=LADDER_RESPONSE if target_mode == "ladder" else ST_RESPONSE,
         preserved_annotations=source_annotations(current_version_json, confirmed_spec, confirmed_context),
         on_reasoning_chunk=on_reasoning_chunk,
@@ -1654,12 +2015,17 @@ def generate_model_json(user_requirement: str, model_name: str, effort: str,
         image_attachments=image_attachments,
     )
 
+    native_options = (
+        _native_ladder_generation_options(plc_model, allow_partial=is_edit_mode)
+        if target_mode == "ladder" else None
+    )
     try:
         response = _request_model(
             messages,
             model_name=model_name,
             effort=effort,
             stream=False,
+            options=native_options,
             request_timeout=request_timeout,
             max_retries=max_retries,
             response_contract=LADDER_RESPONSE if target_mode == "ladder" else ST_RESPONSE,

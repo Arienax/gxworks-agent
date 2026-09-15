@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "vendor": "mitsubishi",
+  "description": "Modifier grammar for Mitsubishi applied instructions. Standard pulse forms append P; standard double forms prefix D unless an explicit double mnemonic override is supplied. Entries are base mnemonics, not duplicate instruction contracts.",
+  "modifier_rules": {
+    "CMP": {"pulse": true, "double": true},
+    "ZCP": {"pulse": true, "double": true},
+    "MOV": {"pulse": true, "double": true},
+    "CML": {"pulse": true, "double": true},
+    "BMOV": {"pulse": true},
+    "FMOV": {"pulse": true, "double": true},
+    "XCH": {"pulse": true, "double": true},
+    "BCD": {"pulse": true, "double": true},
+    "BIN": {"pulse": true, "double": true},
+    "ADD": {"pulse": true, "double": true},
+    "SUB": {"pulse": true, "double": true},
+    "MUL": {"pulse": true, "double": true},
+    "DIV": {"pulse": true, "double": true},
+    "INC": {"pulse": true, "double": true},
+    "DEC": {"pulse": true, "double": true},
+    "WAND": {"pulse": true, "double": "DAND"},
+    "WOR": {"pulse": true, "double": "DOR"},
+    "WXOR": {"pulse": true, "double": "DXOR"},
+    "NEG": {"pulse": true, "double": true},
+    "SFTL": {"pulse": true},
+    "SFTR": {"pulse": true},
+    "RD3A": {"pulse": true},
+    "WR3A": {"pulse": true}
+  },
+  "instructions": []
+}

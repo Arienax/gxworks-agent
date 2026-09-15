@@ -48,6 +48,102 @@ def _normalize_legacy_blocks(ladder):
                 output.update(replacement)
 
 
+def _has_invalid_shared_parallel(ladder):
+    """Return True only for the explicit structure-only fallback we recognize."""
+    if not isinstance(ladder, dict):
+        return False
+    for rung in ladder.get("rungs", []) or []:
+        if not isinstance(rung, dict):
+            continue
+        for element in rung.get("shared_inputs", []) or []:
+            if (
+                isinstance(element, dict)
+                and str(element.get("type") or "").casefold() == "parallel_block"
+            ):
+                return True
+    return False
+
+
+def _element_semantics(element):
+    if not isinstance(element, dict):
+        return None
+    if str(element.get("type") or "").casefold() == "parallel_block":
+        return {
+            "type": "parallel_block",
+            "branches": [
+                [_element_semantics(child) for child in branch]
+                for branch in (element.get("branches") or [])
+                if isinstance(branch, list)
+            ],
+        }
+    return {
+        key: copy.deepcopy(element[key])
+        for key in ("type", "address", "expression", "opcode", "operands", "value")
+        if key in element
+    }
+
+
+def _rung_behavior_signature(rung):
+    """Ignore storage location only; preserve condition/output associations."""
+    if not isinstance(rung, dict):
+        return None
+    shared = [
+        _element_semantics(element)
+        for element in (rung.get("shared_inputs") or [])
+        if isinstance(element, dict)
+    ]
+    branches = []
+    for branch in rung.get("branches", []) or []:
+        if not isinstance(branch, dict):
+            return None
+        branches.append({
+            "inputs": shared + [
+                _element_semantics(element)
+                for element in (branch.get("inputs") or [])
+                if isinstance(element, dict)
+            ],
+            "outputs": [
+                _element_semantics(element)
+                for element in (branch.get("outputs") or [])
+                if isinstance(element, dict)
+            ],
+        })
+    return {
+        "header_element": _element_semantics(rung.get("header_element")),
+        "branches": branches,
+    }
+
+
+def _enforce_structural_repair_semantics(previous_ladder, submitted_partial):
+    """Structure-only fallback may relocate storage, never change rung behavior.
+
+    Semantic generation-contract repair also uses task_type=contract_repair.
+    Therefore this guard activates from concrete invalid-shared-input evidence,
+    not from the task type name.
+    """
+    if not _has_invalid_shared_parallel(previous_ladder):
+        return
+    if not isinstance(previous_ladder, dict) or not isinstance(submitted_partial, dict):
+        return
+    baseline = {
+        rung.get("rung_id"): rung
+        for rung in previous_ladder.get("rungs", []) or []
+        if isinstance(rung, dict) and isinstance(rung.get("rung_id"), int)
+        and not isinstance(rung.get("rung_id"), bool)
+    }
+    for rung in submitted_partial.get("rungs", []) or []:
+        if not isinstance(rung, dict):
+            continue
+        rung_id = rung.get("rung_id")
+        original = baseline.get(rung_id)
+        if original is None:
+            continue
+        if _rung_behavior_signature(original) != _rung_behavior_signature(rung):
+            raise PLCJsonValidationError(
+                f"$.rungs: structural repair changed condition/output behavior in rung {rung_id}"
+            )
+
+
 def normalization_summary(report):
     """A small user-facing summary, without copied program bodies or paths."""
     operations = {
@@ -92,6 +188,7 @@ def prepare_ladder_candidate(
     """
     parsed = copy.deepcopy(candidate)
     check_candidate_containers(parsed)
+    submitted = copy.deepcopy(parsed)
     progress = on_progress or (lambda _message: None)
     messages = []
     progress(tr('正在解析模型输出：规范化梯形图协议'))
@@ -105,6 +202,7 @@ def prepare_ladder_candidate(
 
     allowed_ids = set(allowed_rung_ids or ())
     allowed_devices = {str(item).strip().upper() for item in (allowed_addresses or ())}
+    structural_only = _has_invalid_shared_parallel(previous_ladder)
     if repair_mode:
         if parsed.get("mode") != "partial":
             raise PLCJsonValidationError('$.mode: repair must return "partial"')
@@ -119,10 +217,15 @@ def prepare_ladder_candidate(
         if task_type == "contract_repair":
             if parsed.get("delete_rung_ids"):
                 raise PLCJsonValidationError("$.delete_rung_ids: contract repair may not delete existing rungs")
-            if allowed_devices:
+            # For structure-only relocation, behavior equality below is stronger
+            # than the legacy address extractor, which does not inspect invalid
+            # shared_inputs containers. Keep the ordinary address scope for all
+            # semantic contract repairs.
+            if allowed_devices and not structural_only:
                 outside_devices = patch_device_addresses(parsed) - allowed_devices
                 if outside_devices:
                     raise PLCJsonValidationError("$.rungs: contract repair introduced out-of-scope devices " + ", ".join(sorted(outside_devices)))
+            _enforce_structural_repair_semantics(previous_ladder, submitted)
 
     normalization_scope = None
     if parsed.get("mode") == "partial":

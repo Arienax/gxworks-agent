@@ -7,7 +7,9 @@ from concurrent.futures import ThreadPoolExecutor
 import zipfile
 import pytest
 import runtime_diagnostics as d
-from model_provider import (OpenAICompatibleProvider, ModelRequest, UserMessage,
+from application.generation_repair import GenerationValidationError
+from plc_json_validator import PLCJsonValidationError, validate_ladder_candidate_structure
+from model_provider import (OpenAICompatibleProvider, ModelRequest, SystemMessage, UserMessage,
     ResponseRejectedError, ResponseContract, collect_response, ModelProviderError)
 
 
@@ -56,6 +58,139 @@ def test_json_locations_include_original_fence_and_leading_whitespace():
     assert value['fenced'] is True
 
 
+def test_extra_data_reports_complete_object_shape_and_tail_class_without_content():
+    value = d.json_diagnostic('{"device_comments":{},"rungs":[{"rung_id":1}]};')
+    assert value['json_status'] == 'syntax_error'
+    assert value['json_error'] == 'Extra data'
+    assert value['prefix_complete_object'] is True
+    assert value['punctuation_only_tail'] is True
+    assert value['tail_class'] == 'punctuation'
+    assert value['suffix_chars'] == 1
+    assert value['rung_count'] == 1
+    assert value['device_comment_count'] == 0
+    assert value['distance_from_end'] == 1
+    semantic = d.json_diagnostic('{"rungs":[]}x')
+    assert semantic['prefix_complete_object'] is True
+    assert semantic['tail_class'] == 'semantic'
+    second = d.json_diagnostic('{"rungs":[]}{"rungs":[]}')
+    assert second['prefix_complete_object'] is True
+    assert second['tail_class'] == 'second_json'
+    raw = json.dumps([value, semantic, second])
+    assert 'rung_id' not in raw and 'device_comments' not in raw
+
+
+def test_model_request_records_role_sizes_without_message_text(tmp_path):
+    req = ModelRequest((SystemMessage('SYSTEM_PRIVATE'), UserMessage('USER_PRIVATE')),
+                       model='fixture-model', response_contract=ResponseContract('ladder','json'))
+    with d.diagnostic_scope(tmp_path,'job_test'):
+        d.begin_request(req, object())
+    event = next(x for x in rows(tmp_path) if x['event']=='model_request')
+    assert event['system_messages'] == 1 and event['user_messages'] == 1
+    assert event['system_chars'] == len('SYSTEM_PRIVATE')
+    assert event['user_chars'] == len('USER_PRIVATE')
+    assert event['message_chars'] == len('SYSTEM_PRIVATE') + len('USER_PRIVATE')
+    assert 'SYSTEM_PRIVATE' not in json.dumps(event) and 'USER_PRIVATE' not in json.dumps(event)
+
+
+
+def test_invalid_app_instr_opcode_is_exported_as_bounded_observed_value(tmp_path):
+    ladder = {
+        "device_comments": {},
+        "rungs": [{
+            "rung_id": 1,
+            "header_element": None,
+            "shared_inputs": [],
+            "branches": [{
+                "branch_id": 1,
+                "y_offset_level": 0,
+                "inputs": [],
+                "outputs": [{
+                    "type": "APP_INSTR",
+                    "opcode": "NOT_A_REAL_OPCODE",
+                    "operands": ["PRIVATE_OPERAND"],
+                    "label": None,
+                }],
+            }],
+        }],
+    }
+    with pytest.raises(PLCJsonValidationError) as caught:
+        validate_ladder_candidate_structure(
+            ladder, plc_model="FX3U", require_catalogued_instructions=True,
+        )
+    assert caught.value.observed_opcode == "NOT_A_REAL_OPCODE"
+    failure = GenerationValidationError(
+        [caught.value], attempts=0, max_attempts=0,
+        language="zh-CN", stop_reason="final_validation",
+    )
+    with d.diagnostic_scope(tmp_path, "job_test"):
+        d.exception_record(failure)
+
+    baseline = json.loads(json.dumps(ladder))
+    outputs = baseline["rungs"][0]["branches"][0]["outputs"]
+    outputs[0]["opcode"] = "DADD"
+    outputs.append({
+        "type": "APP_INSTR", "opcode": "MOV",
+        "operands": ["PRIVATE_SECOND_OPERAND"], "label": None,
+    })
+    private_record = {
+        "id": "job_test",
+        "snapshot": {
+            "repair_mode": True, "repair_baseline": baseline, "allowed_rung_ids": [1],
+            "project": {"plc_model": "FX3U"},
+        },
+    }
+    jobs_dir = tmp_path / "jobs"
+    jobs_dir.mkdir()
+    (jobs_dir / "job_test.json").write_text(json.dumps(private_record), encoding="utf-8")
+    # Match the real HTTP path: the exporter receives a public job without snapshot.
+    job = {"id": "job_test", "status": "failed", "kind": "generation"}
+    with zipfile.ZipFile(io.BytesIO(d.export_diagnostics(tmp_path, job))) as archive:
+        summary = json.loads(archive.read("summary.json"))
+        log = archive.read("diagnostics.jsonl").decode()
+        payload = archive.read("summary.json").decode() + log + archive.read("README.txt").decode()
+    assert summary["validation_values_included"] is True
+    workflow = summary["failure_analysis"]["workflow_exception"]
+    violation = workflow["exceptions"][0]["violations"][0]
+    assert violation["baseline_app_instrs"] == [
+        {"output_index": 0, "opcode": "DADD", "rung_id": 1, "branch_id": 1},
+        {"output_index": 1, "opcode": "MOV", "rung_id": 1, "branch_id": 1},
+    ]
+    assert "baseline_opcode" not in violation
+    assert violation["observed_opcode"] == "NOT_A_REAL_OPCODE"
+    assert violation["allowed_by_registry"] is False
+    assert '"baseline_app_instrs"' in log
+    assert '"opcode": "DADD"' in log
+    assert '"opcode": "MOV"' in log
+    assert '"observed_opcode": "NOT_A_REAL_OPCODE"' in log
+    assert '"allowed_by_registry": false' in log
+    assert "PRIVATE_OPERAND" not in payload
+    assert "PRIVATE_SECOND_OPERAND" not in payload
+
+
+def test_observed_opcode_diagnostic_redacts_secret_like_tokens(tmp_path):
+    error = PLCJsonValidationError("$.rungs[0].branches[0].outputs[0].opcode: invalid")
+    error.observed_opcode = "SK-PRIVATE_TOKEN"
+    with d.diagnostic_scope(tmp_path, "job_test"):
+        d.exception_record(error)
+    item = next(x for x in rows(tmp_path) if x["event"] == "workflow_exception")["exceptions"][0]
+    assert item["observed_opcode"] == "redacted"
+    assert "PRIVATE_TOKEN" not in json.dumps(rows(tmp_path))
+
+
+def test_generation_validation_exception_records_attempts_stop_and_paths(tmp_path):
+    cause = json.JSONDecodeError('Extra data', '{};', 2)
+    failure = GenerationValidationError([cause], attempts=0, max_attempts=0,
+                                        language='zh-CN', stop_reason='final_validation')
+    with d.diagnostic_scope(tmp_path,'job_test'):
+        d.exception_record(failure)
+    item = next(x for x in rows(tmp_path) if x['event']=='workflow_exception')['exceptions'][0]
+    assert item['attempt_count'] == 0 and item['max_attempts'] == 0
+    assert item['stop_reason'] == 'final_validation'
+    assert item['violation_count'] == 1
+    assert item['violations'][0]['reason'] == 'invalid_json_object'
+    assert item['violations'][0]['path'].startswith('content$')
+
+
 @pytest.mark.parametrize('stream', [False,True])
 @pytest.mark.parametrize('finish', ['length','stop','content_filter','insufficient_system_resource',None])
 def test_raw_adapter_finish_and_rejection_are_observed_not_repaired(tmp_path,stream,finish):
@@ -79,6 +214,10 @@ def test_raw_adapter_finish_and_rejection_are_observed_not_repaired(tmp_path,str
     assert result['finish_seen'] == (finish is not None)
     assert next(x for x in log if x['event']=='model_response')['json']['json_status']=='syntax_error'
     assert any(x['event']=='response_rejected' for x in log)
+    exception = next(x for x in log if x['event']=='workflow_exception')['exceptions'][0]
+    assert exception['violation_count'] >= 1
+    assert exception['violations'][0]['path'] == 'content'
+    assert exception['violations'][0]['reason'] == 'invalid_json_object'
     assert len(calls)==1 and emitted==[]
     raw=json.dumps(log)
     assert all(secret not in raw for secret in ['PRIVATE_RESPONSE','PRIVATE_REASONING','PRIVATE_PROMPT','PRIVATE_CREDENTIAL','PRIVATE_ENDPOINT'])
@@ -120,20 +259,23 @@ def test_stream_failure_records_metadata_and_original_cause(tmp_path):
     assert 'PRIVATE_CREDENTIAL' not in json.dumps(records)
 
 
-def test_export_reprojects_log_and_never_reads_snapshot_config_or_body(tmp_path):
-    with d.diagnostic_scope(tmp_path,'job_test'):
-        d.emit('model_request', model='fixture-model', prompt='PRIVATE_PROMPT', api_key='PRIVATE_KEY')
-    path=tmp_path/'diagnostics/job_test.jsonl'
-    with path.open('a') as f:
-        f.write(json.dumps({'schema_version':1,'event':'model_request','job_id':'job_test',
-                'model':'sk-PRIVATE_CREDENTIAL','api_key':'PRIVATE_KEY','prompt':'PRIVATE_PROMPT'})+'\n')
-    job={'id':'job_test','status':'failed','kind':'generation','snapshot':{'password':'PRIVATE_PASSWORD'}}
-    with zipfile.ZipFile(io.BytesIO(d.export_diagnostics(tmp_path,job))) as z:
-        assert set(z.namelist())=={'summary.json','diagnostics.jsonl','README.txt'}
-        payload=''.join(z.read(n).decode() for n in z.namelist())
-        assert 'PRIVATE_' not in payload
-        assert json.loads(z.read('summary.json'))['capture_status']=='captured'
-
+def test_export_includes_operator_details_but_redacts_sensitive_fields(tmp_path):
+    with d.diagnostic_scope(tmp_path, 'job_test'):
+        d.emit('model_request', model='fixture-model')
+    job = {'id':'job_test','status':'failed','kind':'generation',
+           'snapshot':{'password':'do-not-export','text':'operator requirement'}}
+    with zipfile.ZipFile(io.BytesIO(d.export_diagnostics(tmp_path, job))) as z:
+        assert set(z.namelist()) == {
+            'summary.json','diagnostics.jsonl','job.json','transcript.jsonl',
+            'operator_actions.jsonl','README.txt'
+        }
+        exported_job = json.loads(z.read('job.json'))
+        assert exported_job['snapshot']['text'] == 'operator requirement'
+        assert exported_job['snapshot']['password'] == '<redacted>'
+        summary = json.loads(z.read('summary.json'))
+        assert summary['capture_status'] == 'captured'
+        assert summary['content_included'] is True
+        assert 'model_request' in summary['failure_analysis']
 
 def test_old_job_export_does_not_fabricate_evidence(tmp_path):
     with zipfile.ZipFile(io.BytesIO(d.export_diagnostics(tmp_path,{'id':'job_old'}))) as z:

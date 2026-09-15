@@ -16,6 +16,62 @@
         {"name": "pulse_output", "role": "write"}
       ],
       "notes": "FX5U projects should use the model-appropriate homing instruction such as DSZR."
+    },
+    {
+      "mnemonic": "ZRST",
+      "canonical_op": "ZONE_RESET",
+      "category": "action",
+      "semantic_kind": "function",
+      "cpu_support": ["FX3U"],
+      "arity": {"min": 2, "max": 2},
+      "operands": [
+        {"name": "start", "role": "write", "device_prefixes": ["Y", "M", "S", "T", "C", "D"]},
+        {"name": "end", "role": "write", "device_prefixes": ["Y", "M", "S", "T", "C", "D"]}
+      ],
+      "notes": "FNC40 ZRST / Zone Reset. JY997D16601. Resets the inclusive range between two like devices."
+    },
+    {
+      "mnemonic": "UNI",
+      "canonical_op": "NIBBLE_LINK",
+      "category": "action",
+      "semantic_kind": "function",
+      "cpu_support": ["FX3U"],
+      "arity": {"min": 3, "max": 3},
+      "operands": [
+        {"name": "source", "role": "read", "data_type": "word"},
+        {"name": "destination", "role": "write", "data_type": "word"},
+        {"name": "count", "role": "read"}
+      ],
+      "notes": "FNC143 UNI / 4-bit Linking of Word Data. Source: Mitsubishi JY997D16601 section 19.4. Count n is 0..4; n=0 performs no operation."
+    },
+    {
+      "mnemonic": "DIS",
+      "canonical_op": "NIBBLE_GROUP",
+      "category": "action",
+      "semantic_kind": "function",
+      "cpu_support": ["FX3U"],
+      "arity": {"min": 3, "max": 3},
+      "operands": [
+        {"name": "source", "role": "read", "data_type": "word"},
+        {"name": "destination", "role": "write", "data_type": "word"},
+        {"name": "count", "role": "read"}
+      ],
+      "notes": "FNC144 DIS / 4-bit Grouping of Word Data. Source: Mitsubishi JY997D16601 section 19.5. Count n is 0..4; n=0 performs no operation."
+    },
+    {
+      "mnemonic": "BK+",
+      "canonical_op": "BLOCK_ADD",
+      "category": "action",
+      "semantic_kind": "function",
+      "cpu_support": ["FX3U"],
+      "arity": {"min": 4, "max": 4},
+      "operands": [
+        {"name": "source_1", "role": "read"},
+        {"name": "source_2", "role": "read"},
+        {"name": "destination", "role": "write"},
+        {"name": "count", "role": "read"}
+      ],
+      "notes": "FNC192 BK+ / Block Data Addition. Source: Mitsubishi JY997D16601 section 25.1. Bare BK is not a valid mnemonic."
     }
   ]
 }

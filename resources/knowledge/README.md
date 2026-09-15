@@ -59,6 +59,8 @@ Mitsubishi PDF manuals                 gxw2-skill Markdown/examples
 
 `S1/S2` 根据上下文分为 `operand_placeholder` 或 `device`；例如 `skill_instruction` 文档中的 `S1/S2` 作为 operand，而设备文档中的状态继电器地址保持为 device。
 
+设备实体构建还会执行语义清洗：小写参数变量（例如 `2 <= n <= 512`）不会被归一化为 `N512` 设备；MC/MCR 的 `N0`～`N7` 保留为 nesting-level 语义；`D | 17 steps | DABSD` 一类 PDF 表格压平结果不会生成伪 `D17`。该清洗只处理有明确语义证据的误识别，不使用具体设备地址黑名单，因此程序示例中的 `D307`、`M599`、`P10` 等仍作为真实设备/指针实体保留。
+
 导入器支持 UTF-8/UTF-8 BOM，以及带 BOM 的 UTF-16 LE/BE 文本，以兼容 gxw2-skill 中 GX Works2 Label CSV 示例的实际编码。
 
 ## 检索
@@ -94,13 +96,15 @@ deterministic cross-signal reranker + source priority + task-aware ranking
 完整重建顺序：
 
 ```powershell
-python tools/build_fx3u_knowledge_v3.py
+python tools/build_fx3u_knowledge.py
 python tools/import_design_patterns.py
 python tools/import_gxw2_skill.py
 python tools/tune_gxw2_skill_ranking.py
 python tools/build_dense_embeddings.py
 python tools/evaluate_rag_benchmark.py --fail-under-recall-10 0.98
 ```
+
+`build_fx3u_knowledge.py` 是规范入口；它复用 schema-v3 builder，并在写入 `entity_index` / `device_records` 前应用设备实体语义清洗。不要绕过该入口直接调用内部 `build_fx3u_knowledge_v3.py` 进行正式重建。
 
 `import_gxw2_skill.py` 默认下载 `external_sources.json` 固定的 commit。已有本地 checkout 时可离线导入：
 

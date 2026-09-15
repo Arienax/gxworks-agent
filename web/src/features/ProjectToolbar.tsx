@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { ArrowDownToLine, ArrowLeft, ArrowRight, ChevronDown, MoreHorizontal, RefreshCw, Trash2 } from "lucide-react";
 import type { Artifact } from "../api/client";
-import { api, artifactUrl } from "../api/client";
+import { api, artifactUrl, freshGxCsvUrl } from "../api/client";
 import { Button } from "../components/ui";
 
 export function artifactLabel(id: string) {
@@ -36,6 +36,7 @@ export function ProjectToolbar({ pid, vid, artifacts, exportable, canRead, canSe
   onSend: () => void; onRefresh: () => void; more: ReactNode; t: (s:string) => string;
 }) {
   const files = artifacts.filter((a) => a.available);
+  const canFreshExport = !!pid && !!vid && files.some((a) => ["ir", "json", "program_csv"].includes(a.id));
   const [deleting, setDeleting] = useState(false);
   async function deleteProject() {
     if (!pid || deleting) return;
@@ -57,6 +58,10 @@ export function ProjectToolbar({ pid, vid, artifacts, exportable, canRead, canSe
         {files.map((a) => <a key={a.id} href={artifactUrl(pid, vid, a.id, true)}>
           <span>{t(artifactLabel(a.id))}</span><small>{a.filename}</small>
         </a>)}
+        {canFreshExport && <a href={freshGxCsvUrl(pid, vid)}>
+          <span>{t("重新导出 GX Works2 CSV")}</span>
+          <small>{t("不调用模型，按当前导出器从已保存程序重新生成")}</small>
+        </a>}
       </Menu>
     </div>
     <div className="toolbar-group gx-transfer-group">

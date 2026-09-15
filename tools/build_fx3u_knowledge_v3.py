@@ -38,7 +38,7 @@ except ImportError as error:  # pragma: no cover
     raise SystemExit("pdfplumber is required to preserve tables and word geometry") from error
 
 
-BUILDER_VERSION = "3.0.0"
+BUILDER_VERSION = "3.0.3"
 SCHEMA_VERSION = 3
 TASK_TYPES = "*"
 DEFAULT_TARGET_CHARS = 4800
@@ -1008,11 +1008,22 @@ def extract_entities(
         second_prefix = (match.group(3) or first_prefix).upper()
         first_token = f"{first_prefix}{match.group(2)}"
         second_token = f"{second_prefix}{match.group(4)}"
+        # A real PLC device range cannot change device family. Text such as
+        # ``D8360-Y003`` is normally two table/prose cells flattened around a
+        # dash and must not become one device_range entity.
+        if first_prefix != second_prefix:
+            continue
         if (
-            first_prefix == second_prefix == "S"
+            first_prefix in {"S", "D", "N", "M", "P"}
             and chunk_type == "instruction"
-            and not _explicit_state_relay_context(text, first_token)
-            and not _explicit_state_relay_context(text, second_token)
+            and _operand_placeholder_context(text, match.start(), match.end())
+            and (
+                first_prefix != "S"
+                or (
+                    not _explicit_state_relay_context(text, first_token)
+                    and not _explicit_state_relay_context(text, second_token)
+                )
+            )
         ):
             entities[(first_token, "operand_placeholder")] += 1
             entities[(second_token, "operand_placeholder")] += 1
@@ -1025,11 +1036,15 @@ def extract_entities(
         entity = f"{prefix}{match.group(2)}"
         if match.group(3):
             entity += f".{match.group(3)}"
-        if prefix == "S" and int(match.group(2)) > 0:
-            is_operand_context = chunk_type == "instruction" or _operand_placeholder_context(
-                text, match.start(), match.end()
+        if prefix in {"S", "D", "N", "M", "P"} and int(match.group(2)) > 0:
+            is_operand_context = (
+                chunk_type == "instruction"
+                and _operand_placeholder_context(text, match.start(), match.end())
             )
-            if is_operand_context and not _explicit_state_relay_context(text, entity):
+            if (
+                is_operand_context
+                and (prefix != "S" or not _explicit_state_relay_context(text, entity))
+            ):
                 entities[(entity, "operand_placeholder")] += 1
                 continue
         entities[(entity, "device")] += 1
@@ -1054,10 +1069,13 @@ def extract_entities(
             continue
         if instruction_re.fullmatch(entity):
             kind = "instruction"
-        elif re.fullmatch(r"S[1-9]\d*", entity) and (
+        elif re.fullmatch(r"[SDNMP][1-9]\d*", entity) and (
             chunk_type == "instruction"
-            or _operand_placeholder_context(text, 0, len(text))
-        ) and not _explicit_state_relay_context(text, entity):
+            and _operand_placeholder_context(text, 0, len(text))
+        ) and (
+            not entity.startswith("S")
+            or not _explicit_state_relay_context(text, entity)
+        ):
             kind = "operand_placeholder"
         elif DEVICE_RE.fullmatch(entity):
             kind = "device"
@@ -1069,76 +1087,299 @@ def extract_entities(
     return entities
 
 
-def parse_operand_schema(pages: list[PageArtifact]) -> list[dict[str, str]]:
-    operands: list[dict[str, str]] = []
-    seen: set[str] = set()
-    for page in pages[:4]:
-        in_set_data = False
-        for raw_line in page.compact_layout.splitlines():
-            line = normalize_line(raw_line.replace("|", " | "))
-            if re.search(r"\bSet data\b", line, flags=re.I):
-                in_set_data = True
-                continue
-            if in_set_data and re.search(r"Applicable devices|Explanation of function", line, flags=re.I):
-                break
-            if not in_set_data:
-                continue
-            match = re.match(r"^(S\d+|D)\s*\|\s*(.+)$", raw_line.strip(), flags=re.I)
-            if not match:
-                continue
-            name = match.group(1).upper()
-            if name in seen:
-                continue
-            cells = [normalize_line(value) for value in match.group(2).split("|") if normalize_line(value)]
-            description = cells[0] if cells else ""
-            data_type = next(
-                (
-                    value
-                    for value in cells[1:]
-                    if re.search(
-                        r"\b(?:bit|binary|word|double\s*word|integer|real|bool|string)\b",
-                        value,
-                        flags=re.I,
-                    )
-                ),
-                cells[-1] if len(cells) > 1 else "",
-            )
-            operands.append(
-                {"position": name, "description": description, "data_type": data_type}
-            )
-            seen.add(name)
+def _operand_name(value: str) -> str:
+    """Normalize Mitsubishi instruction operand placeholders.
 
-        for table in page.tables:
-            table_text = str(table.get("text", ""))
-            if not re.search(r"Operand\s+Type", table_text, flags=re.I):
+    Data operands in the source manuals use S/D/N/M/P families (optionally
+    numbered). Device headers such as X/Y/K are not operand placeholders.
+    """
+    token = normalize_line(str(value or "")).strip()
+    if not token or token.upper() in {"EN", "ENO"}:
+        return ""
+    if not re.fullmatch(r"[SDNMPsdnmp](?:\d{0,3})?", token):
+        return ""
+    return token.upper()
+
+
+def _clean_table_cell(value: str) -> str:
+    token = normalize_line(str(value or "")).strip()
+    if token.casefold() in {"", "<blank>", "blank", "-", "—"}:
+        return ""
+    return token
+
+
+def _device_column_name(value: str) -> str:
+    """Normalize one column label from an Applicable devices matrix."""
+    token = normalize_line(str(value or ""))
+    token = re.sub(r"\[GLYPH-[0-9A-F]+\]|\(cid:\d+\)", "", token, flags=re.I)
+    token = re.sub(r"\s+", "", token)
+    if not token or token.casefold() in {"<blank>", "blank"}:
+        return ""
+    upper = token.upper()
+    if upper in {"X", "Y", "M", "T", "C", "S", "D", "R", "V", "Z", "K", "H", "E", "P"}:
+        return upper
+    if re.fullmatch(r"KN[XYMS]", upper):
+        return "Kn" + upper[2:]
+    if upper in {"D.B", "DB"}:
+        return "D.b"
+    if upper.startswith("U") and "\\G" in upper:
+        return "U\\G"
+    if upper.startswith("MODIF"):
+        return "Modifier"
+    if token.startswith('"'):
+        return "String"
+    return ""
+
+
+def _signature_operand_order(pages: list[PageArtifact], opcode: str) -> list[str]:
+    if not opcode:
+        return []
+    pattern = re.compile(rf"(?<![A-Z0-9_]){re.escape(opcode)}\s*\(([^)]{{1,180}})\)", re.I)
+    for page in pages[:4]:
+        for text in (page.compact_layout, page.layout_text, page.clean_text):
+            for match in pattern.finditer(text or ""):
+                raw_args = [normalize_line(value) for value in match.group(1).split(",")]
+                names: list[str] = []
+                valid = True
+                for raw in raw_args:
+                    if raw.upper() in {"EN", "ENO"}:
+                        continue
+                    name = _operand_name(raw)
+                    if not name:
+                        valid = False
+                        break
+                    names.append(name)
+                if valid and names:
+                    return list(dict.fromkeys(names))
+    return []
+
+
+def _compact_operand_rows(page: PageArtifact) -> list[tuple[str, str, str]]:
+    rows: list[tuple[str, str, str]] = []
+    active = False
+    type_pattern = re.compile(
+        r"\b(?:ANY(?:16|32|_SIMPLE)|BIN\s*\d+(?:/\d+)?-?bit|bit|binary|word|double\s*word|integer|real|bool|string)\b",
+        flags=re.I,
+    )
+    for raw_line in page.compact_layout.splitlines():
+        line = normalize_line(raw_line.replace("|", " | "))
+        if re.search(r"\bSet data\b|\bOperand\s+Type\b|^Variable\s*\|", line, flags=re.I):
+            active = True
+            continue
+        if active and re.search(
+            r"Applicable devices|Explanation of function|Function and operation explanation",
+            line,
+            flags=re.I,
+        ):
+            break
+        if not active:
+            continue
+        cells = [_clean_table_cell(value) for value in raw_line.split("|")]
+        if not cells:
+            continue
+        name = next((_operand_name(value) for value in cells[:2] if _operand_name(value)), "")
+        if not name:
+            continue
+        meaningful = [value for value in cells[1:] if value]
+        description = meaningful[0] if meaningful else ""
+        data_type = next((value for value in meaningful[1:] if type_pattern.search(value)), "")
+        if description:
+            rows.append((name, description, data_type))
+    return rows
+
+
+def _definition_table_rows(
+    page: PageArtifact,
+    expected_order: list[str],
+) -> list[tuple[str, str, str]]:
+    result: list[tuple[str, str, str]] = []
+    type_pattern = re.compile(
+        r"\b(?:ANY(?:16|32|_SIMPLE)|BIN\s*\d+(?:/\d+)?-?bit|bit|binary|word|double\s*word|integer|real|bool|string)\b",
+        flags=re.I,
+    )
+    for table in page.tables:
+        rows = table.get("rows") or []
+        table_text = normalize_line(str(table.get("text", "")))
+        if not rows or not re.search(r"\bDescription\b", table_text, flags=re.I):
+            continue
+        if re.search(r"Bit\s+Devices", table_text, flags=re.I) and re.search(r"Word\s+Devices", table_text, flags=re.I):
+            continue
+
+        header_index = -1
+        desc_col = -1
+        for row_index, row in enumerate(rows[:6]):
+            for column, raw in enumerate(row):
+                if re.search(r"\bDescription\b", _clean_table_cell(raw), flags=re.I):
+                    header_index, desc_col = row_index, column
+                    break
+            if header_index >= 0:
+                break
+        if header_index < 0 or desc_col < 0:
+            continue
+
+        expected_cursor = 0
+        consumed: set[str] = set()
+        for row in rows[header_index + 1:]:
+            cells = [_clean_table_cell(value) for value in row]
+            if desc_col >= len(cells):
                 continue
-            for row in table.get("rows", [])[1:]:
-                cells = [normalize_line(value) for value in row]
-                name = next((value.upper() for value in cells[:4] if re.fullmatch(r"S\d+|D", value, re.I)), "")
-                if not name or name in seen:
-                    continue
-                meaningful = [value for value in cells if value and value.upper() != name]
-                semantic_type = next(
-                    (
-                        value
-                        for value in meaningful[1:]
-                        if re.search(
-                            r"\b(?:bit|binary|word|double\s*word|integer|real|bool|string)\b",
-                            value,
-                            flags=re.I,
-                        )
-                    ),
-                    meaningful[-1] if len(meaningful) > 1 else "",
-                )
-                operands.append(
-                    {
-                        "position": name,
-                        "description": meaningful[0] if meaningful else "",
-                        "data_type": semantic_type,
-                    }
-                )
-                seen.add(name)
-    return operands
+            name_area = cells[:desc_col]
+            if any(str(value).upper() in {"EN", "ENO"} for value in name_area if value):
+                continue
+            explicit = next((_operand_name(value) for value in name_area if _operand_name(value)), "")
+            description = cells[desc_col]
+            if not description:
+                continue
+            data_type = next((value for value in cells[desc_col + 1:] if value and type_pattern.search(value)), "")
+            name = explicit
+            if not name:
+                while expected_cursor < len(expected_order) and expected_order[expected_cursor] in consumed:
+                    expected_cursor += 1
+                if expected_cursor < len(expected_order):
+                    name = expected_order[expected_cursor]
+                    expected_cursor += 1
+            if not name:
+                continue
+            consumed.add(name)
+            result.append((name, description, data_type))
+    return result
+
+
+def _applicable_devices_by_operand(
+    page: PageArtifact,
+    expected_order: list[str],
+) -> dict[str, set[str]]:
+    """Decode official Applicable-devices matrices without opcode rules."""
+    found: dict[str, set[str]] = defaultdict(set)
+    for table in page.tables:
+        rows = table.get("rows") or []
+        table_text = normalize_line(str(table.get("text", "")))
+        if not rows:
+            continue
+        if not (
+            re.search(r"Bit\s+Devices", table_text, flags=re.I)
+            and re.search(r"Word\s+Devices", table_text, flags=re.I)
+        ):
+            continue
+
+        best_index = -1
+        best_headers: dict[int, str] = {}
+        for row_index, row in enumerate(rows[:8]):
+            headers = {
+                index: name
+                for index, cell in enumerate(row)
+                if (name := _device_column_name(cell))
+            }
+            if len(headers) > len(best_headers):
+                best_index, best_headers = row_index, headers
+        if len(best_headers) < 4:
+            continue
+
+        first_device_col = min(best_headers)
+        expected_cursor = 0
+        consumed: set[str] = set()
+        for row in rows[best_index + 1:]:
+            cells = [_clean_table_cell(value) for value in row]
+            marked = [
+                column
+                for column in best_headers
+                if column < len(cells) and cells[column]
+            ]
+            if not marked:
+                continue
+            explicit = next(
+                (_operand_name(value) for value in cells[:first_device_col] if _operand_name(value)),
+                "",
+            )
+            name = explicit
+            if not name:
+                while expected_cursor < len(expected_order) and expected_order[expected_cursor] in consumed:
+                    expected_cursor += 1
+                if expected_cursor < len(expected_order):
+                    name = expected_order[expected_cursor]
+                    expected_cursor += 1
+            if not name:
+                continue
+            consumed.add(name)
+            for column in marked:
+                found[name].add(best_headers[column])
+    return found
+
+
+def parse_operand_schema(
+    pages: list[PageArtifact],
+    opcode: str = "",
+) -> list[dict[str, Any]]:
+    """Extract operand semantics and device applicability from manual tables.
+
+    The parser distinguishes operand-definition tables from Applicable-devices
+    matrices and uses instruction signatures only to align rows whose operand
+    glyph was lost by PDF table extraction.
+    """
+    operands: list[dict[str, Any]] = []
+    by_name: dict[str, dict[str, Any]] = {}
+
+    def remember(name: str, description: str = "", data_type: str = "") -> None:
+        if not name:
+            return
+        description = normalize_line(description)
+        data_type = normalize_line(data_type)
+        type_only = re.compile(
+            r"^(?:ANY(?:16|32|_SIMPLE)|BIN\s*\d+(?:/\d+)?-?bit|\d+-bit\s+binary|\d+-\s*or\s*\d+-bit\s+binary|bit|binary|word|double\s*word|integer|real|bool|string)(?:\s+binary)?$",
+            flags=re.I,
+        )
+        if description and not data_type and type_only.fullmatch(description):
+            data_type, description = description, ""
+        if description and re.fullmatch(
+            r"(?:(?:\[GLYPH-[0-9A-F]+\]|\(cid:\d+\))\d*\s*)+", description, flags=re.I
+        ):
+            description = ""
+        if description and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", description) and len(description) <= 3:
+            description = ""
+        if description and len(description) < 24:
+            words = re.findall(r"[A-Za-z]+", description)
+            if words and not any(len(word) >= 4 for word in words) and not re.search(r"\d{2,}", description):
+                description = ""
+        current = by_name.get(name)
+        if current is None:
+            current = {"position": name, "description": description, "data_type": data_type}
+            operands.append(current)
+            by_name[name] = current
+        else:
+            if description and not current.get("description"):
+                current["description"] = description
+            if data_type and not current.get("data_type"):
+                current["data_type"] = data_type
+
+    compact_rows: list[tuple[str, str, str]] = []
+    for page in pages[:4]:
+        compact_rows.extend(_compact_operand_rows(page))
+    signature_order = _signature_operand_order(pages, opcode)
+    if signature_order:
+        compact_rows = [row for row in compact_rows if row[0] in signature_order]
+    compact_order = list(dict.fromkeys(name for name, _description, _data_type in compact_rows))
+    expected_order = signature_order or compact_order
+
+    for name, description, data_type in compact_rows:
+        remember(name, description, data_type)
+    for page in pages[:4]:
+        for name, description, data_type in _definition_table_rows(page, expected_order):
+            remember(name, description, data_type)
+
+    applicability: dict[str, set[str]] = defaultdict(set)
+    for page in pages[:4]:
+        for name, devices in _applicable_devices_by_operand(page, expected_order).items():
+            applicability[name].update(devices)
+    for name, devices in applicability.items():
+        remember(name)
+        if devices:
+            by_name[name]["applicable_devices"] = sorted(devices)
+
+    # Do not publish a placeholder that was seen only as an unlabeled/empty row.
+    return [
+        item for item in operands
+        if item.get("description") or item.get("data_type") or item.get("applicable_devices")
+    ]
 
 
 def instruction_summary(pages: list[PageArtifact]) -> str:
@@ -1171,15 +1412,47 @@ def instruction_restrictions(pages: list[PageArtifact]) -> list[str]:
 
 
 def instruction_completion_flags(pages: list[PageArtifact]) -> list[str]:
+    """Return relays explicitly described as instruction completion flags.
+
+    A generic occurrence of the word ``flag`` is intentionally insufficient:
+    Mitsubishi instruction pages also contain zero, carry, borrow, error,
+    busy/ready, limit and control flags. Completion phrases are assigned only
+    to the nearest M8xxx relay on the same source line. This prevents a relay
+    on an adjacent PDF-table/prose line from inheriting another line's
+    completion semantics.
+    """
+    completion_semantics = re.compile(
+        r"\b(?:instruction\s+)?execution\s+complete(?:d)?\b|"
+        r"\bexecution\s+completion\s+(?:flag|relay)\b|"
+        r"\b(?:instruction|operation)\s+completion\s+(?:flag|relay)\b|"
+        r"\bcompletion\s+(?:flag|relay)\b|"
+        r"\b(?:instruction|operation)\s+(?:is\s+)?finished\b|"
+        r"\bfinished\s+(?:flag|relay)\b",
+        flags=re.I,
+    )
+    relay_re = re.compile(r"\bM8\d{3}\b", flags=re.I)
     flags: list[str] = []
+
+    def remember_nearest(context: str) -> None:
+        relay_matches = list(relay_re.finditer(context))
+        semantic_matches = list(completion_semantics.finditer(context))
+        if not relay_matches or not semantic_matches:
+            return
+        for semantic in semantic_matches:
+            semantic_center = (semantic.start() + semantic.end()) / 2
+            relay = min(
+                relay_matches,
+                key=lambda item: abs(((item.start() + item.end()) / 2) - semantic_center),
+            )
+            value = relay.group(0).upper()
+            if value not in flags:
+                flags.append(value)
+
     for page in pages:
-        text = page.clean_text
-        for match in re.finditer(r"\bM8\d{3}\b", text, flags=re.I):
-            window = text[max(0, match.start() - 100) : match.end() + 140]
-            if re.search(r"complete|completion|flag|finished", window, flags=re.I):
-                value = match.group(0).upper()
-                if value not in flags:
-                    flags.append(value)
+        for raw_line in page.clean_text.splitlines():
+            line = normalize_line(raw_line)
+            if relay_re.search(line) and completion_semantics.search(line):
+                remember_nearest(line)
     return flags
 
 
@@ -1206,9 +1479,29 @@ def sanitize_error_text(text: str) -> str:
     return value
 
 
+NO_ERROR_CODE_RANGE_RE = re.compile(
+    r"(?<![0-9A-F])(?:0x)?[3-9][0-9A-F]{3}(?:H)?\s+"
+    r"(?:to|through|[-–—~])\s+"
+    r"(?:0x)?[3-9][0-9A-F]{3}(?:H)?\s+"
+    r"(?:[-–—]\s*)?no\s+error\b",
+    flags=re.I,
+)
+
+
+def no_error_code_range_spans(text: str) -> list[tuple[int, int]]:
+    return [(match.start(), match.end()) for match in NO_ERROR_CODE_RANGE_RE.finditer(text)]
+
+
 def plausible_error_matches(text: str) -> list[re.Match[str]]:
+    # Some Mitsubishi error tables contain reserved/no-error ranges such as
+    # ``6307 to 6311 No error``. PDF text extraction makes both endpoints look
+    # like independent error codes. Exclude the whole range before slicing
+    # records so neither endpoint becomes a fake diagnostic row.
+    no_error_ranges = no_error_code_range_spans(text)
     matches: list[re.Match[str]] = []
     for match in ERROR_CODE_RE.finditer(text):
+        if any(start <= match.start() < end for start, end in no_error_ranges):
+            continue
         digits = match.group(1).upper()
         if len(digits) != 4:
             continue
@@ -1241,11 +1534,16 @@ def parse_error_records(page: PageArtifact) -> list[dict[str, Any]]:
                 flags=re.I,
             ):
                 continue
-            block_end = (
+            candidate_ends = [
                 matches[match_index + 1].start()
                 if match_index + 1 < len(matches)
                 else min(len(text), match.end() + 1800)
+            ]
+            candidate_ends.extend(
+                start for start, _end in no_error_code_range_spans(text)
+                if start > match.end()
             )
+            block_end = min(candidate_ends)
             raw_block = text[match.end() : block_end].strip()
             raw_lines = [
                 normalize_line(line)
@@ -1253,6 +1551,24 @@ def parse_error_records(page: PageArtifact) -> list[dict[str, Any]]:
                 if normalize_line(line)
             ]
             if not raw_lines:
+                continue
+            # 0000 is the explicit "No error" state in Mitsubishi error-code
+            # tables. PDF text extraction flattens the following nonzero-error
+            # row into the same text stream, so a generic block window would
+            # otherwise leak the next row's cause/action into the 0000 record.
+            if code == "0000" and re.search(r"\bno\s+error\b", raw_lines[0], flags=re.I):
+                message = re.sub(r"^[\s⎯—-]+", "", raw_lines[0]).strip()[:500]
+                records.append(
+                    {
+                        "code": code,
+                        "message": message,
+                        "cause": "",
+                        "corrective_action": "",
+                        "raw_text": message,
+                        "table_index": 0,
+                        "row_index": match_index + 1,
+                    }
+                )
                 continue
             message = raw_lines[0][:500]
             action_lines = [
@@ -1815,7 +2131,7 @@ def insert_instruction_records(
         manual = instruction_pages[0].manual
         instruction_re = instruction_re_by_manual[manual_id]
         variants = instruction_variants(instruction_pages, opcode, instruction_re)
-        operands = parse_operand_schema(instruction_pages)
+        operands = parse_operand_schema(instruction_pages, opcode)
         completion_flags = instruction_completion_flags(instruction_pages)
         restrictions = instruction_restrictions(instruction_pages)
         title = next(
@@ -1886,8 +2202,10 @@ def insert_instruction_records(
             operand_summary = "; ".join(
                 f"{item.get('position', '')}: {item.get('description', '')}"
                 + (f" [{item.get('data_type')}]" if item.get("data_type") else "")
+                + (" applicable=" + ",".join(item.get("applicable_devices") or [])
+                   if item.get("applicable_devices") else "")
                 for item in operands
-            )[:520]
+            )[:900]
             restriction_summary = " | ".join(restrictions[:2])[:260]
             structured_lines = ["[STRUCTURED INSTRUCTION RECORD]"]
             if operand_summary:

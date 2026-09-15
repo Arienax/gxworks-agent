@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "vendor": "mitsubishi",
+  "description": "Structured instruction candidates intentionally excluded from generation until opcode identity/signature and required capabilities are verified.",
+  "entries": [
+    {
+      "opcode": "BK",
+      "status": "retrieval_only",
+      "reason": "manual_review_alias",
+      "correct_mnemonic": "BK+",
+      "manual": "JY997D16601",
+      "section": "25.1 FNC192 BK+ / Block Data Addition",
+      "notes": "Bare BK is not the Mitsubishi mnemonic. Use BK+; BK remains quarantined as an extraction alias.",
+      "evidence": [
+        {
+          "manual_id": "fx3_programming_r",
+          "fnc_number": "192",
+          "title": "25.1 FNC192 – BK+ / Block Data Addition"
+        }
+      ]
+    },
+    {
+      "opcode": "FLDE",
+      "status": "retrieval_only",
+      "reason": "manual_review_alias",
+      "correct_mnemonic": "FLDEL",
+      "manual": "JY997D16601",
+      "section": "34.2 FNC301 FLDEL / File delete-CF card format",
+      "notes": "FLDE is a truncated extraction alias of FLDEL and must never enter the generation opcode enum.",
+      "evidence": [
+        {
+          "manual_id": "fx3_programming_r",
+          "fnc_number": "301",
+          "title": "34.2 FNC301 – FLDEL / File delete·CF card format"
+        }
+      ]
+    },
+    {
+      "opcode": "FLDEL",
+      "status": "retrieval_only",
+      "reason": "manual_verified_hardware_gated",
+      "correct_mnemonic": "FLDEL",
+      "manual": "JY997D35401",
+      "section": "8.4 FNC301 FLDEL / File delete-CF card format",
+      "notes": "FLDEL is real, but requires FX3U-CF-ADP and FX3U/FX3UC Ver.2.61 or later. Keep retrieval-only until the generation contract can enforce hardware/version capabilities.",
+      "evidence": [
+        {
+          "manual_id": "fx3_programming_r",
+          "fnc_number": "301",
+          "title": "34.2.1 Detailed explanation of setting data"
+        }
+      ]
+    }
+  ]
+}

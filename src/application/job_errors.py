@@ -54,6 +54,19 @@ def _diagnostic_path(value):
     return prefix + dollar + "." + ".".join(segments)
 
 
+def _diagnostic_opcode(value):
+    if not isinstance(value, str):
+        return None
+    token = value.strip().upper()
+    if not re.fullmatch(r"[A-Z0-9_.$@+\-]{1,64}", token):
+        return None
+    lowered = token.lower()
+    if any(marker in lowered for marker in ("sk-", "bearer", "secret", "private", "api_key", "token", "password")):
+        return None
+    return token
+
+
+
 def public_error_details(value):
     """Reproject persisted diagnostics as well as newly classified failures."""
     if not isinstance(value, Mapping):
@@ -67,8 +80,12 @@ def public_error_details(value):
     for violation in violations[:_MAX_VIOLATIONS]:
         if isinstance(violation, Mapping):
             reason = violation.get("reason")
-            rows.append({"path": _diagnostic_path(violation.get("path")),
-                         "reason": reason if isinstance(reason, str) and reason in _REASONS else "invalid_response"})
+            row = {"path": _diagnostic_path(violation.get("path")),
+                   "reason": reason if isinstance(reason, str) and reason in _REASONS else "invalid_response"}
+            observed_opcode = _diagnostic_opcode(violation.get("observed_opcode"))
+            if observed_opcode is not None:
+                row["observed_opcode"] = observed_opcode
+            rows.append(row)
     count = value.get("violation_count", len(violations))
     if isinstance(count, bool) or not isinstance(count, int):
         count = len(violations)

@@ -5,8 +5,10 @@ import base64
 import copy
 import hashlib
 import json
+import re
 import tempfile
 import uuid
+import runtime_diagnostics as diagnostics
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -145,6 +147,14 @@ class WorkbenchService:
         from confirmed_spec import canonicalize_confirmed_spec, validate_spec_draft
         from plc_ir import canonical_sha256
         self.writable()
+
+        def audited(result):
+            diagnostics.record_operator_action(
+                self.state_dir, "spec_update", project_id=project_id,
+                payload={"spec": spec, "expected_hash": expected_hash}, result=result,
+            )
+            return result
+
         with self.lock.thread_lock:
             project = self.projects.raw_project(project_id)
             current = project.get("confirmed_spec")
@@ -152,14 +162,14 @@ class WorkbenchService:
                 raise ConflictError("确认规格已变化，请重新加载。")
             issues = validate_spec_draft(spec, project.get("plc_model"))
             if issues.get("errors"):
-                return {"valid": False, "issues": public(issues)}
+                return audited({"valid": False, "issues": public(issues)})
             normalized = canonicalize_confirmed_spec(spec)
             issues = validate_spec_draft(normalized, project.get("plc_model"))
             if issues.get("errors"):
-                return {"valid": False, "issues": public(issues)}
+                return audited({"valid": False, "issues": public(issues)})
             self.store.set_confirmed_spec(project_id, normalized)
             persisted = self.projects.raw_project(project_id)["confirmed_spec"]
-            return {"valid": True, "spec": public(persisted), "hash": canonical_sha256(persisted)}
+            return audited({"valid": True, "spec": public(persisted), "hash": canonical_sha256(persisted)})
 
     def upload_attachment(self, project_id, filename, data_base64):
         from session_store import detect_image_media_type
@@ -302,28 +312,60 @@ class WorkbenchService:
                 "validation": public(metadata.get("validation") or {})}
 
     def repair_generation(self, job_id, request_id):
-        """Submit one operator-confirmed model call to repair a rejected ladder shape."""
+        """Submit one operator-confirmed repair without re-running normal generation."""
         self.writable()
         record_id(request_id)
         with self.lock.thread_lock:
             if not self.jobs:
                 raise KeyError(job_id)
             record = self.jobs._load(record_id(job_id))
-            if (record.get("kind") != "generation" or record.get("status") != "failed"
-                    or record.get("error_code") != "generation_validation_failed"):
-                raise ConflictError("Only a failed structural generation can be repaired")
+            failed_validation = (
+                record.get("kind") == "generation"
+                and record.get("status") == "failed"
+                and record.get("error_code") == "generation_validation_failed"
+            )
+            saved_invalid = (
+                record.get("kind") == "generation"
+                and record.get("status") == "completed"
+                and isinstance(record.get("result"), dict)
+                and record["result"].get("status") == "saved_invalid"
+                and isinstance(record["result"].get("version_id"), str)
+            )
+            if not (failed_validation or saved_invalid):
+                raise ConflictError("Only a rejected generation candidate can be repaired")
             snapshot = copy.deepcopy(record.get("snapshot") or {})
-            self._check_snapshot(snapshot)
             project_id = snapshot["project_id"]
+            if saved_invalid:
+                # Preserving an invalid candidate intentionally activates a
+                # diagnostic version. Accept that one known state transition,
+                # but reject unrelated project/spec changes before repairing.
+                current = self.projects.raw_project(project_id)
+                frozen = snapshot.get("project") or {}
+                preserved_id = record["result"]["version_id"]
+                if current.get("active_version_id") != preserved_id or any(
+                    current.get(key) != frozen.get(key)
+                    for key in ("confirmed_spec", "target_mode", "plc_model")
+                ):
+                    raise ConflictError("错误候选保存后工程状态已变化，请重新生成或选择当前候选。")
+            else:
+                self._check_snapshot(snapshot)
             version_id = snapshot.get("version_id")
             root = contained(self.state_dir / "staging" / record_id(job_id), self.state_dir / "staging")
             candidate_path = contained(root / "repair_candidate.json", root)
             if not candidate_path.is_file():
                 raise ConflictError("The rejected candidate is no longer available for repair")
-            candidate = candidate_path.read_text(encoding="utf-8")
-            if not candidate.strip() or len(candidate) > 512000:
+            candidate_text = candidate_path.read_text(encoding="utf-8")
+            if not candidate_text.strip() or len(candidate_text) > 512000:
                 raise ConflictError("The rejected candidate is too large or empty")
             details = record.get("error_details") or {}
+            if saved_invalid and not details:
+                try:
+                    preserved_output = self.output(job_id)
+                    preserved_validation = ((preserved_output.get("generation") or {}).get("validation") or {})
+                    if isinstance(preserved_validation, dict):
+                        details = preserved_validation
+                except (KeyError, ValueError, OSError):
+                    details = {}
             violations = details.get("violations") if isinstance(details, dict) else []
             locations = []
             for item in violations or []:
@@ -334,15 +376,132 @@ class WorkbenchService:
                         locations.append(path + (f" ({reason})" if isinstance(reason, str) else ""))
             language = snapshot.get("response_language") if snapshot.get("response_language") in ("zh-CN", "en", "ja") else "zh-CN"
 
-        repair_text = (
-            "这是用户明确确认的一次结构修复。不要重新分析需求，也不要改变控制逻辑、地址、参数、触点极性或未出错梯级。"
-            "只修复下面失败候选的 JSON 协议/结构问题。debug_note 是可选字段，默认删除；不要用它解释推理。"
-            "label、debug_note、device_comment 单条目标不超过48字符且绝不能超过64字符。"
-            "只使用梯形图 schema 允许的字段，保持原候选的 mode 和语义，修好后只返回 JSON。\n"
-            "失败位置：" + ("；".join(locations) if locations else "ladder schema") + "\n\n"
-            "失败候选 JSON：\n" + candidate
-        )
-        return self.submit({
+            # A parseable rejected ladder is a safe repair baseline. Keep the
+            # model on a partial replacement contract and enforce the same scope
+            # again after materialization. Syntax-broken JSON has no trustworthy
+            # rung identity and therefore uses the separate full-format path.
+            from application.generation_repair import candidate_base
+            from application.field_repair import plan as plan_field_patch
+            inherited_repair_base = (
+                candidate_base(snapshot.get("repair_baseline"))
+                if snapshot.get("repair_mode") else None
+            )
+            inherited_repair_plan = (copy.deepcopy(snapshot.get("repair_plan"))
+                                     if snapshot.get("repair_mode") and isinstance(snapshot.get("repair_plan"), dict)
+                                     else None)
+            inherited_local_repair = inherited_repair_base is not None
+            if inherited_local_repair:
+                # A failed repair attempt is still repairing the same immutable
+                # baseline. Never widen it to a full-program regeneration merely
+                # because the partial response itself had invalid JSON/shape.
+                repair_base = inherited_repair_base
+                local_repair = True
+                allowed_rung_ids = {
+                    int(item) for item in (snapshot.get("allowed_rung_ids") or [])
+                    if isinstance(item, int) and not isinstance(item, bool)
+                }
+                allowed_addresses = {
+                    str(item).strip().upper()
+                    for item in (snapshot.get("allowed_addresses") or [])
+                    if isinstance(item, str) and item.strip()
+                }
+                repair_plan = inherited_repair_plan
+            else:
+                try:
+                    parsed_candidate = json.loads(candidate_text)
+                except (TypeError, ValueError):
+                    parsed_candidate = None
+                repair_base = candidate_base(parsed_candidate)
+                local_repair = repair_base is not None
+                allowed_rung_ids = set()
+                allowed_addresses = set()
+                repair_plan = plan_field_patch(
+                    repair_base, violations, snapshot.get("project", {}).get("plc_model", "FX3U")
+                ) if local_repair else None
+            if local_repair and isinstance(repair_plan, dict):
+                target = repair_plan.get("target") or {}
+                if target.get("strategy") == "blocked":
+                    raise ConflictError(
+                        "该校验错误涉及指令、地址或参数语义，局部修复不会猜测修改；请重新生成候选或手动修正。"
+                    )
+            if local_repair and not inherited_local_repair and repair_plan is None:
+                rungs = repair_base["rungs"]
+                by_index = {index: rung for index, rung in enumerate(rungs)}
+                saw_rung_path = False
+                saw_comment_path = False
+                unresolved_rung_path = False
+                for item in violations or []:
+                    path = item.get("path") if isinstance(item, dict) else None
+                    if not isinstance(path, str):
+                        continue
+                    saw_comment_path |= "device_comments" in path
+                    if "rungs" not in path:
+                        continue
+                    saw_rung_path = True
+                    match = re.search(r"rungs(?:\.|\[)(\d+)", path)
+                    if match:
+                        rung = by_index.get(int(match.group(1)))
+                        rung_id = rung.get("rung_id") if isinstance(rung, dict) else None
+                        if isinstance(rung_id, int) and not isinstance(rung_id, bool):
+                            allowed_rung_ids.add(rung_id)
+                        else:
+                            unresolved_rung_path = True
+                    else:
+                        unresolved_rung_path = True
+                if (unresolved_rung_path or (not saw_rung_path and not saw_comment_path)) and not allowed_rung_ids:
+                    allowed_rung_ids = {
+                        rung["rung_id"] for rung in rungs
+                        if isinstance(rung, dict) and isinstance(rung.get("rung_id"), int)
+                        and not isinstance(rung.get("rung_id"), bool)
+                    }
+                selected = [rung for rung in rungs if rung.get("rung_id") in allowed_rung_ids]
+                from contract_repair import patch_device_addresses
+                allowed_addresses.update(patch_device_addresses({
+                    "mode": "partial", "rungs": selected,
+                    "delete_rung_ids": [], "device_comments": {},
+                }))
+                if saw_comment_path:
+                    allowed_addresses.update(
+                        str(address).strip().upper()
+                        for address in repair_base.get("device_comments", {})
+                        if isinstance(address, str) and re.fullmatch(r"[A-Za-z]+\d+", address.strip())
+                    )
+
+        location_text = "；".join(locations) if locations else "ladder schema"
+        if local_repair and repair_plan is not None:
+            target = repair_plan.get("target") or {}
+            repair_text = (
+                "这是用户明确确认的一次字段级 JSON 修复。不要返回梯级、分支或完整程序。"
+                "只返回 field_patch 协议对象，并且只能修改 target.path 指定的一个字段。"
+                "不要改变其他地址、参数、触点极性或结构。\n"
+                f"目标字段：{target.get('diagnostic_path') or target.get('path')}\n"
+                f"失败位置：{location_text}"
+            )
+        elif local_repair:
+            rung_text = ", ".join(map(str, sorted(allowed_rung_ids))) or "无（仅允许修复注释字段）"
+            retry_note = (
+                "\n上一次局部修复回复仍未通过校验。只修正下面这个 partial patch 的 JSON/结构问题，"
+                "不要扩大修改范围，也不要改成完整程序。\n上一次失败的局部 patch：\n" + candidate_text
+                if inherited_local_repair else ""
+            )
+            repair_text = (
+                "这是用户明确确认的一次局部结构修复。系统已把失败候选作为 Current version JSON 提供给你。"
+                "不要重新分析需求，不要重新生成完整程序，不要改变控制逻辑、地址、参数、触点极性或未出错梯级。"
+                "只返回一个完整可解析的 JSON 对象，并且必须使用 mode=\"partial\"。"
+                "rungs 只包含需要替换的完整梯级，delete_rung_ids 必须为空，device_comments 只列确实需要修复的现有地址。"
+                "debug_note 是可选字段，默认删除；label、debug_note、device_comment 单条不得超过64字符。\n"
+                f"允许修改的 rung_id：{rung_text}\n"
+                f"失败位置：{location_text}"
+                + retry_note
+            )
+        else:
+            repair_text = (
+                "这是用户明确确认的一次局部 JSON 格式修复。完整失败候选由系统持有，严禁模型重写完整程序。"
+                "先执行确定性语法恢复；只有仍有歧义时才允许模型返回 format_patch 的短 before/after 文本替换。"
+                "不得返回 ladder、rungs、branch 或任何完整候选，不得改变地址、指令、参数、触点极性或控制语义。\n"
+                f"失败位置：{location_text}\n\n失败候选 JSON：\n{candidate_text}"
+            )
+        command = {
             "kind": "generation",
             "project_id": project_id,
             "version_id": version_id,
@@ -351,7 +510,20 @@ class WorkbenchService:
             "response_language": language,
             "attachment_ids": [],
             "change_scope": snapshot.get("change_scope"),
-        })
+            "repair_origin_job_id": job_id,
+            "repair_mode": local_repair,
+            "format_repair": not local_repair,
+            "task_type": "contract_repair",
+        }
+        if local_repair:
+            command.update(
+                repair_baseline=repair_base,
+                allowed_rung_ids=sorted(allowed_rung_ids),
+                allowed_addresses=sorted(allowed_addresses),
+            )
+            if repair_plan is not None:
+                command["repair_plan"] = copy.deepcopy(repair_plan)
+        return self.submit(command)
 
     def submit(self, command):
         self.writable()
@@ -386,13 +558,24 @@ class WorkbenchService:
                 snapshot["fbd_program"] = context.version.get("program_name")
             # Resolve files and credentials at submission, never later from mutable UI state.
             images = self._attachments(project_id, command.get("attachment_ids", []))
-            requires_model = command["kind"] not in ("gx_read", "gx_inspect") and (command["kind"] != "review" or command.get("deep", True))
+            repair_plan = command.get("repair_plan") if isinstance(command.get("repair_plan"), dict) else {}
+            repair_target = repair_plan.get("target") if isinstance(repair_plan.get("target"), dict) else {}
+            deterministic_generation_repair = (
+                command["kind"] == "generation"
+                and repair_plan.get("mode") == "field_patch"
+                and repair_target.get("strategy") == "deterministic"
+            )
+            requires_model = (
+                command["kind"] not in ("gx_read", "gx_inspect")
+                and (command["kind"] != "review" or command.get("deep", True))
+                and not deterministic_generation_repair
+            )
             provider, model = self.model_factory() if requires_model else (None, {})
             snapshot["model"] = model
             snapshot["approval_consent"] = self.approval.read()
-            snapshot["context_policy"] = resolve_context_policy(
-                None if requires_model else "legacy"
-            ).snapshot()
+            repair_context = "minimal" if command.get("repair_mode") or command.get("format_repair") else None
+            policy_name = repair_context if repair_context else (None if requires_model else "legacy")
+            snapshot["context_policy"] = resolve_context_policy(policy_name).snapshot()
             if command["kind"] == "debug_plan":
                 snapshot["saved_run"] = self.projects.simulator_run(project_id, context.version_id, command.get("run_id"))
 
@@ -478,12 +661,28 @@ class WorkbenchService:
                 metadata["artifacts"] = {k: v["path"] for k, v in fbd_payload["artifacts"].items()}
             else:
                 program = snapshot.get("program_ir")
-                request = GenerationRequest(user_input=scoped_text, effort=project.get("effort"), target_mode=project["target_mode"],
-                    previous_json=ir_to_ladder(program) if program else None, previous_ir=program,
-                    confirmed_context=project.get("confirmed_spec"), conversation_history=project.get("messages", []),
+                repair_mode = bool(snapshot.get("repair_mode"))
+                format_repair = bool(snapshot.get("format_repair"))
+                repair_baseline = snapshot.get("repair_baseline") if repair_mode else None
+                repair_plan = snapshot.get("repair_plan") if repair_mode else None
+                if repair_mode:
+                    previous_json = copy.deepcopy(repair_baseline)
+                elif format_repair:
+                    previous_json = None
+                else:
+                    previous_json = ir_to_ladder(program) if program else None
+                request = GenerationRequest(
+                    user_input=scoped_text, effort=project.get("effort"), target_mode=project["target_mode"],
+                    previous_json=previous_json, previous_ir=program,
+                    confirmed_context=project.get("confirmed_spec"),
+                    conversation_history=[] if (repair_mode or format_repair) else project.get("messages", []),
+                    task_type=snapshot.get("task_type"),
                     plc_model=project.get("plc_model", "FX3U"), program_name=(program or {}).get("program_name", "MAIN"),
                     revision=(program or {}).get("revision", 0) + 1,
-                    requirement_text=text, image_attachments=images, model_name=snapshot.get("model", {}).get("model"), response_language=language)
+                    requirement_text=text, repair_mode=repair_mode, format_repair=format_repair,
+                    allowed_rung_ids=snapshot.get("allowed_rung_ids"),
+                    allowed_addresses=snapshot.get("allowed_addresses"), repair_plan=repair_plan,
+                    image_attachments=images, model_name=snapshot.get("model", {}).get("model"), response_language=language)
                 metadata = GenerationWorkflow(request, out_dir, ctx.emit, GenerationDependencies(
                     provider=provider, check_cancelled=ctx.checkpoint, preserve_rejected_candidate=True
                 )).run()
