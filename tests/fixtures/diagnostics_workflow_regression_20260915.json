@@ -1,0 +1,33 @@
+{
+  "source_archive": "513a1566-dc47-4a53-960e-803079a782e2.zip",
+  "observed_job": {
+    "kind": "analysis",
+    "version_id": "v0001",
+    "status": "failed",
+    "error_code": "job_failed"
+  },
+  "project": {
+    "workflow_mode": "generate",
+    "has_confirmed_spec": true,
+    "has_saved_version": true
+  },
+  "preceding_same_request": {
+    "kind": "generation"
+  },
+  "provider_exception": {
+    "error_type": "ModelProviderError",
+    "code": "rate_limit",
+    "status_code": 429
+  },
+  "response_acceptance": {
+    "content_chars": 0,
+    "json_status": "empty"
+  },
+  "workflow_exception": {
+    "error_type": "ValueError"
+  },
+  "expected": {
+    "provider_error_code": "model_rate_limit",
+    "edit_regenerate_kind": "generation"
+  }
+}
