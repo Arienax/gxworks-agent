@@ -31,120 +31,135 @@ jobs:
         run: |
           from pathlib import Path
 
-          def replace_once(path, old, new):
-              p = Path(path)
-              text = p.read_text(encoding="utf-8")
+          def block(*lines):
+              return "\n".join(lines) + "\n"
+
+          def replace_exact(text, old, new, label):
               count = text.count(old)
               if count != 1:
-                  raise SystemExit(f"{path}: expected one match, found {count}: {old[:80]!r}")
-              p.write_text(text.replace(old, new, 1), encoding="utf-8")
+                  raise SystemExit(f"{label}: expected one match, found {count}")
+              return text.replace(old, new, 1)
 
           api = Path("src/api.py")
           text = api.read_text(encoding="utf-8")
-          import_old = "    ImageAttachment,\n    ModelRequest,\n    ResponseRejectedError,\n"
-          import_new = "    ImageAttachment,\n    ModelProviderError,\n    ModelRequest,\n    ResponseRejectedError,\n"
-          if import_old not in text:
-              raise SystemExit("src/api.py: model provider import anchor changed")
-          text = text.replace(import_old, import_new, 1)
+          text = replace_exact(
+              text,
+              block("    ImageAttachment,", "    ModelRequest,", "    ResponseRejectedError,"),
+              block("    ImageAttachment,", "    ModelProviderError,", "    ModelRequest,", "    ResponseRejectedError,"),
+              "src/api.py provider import",
+          )
           for label in ("阶段1 分析失败", "阶段1 流式分析失败"):
-              old = (
-                  "    except ResponseRejectedError:\n"
-                  "        raise\n"
-                  "    except Exception as e:\n"
-                  f"        print(f\"{label}: {{e}}\")\n"
-                  "        return None\n"
+              text = replace_exact(
+                  text,
+                  block(
+                      "    except ResponseRejectedError:",
+                      "        raise",
+                      "    except Exception as e:",
+                      f"        print(f\"{label}: {{e}}\")",
+                      "        return None",
+                  ),
+                  block(
+                      "    except ModelProviderError:",
+                      "        raise",
+                      "    except Exception as e:",
+                      f"        print(f\"{label}: {{e}}\")",
+                      "        return None",
+                  ),
+                  f"src/api.py {label}",
               )
-              new = (
-                  "    except ModelProviderError:\n"
-                  "        raise\n"
-                  "    except Exception as e:\n"
-                  f"        print(f\"{label}: {{e}}\")\n"
-                  "        return None\n"
-              )
-              if text.count(old) != 1:
-                  raise SystemExit(f"src/api.py: analysis exception anchor changed for {label}")
-              text = text.replace(old, new, 1)
           api.write_text(text, encoding="utf-8")
 
           app = Path("web/src/App.tsx")
           text = app.read_text(encoding="utf-8")
-          old = '  const composerProjectRef = useRef("");\n  useEffect(() => {\n'
-          new = '''  const composerProjectRef = useRef("");
-          function syncComposerRoute(value: Project) {
-            const editRegenerate = !!value.confirmed_spec &&
-              ((value.version_count || 0) > 0 || (value.versions?.length || 0) > 0);
-            const routeKey = `${value.id}:${editRegenerate ? "edit-regenerate" : "new-requirement"}`;
-            if (composerProjectRef.current === routeKey) return;
-            composerProjectRef.current = routeKey;
-            setIntent(editRegenerate ? "generation" : "analysis");
-          }
-          useEffect(() => {
-          '''
-          if text.count(old) != 1:
-              raise SystemExit("App.tsx: composer route insertion anchor changed")
-          text = text.replace(old, new, 1)
-          old = '''        setProject(value);
-          if (composerProjectRef.current !== value.id) {
-            composerProjectRef.current = value.id;
-            setIntent(value.confirmed_spec && (value.versions?.length || 0) > 0
-              ? "generation"
-              : "analysis");
-          }
-          '''
-          new = '''        setProject(value);
-          syncComposerRoute(value);
-          '''
-          if text.count(old) != 1:
-              raise SystemExit("App.tsx: initial composer route anchor changed")
-          text = text.replace(old, new, 1)
-          old = '''    previewEpoch.current += 1;
-          setProject(fresh); setVid(versionId); setPreview(null); setSelectedProposal(null);
-          '''
-          new = '''    previewEpoch.current += 1;
-          syncComposerRoute(fresh);
-          setProject(fresh); setVid(versionId); setPreview(null); setSelectedProposal(null);
-          '''
-          if text.count(old) != 1:
-              raise SystemExit("App.tsx: saved-version route anchor changed")
-          text = text.replace(old, new, 1)
-          old = '''    setProject(fresh);
-          setProjects((old) => old.map((item) => item.id === fresh.id ? fresh : item));
-          '''
-          new = '''    syncComposerRoute(fresh);
-          setProject(fresh);
-          setProjects((old) => old.map((item) => item.id === fresh.id ? fresh : item));
-          '''
-          if text.count(old) != 1:
-              raise SystemExit("App.tsx: silent reload route anchor changed")
-          text = text.replace(old, new, 1)
+          text = replace_exact(
+              text,
+              block('  const composerProjectRef = useRef("");', "  useEffect(() => {"),
+              block(
+                  '  const composerProjectRef = useRef("");',
+                  "  function syncComposerRoute(value: Project) {",
+                  "    const editRegenerate = !!value.confirmed_spec &&",
+                  "      ((value.version_count || 0) > 0 || (value.versions?.length || 0) > 0);",
+                  '    const routeKey = `${value.id}:${editRegenerate ? "edit-regenerate" : "new-requirement"}`;',
+                  "    if (composerProjectRef.current === routeKey) return;",
+                  "    composerProjectRef.current = routeKey;",
+                  '    setIntent(editRegenerate ? "generation" : "analysis");',
+                  "  }",
+                  "  useEffect(() => {",
+              ),
+              "App.tsx composer route insertion",
+          )
+          text = replace_exact(
+              text,
+              block(
+                  "        setProject(value);",
+                  "        if (composerProjectRef.current !== value.id) {",
+                  "          composerProjectRef.current = value.id;",
+                  "          setIntent(value.confirmed_spec && (value.versions?.length || 0) > 0",
+                  '            ? "generation"',
+                  '            : "analysis");',
+                  "        }",
+              ),
+              block("        setProject(value);", "        syncComposerRoute(value);"),
+              "App.tsx initial composer route",
+          )
+          text = replace_exact(
+              text,
+              block(
+                  "    previewEpoch.current += 1;",
+                  "    setProject(fresh); setVid(versionId); setPreview(null); setSelectedProposal(null);",
+              ),
+              block(
+                  "    previewEpoch.current += 1;",
+                  "    syncComposerRoute(fresh);",
+                  "    setProject(fresh); setVid(versionId); setPreview(null); setSelectedProposal(null);",
+              ),
+              "App.tsx saved-version route",
+          )
+          text = replace_exact(
+              text,
+              block(
+                  "    setProject(fresh);",
+                  "    setProjects((old) => old.map((item) => item.id === fresh.id ? fresh : item));",
+              ),
+              block(
+                  "    syncComposerRoute(fresh);",
+                  "    setProject(fresh);",
+                  "    setProjects((old) => old.map((item) => item.id === fresh.id ? fresh : item));",
+              ),
+              "App.tsx silent reload route",
+          )
           app.write_text(text, encoding="utf-8")
 
           test = Path("tests/test_web_frontend_state_flow.py")
           text = test.read_text(encoding="utf-8")
-          old = '''def test_existing_confirmed_project_defaults_to_generation_edit_mode():
-              assert "composerProjectRef.current !== value.id" in APP
-              assert "value.confirmed_spec && (value.versions?.length || 0) > 0" in APP
-          '''
-          new = '''def test_existing_confirmed_project_defaults_to_generation_edit_mode():
-              route = _between("function syncComposerRoute(", "useEffect(() => {")
-              assert '"edit-regenerate"' in route
-              assert '"new-requirement"' in route
-              assert "value.confirmed_spec" in route
-              assert "value.version_count" in route
-              assert "value.versions?.length" in route
-              assert 'setIntent(editRegenerate ? "generation" : "analysis")' in route
-
-          def test_same_project_maturity_resynchronizes_composer_route():
-              initial = _between('api<Project>(`/projects/${pid}`)', '.catch((e) => setError(e.message))')
-              silent = _between("async function reloadProjectSilently(", "async function refreshDrawing(")
-              saved = _between("async function openSavedVersion(", "async function redrawVersion(")
-              assert "syncComposerRoute(value)" in initial
-              assert "syncComposerRoute(fresh)" in silent
-              assert "syncComposerRoute(fresh)" in saved
-          '''
-          if text.count(old) != 1:
-              raise SystemExit("frontend state-flow test anchor changed")
-          test.write_text(text.replace(old, new, 1), encoding="utf-8")
+          text = replace_exact(
+              text,
+              block(
+                  "def test_existing_confirmed_project_defaults_to_generation_edit_mode():",
+                  '    assert "composerProjectRef.current !== value.id" in APP',
+                  '    assert "value.confirmed_spec && (value.versions?.length || 0) > 0" in APP',
+              ),
+              block(
+                  "def test_existing_confirmed_project_defaults_to_generation_edit_mode():",
+                  '    route = _between("function syncComposerRoute(", "useEffect(() => {")',
+                  '    assert \'"edit-regenerate"\' in route',
+                  '    assert \'"new-requirement"\' in route',
+                  '    assert "value.confirmed_spec" in route',
+                  '    assert "value.version_count" in route',
+                  '    assert "value.versions?.length" in route',
+                  '    assert \'setIntent(editRegenerate ? "generation" : "analysis")\' in route',
+                  "",
+                  "def test_same_project_maturity_resynchronizes_composer_route():",
+                  '    initial = _between(\'api<Project>(`/projects/${pid}`)\', \'.catch((e) => setError(e.message))\')',
+                  '    silent = _between("async function reloadProjectSilently(", "async function refreshDrawing(")',
+                  '    saved = _between("async function openSavedVersion(", "async function redrawVersion(")',
+                  '    assert "syncComposerRoute(value)" in initial',
+                  '    assert "syncComposerRoute(fresh)" in silent',
+                  '    assert "syncComposerRoute(fresh)" in saved',
+              ),
+              "frontend state-flow regression",
+          )
+          test.write_text(text, encoding="utf-8")
       - name: Install Python test dependencies
         run: python -m pip install -q pytest -r requirements/web.txt
       - name: Run focused regressions
