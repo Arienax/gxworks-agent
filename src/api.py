@@ -17,6 +17,7 @@ from draw import AdvancedSVGLadder
 from config_manager import get_api_key, get_model_profile, load_full_config
 from model_provider import (
     ImageAttachment,
+    ModelProviderError,
     ModelRequest,
     ResponseRejectedError,
     UserMessage,
@@ -660,7 +661,7 @@ def analyze_requirement(
         print(f"阶段1 分析完成: {result.get('summary', '')[:80]}...")
         return result
 
-    except ResponseRejectedError:
+    except ModelProviderError:
         raise
     except Exception as e:
         print(f"阶段1 分析失败: {e}")
@@ -741,7 +742,7 @@ def analyze_requirement_streaming(
         print(f"阶段1 分析完成: {result.get('summary', '')[:80]}...")
         return result
 
-    except ResponseRejectedError:
+    except ModelProviderError:
         raise
     except Exception as e:
         print(f"阶段1 流式分析失败: {e}")

@@ -6,8 +6,22 @@ def _between(start: str, end: str) -> str:
     return APP.split(start, 1)[1].split(end, 1)[0]
 
 def test_existing_confirmed_project_defaults_to_generation_edit_mode():
-    assert "composerProjectRef.current !== value.id" in APP
-    assert "value.confirmed_spec && (value.versions?.length || 0) > 0" in APP
+    route = _between("function syncComposerRoute(", "useEffect(() => {")
+    assert '"edit-regenerate"' in route
+    assert '"new-requirement"' in route
+    assert "value.confirmed_spec" in route
+    assert "value.version_count" in route
+    assert "value.versions?.length" in route
+    assert "composerProjectRef.current === routeKey" in route
+    assert 'setIntent(editRegenerate ? "generation" : "analysis")' in route
+
+def test_same_project_maturity_resynchronizes_composer_route():
+    initial = _between('api<Project>(`/projects/${pid}`)', '.catch((e) => setError(e.message))')
+    silent = _between("async function reloadProjectSilently(", "async function refreshDrawing(")
+    saved = _between("async function openSavedVersion(", "async function redrawVersion(")
+    assert "syncComposerRoute(value)" in initial
+    assert "syncComposerRoute(fresh)" in silent
+    assert "syncComposerRoute(fresh)" in saved
 
 def test_job_completion_is_silent():
     sse = _between("stream.onmessage = (event) => {", "return () => {\n      stopped = true;\n      stream.close();")

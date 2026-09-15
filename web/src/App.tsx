@@ -157,6 +157,14 @@ export default function App() {
   gxSendSelection.current = { pid, vid, activeVersionId: project?.active_version_id || "", epoch: projectEpoch.current };
   useEffect(() => { setGXSend(null); }, [pid, vid, project?.active_version_id]);
   const composerProjectRef = useRef("");
+  function syncComposerRoute(value: Project) {
+    const editRegenerate = !!value.confirmed_spec &&
+      ((value.version_count || 0) > 0 || (value.versions?.length || 0) > 0);
+    const routeKey = `${value.id}:${editRegenerate ? "edit-regenerate" : "new-requirement"}`;
+    if (composerProjectRef.current === routeKey) return;
+    composerProjectRef.current = routeKey;
+    setIntent(editRegenerate ? "generation" : "analysis");
+  }
   useEffect(() => {
     projectEpoch.current += 1;
     previewEpoch.current += 1;
@@ -310,12 +318,7 @@ export default function App() {
       .then((value) => {
         if (stopped) return;
         setProject(value);
-        if (composerProjectRef.current !== value.id) {
-          composerProjectRef.current = value.id;
-          setIntent(value.confirmed_spec && (value.versions?.length || 0) > 0
-            ? "generation"
-            : "analysis");
-        }
+        syncComposerRoute(value);
         if (!value.versions?.length && value.target_mode === "fbd") setTab("fbd");
         const binding = value.id + ":" + (value.confirmed_spec_hash || "");
         if (specBinding.current !== binding) {
@@ -574,6 +577,7 @@ export default function App() {
     const saved = fresh.versions?.find((v) => v.id === versionId);
     if (!saved) throw new Error(t("已保存版本尚不可用，请刷新重试。"));
     previewEpoch.current += 1;
+    syncComposerRoute(fresh);
     setProject(fresh); setVid(versionId); setPreview(null); setSelectedProposal(null);
     setDiagnosticJobId(""); setTab(saved.target_mode || fresh.target_mode || "ladder"); setPanel("agent");
     if (saved.target_mode === "ladder") await redrawVersion(versionId, previewTheme);
@@ -596,6 +600,7 @@ export default function App() {
     const fresh = await api<Project>(`/projects/${targetPid}`);
     if (epoch !== projectEpoch.current ||
         activeProjectRef.current !== targetPid || fresh.id !== targetPid) return;
+    syncComposerRoute(fresh);
     setProject(fresh);
     setProjects((old) => old.map((item) => item.id === fresh.id ? fresh : item));
     setVid((old) => fresh.versions?.some((item) => item.id === old)
