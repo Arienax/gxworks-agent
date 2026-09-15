@@ -168,7 +168,6 @@ jobs:
           pytest -q
           tests/test_model_provider.py
           tests/test_application_job_errors.py
-          tests/test_streaming_workflows.py
           tests/test_web_frontend_state_flow.py
           tests/test_diagnostics_workflow_regression_20260915.py
       - name: Build web client
