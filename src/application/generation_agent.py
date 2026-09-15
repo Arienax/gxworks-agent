@@ -192,7 +192,7 @@ def _response_options(provider):
     """Constrain only the compact transport object, never the verbose ladder_v1."""
     profile = getattr(provider, "profile", None)
     capabilities = profile.get("capabilities", {}) if isinstance(profile, dict) else {}
-    if capabilities.get("structured_output"):
+    if capabilities.get("json_schema_response_format"):
         return {
             "response_format": {
                 "type": "json_schema",

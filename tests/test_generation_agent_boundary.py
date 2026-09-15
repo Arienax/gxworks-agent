@@ -59,7 +59,7 @@ class OneShotProvider:
         self.requests.append(request)
         if len(self.requests) > 1:
             raise AssertionError("confirmed generation must not request a second full ladder")
-        yield TextDelta(json.dumps(_ladder(), ensure_ascii=False))
+        yield TextDelta(json.dumps({"r": [{"b": [{"i": ["NO X0"], "o": ["COIL Y0"]}]}]}, ensure_ascii=False))
 
 
 def test_confirmed_generation_uses_one_isolated_agent_call(tmp_path):
@@ -89,7 +89,7 @@ def test_confirmed_generation_uses_one_isolated_agent_call(tmp_path):
     assert "X0" in sent and "Y0" in sent
     assert provider.requests[0].stream is True
     assert provider.requests[0].max_retries == 0
-    assert provider.requests[0].response_contract.name == "ladder"
+    assert provider.requests[0].response_contract.name == "compact_ladder"
     assert metadata["first_pass_pipeline"] == {"mode": "confirmed_spec", "model_calls": 1}
     assert metadata["validation"]["status"] == "candidate_ready"
 
@@ -116,3 +116,26 @@ def test_injected_direct_generator_remains_one_call(tmp_path):
     assert len(calls) == 1
     assert metadata["first_pass_pipeline"] == {"mode": "direct"}
     assert metadata["validation"]["status"] == "candidate_ready"
+
+
+def test_builtin_deepseek_chat_profile_uses_json_object_transport():
+    from types import SimpleNamespace
+    from application.generation_agent import _response_options
+    from config_manager import DEFAULT_MODEL_PROFILES
+
+    profile = next(item for item in DEFAULT_MODEL_PROFILES if item["id"] == "deepseek-default")
+    assert _response_options(SimpleNamespace(profile=profile)) == {
+        "response_format": {"type": "json_object"}
+    }
+
+
+def test_json_schema_transport_requires_explicit_profile_capability():
+    from types import SimpleNamespace
+    from application.generation_agent import _response_options
+
+    provider = SimpleNamespace(profile={"capabilities": {
+        "structured_output": True, "json_schema_response_format": True
+    }})
+    response_format = _response_options(provider)["response_format"]
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["strict"] is True
