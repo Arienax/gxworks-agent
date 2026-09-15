@@ -6,6 +6,8 @@ import pytest
 
 import api
 from application.job_errors import workflow_error_code
+from application.jobs import JobManager
+from application.workspace import WorkspaceWriterLock
 from model_provider import ModelProviderError
 
 
@@ -27,16 +29,20 @@ class RateLimitedProvider:
         yield  # pragma: no cover - keep this a generator
 
 
-@pytest.mark.parametrize("stream", [False, True])
-def test_analysis_rate_limit_propagates_without_json_parser(stream, monkeypatch):
+def _rate_limit_error():
     observed = FIXTURE["provider_exception"]
-    error = ModelProviderError(
+    return ModelProviderError(
         "rate limited",
         code=observed["code"],
         retryable=True,
         status_code=observed["status_code"],
     )
-    provider = RateLimitedProvider(error)
+
+
+@pytest.mark.parametrize("stream", [False, True])
+def test_analysis_rate_limit_propagates_without_json_parser(stream, monkeypatch):
+    observed = FIXTURE["provider_exception"]
+    provider = RateLimitedProvider(_rate_limit_error())
     parser_calls = []
 
     monkeypatch.setattr(api, "_build_knowledge_context", lambda *args, **kwargs: "")
@@ -54,11 +60,46 @@ def test_analysis_rate_limit_propagates_without_json_parser(stream, monkeypatch)
     with api.provider_scope(provider), pytest.raises(ModelProviderError) as caught:
         function("modify the current saved project", **options)
 
-    assert caught.value is error
     assert caught.value.code == observed["code"]
     assert caught.value.status_code == observed["status_code"]
     assert caught.value.retryable is True
     assert workflow_error_code(caught.value) == FIXTURE["expected"]["provider_error_code"]
+    assert parser_calls == []
+    assert len(provider.requests) == 1
+
+
+def test_rate_limit_reaches_job_manager_as_model_rate_limit(tmp_path, monkeypatch):
+    provider = RateLimitedProvider(_rate_limit_error())
+    parser_calls = []
+    monkeypatch.setattr(api, "_build_knowledge_context", lambda *args, **kwargs: "")
+
+    def fail_if_parsed(*args, **kwargs):
+        parser_calls.append((args, kwargs))
+        raise AssertionError("provider failure must not reach analysis JSON parsing")
+
+    monkeypatch.setattr(api, "_parse_analysis_response", fail_if_parsed)
+    with WorkspaceWriterLock(tmp_path / "workspace", tmp_path / "locks") as lock:
+        manager = JobManager(tmp_path / "state", lock)
+        try:
+            def worker(_ctx):
+                with api.provider_scope(provider):
+                    return api.analyze_requirement(
+                        "modify the current saved project",
+                        response_language="zh-CN",
+                    )
+
+            job = manager.submit(
+                "analysis",
+                {"project_id": "project", "response_language": "zh-CN"},
+                worker,
+            )
+            manager._futures[job["id"]].result(timeout=5)
+            completed = manager.get(job["id"])
+        finally:
+            manager.shutdown()
+
+    assert completed["status"] == "failed"
+    assert completed["error_code"] == FIXTURE["expected"]["provider_error_code"]
     assert parser_calls == []
     assert len(provider.requests) == 1
 
