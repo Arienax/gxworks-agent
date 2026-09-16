@@ -4,7 +4,7 @@
 
 > **AI-native engineering workbench and agent runtime for Mitsubishi MELSEC PLC development.**
 
-![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)
+![License](https://img.shields.io/badge/license-source--available%20proprietary-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-0078D6.svg)
 ![PLC](https://img.shields.io/badge/focus-FX3U-orange.svg)
 ![Status](https://img.shields.io/badge/status-active%20development-yellow.svg)
@@ -151,4 +151,4 @@ Safety-critical functions such as emergency stop, guarding, motion limits, press
 
 ## License
 
-Licensed under the [Apache License 2.0](LICENSE).
+GXWorks Agent is **source-available proprietary software**, not open-source software. See [LICENSE](LICENSE) for the full terms. Source viewing, local execution, modification, research/evaluation, and internal organizational use are permitted; redistribution, sublicensing, distribution of compiled or packaged derivatives, incorporation into distributed products, hosted/SaaS/API offerings, resale, relicensing, and white-label use require prior written permission.
