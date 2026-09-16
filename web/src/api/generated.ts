@@ -948,6 +948,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/detect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Detect Model Profile */
+        post: operations["detect_model_profile_api_settings_detect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/profiles": {
         parameters: {
             query?: never;
@@ -1677,6 +1694,26 @@ export interface components {
             api_key?: string | null;
             profile?: components["schemas"]["ModelProfileUpdate"] | null;
         };
+        /** ModelDiscoveryRequest */
+        ModelDiscoveryRequest: {
+            profile: components["schemas"]["ModelProfileCreate"];
+        };
+        /** ModelDiscoveryResult */
+        ModelDiscoveryResult: {
+            /** Discovery */
+            discovery?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Message */
+            message: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "connected" | "failed";
+        };
         /** ModelKeyUpdate */
         ModelKeyUpdate: {
             /** Api Key */
@@ -1707,6 +1744,10 @@ export interface components {
             model?: string | null;
             /** Name */
             name?: string | null;
+            /** Parameter Support */
+            parameter_support?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
             /** Request Overrides */
             request_overrides?: {
                 [key: string]: components["schemas"]["JsonValue"];
@@ -1732,6 +1773,10 @@ export interface components {
             model: string;
             /** Name */
             name: string;
+            /** Parameter Support */
+            parameter_support?: {
+                [key: string]: unknown;
+            };
             /** Request Overrides */
             request_overrides?: {
                 [key: string]: unknown;
@@ -1755,6 +1800,10 @@ export interface components {
             model?: string | null;
             /** Name */
             name?: string | null;
+            /** Parameter Support */
+            parameter_support?: {
+                [key: string]: unknown;
+            } | null;
             /** Request Overrides */
             request_overrides?: {
                 [key: string]: unknown;
@@ -4146,6 +4195,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detect_model_profile_api_settings_detect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelDiscoveryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelDiscoveryResult"];
                 };
             };
             /** @description Validation Error */
