@@ -269,11 +269,13 @@ def _normalize_profile(profile):
         raise ValueError(f"模型 Profile {profile_id} 缺少 baseUrl。")
     if not normalized["model"]:
         raise ValueError(f"模型 Profile {profile_id} 缺少 model。")
-    for key in ("capabilities", "generationDefaults", "requestOverrides"):
+    for key in ("capabilities", "generationDefaults", "requestOverrides", "parameterSupport"):
         value = normalized.get(key)
         if value is not None and not isinstance(value, dict):
             raise ValueError(f"模型 Profile {profile_id} 的 {key} 必须是对象。")
         normalized[key] = copy.deepcopy(value) if isinstance(value, dict) else {}
+    from model_capabilities import normalize_parameter_support
+    normalized["parameterSupport"] = normalize_parameter_support(normalized["parameterSupport"])
     normalized["credentialTarget"] = str(
         normalized.get("credentialTarget")
         or credential_target_for_profile(profile_id)

@@ -12,11 +12,12 @@ from urllib.parse import urlsplit, urlunsplit
 
 # Public service error shared with desktop/CLI model selection.
 from config_manager import ModelConfigurationRequiredError
+from model_capabilities import capability_scope, normalize_parameter_support
 
 
 _SETTINGS_LOCK = threading.RLock()
 _PROFILE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
-_PROFILE_FIELDS = {"id", "name", "model", "base_url", "capabilities", "generation_defaults", "request_overrides"}
+_PROFILE_FIELDS = {"id", "name", "model", "base_url", "capabilities", "generation_defaults", "request_overrides", "parameter_support"}
 _SENSITIVE_NAMES = {"key", "accesskey", "auth", "bearer", "token", "headers", "extraheaders", "cookie", "cookies", "authentication", "proxyauth"}
 
 
@@ -125,6 +126,8 @@ class SettingsService:
                                      if not _sensitive(key) and isinstance(value, bool)},
                     "generation_defaults": _safe_options(profile["generationDefaults"]),
                     "request_overrides": _safe_options(profile["requestOverrides"]),
+                    "parameter_support": _safe_options(profile.get("parameterSupport") or {})
+                        if (profile.get("parameterSupport") or {}).get("scope") == capability_scope(profile) else {},
                 })
             return {"language": config["language"], "active_profile_id": config["activeModelProfileId"], "profiles": profiles}
 
@@ -134,6 +137,7 @@ class SettingsService:
             raise ValueError("Unknown model profile fields")
         if "id" in values and _profile_id(values["id"]) != chosen["id"]:
             raise ValueError("Cannot change model profile ID")
+        old_scope = capability_scope(chosen)
         for key in ("name", "model"):
             if key in values:
                 value = str(values[key]).strip()
@@ -158,6 +162,13 @@ class SettingsService:
                     if number is not None and (isinstance(number, bool) or not isinstance(number, (int, float)) or not 0 <= number <= upper):
                         raise ValueError("Sampling parameter outside supported range")
             chosen[stored] = value
+        if "parameter_support" in values:
+            support = normalize_parameter_support(_safe_options(values["parameter_support"], strict=True))
+            if support and support["scope"] != capability_scope(chosen):
+                raise ValueError("Model, endpoint or thinking options changed; detect parameters again")
+            chosen["parameterSupport"] = support
+        elif old_scope != capability_scope(chosen):
+            chosen["parameterSupport"] = {}
 
     @staticmethod
     def _save(config, legacy, *, skip_legacy=()):
@@ -190,6 +201,9 @@ class SettingsService:
             skip_legacy = ()
             if api_key is not None:
                 selected = get_model_profile(config, (profile or {}).get("id") or active_profile_id)
+                if "parameter_support" not in (profile or {}):
+                    selected["parameterSupport"] = {}
+                    config["modelProfiles"] = [selected if p["id"] == selected["id"] else p for p in config["modelProfiles"]]
                 write_api_key(api_key, selected["credentialTarget"])
                 skip_legacy = (selected["id"],)
             self._save(config, legacy, skip_legacy=skip_legacy)
@@ -240,11 +254,46 @@ class SettingsService:
             config = self.read_config()
             legacy = self._legacy_credential(config)
             profile = get_model_profile(config, _profile_id(profile_id))
+            profile["parameterSupport"] = {}
+            config["modelProfiles"] = [profile if p["id"] == profile_id else p for p in config["modelProfiles"]]
             # Persist the explicit legacy conversion so a removed key cannot
             # silently reappear from the old inline/global-credential fallback.
             self._save(config, legacy, skip_legacy=(profile_id,))
             delete_api_key(profile["credentialTarget"])
             return self.public_settings()
+
+    def detect_profile(self, *, id=None, api_key=None, **values):
+        """Read-only draft discovery, including the very first unsaved profile."""
+        from config_manager import get_model_profile, _normalize_profile
+        from credential_store import credential_target_for_profile
+        from model_provider import create_provider
+        from application.model_detection import inspect_openai_compatible
+        with _SETTINGS_LOCK:
+            if id:
+                config = self.read_config()
+                selected = get_model_profile(config, _profile_id(id))
+                old_url = selected.get("baseUrl")
+                self._apply_profile(selected, values)
+                # Do not send a saved credential to a different endpoint merely
+                # because the user selected another connection preset.
+                key = api_key if api_key is not None else (
+                    self._key(config, selected) if old_url == selected.get("baseUrl") else "")
+            else:
+                selected = {"id": "discovery-draft", "adapter": "openai_compatible",
+                            "credentialTarget": credential_target_for_profile("discovery-draft")}
+                self._apply_profile(selected, values)
+                key = api_key or ""
+            selected = _normalize_profile(selected)
+            if not str(key).strip():
+                return {"status": "failed", "message": "请先配置 API Key；更换服务地址时请重新输入密钥。", "error_code": "missing_key"}
+        try:
+            result = inspect_openai_compatible(create_provider(selected, key), selected["model"], selected["capabilities"])
+            return {"status": "connected", "message": "模型列表与能力检测完成", "discovery": result}
+        except Exception as error:
+            code = getattr(error, "code", "provider_error")
+            if code not in {"authentication", "rate_limit", "timeout", "invalid_request", "unavailable", "protocol"}:
+                code = "provider_error"
+            return {"status": "failed", "message": "检测失败，请检查兼容 API 地址、模型 ID 和密钥；模型列表不可用时请手动填写模型。", "error_code": code}
 
     def test_connection(self, profile_id, *, profile=None, api_key=None):
         from config_manager import get_model_profile

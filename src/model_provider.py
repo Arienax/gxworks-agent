@@ -6,6 +6,7 @@ import copy
 import base64
 import json
 import hashlib
+import inspect
 import threading
 import time
 import runtime_diagnostics as diagnostics
@@ -17,6 +18,7 @@ from typing import Any, Callable, Dict, Iterable, Iterator, Mapping, Optional, P
 from i18n import get_language, normalize_language, response_language_instruction, translate
 from response_language import ResponseContract, TEXT_RESPONSE, inspect_response, preserved_annotations
 from tool_messages import ToolCall, ToolResult
+from model_capabilities import apply_parameter_contract, parameter_error
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,7 @@ class AssistantMessage:
     # Canonical backend messages alone may carry provider-required replay.
     # This is never visible prose and is deliberately absent from dict coercion.
     _provider_reasoning: str = field(default="", repr=False)
+    _provider_fields: Mapping[str, Any] = field(default_factory=dict, repr=False, compare=False)
 
 
 ModelMessage = Union[SystemMessage, UserMessage, AssistantMessage, ToolResult]
@@ -94,6 +97,12 @@ class Usage:
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
+
+
+@dataclass(frozen=True)
+class _ProviderState:
+    """Private replay state; collect_response must never publish this event."""
+    fields: Mapping[str, Any] = field(repr=False)
 
 
 ModelEvent = Union[TextDelta, ReasoningDelta, ToolCallStart, ToolCallEnd, Usage]
@@ -324,7 +333,7 @@ def strip_legacy_provider_fields(value: Mapping[str, Any]) -> Dict[str, Any]:
     return {
         key: copy.deepcopy(item)
         for key, item in value.items()
-        if key not in {"reasoning_content", "raw_response", "raw_attempts", "_provider_reasoning"}
+        if key not in {"reasoning_content", "raw_response", "raw_attempts", "_provider_reasoning", "_provider_fields"}
     }
 
 
@@ -346,7 +355,7 @@ def _wire_arguments(arguments: Any) -> str:
     return json.dumps(arguments, ensure_ascii=False, separators=(",", ":"))
 
 
-def _wire_message(message: ModelMessage) -> Dict[str, Any]:
+def _wire_message(message: ModelMessage, origin=None) -> Dict[str, Any]:
     if isinstance(message, SystemMessage):
         return {"role": "system", "content": message.content}
     if isinstance(message, UserMessage):
@@ -376,7 +385,9 @@ def _wire_message(message: ModelMessage) -> Dict[str, Any]:
         "role": "assistant",
         "content": message.content or None,
     }
-    replay_reasoning = message._provider_reasoning or message.reasoning
+    state = message._provider_fields
+    replay_allowed = not state or state.get("origin") == origin
+    replay_reasoning = (message._provider_reasoning or message.reasoning) if replay_allowed else ""
     if replay_reasoning:
         # Both supported OpenAI-compatible providers require this replay during
         # an interleaved thinking/tool turn.  It never leaves this adapter.
@@ -393,7 +404,35 @@ def _wire_message(message: ModelMessage) -> Dict[str, Any]:
             }
             for item in message.tool_calls
         ]
+    if state and replay_allowed:
+        payload.update(copy.deepcopy(state.get("message") or {}))
+        for call in payload.get("tool_calls", []):
+            call.update(copy.deepcopy((state.get("tools") or {}).get(call["id"], {})))
     return payload
+
+
+def _replay_fields(value):
+    # Only backend responses can populate these fields. Do not forward response
+    # metadata, URLs, headers, credentials, or arbitrary SDK object attributes.
+    return {name: copy.deepcopy(_value(value, name))
+            for name in ("reasoning_content", "reasoning", "reasoning_details", "extra_content")
+            if _value(value, name, None) is not None}
+
+
+def _merge_replay(base, addition):
+    result = copy.deepcopy(base)
+    for name, value in addition.items():
+        if isinstance(value, Mapping) and isinstance(result.get(name), Mapping):
+            result[name] = _merge_replay(result[name], value)
+        elif isinstance(value, str) and isinstance(result.get(name), str):
+            # Opaque signatures are whole values, not text deltas. Never append
+            # repeated signatures; only concatenate explicitly textual channels.
+            result[name] = result[name] + value if name in {"reasoning_content", "reasoning"} else value
+        elif isinstance(value, list) and isinstance(result.get(name), list):
+            result[name] = result[name] + copy.deepcopy(value)
+        else:
+            result[name] = copy.deepcopy(value)
+    return result
 
 
 def _normalize_error(error: Exception) -> ModelProviderError:
@@ -538,7 +577,7 @@ class OpenAICompatibleProvider:
                 params["response_format"] = explicit_response_format
 
         params["model"] = request.model or str(self.profile.get("model") or "")
-        params["messages"] = [_wire_message(item) for item in request.messages]
+        params["messages"] = [_wire_message(item, self._origin(params["model"])) for item in request.messages]
         params["stream"] = bool(request.stream)
         if request.tools:
             params["tools"] = copy.deepcopy(list(request.tools))
@@ -553,7 +592,102 @@ class OpenAICompatibleProvider:
             and str(thinking.get("type") or "").lower() == "enabled"
         ):
             params.pop("tool_choice", None)
+        # SDK extra_body is merged last on the wire. It must not replace the
+        # application's canonical context, tools or response contract.
+        reserved = {"model", "messages", "tools", "tool_choice", "stream", "response_format"}
+        if reserved.intersection(params.get("extra_body") or {}):
+            raise ModelProviderError("extra_body cannot override protocol fields", code="invalid_request")
+        try:
+            return apply_parameter_contract(params, self.profile, request.model)
+        except ValueError as error:
+            raise ModelProviderError(str(error), code="invalid_request") from error
+
+    def _origin(self, model=None):
+        return (str(self.profile.get("baseUrl") or "").rstrip("/"),
+                str(model or self.profile.get("model") or ""),
+                hashlib.sha256(self.api_key.encode("utf-8")).hexdigest())
+
+    @staticmethod
+    def _sdk_params(create, params):
+        """Move extensions unknown to the installed SDK to extra_body.
+
+        This is SDK-signature based, not a per-model parameter allowlist. The
+        canonical protocol fields were already protected by _request_params.
+        """
+        try:
+            signature = inspect.signature(create)
+        except (TypeError, ValueError):
+            return params
+        if any(p.kind == p.VAR_KEYWORD for p in signature.parameters.values()):
+            return params
+        params = copy.deepcopy(params)
+        extra = dict(params.get("extra_body") or {})
+        for name in list(params):
+            if name not in signature.parameters:
+                extra.setdefault(name, params.pop(name))
+        if extra:
+            params["extra_body"] = extra
         return params
+
+    def for_detection(self):
+        """Same transport and thinking extensions, without optional tuning."""
+        profile = copy.deepcopy(self.profile)
+        profile.pop("parameterSupport", None)
+        optional = {"temperature", "reasoning_effort", "top_p", "response_format",
+                    "max_tokens", "max_completion_tokens", "stream_options"}
+        for group in ("generationDefaults", "requestOverrides"):
+            options = profile.setdefault(group, {})
+            for key in optional:
+                options.pop(key, None)
+                if isinstance(options.get("extra_body"), dict):
+                    options["extra_body"].pop(key, None)
+        return OpenAICompatibleProvider(profile, self.api_key, client=self._client)
+
+    def probe_parameter(self, model, name=None, value=None, *, timeout=15.0, context=None):
+        """Bounded raw validation probe; provider error text never crosses this API."""
+        options = {"response_format": None, getattr(self, "_probe_token_key", "max_completion_tokens"): 128, **(context or {})}
+        if name is not None:
+            options[name] = value
+        request = ModelRequest((UserMessage("Reply with OK."),), model=model,
+                               stream=False, options=options, timeout=timeout, max_retries=0)
+        params = self._request_params(request)
+        client = self._client.with_options(timeout=timeout, max_retries=0)
+        started = time.monotonic()
+        for attempt in range(2):
+            try:
+                response = client.chat.completions.create(**self._sdk_params(client.chat.completions.create, params))
+                if not _value(response, "choices", None):
+                    raise ModelProviderError("Empty probe response", code="protocol")
+                return "accepted"
+            except Exception as error:
+                # A few compatible APIs accept only the older output-limit key.
+                # Retry that *named* schema rejection, never authentication, rate
+                # limits, billing errors, arbitrary 400s, or completed generations.
+                if attempt == 0 and "max_completion_tokens" in params and parameter_error(error, "max_completion_tokens") in {"unsupported", "rejected"}:
+                    remaining = timeout - (time.monotonic() - started)
+                    if remaining <= 0:
+                        return "unknown"
+                    params["max_tokens"] = params.pop("max_completion_tokens")
+                    self._probe_token_key = "max_tokens"
+                    client = self._client.with_options(timeout=remaining, max_retries=0)
+                    continue
+                if name is not None:
+                    outcome = parameter_error(error, name)
+                    if outcome != "unknown":
+                        return outcome
+                raise _normalize_error(error) from error
+        return "unknown"
+
+    def list_model_metadata(self, *, timeout=15.0):
+        try:
+            client = self._client.with_options(timeout=timeout, max_retries=0)
+            response = client.models.list()
+            return tuple({name: copy.deepcopy(_value(item, name))
+                          for name in ("id", "parameters", "parameter_schema", "supported_parameters")
+                          if _value(item, name, None) is not None}
+                         for item in (_value(response, "data", []) or []))
+        except Exception as error:
+            raise _normalize_error(error) from error
 
     def stream(self, request: ModelRequest) -> Iterator[ModelEvent]:
         client = self._client
@@ -571,15 +705,15 @@ class OpenAICompatibleProvider:
                 model=params.get("model"), response_format=(response_format.get("type")
                     if isinstance(response_format, Mapping) else "unspecified"),
                 max_tokens=params.get("max_tokens"), max_completion_tokens=params.get("max_completion_tokens"))
-            response = client.chat.completions.create(**params)
+            response = client.chat.completions.create(**self._sdk_params(client.chat.completions.create, params))
             if request.stream:
-                yield from self._streaming_events(response)
+                yield from self._streaming_events(response, origin=self._origin(params["model"]))
             else:
-                yield from self._complete_events(response)
+                yield from self._complete_events(response, origin=self._origin(params["model"]))
         except Exception as error:
             raise _normalize_error(error) from error
 
-    def _complete_events(self, response: Any) -> Iterator[ModelEvent]:
+    def _complete_events(self, response: Any, *, origin=None) -> Iterator[ModelEvent]:
         choices = list(_value(response, "choices", []) or [])
         choice = choices[0] if choices else None
         payload = _value(choice, "message", None)
@@ -596,7 +730,7 @@ class OpenAICompatibleProvider:
         message = _value(choices[0], "message")
         if message is None:
             raise ModelProviderError("AI 返回结果缺少 message。", code="protocol")
-        reasoning = str(_value(message, "reasoning_content", "") or "")
+        reasoning = str(_value(message, "reasoning_content", "") or _value(message, "reasoning", "") or "")
         content = str(_value(message, "content", "") or "")
         if reasoning:
             yield ReasoningDelta(reasoning)
@@ -608,13 +742,21 @@ class OpenAICompatibleProvider:
                 call = replace(call, id=f"tool_call_{index}")
             yield ToolCallStart(call.id, call.name)
             yield ToolCallEnd(call)
+        state = {"origin": origin or self._origin(), "message": _replay_fields(message), "tools": {}}
+        for index, raw_call in enumerate(_value(message, "tool_calls", []) or []):
+            extension = _value(raw_call, "extra_content", None)
+            if extension is not None:
+                state["tools"][str(_value(raw_call, "id") or f"tool_call_{index}")] = {"extra_content": copy.deepcopy(extension)}
+        if state["message"] or state["tools"]:
+            yield _ProviderState(state)
         usage = _usage_event(_value(response, "usage", None))
         if usage is not None:
             yield usage
 
-    def _streaming_events(self, response: Iterable[Any]) -> Iterator[ModelEvent]:
+    def _streaming_events(self, response: Iterable[Any], *, origin=None) -> Iterator[ModelEvent]:
         fragments: Dict[int, Dict[str, Any]] = {}
         latest_usage = None
+        state = {"origin": origin or self._origin(), "message": {}, "tools": {}}
         chunk_count, choice_count = 0, 0
         finish_reason, response_model, reasoning_tokens = None, None, None
         content_type, reasoning_type, refusal_present = "NoneType", "NoneType", False
@@ -639,6 +781,7 @@ class OpenAICompatibleProvider:
                 delta = _value(choices[0], "delta")
                 if delta is None:
                     continue
+                state["message"] = _merge_replay(state["message"], _replay_fields(delta))
                 content_value = _value(delta, "content", None)
                 reasoning_value = _value(delta, "reasoning_content", None)
                 if content_value is not None:
@@ -646,7 +789,7 @@ class OpenAICompatibleProvider:
                 if reasoning_value is not None:
                     reasoning_type = type(reasoning_value).__name__
                 refusal_present |= bool(_value(delta, "refusal", None))
-                reasoning = str(_value(delta, "reasoning_content", "") or "")
+                reasoning = str(_value(delta, "reasoning_content", "") or _value(delta, "reasoning", "") or "")
                 content = str(_value(delta, "content", "") or "")
                 if reasoning:
                     yield ReasoningDelta(reasoning)
@@ -664,6 +807,9 @@ class OpenAICompatibleProvider:
                         index,
                         {"id": "", "name": "", "arguments": ""},
                     )
+                    extension = _value(raw_call, "extra_content", None)
+                    if isinstance(extension, Mapping):
+                        fragment["extra_content"] = _merge_replay(fragment.get("extra_content", {}), extension)
                     fragment["id"] += str(_value(raw_call, "id", "") or "")
                     function = _value(raw_call, "function", {})
                     fragment["name"] += str(_value(function, "name", "") or "")
@@ -671,6 +817,9 @@ class OpenAICompatibleProvider:
                     if arguments not in (None, ""):
                         fragment["arguments"] += _wire_arguments(arguments)
         finally:
+            close = getattr(response, "close", None)
+            if callable(close):
+                close()
             diagnostics.emit("provider_result", stage="provider_transport", stream=True,
                 model=response_model, chunk_count=chunk_count, choice_count=choice_count,
                 finish_reason=finish_reason, finish_seen=finish_reason is not None,
@@ -685,6 +834,10 @@ class OpenAICompatibleProvider:
             )
             yield ToolCallStart(call.id, call.name)
             yield ToolCallEnd(call)
+            if "extra_content" in fragment:
+                state["tools"][call.id] = {"extra_content": fragment["extra_content"]}
+        if state["message"] or state["tools"]:
+            yield _ProviderState(state)
         if latest_usage is not None:
             yield latest_usage
 
@@ -738,6 +891,7 @@ def collect_response(
         events = []
         usage = None
         received_characters = 0
+        provider_fields = {}
 
         def progress(phase):
             if progress_observer is not None:
@@ -745,7 +899,8 @@ def collect_response(
 
         def snapshot(error_code=""):
             return RawModelResponse(
-                AssistantMessage("".join(content), tuple(calls), "".join(reasoning)),
+                AssistantMessage("".join(content), tuple(calls), "".join(reasoning),
+                                 _provider_fields=copy.deepcopy(provider_fields)),
                 usage, tuple(events), current.stream, error_code,
             )
 
@@ -753,6 +908,9 @@ def collect_response(
             progress("waiting")
             preview("start")
             for event in provider.stream(current):
+                if isinstance(event, _ProviderState):
+                    provider_fields = copy.deepcopy(event.fields)
+                    continue
                 events.append(event)
                 if isinstance(event, ReasoningDelta):
                     reasoning.append(event.text)
@@ -917,8 +1075,15 @@ def reload_model_provider() -> ModelProvider:
 
 def test_model_profile(profile: Mapping[str, Any], api_key: str) -> str:
     provider = create_provider(profile, api_key)
-    model_ids = set(provider.list_models(timeout=15.0))
     selected = str(profile.get("model") or "")
+    try:
+        model_ids = set(provider.list_models(timeout=15.0))
+    except ModelProviderError as error:
+        if error.code in {"authentication", "rate_limit"}:
+            raise
+        # A custom deployment can expose chat/completions without GET /models.
+        provider.for_detection().probe_parameter(selected, timeout=15.0)
+        return "连接成功；服务未提供模型列表，已验证当前模型的聊天接口。"
     if model_ids and selected not in model_ids:
         return "连接成功；模型列表中未找到当前模型，请确认模型名称。"
     return "连接成功，API Key 和服务地址有效。"

@@ -339,3 +339,67 @@ def test_demo_failure_diagnostics_only_contain_exception_types_and_code_location
     assert "RuntimeError" in stderr and "ModelProviderError" in stderr
     assert "test_application_settings.py" in stderr
     assert "sdk-secret" not in stderr and "Bearer" not in stderr
+
+
+def test_first_unsaved_profile_can_detect_without_writing_settings_or_credentials(settings_env, monkeypatch):
+    from test_model_capabilities import Endpoint
+    from model_provider import OpenAICompatibleProvider
+    import model_provider
+    env = settings_env
+    endpoint = Endpoint()
+    monkeypatch.setattr(model_provider, "create_provider", lambda p, k: OpenAICompatibleProvider(p, k, client=endpoint))
+    result = env.service.detect_profile(name="First", base_url="https://gateway.invalid/custom/v2/",
+                                       model="tenant-alias", api_key="temporary-key")
+    assert result["status"] == "connected"
+    assert result["discovery"]["parameter_support"]["parameters"]["reasoning_effort"]["values"] == ["low", "high", "max"]
+    assert not env.path.exists() and not env.writes and not env.deletes
+    assert "temporary-key" not in json.dumps(result)
+
+
+def test_detect_does_not_reuse_saved_key_for_changed_endpoint(settings_env):
+    env = settings_env
+    env.keys["test-target"] = "do-not-send-to-another-host"
+    result = env.service.detect_profile(id="fake", base_url="https://other.invalid/v1")
+    assert result["status"] == "failed" and result["error_code"] == "missing_key"
+    assert not env.calls and not env.path.exists()
+
+
+def test_parameter_contract_roundtrips_and_is_invalidated_on_model_or_key_change(settings_env):
+    from model_capabilities import capability_scope
+    env = settings_env
+    source = copy.deepcopy(env.config["modelProfiles"][0])
+    support = {"scope": capability_scope(source), "parameters": {
+        "reasoning_effort": {"status": "supported", "source": "probe", "values": ["low", "high"]}}}
+    result = env.service.update(profile={"id": "fake", "parameter_support": support})
+    assert _profile(result)["parameter_support"] == support
+    env.service.set_key("fake", "new-key")
+    assert not _profile(env.service.public_settings())["parameter_support"]
+    env.service.update(profile={"id": "fake", "parameter_support": support})
+    changed = env.service.update(profile={"id": "fake", "model": "different"})
+    assert not _profile(changed)["parameter_support"]
+    with pytest.raises(ValueError):
+        env.service.update(profile={"id": "fake", "parameter_support": support})
+
+
+def test_discovery_http_requires_operator_csrf_and_accepts_an_unsaved_profile(settings_env, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from application.workbench import WorkbenchService
+    from integrations.web.app import create_app
+    from model_provider import OpenAICompatibleProvider
+    from test_model_capabilities import Endpoint
+    import model_provider
+    monkeypatch.setattr(model_provider, "create_provider", lambda p, k: OpenAICompatibleProvider(p, k, client=Endpoint()))
+    env = settings_env
+    origin = "http://127.0.0.1:8765"
+    service = WorkbenchService(tmp_path / "workspace", tmp_path / "state", settings=env.service)
+    app = create_app(service.store.base_dir, service=service, origin=origin, operator_token="operator", agent_token="agent")
+    body = {"profile": {"name": "Unsaved", "base_url": "https://gateway.invalid/custom/v2/",
+                        "model": "tenant-alias", "api_key": "private-draft-key"}}
+    with TestClient(app, base_url=origin) as client:
+        assert client.post("/api/settings/detect", json=body, headers={"Origin": origin, "Authorization": "Bearer agent"}).status_code == 401
+        login = client.post("/api/session", json={"token": "operator"}, headers={"Origin": origin}).json()
+        assert client.post("/api/settings/detect", json=body, headers={"Origin": origin}).status_code == 403
+        response = client.post("/api/settings/detect", json=body, headers={"Origin": origin, "X-CSRF-Token": login["csrf"]})
+        assert response.status_code == 200 and response.json()["status"] == "connected"
+        assert "private-draft-key" not in response.text
+    assert not env.path.exists() and not env.writes

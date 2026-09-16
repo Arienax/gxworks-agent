@@ -381,12 +381,17 @@ class ModelProfile(PublicResource):
     deletable: bool = False
     generation_defaults: JsonObject = Field(default_factory=dict)
     request_overrides: JsonObject = Field(default_factory=dict)
+    parameter_support: JsonObject = Field(default_factory=dict)
 
 
 class ModelConnectionResult(PublicResource):
     status: Literal["connected", "failed"]
     message: str
     error_code: str | None = None
+
+
+class ModelDiscoveryResult(ModelConnectionResult):
+    discovery: JsonObject | None = None
 
 
 class ApprovalSettings(PublicResource):

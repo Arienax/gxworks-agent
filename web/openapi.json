@@ -2053,6 +2053,67 @@
         "title": "ModelConnectionTest",
         "type": "object"
       },
+      "ModelDiscoveryRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "profile": {
+            "$ref": "#/components/schemas/ModelProfileCreate"
+          }
+        },
+        "required": [
+          "profile"
+        ],
+        "title": "ModelDiscoveryRequest",
+        "type": "object"
+      },
+      "ModelDiscoveryResult": {
+        "additionalProperties": false,
+        "properties": {
+          "discovery": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discovery"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "connected",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "message"
+        ],
+        "title": "ModelDiscoveryResult",
+        "type": "object"
+      },
       "ModelKeyUpdate": {
         "additionalProperties": false,
         "properties": {
@@ -2132,6 +2193,13 @@
             ],
             "title": "Name"
           },
+          "parameter_support": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Parameter Support",
+            "type": "object"
+          },
           "request_overrides": {
             "additionalProperties": {
               "$ref": "#/components/schemas/JsonValue"
@@ -2204,6 +2272,11 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "parameter_support": {
+            "additionalProperties": true,
+            "title": "Parameter Support",
+            "type": "object"
           },
           "request_overrides": {
             "additionalProperties": true,
@@ -2291,6 +2364,18 @@
               }
             ],
             "title": "Name"
+          },
+          "parameter_support": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parameter Support"
           },
           "request_overrides": {
             "anyOf": [
@@ -6518,6 +6603,44 @@
           }
         },
         "summary": "Update Approval Settings"
+      }
+    },
+    "/api/settings/detect": {
+      "post": {
+        "operationId": "detect_model_profile_api_settings_detect_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelDiscoveryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelDiscoveryResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Detect Model Profile"
       }
     },
     "/api/settings/profiles": {

@@ -1,13 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { Json, ModelSettings } from "../api/client";
 import type { components } from "../api/generated";
 import { Button, Badge } from "../components/ui";
+import { ModelParameters } from "./ModelParameters";
+import { ENDPOINT_PRESETS, reconcileParameters, changeParameter } from "./modelParameters";
+import type { ParameterSupport } from "./modelParameters";
 
 type Profile = NonNullable<ModelSettings["profiles"]>[number] & {
   deletable?: boolean;
   generation_defaults?: Record<string, Json>;
   request_overrides?: Record<string, Json>;
+  parameter_support?: Record<string, Json>;
 };
 
 type Discovery = {
@@ -17,6 +21,7 @@ type Discovery = {
   selected_model_available?: boolean;
   capabilities?: Record<string, boolean>;
   detected?: string[];
+  parameter_support?: ParameterSupport;
   note?: string;
 };
 
@@ -232,16 +237,38 @@ export function Settings({
   const [deleting, setDeleting] = useState(false);
   const [discoveredModels, setDiscoveredModels] = useState<string[]>([]);
   const [detected, setDetected] = useState<string[]>([]);
+  const [parameterSupport, setParameterSupport] = useState<ParameterSupport>({});
+  const draftRevision = useRef(0);
+  const invalidate = (clearModels = false) => {
+    draftRevision.current += 1;
+    setParameterSupport({});
+    setDetected([]);
+    if (clearModels) setDiscoveredModels([]);
+  };
+  const clearParameterValues = () => {
+    try {
+      const [nextDefaults, nextOverrides] = changeParameter(JSON.parse(defaults), JSON.parse(overrides), "reasoning_effort", null);
+      setDefaults(JSON.stringify(nextDefaults, null, 2));
+      setOverrides(JSON.stringify(nextOverrides, null, 2));
+    } catch { /* Keep invalid advanced JSON for the user to repair. */ }
+  };
+  const changeModel = (next: string) => {
+    if (next !== model) { invalidate(); setCapabilities({}); clearParameterValues(); }
+    setModel(next);
+  };
+  useEffect(() => () => { draftRevision.current += 1; }, []);
   const profile = value.profiles?.find((p) => p.id === selected) as
     | Profile
     | undefined;
   useEffect(() => {
+    draftRevision.current += 1;
     if (creating) return;
     setName(profile?.name || "");
     setModel(profile?.model || "");
     setBaseUrl(profile?.base_url || "");
     setSecret("");
     setCapabilities(profile?.capabilities || {});
+    setParameterSupport((profile?.parameter_support || {}) as ParameterSupport);
     setDefaults(JSON.stringify(profile?.generation_defaults || {}, null, 2));
     setOverrides(JSON.stringify(profile?.request_overrides || {}, null, 2));
     setDeleting(false);
@@ -263,6 +290,7 @@ export function Settings({
     capabilities,
     generation_defaults: parse(defaults),
     request_overrides: parse(overrides),
+    parameter_support: parameterSupport,
   });
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -287,6 +315,7 @@ export function Settings({
     setBaseUrl("");
     setSecret("");
     setCapabilities({});
+    invalidate(true);
     setDefaults("{}");
     setOverrides("{}");
     setDiscoveredModels([]);
@@ -314,7 +343,7 @@ export function Settings({
         <Button variant="primary">{t("模型 API")}</Button>
         <Button variant="ghost" onClick={() => setPage("integrations")}>Integrations / MCP</Button>
       </nav>
-      <div className="form settings-form">
+      <fieldset className="form settings-form" disabled={busy || disabled}>
         <div className="form-actions">
           <label>
             {t("选择模型配置")}
@@ -344,6 +373,17 @@ export function Settings({
           </Button>
         </div>
         <label>
+          {t("兼容服务预设")}
+          <select value="" onChange={event => {
+            const preset = ENDPOINT_PRESETS.find(item => item.url === event.target.value);
+            if (preset) { beginCreate(); setName(preset.name); setBaseUrl(preset.url); }
+          }}>
+            <option value="">{t("自定义 OpenAI-compatible 服务")}</option>
+            {ENDPOINT_PRESETS.map(item => <option key={item.url} value={item.url}>{item.name}</option>)}
+          </select>
+        </label>
+        <p className="muted">{t("预设只填写地址，不绑定模型或参数。可修改为区域、工作区或网关提供的兼容地址。Claude 原生 Messages 功能不等同于兼容接口功能。")}</p>
+        <label>
           {t("配置名称")}
           <input value={name} onChange={(e) => setName(e.target.value)} />
         </label>
@@ -351,7 +391,7 @@ export function Settings({
           API URL
           <input
             value={baseUrl}
-            onChange={(e) => setBaseUrl(e.target.value)}
+            onChange={(e) => { setBaseUrl(e.target.value); invalidate(true); setCapabilities({}); clearParameterValues(); }}
             placeholder="https://api.example.com/v1"
           />
         </label>
@@ -365,7 +405,7 @@ export function Settings({
             autoComplete="new-password"
             placeholder={t("保留现有密钥")}
             value={secret}
-            onChange={(e) => setSecret(e.target.value)}
+            onChange={(e) => { setSecret(e.target.value); invalidate(); }}
           />
         </label>
         <p className="muted">{t("API Key 用于连接模型服务；编辑已有配置时，留空可保留已保存的密钥。")}</p>
@@ -374,34 +414,35 @@ export function Settings({
             disabled={!discoverReady}
             onClick={() =>
               void run(async () => {
-                const probeId = selected || value.active_profile_id || value.profiles?.[0]?.id || "";
-                if (!probeId) throw new Error(t("请先保存一个模型配置，再检测可用模型与能力。"));
+                const revision = draftRevision.current;
                 const draft = {
-                  id: probeId,
+                  ...(creating ? {} : { id: selected }),
                   name: name.trim() || "Custom API",
                   model: model.trim() || "__discover__",
                   base_url: baseUrl,
                   capabilities,
                   generation_defaults: parse(defaults),
                   request_overrides: parse(overrides),
+                  // Re-detection must not validate against a stale contract.
+                  parameter_support: {},
+                  ...(secret ? { api_key: secret } : {}),
                 };
-                const result = await api<{ status: string; message: string }>(
-                  `/settings/profiles/${encodeURIComponent(probeId)}/test`,
-                  "POST",
-                  { profile: draft, ...(secret ? { api_key: secret } : {}) },
+                const result = await api<{ status: string; message: string; discovery?: Discovery }>(
+                  "/settings/detect", "POST", { profile: draft },
                 );
+                if (revision !== draftRevision.current) return;
                 if (result.status !== "connected") throw new Error(result.message || t("连接失败"));
-                const discovery = parseDiscovery(result.message);
-                if (!discovery) {
-                  setMessage(result.message || t("连接成功"));
-                  return;
-                }
-                const models = discovery.models || [];
-                setDiscoveredModels(models);
-                if ((!model || !models.includes(model)) && discovery.recommended_model)
-                  setModel(discovery.recommended_model);
+                const discovery = result.discovery || parseDiscovery(result.message);
+                if (!discovery) { setMessage(result.message || t("连接成功")); return; }
+                setDiscoveredModels(discovery.models || []);
+                if (!model && discovery.recommended_model) setModel(discovery.recommended_model);
                 if (discovery.capabilities) setCapabilities(discovery.capabilities);
                 setDetected(discovery.detected || []);
+                const support = discovery.parameter_support || {};
+                setParameterSupport(support);
+                const [nextDefaults, nextOverrides] = reconcileParameters(parse(defaults), parse(overrides), support);
+                setDefaults(JSON.stringify(nextDefaults, null, 2));
+                setOverrides(JSON.stringify(nextOverrides, null, 2));
                 setMessage(discovery.note || t("模型列表与能力检测完成"));
               })
             }
@@ -411,19 +452,22 @@ export function Settings({
         </div>
         <label>
           {t("模型")}
-          {discoveredModels.length ? (
-            <select value={model} onChange={(e) => setModel(e.target.value)}>
-              {discoveredModels.map((item) => <option value={item} key={item}>{item}</option>)}
-            </select>
-          ) : (
-            <input value={model} onChange={(e) => setModel(e.target.value)} placeholder={t("可先自动获取模型")} />
-          )}
+          <input value={model} onChange={(e) => changeModel(e.target.value)}
+            list="compatible-models" placeholder={t("可先自动获取模型")} />
+          <datalist id="compatible-models">
+            {discoveredModels.map(item => <option value={item} key={item} />)}
+          </datalist>
         </label>
         {detected.length > 0 && (
           <p className="muted">
             {t("已检测")}: {detected.map((key) => `${key}=${capabilities[key] ? "✓" : "×"}`).join(" · ")}
           </p>
         )}
+        <p className="muted">{t("检测会发送少量测试请求，可能产生 API 费用；仅使用固定测试文本，不发送工程内容。")}</p>
+        <ModelParameters support={parameterSupport} defaults={defaults} overrides={overrides}
+          disabled={busy || disabled} t={t} onChange={(nextDefaults, nextOverrides) => {
+            setDefaults(nextDefaults); setOverrides(nextOverrides);
+          }} />
         <details>
           <summary>{t("高级设置")}</summary>
           <p className="muted">
@@ -443,12 +487,10 @@ export function Settings({
                 <input
                   type="checkbox"
                   checked={!!capabilities[key]}
-                  onChange={(e) =>
-                    setCapabilities((old) => ({
-                      ...old,
-                      [key]: e.target.checked,
-                    }))
-                  }
+                  onChange={(e) => {
+                    invalidate();
+                    setCapabilities((old) => ({ ...old, [key]: e.target.checked }));
+                  }}
                 />
                 {t(key)}
               </label>
@@ -460,7 +502,7 @@ export function Settings({
               className="mono"
               aria-label={t("生成默认参数")}
               value={defaults}
-              onChange={(e) => setDefaults(e.target.value)}
+              onChange={(e) => { setDefaults(e.target.value); invalidate(); }}
             />
           </label>
           <p className="muted">temperature · top_p · max_tokens</p>
@@ -470,7 +512,7 @@ export function Settings({
               className="mono"
               aria-label={t("请求覆盖参数")}
               value={overrides}
-              onChange={(e) => setOverrides(e.target.value)}
+              onChange={(e) => { setOverrides(e.target.value); invalidate(); }}
             />
           </label>
         </details>
@@ -546,6 +588,7 @@ export function Settings({
                     ),
                   );
                   setSecret("");
+                  invalidate();
                   setMessage(t("密钥已清除"));
                 })
               }
@@ -592,7 +635,7 @@ export function Settings({
             )}
           </div>
         )}
-      </div>
+      </fieldset>
     </div>
   );
 }

@@ -87,6 +87,7 @@ class ModelProfileUpdate(Command):
     capabilities: dict[str, bool] | None = None
     generation_defaults: dict[str, Any] | None = None
     request_overrides: dict[str, Any] | None = None
+    parameter_support: dict[str, Any] | None = None
 
 
 class ModelProfileCreate(Command):
@@ -97,7 +98,12 @@ class ModelProfileCreate(Command):
     capabilities: dict[str, bool] = Field(default_factory=dict)
     generation_defaults: dict[str, Any] = Field(default_factory=dict)
     request_overrides: dict[str, Any] = Field(default_factory=dict)
+    parameter_support: dict[str, Any] = Field(default_factory=dict)
     api_key: str | None = Field(default=None, min_length=1, max_length=8192)
+
+
+class ModelDiscoveryRequest(Command):
+    profile: ModelProfileCreate
 
 
 class ModelKeyUpdate(Command):

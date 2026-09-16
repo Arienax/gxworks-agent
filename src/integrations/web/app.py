@@ -27,7 +27,7 @@ from .mcp_routes import register_mcp_routes
 from . import responses as dto
 from .schemas import (Login, ProjectCreate, ProjectUpdate, ActivateVersion, SpecUpdate,
                       JobCreate, GenerationRepair, ProposalDecision, ExecutionProposal, AgentCall,
-                      SettingsUpdate, ApprovalSettingsUpdate, ModelProfileCreate, ModelKeyUpdate, ModelConnectionTest,
+                      SettingsUpdate, ApprovalSettingsUpdate, ModelProfileCreate, ModelKeyUpdate, ModelConnectionTest, ModelDiscoveryRequest,
                       AttachmentUpload, SFCInput, FBDProposal)
 
 
@@ -329,6 +329,11 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
         service.writable()
         with service.lock.thread_lock:
             return service.settings.update(**command.model_dump(exclude_none=True))
+
+    @app.post("/api/settings/detect", response_model=dto.ModelDiscoveryResult, response_model_exclude_none=True)
+    def detect_model_profile(command: ModelDiscoveryRequest):
+        service.writable()
+        return service.settings.detect_profile(**command.profile.model_dump(exclude_none=True))
 
     @app.post("/api/settings/profiles", status_code=201, response_model=dto.ModelSettings)
     def create_model_profile(command: ModelProfileCreate):

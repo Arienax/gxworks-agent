@@ -22,7 +22,7 @@ from prompt_context_policy import (
 def _engineering_hardware_snapshot(value):
     # Preserve the API's historical filtering without importing model transport.
     return {key: copy.deepcopy(item) for key, item in value.items()
-            if key not in {"reasoning_content", "raw_response", "raw_attempts", "_provider_reasoning"}}
+            if key not in {"reasoning_content", "raw_response", "raw_attempts", "_provider_reasoning", "_provider_fields"}}
 
 
 _KNOWLEDGE_GENERIC_VALUES = {
