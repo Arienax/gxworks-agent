@@ -1,0 +1,442 @@
+diff --git a/src/application/model_detection.py b/src/application/model_detection.py
+index 9bf32f7..f93eff0 100644
+--- a/src/application/model_detection.py
++++ b/src/application/model_detection.py
+@@ -1,20 +1,19 @@
+-"""Bounded OpenAI-compatible model discovery and capability probes.
++"""Bounded discovery based on endpoint metadata and isolated validation probes.
+ 
+-This module is intentionally UI/application-side.  It does not change the
+-ModelProvider contract or PLC runtime.  Probes are best-effort and never persist
+-settings by themselves.
++No provider/model-name table. Unknown, ignored and unsupported are deliberately
++not conflated. Probes use synthetic prompts only; never PLC data or user history.
+ """
+ from __future__ import annotations
+ 
+ import json
++import time
+ from typing import Any, Dict, Mapping
+ 
++from model_capabilities import (
++    EFFORT_CANDIDATES, capability_scope, effective_parameter, metadata_parameters,
++)
+ from model_provider import (
+-    ModelRequest,
+-    SystemMessage,
+-    TextDelta,
+-    ToolCallEnd,
+-    UserMessage,
++    ModelProviderError, ModelRequest, SystemMessage, TextDelta, ToolCallEnd, UserMessage,
+ )
+ 
+ 
+@@ -22,87 +21,156 @@ def _consume(provider, request):
+     return list(provider.stream(request))
+ 
+ 
+-def _tool_probe(provider, model: str) -> bool:
+-    tool = {
+-        "type": "function",
+-        "function": {
+-            "name": "capability_probe",
+-            "description": "Return the fixed probe value.",
+-            "parameters": {
+-                "type": "object",
+-                "properties": {"value": {"type": "string", "enum": ["ok"]}},
+-                "required": ["value"],
+-                "additionalProperties": False,
+-            },
+-        },
+-    }
++def _tool_probe(provider, model: str, timeout=15.0) -> bool:
++    tool = {"type": "function", "function": {
++        "name": "capability_probe", "description": "Return the fixed probe value.",
++        "parameters": {"type": "object", "properties": {"value": {"type": "string", "enum": ["ok"]}},
++                       "required": ["value"], "additionalProperties": False}}}
+     request = ModelRequest(
+-        messages=(
+-            SystemMessage("This is a capability probe. Follow the user instruction exactly."),
+-            UserMessage("Call capability_probe exactly once with value='ok'. Do not answer with prose."),
+-        ),
+-        model=model,
+-        tools=(tool,),
+-        stream=False,
+-        timeout=15.0,
+-        max_retries=0,
+-        options={"response_format": None},
++        messages=(SystemMessage("This is a capability probe. Follow the user instruction exactly."),
++                  UserMessage("Call capability_probe exactly once with value='ok'. Do not answer with prose.")),
++        model=model, tools=(tool,), stream=False, timeout=timeout, max_retries=0,
++        options={"response_format": None, getattr(provider, "_probe_token_key", "max_completion_tokens"): 256},
+     )
+     try:
+         events = _consume(provider, request)
++    except ModelProviderError as error:
++        if error.code in {"authentication", "rate_limit"}:
++            raise
++        return False
+     except Exception:
+         return False
+     return any(isinstance(event, ToolCallEnd) and event.tool_call.name == "capability_probe" for event in events)
+ 
+ 
+-def _structured_output_probe(provider, model: str) -> bool:
++def _structured_output_probe(provider, model: str, timeout=15.0) -> bool:
+     request = ModelRequest(
+-        messages=(
+-            SystemMessage("Return only valid JSON."),
+-            UserMessage('Return exactly one JSON object with key "probe" and value true.'),
+-        ),
+-        model=model,
+-        stream=False,
+-        timeout=15.0,
+-        max_retries=0,
+-        options={"response_format": {"type": "json_object"}},
++        messages=(SystemMessage("Return only valid JSON."),
++                  UserMessage('Return exactly one JSON object with key "probe" and value true.')),
++        model=model, stream=False, timeout=timeout, max_retries=0,
++        options={"response_format": {"type": "json_object"},
++                 getattr(provider, "_probe_token_key", "max_completion_tokens"): 256},
+     )
+     try:
+-        text = "".join(
+-            event.text for event in _consume(provider, request) if isinstance(event, TextDelta)
+-        ).strip()
++        text = "".join(event.text for event in _consume(provider, request) if isinstance(event, TextDelta)).strip()
+         payload = json.loads(text)
++    except ModelProviderError as error:
++        if error.code in {"authentication", "rate_limit"}:
++            raise
++        return False
+     except Exception:
+         return False
+     return isinstance(payload, Mapping) and payload.get("probe") is True
+ 
+ 
++def _parameter_probe(provider, model, name, candidates, invalid, remaining, context=None):
++    result = {"status": "unknown", "source": "probe"}
++    if not callable(getattr(provider, "probe_parameter", None)):
++        return result
++
++    def attempt(value):
++        timeout = remaining()
++        if timeout <= 0:
++            return "unknown"
++        try:
++            return provider.probe_parameter(model, name, value, timeout=timeout, context=context)
++        except ModelProviderError as error:
++            if error.code in {"authentication", "rate_limit"}:
++                raise
++            return "unknown"
++
++    # Negative control: permissive gateways can silently ignore parameters.
++    negative = attempt(invalid)
++    if negative == "unsupported":
++        return {**result, "status": "unsupported"}
++    if negative == "accepted":
++        return {**result, "status": "accepted"}
++    if negative != "rejected":
++        return result
++    accepted = []
++    rejected = 0
++    for value in candidates:
++        outcome = attempt(value)
++        if outcome == "accepted":
++            accepted.append(value)
++        elif outcome in {"rejected", "unsupported"}:
++            rejected += 1
++        else:
++            # Stop on network/time/budget failure; retain validated values, but
++            # do not claim that missing values or an entire parameter are absent.
++            break
++    if accepted:
++        result.update(status="supported", values=accepted)
++        if name == "temperature" and len(accepted) == 1 and rejected == len(candidates) - 1:
++            result["status"] = "fixed"
++    return result
++
++
+ def inspect_openai_compatible(provider, model: str, configured_capabilities=None) -> Dict[str, Any]:
+-    """Discover model ids and probe capabilities that can be tested safely.
+-
+-    Tool calling and JSON-object structured output are actively probed.  Other
+-    capability flags are preserved from the selected profile because reasoning,
+-    multimodal support and provider-specific thinking controls cannot be safely
+-    inferred from a generic text-only OpenAI-compatible request.  A failed
+-    best-effort probe never downgrades an existing known-good True flag.
+-    """
+-    models = sorted(set(provider.list_models(timeout=15.0)))
++    original = getattr(provider, "profile", {}) or {}
+     selected = str(model or "").strip()
+-    probe_model = selected if selected in models else (models[0] if models else selected)
++    deadline = time.monotonic() + 90.0
++
++    def remaining():
++        return max(0.0, min(15.0, deadline - time.monotonic()))
++
++    listing_available = True
++    metadata = []
++    try:
++        if callable(getattr(provider, "list_model_metadata", None)):
++            metadata = list(provider.list_model_metadata(timeout=remaining()))
++            models = sorted({str(item["id"]) for item in metadata if item.get("id")})
++        else:
++            models = sorted(set(provider.list_models(timeout=15.0)))
++    except ModelProviderError as error:
++        if error.code in {"authentication", "rate_limit"}:
++            raise
++        listing_available, models = False, []
++    except Exception:
++        listing_available, models = False, []
++    # A gateway alias may not occur in /models. Never replace an explicit model
++    # with the first advertised entry and accidentally attach its capabilities.
++    probe_model = selected if selected and selected != "__discover__" else (models[0] if models else "")
++    if not probe_model:
++        raise ModelProviderError("模型列表不可用，请手动填写模型 ID。", code="invalid_request")
++    if callable(getattr(provider, "for_detection", None)):
++        provider = provider.for_detection()
++    if callable(getattr(provider, "probe_parameter", None)):
++        # GET /models alone is not evidence of a usable Chat Completions API.
++        provider.probe_parameter(probe_model, timeout=remaining())
++    entry = next((item for item in metadata if item.get("id") == probe_model), {})
++    parameters = metadata_parameters(entry)
++    if "reasoning_effort" not in parameters:
++        parameters["reasoning_effort"] = _parameter_probe(
++            provider, probe_model, "reasoning_effort", EFFORT_CANDIDATES,
++            "__gxw_invalid_effort__", remaining,
++        )
++    configured_effort = effective_parameter(original, "reasoning_effort")
++    effort_values = parameters["reasoning_effort"].get("values", [])
++    effort = configured_effort if configured_effort in effort_values else None
++    if "temperature" not in parameters:
++        parameters["temperature"] = _parameter_probe(
++            provider, probe_model, "temperature", (0.0, 0.5, 1.0, 1.5, 2.0), -1.0,
++            remaining, {"reasoning_effort": effort} if effort is not None else {},
++        )
++    # Temperature support can change when reasoning is enabled or disabled.
++    parameters["temperature"]["reasoning_effort"] = effort
+     capabilities = dict(configured_capabilities or {})
+     detected_values = {
+-        "tools": _tool_probe(provider, probe_model) if probe_model else False,
+-        "structured_output": _structured_output_probe(provider, probe_model) if probe_model else False,
++        "tools": _tool_probe(provider, probe_model, remaining()) if remaining() > 0 else False,
++        "structured_output": _structured_output_probe(provider, probe_model, remaining()) if remaining() > 0 else False,
+     }
+     for name, supported in detected_values.items():
+         if supported or name not in capabilities:
+             capabilities[name] = supported
+     return {
+         "models": models,
+-        "recommended_model": probe_model or None,
++        "recommended_model": probe_model,
+         "selected_model_available": bool(selected and selected in models),
++        "model_listing_available": listing_available,
+         "capabilities": capabilities,
+         "detected": sorted(detected_values),
+         "probe_results": detected_values,
+-        "note": "已自动检测工具调用与结构化输出；推理、视觉和供应商专用参数保留现有配置，可在高级设置中手动调整。",
++        "parameter_support": {"scope": capability_scope(original, probe_model), "parameters": parameters},
++        "note": "参数滑条只显示已声明或已通过有效值与无效值对照检测的档位；接口接受不等于实际生效。工具和 JSON 为本次观察结果，失败可能是超时或输出预算不足；视觉能力需手动确认。检测结果保存后生效。",
+     }
+diff --git a/src/application/settings.py b/src/application/settings.py
+index bf998d0..b0d74ca 100644
+--- a/src/application/settings.py
++++ b/src/application/settings.py
+@@ -12,11 +12,12 @@ from urllib.parse import urlsplit, urlunsplit
+ 
+ # Public service error shared with desktop/CLI model selection.
+ from config_manager import ModelConfigurationRequiredError
++from model_capabilities import capability_scope, normalize_parameter_support
+ 
+ 
+ _SETTINGS_LOCK = threading.RLock()
+ _PROFILE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
+-_PROFILE_FIELDS = {"id", "name", "model", "base_url", "capabilities", "generation_defaults", "request_overrides"}
++_PROFILE_FIELDS = {"id", "name", "model", "base_url", "capabilities", "generation_defaults", "request_overrides", "parameter_support"}
+ _SENSITIVE_NAMES = {"key", "accesskey", "auth", "bearer", "token", "headers", "extraheaders", "cookie", "cookies", "authentication", "proxyauth"}
+ 
+ 
+@@ -125,6 +126,8 @@ class SettingsService:
+                                      if not _sensitive(key) and isinstance(value, bool)},
+                     "generation_defaults": _safe_options(profile["generationDefaults"]),
+                     "request_overrides": _safe_options(profile["requestOverrides"]),
++                    "parameter_support": _safe_options(profile.get("parameterSupport") or {})
++                        if (profile.get("parameterSupport") or {}).get("scope") == capability_scope(profile) else {},
+                 })
+             return {"language": config["language"], "active_profile_id": config["activeModelProfileId"], "profiles": profiles}
+ 
+@@ -134,6 +137,7 @@ class SettingsService:
+             raise ValueError("Unknown model profile fields")
+         if "id" in values and _profile_id(values["id"]) != chosen["id"]:
+             raise ValueError("Cannot change model profile ID")
++        old_scope = capability_scope(chosen)
+         for key in ("name", "model"):
+             if key in values:
+                 value = str(values[key]).strip()
+@@ -158,6 +162,13 @@ class SettingsService:
+                     if number is not None and (isinstance(number, bool) or not isinstance(number, (int, float)) or not 0 <= number <= upper):
+                         raise ValueError("Sampling parameter outside supported range")
+             chosen[stored] = value
++        if "parameter_support" in values:
++            support = normalize_parameter_support(_safe_options(values["parameter_support"], strict=True))
++            if support and support["scope"] != capability_scope(chosen):
++                raise ValueError("Model, endpoint or thinking options changed; detect parameters again")
++            chosen["parameterSupport"] = support
++        elif old_scope != capability_scope(chosen):
++            chosen["parameterSupport"] = {}
+ 
+     @staticmethod
+     def _save(config, legacy, *, skip_legacy=()):
+@@ -190,6 +201,9 @@ class SettingsService:
+             skip_legacy = ()
+             if api_key is not None:
+                 selected = get_model_profile(config, (profile or {}).get("id") or active_profile_id)
++                if "parameter_support" not in (profile or {}):
++                    selected["parameterSupport"] = {}
++                    config["modelProfiles"] = [selected if p["id"] == selected["id"] else p for p in config["modelProfiles"]]
+                 write_api_key(api_key, selected["credentialTarget"])
+                 skip_legacy = (selected["id"],)
+             self._save(config, legacy, skip_legacy=skip_legacy)
+@@ -240,12 +254,47 @@ class SettingsService:
+             config = self.read_config()
+             legacy = self._legacy_credential(config)
+             profile = get_model_profile(config, _profile_id(profile_id))
++            profile["parameterSupport"] = {}
++            config["modelProfiles"] = [profile if p["id"] == profile_id else p for p in config["modelProfiles"]]
+             # Persist the explicit legacy conversion so a removed key cannot
+             # silently reappear from the old inline/global-credential fallback.
+             self._save(config, legacy, skip_legacy=(profile_id,))
+             delete_api_key(profile["credentialTarget"])
+             return self.public_settings()
+ 
++    def detect_profile(self, *, id=None, api_key=None, **values):
++        """Read-only draft discovery, including the very first unsaved profile."""
++        from config_manager import get_model_profile, _normalize_profile
++        from credential_store import credential_target_for_profile
++        from model_provider import create_provider
++        from application.model_detection import inspect_openai_compatible
++        with _SETTINGS_LOCK:
++            if id:
++                config = self.read_config()
++                selected = get_model_profile(config, _profile_id(id))
++                old_url = selected.get("baseUrl")
++                self._apply_profile(selected, values)
++                # Do not send a saved credential to a different endpoint merely
++                # because the user selected another connection preset.
++                key = api_key if api_key is not None else (
++                    self._key(config, selected) if old_url == selected.get("baseUrl") else "")
++            else:
++                selected = {"id": "discovery-draft", "adapter": "openai_compatible",
++                            "credentialTarget": credential_target_for_profile("discovery-draft")}
++                self._apply_profile(selected, values)
++                key = api_key or ""
++            selected = _normalize_profile(selected)
++            if not str(key).strip():
++                return {"status": "failed", "message": "请先配置 API Key；更换服务地址时请重新输入密钥。", "error_code": "missing_key"}
++        try:
++            result = inspect_openai_compatible(create_provider(selected, key), selected["model"], selected["capabilities"])
++            return {"status": "connected", "message": "模型列表与能力检测完成", "discovery": result}
++        except Exception as error:
++            code = getattr(error, "code", "provider_error")
++            if code not in {"authentication", "rate_limit", "timeout", "invalid_request", "unavailable", "protocol"}:
++                code = "provider_error"
++            return {"status": "failed", "message": "检测失败，请检查兼容 API 地址、模型 ID 和密钥；模型列表不可用时请手动填写模型。", "error_code": code}
++
+     def test_connection(self, profile_id, *, profile=None, api_key=None):
+         from config_manager import get_model_profile
+         from model_provider import create_provider, test_model_profile
+diff --git a/src/config_manager.py b/src/config_manager.py
+index 399fb04..8703712 100644
+--- a/src/config_manager.py
++++ b/src/config_manager.py
+@@ -269,11 +269,13 @@ def _normalize_profile(profile):
+         raise ValueError(f"模型 Profile {profile_id} 缺少 baseUrl。")
+     if not normalized["model"]:
+         raise ValueError(f"模型 Profile {profile_id} 缺少 model。")
+-    for key in ("capabilities", "generationDefaults", "requestOverrides"):
++    for key in ("capabilities", "generationDefaults", "requestOverrides", "parameterSupport"):
+         value = normalized.get(key)
+         if value is not None and not isinstance(value, dict):
+             raise ValueError(f"模型 Profile {profile_id} 的 {key} 必须是对象。")
+         normalized[key] = copy.deepcopy(value) if isinstance(value, dict) else {}
++    from model_capabilities import normalize_parameter_support
++    normalized["parameterSupport"] = normalize_parameter_support(normalized["parameterSupport"])
+     normalized["credentialTarget"] = str(
+         normalized.get("credentialTarget")
+         or credential_target_for_profile(profile_id)
+diff --git a/src/integrations/web/app.py b/src/integrations/web/app.py
+index eef62bb..4723603 100644
+--- a/src/integrations/web/app.py
++++ b/src/integrations/web/app.py
+@@ -27,7 +27,7 @@ from .mcp_routes import register_mcp_routes
+ from . import responses as dto
+ from .schemas import (Login, ProjectCreate, ProjectUpdate, ActivateVersion, SpecUpdate,
+                       JobCreate, GenerationRepair, ProposalDecision, ExecutionProposal, AgentCall,
+-                      SettingsUpdate, ApprovalSettingsUpdate, ModelProfileCreate, ModelKeyUpdate, ModelConnectionTest,
++                      SettingsUpdate, ApprovalSettingsUpdate, ModelProfileCreate, ModelKeyUpdate, ModelConnectionTest, ModelDiscoveryRequest,
+                       AttachmentUpload, SFCInput, FBDProposal)
+ 
+ 
+@@ -330,6 +330,11 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
+         with service.lock.thread_lock:
+             return service.settings.update(**command.model_dump(exclude_none=True))
+ 
++    @app.post("/api/settings/detect", response_model=dto.ModelDiscoveryResult, response_model_exclude_none=True)
++    def detect_model_profile(command: ModelDiscoveryRequest):
++        service.writable()
++        return service.settings.detect_profile(**command.profile.model_dump(exclude_none=True))
++
+     @app.post("/api/settings/profiles", status_code=201, response_model=dto.ModelSettings)
+     def create_model_profile(command: ModelProfileCreate):
+         service.writable()
+diff --git a/src/integrations/web/responses.py b/src/integrations/web/responses.py
+index d3941da..41047d8 100644
+--- a/src/integrations/web/responses.py
++++ b/src/integrations/web/responses.py
+@@ -381,6 +381,7 @@ class ModelProfile(PublicResource):
+     deletable: bool = False
+     generation_defaults: JsonObject = Field(default_factory=dict)
+     request_overrides: JsonObject = Field(default_factory=dict)
++    parameter_support: JsonObject = Field(default_factory=dict)
+ 
+ 
+ class ModelConnectionResult(PublicResource):
+@@ -389,6 +390,10 @@ class ModelConnectionResult(PublicResource):
+     error_code: str | None = None
+ 
+ 
++class ModelDiscoveryResult(ModelConnectionResult):
++    discovery: JsonObject | None = None
++
++
+ class ApprovalSettings(PublicResource):
+     mode: Literal["ask", "auto", "full"]
+     revision: int = Field(ge=0)
+diff --git a/src/integrations/web/schemas.py b/src/integrations/web/schemas.py
+index 60f072a..7afd82d 100644
+--- a/src/integrations/web/schemas.py
++++ b/src/integrations/web/schemas.py
+@@ -87,6 +87,7 @@ class ModelProfileUpdate(Command):
+     capabilities: dict[str, bool] | None = None
+     generation_defaults: dict[str, Any] | None = None
+     request_overrides: dict[str, Any] | None = None
++    parameter_support: dict[str, Any] | None = None
+ 
+ 
+ class ModelProfileCreate(Command):
+@@ -97,9 +98,14 @@ class ModelProfileCreate(Command):
+     capabilities: dict[str, bool] = Field(default_factory=dict)
+     generation_defaults: dict[str, Any] = Field(default_factory=dict)
+     request_overrides: dict[str, Any] = Field(default_factory=dict)
++    parameter_support: dict[str, Any] = Field(default_factory=dict)
+     api_key: str | None = Field(default=None, min_length=1, max_length=8192)
+ 
+ 
++class ModelDiscoveryRequest(Command):
++    profile: ModelProfileCreate
++
++
+ class ModelKeyUpdate(Command):
+     api_key: str = Field(min_length=1, max_length=8192)
+ 

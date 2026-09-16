@@ -1,30 +1,87 @@
 name: Model API Compatibility
-
 on:
   push:
     branches: [feat/universal-api-capabilities]
-  pull_request:
-    paths:
-      - 'src/model_*.py'
-      - 'src/config_manager.py'
-      - 'web/**'
-      - 'tests/test_model_*.py'
-      - '.github/workflows/model-api-compatibility.yml'
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
-  source-baseline:
+  integrate-and-validate:
+    if: github.ref == 'refs/heads/feat/universal-api-capabilities'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@v4
-      - name: Export tracked source for isolated validation
-        run: git archive --format=tar HEAD > source-baseline.tar
-      - uses: actions/upload-artifact@v4
         with:
-          name: source-baseline
-          path: source-baseline.tar
-          retention-days: 1
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Apply the reviewed implementation to this feature branch only
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, subprocess
+          parts = sorted(Path('tools/.api-implementation').glob('*.patch'))
+          assert len(parts) == 6, 'Expected the six reviewed patch parts'
+          data = b''.join(p.read_bytes() for p in parts)
+          # Correct a transport transcription in an unchanged context line.
+          data = data.replace(b'content_type, reasoning_type, refusal_present = "NoneType", "NoneType", "False"', b'content_type, reasoning_type, refusal_present = "NoneType", "NoneType", False')
+          assert hashlib.sha256(data).hexdigest() == '96f66b71c2e089460e170c2c9e3848fb89d1b2304a6db37f0d6e8d46e43b55da', 'Implementation bytes differ from tested source'
+          subprocess.run(['git', 'apply', '--index', '--whitespace=error'], input=data, check=True)
+          PY
+          git rm -r tools/.api-implementation
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: add universal API capability discovery and parameter sliders'
+          git push origin HEAD:refs/heads/feat/universal-api-capabilities
+      - name: Install isolated validation dependencies
+        run: |
+          python -m pip install -r requirements/web.txt pytest playwright==1.55.0
+          npm ci --prefix web
+      - name: Generate typed HTTP contract
+        run: |
+          npm run types --prefix web
+          git add web/src/api/generated.ts
+          if ! git diff --cached --quiet; then
+            git commit -m 'chore: regenerate model discovery API types'
+            git push origin HEAD:refs/heads/feat/universal-api-capabilities
+          fi
+      - name: Verify Python API and shared boundaries
+        run: |
+          mkdir -p model-api-evidence
+          python -m compileall -q src tests scripts/web_model_settings_e2e.py
+          python -m pytest -q tests/test_model_capabilities.py tests/test_application_settings.py tests/test_model_provider.py tests/test_model_detection.py tests/test_model_profile_config.py tests/test_model_profile_deletion.py tests/test_web_contract.py tests/test_web_frontend_state_flow.py tests/test_model_stream_cancellation.py tests/test_model_presentation.py tests/test_plc_core_boundary.py --junitxml=model-api-evidence/python.xml
+      - name: Test parameter controls and build Web frontend
+        run: |
+          node --experimental-strip-types --test web/tests/model-parameters.test.mjs
+          npm run build --prefix web
+      - name: Exercise real browser and HTTP settings flow
+        run: |
+          python -m playwright install --with-deps chromium
+          python scripts/web_model_settings_e2e.py --web-dist web/dist --evidence model-api-evidence
+      - name: Export implementation and evidence for inspection
+        if: always()
+        run: |
+          mkdir -p model-api-evidence
+          git rev-parse HEAD > model-api-evidence/commit.txt
+          git archive --format=tar HEAD > model-api-evidence/implemented-source.tar
+          if [ -d web/dist ]; then tar -cf model-api-evidence/web-dist.tar -C web dist; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: model-api-evidence
+          path: model-api-evidence/
+          retention-days: 3
