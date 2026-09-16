@@ -4,7 +4,7 @@
 
 > **面向 Mitsubishi MELSEC PLC 开发的 AI 原生工程工作台与 Agent Runtime。**
 
-![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)
+![License](https://img.shields.io/badge/license-source--available%20proprietary-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-0078D6.svg)
 ![PLC](https://img.shields.io/badge/focus-FX3U-orange.svg)
 ![Status](https://img.shields.io/badge/status-active%20development-yellow.svg)
@@ -151,4 +151,4 @@ GXWorks Agent 仍处于持续开发中。生成的 PLC 逻辑在部署前必须�
 
 ## License
 
-Licensed under the [Apache License 2.0](LICENSE).
+GXWorks Agent 采用**源码可见（source-available）的专有许可**，不是开源软件。完整条款见 [LICENSE](LICENSE)。允许查看源码、本地运行、修改、研究 / 评估以及组织内部使用；未经事先书面许可，不得再分发、再许可、分发编译或打包后的衍生版本、集成到对外分发的产品中、作为托管 / SaaS / API 服务提供，也不得转售、重新许可或白标使用。
