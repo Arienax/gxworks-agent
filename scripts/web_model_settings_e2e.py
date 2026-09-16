@@ -85,7 +85,11 @@ async def run(web_dist, evidence):
                         await page.get_by_role("button", name="模型", exact=True).click()
                         await expect(page.get_by_role("slider", name="reasoning_effort")).to_have_attribute("aria-valuetext", "high")
                         await expect(page.get_by_role("slider", name="temperature")).to_have_attribute("aria-valuetext", "0.5")
+                        # The settings modal scrolls independently from the page.
+                        # Capture the controls, not just the top of the dialog.
+                        await page.locator(".model-parameters").scroll_into_view_if_needed()
                         await page.screenshot(path=str(evidence / "model-parameters.png"), full_page=True)
+                        await page.locator(".model-parameters").screenshot(path=str(evidence / "parameter-controls.png"))
                         await page.get_by_label("模型", exact=True).fill("different-model")
                         await expect(page.get_by_role("slider")).to_have_count(0)
                         advanced = page.get_by_text("高级设置", exact=True)
