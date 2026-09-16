@@ -121,10 +121,22 @@ def apply_parameter_contract(params, profile, model=None):
 
     Unknown support does not ban explicit advanced options. Unsupported/fixed
     controls omit the parameter and let the server choose its own default. A
-    validated slider cannot be overridden by a duplicate in extra_body.
+    validated slider is authoritative over task hints and extra_body duplicates.
     """
     params = copy.deepcopy(params)
-    for name, descriptor in scoped_parameters(profile, model).items():
+    descriptors = scoped_parameters(profile, model)
+    # A detected control is a user-level setting, not a task default. Workflow
+    # stages still suggest low/high in ModelRequest.options; those suggestions
+    # must not override a saved slider, or resurrect a "server default" field.
+    # Profiles without a scoped control retain the legacy merge semantics.
+    for name, descriptor in descriptors.items():
+        if descriptor["status"] in {"supported", "fixed", "unsupported"}:
+            params.pop(name, None)
+            (params.get("extra_body") or {}).pop(name, None)
+            selected = effective_parameter(profile, name)
+            if descriptor["status"] == "supported" and selected is not None:
+                params[name] = copy.deepcopy(selected)
+    for name, descriptor in descriptors.items():
         extra = params.get("extra_body") or {}
         value = extra.get(name, params.get(name))
         if descriptor["status"] in {"unsupported", "fixed"}:

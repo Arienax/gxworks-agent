@@ -185,14 +185,16 @@ def test_saved_contract_is_scoped_to_endpoint_model_and_thinking_extensions():
                    {"requestOverrides": {"extra_body": {"enable_thinking": True}}}):
         assert scoped_parameters({**p, **change}) == {}
     assert scoped_parameters(p, "other") == {}
+    p["generationDefaults"]["reasoning_effort"] = "max"
     with pytest.raises(ValueError):
-        apply_parameter_contract({"reasoning_effort": "max"}, p)
+        apply_parameter_contract({"reasoning_effort": "low"}, p)
 
 
 def test_temperature_is_invalidated_by_reasoning_mode_changes():
     p = profile()
     p["parameterSupport"] = descriptor(p, temperature={"status": "supported", "source": "probe",
         "values": [0, 1], "reasoning_effort": "none"})
+    p["generationDefaults"]["temperature"] = 0
     assert apply_parameter_contract({"temperature": 0, "reasoning_effort": "none"}, p)["temperature"] == 0
     with pytest.raises(ValueError):
         apply_parameter_contract({"temperature": 0, "extra_body": {"reasoning_effort": "high"}}, p)
@@ -289,3 +291,42 @@ def test_effective_parameter_matches_sdk_extra_body_precedence_and_deletion():
     assert effective_parameter(p, "reasoning_effort") == "max"
     p["requestOverrides"]["extra_body"] = None
     assert effective_parameter(p, "reasoning_effort") == "max"
+
+
+@pytest.mark.parametrize("selected", ["low", "max", None])
+def test_slider_and_server_default_override_real_workflow_and_agent_hints(selected):
+    import api
+    import plc_agent
+    from test_model_provider import _Client, _chunk
+
+    settings = profile(generationDefaults={"temperature": .5})
+    if selected is not None:
+        settings["generationDefaults"]["reasoning_effort"] = selected
+    settings["parameterSupport"] = descriptor(settings,
+        reasoning_effort={"status": "supported", "source": "probe", "values": ["low", "high", "max"]},
+        temperature={"status": "supported", "source": "probe", "values": [0, .5, 1], "reasoning_effort": selected})
+    client = _Client([
+        {"choices": [{"message": {"content": "完成。"}}]},
+        iter([_chunk(content="完成。")]),
+    ])
+    p = OpenAICompatibleProvider(settings, "test-key", client=client)
+    # Exercise the production analysis/repair helper with its own stage hint.
+    with api.provider_scope(p):
+        api._request_model([{"role": "user", "content": "检查"}], effort="high", stream=False,
+                           options={"temperature": 1.5})
+    # Exercise the production agent, which normally supplies effort=high.
+    runtime = SimpleNamespace(list_tools=lambda context: [])
+    plc_agent.run_tool_agent("检查", context=None, provider=p, runtime=runtime)
+    assert len(client.completions.calls) == 2
+    for request in client.completions.calls:
+        if selected is None:
+            assert "reasoning_effort" not in request
+        else:
+            assert request["reasoning_effort"] == selected
+        assert request["temperature"] == .5
+
+
+def test_unknown_controls_preserve_explicit_advanced_options():
+    p = profile()
+    p["parameterSupport"] = descriptor(p, reasoning_effort={"status": "unknown", "source": "probe"})
+    assert apply_parameter_contract({"reasoning_effort": "high"}, p)["reasoning_effort"] == "high"
