@@ -1,0 +1,30 @@
+name: Model API Compatibility
+
+on:
+  push:
+    branches: [feat/universal-api-capabilities]
+  pull_request:
+    paths:
+      - 'src/model_*.py'
+      - 'src/config_manager.py'
+      - 'web/**'
+      - 'tests/test_model_*.py'
+      - '.github/workflows/model-api-compatibility.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Export tracked source for isolated validation
+        run: git archive --format=tar HEAD > source-baseline.tar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source-baseline
+          path: source-baseline.tar
+          retention-days: 1
