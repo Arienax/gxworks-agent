@@ -64,14 +64,17 @@ try {
 
     $releaseExecutable = Join-Path $applicationRoot "GXWorks-Agent-Web.exe"
     $sourcePython = Join-Path $applicationRoot ".venv\Scripts\python.exe"
+    $sourceEntry = Join-Path $applicationRoot "src\integrations\web\__main__.py"
     $builtPackageExecutable = Join-Path $applicationRoot "dist\GXWorks-Agent-Web\GXWorks-Agent-Web.exe"
     $hasSourceRuntime = Test-Path -LiteralPath $sourcePython -PathType Leaf
+    $isSourceCheckout = Test-Path -LiteralPath $sourceEntry -PathType Leaf
     $hasReleaseExecutable = Test-Path -LiteralPath $releaseExecutable -PathType Leaf
     $hasBuiltPackage = Test-Path -LiteralPath $builtPackageExecutable -PathType Leaf
 
     # A repository/source checkout can also contain an older packaged executable.
-    # Prefer the source runtime whenever .venv exists so rebuilding web/dist and
-    # updating Python source actually changes what start-web.cmd launches.
+    # Never silently fall back to that executable: a frozen backend serves the
+    # web assets bundled inside its own _MEIPASS directory, so rebuilding the
+    # checkout's web/dist would otherwise appear to have no effect.
     if ($hasSourceRuntime) {
         $backend = $sourcePython
         $backendArgs = @("-m", "integrations.web")
@@ -80,6 +83,8 @@ try {
         if ($hasReleaseExecutable) {
             Write-Host "[INFO] 检测到 GXWorks-Agent-Web.exe；当前目录存在源码 .venv，因此优先启动源码后端。" -ForegroundColor DarkGray
         }
+    } elseif ($isSourceCheckout) {
+        throw "检测到源码目录，但缺少 .venv\Scripts\python.exe。请运行根目录 build-web.bat（不要使用 --frontend-only）后再启动；不会回退到可能过期的 GXWorks-Agent-Web.exe。"
     } elseif ($hasReleaseExecutable) {
         $backend = $releaseExecutable
         $backendArgs = @()
