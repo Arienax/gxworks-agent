@@ -19,4 +19,6 @@ jobs:
         with:
           name: capability-v2-transfer
           path: tools/.capability-v2/*.part
+          include-hidden-files: true
+          if-no-files-found: error
           retention-days: 1
