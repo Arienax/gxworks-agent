@@ -65,17 +65,27 @@ try {
     $releaseExecutable = Join-Path $applicationRoot "GXWorks-Agent-Web.exe"
     $sourcePython = Join-Path $applicationRoot ".venv\Scripts\python.exe"
     $builtPackageExecutable = Join-Path $applicationRoot "dist\GXWorks-Agent-Web\GXWorks-Agent-Web.exe"
-    if (Test-Path -LiteralPath $releaseExecutable -PathType Leaf) {
-        $backend = $releaseExecutable
-        $backendArgs = @()
-        $backendKind = "release"
-        $staticIndex = Join-Path $applicationRoot "web\dist\index.html"
-    } elseif (Test-Path -LiteralPath $sourcePython -PathType Leaf) {
+    $hasSourceRuntime = Test-Path -LiteralPath $sourcePython -PathType Leaf
+    $hasReleaseExecutable = Test-Path -LiteralPath $releaseExecutable -PathType Leaf
+    $hasBuiltPackage = Test-Path -LiteralPath $builtPackageExecutable -PathType Leaf
+
+    # A repository/source checkout can also contain an older packaged executable.
+    # Prefer the source runtime whenever .venv exists so rebuilding web/dist and
+    # updating Python source actually changes what start-web.cmd launches.
+    if ($hasSourceRuntime) {
         $backend = $sourcePython
         $backendArgs = @("-m", "integrations.web")
         $backendKind = "source"
         $staticIndex = Join-Path $applicationRoot "web\dist\index.html"
-    } elseif (Test-Path -LiteralPath $builtPackageExecutable -PathType Leaf) {
+        if ($hasReleaseExecutable) {
+            Write-Host "[INFO] 检测到 GXWorks-Agent-Web.exe；当前目录存在源码 .venv，因此优先启动源码后端。" -ForegroundColor DarkGray
+        }
+    } elseif ($hasReleaseExecutable) {
+        $backend = $releaseExecutable
+        $backendArgs = @()
+        $backendKind = "release"
+        $staticIndex = Join-Path $applicationRoot "web\dist\index.html"
+    } elseif ($hasBuiltPackage) {
         $backend = $builtPackageExecutable
         $backendArgs = @()
         $backendKind = "built-package"
