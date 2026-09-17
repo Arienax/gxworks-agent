@@ -62,9 +62,24 @@ def inspect_openai_compatible(provider, model, configured_capabilities=None, *, 
         listing_available, models = False, []
     except Exception:
         listing_available, models = False, []
-    probe_model = selected if selected and selected != "__discover__" else (models[0] if models else "")
-    if not probe_model:
-        raise ModelProviderError("模型列表不可用，请手动填写模型 ID。", code="invalid_request")
+
+    # A model list is availability data, not a ranking. Never treat the first
+    # lexicographically sorted id as a recommendation: compatible gateways can
+    # expose many vendors and aliases through one endpoint. When no model was
+    # explicitly selected, return the list only and wait for the operator to
+    # choose the model whose capabilities should be probed.
+    if not selected or selected == "__discover__":
+        if not models:
+            raise ModelProviderError("模型列表不可用，请手动填写模型 ID。", code="invalid_request")
+        return {
+            "models": models,
+            "recommended_model": None,
+            "selected_model_available": False,
+            "model_listing_available": listing_available,
+            "note": f"已获取 {len(models)} 个模型。请选择模型后再次点击检测能力；不会自动选择列表中的第一个模型。",
+        }
+
+    probe_model = selected
     entry = next((item for item in metadata if item.get("id") == probe_model), {})
     parameters, capabilities, constraints = metadata_contract_parts(entry)
     if callable(getattr(provider, "for_detection", None)):
