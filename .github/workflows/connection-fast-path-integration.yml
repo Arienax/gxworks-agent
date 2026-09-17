@@ -1,0 +1,43 @@
+name: Connection Fast Path Integration
+on:
+  push:
+    branches: [feat/universal-api-capabilities]
+    paths: ['.github/workflows/connection-fast-path-integration.yml']
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Apply fast connection-test patch
+        run: |
+          git apply --index --whitespace=error tools/.connection-fast-path.patch
+          git diff --cached --check
+      - name: Validate targeted backend and frontend
+        run: |
+          python -m pip install -r requirements/web.txt pytest
+          npm ci --prefix web
+          python -m pytest -q tests/test_application_settings.py
+          npm run build --prefix web
+      - name: Commit source changes only
+        run: |
+          git reset
+          git add src/application/settings.py web/src/features/Settings.tsx tests/test_application_settings.py
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: keep connection testing separate from capability discovery'
+          git push origin HEAD:refs/heads/feat/universal-api-capabilities
