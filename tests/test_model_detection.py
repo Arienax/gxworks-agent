@@ -4,6 +4,7 @@ from tool_messages import ToolCall
 
 
 class _Provider:
+    profile = {"baseUrl": "https://test.invalid/v1"}
     def list_models(self, *, timeout=None):
         assert timeout == 15.0
         return ("model-b", "model-a", "model-b")
@@ -26,7 +27,7 @@ def test_discovery_sorts_models_selects_recommended_and_probes_common_capabiliti
     assert result["models"] == ["model-a", "model-b"]
     assert result["recommended_model"] == "model-a"
     assert result["selected_model_available"] is False
-    assert result["capabilities"]["reasoning"] is True
-    assert result["capabilities"]["tools"] is True
-    assert result["capabilities"]["structured_output"] is True
-    assert result["detected"] == ["structured_output", "tools"]
+    assert result["contract"]["capabilities"]["reasoning"]["status"] == "supported"
+    assert result["contract"]["capabilities"]["tools"]["status"] == "supported"
+    assert result["contract"]["capabilities"]["structured_output"]["status"] == "supported"
+    assert "probe_results" not in result and "parameter_support" not in result

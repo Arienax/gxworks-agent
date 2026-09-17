@@ -13,11 +13,13 @@ from urllib.parse import urlsplit, urlunsplit
 # Public service error shared with desktop/CLI model selection.
 from config_manager import ModelConfigurationRequiredError
 from model_capabilities import capability_scope, normalize_parameter_support
+from model_contract import CapabilityContract, UserModelSettings, scoped_contract, normalize_contract, credential_fingerprint
+from model_request_policy import public_contract_settings
 
 
 _SETTINGS_LOCK = threading.RLock()
 _PROFILE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
-_PROFILE_FIELDS = {"id", "name", "model", "base_url", "capabilities", "generation_defaults", "request_overrides", "parameter_support"}
+_PROFILE_FIELDS = {"id", "name", "model", "base_url", "capabilities", "generation_defaults", "request_overrides", "parameter_support", "contract", "user_settings"}
 _SENSITIVE_NAMES = {"key", "accesskey", "auth", "bearer", "token", "headers", "extraheaders", "cookie", "cookies", "authentication", "proxyauth"}
 
 
@@ -117,6 +119,7 @@ class SettingsService:
             profiles = []
             for item in config["modelProfiles"]:
                 profile = get_model_profile(config, item["id"])
+                contract, user_settings = public_contract_settings(profile, self._key(config, profile))
                 profiles.append({
                     "id": profile["id"], "name": profile["name"], "model": profile["model"],
                     "base_url": _base_url(profile["baseUrl"], strict=False),
@@ -124,6 +127,8 @@ class SettingsService:
                     "deletable": True,
                     "capabilities": {key: value for key, value in profile["capabilities"].items()
                                      if not _sensitive(key) and isinstance(value, bool)},
+                    "contract": contract,
+                    "user_settings": user_settings,
                     "generation_defaults": _safe_options(profile["generationDefaults"]),
                     "request_overrides": _safe_options(profile["requestOverrides"]),
                     "parameter_support": _safe_options(profile.get("parameterSupport") or {})
@@ -156,7 +161,7 @@ class SettingsService:
             value = _safe_options(value, strict=True)
             if key == "capabilities" and any(not isinstance(item, bool) for item in value.values()):
                 raise ValueError("Capabilities must contain boolean values")
-            if key == "generation_defaults":
+            if key == "generation_defaults" and not (values.get("contract") or chosen.get("capabilityContract")):
                 for name, upper in (("temperature", 2), ("top_p", 1)):
                     number = value.get(name)
                     if number is not None and (isinstance(number, bool) or not isinstance(number, (int, float)) or not 0 <= number <= upper):
@@ -169,6 +174,37 @@ class SettingsService:
             chosen["parameterSupport"] = support
         elif old_scope != capability_scope(chosen):
             chosen["parameterSupport"] = {}
+
+        if "contract" in values:
+            chosen["capabilityContract"] = normalize_contract(_safe_options(values["contract"], strict=True))
+            if chosen["capabilityContract"] and scoped_contract(chosen) is None:
+                raise ValueError("Contract scope changed; detect this endpoint/model/context again")
+            # Observations and selections are never stored in defaults.
+            chosen["userModelSettings"] = {}
+            if chosen["capabilityContract"]:
+                chosen["parameterSupport"] = {}
+        elif chosen.get("capabilityContract") and scoped_contract(chosen) is None:
+            chosen["capabilityContract"] = {}
+            chosen["userModelSettings"] = {}
+        if "user_settings" in values and values["user_settings"]:
+            if not chosen.get("capabilityContract"):
+                raise ValueError("User selections require a scoped contract")
+            chosen["userModelSettings"] = UserModelSettings.from_dict(
+                _safe_options(values["user_settings"], strict=True),
+                CapabilityContract.from_dict(chosen["capabilityContract"])).to_dict()
+        elif "user_settings" in values:
+            chosen["userModelSettings"] = {}
+
+    @staticmethod
+    def _validate_binding(profile, key, *, explicit=False):
+        contract = profile.get("capabilityContract")
+        if not contract:
+            return
+        if contract["scope"]["binding"] != credential_fingerprint(key):
+            if explicit:
+                raise ValueError("Credential changed; detect the contract with the current key again")
+            profile["capabilityContract"] = {}
+            profile["userModelSettings"] = {}
 
     @staticmethod
     def _save(config, legacy, *, skip_legacy=()):
@@ -194,6 +230,8 @@ class SettingsService:
             if profile is not None:
                 selected = get_model_profile(config, _profile_id(profile["id"]))
                 self._apply_profile(selected, profile)
+                self._validate_binding(selected, api_key if api_key is not None else self._key(config, selected),
+                    explicit=bool(profile.get("contract")))
                 config["modelProfiles"] = [selected if p["id"] == selected["id"] else p for p in config["modelProfiles"]]
             if active_profile_id is not None:
                 get_model_profile(config, _profile_id(active_profile_id))
@@ -204,6 +242,8 @@ class SettingsService:
                 if "parameter_support" not in (profile or {}):
                     selected["parameterSupport"] = {}
                     config["modelProfiles"] = [selected if p["id"] == selected["id"] else p for p in config["modelProfiles"]]
+                self._validate_binding(selected, api_key, explicit=bool((profile or {}).get("contract")))
+                config["modelProfiles"] = [selected if p["id"] == selected["id"] else p for p in config["modelProfiles"]]
                 write_api_key(api_key, selected["credentialTarget"])
                 skip_legacy = (selected["id"],)
             self._save(config, legacy, skip_legacy=skip_legacy)
@@ -222,6 +262,7 @@ class SettingsService:
                        "credentialTarget": credential_target_for_profile(profile_id)}
             self._apply_profile(profile, values)
             profile = _normalize_profile(profile)
+            self._validate_binding(profile, api_key or "", explicit=bool(values.get("contract")))
             config["modelProfiles"].append(profile)
             if not config.get("activeModelProfileId"):
                 config["activeModelProfileId"] = profile_id
@@ -255,6 +296,8 @@ class SettingsService:
             legacy = self._legacy_credential(config)
             profile = get_model_profile(config, _profile_id(profile_id))
             profile["parameterSupport"] = {}
+            profile["capabilityContract"] = {}
+            profile["userModelSettings"] = {}
             config["modelProfiles"] = [profile if p["id"] == profile_id else p for p in config["modelProfiles"]]
             # Persist the explicit legacy conversion so a removed key cannot
             # silently reappear from the old inline/global-credential fallback.
@@ -302,9 +345,11 @@ class SettingsService:
         with _SETTINGS_LOCK:
             config = self.read_config()
             selected = get_model_profile(config, _profile_id(profile_id))
+            old_url = selected.get("baseUrl")
             if profile is not None:
                 self._apply_profile(selected, profile)
-            key = api_key if api_key is not None else self._key(config, selected)
+            key = api_key if api_key is not None else (
+                self._key(config, selected) if selected.get("baseUrl") == old_url else "")
             if not str(key or "").strip():
                 return {"status": "failed", "message": "请先配置 API Key。", "error_code": "missing_key"}
             frozen = copy.deepcopy(selected)

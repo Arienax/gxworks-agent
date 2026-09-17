@@ -30,7 +30,13 @@ async def run(web_dist, evidence):
     endpoints = []
 
     def factory(profile, key):
-        endpoint = Endpoint()
+        endpoint = Endpoint(metadata=[{"id": "tenant-alias", "parameters": {
+            "enable_thinking": {"type": "boolean"},
+            "thinking_budget": {"type": "integer", "minimum": 0, "maximum": 32768, "multipleOf": 1024,
+                "wire_location": "extra_body", "wire_path": ["thinking", "budget_tokens"],
+                "requires": {"enable_thinking": [True]}},
+            "verbosity": {"enum": ["quiet", "normal", "verbose"]},
+        }, "capabilities": {"vision": True, "audio": False}, "context_window": 262144}])
         endpoints.append(endpoint)
         return OpenAICompatibleProvider(profile, key, client=endpoint)
 
@@ -70,26 +76,51 @@ async def run(web_dist, evidence):
                         await temperature.press("ArrowRight")
                         await temperature.press("ArrowRight")
                         await expect(temperature).to_have_attribute("aria-valuetext", "0.5")
+                        await page.get_by_role("switch", name="enable_thinking", exact=True).check()
+                        budget = page.get_by_role("slider", name="thinking_budget", exact=True)
+                        await expect(budget).to_be_enabled()
+                        await budget.focus()
+                        await budget.press("Home")
+                        for _ in range(9):
+                            await budget.press("ArrowRight")
+                        await expect(budget).to_have_attribute("aria-valuetext", "8192")
+                        verbosity = page.get_by_role("slider", name="verbosity", exact=True)
+                        await verbosity.focus()
+                        await verbosity.press("End")
+                        await expect(verbosity).to_have_attribute("aria-valuetext", "verbose")
                         await page.get_by_role("button", name="创建配置", exact=True).click()
                         await expect(page.get_by_text("设置已保存", exact=True)).to_be_visible()
                         public = settings.public_settings()
                         saved = public["profiles"][0]
-                        assert saved["generation_defaults"]["reasoning_effort"] == "high"
-                        assert saved["generation_defaults"]["temperature"] == .5
+                        assert saved["user_settings"]["parameters"]["reasoning_effort"] == {"mode": "value", "value": "high"}
+                        assert saved["user_settings"]["parameters"]["temperature"] == {"mode": "value", "value": .5}
+                        assert saved["user_settings"]["parameters"]["thinking_budget"]["value"] == 8192
+                        assert not saved["generation_defaults"]
+                        assert saved["contract"]["schema_version"] == 2
                         assert "synthetic-only-key" not in json.dumps(public)
                         model, _ = settings.model_snapshot()
                         wire = model._request_params(ModelRequest((UserMessage("验收"),), stream=False))
                         assert wire["reasoning_effort"] == "high" and wire["temperature"] == .5
+                        assert wire["extra_body"]["thinking"]["budget_tokens"] == 8192
+                        assert wire["enable_thinking"] is True and wire["verbosity"] == "verbose"
+                        assert "thinking_budget" not in wire
                         await page.reload()
                         await page.get_by_role("button", name="设置", exact=True).click()
                         await page.get_by_role("button", name="模型", exact=True).click()
                         await expect(page.get_by_role("slider", name="reasoning_effort")).to_have_attribute("aria-valuetext", "high")
                         await expect(page.get_by_role("slider", name="temperature")).to_have_attribute("aria-valuetext", "0.5")
-                        # The settings modal scrolls independently from the page.
-                        # Capture the controls, not just the top of the dialog.
-                        await page.locator(".model-parameters").scroll_into_view_if_needed()
+                        await page.get_by_role("slider", name="thinking_budget", exact=True).scroll_into_view_if_needed()
                         await page.screenshot(path=str(evidence / "model-parameters.png"), full_page=True)
                         await page.locator(".model-parameters").screenshot(path=str(evidence / "parameter-controls.png"))
+                        # Explicit omission stays omitted even when a production
+                        # workflow supplies an effort hint after persistence.
+                        await page.get_by_role("combobox", name="reasoning_effort mode").select_option("omit")
+                        await page.get_by_role("button", name="保存并使用", exact=True).click()
+                        await expect(page.get_by_text("设置已保存", exact=True)).to_be_visible()
+                        model, _ = settings.model_snapshot()
+                        omitted = model._request_params(ModelRequest((UserMessage("验收"),), stream=False,
+                            options={"reasoning_effort": "high"}))
+                        assert "reasoning_effort" not in omitted and "temperature" not in omitted
                         await page.get_by_label("模型", exact=True).fill("different-model")
                         await expect(page.get_by_role("slider")).to_have_count(0)
                         advanced = page.get_by_text("高级设置", exact=True)
@@ -100,6 +131,9 @@ async def run(web_dist, evidence):
                         report = {"status": "passed", "checks": ["first-unsaved-profile-detection", "reasoning-slider",
                             "temperature-mode-invalidation", "temperature-slider", "persist-and-reload", "actual-request-options",
                             "model-switch-invalidation", "credential-redaction"],
+                            "contract_version": 2,
+                            "additional_checks": ["metadata-driven-unknown-controls", "boolean-switch", "nested-budget-wire-path",
+                                "observation-selection-separation", "explicit-omit-beats-workflow"],
                             "synthetic_requests": sum(len(item.calls) for item in endpoints)}
                         (evidence / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
                         print(json.dumps(report))

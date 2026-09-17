@@ -88,6 +88,8 @@ class ModelProfileUpdate(Command):
     generation_defaults: dict[str, Any] | None = None
     request_overrides: dict[str, Any] | None = None
     parameter_support: dict[str, Any] | None = None
+    contract: dict[str, Any] | None = None
+    user_settings: dict[str, Any] | None = None
 
 
 class ModelProfileCreate(Command):
@@ -99,6 +101,8 @@ class ModelProfileCreate(Command):
     generation_defaults: dict[str, Any] = Field(default_factory=dict)
     request_overrides: dict[str, Any] = Field(default_factory=dict)
     parameter_support: dict[str, Any] = Field(default_factory=dict)
+    contract: dict[str, Any] = Field(default_factory=dict)
+    user_settings: dict[str, Any] = Field(default_factory=dict)
     api_key: str | None = Field(default=None, min_length=1, max_length=8192)
 
 

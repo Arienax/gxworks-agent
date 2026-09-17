@@ -269,13 +269,20 @@ def _normalize_profile(profile):
         raise ValueError(f"模型 Profile {profile_id} 缺少 baseUrl。")
     if not normalized["model"]:
         raise ValueError(f"模型 Profile {profile_id} 缺少 model。")
-    for key in ("capabilities", "generationDefaults", "requestOverrides", "parameterSupport"):
+    for key in ("capabilities", "generationDefaults", "requestOverrides", "parameterSupport", "capabilityContract", "userModelSettings"):
         value = normalized.get(key)
         if value is not None and not isinstance(value, dict):
             raise ValueError(f"模型 Profile {profile_id} 的 {key} 必须是对象。")
         normalized[key] = copy.deepcopy(value) if isinstance(value, dict) else {}
     from model_capabilities import normalize_parameter_support
     normalized["parameterSupport"] = normalize_parameter_support(normalized["parameterSupport"])
+    from model_contract import CapabilityContract, UserModelSettings, normalize_contract
+    normalized["capabilityContract"] = normalize_contract(normalized["capabilityContract"])
+    if normalized["userModelSettings"]:
+        if not normalized["capabilityContract"]:
+            raise ValueError("User selections require a capability contract")
+        normalized["userModelSettings"] = UserModelSettings.from_dict(
+            normalized["userModelSettings"], CapabilityContract.from_dict(normalized["capabilityContract"])).to_dict()
     normalized["credentialTarget"] = str(
         normalized.get("credentialTarget")
         or credential_target_for_profile(profile_id)

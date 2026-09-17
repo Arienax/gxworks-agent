@@ -2155,6 +2155,13 @@
             "title": "Configured",
             "type": "boolean"
           },
+          "contract": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Contract",
+            "type": "object"
+          },
           "deletable": {
             "default": false,
             "title": "Deletable",
@@ -2206,6 +2213,13 @@
             },
             "title": "Request Overrides",
             "type": "object"
+          },
+          "user_settings": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "User Settings",
+            "type": "object"
           }
         },
         "required": [
@@ -2242,6 +2256,11 @@
               "type": "boolean"
             },
             "title": "Capabilities",
+            "type": "object"
+          },
+          "contract": {
+            "additionalProperties": true,
+            "title": "Contract",
             "type": "object"
           },
           "generation_defaults": {
@@ -2282,6 +2301,11 @@
             "additionalProperties": true,
             "title": "Request Overrides",
             "type": "object"
+          },
+          "user_settings": {
+            "additionalProperties": true,
+            "title": "User Settings",
+            "type": "object"
           }
         },
         "required": [
@@ -2321,6 +2345,18 @@
               }
             ],
             "title": "Capabilities"
+          },
+          "contract": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract"
           },
           "generation_defaults": {
             "anyOf": [
@@ -2388,6 +2424,18 @@
               }
             ],
             "title": "Request Overrides"
+          },
+          "user_settings": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Settings"
           }
         },
         "required": [
@@ -3132,6 +3180,19 @@
       "ResponseViolation": {
         "additionalProperties": false,
         "properties": {
+          "observed_opcode": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "pattern": "^[A-Z0-9_.$@+\\-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed Opcode"
+          },
           "path": {
             "title": "Path",
             "type": "string"
@@ -5289,6 +5350,53 @@
           }
         },
         "summary": "Explorer"
+      }
+    },
+    "/api/projects/{project_id}/versions/{version_id}/exports/gxworks2-csv": {
+      "get": {
+        "description": "Download a fresh CSV pair from the saved IR without calling a model.",
+        "operationId": "fresh_gxworks2_csv_api_projects__project_id__versions__version_id__exports_gxworks2_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fresh Gxworks2 Csv"
       }
     },
     "/api/projects/{project_id}/versions/{version_id}/hardware": {

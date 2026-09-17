@@ -19,6 +19,8 @@ from i18n import get_language, normalize_language, response_language_instruction
 from response_language import ResponseContract, TEXT_RESPONSE, inspect_response, preserved_annotations
 from tool_messages import ToolCall, ToolResult
 from model_capabilities import apply_parameter_contract, parameter_error
+from model_contract import scoped_contract
+from model_request_policy import resolve_request, capability_available
 
 
 @dataclass(frozen=True)
@@ -543,7 +545,8 @@ class OpenAICompatibleProvider:
             if isinstance(message, UserMessage)
             for image in message.images
         ]
-        if image_attachments and not capabilities.get("multimodal"):
+        if image_attachments and not self.profile.get("capabilityContract") and not capability_available(self.profile, "vision", model=request.model,
+                api_key=self.api_key, options=params, legacy_name="multimodal"):
             model = str(request.model or self.profile.get("model") or "当前模型")
             raise ModelProviderError(
                 f"模型 {model} 不支持图片输入，请切换到带视觉能力的模型。",
@@ -598,6 +601,24 @@ class OpenAICompatibleProvider:
         if reserved.intersection(params.get("extra_body") or {}):
             raise ModelProviderError("extra_body cannot override protocol fields", code="invalid_request")
         try:
+            if self.profile.get("capabilityContract"):
+                # Canonical protocol fields were finalized above and cannot be
+                # owned by metadata or user selections. Legacy transport flags
+                # remain profile-controlled outside the generic tuning policy.
+                protocol = {k: params.get(k) for k in reserved}
+                transport_defaults = {}
+                if capabilities.get("thinking_required"):
+                    transport_defaults.setdefault("extra_body", {})["thinking"] = {"type": "enabled"}
+                if capabilities.get("tool_stream") and request.stream and request.tools:
+                    transport_defaults.setdefault("extra_body", {})["tool_stream"] = True
+                resolved = dict(resolve_request(self.profile, request.options, protocol=protocol,
+                    model=request.model, api_key=self.api_key, transport_defaults=transport_defaults).options)
+                if reserved.intersection(resolved.get("extra_body") or {}):
+                    raise ValueError("extra_body cannot override protocol fields")
+                if image_attachments and not capability_available(self.profile, "vision", model=request.model,
+                        api_key=self.api_key, options=resolved, legacy_name="multimodal"):
+                    raise ModelProviderError("当前模型或参数组合不支持图片输入。", code="image_not_supported")
+                return resolved
             return apply_parameter_contract(params, self.profile, request.model)
         except ValueError as error:
             raise ModelProviderError(str(error), code="invalid_request") from error
@@ -629,14 +650,20 @@ class OpenAICompatibleProvider:
             params["extra_body"] = extra
         return params
 
-    def for_detection(self):
+    def for_detection(self, *, parameters=None):
         """Same transport and thinking extensions, without optional tuning."""
         profile = copy.deepcopy(self.profile)
+        contract = scoped_contract(profile)
+        declared = {**(contract.parameters if contract else {}), **(parameters or {})}
         profile.pop("parameterSupport", None)
+        profile.pop("capabilityContract", None)
+        profile.pop("userModelSettings", None)
         optional = {"temperature", "reasoning_effort", "top_p", "response_format",
                     "max_tokens", "max_completion_tokens", "stream_options"}
         for group in ("generationDefaults", "requestOverrides"):
             options = profile.setdefault(group, {})
+            for name, descriptor in declared.items():
+                descriptor.remove(options, name)
             for key in optional:
                 options.pop(key, None)
                 if isinstance(options.get("extra_body"), dict):
@@ -683,7 +710,7 @@ class OpenAICompatibleProvider:
             client = self._client.with_options(timeout=timeout, max_retries=0)
             response = client.models.list()
             return tuple({name: copy.deepcopy(_value(item, name))
-                          for name in ("id", "parameters", "parameter_schema", "supported_parameters")
+                          for name in ("id", "parameters", "parameter_schema", "supported_parameters", "capabilities", "constraints", "context_window")
                           if _value(item, name, None) is not None}
                          for item in (_value(response, "data", []) or []))
         except Exception as error:

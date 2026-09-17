@@ -382,6 +382,8 @@ class ModelProfile(PublicResource):
     generation_defaults: JsonObject = Field(default_factory=dict)
     request_overrides: JsonObject = Field(default_factory=dict)
     parameter_support: JsonObject = Field(default_factory=dict)
+    contract: JsonObject = Field(default_factory=dict)
+    user_settings: JsonObject = Field(default_factory=dict)
 
 
 class ModelConnectionResult(PublicResource):

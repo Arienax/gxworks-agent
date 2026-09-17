@@ -87,12 +87,14 @@ def test_generic_detection_does_not_need_a_model_or_vendor_table():
     p = OpenAICompatibleProvider(original, "fake", client=endpoint)
     before = copy.deepcopy(p.profile)
     result = inspect_openai_compatible(p, "tenant-alias")
-    support = result["parameter_support"]
-    assert support["parameters"]["reasoning_effort"] == {
-        "status": "supported", "source": "probe", "values": ["low", "high", "max"]}
+    support = result["contract"]
+    assert support["parameters"]["reasoning_effort"]["status"] == "supported"
+    assert support["parameters"]["reasoning_effort"]["source"] == "probe"
+    assert support["parameters"]["reasoning_effort"]["values"] == ["low", "high", "max"]
     assert support["parameters"]["temperature"]["values"] == [0, .5, 1, 1.5, 2]
-    assert support["parameters"]["temperature"]["reasoning_effort"] == "max"
-    assert result["probe_results"] == {"tools": True, "structured_output": True}
+    assert support["parameters"]["temperature"]["requires"] == {"reasoning_effort": ["max"]}
+    assert result["contract"]["capabilities"]["tools"]["status"] == "supported"
+    assert result["contract"]["capabilities"]["structured_output"]["modes"] == ["json_object"]
     assert len(endpoint.calls) <= 18
     assert p.profile == before
     assert all("max_completion_tokens" in call for call in endpoint.calls)
@@ -101,7 +103,7 @@ def test_generic_detection_does_not_need_a_model_or_vendor_table():
 
 def test_invalid_values_accepted_is_not_proof_of_support():
     result = inspect_openai_compatible(provider(Endpoint(ignore=True)), "tenant-alias")
-    parameters = result["parameter_support"]["parameters"]
+    parameters = result["contract"]["parameters"]
     assert all(value["status"] == "accepted" for value in parameters.values())
     assert all("values" not in value for value in parameters.values())
 
@@ -109,25 +111,26 @@ def test_invalid_values_accepted_is_not_proof_of_support():
 def test_explicit_unsupported_is_distinct_from_unknown_and_omits_stale_defaults():
     result = inspect_openai_compatible(provider(Endpoint(unsupported=True)), "tenant-alias")
     p = profile()
-    p["parameterSupport"] = result["parameter_support"]
-    params = apply_parameter_contract({"reasoning_effort": "high", "extra_body": {"temperature": 1},
-                                      "response_format": {"type": "json_object"}, "tools": [{"type": "function"}]}, p)
-    assert "reasoning_effort" not in params and "temperature" not in params["extra_body"]
+    p["capabilityContract"] = result["contract"]
+    from model_request_policy import resolve_request
+    params = resolve_request(p, {"reasoning_effort": "high", "extra_body": {"temperature": 1},
+                                      "response_format": {"type": "json_object"}, "tools": [{"type": "function"}]}).options
+    assert "reasoning_effort" not in params and "temperature" not in params.get("extra_body", {})
     assert params["tools"] and params["response_format"]
     assert "secret-must-not-leak" not in json.dumps(result)
 
 
 def test_fixed_temperature_has_no_adjustable_range():
     result = inspect_openai_compatible(provider(Endpoint(temperatures=(1.0,))), "tenant-alias")
-    assert result["parameter_support"]["parameters"]["temperature"]["status"] == "fixed"
-    assert result["parameter_support"]["parameters"]["temperature"]["values"] == [1.0]
+    assert result["contract"]["parameters"]["temperature"]["status"] == "fixed"
+    assert result["contract"]["parameters"]["temperature"]["values"] == [1.0]
 
 
 def test_metadata_preserves_declared_ranges_and_new_effort_values():
     result = inspect_openai_compatible(provider(Endpoint(metadata=[{"id": "tenant-alias", "parameters": {
         "temperature": {"minimum": 0, "maximum": 1, "multipleOf": .1},
         "reasoning_effort": {"enum": ["economy", "balanced", "thorough"]}}}])), "tenant-alias")
-    params = result["parameter_support"]["parameters"]
+    params = result["contract"]["parameters"]
     assert params["temperature"]["step"] == .1
     assert params["reasoning_effort"]["values"] == ["economy", "balanced", "thorough"]
     assert params["reasoning_effort"]["source"] == "metadata"
@@ -166,7 +169,7 @@ def test_auth_and_rate_limit_are_not_reported_as_missing_capabilities(status):
 def test_legacy_output_limit_negotiates_only_the_named_rejection():
     endpoint = Endpoint(legacy_limit=True)
     result = inspect_openai_compatible(provider(endpoint), "tenant-alias")
-    assert result["capabilities"]["tools"]
+    assert result["contract"]["capabilities"]["tools"]["status"] == "supported"
     assert sum("max_completion_tokens" in call for call in endpoint.calls) == 1
     assert all("max_tokens" in call for call in endpoint.calls[1:])
 

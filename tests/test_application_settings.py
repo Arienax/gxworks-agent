@@ -351,7 +351,7 @@ def test_first_unsaved_profile_can_detect_without_writing_settings_or_credential
     result = env.service.detect_profile(name="First", base_url="https://gateway.invalid/custom/v2/",
                                        model="tenant-alias", api_key="temporary-key")
     assert result["status"] == "connected"
-    assert result["discovery"]["parameter_support"]["parameters"]["reasoning_effort"]["values"] == ["low", "high", "max"]
+    assert result["discovery"]["contract"]["parameters"]["reasoning_effort"]["values"] == ["low", "high", "max"]
     assert not env.path.exists() and not env.writes and not env.deletes
     assert "temporary-key" not in json.dumps(result)
 

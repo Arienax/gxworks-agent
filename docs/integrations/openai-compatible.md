@@ -1,5 +1,7 @@
 # 通用 OpenAI-compatible 接入与参数检测
 
+> 当前分支已升级为 [Capability Contract v2](capability-contract-v2.md)：完整能力与参数描述、独立用户选择、动态控件及统一请求策略。以下双参数合同章节记录 v1 的兼容行为；新检测结果使用 `contract`，不再返回 `parameter_support` / `probe_results` 三套结果。
+
 ## 实现范围
 
 所有兼容服务使用同一个 `OpenAICompatibleProvider`，不根据模型名称编写参数分支。Web 设置页提供 OpenAI、千问、Kimi、Claude 和 Gemini 的地址预设；预设不携带模型 ID、推理强度、温度或供应商专用参数。自定义网关、区域和工作区地址可直接编辑；模型可手动填写，也可从 `/models` 获取。已有 DeepSeek/GLM 配置保留，不自动改写用户配置。

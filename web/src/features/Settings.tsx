@@ -4,14 +4,15 @@ import type { Json, ModelSettings } from "../api/client";
 import type { components } from "../api/generated";
 import { Button, Badge } from "../components/ui";
 import { ModelParameters } from "./ModelParameters";
-import { ENDPOINT_PRESETS, reconcileParameters, changeParameter } from "./modelParameters";
-import type { ParameterSupport } from "./modelParameters";
+import { ENDPOINT_PRESETS, adoptSelections, clearKnown } from "./modelParameters";
+import type { CapabilityContract, UserModelSettings } from "./modelParameters";
 
 type Profile = NonNullable<ModelSettings["profiles"]>[number] & {
   deletable?: boolean;
   generation_defaults?: Record<string, Json>;
   request_overrides?: Record<string, Json>;
-  parameter_support?: Record<string, Json>;
+  contract?: Record<string, Json>;
+  user_settings?: Record<string, Json>;
 };
 
 type Discovery = {
@@ -19,9 +20,7 @@ type Discovery = {
   models?: string[];
   recommended_model?: string | null;
   selected_model_available?: boolean;
-  capabilities?: Record<string, boolean>;
-  detected?: string[];
-  parameter_support?: ParameterSupport;
+  contract?: CapabilityContract;
   note?: string;
 };
 
@@ -232,28 +231,29 @@ export function Settings({
     [capabilities, setCapabilities] = useState<Record<string, boolean>>({});
   const [defaults, setDefaults] = useState("{}"),
     [overrides, setOverrides] = useState("{}");
+  const [compatibilityText, setCompatibilityText] = useState("{}");
   const [error, setError] = useState(""),
     [message, setMessage] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [discoveredModels, setDiscoveredModels] = useState<string[]>([]);
-  const [detected, setDetected] = useState<string[]>([]);
-  const [parameterSupport, setParameterSupport] = useState<ParameterSupport>({});
+  const [contract, setContract] = useState<CapabilityContract>({});
+  const [userSettings, setUserSettings] = useState<UserModelSettings>({});
   const draftRevision = useRef(0);
   const invalidate = (clearModels = false) => {
     draftRevision.current += 1;
-    setParameterSupport({});
-    setDetected([]);
+    setContract({});
+    setUserSettings({});
     if (clearModels) setDiscoveredModels([]);
   };
   const clearParameterValues = () => {
     try {
-      const [nextDefaults, nextOverrides] = changeParameter(JSON.parse(defaults), JSON.parse(overrides), "reasoning_effort", null);
+      const [nextDefaults, nextOverrides] = clearKnown(JSON.parse(defaults), JSON.parse(overrides), contract);
       setDefaults(JSON.stringify(nextDefaults, null, 2));
       setOverrides(JSON.stringify(nextOverrides, null, 2));
     } catch { /* Keep invalid advanced JSON for the user to repair. */ }
   };
   const changeModel = (next: string) => {
-    if (next !== model) { invalidate(); setCapabilities({}); clearParameterValues(); }
+    if (next !== model) { invalidate(); setCapabilities({}); setCompatibilityText("{}"); clearParameterValues(); }
     setModel(next);
   };
   useEffect(() => () => { draftRevision.current += 1; }, []);
@@ -268,12 +268,13 @@ export function Settings({
     setBaseUrl(profile?.base_url || "");
     setSecret("");
     setCapabilities(profile?.capabilities || {});
-    setParameterSupport((profile?.parameter_support || {}) as ParameterSupport);
+    setCompatibilityText(JSON.stringify(profile?.capabilities || {}, null, 2));
+    setContract((profile?.contract || {}) as CapabilityContract);
+    setUserSettings((profile?.user_settings || {}) as UserModelSettings);
     setDefaults(JSON.stringify(profile?.generation_defaults || {}, null, 2));
     setOverrides(JSON.stringify(profile?.request_overrides || {}, null, 2));
     setDeleting(false);
     setDiscoveredModels([]);
-    setDetected([]);
     // Background job refreshes must preserve in-progress fields and secrets.
   }, [selected, creating]);
   const parse = (text: string) => {
@@ -287,10 +288,11 @@ export function Settings({
     name,
     model,
     base_url: baseUrl,
-    capabilities,
+    capabilities: parse(compatibilityText),
     generation_defaults: parse(defaults),
     request_overrides: parse(overrides),
-    parameter_support: parameterSupport,
+    contract,
+    user_settings: userSettings,
   });
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -314,12 +316,11 @@ export function Settings({
     setModel("");
     setBaseUrl("");
     setSecret("");
-    setCapabilities({});
+    setCapabilities({}); setCompatibilityText("{}");
     invalidate(true);
     setDefaults("{}");
     setOverrides("{}");
     setDiscoveredModels([]);
-    setDetected([]);
     setError("");
     setMessage("");
     setDeleting(false);
@@ -391,7 +392,7 @@ export function Settings({
           API URL
           <input
             value={baseUrl}
-            onChange={(e) => { setBaseUrl(e.target.value); invalidate(true); setCapabilities({}); clearParameterValues(); }}
+            onChange={(e) => { setBaseUrl(e.target.value); invalidate(true); setCapabilities({}); setCompatibilityText("{}"); clearParameterValues(); }}
             placeholder="https://api.example.com/v1"
           />
         </label>
@@ -424,7 +425,8 @@ export function Settings({
                   generation_defaults: parse(defaults),
                   request_overrides: parse(overrides),
                   // Re-detection must not validate against a stale contract.
-                  parameter_support: {},
+                  contract,
+                  user_settings: userSettings,
                   ...(secret ? { api_key: secret } : {}),
                 };
                 const result = await api<{ status: string; message: string; discovery?: Discovery }>(
@@ -436,13 +438,9 @@ export function Settings({
                 if (!discovery) { setMessage(result.message || t("连接成功")); return; }
                 setDiscoveredModels(discovery.models || []);
                 if (!model && discovery.recommended_model) setModel(discovery.recommended_model);
-                if (discovery.capabilities) setCapabilities(discovery.capabilities);
-                setDetected(discovery.detected || []);
-                const support = discovery.parameter_support || {};
-                setParameterSupport(support);
-                const [nextDefaults, nextOverrides] = reconcileParameters(parse(defaults), parse(overrides), support);
-                setDefaults(JSON.stringify(nextDefaults, null, 2));
-                setOverrides(JSON.stringify(nextOverrides, null, 2));
+                const nextContract = discovery.contract || {};
+                setContract(nextContract);
+                setUserSettings(adoptSelections(nextContract, userSettings, parse(defaults), parse(overrides)));
                 setMessage(discovery.note || t("模型列表与能力检测完成"));
               })
             }
@@ -458,44 +456,28 @@ export function Settings({
             {discoveredModels.map(item => <option value={item} key={item} />)}
           </datalist>
         </label>
-        {detected.length > 0 && (
-          <p className="muted">
-            {t("已检测")}: {detected.map((key) => `${key}=${capabilities[key] ? "✓" : "×"}`).join(" · ")}
-          </p>
-        )}
         <p className="muted">{t("检测会发送少量测试请求，可能产生 API 费用；仅使用固定测试文本，不发送工程内容。")}</p>
-        <ModelParameters support={parameterSupport} defaults={defaults} overrides={overrides}
-          disabled={busy || disabled} t={t} onChange={(nextDefaults, nextOverrides) => {
-            setDefaults(nextDefaults); setOverrides(nextOverrides);
+        <ModelParameters contract={contract} settings={userSettings} defaults={defaults} overrides={overrides}
+          disabled={busy || disabled} t={t} onChange={(next) => {
+            draftRevision.current += 1;
+            setUserSettings(next);
           }} />
         <details>
           <summary>{t("高级设置")}</summary>
           <p className="muted">
             {t("如供应商要求特定参数，可在此调整模型能力、生成参数和请求覆盖参数。")}
           </p>
-          <div className="capability-grid">
-            {[
-              "reasoning",
-              "tools",
-              "structured_output",
-              "multimodal",
-              "tool_stream",
-              "thinking_required",
-              "disable_tool_choice_with_thinking",
-            ].map((key) => (
-              <label key={key}>
-                <input
-                  type="checkbox"
-                  checked={!!capabilities[key]}
-                  onChange={(e) => {
-                    invalidate();
-                    setCapabilities((old) => ({ ...old, [key]: e.target.checked }));
-                  }}
-                />
-                {t(key)}
-              </label>
-            ))}
-          </div>
+          <label>
+            {t("旧版协议兼容选项")}
+            <textarea className="mono" aria-label={t("旧版协议兼容选项")}
+              value={compatibilityText}
+              onChange={e => { setCompatibilityText(e.target.value); invalidate();
+                try { const next = parse(e.target.value);
+                  if (Object.values(next).every(v => typeof v === "boolean")) setCapabilities(next);
+                } catch { /* Keep invalid JSON editable; the save command validates it. */ }
+              }} />
+          </label>
+          {contract.scope && <details><summary>{t("查看能力合同")}</summary><pre className="mono">{JSON.stringify(contract, null, 2)}</pre></details>}
           <label>
             {t("生成默认参数")}
             <textarea

@@ -13,7 +13,8 @@ import math
 import re
 from collections.abc import Mapping
 
-PARAMETERS = ("reasoning_effort", "temperature")
+# v1 compatibility only. Discovery/control membership lives in the v2 contract.
+LEGACY_PARAMETER_NAMES = ("reasoning_effort", "temperature")
 EFFORT_CANDIDATES = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
 STATUSES = {"supported", "accepted", "unknown", "unsupported", "fixed"}
 SOURCES = {"probe", "metadata", "manual"}
@@ -23,11 +24,11 @@ def capability_scope(profile, model=None):
     context = {}
     for group in ("generationDefaults", "requestOverrides"):
         context[group] = {k: v for k, v in (profile.get(group) or {}).items()
-                          if k not in (*PARAMETERS, "top_p", "max_tokens", "max_completion_tokens",
+                          if k not in (*LEGACY_PARAMETER_NAMES, "top_p", "max_tokens", "max_completion_tokens",
                                        "response_format")}
         if isinstance(context[group].get("extra_body"), dict):
             context[group]["extra_body"] = {k: v for k, v in context[group]["extra_body"].items()
-                                            if k not in PARAMETERS}
+                                            if k not in LEGACY_PARAMETER_NAMES}
     return {"base_url": str(profile.get("baseUrl") or "").strip().rstrip("/"),
             "model": str(model if model is not None else profile.get("model") or "").strip(),
             "context": hashlib.sha256(json.dumps(context, sort_keys=True, ensure_ascii=True).encode()).hexdigest()}
@@ -51,7 +52,7 @@ def normalize_parameter_support(value):
         raise ValueError("Invalid parameter support scope")
     if not re.fullmatch(r"[a-f0-9]{64}", scope["context"]):
         raise ValueError("Invalid parameter context fingerprint")
-    if not isinstance(parameters, dict) or set(parameters) - set(PARAMETERS):
+    if not isinstance(parameters, dict) or set(parameters) - set(LEGACY_PARAMETER_NAMES):
         raise ValueError("Unsupported parameter contract")
     result = {"scope": dict(scope), "parameters": {}}
     for name, item in parameters.items():
@@ -194,7 +195,7 @@ def metadata_parameters(metadata):
     schema = schema.get("properties", schema)
     if not isinstance(schema, Mapping):
         return result
-    for name in PARAMETERS:
+    for name in LEGACY_PARAMETER_NAMES:
         raw = schema.get(name)
         if not isinstance(raw, Mapping):
             continue
