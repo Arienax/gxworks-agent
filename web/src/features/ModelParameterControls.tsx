@@ -52,6 +52,7 @@ export function ModelParameters({ contract, settings, defaults, overrides, onCha
       <div className="parameter-heading"><label htmlFor={id}>{desc.label || name}</label>
         <output htmlFor={id} aria-live="polite">{display}</output></div>
       <p className="muted">{t(labels[desc.status])} · {t(desc.source === "metadata" ? "服务元数据" : desc.source === "manual" ? "手动声明" : desc.source === "legacy" ? "旧配置迁移" : "主动检测")}</p>
+      {desc.scan === "partial" && <p className="muted">{t("仅验证了部分取值；深度参数扫描可补充档位，不代表固定值或完整范围。")}</p>}
       {adjustable && <>
         {desc.type === "boolean" ? <label><input id={id} role="switch" type="checkbox" aria-label={name}
           checked={value === true} disabled={disabled} onChange={e => change(name, { mode: "value", value: e.target.checked })} />{t("启用")}</label>

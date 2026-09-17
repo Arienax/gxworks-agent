@@ -108,6 +108,8 @@ class ModelProfileCreate(Command):
 
 class ModelDiscoveryRequest(Command):
     profile: ModelProfileCreate
+    mode: Literal["list", "quick", "deep"] = "quick"
+    refresh: bool = Field(default=False, strict=True)
 
 
 class ModelKeyUpdate(Command):

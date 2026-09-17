@@ -84,3 +84,70 @@ python scripts/web_model_settings_e2e.py --web-dist web/dist --evidence model-ap
 ```
 
 The real-browser test substitutes only the model transport, not settings HTTP/auth/storage. It covers unknown metadata controls, boolean false/true, nested budget mapping, dependencies, observation/selection separation, persistence/reload, explicit omission versus workflow hints and model-scope invalidation. Live provider-account behavior and Windows/PLC integration still require operator acceptance.
+
+## Two-stage discovery
+
+`POST /api/settings/detect` accepts `mode: "list" | "quick" | "deep"`
+(default `quick`) and `refresh: boolean` (default `false`). These are command
+options, not profile settings or provider request parameters. The Web settings
+panel exposes **获取模型列表**, **快速能力检测**, and **深度参数扫描** separately.
+The existing **测试连接** route remains independent and never runs discovery.
+
+- `list`: fetch availability only, even when a model is already selected. Never
+  chooses the first model, sends a completion, or replaces the current contract.
+  An empty model on the quick route also returns the list without probing.
+- `quick`: metadata first; absent declarations use a negative control and **one**
+  positive sample per registered parameter (the explicit draft value, otherwise
+  the strategy's quick sample). Tools and JSON-object checks run independently
+  beside the ordered parameter lane, with at most three workers. Temperature
+  still follows reasoning. A normal cold run with no metadata makes one model
+  listing plus at most seven completion calls; the legacy output-limit fallback
+  can add one rejected request. Rejected/ignored controls or cached evidence
+  reduce that count. Quick mode does not enumerate all effort/temperature levels.
+- `deep`: manually extends registered parameter candidate sets, skipping known
+  positive samples and preserving the scoped quick capability evidence. It does
+  **not** repeat tool or structured-output generations. The UI enables it after
+  a scoped quick result. A direct deep request without one leaves missing
+  capabilities unknown rather than guessing them.
+
+Quick scheduling uses a 20-second total budget and up to 5 seconds per SDK
+request; deep uses 90 seconds and up to 15 seconds. All probes disable SDK
+retries, apart from the existing named output-limit compatibility fallback.
+These are **scheduling and network I/O limits**, not a guaranteed wall-clock
+latency SLA: SDK read/connect timeouts are phase/inactivity based, and in-flight
+requests are joined before returning. No worker keeps launching scans after the
+result is delivered. An authentication/rate-limit error stops scheduling; a
+failed preflight prevents the remaining generations. Expired budget, transient
+failure, and an untested value are not evidence of unsupported functionality.
+
+A probe parameter may carry `scan: "partial" | "complete"`. This describes
+coverage of its registered **finite candidate set**, never the entirety of a
+provider's possible domain. Existing v2 contracts without `scan` remain valid.
+A quick positive sample remains `status: "supported", scan: "partial"`, not
+`fixed`; discrete samples do not imply a continuous range. The editor labels
+partial evidence, and only verified/declaratively valid values become controls.
+A deep scan interrupted by a timeout retains earlier validated positive values
+and remains partial. Metadata remains authoritative; adding a metadata-defined
+scalar control does not require adding a probe or a model-name branch.
+
+Reusable results must match endpoint, model, non-parameter context, and credential
+fingerprint. Dependent parameter evidence also has to match current `requires`
+values (e.g. the selected reasoning effort), because tuning values themselves
+are excluded from the context fingerprint. Deep results are not narrowed by a
+later quick check. **重新验证已有结果** in Advanced settings explicitly discards
+reusable registered samples; a deep refresh still only rechecks parameters.
+Saving/reloading retains observations and user selections separately. Listing,
+testing the connection, normal requests, or switching models never silently
+starts a deep scan.
+
+Discovery responses include `mode`, actual `elapsed_ms`, `partial`,
+`parameters_pending`, `parameters_reused`, `budget_seconds`, `budget_exhausted`,
+and `preflight_failed`. These are diagnostic summaries, not parameters sent to
+the model. The UI shows an elapsed timer while waiting and actual timing on
+completion, never a fabricated percentage. No secret or raw provider error body
+is included.
+
+Regression coverage: `tests/test_model_detection_stages.py`, updated HTTP tests,
+`web/tests/model-parameters.test.mjs`, and `scripts/web_model_settings_e2e.py`.
+All use synthetic transports and disposable settings; they are not live provider
+or PLC acceptance tests.

@@ -57,9 +57,21 @@ async def run(web_dist, evidence):
                         await page.get_by_label("配置名称", exact=True).fill("多 API 验收")
                         await page.get_by_label("API URL", exact=True).fill("https://gateway.invalid/custom/v2/")
                         await page.locator('.settings-form input[type="password"]').fill("synthetic-only-key")
+                        listing = page.get_by_role("button", name="获取模型列表", exact=True)
+                        detect = page.get_by_role("button", name="快速能力检测", exact=True)
+                        deep = page.get_by_role("button", name="深度参数扫描", exact=True)
+                        await expect(detect).to_be_disabled()
+                        await expect(deep).to_be_disabled()
+                        await listing.click()
+                        await expect(page.locator('.settings-form p[role="status"]')).to_contain_text("已获取")
+                        await expect(page.get_by_label("模型", exact=True)).to_have_value("")
+                        assert sum(len(endpoint.calls) for endpoint in endpoints) == 0
                         await page.get_by_label("模型", exact=True).fill("tenant-alias")
-                        detect = page.get_by_role("button", name="自动获取模型 + 检测能力", exact=True)
                         await detect.click()
+                        await expect(deep).to_be_enabled()
+                        await expect(page.get_by_role("slider", name="reasoning_effort", exact=True)).to_have_attribute("max", "1")
+                        await page.screenshot(path=str(evidence / "quick-discovery.png"), full_page=True)
+                        await deep.click()
                         effort = page.get_by_role("slider", name="reasoning_effort", exact=True)
                         await expect(effort).to_be_enabled()
                         await effort.focus()
@@ -68,7 +80,7 @@ async def run(web_dist, evidence):
                         await expect(effort).to_have_attribute("aria-valuetext", "high")
                         # Temperature from the old reasoning mode must not survive.
                         await expect(page.get_by_role("slider", name="temperature", exact=True)).to_have_count(0)
-                        await detect.click()
+                        await deep.click()
                         temperature = page.get_by_role("slider", name="temperature", exact=True)
                         await expect(temperature).to_be_enabled()
                         await temperature.focus()
@@ -112,6 +124,16 @@ async def run(web_dist, evidence):
                         await page.get_by_role("slider", name="thinking_budget", exact=True).scroll_into_view_if_needed()
                         await page.screenshot(path=str(evidence / "model-parameters.png"), full_page=True)
                         await page.locator(".model-parameters").screenshot(path=str(evidence / "parameter-controls.png"))
+                        await detect.click()
+                        await expect(page.get_by_role("slider", name="reasoning_effort")).to_have_attribute("aria-valuetext", "high")
+                        await expect(page.get_by_role("slider", name="reasoning_effort")).to_have_attribute("max", "3")
+                        await listing.click()
+                        await expect(page.get_by_label("模型", exact=True)).to_have_value("tenant-alias")
+                        await expect(page.get_by_role("slider", name="reasoning_effort")).to_have_attribute("aria-valuetext", "high")
+                        calls_before_test = sum(len(endpoint.calls) for endpoint in endpoints)
+                        await page.get_by_role("button", name="测试连接", exact=True).click()
+                        await expect(page.locator('.settings-form p[role="status"]')).to_contain_text("连接测试通过")
+                        assert sum(len(endpoint.calls) for endpoint in endpoints) == calls_before_test
                         # Explicit omission stays omitted even when a production
                         # workflow supplies an effort hint after persistence.
                         await page.get_by_role("combobox", name="reasoning_effort mode").select_option("omit")
@@ -133,7 +155,9 @@ async def run(web_dist, evidence):
                             "model-switch-invalidation", "credential-redaction"],
                             "contract_version": 2,
                             "additional_checks": ["metadata-driven-unknown-controls", "boolean-switch", "nested-budget-wire-path",
-                                "observation-selection-separation", "explicit-omit-beats-workflow"],
+                                "observation-selection-separation", "explicit-omit-beats-workflow",
+                                "list-does-not-select-or-generate", "quick-partial-domain", "explicit-deep-expansion",
+                                "cached-quick-keeps-deep-domain", "list-keeps-selected-contract", "connection-no-discovery"],
                             "synthetic_requests": sum(len(item.calls) for item in endpoints)}
                         (evidence / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
                         print(json.dumps(report))

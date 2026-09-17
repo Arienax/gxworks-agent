@@ -305,12 +305,14 @@ class SettingsService:
             delete_api_key(profile["credentialTarget"])
             return self.public_settings()
 
-    def detect_profile(self, *, id=None, api_key=None, **values):
+    def detect_profile(self, *, id=None, api_key=None, mode="quick", refresh=False, **values):
         """Read-only draft discovery, including the very first unsaved profile."""
         from config_manager import get_model_profile, _normalize_profile
         from credential_store import credential_target_for_profile
         from model_provider import create_provider
         from application.model_detection import inspect_openai_compatible
+        if mode not in {"list", "quick", "deep"} or not isinstance(refresh, bool):
+            raise ValueError("Invalid discovery mode")
         with _SETTINGS_LOCK:
             if id:
                 config = self.read_config()
@@ -330,8 +332,9 @@ class SettingsService:
             if not str(key).strip():
                 return {"status": "failed", "message": "请先配置 API Key；更换服务地址时请重新输入密钥。", "error_code": "missing_key"}
         try:
-            result = inspect_openai_compatible(create_provider(selected, key), selected["model"], selected["capabilities"])
-            return {"status": "connected", "message": "模型列表与能力检测完成", "discovery": result}
+            result = inspect_openai_compatible(create_provider(selected, key), selected["model"], selected["capabilities"],
+                mode=mode, refresh=refresh)
+            return {"status": "connected", "message": result["note"], "discovery": result}
         except Exception as error:
             code = getattr(error, "code", "provider_error")
             if code not in {"authentication", "rate_limit", "timeout", "invalid_request", "unavailable", "protocol"}:

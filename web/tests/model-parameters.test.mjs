@@ -84,3 +84,30 @@ test('constraints use strict scalar identity and conjunctive requirements', () =
 test('presets contain endpoints, never model names or tuning defaults', () => {
   for (const entry of ENDPOINT_PRESETS) assert.deepEqual(Object.keys(entry).sort(), ['name', 'url']);
 });
+
+test('partial samples never invent a numeric range or imply a fixed parameter', () => {
+  const partial = spec({ source: 'probe', values: [1], scan: 'partial' });
+  assert.deepEqual(controlValues(partial), [1]);
+  assert.equal(validValue(partial, .7), false);
+  assert.equal(partial.status, 'supported');
+});
+
+test('extending a quick domain preserves explicit choices and omission', () => {
+  const quick = { ...contract, parameters: { effort: spec({ type: 'enum', source: 'probe', values: ['economy'], scan: 'partial' }) } };
+  const deep = { ...quick, parameters: { effort: spec({ type: 'enum', source: 'probe', values: ['off', 'economy', 'thorough'], scan: 'complete' }) } };
+  for (const selection of [{ mode: 'value', value: 'economy' }, { mode: 'omit' }, { mode: 'inherit' }]) {
+    const before = JSON.stringify(quick);
+    const user = adoptSelections(deep, { scope, parameters: { effort: selection } }, {}, {});
+    assert.deepEqual(user.parameters.effort, selection);
+    assert.equal(JSON.stringify(quick), before);
+  }
+});
+
+test('deep scanning requires a contract from the selected endpoint and model', async () => {
+  const { canDeepScan } = await import('../src/features/modelParameters.ts');
+  assert.equal(canDeepScan({}, scope.endpoint, scope.model), false);
+  assert.equal(canDeepScan(contract, scope.endpoint + '/', scope.model), true);
+  assert.equal(canDeepScan(contract, 'https://other.invalid/v1', scope.model), false);
+  assert.equal(canDeepScan(contract, scope.endpoint, 'other-model'), false);
+  assert.equal(canDeepScan(contract, scope.endpoint, ''), false);
+});

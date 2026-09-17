@@ -1716,7 +1716,18 @@ export interface components {
         };
         /** ModelDiscoveryRequest */
         ModelDiscoveryRequest: {
+            /**
+             * Mode
+             * @default quick
+             * @enum {string}
+             */
+            mode: "list" | "quick" | "deep";
             profile: components["schemas"]["ModelProfileCreate"];
+            /**
+             * Refresh
+             * @default false
+             */
+            refresh: boolean;
         };
         /** ModelDiscoveryResult */
         ModelDiscoveryResult: {

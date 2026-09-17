@@ -87,6 +87,13 @@ def test_generic_detection_does_not_need_a_model_or_vendor_table():
     p = OpenAICompatibleProvider(original, "fake", client=endpoint)
     before = copy.deepcopy(p.profile)
     result = inspect_openai_compatible(p, "tenant-alias")
+    assert result["contract"]["parameters"]["reasoning_effort"]["values"] == ["max"]
+    assert result["contract"]["parameters"]["temperature"]["values"] == [1]
+    assert len(endpoint.calls) <= 7  # no full candidate enumeration in quick mode
+    p.profile["capabilityContract"] = result["contract"]
+    endpoint.calls.clear()
+    result = inspect_openai_compatible(p, "tenant-alias", mode="deep")
+    p.profile.pop("capabilityContract")
     support = result["contract"]
     assert support["parameters"]["reasoning_effort"]["status"] == "supported"
     assert support["parameters"]["reasoning_effort"]["source"] == "probe"
@@ -121,7 +128,7 @@ def test_explicit_unsupported_is_distinct_from_unknown_and_omits_stale_defaults(
 
 
 def test_fixed_temperature_has_no_adjustable_range():
-    result = inspect_openai_compatible(provider(Endpoint(temperatures=(1.0,))), "tenant-alias")
+    result = inspect_openai_compatible(provider(Endpoint(temperatures=(1.0,))), "tenant-alias", mode="deep")
     assert result["contract"]["parameters"]["temperature"]["status"] == "fixed"
     assert result["contract"]["parameters"]["temperature"]["values"] == [1.0]
 

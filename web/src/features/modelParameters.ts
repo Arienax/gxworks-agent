@@ -11,6 +11,7 @@ export type Descriptor = Conditions & {
   minimum?: number; maximum?: number; step?: number;
   wire_location?: "body" | "extra_body"; wire_path?: string[];
   default_mode?: "omit" | "inherit"; label?: string;
+  scan?: "partial" | "complete";
 };
 export type Capability = Conditions & {
   status: "supported" | "unsupported" | "unknown" | "conditional";
@@ -172,4 +173,12 @@ export function changeSelection(contract: CapabilityContract, settings: UserMode
   const result = reconcileSelections(contract, next, defaults, overrides);
   if (result.parameters) result.parameters[name] = selection;
   return result;
+}
+
+// Changing modes never re-ranks models or treats list-only results as a new
+// contract. A deep scan is a deliberate action after a scoped quick result.
+export type DiscoveryMode = "list" | "quick" | "deep";
+export function canDeepScan(contract: CapabilityContract, endpoint: string, model: string): boolean {
+  return !!model.trim() && !!contract.scope && contract.scope.model === model.trim() &&
+    contract.scope.endpoint === endpoint.trim().replace(/\/+$/, "");
 }

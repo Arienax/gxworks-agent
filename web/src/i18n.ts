@@ -1,5 +1,18 @@
 export type Locale = "zh-CN" | "en" | "ja";
 const words: Record<string, [string, string]> = {
+  "获取模型列表": ["Fetch model list", "モデル一覧を取得"],
+  "快速能力检测": ["Quick capability check", "能力の簡易確認"],
+  "深度参数扫描": ["Deep parameter scan", "パラメーター詳細スキャン"],
+  "正在获取模型列表…": ["Fetching model list…", "モデル一覧を取得中…"],
+  "快速检测中…": ["Quick check in progress…", "簡易確認中…"],
+  "深度扫描中…": ["Deep scan in progress…", "詳細スキャン中…"],
+  "耗时": ["Elapsed", "所要時間"],
+  "请勿重复提交；完成后显示实际耗时。": ["Please wait; elapsed time is shown when finished.", "完了後に所要時間を表示します。重複送信しないでください。"],
+  "先获取列表并选择模型，再快速检测；需要更多档位时手动深度扫描。不会自动扫描所有模型。": ["Fetch the list, choose a model, then run a quick check. Deep scanning is optional and never scans every model.", "一覧からモデルを選び、簡易確認を実行してください。必要な場合のみ詳細スキャンを行います。全モデルの自動スキャンは行いません。"],
+  "可先获取模型列表，也可手动填写模型 ID": ["Fetch models or enter a model ID manually", "一覧を取得するかモデル ID を入力"],
+  "已达到检测预算，未完成项保留为未知或部分扫描。": ["Check budget reached; unfinished items remain unknown or partial.", "確認の予算に達しました。未完了項目は不明または部分確認のままです。"],
+  "仅验证了部分取值；深度参数扫描可补充档位，不代表固定值或完整范围。": ["Only some values have been verified. A deep scan can add levels; this is not a fixed value or a complete range.", "一部の値のみ検証済みです。詳細スキャンで追加できます。固定値や全範囲を意味しません。"],
+  "重新验证已有结果（增加请求；深度扫描仅重测参数）": ["Revalidate existing results (more requests; deep mode rechecks parameters only)", "既存の結果を再検証（要求数が増加。詳細モードはパラメーターのみ）"],
   "兼容服务预设": ["Compatible endpoint preset", "互換サービスのプリセット"],
   "自定义 OpenAI-compatible 服务": ["Custom OpenAI-compatible service", "カスタム OpenAI 互換サービス"],
   "预设只填写地址，不绑定模型或参数。可修改为区域、工作区或网关提供的兼容地址。Claude 原生 Messages 功能不等同于兼容接口功能。": ["Presets only fill the URL; models and parameters remain independent. Use your regional, workspace or gateway URL. Claude native Messages features differ from compatibility-layer features.", "プリセットはURLのみを設定します。モデルやパラメーターは固定しません。地域、ワークスペース、ゲートウェイの互換URLに変更できます。ClaudeのネイティブMessages APIと互換APIでは機能が異なります。"],

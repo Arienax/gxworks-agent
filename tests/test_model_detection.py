@@ -10,12 +10,12 @@ class _Provider:
         self.stream_calls = 0
 
     def list_models(self, *, timeout=None):
-        assert timeout == 15.0
+        assert 0 < timeout <= 5.0
         return ("model-b", "model-a", "model-b")
 
     def stream(self, request):
         self.stream_calls += 1
-        assert request.timeout == 15.0
+        assert 0 < request.timeout <= 5.0
         assert request.max_retries == 0
         if request.tools:
             yield ToolCallEnd(ToolCall("probe-1", "capability_probe", '{"value":"ok"}'))

@@ -139,12 +139,14 @@ class ParameterDescriptor:
     label: str = ""
     default_mode: str = "omit"
     constraints: ConstraintDescriptor = field(default_factory=ConstraintDescriptor)
+    # Coverage of the registered finite candidate set, NOT the whole value domain.
+    scan: Optional[str] = None
 
     @classmethod
     def from_dict(cls, name, value):
         identifier(name)
         value = checked_object(value, {"type", "status", "source", "values", "minimum", "maximum", "step",
-            "wire_location", "wire_name", "wire_path", "label", "default_mode", "requires", "conflicts_with"}, "parameter descriptor")
+            "wire_location", "wire_name", "wire_path", "label", "default_mode", "requires", "conflicts_with", "scan"}, "parameter descriptor")
         kind, status, source = value.get("type"), value.get("status"), value.get("source")
         if kind not in TYPES or status not in PARAMETER_STATUSES or source not in SOURCES:
             raise ValueError("Invalid parameter type or evidence")
@@ -189,8 +191,11 @@ class ParameterDescriptor:
         constraints = ConstraintDescriptor.from_dict({k: value[k] for k in ("requires", "conflicts_with") if k in value})
         if status == "conditional" and not constraints.to_dict():
             raise ValueError("Conditional parameters require a constraint")
+        scan = value.get("scan")
+        if scan is not None and (scan not in {"partial", "complete"} or source != "probe"):
+            raise ValueError("Invalid probe scan coverage")
         result = cls(kind, status, source, tuple(values) if values is not None else None,
-            lower, upper, step, location, tuple(path), label, value.get("default_mode", "omit"), constraints)
+            lower, upper, step, location, tuple(path), label, value.get("default_mode", "omit"), constraints, scan)
         for item in values or ():
             result.validate(item)
         return result
@@ -224,6 +229,8 @@ class ParameterDescriptor:
         for key in ("minimum", "maximum", "step"):
             if getattr(self, key) is not None:
                 result[key] = getattr(self, key)
+        if self.scan is not None:
+            result["scan"] = self.scan
         if self.label:
             result["label"] = self.label
         return {**result, **self.constraints.to_dict()}

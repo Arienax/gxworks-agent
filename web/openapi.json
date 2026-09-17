@@ -2056,8 +2056,23 @@
       "ModelDiscoveryRequest": {
         "additionalProperties": false,
         "properties": {
+          "mode": {
+            "default": "quick",
+            "enum": [
+              "list",
+              "quick",
+              "deep"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
           "profile": {
             "$ref": "#/components/schemas/ModelProfileCreate"
+          },
+          "refresh": {
+            "default": false,
+            "title": "Refresh",
+            "type": "boolean"
           }
         },
         "required": [

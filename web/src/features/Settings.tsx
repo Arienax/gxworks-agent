@@ -4,8 +4,8 @@ import type { Json, ModelSettings } from "../api/client";
 import type { components } from "../api/generated";
 import { Button, Badge } from "../components/ui";
 import { ModelParameters } from "./ModelParameterControls";
-import { ENDPOINT_PRESETS, adoptSelections, clearKnown } from "./modelParameters";
-import type { CapabilityContract, UserModelSettings } from "./modelParameters";
+import { ENDPOINT_PRESETS, adoptSelections, clearKnown, canDeepScan } from "./modelParameters";
+import type { CapabilityContract, UserModelSettings, DiscoveryMode } from "./modelParameters";
 
 type Profile = NonNullable<ModelSettings["profiles"]>[number] & {
   deletable?: boolean;
@@ -16,7 +16,12 @@ type Profile = NonNullable<ModelSettings["profiles"]>[number] & {
 };
 
 type Discovery = {
-  kind: "model_discovery_v1";
+  kind?: "model_discovery_v1";
+  mode?: DiscoveryMode;
+  elapsed_ms?: number;
+  budget_seconds?: number;
+  budget_exhausted?: boolean;
+  partial?: boolean;
   models?: string[];
   recommended_model?: string | null;
   selected_model_available?: boolean;
@@ -238,11 +243,22 @@ export function Settings({
   const [discoveredModels, setDiscoveredModels] = useState<string[]>([]);
   const [contract, setContract] = useState<CapabilityContract>({});
   const [userSettings, setUserSettings] = useState<UserModelSettings>({});
+  const [scanMode, setScanMode] = useState<DiscoveryMode | null>(null);
+  const [scanSeconds, setScanSeconds] = useState(0);
+  const [refreshScan, setRefreshScan] = useState(false);
+  useEffect(() => {
+    if (!scanMode) return;
+    const started = Date.now();
+    setScanSeconds(0);
+    const timer = window.setInterval(() => setScanSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [scanMode]);
   const draftRevision = useRef(0);
   const invalidate = (clearModels = false) => {
     draftRevision.current += 1;
     setContract({});
     setUserSettings({});
+    setMessage("");
     if (clearModels) setDiscoveredModels([]);
   };
   const clearParameterValues = () => {
@@ -310,6 +326,41 @@ export function Settings({
     !busy && !disabled && !!name.trim() && !!model.trim() && !!baseUrl.trim();
   const discoverReady =
     !busy && !disabled && !!baseUrl.trim() && (!creating || !!secret.trim());
+  const discover = (mode: DiscoveryMode) => void run(async () => {
+    const revision = draftRevision.current;
+    setScanMode(mode);
+    try {
+      const draft = {
+        ...(creating ? {} : { id: selected }),
+        name: name.trim() || "Custom API",
+        model: model.trim() || "__discover__",
+        base_url: baseUrl, capabilities,
+        generation_defaults: parse(defaults), request_overrides: parse(overrides),
+        contract, user_settings: userSettings,
+        ...(secret ? { api_key: secret } : {}),
+      };
+      const result = await api<{ status: string; message: string; discovery?: Discovery }>(
+        "/settings/detect", "POST", { profile: draft, mode, refresh: refreshScan },
+      );
+      if (revision !== draftRevision.current) return;
+      if (result.status !== "connected") throw new Error(result.message || t("连接失败"));
+      const discovery = result.discovery || parseDiscovery(result.message);
+      if (!discovery) { setMessage(result.message || t("连接成功")); return; }
+      setDiscoveredModels(discovery.models || []);
+      // Listing is read-only for the selected model and its current contract.
+      if (discovery.contract && discovery.mode !== "list") {
+        setContract(discovery.contract);
+        setUserSettings(adoptSelections(discovery.contract, userSettings, parse(defaults), parse(overrides)));
+      }
+      const timing = discovery.elapsed_ms == null ? "" : ` · ${t("耗时")} ${(discovery.elapsed_ms / 1000).toFixed(1)} s`;
+      setMessage((discovery.note || t("模型列表与能力检测完成")) + timing +
+        (discovery.budget_exhausted ? ` · ${t("已达到检测预算，未完成项保留为未知或部分扫描。")}` : ""));
+    } catch (e) {
+      if (revision === draftRevision.current) throw e;
+    } finally {
+      setScanMode(null);
+    }
+  });
   const beginCreate = () => {
     setCreating(true);
     setName("");
@@ -411,47 +462,25 @@ export function Settings({
         </label>
         <p className="muted">{t("API Key 用于连接模型服务；编辑已有配置时，留空可保留已保存的密钥。")}</p>
         <div className="form-actions">
-          <Button
-            disabled={!discoverReady}
-            onClick={() =>
-              void run(async () => {
-                const revision = draftRevision.current;
-                const draft = {
-                  ...(creating ? {} : { id: selected }),
-                  name: name.trim() || "Custom API",
-                  model: model.trim() || "__discover__",
-                  base_url: baseUrl,
-                  capabilities,
-                  generation_defaults: parse(defaults),
-                  request_overrides: parse(overrides),
-                  // Re-detection must not validate against a stale contract.
-                  contract,
-                  user_settings: userSettings,
-                  ...(secret ? { api_key: secret } : {}),
-                };
-                const result = await api<{ status: string; message: string; discovery?: Discovery }>(
-                  "/settings/detect", "POST", { profile: draft },
-                );
-                if (revision !== draftRevision.current) return;
-                if (result.status !== "connected") throw new Error(result.message || t("连接失败"));
-                const discovery = result.discovery || parseDiscovery(result.message);
-                if (!discovery) { setMessage(result.message || t("连接成功")); return; }
-                setDiscoveredModels(discovery.models || []);
-                if (!model && discovery.recommended_model) setModel(discovery.recommended_model);
-                const nextContract = discovery.contract || {};
-                setContract(nextContract);
-                setUserSettings(adoptSelections(nextContract, userSettings, parse(defaults), parse(overrides)));
-                setMessage(discovery.note || t("模型列表与能力检测完成"));
-              })
-            }
-          >
-            {t(busy ? "检测中…" : "自动获取模型 + 检测能力")}
+          <Button disabled={!discoverReady} onClick={() => discover("list")}>
+            {t("获取模型列表")}
+          </Button>
+          <Button disabled={!discoverReady || !model.trim()} onClick={() => discover("quick")}>
+            {t("快速能力检测")}
+          </Button>
+          <Button disabled={!discoverReady || !canDeepScan(contract, baseUrl, model)} onClick={() => discover("deep")}>
+            {t("深度参数扫描")}
           </Button>
         </div>
+        <p className="muted">{t("先获取列表并选择模型，再快速检测；需要更多档位时手动深度扫描。不会自动扫描所有模型。")}</p>
+        {scanMode && <p role="status" aria-live="polite">
+          {t(scanMode === "list" ? "正在获取模型列表…" : scanMode === "quick" ? "快速检测中…" : "深度扫描中…")}
+          {` ${scanSeconds} s · `}{t("请勿重复提交；完成后显示实际耗时。")}
+        </p>}
         <label>
           {t("模型")}
           <input value={model} onChange={(e) => changeModel(e.target.value)}
-            list="compatible-models" placeholder={t("可先自动获取模型")} />
+            list="compatible-models" placeholder={t("可先获取模型列表，也可手动填写模型 ID")} />
           <datalist id="compatible-models">
             {discoveredModels.map(item => <option value={item} key={item} />)}
           </datalist>
@@ -464,6 +493,8 @@ export function Settings({
           }} />
         <details>
           <summary>{t("高级设置")}</summary>
+          <label><input type="checkbox" checked={refreshScan} disabled={busy || disabled}
+            onChange={e => setRefreshScan(e.target.checked)} />{t("重新验证已有结果（增加请求；深度扫描仅重测参数）")}</label>
           <p className="muted">
             {t("如供应商要求特定参数，可在此调整模型能力、生成参数和请求覆盖参数。")}
           </p>
