@@ -16,6 +16,9 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+    defaults:
+      run:
+        shell: bash
     env:
       PYTHONUTF8: '1'
       PYTHONDONTWRITEBYTECODE: '1'
@@ -54,6 +57,12 @@ jobs:
               assert hashlib.sha1(b'blob ' + str(len(content)).encode() + b'\0' + content).hexdigest() == sha, name
               patches.append(content)
           subprocess.run(['git', 'apply', '--index', '--whitespace=error'], input=b''.join(patches), check=True)
+          path = Path('scripts/web_model_settings_e2e.py')
+          text = path.read_text(encoding='utf-8')
+          assert text.count('to_contain_text("连接成功")') == 1
+          path.write_text(text.replace('to_contain_text("连接成功")', 'to_contain_text("连接测试通过")'), encoding='utf-8')
+          assert subprocess.check_output(['git', 'hash-object', str(path)], text=True).strip() == '4d526c0a31fc7201780568d8ac92924bb498c217'
+          subprocess.run(['git', 'add', str(path)], check=True)
           PY
           git diff --cached --check
       - name: Install isolated validation dependencies
