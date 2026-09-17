@@ -128,12 +128,15 @@ jobs:
         run: |
           & .\build-web.bat --frontend-only --no-pause
           if ($LASTEXITCODE -ne 0) { throw 'Windows Web source build failed.' }
-      - name: Verify source runtime wins over a stale packaged executable
+      - name: Verify source checkout never launches a stale packaged executable
         run: |
-          New-Item -ItemType Directory -Force .venv\Scripts | Out-Null
-          Copy-Item $env:ComSpec .venv\Scripts\python.exe -Force
           Set-Content -Path .\GXWorks-Agent-Web.exe -Value 'stale packaged fixture'
           $workspace = Join-Path $env:RUNNER_TEMP 'gxworks-launcher-source-precedence'
+          $missingRuntime = & .\scripts\start_web.ps1 -Workspace $workspace -NoBrowser -ValidateOnly 2>&1
+          if ($LASTEXITCODE -eq 0) { throw 'Source checkout silently fell back to stale release executable.' }
+          if (($missingRuntime -join "`n") -notmatch 'build-web\.bat') { throw 'Missing source-runtime diagnostic was not actionable.' }
+          New-Item -ItemType Directory -Force .venv\Scripts | Out-Null
+          Copy-Item $env:ComSpec .venv\Scripts\python.exe -Force
           $output = & .\scripts\start_web.ps1 -Workspace $workspace -NoBrowser -ValidateOnly
           if ($LASTEXITCODE -ne 0) { throw 'Launcher validation failed.' }
           $record = ($output | Select-Object -Last 1) | ConvertFrom-Json
