@@ -1,0 +1,22 @@
+name: Capability Stage Source
+on:
+  push:
+    branches: [feat/universal-api-capabilities]
+    paths: ['.github/workflows/capability-stage-source.yml']
+permissions:
+  contents: read
+jobs:
+  source:
+    if: github.repository == 'Arienax/gxworks-agent' && github.ref == 'refs/heads/feat/universal-api-capabilities'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: git archive --format=tar HEAD > capability-stage-source.tar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: capability-stage-source
+          path: capability-stage-source.tar
+          retention-days: 1
