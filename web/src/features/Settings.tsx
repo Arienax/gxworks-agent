@@ -546,10 +546,9 @@ export function Settings({
                   "POST",
                   { profile: command(), ...(secret ? { api_key: secret } : {}) },
                 );
-                if (result.status === "connected") {
-                  const discovery = parseDiscovery(result.message);
-                  setMessage(discovery?.note || t("连接成功"));
-                } else setError(result.message || t("连接失败"));
+                if (result.status === "connected")
+                  setMessage(result.message || t("连接成功"));
+                else setError(result.message || t("连接失败"));
               })
             }
           >

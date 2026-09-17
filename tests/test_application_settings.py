@@ -175,11 +175,15 @@ def test_public_advanced_values_strip_nested_credentials_and_url_credentials(set
     assert env.path.read_bytes() == before
 
 
-def test_test_connection_uses_unsaved_draft_and_key_without_any_mutation(settings_env):
+def test_test_connection_uses_unsaved_draft_and_key_without_any_mutation(settings_env, monkeypatch):
+    import model_provider
     env = settings_env
+    monkeypatch.setattr(model_provider, "create_provider",
+        lambda *args, **kwargs: pytest.fail("connection test must not run capability discovery"))
     result = env.service.test_connection("fake", profile={"id": "fake", "model": "draft-model",
         "generation_defaults": {"top_p": 0.3}}, api_key="temporary-secret")
     assert result["status"] == "connected"
+    assert result["message"] == "连接成功，API Key 和服务地址有效。"
     profile, key = env.calls[0]
     assert key == "temporary-secret" and profile["model"] == "draft-model"
     assert not env.path.exists() and not env.writes and not env.deletes
