@@ -24,6 +24,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Apply fast connection-test patch
         run: |
+          # Patch is staged separately so the source commit cannot alter this workflow.
           git apply --index --whitespace=error tools/.connection-fast-path.patch
           git diff --cached --check
       - name: Validate targeted backend and frontend
