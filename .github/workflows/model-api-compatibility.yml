@@ -17,6 +17,7 @@ on:
       - 'scripts/web_model_settings_e2e.py'
       - 'scripts/web_generation_e2e.py'
       - 'scripts/web_demo.py'
+      - 'scripts/start_web.ps1'
       - 'build-web.bat'
       - 'scripts/build_web_source.ps1'
       - 'web/**'
@@ -37,6 +38,7 @@ on:
       - 'scripts/web_model_settings_e2e.py'
       - 'scripts/web_generation_e2e.py'
       - 'scripts/web_demo.py'
+      - 'scripts/start_web.ps1'
       - 'build-web.bat'
       - 'scripts/build_web_source.ps1'
       - 'web/**'
@@ -126,6 +128,17 @@ jobs:
         run: |
           & .\build-web.bat --frontend-only --no-pause
           if ($LASTEXITCODE -ne 0) { throw 'Windows Web source build failed.' }
+      - name: Verify source runtime wins over a stale packaged executable
+        run: |
+          New-Item -ItemType Directory -Force .venv\Scripts | Out-Null
+          Copy-Item $env:ComSpec .venv\Scripts\python.exe -Force
+          Set-Content -Path .\GXWorks-Agent-Web.exe -Value 'stale packaged fixture'
+          $workspace = Join-Path $env:RUNNER_TEMP 'gxworks-launcher-source-precedence'
+          $output = & .\scripts\start_web.ps1 -Workspace $workspace -NoBrowser -ValidateOnly
+          if ($LASTEXITCODE -ne 0) { throw 'Launcher validation failed.' }
+          $record = ($output | Select-Object -Last 1) | ConvertFrom-Json
+          if ($record.backend -ne 'source') { throw "Expected source backend, got $($record.backend)." }
+          Remove-Item .\GXWorks-Agent-Web.exe -Force
       - name: Verify Windows resolution and parameter controls
         run: |
           node -e "const ts = require('./web/node_modules/typescript'); if (ts.sys.useCaseSensitiveFileNames) process.exit(1); console.log('Case-insensitive Windows module resolution confirmed');"
