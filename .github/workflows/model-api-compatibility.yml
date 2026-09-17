@@ -17,6 +17,8 @@ on:
       - 'scripts/web_model_settings_e2e.py'
       - 'scripts/web_generation_e2e.py'
       - 'scripts/web_demo.py'
+      - 'build-web.bat'
+      - 'scripts/build_web_source.ps1'
       - 'web/**'
       - '.github/workflows/model-api-compatibility.yml'
   pull_request:
@@ -35,6 +37,8 @@ on:
       - 'scripts/web_model_settings_e2e.py'
       - 'scripts/web_generation_e2e.py'
       - 'scripts/web_demo.py'
+      - 'build-web.bat'
+      - 'scripts/build_web_source.ps1'
       - 'web/**'
       - '.github/workflows/model-api-compatibility.yml'
   workflow_dispatch:
@@ -83,7 +87,7 @@ jobs:
           python -m pytest -q tests/test_model_contract.py tests/test_model_capabilities.py tests/test_application_settings.py tests/test_model_provider.py tests/test_model_detection.py tests/test_model_profile_config.py tests/test_model_profile_deletion.py tests/test_web_contract.py tests/test_web_frontend_state_flow.py tests/test_model_stream_cancellation.py tests/test_model_presentation.py tests/test_plc_core_boundary.py --junitxml=model-api-evidence/python.xml
       - name: Test parameter controls and build Web frontend
         run: |
-          node --experimental-strip-types --test web/tests/model-parameters.test.mjs
+          node --experimental-strip-types --test web/tests/model-parameters.test.mjs web/tests/module-resolution.test.mjs
           npm run build --prefix web
       - name: Exercise real browser and HTTP settings flow
         run: |
@@ -99,4 +103,44 @@ jobs:
         with:
           name: model-api-evidence
           path: model-api-evidence/
+          retention-days: 7
+
+  windows-build:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build with the Windows source entry point
+        run: |
+          & .\build-web.bat --frontend-only --no-pause
+          if ($LASTEXITCODE -ne 0) { throw 'Windows Web source build failed.' }
+      - name: Verify Windows resolution and parameter controls
+        run: |
+          node -e "const ts = require('./web/node_modules/typescript'); if (ts.sys.useCaseSensitiveFileNames) process.exit(1); console.log('Case-insensitive Windows module resolution confirmed');"
+          if ($LASTEXITCODE -ne 0) { throw 'Expected a case-insensitive Windows compiler host.' }
+          node --experimental-strip-types --test web/tests/model-parameters.test.mjs web/tests/module-resolution.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Frontend regression tests failed.' }
+          git diff --exit-code -- web/src/api/generated.ts
+          if ($LASTEXITCODE -ne 0) { throw 'Generated HTTP types are not current.' }
+      - name: Record the validated Windows commit
+        if: always()
+        run: |
+          New-Item -ItemType Directory -Force windows-model-api-evidence | Out-Null
+          git rev-parse HEAD | Set-Content windows-model-api-evidence/commit.txt
+          if (Test-Path build-web.log) { Copy-Item build-web.log windows-model-api-evidence/ }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-model-api-evidence
+          path: windows-model-api-evidence/
           retention-days: 7

@@ -3,7 +3,7 @@ import { api } from "../api/client";
 import type { Json, ModelSettings } from "../api/client";
 import type { components } from "../api/generated";
 import { Button, Badge } from "../components/ui";
-import { ModelParameters } from "./ModelParameters";
+import { ModelParameters } from "./ModelParameterControls";
 import { ENDPOINT_PRESETS, adoptSelections, clearKnown } from "./modelParameters";
 import type { CapabilityContract, UserModelSettings } from "./modelParameters";
 
