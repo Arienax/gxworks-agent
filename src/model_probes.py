@@ -170,6 +170,13 @@ class ParameterProbe:
         raw = _parameter_probe(context.provider, context.model, self.name, candidates,
             self.invalid, context.remaining, options, self.fixed_single,
             known_values=known, exhaustive=context.mode == "deep")
+        if raw.get("values"):
+            # Extending a quick result must not reorder an effort slider around
+            # the newest sample. Only order observed values, never add untested
+            # candidates from the registry to the reported domain.
+            values = [v for v in self.candidates if member(v, raw["values"])]
+            values.extend(v for v in raw["values"] if not member(v, values))
+            raw["values"] = values
         if requires:
             raw["requires"] = requires
         raw["type"] = self.type
@@ -184,7 +191,8 @@ class CapabilityProbe:
     kind: str = "capability"
 
     def run(self, context):
-        ok = self.check(context.provider, context.model, context.remaining()) if context.remaining() > 0 else False
+        timeout = context.remaining()
+        ok = self.check(context.provider, context.model, timeout) if timeout > 0 else False
         # A timeout, unavailable model or malformed output is not evidence of
         # lack of capability. Only explicit metadata/rejection can say that.
         return CapabilityDescriptor("supported" if ok else "unknown", "probe", self.modes if ok else ())

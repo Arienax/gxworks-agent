@@ -15,7 +15,7 @@ from dataclasses import replace
 from model_contract import (
     MISSING, CapabilityContract, CapabilityDescriptor, ConstraintDescriptor,
     ParameterDescriptor, contract_scope, metadata_contract_parts, identifier,
-    scoped_contract, validate_parameter_paths,
+    scoped_contract, validate_parameter_paths, member,
 )
 from model_request_policy import parameter_value, merge
 from model_probes import PROBE_REGISTRY, ProbeContext
@@ -146,7 +146,13 @@ def inspect_openai_compatible(provider, model, configured_capabilities=None, *,
                 {"type": strategy.type, "status": "unknown", "source": "probe", "scan": "partial"})
             parameters[strategy.name] = desc
         declared = strategy.name in metadata_parameters or desc.source in {"metadata", "manual"}
-        reusable = same_condition and (desc.scan == "complete" or
+        # Scope excludes tuning values. Reusing a partial domain is safe only
+        # if it already covers the explicit draft sample; otherwise quick mode
+        # must validate that sample rather than silently retaining an old one.
+        requested = configured.get(strategy.name, MISSING)
+        new_sample = (mode == "quick" and desc.scan == "partial" and
+            requested is not MISSING and not member(requested, desc.values or ()))
+        reusable = same_condition and not new_sample and (desc.scan == "complete" or
             mode == "quick" and desc.status in {"supported", "accepted", "unsupported", "fixed", "conditional"})
         if declared or reusable:
             reused.append(strategy.name)
