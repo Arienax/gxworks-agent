@@ -32,42 +32,28 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - name: Apply and verify locally validated source bytes
+      - name: Apply byte-verified locally validated source
         run: |
           mkdir -p two-stage-evidence
           python - <<'PY'
-          import subprocess
+          import hashlib, subprocess
           from pathlib import Path
           base = 'e511510b50299a094848f2ffa738bb4ee0ee22f0'
           changed = subprocess.check_output(['git', 'diff', '--name-only', base, 'HEAD'], text=True).splitlines()
           assert all(p.startswith('tools/.two-stage/') or p == '.github/workflows/capability-stage-integration.yml' for p in changed), 'Baseline changed; preserve concurrent work'
-          paths = [str(p) for p in sorted(Path('tools/.two-stage').glob('*.patch'))]
-          assert len(paths) == 3
-          subprocess.run(['git', 'apply', '--index', '--whitespace=error', *paths], check=True)
-          expected = {
-              'docs/integrations/capability-contract-v2.md': '39661450bd36e454135d77643f66b5e5add174c6',
-              'scripts/web_model_settings_e2e.py': '640e2877e983eee95c5beaebf37d7c12c05e39c2',
-              'src/application/model_detection.py': '580ef708fab233ece3f008e30d950dcd35cec8a5',
-              'src/application/settings.py': '117ec126267ce6f9bab4eecea0e3e382fa29c240',
-              'src/integrations/web/app.py': '8aaa56bb5e368527bce90cf2183556c3913a20d4',
-              'src/integrations/web/schemas.py': '12191610488557dd40824dfb4ccdd0988eab18e9',
-              'src/model_contract.py': 'ed8050c6f8c18e54909b6deb067a3c669996956f',
-              'src/model_probes.py': 'c806ace7a1fae5d110aa032cf2d897758588488b',
-              'tests/test_application_settings.py': '23596ba991cca64320e39b23a98585fd169c6a85',
-              'tests/test_model_capabilities.py': '4512f35264e06c6a6151aa826f5ee9631307d5b1',
-              'tests/test_model_detection.py': '765fa875e03ee6a79c720e8bcb0a8ac75ce614be',
-              'tests/test_model_detection_stages.py': 'd86be0b58beb15c528c2b2b8161fc2f254585d6f',
-              'web/openapi.json': '641883aa651576e779ee8e24c39c443c6cd58f9a',
-              'web/src/api/generated.ts': 'e22e91e6d0419a3c3a8a5d72fe5ffb991bc2f0f0',
-              'web/src/features/ModelParameterControls.tsx': '10198aac8412fd218272695abf7296bc6f06c7df',
-              'web/src/features/Settings.tsx': '1a0777fe82229f58a3e37abcd54194f2e125c1e4',
-              'web/src/features/modelParameters.ts': 'cd7bea30aa85ef83dfbf7cd333a9cd31cfeb449d',
-              'web/src/i18n.ts': '2c6fa1cec03a740419a91d294c7538ac0b0b1840',
-              'web/tests/model-parameters.test.mjs': 'ffb185a7e2dbc856ab6872e03888ec8f360778be',
-          }
-          for path, sha in expected.items():
-              actual = subprocess.check_output(['git', 'hash-object', path], text=True).strip()
-              assert actual == sha, f'{path}: source bytes differ: {actual}'
+          source = Path('tools/.two-stage')
+          data = (source / 'tests.patch').read_bytes()
+          before = b"@@ -84,3 +84,30 @@ test('presets contain endpoints, never model names or tuning defaults', () => {\n"
+          after = b"@@ -84,3 +84,30 @@ test('constraints use strict scalar identity and conjunctive requirements', () =\n test('presets contain endpoints, never model names or tuning defaults', () => {\n"
+          assert data.count(before) == 1
+          data = data.replace(before, after)
+          expected = {'backend.patch': '41cf72f326f2818e1de11ff0c6d7332db372b208', 'ui.patch': 'e653fb8284dae2321369fcf70f2db9759cd060bf', 'tests.patch': 'ab3abe8db2d000f883e6ac0addbc26ba0e0d6f37'}
+          patches = []
+          for name, sha in expected.items():
+              content = data if name == 'tests.patch' else (source / name).read_bytes()
+              assert hashlib.sha1(b'blob ' + str(len(content)).encode() + b'\0' + content).hexdigest() == sha, name
+              patches.append(content)
+          subprocess.run(['git', 'apply', '--index', '--whitespace=error'], input=b''.join(patches), check=True)
           PY
           git diff --cached --check
       - name: Install isolated validation dependencies
