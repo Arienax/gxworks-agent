@@ -1,0 +1,22 @@
+name: Capability V2 Integration
+on:
+  push:
+    branches: [feat/universal-api-capabilities]
+    paths: ['tools/.capability-v2/**', '.github/workflows/capability-v2-integration.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  transfer-verification:
+    if: github.repository == 'Arienax/gxworks-agent' && github.ref == 'refs/heads/feat/universal-api-capabilities'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: capability-v2-transfer
+          path: tools/.capability-v2/*.part
+          retention-days: 1
