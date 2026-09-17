@@ -29,120 +29,57 @@ jobs:
 
           path = Path('src/application/settings.py')
           text = path.read_text(encoding='utf-8')
-          old = '''    def test_connection(self, profile_id, *, profile=None, api_key=None):
-              from config_manager import get_model_profile
-              from model_provider import create_provider, test_model_profile
-              from application.model_detection import inspect_openai_compatible
-              with _SETTINGS_LOCK:
-                  config = self.read_config()
-                  selected = get_model_profile(config, _profile_id(profile_id))
-                  old_url = selected.get("baseUrl")
-                  if profile is not None:
-                      self._apply_profile(selected, profile)
-                  key = api_key if api_key is not None else (
-                      self._key(config, selected) if selected.get("baseUrl") == old_url else "")
-                  if not str(key or "").strip():
-                      return {"status": "failed", "message": "请先配置 API Key。", "error_code": "missing_key"}
-                  frozen = copy.deepcopy(selected)
-              try:
-                  # Preserve the existing connection-test behavior and error mapping.
-                  message = test_model_profile(copy.deepcopy(frozen), key)
-                  try:
-                      provider = create_provider(frozen, key)
-                      inspection = inspect_openai_compatible(
-                          provider,
-                          str(frozen.get("model") or ""),
-                          frozen.get("capabilities") or {},
-                      )
-                  except Exception:
-                      # Some compatible services expose a usable selected model but do
-                      # not support model listing or one of the optional probes.
-                      return {"status": "connected", "message": message}
-                  return {
-                      "status": "connected",
-                      # Keep the public response contract stable for one release.
-                      # The Web client recognizes this JSON payload and falls back to
-                      # ordinary text for older/non-discoverable backends.
-                      "message": json.dumps({
-                          "kind": "model_discovery_v1",
-                          **inspection,
-                      }, ensure_ascii=False),
-                  }
-              except Exception as error:
-                  code = getattr(error, "code", "provider_error")
-                  if code not in ("authentication", "rate_limit", "timeout", "invalid_request", "unavailable"):
-                      code = "provider_error"
-                  # Provider error bodies can echo authentication data. Never publish them.
-                  return {"status": "failed", "message": "连接测试失败，请检查服务地址、模型和密钥。", "error_code": code}
-          '''.replace('          ', '')
-          new = '''    def test_connection(self, profile_id, *, profile=None, api_key=None):
-              from config_manager import get_model_profile
-              from model_provider import test_model_profile
-              with _SETTINGS_LOCK:
-                  config = self.read_config()
-                  selected = get_model_profile(config, _profile_id(profile_id))
-                  old_url = selected.get("baseUrl")
-                  if profile is not None:
-                      self._apply_profile(selected, profile)
-                  key = api_key if api_key is not None else (
-                      self._key(config, selected) if selected.get("baseUrl") == old_url else "")
-                  if not str(key or "").strip():
-                      return {"status": "failed", "message": "请先配置 API Key。", "error_code": "missing_key"}
-                  frozen = copy.deepcopy(selected)
-              try:
-                  # Connection testing is deliberately a fast path. Capability
-                  # discovery is an explicit, potentially expensive operation behind
-                  # /settings/detect and must never be triggered by this button.
-                  message = test_model_profile(copy.deepcopy(frozen), key)
-                  return {"status": "connected", "message": message}
-              except Exception as error:
-                  code = getattr(error, "code", "provider_error")
-                  if code not in ("authentication", "rate_limit", "timeout", "invalid_request", "unavailable"):
-                      code = "provider_error"
-                  # Provider error bodies can echo authentication data. Never publish them.
-                  return {"status": "failed", "message": "连接测试失败，请检查服务地址、模型和密钥。", "error_code": code}
-          '''.replace('          ', '')
-          assert old in text, 'settings fast-path source block changed'
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          old_imports = '        from model_provider import create_provider, test_model_profile\n        from application.model_detection import inspect_openai_compatible\n'
+          assert old_imports in text, 'connection-test imports changed'
+          text = text.replace(old_imports, '        from model_provider import test_model_profile\n', 1)
+          start = text.index('        try:\n            # Preserve the existing connection-test behavior and error mapping.\n')
+          end = text.index('        except Exception as error:\n', start)
+          replacement = (
+              '        try:\n'
+              '            # Connection testing is deliberately a fast path. Capability\n'
+              '            # discovery is an explicit, potentially expensive operation behind\n'
+              '            # /settings/detect and must never be triggered by this button.\n'
+              '            message = test_model_profile(copy.deepcopy(frozen), key)\n'
+              '            return {"status": "connected", "message": message}\n'
+          )
+          path.write_text(text[:start] + replacement + text[end:], encoding='utf-8')
 
           path = Path('web/src/features/Settings.tsx')
           text = path.read_text(encoding='utf-8')
-          old = '''                if (result.status === "connected") {
-                    const discovery = parseDiscovery(result.message);
-                    setMessage(discovery?.note || t("连接成功"));
-                  } else setError(result.message || t("连接失败"));'''
-          new = '''                if (result.status === "connected")
-                    setMessage(result.message || t("连接成功"));
-                  else setError(result.message || t("连接失败"));'''
+          old = (
+              '                if (result.status === "connected") {\n'
+              '                  const discovery = parseDiscovery(result.message);\n'
+              '                  setMessage(discovery?.note || t("连接成功"));\n'
+              '                } else setError(result.message || t("连接失败"));'
+          )
+          new = (
+              '                if (result.status === "connected")\n'
+              '                  setMessage(result.message || t("连接成功"));\n'
+              '                else setError(result.message || t("连接失败"));'
+          )
           assert old in text, 'Settings.tsx connection result block changed'
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
           path = Path('tests/test_application_settings.py')
           text = path.read_text(encoding='utf-8')
-          old = '''def test_test_connection_uses_unsaved_draft_and_key_without_any_mutation(settings_env):
-              env = settings_env
-              result = env.service.test_connection("fake", profile={"id": "fake", "model": "draft-model",
-                  "generation_defaults": {"top_p": 0.3}}, api_key="temporary-secret")
-              assert result["status"] == "connected"
-              profile, key = env.calls[0]
-              assert key == "temporary-secret" and profile["model"] == "draft-model"
-              assert not env.path.exists() and not env.writes and not env.deletes
-          '''.replace('          ', '')
-          new = '''def test_test_connection_uses_unsaved_draft_and_key_without_any_mutation(settings_env, monkeypatch):
-              import model_provider
-              env = settings_env
-              monkeypatch.setattr(model_provider, "create_provider",
-                  lambda *args, **kwargs: pytest.fail("connection test must not run capability discovery"))
-              result = env.service.test_connection("fake", profile={"id": "fake", "model": "draft-model",
-                  "generation_defaults": {"top_p": 0.3}}, api_key="temporary-secret")
-              assert result["status"] == "connected"
-              assert result["message"] == "连接成功，API Key 和服务地址有效。"
-              profile, key = env.calls[0]
-              assert key == "temporary-secret" and profile["model"] == "draft-model"
-              assert not env.path.exists() and not env.writes and not env.deletes
-          '''.replace('          ', '')
-          assert old in text, 'test connection regression block changed'
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          start = text.index('def test_test_connection_uses_unsaved_draft_and_key_without_any_mutation(')
+          end = text.index('\n\n\ndef test_test_connection_does_not_echo_provider_errors', start)
+          replacement = (
+              'def test_test_connection_uses_unsaved_draft_and_key_without_any_mutation(settings_env, monkeypatch):\n'
+              '    import model_provider\n'
+              '    env = settings_env\n'
+              '    monkeypatch.setattr(model_provider, "create_provider",\n'
+              '        lambda *args, **kwargs: pytest.fail("connection test must not run capability discovery"))\n'
+              '    result = env.service.test_connection("fake", profile={"id": "fake", "model": "draft-model",\n'
+              '        "generation_defaults": {"top_p": 0.3}}, api_key="temporary-secret")\n'
+              '    assert result["status"] == "connected"\n'
+              '    assert result["message"] == "连接成功，API Key 和服务地址有效。"\n'
+              '    profile, key = env.calls[0]\n'
+              '    assert key == "temporary-secret" and profile["model"] == "draft-model"\n'
+              '    assert not env.path.exists() and not env.writes and not env.deletes\n'
+              '    assert _profile(env.service.public_settings())["model"] == "model-a"'
+          )
+          path.write_text(text[:start] + replacement + text[end:], encoding='utf-8')
           PY
           git diff --check
       - name: Validate targeted backend and frontend
