@@ -132,9 +132,9 @@ jobs:
         run: |
           Set-Content -Path .\GXWorks-Agent-Web.exe -Value 'stale packaged fixture'
           $workspace = Join-Path $env:RUNNER_TEMP 'gxworks-launcher-source-precedence'
-          $missingRuntime = & .\scripts\start_web.ps1 -Workspace $workspace -NoBrowser -ValidateOnly 2>&1
+          $missingRuntime = (& .\scripts\start_web.ps1 -Workspace $workspace -NoBrowser -ValidateOnly *>&1 | Out-String)
           if ($LASTEXITCODE -eq 0) { throw 'Source checkout silently fell back to stale release executable.' }
-          if (($missingRuntime -join "`n") -notmatch 'build-web\.bat') { throw 'Missing source-runtime diagnostic was not actionable.' }
+          if ($missingRuntime -notmatch 'build-web\.bat') { throw 'Missing source-runtime diagnostic was not actionable.' }
           New-Item -ItemType Directory -Force .venv\Scripts | Out-Null
           Copy-Item $env:ComSpec .venv\Scripts\python.exe -Force
           $output = & .\scripts\start_web.ps1 -Workspace $workspace -NoBrowser -ValidateOnly
