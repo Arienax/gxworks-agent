@@ -168,6 +168,30 @@ def _request_model(
     )
 
 
+
+def current_provider():
+    """Return the provider frozen for this workflow; never switch profiles mid-call."""
+    return _workflow_provider()
+
+
+def request_model(
+    messages, *, model_name=None, effort=None, stream=False, tools=None,
+    request_timeout=None, max_retries=None, on_reasoning_chunk=None,
+    on_content_chunk=None, on_event=None, fallback_to_non_stream=False,
+    on_fallback=None, options=None, response_contract=TEXT_RESPONSE,
+    preserved_annotations=(),
+):
+    """Public model gateway. Protocol decoding and acceptance stay in the runtime."""
+    return _request_model(
+        messages, model_name=model_name, effort=effort, stream=stream, tools=tools,
+        request_timeout=request_timeout, max_retries=max_retries,
+        on_reasoning_chunk=on_reasoning_chunk, on_content_chunk=on_content_chunk,
+        on_event=on_event, fallback_to_non_stream=fallback_to_non_stream,
+        on_fallback=on_fallback, options=options, response_contract=response_contract,
+        preserved_annotations=preserved_annotations,
+    )
+
+
 def _user_message_with_images(content, image_attachments=None):
     """Build one canonical user message without exposing provider wire fields."""
 
@@ -518,6 +542,11 @@ def _prepare_api_call(
         persist_history = False
     if confirmed_spec is not None:
         confirmed_context = confirmed_spec
+    normalized_task = str(task_type or review_mode or ("edit" if is_edit_mode else "generate")).strip().casefold()
+    if (target_mode == "ladder" and not is_edit_mode and normalized_task == "generate"
+            and isinstance(confirmed_context, dict) and confirmed_context):
+        from application.confirmed_generation_context import CONFIRMED_GENERATION_REQUEST
+        user_requirement = CONFIRMED_GENERATION_REQUEST
     conversation_history.append({"role": "user", "content": user_requirement})
     if persist_history:
         _save_history(conversation_history)
@@ -1297,7 +1326,7 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
                              confirmed_spec=None,
                              current_version_json=None,
                              plc_model=None,
-                             image_attachments=None):
+                             image_attachments=None, on_fallback=None):
     """
     通过当前 ModelProvider 流式调用模型，实时返回工程推理摘要。
 
@@ -1333,6 +1362,9 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
         model_name=model_name,
         effort=effort,
         stream=True,
+        max_retries=0,
+        fallback_to_non_stream=True,
+        on_fallback=on_fallback,
         options=native_options,
         response_contract=LADDER_RESPONSE if target_mode == "ladder" else ST_RESPONSE,
         preserved_annotations=source_annotations(current_version_json, confirmed_spec, confirmed_context),

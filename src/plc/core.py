@@ -109,6 +109,10 @@ def _program_diff(
 class PLCCore:
     """Thin facade; all PLC semantics stay in the existing modules."""
 
+    def __init__(self, candidate_service=None):
+        from plc.candidate_service import CandidateService
+        self.candidates = candidate_service or CandidateService()
+
     def diff_programs(
         self, before: Optional[Mapping[str, Any]], after: Mapping[str, Any]
     ) -> Mapping[str, Any]:
@@ -215,7 +219,6 @@ class PLCCore:
         previous_program: Optional[Mapping[str, Any]] = None,
     ) -> Mapping[str, Any]:
         """Prepare one generated full/partial ladder through the API fast path."""
-        from plc.generation import prepare_ladder_candidate
         from plc.ir import ir_to_ladder
 
         if not isinstance(ladder, Mapping):
@@ -228,7 +231,7 @@ class PLCCore:
             validate_plc_ir(previous_program, validate_ladder=False)
             previous_ladder = ir_to_ladder(previous_program)
             revision = int(previous_program.get("revision") or 0) + 1
-        prepared = prepare_ladder_candidate(
+        prepared = self.candidates.prepare(
             dict(ladder), plc_model=plc_model, program_name=program_name,
             revision=revision, confirmed_spec=copy.deepcopy(confirmed_spec),
             previous_ladder=previous_ladder,
@@ -266,21 +269,12 @@ class PLCCore:
         *,
         validation_profile: str = "strict",
     ) -> Mapping[str, Any]:
-        from plc.artifacts import render_candidate_artifacts
-
-        structural = validation_profile == "generation_structural"
         def render(target: Path) -> Mapping[str, Any]:
-            # Generation shares the API renderer; explicit Debug keeps strict.
-            if structural:
-                from plc.generation import render_generation_artifacts
-                artifacts = render_generation_artifacts(program, target)["artifacts"]
-            else:
-                artifacts = render_candidate_artifacts(program, target)
-            hashes = {
-                name: hashlib.sha256((target / filename).read_bytes()).hexdigest()
-                for name, filename in artifacts.items()
-            }
-            return {"artifacts": artifacts, "hashes": hashes}
+            rendered = self.candidates.compile(
+                program, target, validation_profile=validation_profile,
+            )
+            # Preserve the public Core manifest; Web also uses renderer metadata.
+            return {"artifacts": rendered["artifacts"], "hashes": rendered["hashes"]}
 
         if output_dir is not None:
             return render(Path(output_dir))

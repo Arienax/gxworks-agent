@@ -384,15 +384,33 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
     knowledge_builder = knowledge_builder or _build_knowledge_context
     profile_builder = profile_builder or _build_model_context
     confirmed_builder = confirmed_builder or _with_confirmed_context
-    selected_prompt = prompt_builder(target_mode, is_edit_mode=is_edit_mode, user_requirement=user_requirement,
-                                     task_type=task_type, review_mode=review_mode, plc_model=plc_model,
-                                     confirmed_context=confirmed_context)
+    from application.confirmed_generation_context import (
+        build_confirmed_generation_context, project_confirmed_specification,
+    )
+    shared_confirmed = (target_mode == "ladder" and normalized_task in {"generate", "edit"}
+                        and isinstance(confirmed_context, dict) and bool(confirmed_context))
+    if shared_confirmed:
+        confirmed_context = project_confirmed_specification(confirmed_context)
+        current_version_json = public_generation_ladder(current_version_json)
     current_context, retrieval_evidence = _current_version_context(user_requirement, current_version_json,
                                                                     target_mode=target_mode)
     if retrieval_evidence is None and current_version_json is not None:
         retrieval_evidence = current_version_json
-    knowledge_ctx = knowledge_builder(user_requirement, plc_model=plc_model, task_type=normalized_task,
-                                      confirmed_context=confirmed_context, evidence=retrieval_evidence)
+    if shared_confirmed and confirmed_context:
+        context = build_confirmed_generation_context(
+            confirmed_context, plc_model, user_requirement=user_requirement,
+            current_program=current_version_json, task_type=normalized_task,
+            evidence=retrieval_evidence, knowledge_builder=knowledge_builder,
+        )
+        confirmed_context = context.confirmed_spec
+        user_requirement = context.generation_request
+        knowledge_ctx = context.knowledge_context
+    else:
+        knowledge_ctx = knowledge_builder(user_requirement, plc_model=plc_model, task_type=normalized_task,
+                                          confirmed_context=confirmed_context, evidence=retrieval_evidence)
+    selected_prompt = prompt_builder(target_mode, is_edit_mode=is_edit_mode, user_requirement=user_requirement,
+                                     task_type=task_type, review_mode=review_mode, plc_model=plc_model,
+                                     confirmed_context=confirmed_context)
     system_prompt = confirmed_builder(selected_prompt + profile_builder(
         plc_model, confirmed_context, compact=bool(knowledge_ctx)) + knowledge_ctx, confirmed_context)
     if current_context:

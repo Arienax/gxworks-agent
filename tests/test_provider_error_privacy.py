@@ -52,12 +52,12 @@ def test_collect_response_classifies_errors_without_exposing_text_or_changing_fa
             on_fallback=lambda error: fallbacks.append(str(error)))
     assert SENTINEL not in str(captured.value) + repr(fallbacks)
     assert captured.value.code == ("authentication" if typed else "provider_error")
-    assert provider.calls == ([True, False] if typed else [True])
+    assert provider.calls == [True] and fallbacks == []
     assert captured.value.__cause__ is not None
 
 
 @pytest.mark.parametrize("typed", [False, True])
-def test_generation_injected_transport_error_is_safe_and_still_falls_back(tmp_path, capsys, typed):
+def test_generation_injected_transport_error_is_safe_and_never_replayed(tmp_path, capsys, typed):
     events, calls = [], []
     def fail_stream(*args, **kwargs):
         calls.append("stream")
@@ -65,13 +65,15 @@ def test_generation_injected_transport_error_is_safe_and_still_falls_back(tmp_pa
     def fallback(*args, **kwargs):
         calls.append("fallback")
         return '{"st_code":"Y0 := X0;"}'
-    result = GenerationWorkflow(GenerationRequest("Input controls output", target_mode="st", model_name="offline"),
-        tmp_path, lambda *event: events.append(event),
-        GenerationDependencies(stream_response=fail_stream, generate_json=fallback)).run()
-    assert result["artifacts"] == {"st": "program.st"}
-    assert calls == ["stream", "fallback"]
-    assert SENTINEL not in json.dumps(events, ensure_ascii=False) + capsys.readouterr().out
-    assert any(kind == "progress" and payload.get("stage") == "fallback" for kind, payload in events)
+    from plc.candidate_repair import GenerationError
+    with pytest.raises(GenerationError) as failure:
+        GenerationWorkflow(GenerationRequest("Input controls output", target_mode="st", model_name="offline"),
+            tmp_path, lambda *event: events.append(event),
+            GenerationDependencies(stream_response=fail_stream, generate_json=fallback)).run()
+    assert list(tmp_path.iterdir()) == []
+    assert calls == ["stream"]
+    assert SENTINEL not in str(failure.value) + json.dumps(events, ensure_ascii=False) + capsys.readouterr().out
+    assert not any(kind == "progress" and payload.get("stage") == "fallback" for kind, payload in events)
 
 
 @pytest.mark.parametrize("typed", [False, True])

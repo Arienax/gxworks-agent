@@ -12,6 +12,7 @@ import application.model_api as api
 import knowledge.retriever as knowledge_retriever
 from agent_runtime.plc_tools import build_default_tool_registry, build_tool_context
 from application.generation_context import generation_user_input, public_generation_ladder
+from application.confirmed_generation_context import CONFIRMED_GENERATION_REQUEST
 from shared.context_policy import POLICY_NAMES, context_policy_scope
 
 
@@ -64,7 +65,7 @@ def test_api_and_external_context_have_identical_generation_instructions(monkeyp
     assert result["ok"], result
     data = result["data"]
     assert data["generation_instructions"] == messages[0]["content"]
-    assert data["generation_request"] == model_request
+    assert data["generation_request"] == (model_request if editing else CONFIRMED_GENERATION_REQUEST)
     assert calls == api_calls
     for _query, options in calls:
         assert options == {"plc_model": "FX3U", "task_type": "edit" if editing else "generate",

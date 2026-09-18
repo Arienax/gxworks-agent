@@ -176,10 +176,9 @@ def test_provider_and_language_remain_bound_across_transport_fallback(monkeypatc
         def stream(self, request):
             calls.append(request)
             if request.stream:
-                yield TextDelta("Unaccepted partial output")
                 set_language("ja")
                 monkeypatch.setattr(api, "get_active_provider", lambda: pytest.fail("Provider drift"))
-                raise ModelProviderError("Offline transport failure")
+                raise ModelProviderError("Offline stream rejection", code="stream_not_supported")
             yield TextDelta(accepted)
     provider = Provider()
     monkeypatch.setattr(api, "get_active_provider", lambda: provider)

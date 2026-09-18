@@ -75,20 +75,22 @@ def test_shape_or_empty_candidate_is_not_secretly_regenerated(tmp_path, bad):
 
 
 def test_transport_fallback_remains_distinct_from_semantic_repair(tmp_path):
+    from model_runtime.provider import TextDelta
     candidate = ladder40(invalid=False)
     calls = []
-    def stream(*args, **kwargs):
-        raise ModelProviderError("offline transport", code="timeout")
-    def generate(*args, **kwargs):
-        calls.append((args, kwargs))
-        return json.dumps(candidate, ensure_ascii=False)
+    class Provider:
+        def stream(self, request):
+            calls.append(request.stream)
+            if request.stream:
+                raise ModelProviderError("explicit stream rejection", code="stream_not_supported")
+            yield TextDelta(json.dumps(candidate, ensure_ascii=False))
     task = GenerationWorkflow(
         GenerationRequest("按已确认规格生成", model_name="offline"), tmp_path,
-        dependencies=GenerationDependencies(stream_response=stream, generate_json=generate),
+        dependencies=GenerationDependencies(provider=Provider()),
     )
     result = task.run()
     assert result["validation"]["status"] == "candidate_ready"
-    assert len(calls) == 1 and result["repair_attempts"] == 0
+    assert calls == [True, False] and result["repair_attempts"] == 0
 
 
 def test_cancellation_is_not_wrapped_or_retried(tmp_path):

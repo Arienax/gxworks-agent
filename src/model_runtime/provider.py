@@ -21,6 +21,9 @@ from agent_runtime.messages import ToolCall, ToolResult
 from model_runtime.capabilities import apply_parameter_contract, parameter_error
 from model_runtime.contract import scoped_contract
 from model_runtime.request_policy import resolve_request, capability_available
+from model_runtime.transport_policy import (
+    can_fallback_to_non_stream, is_explicit_stream_rejection, preferred_streaming,
+)
 
 
 @dataclass(frozen=True)
@@ -447,6 +450,8 @@ def _normalize_error(error: Exception) -> ModelProviderError:
     name = type(error).__name__.lower()
     if isinstance(error, ModelProviderError):
         code, retryable = error.code, error.retryable
+    elif is_explicit_stream_rejection(error):
+        code, retryable = "stream_not_supported", False
     elif status in {401, 403} or "authentication" in name or "permission" in name:
         code, retryable = "authentication", False
     elif status == 429 or "ratelimit" in name or "rate_limit" in name:
@@ -462,6 +467,7 @@ def _normalize_error(error: Exception) -> ModelProviderError:
     else:
         code, retryable = "provider_error", False
     messages = {
+        "stream_not_supported": "模型服务明确拒绝流式请求。",
         "authentication": "模型服务认证失败，请检查 API Key 和访问权限。",
         "rate_limit": "模型服务请求过于频繁，请稍后重试。",
         "timeout": "模型服务请求超时，请稍后重试。",
@@ -925,6 +931,11 @@ def collect_response(
     delivered as accepted content, even when the transport falls back. Language
     failure never triggers transport fallback or automatic PLC regeneration.
     """
+    if (fallback_to_non_stream and request.stream and not preferred_streaming(
+        getattr(provider, "profile", None), model=request.model,
+        api_key=getattr(provider, "api_key", None),
+    )):
+        request = replace(request, stream=False)
     request = with_response_language(request)
     diagnostics.begin_request(request, provider)
     attempts = []
@@ -945,6 +956,7 @@ def collect_response(
         usage = None
         received_characters = 0
         provider_fields = {}
+        saw_provider_state = False
 
         def progress(phase):
             if progress_observer is not None:
@@ -962,6 +974,7 @@ def collect_response(
             preview("start")
             for event in provider.stream(current):
                 if isinstance(event, _ProviderState):
+                    saw_provider_state = True
                     provider_fields = copy.deepcopy(event.fields)
                     continue
                 events.append(event)
@@ -986,9 +999,11 @@ def collect_response(
             safe_error = public_model_error(error)
             attempts.append(snapshot(safe_error.code))
             safe_error.raw_attempts = tuple(attempts)
-            # Unknown adapter exceptions previously aborted without transport
-            # fallback. Classification must not add a new automatic retry.
-            safe_error._stream_fallback_allowed = isinstance(error, ModelProviderError)
+            # A structured stream rejection is the only replay permission.
+            # Even an explicit code is insufficient once any output has arrived.
+            safe_error._stream_fallback_allowed = can_fallback_to_non_stream(
+                safe_error, had_events=bool(events or saw_provider_state),
+            )
             if safe_error is error:
                 raise
             raise safe_error from error

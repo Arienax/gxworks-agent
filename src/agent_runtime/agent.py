@@ -170,7 +170,6 @@ def run_tool_agent(
             ),
             options={
                 "response_format": None,
-                "reasoning_effort": "high",
                 "tool_choice": "auto",
             },
             stream=True,

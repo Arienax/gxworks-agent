@@ -258,7 +258,7 @@ def test_fallback_keeps_language_and_raw_response():
             requests.append(request)
             if request.stream:
                 set_language("ja")
-                raise ModelProviderError("fixture transport failure")
+                raise ModelProviderError("fixture stream rejection", code="stream_not_supported")
             yield TextDelta(raw)
     set_language("en")
     displayed = []

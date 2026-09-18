@@ -2,8 +2,8 @@
 
 Exit 1 for new failures, new skips, missing tests, duplicate node IDs, an empty
 suite or a collection/crash exit code. Persistent failures are reported, not
-relabelled as passing. The two explicit renamed tests retain their assertions
-against the new implementation locations.
+relabelled as passing. Explicit test renames are recorded, including parameterized cases. Contract
+changes keep their negative assertions rather than dropping old test nodes.
 """
 from __future__ import annotations
 
@@ -17,6 +17,11 @@ RENAMES = {
         "tests.test_spec_review_workbench.test_pyinstaller_specs_use_importable_editor_package",
     "tests.test_architecture_boundaries.test_generation_contract_and_tool_messages_depend_only_on_standard_library":
         "tests.test_architecture_boundaries.test_generation_contract_uses_only_stdlib_and_authoritative_instruction_registry",
+    "tests.test_provider_error_privacy.test_generation_injected_transport_error_is_safe_and_still_falls_back":
+        "tests.test_provider_error_privacy.test_generation_injected_transport_error_is_safe_and_never_replayed",
+    "tests.test_response_language.test_fallback_discards_partial_callbacks_and_keeps_original_language":
+        "tests.test_response_language.test_partial_stream_failure_is_not_replayed_or_published",
+
 }
 
 
@@ -37,7 +42,10 @@ def load_report(path: Path) -> dict:
 
 
 def compare_reports(baseline: dict, candidate: dict) -> dict:
-    before = {RENAMES.get(name, name): value for name, value in baseline.items()}
+    def renamed(name):
+        function, bracket, parameters = name.partition("[")
+        return RENAMES.get(function, function) + bracket + parameters
+    before = {renamed(name): value for name, value in baseline.items()}
     if len(before) != len(baseline):
         raise ValueError("Renamed test IDs collide")
     missing = sorted(set(before) - set(candidate))
@@ -63,7 +71,7 @@ def compare_reports(baseline: dict, candidate: dict) -> dict:
             {"test": name, "before": before[name]["message"], "after": candidate[name]["message"]}
             for name in persistent if before[name]["message"] != candidate[name]["message"]
         ],
-        "reviewed_test_renames": {a: b for a, b in RENAMES.items() if a in baseline},
+        "reviewed_test_renames": {name: renamed(name) for name in baseline if renamed(name) != name},
     }
 
 

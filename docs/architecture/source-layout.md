@@ -105,3 +105,10 @@ Real Windows GX Works2 / MX Component / Win7 certification is separate from
 Linux unit tests and Linux PyInstaller smoke. Do not equate the two. Existing
 baseline failures must be reported separately from migration regressions; do not
 silently deselect them or mark an incomplete suite as passing.
+
+
+## Call-contract follow-up
+
+The post-layout semantic projection, transport downgrade policy and shared
+candidate entry points are documented in [generation call contracts](generation-call-contracts.md).
+Shared engineering semantics do not require identical compact/full wire protocols.

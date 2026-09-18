@@ -292,6 +292,9 @@ def _get_generation_context(
     from shared.context_policy import context_policy_scope
 
     confirmed_spec = _confirmed_spec(context)
+    from application.confirmed_generation_context import (
+        CONFIRMED_GENERATION_REQUEST, project_confirmed_specification,
+    )
     public_spec = public_generation_specification(confirmed_spec)
     source = context.ladder
     if isinstance(context.program_ir, Mapping):
@@ -301,6 +304,10 @@ def _get_generation_context(
     user_requirement = public_generation_value(str(arguments.get("user_requirement") or ""))
     target_mode = str(context.project.get("target_mode") or "ladder")
     is_edit_mode = target_mode == "ladder" and current_ladder is not None
+    if target_mode == "ladder" and isinstance(confirmed_spec, Mapping) and confirmed_spec:
+        public_spec = project_confirmed_specification(confirmed_spec)
+        if not is_edit_mode:
+            user_requirement = CONFIRMED_GENERATION_REQUEST
     model_request = generation_user_input(
         user_requirement, is_edit_mode=is_edit_mode, target_mode=target_mode,
     )
@@ -324,7 +331,7 @@ def _get_generation_context(
         "workflow_mode": str(context.project.get("workflow_mode") or "generate"),
         "has_confirmed_spec": isinstance(confirmed_spec, Mapping),
         "confirmed_spec": public_spec,
-        "output_contract": generation_output_contract(allow_partial=is_edit_mode),
+        "output_contract": generation_output_contract(allow_partial=is_edit_mode, plc_model=context.plc_model),
         "current_version_id": context.version_id or None,
         "generation_instructions": instructions,
         "generation_request": model_request,

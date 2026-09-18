@@ -231,9 +231,8 @@ def test_compiler_transport_fallback_preserves_language_and_discards_partial_out
         def stream(self, request):
             if request.stream:
                 self.requests.append(request)
-                yield TextDelta("Rejected partial stream")
                 set_language("ja")
-                raise ModelProviderError("Offline transport failure")
+                raise ModelProviderError("Offline stream rejection", code="stream_not_supported")
             yield from super().stream(request)
 
     provider = Provider(accepted)

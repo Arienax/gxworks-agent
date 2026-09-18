@@ -18,7 +18,7 @@ from plc.candidate_repair import (
 )
 from shared.i18n import get_language, language_context, tr
 from storage.config import get_active_model_name, load_full_config
-from plc.generation import prepare_ladder_candidate, render_generation_artifacts
+from plc.candidate_service import CandidateService
 from plc.validation import (
     PLCJsonValidationError, validate_st_json,
 )
@@ -62,11 +62,13 @@ class GenerationRequest:
 class GenerationDependencies:
     """Inject model calls or a provider snapshot; defaults use the accepted API."""
     stream_response: Optional[Callable] = None
+    # Retained as an initialization-compatible legacy hook, never an implicit replay.
     generate_json: Optional[Callable] = None
     repair_response: Optional[Callable] = None
     provider: object = None
     check_cancelled: Optional[Callable] = None
     preserve_rejected_candidate: bool = False
+    candidate_service: Optional[CandidateService] = None
 
 
 
@@ -78,6 +80,7 @@ class GenerationWorkflow:
         self.output_dir = Path(output_dir)
         self.on_event = on_event
         self.dependencies = dependencies or GenerationDependencies()
+        self.candidates = self.dependencies.candidate_service or CandidateService()
         self.conversation_history = self.conversation_history or []
         self.task_type = self.task_type or ("edit" if self.previous_json is not None else "generate")
         # The local merge base must also be visible to the model. Previously an
@@ -344,6 +347,12 @@ class GenerationWorkflow:
                     )
                     on_content(full_content)
                 else:
+                    transport_hooks = {} if self.dependencies.stream_response is not None else {
+                        "on_fallback": lambda _error: self._emit("progress", {
+                            "stage": "fallback", "severity": "warning",
+                            "message": tr('流式调用失败，切换普通模式：{v0}', v0=_error),
+                        })
+                    }
                     _reasoning, full_content = model_call(
                         stream_model_response,
                         model_user_input,
@@ -360,6 +369,7 @@ class GenerationWorkflow:
                         current_version_json=self.current_version_json,
                         plc_model=self.plc_model,
                         image_attachments=self.image_attachments,
+                        **transport_hooks,
                     )
                 emit_parsing_progress(tr('正在解析模型输出：清理流式文本'))
                 streaming_succeeded = True
@@ -388,7 +398,7 @@ class GenerationWorkflow:
                 elif isinstance(stream_err, ResponseRejectedError):
                     raise
                 elif repair_call:
-                    # Explicit repair has its own transport fallback inside the dedicated API.
+                    # Explicit repair has its own bounded transport policy inside the dedicated API.
                     # Never fall back into a normal full generation request.
                     raise
                 elif confirmed_generation_call:
@@ -396,53 +406,13 @@ class GenerationWorkflow:
                     # full generation after a failed confirmed-spec request.
                     raise
                 else:
-                    self._emit("progress", {
-                        "stage": "fallback",
-                        "severity": "warning",
-                        "message": tr('流式调用失败，切换普通模式：{v0}', v0=stream_err),
-                    })
-                    print(tr('流式调用失败，降级至普通模式: {v0}', v0=stream_err))
+                    # Authentication, limits, timeouts and adapter errors do not
+                    # authorize a second generation. Runtime owns stream policy.
+                    raise
 
             if repair_call and (not streaming_succeeded or not full_content):
                 raise GenerationError(tr('修复调用未返回候选 JSON'))
-
-            # Transport fallback is not a semantic repair. It obtains the same
-            # requested candidate once when streaming itself failed.
-            if streaming_succeeded and full_content:
-                json_str = clean_json_text(full_content)
-            else:
-                try:
-                    json_str = model_call(
-                        self.dependencies.generate_json or api.generate_model_json,
-                        model_user_input,
-                        self.model_name,
-                        self.effort,
-                        self.target_mode,
-                        is_edit_mode=is_edit_mode,
-                        conversation_history=self.conversation_history,
-                        confirmed_context=self.confirmed_context,
-                        persist_history=False,
-                        task_type=self.task_type,
-                        current_version_json=self.current_version_json,
-                        plc_model=self.plc_model,
-                        image_attachments=self.image_attachments,
-                    )
-                except Exception as fallback_err:
-                    if isinstance(fallback_err, JobCancelled):
-                        raise
-                    rejected_candidate = (
-                        rejected_json_candidate(fallback_err)
-                        if self.target_mode == "ladder"
-                        else None
-                    )
-                    if rejected_candidate is None:
-                        raise
-                    json_str = rejected_candidate
-                    self._emit("progress", {
-                        "stage": "format_recovery",
-                        "severity": "warning",
-                        "message": tr('普通模式回复 JSON 格式验收失败；正在检查是否可安全恢复，否则保留候选供显式修复。'),
-                    })
+            json_str = clean_json_text(full_content) if full_content else ""
 
             if not json_str:
                 raise GenerationError(tr('大模型未返回合法数据'))
@@ -470,14 +440,14 @@ class GenerationWorkflow:
                     if self.repair_mode and isinstance(self.repair_plan, dict) and self.repair_plan.get("mode") == "field_patch":
                         from application.field_repair import apply as apply_field_patch
                         parsed = apply_field_patch(self.previous_json, parsed, self.repair_plan)
-                        prepared_candidate = prepare_ladder_candidate(
+                        prepared_candidate = self.candidates.prepare(
                             parsed, plc_model=self.plc_model, program_name=self.program_name,
                             revision=self.revision, confirmed_spec=self.confirmed_context,
                             previous_ladder=None, repair_mode=False, task_type=self.task_type,
                             on_progress=emit_parsing_progress,
                         )
                     else:
-                        prepared_candidate = prepare_ladder_candidate(
+                        prepared_candidate = self.candidates.prepare(
                             parsed, plc_model=self.plc_model, program_name=self.program_name,
                             revision=self.revision, confirmed_spec=self.confirmed_context,
                             previous_ladder=self.previous_json, repair_mode=self.repair_mode,
@@ -536,7 +506,7 @@ class GenerationWorkflow:
                         on_content_chunk=on_field_content)
                     patch = json.loads(clean_json_text(local_text))
                     patched = apply_field_patch(base, patch, field_plan)
-                    prepared_candidate = prepare_ladder_candidate(
+                    prepared_candidate = self.candidates.prepare(
                         patched, plc_model=self.plc_model, program_name=self.program_name,
                         revision=self.revision, confirmed_spec=self.confirmed_context,
                         previous_ladder=None, repair_mode=False, task_type="contract_repair",
@@ -569,7 +539,7 @@ class GenerationWorkflow:
                 else:
                     _r, local_text = model_call(api.repair_ladder_response, payload, self.model_name, self.effort, mode="partial", on_reasoning_chunk=on_reasoning, on_content_chunk=on_content)
                 partial = json.loads(clean_json_text(local_text))
-                prepared_candidate = prepare_ladder_candidate(partial, plc_model=self.plc_model, program_name=self.program_name, revision=self.revision,
+                prepared_candidate = self.candidates.prepare(partial, plc_model=self.plc_model, program_name=self.program_name, revision=self.revision,
                     confirmed_spec=self.confirmed_context, previous_ladder=base, repair_mode=True, allowed_rung_ids={rung_id},
                     allowed_addresses=set(addresses), task_type="contract_repair", on_progress=emit_parsing_progress)
                 validation_messages.extend(prepared_candidate["validation_messages"])
@@ -594,7 +564,7 @@ class GenerationWorkflow:
                     "stage": "parsed",
                     "message": tr('模型输出已解析为候选程序'),
                 })
-                rendered = render_generation_artifacts(program_ir, self.output_dir)
+                rendered = self.candidates.compile(program_ir, self.output_dir)
                 artifacts = rendered["artifacts"]
                 from plc.st_renderer import ST_RENDERER_SCHEMA_VERSION
 
