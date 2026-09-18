@@ -2,7 +2,7 @@ import copy
 import difflib
 import re
 
-from spec_bindings import bind_answers, binding_hint, single_address
+from spec_bindings import bind_answers, binding_hint, single_address, restore_bound_choices
 
 from approach_contracts import (
     contract_definition_issues,
@@ -1011,7 +1011,8 @@ def _missing_info_to_parameters(missing_info):
 def _merge_io_rows(base_rows, incoming_rows):
     merged = []
     by_address = {}
-    for row in list(base_rows or []) + list(incoming_rows or []):
+    base_count = len(base_rows or [])
+    for position, row in enumerate(list(base_rows or []) + list(incoming_rows or [])):
         if not isinstance(row, dict):
             continue
         address = str(row.get("address", "")).strip().upper()
@@ -1026,6 +1027,21 @@ def _merge_io_rows(base_rows, incoming_rows):
         for field in ("binding_id", "source_parameter_id", "row_id"):
             if isinstance(row.get(field), str):
                 clean[field] = row[field]
+        if position >= base_count and not clean.get("binding_id"):
+            previous = merged[by_address[address]] if address in by_address else None
+            if previous and previous.get("binding_id"):
+                # A new analysis is a suggestion, not a user edit to the row
+                # already confirmed at this address (including its purpose).
+                continue
+            exact_bound_labels = [r for r in merged if r.get("binding_id")
+                                  and r["kind"] == clean["kind"] and r["label"]
+                                  and r["label"].casefold() == clean["label"].casefold()]
+            if address not in by_address and len(exact_bound_labels) == 1:
+                # Reanalysis often repeats its original suggested address after
+                # the operator has changed it. Do not add a second row for the
+                # same exact, already-bound purpose. New typed answers are still
+                # independently bound when the user confirms them.
+                continue
         if address in by_address:
             previous = merged[by_address[address]]
             for field in ("binding_id", "source_parameter_id", "row_id"):
@@ -1164,7 +1180,10 @@ def build_review_draft(analysis, previous_spec=None):
     previous_parameters = retained_parameters
     parameters = _merge_parameters(
         previous_parameters,
-        _missing_info_to_parameters(analysis.get("missing_info", [])),
+        restore_bound_choices(
+            _missing_info_to_parameters(analysis.get("missing_info", [])),
+            previous_rows, previous.get("io_bindings", []),
+        ),
     )
 
     approaches = [
@@ -1336,6 +1355,8 @@ def canonicalize_confirmed_spec(spec):
     } if isinstance(answers, dict) else {}
     if bindings:
         canonical["io_bindings"] = bindings
+    else:
+        canonical.pop("io_bindings", None)
     applied_io_answers = dict(canonical.get("io_overrides_applied") or {})
     applied_io_answers.update(applied)
     canonical["plc_model"] = str(canonical.get("plc_model") or "FX3U").strip().upper()

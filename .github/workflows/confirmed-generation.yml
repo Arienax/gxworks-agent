@@ -49,6 +49,7 @@ jobs:
           tests/test_generation_agent_boundary.py
           tests/test_spec_choice_metadata.py
           tests/test_confirmed_compatibility.py
+          tests/test_confirmed_reconfirmation.py
           tests/test_hybrid_compact_recovery.py
           tests/test_generation_delivery.py
           tests/test_context_refresh_runtime.py
@@ -67,6 +68,29 @@ jobs:
           tests/test_model_presentation.py
           tests/test_plc_core_boundary.py
           --junitxml=confirmed-generation-tests.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Validate generated types and build the actual Web UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix web
+          python scripts/export_web_schema.py
+          npm run types --prefix web
+          git diff --exit-code -- web/openapi.json web/src/api/generated.ts
+          node --experimental-strip-types --test web/tests/*.test.mjs | tee frontend-tests.tap
+          npm run build --prefix web | tee frontend-build.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: confirmed-generation-web-results
+          path: |
+            frontend-tests.tap
+            frontend-build.log
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         if: always()
         with:

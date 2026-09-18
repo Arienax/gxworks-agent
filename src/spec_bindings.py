@@ -83,6 +83,22 @@ def _row_matches(row, hint, name):
     return key in _ROLE_LABELS.get(hint.get("role"), set())
 
 
+def _bound_row(rows, identity, binding):
+    """Resolve a persisted answer by row identity, not by its historical value."""
+    owner = binding.get("row_binding_id") or identity
+    matches = [row for row in rows if isinstance(row, dict)
+               and row.get("binding_id") == owner]
+    if len(matches) == 1:
+        return matches[0]
+    if binding.get("row_binding_id"):
+        return None  # Explicit ownership was removed, not rebound by spelling.
+    # Older shared-address provenance has no owning row identity. An exact,
+    # unique existing address is its only safe read-only association.
+    matches = [row for row in rows if isinstance(row, dict)
+               and str(row.get("address") or "").strip().upper() == binding.get("address")]
+    return matches[0] if len(matches) == 1 else None
+
+
 def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
     """Bind confirmed answers on a copy; return rows, remaining params, provenance.
 
@@ -114,6 +130,23 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
         if hint is None:
             identity = identifier or hashlib.sha256(name.encode("utf-8")).hexdigest()[:16]
             hint = {"binding_id": "question_" + identity, "kind": re.match(r"[A-Z]+", address).group()}
+        prior = previous.get(hint["binding_id"])
+        if prior:
+            prior_address = single_address(prior.get("value", ""), hint["kind"])
+            linked_row = _bound_row(original_rows, hint["binding_id"], prior)
+            if address == prior_address and linked_row is not None:
+                # A combined answer such as "X1，常闭" remains editable for its
+                # polarity. If only its historical address was retained, an
+                # explicit I/O-table edit wins; preserve all the contact text.
+                current_address = str(linked_row.get("address") or "").strip().upper()
+                if current_address and current_address != address:
+                    item["value"] = _DEVICE.sub(lambda _m: current_address, str(item["value"]), count=1)
+                    address = current_address
+            elif address == prior_address and linked_row is None:
+                # Explicitly removing a bound row must not re-create it from an
+                # unchanged retained answer. Its original value remains in the
+                # operator audit, not in the active generation specification.
+                continue
         pending.append((hint, item, address))
         if re.search(r"常[开闭閉]|normally\s+(?:open|closed)|\b(?:NO|NC)\b", str(item.get("value")), re.I):
             remaining.append(item)
@@ -157,7 +190,8 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
         previous[identity] = {**hint, "address": address,
                               "source_parameter_id": str(item.get("id") or ""),
                               "name": name, "value": str(item.get("value") or ""),
-                              "source": item.get("source") or "user"}
+                              "source": item.get("source") or "user",
+                              "row_binding_id": row.get("binding_id") or identity}
         applied[name] = str(item.get("value") or "")
 
     # Stable order for additions, without changing the order of existing rows.
@@ -168,8 +202,44 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
     rows[original_count:] = sorted(rows[original_count:], key=order)
     # A user may edit the I/O table directly after address questions were
     # consumed. Reflect that edit in provenance; never replay old answers.
-    by_identity = {r.get("binding_id"): r for r in rows if isinstance(r, dict) and r.get("binding_id")}
+    active = {}
     for identity, binding in previous.items():
-        if identity in by_identity:
-            binding["address"] = str(by_identity[identity].get("address") or "").strip().upper()
-    return rows, remaining, [previous[k] for k in sorted(previous)], applied
+        row = _bound_row(rows, identity, binding)
+        if row is not None:
+            binding["address"] = str(row.get("address") or "").strip().upper()
+            binding["row_binding_id"] = row.get("binding_id") or identity
+            active[identity] = binding
+    # A deleted row has no active binding. Do not feed its stale address to
+    # Agent B merely because it still occurs in historical provenance.
+    return rows, remaining, [active[k] for k in sorted(active)], applied
+
+
+def restore_bound_choices(questions, rows, bindings):
+    """Carry an existing confirmed answer into the same stable review question.
+
+    This is not adoption of a newly suggested model default. Unidentified/new
+    questions stay unanswered; direct table edits replace only the old address.
+    """
+    result = copy.deepcopy(questions)
+    saved = [item for item in (bindings or []) if isinstance(item, dict)]
+    for question in result:
+        if not isinstance(question, dict) or str(question.get("value") or "").strip():
+            continue
+        identifier = str(question.get("id") or "").strip()
+        hint = binding_hint(question)
+        matches = [item for item in saved if
+                   (hint and item.get("binding_id") == hint["binding_id"]) or
+                   (identifier and item.get("source_parameter_id") == identifier)]
+        if len(matches) != 1:
+            continue
+        binding = matches[0]
+        row = _bound_row(rows, binding["binding_id"], binding)
+        if row is None:
+            continue
+        value = str(binding.get("value") or "")
+        address = str(row.get("address") or "").strip().upper()
+        if not single_address(value) or not single_address(address):
+            continue
+        question["value"] = _DEVICE.sub(lambda _m: address, value, count=1)
+        question["source"] = binding.get("source") or "previous"
+    return result

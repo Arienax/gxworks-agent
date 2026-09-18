@@ -24,6 +24,37 @@ Local compact/PLC errors retain their category rather than being relabelled as a
 
 ## Validation
 
-`tests/test_confirmed_compatibility.py` contains 99 parameterized cases, including 54 real HTTP confirmation-to-autosaved-artifact paths. Those paths use the actual service, provider serializer, decoder, converter, IR and renderer with a synthetic SDK-shaped endpoint. They span three response modes, three documented response representations, omitted/empty/null shared inputs and both explicitly specified physical stop polarities. Every successful path checks the control truth table, non-empty saved artifacts, exactly one model request and idempotent submission replay.
+`tests/test_confirmed_compatibility.py` and `tests/test_confirmed_reconfirmation.py` contain 113 parameterized cases, including 58 real HTTP confirmation-to-autosaved-artifact paths. Those paths use the actual service, provider serializer, decoder, converter, IR and renderer with a synthetic SDK-shaped endpoint. They span three response modes, three documented response representations, omitted/empty/null shared inputs and both explicitly specified physical stop polarities. Every successful path checks the control truth table, non-empty saved artifacts and exactly one model request. The original 54 HTTP cases also verify idempotent submission replay; the additional four exercise explicit re-confirmation after an I/O-table edit.
 
 Run the read-only `Confirmed Generation Compatibility` workflow for the expanded shared-boundary regression selection. Its artifacts contain the exact tested source and JUnit results. Qt-only tests are not part of this Web-dependency job. Synthetic endpoint coverage is not live verification of every commercial model; no private engineering transcript, credential, GX operation or physical PLC write is used by these tests.
+
+## Resumed PR #13: confirmation edits and re-confirmation
+
+The e655a08 checkpoint passed 430 cases in GitHub Actions run 35318441182.
+The resumed review then reproduced a missing regression: changing a stop row to
+X3 could be undone by its retained combined answer `X1，常闭`. The follow-up makes
+the bound row authoritative when only a historical address is repeated; contact
+text and explicit new address answers are still preserved independently.
+
+Active binding provenance now follows explicit row identity, including multiple
+uses of one physical input. Removed rows are not re-created by unchanged answers
+and their stale bindings are not sent to generation. The original operator audit
+is not rewritten. Reanalysis reuses an already confirmed answer for the same
+stable question ID, never adopts a new AI default, and does not re-add an old
+suggested row for the exact already-bound purpose. New questions stay unanswered.
+
+Four additional HTTP integration paths save a specification, change a combined
+stop-address/contact answer through the I/O table, re-confirm with the real hash,
+and generate/save JSON, IR, SVG and CSV against the new X3 wiring. They cover both
+stop polarities and streaming/non-streaming serialization, verify every Boolean
+state, and assert that confirmation sends no generation request and generation
+sends exactly one. Ten additional local cases cover retention, removal, shared
+addresses and reanalysis; no new model regeneration or semantic rewrite is added.
+
+Reproduced locally on Python 3.13 during resume: 123 core cases passed; the full
+selected workflow group had 439 passes and 5 skips. The skips require the real
+OpenAI SDK import, unavailable in that local environment. Final CI uses the pinned
+Web dependency environment; consult that run's JUnit rather than counting skipped
+local cases as passed. The read-only workflow also checks generated OpenAPI/types,
+all three frontend test files, and the actual TypeScript/Vite build. No live model,
+GX Works2 or physical PLC acceptance is claimed.
