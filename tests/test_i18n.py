@@ -11,11 +11,11 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 
-from i18n import (
+from shared.i18n import (
     DisplayLanguageGuard, catalog, get_language, language_context,
     normalize_language, runtime_text, set_language, tr, translate,
 )
-from qt_compat import (
+from ui.desktop.qt import (
     QApplication, QComboBox, QDialog, QLabel, QLineEdit, QListWidgetItem,
     QMenu, QPushButton, QTableWidget, QTableWidgetItem, QTabWidget, QWidget,
 )
@@ -112,8 +112,8 @@ def test_qt_live_labels_tabs_actions_and_headers_preserve_editor_and_item_data()
 
 
 def test_settings_save_language_without_api_key_and_cancel_does_not_apply(monkeypatch):
-    import config_dialog
-    from config_manager import DEFAULT_MODEL_PROFILES
+    import ui.desktop.dialogs.config as config_dialog
+    from storage.config import DEFAULT_MODEL_PROFILES
     config = {"language": "zh-CN", "activeModelProfileId": "deepseek-default",
               "modelProfiles": copy.deepcopy(list(DEFAULT_MODEL_PROFILES))}
     saved = []
@@ -141,7 +141,7 @@ def test_settings_save_language_without_api_key_and_cancel_does_not_apply(monkey
 
 
 def test_model_policy_is_idempotent_snapshotted_and_preserves_payloads():
-    from model_provider import ImageAttachment, ModelRequest, SystemMessage, UserMessage, with_response_language
+    from model_runtime.provider import ImageAttachment, ModelRequest, SystemMessage, UserMessage, with_response_language
     image = ImageAttachment("图.png", "image/png", b"image")
     history = (SystemMessage("Return JSON only."), UserMessage("原文 X0", (image,)))
     with language_context("ja"):
@@ -182,7 +182,7 @@ def test_stream_guard_preserves_machine_tokens(language):
 
 
 def test_thinking_panel_displays_accepted_bytes_without_reinterpreting_language():
-    from main import ThinkingPanel
+    from ui.desktop.widgets.activity import ThinkingPanel
     set_language("en")
     panel = ThinkingPanel()
     # This Chinese quotation is accepted source evidence, not generated prose.
@@ -200,7 +200,7 @@ def test_thinking_panel_displays_accepted_bytes_without_reinterpreting_language(
 
 @pytest.mark.parametrize("language", ["en", "ja"])
 def test_naturalized_display_stream_is_pinned_to_language(language):
-    from display_names import DisplayTextStream, naturalize_display_text
+    from shared.display_names import DisplayTextStream, naturalize_display_text
     source = '"network_id": "N0001", "description": "X0 → Y0"\n'
     stream = DisplayTextStream(language)
     with language_context(language):
@@ -213,8 +213,8 @@ def test_naturalized_display_stream_is_pinned_to_language(language):
 
 @pytest.mark.parametrize("language", ["en", "ja"])
 def test_workbench_settings_entry_and_live_switch_keep_draft(monkeypatch, tmp_path, language):
-    import main
-    from session_store import SessionStore
+    import ui.desktop.main_window as main
+    from storage.session import SessionStore
     monkeypatch.setattr(main, "SessionStore", lambda *args, **kwargs: SessionStore(base_dir=tmp_path / "workspace", legacy_dir=tmp_path))
     monkeypatch.setattr(main, "load_full_config", lambda: {"language": language})
     window = main._IndustrialWorkbenchUI()
@@ -231,7 +231,7 @@ def test_workbench_settings_entry_and_live_switch_keep_draft(monkeypatch, tmp_pa
 
 @pytest.mark.parametrize("language,expected", [("en", "Cancel"), ("ja", "キャンセル"), ("zh-CN", "取消")])
 def test_standard_dialog_labels_follow_language(language, expected):
-    from qt_compat import QCoreApplication
+    from ui.desktop.qt import QCoreApplication
     set_language(language)
     assert QCoreApplication.translate("QDialogButtonBox", "Cancel") == expected
     # An unknown native message must fall back to its source, never blank text.
@@ -243,14 +243,14 @@ def test_standard_dialog_labels_follow_language(language, expected):
 
 @pytest.mark.parametrize("utterance", ["重新生成程序", "Please regenerate the program.", "retry", "プログラムを再生成してください。", "再試行"])
 def test_regeneration_command_recognizes_supported_languages(utterance):
-    from main import _is_regenerate_locked_spec_request
+    from application.request_intent import _is_regenerate_locked_spec_request
     assert _is_regenerate_locked_spec_request(utterance)
     assert not _is_regenerate_locked_spec_request(utterance + " X0 Y0")
 
 
 def test_fallback_keeps_language_and_raw_response():
-    from model_provider import ModelProviderError, ModelRequest, ResponseRejectedError, TextDelta, UserMessage, collect_response
-    from response_language import ResponseContract
+    from model_runtime.provider import ModelProviderError, ModelRequest, ResponseRejectedError, TextDelta, UserMessage, collect_response
+    from model_runtime.responses import ResponseContract
     requests = []
     raw = '{"description":"原始内容","operand":"X0"}'
     class Provider:
@@ -258,7 +258,7 @@ def test_fallback_keeps_language_and_raw_response():
             requests.append(request)
             if request.stream:
                 set_language("ja")
-                raise ModelProviderError("fixture transport failure")
+                raise ModelProviderError("fixture stream rejection", code="stream_not_supported")
             yield TextDelta(raw)
     set_language("en")
     displayed = []
@@ -319,8 +319,8 @@ def _reported_spec_analysis():
 
 @pytest.mark.parametrize("language", ["en", "ja"])
 def test_reported_spec_navigation_validation_and_constraints(language):
-    from qt_compat import QLabel
-    from workbench_widgets import SpecificationWorkbenchDialog
+    from ui.desktop.qt import QLabel
+    from ui.desktop.workbench import SpecificationWorkbenchDialog
     # NAV_ITEMS was created at import time in Chinese, before selecting English.
     set_language(language)
     analysis = _reported_spec_analysis()
@@ -367,7 +367,7 @@ def test_reported_spec_navigation_validation_and_constraints(language):
 
 
 def test_contract_translation_does_not_change_contracts_or_default_summary():
-    from approach_contracts import format_contract_summary, generation_contract_signature, STRUCTURE_LABELS
+    from plc.specification.approach import format_contract_summary, generation_contract_signature, STRUCTURE_LABELS
     approach = _reported_spec_analysis()["approaches"][0]
     before = copy.deepcopy(approach)
     signature = generation_contract_signature(approach)
@@ -384,12 +384,12 @@ def test_contract_translation_does_not_change_contracts_or_default_summary():
 
 
 def test_validation_presentation_preserves_question_text_and_issue_fields():
-    from workbench_widgets import _LegacyRequirementReviewCard
+    from ui.desktop.workbench.editor import RequirementReviewCard as _SpecificationEditor
     issue = {"code": "required_parameter_missing", "path": "$.parameters[0].value", "row": 0,
              "message": '必填参数“用户自定义名称 {X0} / start_button”尚未填写'}
     before = copy.deepcopy(issue)
     set_language("en")
-    rendered = _LegacyRequirementReviewCard._validation_message(issue)
+    rendered = _SpecificationEditor._validation_message(issue)
     assert 'Required parameter' in rendered
     assert '用户自定义名称 {X0}' in rendered
     assert '尚未填写' not in rendered
@@ -408,15 +408,15 @@ def test_validation_presentation_preserves_question_text_and_issue_fields():
     "已填写的继电器输出类型与内置高速脉冲输出不兼容",
 ])
 def test_local_validation_templates_are_translated_before_display(message):
-    from workbench_widgets import _LegacyRequirementReviewCard
+    from ui.desktop.workbench.editor import RequirementReviewCard as _SpecificationEditor
     set_language("en")
-    rendered = _LegacyRequirementReviewCard._validation_message({"message": message})
+    rendered = _SpecificationEditor._validation_message({"message": message})
     assert not re.search(r"[\u3400-\u9fff]", rendered), rendered
 
 
 def test_destroyed_spec_dialog_unsubscribes_language_updates():
-    from qt_compat import QCoreApplication, QEvent
-    from workbench_widgets import SpecificationWorkbenchDialog
+    from ui.desktop.qt import QCoreApplication, QEvent
+    from ui.desktop.workbench import SpecificationWorkbenchDialog
     dialog = SpecificationWorkbenchDialog(_reported_spec_analysis(), "Start/stop", plc_model="FX3U")
     # Keep the Python wrapper alive after C++ destruction to exercise the actual
     # lifecycle hazard, rather than relying on garbage collection timing.

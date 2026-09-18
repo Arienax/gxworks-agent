@@ -59,7 +59,7 @@ def canonical_hash(value: Any) -> str:
 
 
 def atomic_json(path: Path, value: Any) -> None:
-    from session_store import SessionStore
+    from storage.session import SessionStore
 
     SessionStore._write_json(path, value)
     if os.name != "nt":

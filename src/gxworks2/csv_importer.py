@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
-from instruction_registry import DEFAULT_INSTRUCTION_REGISTRY, InstructionCategory
+from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, InstructionCategory
 
 from .csv_manager import CSVManager
 
@@ -595,13 +595,14 @@ def materialize_gxworks2_version(
     """Create one immutable application version from a native GX export."""
 
     parsed = parse_gxworks2_csv(program_csv_path, comment_csv_path)
-    from draw import AdvancedSVGLadder, generate_gx_works2_csv
-    from plc_ir import IR_SCHEMA_VERSION, build_plc_ir, canonical_sha256, ir_to_ladder, validate_plc_ir
-    from plc_json_validator import validate_ladder_full
-    from plc_semantics import SEMANTICS_SCHEMA_VERSION
-    from plc_static_analyzer import STATIC_ANALYSIS_SCHEMA_VERSION
-    from plc_st_renderer import ST_RENDERER_SCHEMA_VERSION, render_plc_ir_to_st, validate_st_traceability
-    from plc_timing import TIMING_ANALYSIS_SCHEMA_VERSION
+    from rendering.ladder_svg import AdvancedSVGLadder
+    from gxworks2.csv_export import generate_gx_works2_csv
+    from plc.ir import IR_SCHEMA_VERSION, build_plc_ir, canonical_sha256, ir_to_ladder, validate_plc_ir
+    from plc.validation import validate_ladder_full
+    from plc.semantics import SEMANTICS_SCHEMA_VERSION
+    from plc.static_analysis import STATIC_ANALYSIS_SCHEMA_VERSION
+    from plc.st_renderer import ST_RENDERER_SCHEMA_VERSION, render_plc_ir_to_st, validate_st_traceability
+    from plc.timing import TIMING_ANALYSIS_SCHEMA_VERSION
 
     selected_model = str(plc_model or "FX3U").strip().upper()
     # Native GX exports are trusted as the source of spelling, not as proof of
@@ -617,6 +618,9 @@ def materialize_gxworks2_version(
         plc_model=selected_model,
         program_name=program_name or parsed.program_name,
         revision=revision,
+        # Native snapshots retain their exported spelling for forensic round-trip.
+        # Explorer/export projections coalesce aliases without rewriting evidence.
+        _canonicalize_devices=False,
     )
     validate_plc_ir(
         program_ir,

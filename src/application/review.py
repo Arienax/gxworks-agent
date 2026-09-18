@@ -2,9 +2,9 @@
 import copy
 
 from application.base import Workflow, WorkflowError, model_call
-from config_manager import load_full_config, get_api_key
-from i18n import tr
-from plc_ir import build_plc_ir
+from storage.config import load_full_config, get_api_key
+from shared.i18n import tr
+from plc.ir import build_plc_ir
 
 
 class InspectionWorkflow(Workflow):
@@ -68,7 +68,7 @@ class InspectionWorkflow(Workflow):
 
     def _run(self):
         try:
-            from inspection_engine import (
+            from inspection.engine import (
                 merge_inspection_reports,
                 run_local_inspection,
             )
@@ -98,8 +98,8 @@ class InspectionWorkflow(Workflow):
                     return partial
 
                 self._emit("progress", tr('正在进行多角色深度评审'))
-                from api import run_multi_agent_specialist
-                from plc_multi_agent import DeterministicMultiAgentSupervisor
+                from application.model_api import run_multi_agent_specialist
+                from agent_runtime.specialists import DeterministicMultiAgentSupervisor
 
                 program = self.program_ir
                 if not isinstance(program, dict):

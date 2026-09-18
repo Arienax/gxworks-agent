@@ -2,8 +2,8 @@ import copy
 
 import pytest
 
-from plc_ir import build_plc_ir, canonical_sha256
-from session_store import SessionStore
+from plc.ir import build_plc_ir, canonical_sha256
+from storage.session import SessionStore
 from simulator import InMemoryTestBackend, PLCTestRunner, SimulatorRegressionService
 from simulator.models import normalize_test_suite
 from simulator.verification import (

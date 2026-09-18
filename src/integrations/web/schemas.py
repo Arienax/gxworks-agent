@@ -87,6 +87,10 @@ class ModelProfileUpdate(Command):
     capabilities: dict[str, bool] | None = None
     generation_defaults: dict[str, Any] | None = None
     request_overrides: dict[str, Any] | None = None
+    parameter_support: dict[str, Any] | None = None
+    contract: dict[str, Any] | None = None
+    user_settings: dict[str, Any] | None = None
+    capability_overrides: dict[str, Any] | None = None
 
 
 class ModelProfileCreate(Command):
@@ -97,7 +101,25 @@ class ModelProfileCreate(Command):
     capabilities: dict[str, bool] = Field(default_factory=dict)
     generation_defaults: dict[str, Any] = Field(default_factory=dict)
     request_overrides: dict[str, Any] = Field(default_factory=dict)
+    parameter_support: dict[str, Any] = Field(default_factory=dict)
+    contract: dict[str, Any] = Field(default_factory=dict)
+    user_settings: dict[str, Any] = Field(default_factory=dict)
+    capability_overrides: dict[str, Any] = Field(default_factory=dict)
     api_key: str | None = Field(default=None, min_length=1, max_length=8192)
+
+
+class ModelDiscoveryRequest(Command):
+    profile: ModelProfileCreate
+    mode: Literal["list", "quick", "resolve", "deep"] = "resolve"
+    refresh: bool = Field(default=False, strict=True)
+
+
+class ModelVerificationRequest(Command):
+    profile: ModelProfileCreate
+    target: str = Field(min_length=1, max_length=64)
+    kind: Literal["parameter", "capability", "chat"]
+    value: Any = None
+    consent: bool = Field(default=False, strict=True)
 
 
 class ModelKeyUpdate(Command):

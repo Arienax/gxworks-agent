@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from plc_json_validator import (
+from plc.validation import (
     ApproachContractValidationError,
     PLCJsonValidationError,
     should_auto_repair_validation_error,

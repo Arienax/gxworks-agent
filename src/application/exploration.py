@@ -1,6 +1,6 @@
 """Read-only, version-bound navigation and review cards for the workbench."""
 from .projects import public
-from plc_explorer import explore_program, issue_cards
+from application.program_projection import explore_program, issue_cards
 
 
 def public_exploration(program, *, theme="dark"):
@@ -27,8 +27,8 @@ def issues(projects, project_id, version_id, report_id=None):
         if report.get("base_version_id") != version_id:
             raise ValueError("The report belongs to a different version")
         if report.get("base_json_hash"):
-            from inspection_models import hash_ladder_json
-            from plc_ir import ir_to_ladder
+            from inspection.models import hash_ladder_json
+            from plc.ir import ir_to_ladder
             from application.workspace import ConflictError
             if not program or hash_ladder_json(ir_to_ladder(program)) != report["base_json_hash"]:
                 raise ConflictError("The report no longer matches the program content")

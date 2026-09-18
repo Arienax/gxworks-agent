@@ -1,4 +1,4 @@
-from approach_contracts import (
+from plc.specification.approach import (
     contract_definition_issues,
     normalize_generation_contract,
 )

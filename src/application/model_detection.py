@@ -1,108 +1,90 @@
-"""Bounded OpenAI-compatible model discovery and capability probes.
+"""Zero-generation model discovery and catalog resolution.
 
-This module is intentionally UI/application-side.  It does not change the
-ModelProvider contract or PLC runtime.  Probes are best-effort and never persist
-settings by themselves.
+Legacy quick calls are now local resolves. Legacy deep scans are rejected before
+any I/O: paying for a verification requires an explicit single-target command.
 """
 from __future__ import annotations
-
+import copy
 import json
-from typing import Any, Dict, Mapping
+import threading
+import time
+from collections import OrderedDict
+from model_runtime.catalog import endpoint_id, resolve_capabilities
+from model_runtime.contract import credential_fingerprint
+from model_runtime.provider import ModelProviderError
 
-from model_provider import (
-    ModelRequest,
-    SystemMessage,
-    TextDelta,
-    ToolCallEnd,
-    UserMessage,
-)
-
-
-def _consume(provider, request):
-    return list(provider.stream(request))
+_cache = OrderedDict()
+_lock = threading.Lock()
+CACHE_SECONDS = 300
 
 
-def _tool_probe(provider, model: str) -> bool:
-    tool = {
-        "type": "function",
-        "function": {
-            "name": "capability_probe",
-            "description": "Return the fixed probe value.",
-            "parameters": {
-                "type": "object",
-                "properties": {"value": {"type": "string", "enum": ["ok"]}},
-                "required": ["value"],
-                "additionalProperties": False,
-            },
-        },
-    }
-    request = ModelRequest(
-        messages=(
-            SystemMessage("This is a capability probe. Follow the user instruction exactly."),
-            UserMessage("Call capability_probe exactly once with value='ok'. Do not answer with prose."),
-        ),
-        model=model,
-        tools=(tool,),
-        stream=False,
-        timeout=15.0,
-        max_retries=0,
-        options={"response_format": None},
-    )
-    try:
-        events = _consume(provider, request)
-    except Exception:
-        return False
-    return any(isinstance(event, ToolCallEnd) and event.tool_call.name == "capability_probe" for event in events)
+def _key(profile, api_key):
+    return endpoint_id(profile.get('baseUrl', '')), credential_fingerprint(api_key)
 
 
-def _structured_output_probe(provider, model: str) -> bool:
-    request = ModelRequest(
-        messages=(
-            SystemMessage("Return only valid JSON."),
-            UserMessage('Return exactly one JSON object with key "probe" and value true.'),
-        ),
-        model=model,
-        stream=False,
-        timeout=15.0,
-        max_retries=0,
-        options={"response_format": {"type": "json_object"}},
-    )
-    try:
-        text = "".join(
-            event.text for event in _consume(provider, request) if isinstance(event, TextDelta)
-        ).strip()
-        payload = json.loads(text)
-    except Exception:
-        return False
-    return isinstance(payload, Mapping) and payload.get("probe") is True
+def cached_metadata(profile, api_key):
+    with _lock:
+        record = _cache.get(_key(profile,api_key))
+        if not record or time.monotonic()-record[0] > CACHE_SECONDS:
+            return []
+        return copy.deepcopy(record[1])
 
 
-def inspect_openai_compatible(provider, model: str, configured_capabilities=None) -> Dict[str, Any]:
-    """Discover model ids and probe capabilities that can be tested safely.
+def list_metadata(provider):
+    if callable(getattr(provider, 'list_model_metadata', None)):
+        entries = list(provider.list_model_metadata(timeout=5.0))
+    else:
+        entries = [{'id':m} for m in provider.list_models(timeout=5.0)]
+    bounded = []
+    total = 0
+    allowed = {"id", "parameters", "parameter_schema", "capabilities", "constraints", "context_window"}
+    for entry in entries[:2048]:
+        if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or len(entry["id"]) > 256:
+            continue
+        item = {k:v for k,v in entry.items() if k in allowed}
+        try:
+            size = len(json.dumps(item, allow_nan=False))
+        except (ValueError, TypeError):
+            item, size = {"id":entry["id"]}, len(entry["id"])+20
+        if size > 64000 or total + size > 1048576:
+            item, size = {"id":entry["id"]}, len(entry["id"])+20
+        bounded.append(item)
+        total += size
+    entries = bounded
+    with _lock:
+        key = _key(provider.profile, getattr(provider, "api_key", ""))
+        _cache[key] = time.monotonic(), copy.deepcopy(entries)
+        _cache.move_to_end(key)
+        while len(_cache)>32:
+            _cache.popitem(last=False)
+    return entries
 
-    Tool calling and JSON-object structured output are actively probed.  Other
-    capability flags are preserved from the selected profile because reasoning,
-    multimodal support and provider-specific thinking controls cannot be safely
-    inferred from a generic text-only OpenAI-compatible request.  A failed
-    best-effort probe never downgrades an existing known-good True flag.
-    """
-    models = sorted(set(provider.list_models(timeout=15.0)))
-    selected = str(model or "").strip()
-    probe_model = selected if selected in models else (models[0] if models else selected)
-    capabilities = dict(configured_capabilities or {})
-    detected_values = {
-        "tools": _tool_probe(provider, probe_model) if probe_model else False,
-        "structured_output": _structured_output_probe(provider, probe_model) if probe_model else False,
-    }
-    for name, supported in detected_values.items():
-        if supported or name not in capabilities:
-            capabilities[name] = supported
-    return {
-        "models": models,
-        "recommended_model": probe_model or None,
-        "selected_model_available": bool(selected and selected in models),
-        "capabilities": capabilities,
-        "detected": sorted(detected_values),
-        "probe_results": detected_values,
-        "note": "已自动检测工具调用与结构化输出；推理、视觉和供应商专用参数保留现有配置，可在高级设置中手动调整。",
-    }
+
+def resolve_profile_contract(profile, api_key='', *, observations=None):
+    started = time.monotonic()
+    entries = cached_metadata(profile,api_key)
+    metadata = next((e for e in entries if e['id']==profile.get('model')), {})
+    result = resolve_capabilities(profile,api_key=api_key,metadata=metadata,observations=observations)
+    result.update(mode='resolve',elapsed_ms=round((time.monotonic()-started)*1000),
+        models=[e['id'] for e in entries],model_listing_available=bool(entries),recommended_model=profile['model'])
+    if observations:
+        result['capability_observations'] = observations.capabilities(result['contract']['scope'])
+    return result
+
+
+def inspect_openai_compatible(provider, model, configured_capabilities=None, *, probes=None, mode='quick', refresh=False):
+    if mode not in {'list','quick','resolve','deep'} or not isinstance(refresh,bool):
+        raise ValueError('Invalid discovery mode')
+    if mode=='deep':
+        raise ValueError('Batch scanning was removed. Use explicit single-target verification.')
+    profile = copy.deepcopy(provider.profile)
+    profile['model'] = str(model or '').strip()
+    if mode=='list' or not profile['model'] or profile['model']=='__discover__':
+        entries = list_metadata(provider)
+        models = sorted({e['id'] for e in entries})
+        if not models:
+            raise ModelProviderError('模型列表为空或不可用，请手动填写模型 ID。',code='invalid_request')
+        return {'mode':'list','models':models,'recommended_model':None,'generation_requests':0,
+                'selected_model_available':profile['model'] in models, 'model_listing_available':True,
+                'note':f'已获取 {len(models)} 个模型；没有发送生成请求。请选择模型后加载能力配置。'}
+    return resolve_profile_contract(profile,getattr(provider, "api_key", ""))

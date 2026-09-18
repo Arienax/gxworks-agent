@@ -1,6 +1,6 @@
 import json
 
-from api import _normalize_analysis_result
+from application.model_api import _normalize_analysis_result
 from application.generation_agent import (
     _FirstJSONObjectProvider,
     _GENERATION_REQUEST,
@@ -9,9 +9,9 @@ from application.generation_agent import (
     _expand_compact_ladder,
     _strict_generation_projection,
 )
-from confirmed_spec import build_review_draft
-from model_provider import ModelRequest, TextDelta, UserMessage
-from plc_json_validator import validate_ladder_candidate_structure
+from plc.specification.confirmed import build_review_draft
+from model_runtime.provider import ModelRequest, TextDelta, UserMessage
+from plc.validation import validate_ladder_candidate_structure
 
 
 class _DuplicateJsonProvider:

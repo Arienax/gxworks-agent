@@ -24,6 +24,7 @@ if not (root / "resources/instructions/mitsubishi").is_dir():
 datas = [
     (str(root / "src/gxw/templates"), "gxw/templates"),
     (str(root / "web/dist"), "web/dist"),
+    (str(root / "resources/model_catalog"), "resources/model_catalog"),
     (str(root / "resources/config.default.json"), "."),
     (str(root / "resources/pattern_library.json"), "."),
     (str(root / "resources/plc_models.json"), "."),
@@ -66,7 +67,7 @@ a = Analysis(
     [str(root / "scripts/web_entry.py")], pathex=[str(root / "src")],
     binaries=binaries, datas=datas, hiddenimports=hiddenimports,
     hookspath=[], hooksconfig={}, runtime_hooks=[],
-    excludes=["PyQt5", "PyQt6", "PySide2", "PySide6", "qt_compat", "main", "tkinter", "mcp"],
+    excludes=["PyQt5", "PyQt6", "PySide2", "PySide6", "ui.desktop", "main", "tkinter", "mcp"],
     noarchive=False, optimize=1,
 )
 pyz = PYZ(a.pure)

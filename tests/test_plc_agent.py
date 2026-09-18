@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-import plc_agent
-from model_provider import (
+import agent_runtime.agent as plc_agent
+from model_runtime.provider import (
     AssistantMessage,
     ReasoningDelta,
     TextDelta,
@@ -11,8 +11,8 @@ from model_provider import (
     ToolCallEnd,
     ToolResult,
 )
-from plc_agent import run_tool_agent, should_route_to_tool_agent
-from plc_agent_tools import (
+from agent_runtime.agent import run_tool_agent, should_route_to_tool_agent
+from agent_runtime.plc_tools import (
     FORBIDDEN_TOOL_NAMES,
     SAFE_TOOL_NAMES,
     ToolDefinition,
@@ -20,7 +20,7 @@ from plc_agent_tools import (
     build_default_tool_registry,
     build_tool_context,
 )
-from plc_ir import build_plc_ir
+from plc.ir import build_plc_ir
 
 
 class _FakeProvider:
@@ -254,7 +254,7 @@ def test_search_manual_tool_uses_selected_plc_and_caps_results(monkeypatch):
             }
         ]
 
-    monkeypatch.setattr("knowledge_retriever.retrieve_knowledge", fake_retrieve)
+    monkeypatch.setattr('knowledge.retriever.retrieve_knowledge', fake_retrieve)
     result = build_default_tool_registry().call(
         "search_plc_manual", {"query": "T0 怎么用", "top_k": 3}, _context()
     )

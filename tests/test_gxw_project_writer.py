@@ -194,7 +194,7 @@ def test_roundtrip_detects_lost_wire_and_ignores_offset_noise():
 def test_existing_ladder_json_and_ir_generate_same_object_model():
     _, template = project_fixture()
     model = json.loads(Path("research/models/series.json").read_text())
-    from plc_ir import build_plc_ir
+    from plc.ir import build_plc_ir
     plain = structured_from_ladder(template, model)
     ir = structured_from_ladder(template, build_plc_ir(model))
     assert serialize_structured_pou(plain) == serialize_structured_pou(ir)

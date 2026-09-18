@@ -227,7 +227,7 @@ def test_qt_execution_entries_share_desktop_lock_without_constructing_a_window(c
     import application.execution as module
     import gxworks2
     import gxworks2.csv_importer
-    import plc_debug_loop
+    import application.debug_loop as plc_debug_loop
     import simulator.runtime
     import simulator.workflow
 
@@ -253,7 +253,7 @@ def test_qt_execution_entries_share_desktop_lock_without_constructing_a_window(c
 
     # Compile exactly the current Qt adapter method, avoiding QApplication,
     # user settings and a live GUI in this ownership regression test.
-    source = Path(__file__).resolve().parents[1] / "src" / "main.py"
+    source = Path(__file__).resolve().parents[1] / "src" / "ui/desktop/workers.py"
     tree = ast.parse(source.read_text(encoding="utf-8"))
     cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == class_name)
     method = next(node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == "run")

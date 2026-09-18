@@ -4,7 +4,7 @@ import ctypes
 
 import pytest
 
-import windows_credentials as storage
+import storage.windows_credentials as storage
 
 
 class MemoryApi:
@@ -69,7 +69,7 @@ def test_read_frees_native_buffer_when_utf8_is_invalid(memory_api):
 
 
 def test_model_key_wrapper_preserves_legacy_target_and_validation(memory_api):
-    import credential_store
+    import storage.credentials as credential_store
 
     credential_store.write_api_key("  model-key  ")
     assert credential_store.read_api_key() == "model-key"

@@ -1,0 +1,113 @@
+name: Confirmed Generation Compatibility
+
+on:
+  push:
+    branches: [feat/universal-api-capabilities]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'web/**'
+      - 'resources/**'
+      - '.github/workflows/confirmed-generation.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'web/**'
+      - 'resources/**'
+      - '.github/workflows/confirmed-generation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Archive exact tested source
+        run: git archive --format=zip --output=confirmed-generation-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: confirmed-generation-source
+          path: confirmed-generation-source.zip
+          retention-days: 7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install test dependencies
+        run: python -m pip install -r requirements/web.txt pytest jsonschema
+      # Three Qt worker integration tests are outside this headless Web job.
+      # Core IR tests, native CSV fixtures and read-only legacy views still run.
+      - name: Test confirmation through saved ladder artifacts and shared boundaries
+        env:
+          PYTHONPATH: src
+        run: >-
+          python -m pytest -q
+          tests/test_generation_agent_boundary.py
+          tests/test_spec_choice_metadata.py
+          tests/test_confirmed_compatibility.py
+          tests/test_confirmed_reconfirmation.py
+          tests/test_hybrid_compact_recovery.py
+          tests/test_generation_delivery.py
+          tests/test_context_refresh_runtime.py
+          tests/test_approval_modes.py
+          tests/test_program_exploration.py
+          tests/test_confirmed_generation_regressions_20260914.py
+          tests/test_review_noise_regressions.py
+          tests/test_user_confirmed_generation_repair.py
+          tests/test_model_provider.py
+          tests/test_web_contract.py
+          tests/test_web_frontend_state_flow.py
+          tests/test_model_contract.py
+          tests/test_model_catalog_v3.py
+          tests/test_model_capabilities.py
+          tests/test_model_stream_cancellation.py
+          tests/test_model_presentation.py
+          tests/test_plc_core_boundary.py
+          tests/test_hardware_intent_boundary.py
+          tests/test_device_identity_delivery.py
+          tests/test_optional_hardware_parameters.py
+          tests/test_motion_control_regressions.py
+          tests/test_gxworks2_comment_export.py
+          tests/test_execution_read.py
+          tests/test_plc_condition_normalizer.py
+          tests/test_approach_contracts.py
+          tests/test_plc_ir.py
+          tests/test_plc_semantics.py
+          tests/test_plc_static_analysis.py
+          -k 'not test_compiler_thread_persists_ir_and_all_legacy_artifacts and not test_compiler_does_not_repair_semantic_mismatch_after_confirmed_generation and not test_compiler_partial_edit_uses_ir_revision_and_preserves_other_networks'
+          --junitxml=confirmed-generation-tests.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Validate generated types and build the actual Web UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix web
+          python scripts/export_web_schema.py
+          npm run types --prefix web
+          git diff --exit-code -- web/openapi.json web/src/api/generated.ts
+          node --experimental-strip-types --test web/tests/*.test.mjs | tee frontend-tests.tap
+          npm run build --prefix web | tee frontend-build.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: confirmed-generation-web-results
+          path: |
+            frontend-tests.tap
+            frontend-build.log
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: confirmed-generation-results
+          path: confirmed-generation-tests.xml
+          retention-days: 7

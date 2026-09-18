@@ -3,12 +3,12 @@ import json
 
 import pytest
 
-from model_provider import ToolCall
-from plc_agent_tools import build_default_tool_registry, build_tool_context
-from plc_core import PLCCore, accept_candidate_patch
-from plc_ir import build_plc_ir, canonical_sha256, ir_to_ladder, validate_plc_ir
-from session_store import SessionStore
-from tool_runtime import InProcessToolRuntime
+from model_runtime.provider import ToolCall
+from agent_runtime.plc_tools import build_default_tool_registry, build_tool_context
+from plc.core import PLCCore, accept_candidate_patch
+from plc.ir import build_plc_ir, canonical_sha256, ir_to_ladder, validate_plc_ir
+from storage.session import SessionStore
+from agent_runtime.runtime import InProcessToolRuntime
 
 
 def _rung(rung_id, input_address, output_address, note):
@@ -401,7 +401,7 @@ def test_create_program_candidate_retains_nonblocking_static_diagnostics(monkeyp
 @pytest.mark.parametrize("existing_version", [False, True])
 @pytest.mark.parametrize("compile_failure", [False, True])
 def test_generated_candidate_uses_only_temporary_artifacts_and_never_persists(tmp_path, monkeypatch, existing_version, compile_failure):
-    import plc_generation
+    import plc.generation as plc_generation
 
     store = SessionStore(base_dir=tmp_path / "workspace", legacy_dir=tmp_path)
     project = store.create_project("新程序候选", plc_model="FX3U")

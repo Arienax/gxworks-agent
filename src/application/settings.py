@@ -11,12 +11,15 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 # Public service error shared with desktop/CLI model selection.
-from config_manager import ModelConfigurationRequiredError
+from storage.config import ModelConfigurationRequiredError
+from model_runtime.capabilities import capability_scope, normalize_parameter_support
+from model_runtime.contract import CapabilityContract, UserModelSettings, scoped_contract, normalize_contract, credential_fingerprint
+from model_runtime.request_policy import public_contract_settings
 
 
 _SETTINGS_LOCK = threading.RLock()
 _PROFILE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
-_PROFILE_FIELDS = {"id", "name", "model", "base_url", "capabilities", "generation_defaults", "request_overrides"}
+_PROFILE_FIELDS = {"id", "name", "model", "base_url", "capabilities", "generation_defaults", "request_overrides", "parameter_support", "contract", "user_settings", "capability_overrides"}
 _SENSITIVE_NAMES = {"key", "accesskey", "auth", "bearer", "token", "headers", "extraheaders", "cookie", "cookies", "authentication", "proxyauth"}
 
 
@@ -79,9 +82,9 @@ def _profile_id(value):
 class SettingsService:
     def read_config(self):
         # Reuse the desktop normalizers without its file/credential migration.
-        from config_manager import get_config_path, _normalize_profile_selection
-        from resource_paths import resource_path
-        from i18n import normalize_language
+        from storage.config import get_config_path, _normalize_profile_selection
+        from shared.paths import resource_path
+        from shared.i18n import normalize_language
         path = Path(get_config_path())
         if not path.is_file():
             path = resource_path("config.default.json")
@@ -91,8 +94,8 @@ class SettingsService:
 
     @staticmethod
     def _legacy_credential(config):
-        from config_manager import _is_legacy_api_key
-        from credential_store import CREDENTIAL_TARGET, read_api_key
+        from storage.config import _is_legacy_api_key
+        from storage.credentials import CREDENTIAL_TARGET, read_api_key
         if not any(key in config for key in ("api_key", "base_url", "default_model", "request_template")):
             return None
         key = read_api_key(CREDENTIAL_TARGET).strip()
@@ -101,7 +104,7 @@ class SettingsService:
         return (config["activeModelProfileId"], key) if key else None
 
     def _key(self, config, profile):
-        from credential_store import read_api_key
+        from storage.credentials import read_api_key
         key = read_api_key(profile["credentialTarget"]).strip()
         if not key:
             legacy = self._legacy_credential(config)
@@ -110,12 +113,13 @@ class SettingsService:
         return key
 
     def public_settings(self):
-        from config_manager import get_model_profile
+        from storage.config import get_model_profile
         with _SETTINGS_LOCK:
             config = self.read_config()
             profiles = []
             for item in config["modelProfiles"]:
                 profile = get_model_profile(config, item["id"])
+                contract, user_settings = public_contract_settings(profile, self._key(config, profile))
                 profiles.append({
                     "id": profile["id"], "name": profile["name"], "model": profile["model"],
                     "base_url": _base_url(profile["baseUrl"], strict=False),
@@ -123,8 +127,13 @@ class SettingsService:
                     "deletable": True,
                     "capabilities": {key: value for key, value in profile["capabilities"].items()
                                      if not _sensitive(key) and isinstance(value, bool)},
+                    "contract": self._observations().decorate(CapabilityContract.from_dict(contract)).to_dict() if contract else {},
+                    "capability_overrides": _safe_options(profile.get("capabilityOverrides") or {}),
+                    "user_settings": user_settings,
                     "generation_defaults": _safe_options(profile["generationDefaults"]),
                     "request_overrides": _safe_options(profile["requestOverrides"]),
+                    "parameter_support": _safe_options(profile.get("parameterSupport") or {})
+                        if (profile.get("parameterSupport") or {}).get("scope") == capability_scope(profile) else {},
                 })
             return {"language": config["language"], "active_profile_id": config["activeModelProfileId"], "profiles": profiles}
 
@@ -134,6 +143,7 @@ class SettingsService:
             raise ValueError("Unknown model profile fields")
         if "id" in values and _profile_id(values["id"]) != chosen["id"]:
             raise ValueError("Cannot change model profile ID")
+        old_scope = capability_scope(chosen)
         for key in ("name", "model"):
             if key in values:
                 value = str(values[key]).strip()
@@ -143,7 +153,7 @@ class SettingsService:
         if "base_url" in values:
             chosen["baseUrl"] = _base_url(values["base_url"], strict=True)
         for key, stored in (("capabilities", "capabilities"), ("generation_defaults", "generationDefaults"),
-                            ("request_overrides", "requestOverrides")):
+                            ("request_overrides", "requestOverrides"), ("capability_overrides", "capabilityOverrides")):
             if key not in values:
                 continue
             value = values[key]
@@ -152,17 +162,56 @@ class SettingsService:
             value = _safe_options(value, strict=True)
             if key == "capabilities" and any(not isinstance(item, bool) for item in value.values()):
                 raise ValueError("Capabilities must contain boolean values")
-            if key == "generation_defaults":
-                for name, upper in (("temperature", 2), ("top_p", 1)):
-                    number = value.get(name)
-                    if number is not None and (isinstance(number, bool) or not isinstance(number, (int, float)) or not 0 <= number <= upper):
-                        raise ValueError("Sampling parameter outside supported range")
             chosen[stored] = value
+        if "parameter_support" in values:
+            support = normalize_parameter_support(_safe_options(values["parameter_support"], strict=True))
+            if support and support["scope"] != capability_scope(chosen):
+                raise ValueError("Model, endpoint or thinking options changed; detect parameters again")
+            chosen["parameterSupport"] = support
+        elif old_scope != capability_scope(chosen):
+            chosen["parameterSupport"] = {}
+
+        if "contract" in values:
+            chosen["capabilityContract"] = normalize_contract(_safe_options(values["contract"], strict=True))
+            if chosen["capabilityContract"] and scoped_contract(chosen) is None:
+                raise ValueError("Contract scope changed; detect this endpoint/model/context again")
+            # Observations and selections are never stored in defaults.
+            chosen["userModelSettings"] = {}
+            if chosen["capabilityContract"]:
+                chosen["parameterSupport"] = {}
+        elif chosen.get("capabilityContract") and scoped_contract(chosen) is None:
+            chosen["capabilityContract"] = {}
+            chosen["userModelSettings"] = {}
+        if "user_settings" in values and values["user_settings"]:
+            if not chosen.get("capabilityContract"):
+                raise ValueError("User selections require a scoped contract")
+            chosen["userModelSettings"] = UserModelSettings.from_dict(
+                _safe_options(values["user_settings"], strict=True),
+                CapabilityContract.from_dict(chosen["capabilityContract"])).to_dict()
+        elif "user_settings" in values:
+            chosen["userModelSettings"] = {}
+
+    @staticmethod
+    def _validate_binding(profile, key, *, explicit=False):
+        contract = profile.get("capabilityContract")
+        if not contract:
+            return
+        if contract["scope"]["binding"] != credential_fingerprint(key):
+            if explicit:
+                raise ValueError("Credential changed; detect the contract with the current key again")
+            profile["capabilityContract"] = {}
+            profile["userModelSettings"] = {}
+
+    @staticmethod
+    def _validate_manual(profile):
+        if profile.get("capabilityOverrides"):
+            from model_runtime.catalog import resolve_capabilities
+            resolve_capabilities(profile)
 
     @staticmethod
     def _save(config, legacy, *, skip_legacy=()):
-        from config_manager import save_config
-        from credential_store import read_api_key, write_api_key
+        from storage.config import save_config
+        from storage.credentials import read_api_key, write_api_key
         if legacy and legacy[0] not in skip_legacy:
             old = next((p for p in config["modelProfiles"] if p["id"] == legacy[0]), None)
             if old and not read_api_key(old["credentialTarget"]).strip():
@@ -171,8 +220,8 @@ class SettingsService:
         save_config(config)
 
     def update(self, *, language=None, active_profile_id=None, profile=None, api_key=None):
-        from config_manager import get_model_profile
-        from credential_store import write_api_key
+        from storage.config import get_model_profile
+        from storage.credentials import write_api_key
         with _SETTINGS_LOCK:
             config = self.read_config()
             legacy = self._legacy_credential(config)
@@ -183,6 +232,9 @@ class SettingsService:
             if profile is not None:
                 selected = get_model_profile(config, _profile_id(profile["id"]))
                 self._apply_profile(selected, profile)
+                self._validate_manual(selected)
+                self._validate_binding(selected, api_key if api_key is not None else self._key(config, selected),
+                    explicit=bool(profile.get("contract")))
                 config["modelProfiles"] = [selected if p["id"] == selected["id"] else p for p in config["modelProfiles"]]
             if active_profile_id is not None:
                 get_model_profile(config, _profile_id(active_profile_id))
@@ -190,14 +242,19 @@ class SettingsService:
             skip_legacy = ()
             if api_key is not None:
                 selected = get_model_profile(config, (profile or {}).get("id") or active_profile_id)
+                if "parameter_support" not in (profile or {}):
+                    selected["parameterSupport"] = {}
+                    config["modelProfiles"] = [selected if p["id"] == selected["id"] else p for p in config["modelProfiles"]]
+                self._validate_binding(selected, api_key, explicit=bool((profile or {}).get("contract")))
+                config["modelProfiles"] = [selected if p["id"] == selected["id"] else p for p in config["modelProfiles"]]
                 write_api_key(api_key, selected["credentialTarget"])
                 skip_legacy = (selected["id"],)
             self._save(config, legacy, skip_legacy=skip_legacy)
             return self.public_settings()
 
     def create_profile(self, *, id=None, api_key=None, **values):
-        from config_manager import _normalize_profile
-        from credential_store import credential_target_for_profile, write_api_key
+        from storage.config import _normalize_profile
+        from storage.credentials import credential_target_for_profile, write_api_key
         with _SETTINGS_LOCK:
             config = self.read_config()
             legacy = self._legacy_credential(config)
@@ -208,6 +265,8 @@ class SettingsService:
                        "credentialTarget": credential_target_for_profile(profile_id)}
             self._apply_profile(profile, values)
             profile = _normalize_profile(profile)
+            self._validate_manual(profile)
+            self._validate_binding(profile, api_key or "", explicit=bool(values.get("contract")))
             config["modelProfiles"].append(profile)
             if not config.get("activeModelProfileId"):
                 config["activeModelProfileId"] = profile_id
@@ -217,8 +276,8 @@ class SettingsService:
             return self.public_settings()
 
     def delete_profile(self, profile_id):
-        from config_manager import get_model_profile
-        from credential_store import delete_api_key
+        from storage.config import get_model_profile
+        from storage.credentials import delete_api_key
         with _SETTINGS_LOCK:
             config = self.read_config()
             legacy = self._legacy_credential(config)
@@ -234,65 +293,125 @@ class SettingsService:
         return self.update(profile={"id": _profile_id(profile_id)}, api_key=api_key)
 
     def delete_key(self, profile_id):
-        from config_manager import get_model_profile
-        from credential_store import delete_api_key
+        from storage.config import get_model_profile
+        from storage.credentials import delete_api_key
         with _SETTINGS_LOCK:
             config = self.read_config()
             legacy = self._legacy_credential(config)
             profile = get_model_profile(config, _profile_id(profile_id))
+            profile["parameterSupport"] = {}
+            profile["capabilityContract"] = {}
+            profile["userModelSettings"] = {}
+            config["modelProfiles"] = [profile if p["id"] == profile_id else p for p in config["modelProfiles"]]
             # Persist the explicit legacy conversion so a removed key cannot
             # silently reappear from the old inline/global-credential fallback.
             self._save(config, legacy, skip_legacy=(profile_id,))
             delete_api_key(profile["credentialTarget"])
             return self.public_settings()
 
+    @staticmethod
+    def _observations():
+        from storage.config import get_config_path
+        from model_runtime.observations import ObservationStore
+        return ObservationStore(Path(get_config_path()).parent / "model-observations.sqlite")
+
+    def _draft(self, id=None, api_key=None, **values):
+        from storage.config import get_model_profile, _normalize_profile
+        from storage.credentials import credential_target_for_profile
+        with _SETTINGS_LOCK:
+            if id:
+                config = self.read_config()
+                selected = get_model_profile(config, _profile_id(id))
+                old_url = selected.get("baseUrl")
+                self._apply_profile(selected, values)
+                key = api_key if api_key is not None else (
+                    self._key(config, selected) if old_url == selected.get("baseUrl") else "")
+            else:
+                selected = {"id": "discovery-draft", "adapter": "openai_compatible",
+                            "credentialTarget": credential_target_for_profile("discovery-draft")}
+                self._apply_profile(selected, values)
+                key = api_key or ""
+            return _normalize_profile(selected), key
+
+    def detect_profile(self, *, id=None, api_key=None, mode="quick", refresh=False, **values):
+        """Compatibility route: local resolve or model list; never completion."""
+        from application.model_detection import resolve_profile_contract, inspect_openai_compatible
+        if mode not in {"list", "quick", "resolve", "deep"} or not isinstance(refresh, bool):
+            raise ValueError("Invalid discovery mode")
+        if mode == "deep":
+            raise ValueError("Batch scanning has been removed; use explicit single-target verification")
+        selected, key = self._draft(id=id, api_key=api_key, **values)
+        if mode != "list" and selected["model"] != "__discover__":
+            result = resolve_profile_contract(selected, key, observations=self._observations())
+            return {"status": "resolved", "message": result["note"], "discovery": result}
+        if not str(key).strip():
+            return {"status": "failed", "message": "获取模型列表需要当前服务的 API Key。", "error_code": "missing_key"}
+        from model_runtime.provider import create_provider
+        try:
+            result = inspect_openai_compatible(create_provider(selected, key), selected["model"], mode="list")
+            return {"status": "connected", "message": result["note"], "discovery": result}
+        except Exception as error:
+            code = getattr(error, "code", "provider_error")
+            if code not in {"authentication", "rate_limit", "timeout", "invalid_request", "unavailable", "protocol"}:
+                code = "provider_error"
+            return {"status": "failed", "message": "模型列表不可用；可以手动填写模型并加载本地能力配置。未发送生成请求。", "error_code": code}
+
+    def verify_profile(self, *, target, kind, value=None, consent=False, profile):
+        if consent is not True:
+            raise ValueError("Explicit verification consent is required")
+        from application.model_detection import resolve_profile_contract
+        from model_runtime.provider import create_provider
+        from model_runtime.verification import verify_one
+        selected, key = self._draft(**profile)
+        if not str(key).strip():
+            return {"status":"failed", "message":"请配置当前服务的 API Key。", "error_code":"missing_key"}
+        store = self._observations()
+        resolved = resolve_profile_contract(selected, key, observations=store)
+        try:
+            result = verify_one(create_provider(selected,key), resolved["contract"], target,
+                kind=kind,value=value,consent=consent,store=store)
+        except Exception as error:
+            code = getattr(error, "code", "invalid_request")
+            if code not in {"authentication", "rate_limit", "timeout", "invalid_request", "unavailable", "protocol"}:
+                code = "provider_error"
+            return {"status":"failed", "message":"单项验证未完成或被拒绝；未自动重试，也未修改设置。", "error_code":code}
+        resolved = resolve_profile_contract(selected, key, observations=store)
+        resolved.update(result)
+        return {"status":"connected" if result["outcome"] != "inconclusive" else "unverified",
+                "message":result["note"],"discovery":resolved}
+
     def test_connection(self, profile_id, *, profile=None, api_key=None):
-        from config_manager import get_model_profile
-        from model_provider import create_provider, test_model_profile
-        from application.model_detection import inspect_openai_compatible
+        from storage.config import get_model_profile
+        from model_runtime.provider import test_model_profile
         with _SETTINGS_LOCK:
             config = self.read_config()
             selected = get_model_profile(config, _profile_id(profile_id))
+            old_url = selected.get("baseUrl")
             if profile is not None:
                 self._apply_profile(selected, profile)
-            key = api_key if api_key is not None else self._key(config, selected)
+            key = api_key if api_key is not None else (
+                self._key(config, selected) if selected.get("baseUrl") == old_url else "")
             if not str(key or "").strip():
                 return {"status": "failed", "message": "请先配置 API Key。", "error_code": "missing_key"}
             frozen = copy.deepcopy(selected)
         try:
-            # Preserve the existing connection-test behavior and error mapping.
+            # Connection testing is deliberately a fast path. Capability
+            # discovery is an explicit, potentially expensive operation behind
+            # /settings/detect and must never be triggered by this button.
             message = test_model_profile(copy.deepcopy(frozen), key)
-            try:
-                provider = create_provider(frozen, key)
-                inspection = inspect_openai_compatible(
-                    provider,
-                    str(frozen.get("model") or ""),
-                    frozen.get("capabilities") or {},
-                )
-            except Exception:
-                # Some compatible services expose a usable selected model but do
-                # not support model listing or one of the optional probes.
-                return {"status": "connected", "message": message}
-            return {
-                "status": "connected",
-                # Keep the public response contract stable for one release.
-                # The Web client recognizes this JSON payload and falls back to
-                # ordinary text for older/non-discoverable backends.
-                "message": json.dumps({
-                    "kind": "model_discovery_v1",
-                    **inspection,
-                }, ensure_ascii=False),
-            }
+            return {"status": "connected", "message": message}
         except Exception as error:
             code = getattr(error, "code", "provider_error")
+            if code == "metadata_unavailable":
+                return {"status":"unverified", "message":"服务未提供模型列表；当前模型与密钥尚未验证。没有发送生成请求。", "error_code":code}
             if code not in ("authentication", "rate_limit", "timeout", "invalid_request", "unavailable"):
                 code = "provider_error"
             # Provider error bodies can echo authentication data. Never publish them.
             return {"status": "failed", "message": "连接测试失败，请检查服务地址、模型和密钥。", "error_code": code}
 
     def model_snapshot(self):
-        from config_manager import get_model_profile
-        from model_provider import create_provider
+        from storage.config import get_model_profile
+        from model_runtime.provider import create_provider
         with _SETTINGS_LOCK:
             config = self.read_config()
             profile = get_model_profile(config)
@@ -300,6 +419,10 @@ class SettingsService:
             if not key:
                 raise ValueError("请先在模型设置中配置 API Key。")
             # Provider/key lives only in the worker closure, never in job JSON.
-            return create_provider(copy.deepcopy(profile), key), {
+            provider = create_provider(copy.deepcopy(profile), key)
+            from model_runtime.observations import request_observer
+            if hasattr(provider, "observation_sink"):
+                provider.observation_sink = request_observer(provider, self._observations())
+            return provider, {
                 "profile_id": profile["id"], "model": profile.get("model"),
                 "response_language": config.get("language", "zh-CN")}

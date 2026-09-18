@@ -185,7 +185,7 @@ class ProposalService:
             if action == "accept_local":
                 payload.setdefault("_confirmed_spec", copy.deepcopy(spec))
                 if "_candidate_ir" in payload:
-                    from plc_ir import canonical_sha256, ir_to_ladder, validate_plc_ir
+                    from plc.ir import canonical_sha256, ir_to_ladder, validate_plc_ir
                     validation_profile = str(payload.get("_validation_profile") or "strict")
                     structural = validation_profile == "generation_structural"
                     validate_plc_ir(
@@ -193,7 +193,7 @@ class ProposalService:
                         validate_ladder=not structural,
                     )
                     if structural:
-                        from plc_json_validator import validate_ladder_candidate_structure
+                        from plc.validation import validate_ladder_candidate_structure
                         validate_ladder_candidate_structure(
                             ir_to_ladder(payload["_candidate_ir"]),
                             plc_model=str((payload["_candidate_ir"].get("plc") or {}).get("cpu") or "FX3U"),
@@ -228,7 +228,7 @@ class ProposalService:
 
     def _candidate_scope(self, project_id, base_id, payload):
         """Derive constraints and impact before any durable candidate save."""
-        from plc_change_scope import enforce_change_scope, validate_scope_baseline
+        from plc.change_scope import enforce_change_scope, validate_scope_baseline
         before = self.store.load_program_ir(project_id, base_id, persist_legacy=False) if base_id else None
         target_mode = payload.get("target_mode") or ("ladder" if "_candidate_ir" in payload else None)
         scope = validate_scope_baseline(payload.get("change_scope"), before, target_mode=target_mode)
@@ -319,7 +319,7 @@ class ProposalService:
             return self._public(record)
 
     def _accept_local(self, record):
-        from plc_core import PLCCore, accept_candidate_patch
+        from plc.core import PLCCore, accept_candidate_patch
 
         payload = record["private_payload"]
         project_id, base_id = record["project_id"], record["base_version_id"]
@@ -341,7 +341,7 @@ class ProposalService:
                                 validation_profile=validation_profile)
                 metadata["normalization"] = copy.deepcopy(payload.get("normalization"))
                 if compiled["artifacts"].get("st_from_ir"):
-                    from plc_st_renderer import ST_RENDERER_SCHEMA_VERSION
+                    from plc.st_renderer import ST_RENDERER_SCHEMA_VERSION
                     metadata["st_from_ir_sha256"] = hashlib.sha256((output / compiled["artifacts"]["st_from_ir"]).read_bytes()).hexdigest()
                     metadata["st_renderer_schema_version"] = ST_RENDERER_SCHEMA_VERSION
             else:
@@ -361,7 +361,7 @@ class ProposalService:
             metadata.update(summary=metadata.get("summary") or record.get("summary", {}).get("summary") or "已校验的程序",
                             parent_version_id=base_id, source_candidate_id=payload.get("candidate_id", record["id"]),
                             lifecycle_status="accepted", confirmed_spec_snapshot=copy.deepcopy(payload.get("_confirmed_spec")))
-            from plc_ir import canonical_sha256
+            from plc.ir import canonical_sha256
             metadata["confirmed_spec_hash"] = canonical_sha256(payload["_confirmed_spec"]) if payload.get("_confirmed_spec") is not None else None
             version = self.store.complete_version(project_id, version_id, metadata, activate=True)
             return {"version_id": version["id"], "status": "accepted", "target_mode": version["target_mode"]}

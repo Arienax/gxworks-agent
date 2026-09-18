@@ -44,7 +44,7 @@ def delivery_summary(workbench, project_id, version_id):
         requirements = SimulationWorkbenchService(workbench).read(project_id, version_id)["requirements"]
     diff = None
     if version.get("target_mode") == "ladder" and version.get("parent_version_id"):
-        from plc_core import PLCCore
+        from plc.core import PLCCore
         parent = projects.verified_program(project_id, version["parent_version_id"])
         if parent:
             detail = PLCCore().diff_programs(parent, program)

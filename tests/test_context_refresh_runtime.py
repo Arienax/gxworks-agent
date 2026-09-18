@@ -2,12 +2,12 @@
 import copy
 import json
 import pytest
-import api
+import application.model_api as api
 from fastapi.testclient import TestClient
 from application.workbench import WorkbenchService
 from application.events import append_event, _public_context_audit
 from application.workspace import public_payload
-from prompt_context_policy import POLICY_NAMES, context_policy_scope, ContextAudit, audit_section
+from shared.context_policy import POLICY_NAMES, context_policy_scope, ContextAudit, audit_section
 from test_web_api import ORIGIN, _Provider, _app, _complete, _login
 
 

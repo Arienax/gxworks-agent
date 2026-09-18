@@ -1782,3 +1782,14 @@ pre {
   .toolbar-menu-content { min-width: 200px; }
   .approval-mode-indicator { padding: 4px; font-size: 11px; }
 }
+
+/* Shared capability-driven controls; follow the current workbench theme. */
+fieldset.settings-form { border: 0; padding: 0; min-width: 0; }
+.model-parameters { display: grid; gap: 12px; }
+.parameter-control { padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+.parameter-heading, .parameter-scale { display: flex; gap: 12px; justify-content: space-between; align-items: center; }
+.parameter-heading label { display: block; }
+.parameter-heading code { color: var(--muted); font-size: 11px; }
+.parameter-heading output { font-variant-numeric: tabular-nums; color: var(--accent); }
+.parameter-control input[type="range"] { width: 100%; min-height: 28px; padding: 0; accent-color: var(--accent); cursor: pointer; }
+.parameter-control p, .parameter-scale { color: var(--muted); font-size: 12px; }

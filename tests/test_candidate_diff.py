@@ -5,12 +5,12 @@ import json
 
 import pytest
 
-import api
+import application.model_api as api
 from application.workbench import WorkbenchService
-from model_provider import TextDelta
-from plc_core import PLCCore
-from plc_ir import build_plc_ir
-from session_store import SessionStore
+from model_runtime.provider import TextDelta
+from plc.core import PLCCore
+from plc.ir import build_plc_ir
+from storage.session import SessionStore
 
 
 def _ladder(input_address="X0", comment="Output", rung_ids=(1,)):

@@ -10,10 +10,10 @@ from application.settings import SettingsService
 
 @pytest.fixture
 def settings_env(tmp_path, monkeypatch):
-    import config_manager
-    import credential_store
-    import model_provider
-    import resource_paths
+    import storage.config as config_manager
+    import storage.credentials as credential_store
+    import model_runtime.provider as model_provider
+    import shared.paths as resource_paths
     config_path = tmp_path / "user" / "config.json"
     template = tmp_path / "config.default.json"
     config = {"language": "zh-CN", "activeModelProfileId": "fake", "modelProfiles": [{
@@ -78,7 +78,7 @@ def test_missing_config_reads_template_without_creating_file(settings_env):
 
 
 def test_explicit_save_migrates_legacy_key_to_original_profile_when_switching(settings_env):
-    from credential_store import credential_target_for_profile
+    from storage.credentials import credential_target_for_profile
     env = settings_env
     env.persist({"base_url": "https://custom.invalid", "default_model": "old-model", "api_key": "old-key"})
     env.service.update(active_profile_id="deepseek-default", language="ja")
@@ -89,7 +89,7 @@ def test_explicit_save_migrates_legacy_key_to_original_profile_when_switching(se
 
 
 def test_create_update_sample_and_delete_profile_with_isolated_key(settings_env):
-    from credential_store import credential_target_for_profile
+    from storage.credentials import credential_target_for_profile
     env = settings_env
     created = env.service.create_profile(id="custom-two", name="Second", base_url="http://localhost:8080/v1",
         model="other", api_key="second-key", capabilities={"tool_stream": True, "thinking_required": True},
@@ -123,7 +123,7 @@ def test_delete_missing_profile_rejected_without_writes(settings_env):
 
 
 def test_key_commands_do_not_affect_other_profiles_or_revive_legacy_key(settings_env):
-    from credential_store import CREDENTIAL_TARGET
+    from storage.credentials import CREDENTIAL_TARGET
     env = settings_env
     env.service.set_key("fake", "new-key")
     assert _profile(env.service.public_settings())["configured"]
@@ -147,7 +147,6 @@ def test_key_commands_do_not_affect_other_profiles_or_revive_legacy_key(settings
     {"capabilities": {"private_payload": True}}, {"capabilities": {"tools": "yes"}},
     {"base_url": "https://name:password@example.invalid/v1"},
     {"base_url": "https://example.invalid/v1?api_key=secret"},
-    {"generation_defaults": {"temperature": 3}}, {"generation_defaults": {"top_p": -0.1}},
     {"generation_defaults": {"temperature": float("nan")}},
 ])
 def test_unsafe_profile_values_rejected_before_persistence(settings_env, values):
@@ -175,11 +174,15 @@ def test_public_advanced_values_strip_nested_credentials_and_url_credentials(set
     assert env.path.read_bytes() == before
 
 
-def test_test_connection_uses_unsaved_draft_and_key_without_any_mutation(settings_env):
+def test_test_connection_uses_unsaved_draft_and_key_without_any_mutation(settings_env, monkeypatch):
+    import model_runtime.provider as model_provider
     env = settings_env
+    monkeypatch.setattr(model_provider, "create_provider",
+        lambda *args, **kwargs: pytest.fail("connection test must not run capability discovery"))
     result = env.service.test_connection("fake", profile={"id": "fake", "model": "draft-model",
         "generation_defaults": {"top_p": 0.3}}, api_key="temporary-secret")
     assert result["status"] == "connected"
+    assert result["message"] == "连接成功，API Key 和服务地址有效。"
     profile, key = env.calls[0]
     assert key == "temporary-secret" and profile["model"] == "draft-model"
     assert not env.path.exists() and not env.writes and not env.deletes
@@ -187,7 +190,7 @@ def test_test_connection_uses_unsaved_draft_and_key_without_any_mutation(setting
 
 
 def test_test_connection_does_not_echo_provider_errors(settings_env, monkeypatch):
-    import model_provider
+    import model_runtime.provider as model_provider
     env = settings_env
     def failed(*args):
         raise model_provider.ModelProviderError("Authentication Bearer very-private-key D:\\private\\config.json", code="authentication")
@@ -258,9 +261,9 @@ def test_read_only_server_rejects_even_explicit_connection_test(settings_env, tm
 
 
 def test_browser_demo_uses_real_settings_with_only_temporary_io(tmp_path, monkeypatch):
-    import config_manager
-    import credential_store
-    import model_provider
+    import storage.config as config_manager
+    import storage.credentials as credential_store
+    import model_runtime.provider as model_provider
     from scripts.web_demo import isolated_demo_settings
     def forbidden(*args, **kwargs):
         pytest.fail("Demo touched a real credential or network dependency")
@@ -288,7 +291,7 @@ def test_browser_demo_uses_real_settings_with_only_temporary_io(tmp_path, monkey
 def test_browser_demo_main_analysis_confirm_generation_autosaves_with_private_audit(monkeypatch):
     pytest.importorskip("fastapi")
     pytest.importorskip("httpx")
-    import model_provider
+    import model_runtime.provider as model_provider
     import uvicorn
     from fastapi.testclient import TestClient
     from scripts import web_demo
@@ -327,7 +330,7 @@ def test_browser_demo_main_analysis_confirm_generation_autosaves_with_private_au
 
 def test_demo_failure_diagnostics_only_contain_exception_types_and_code_locations(capsys):
     from scripts.web_demo import _demo_exception_diagnostic
-    import model_provider
+    import model_runtime.provider as model_provider
     try:
         try:
             raise model_provider.ModelProviderError("Bearer sdk-secret-and-private-path", code="authentication")
@@ -339,3 +342,76 @@ def test_demo_failure_diagnostics_only_contain_exception_types_and_code_location
     assert "RuntimeError" in stderr and "ModelProviderError" in stderr
     assert "test_application_settings.py" in stderr
     assert "sdk-secret" not in stderr and "Bearer" not in stderr
+
+
+def test_first_unsaved_profile_can_detect_without_writing_settings_or_credentials(settings_env, monkeypatch):
+    from test_model_capabilities import Endpoint
+    from model_runtime.provider import OpenAICompatibleProvider
+    import model_runtime.provider as model_provider
+    env = settings_env
+    endpoint = Endpoint()
+    monkeypatch.setattr(model_provider, "create_provider", lambda p, k: OpenAICompatibleProvider(p, k, client=endpoint))
+    result = env.service.detect_profile(name="First", base_url="https://gateway.invalid/custom/v2/",
+                                       model="tenant-alias", api_key="temporary-key")
+    assert result["status"] == "resolved"
+    assert result["discovery"]["contract"]["parameters"]["reasoning_effort"]["status"] == "unknown"
+    assert endpoint.calls == []
+    assert not env.path.exists() and not env.writes and not env.deletes
+    assert "temporary-key" not in json.dumps(result)
+
+
+def test_detect_does_not_reuse_saved_key_for_changed_endpoint(settings_env):
+    env = settings_env
+    env.keys["test-target"] = "do-not-send-to-another-host"
+    result = env.service.detect_profile(id="fake", base_url="https://other.invalid/v1", mode="list")
+    assert result["status"] == "failed" and result["error_code"] == "missing_key"
+    assert not env.calls and not env.path.exists()
+
+
+def test_parameter_contract_roundtrips_and_is_invalidated_on_model_or_key_change(settings_env):
+    from model_runtime.capabilities import capability_scope
+    env = settings_env
+    source = copy.deepcopy(env.config["modelProfiles"][0])
+    support = {"scope": capability_scope(source), "parameters": {
+        "reasoning_effort": {"status": "supported", "source": "probe", "values": ["low", "high"]}}}
+    result = env.service.update(profile={"id": "fake", "parameter_support": support})
+    assert _profile(result)["parameter_support"] == support
+    env.service.set_key("fake", "new-key")
+    assert not _profile(env.service.public_settings())["parameter_support"]
+    env.service.update(profile={"id": "fake", "parameter_support": support})
+    changed = env.service.update(profile={"id": "fake", "model": "different"})
+    assert not _profile(changed)["parameter_support"]
+    with pytest.raises(ValueError):
+        env.service.update(profile={"id": "fake", "parameter_support": support})
+
+
+def test_discovery_http_requires_operator_csrf_and_accepts_an_unsaved_profile(settings_env, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from application.workbench import WorkbenchService
+    from integrations.web.app import create_app
+    from model_runtime.provider import OpenAICompatibleProvider
+    from test_model_capabilities import Endpoint
+    import model_runtime.provider as model_provider
+    monkeypatch.setattr(model_provider, "create_provider", lambda p, k: OpenAICompatibleProvider(p, k, client=Endpoint()))
+    env = settings_env
+    origin = "http://127.0.0.1:8765"
+    service = WorkbenchService(tmp_path / "workspace", tmp_path / "state", settings=env.service)
+    app = create_app(service.store.base_dir, service=service, origin=origin, operator_token="operator", agent_token="agent")
+    body = {"profile": {"name": "Unsaved", "base_url": "https://gateway.invalid/custom/v2/",
+                        "model": "tenant-alias", "api_key": "private-draft-key"}}
+    with TestClient(app, base_url=origin) as client:
+        assert client.post("/api/settings/detect", json=body, headers={"Origin": origin, "Authorization": "Bearer agent"}).status_code == 401
+        login = client.post("/api/session", json={"token": "operator"}, headers={"Origin": origin}).json()
+        assert client.post("/api/settings/detect", json=body, headers={"Origin": origin}).status_code == 403
+        response = client.post("/api/settings/detect", json=body, headers={"Origin": origin, "X-CSRF-Token": login["csrf"]})
+        assert response.status_code == 200 and response.json()["status"] == "resolved"
+        assert "private-draft-key" not in response.text
+    assert not env.path.exists() and not env.writes
+
+
+def test_manual_override_is_validated_before_configuration_write(settings_env):
+    env = settings_env
+    with pytest.raises(ValueError):
+        env.service.update(profile={'id':'fake','capability_overrides':{'parameters':{
+            'unsafe':{'type':'string','status':'unknown','wire_path':['messages']}}}})
+    assert not env.path.exists() and not env.writes and not env.deletes

@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 
 from integrations.mcp.service_client import ApplicationServiceClient, ServiceConnectionError, validate_service_url
-from plc_agent_tools import SAFE_TOOL_NAMES
-from tool_runtime import build_default_tool_runtime
+from agent_runtime.plc_tools import SAFE_TOOL_NAMES
+from agent_runtime.runtime import build_default_tool_runtime
 
 
 ROOT = Path(__file__).resolve().parents[1]

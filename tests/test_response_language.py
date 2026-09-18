@@ -13,8 +13,8 @@ from dataclasses import replace
 
 import pytest
 
-from i18n import get_language, language_context, set_language
-from model_provider import (
+from shared.i18n import get_language, language_context, set_language
+from model_runtime.provider import (
     ModelProviderError,
     ModelRequest,
     ReasoningDelta,
@@ -29,9 +29,9 @@ from model_provider import (
     UserMessage,
     collect_response,
 )
-from plc_agent import run_tool_agent
-from response_language import ResponseContract, preserved_annotations
-from workflow_response_contracts import (
+from agent_runtime.agent import run_tool_agent
+from model_runtime.responses import ResponseContract, preserved_annotations
+from application.response_contracts import (
     ANALYSIS_RESPONSE,
     LADDER_RESPONSE,
     ST_RESPONSE,
@@ -476,7 +476,7 @@ def test_candidate_tool_argument_contract_keeps_program_machine_tokens_unchanged
 
 
 @pytest.mark.parametrize("language,good,bad", LANGUAGE_CASES)
-def test_fallback_discards_partial_callbacks_and_keeps_original_language(language, good, bad):
+def test_partial_stream_failure_is_not_replayed_or_published(language, good, bad):
     set_language(language)
     failed_call = ToolCall("failed-1", "create_program_candidate", {})
     provider = FakeProvider([
@@ -484,30 +484,24 @@ def test_fallback_discards_partial_callbacks_and_keeps_original_language(languag
          ModelProviderError("fixture stream unavailable", code="unavailable", retryable=True)],
         [TextDelta(good)],
     ])
-    callbacks, events = [], []
-    result = collect_response(
-        provider,
-        ModelRequest((UserMessage("Check X0"),)),
-        on_content_chunk=callbacks.append,
-        on_reasoning_chunk=callbacks.append,
-        on_event=events.append,
-        fallback_to_non_stream=True,
-        on_fallback=lambda _error: set_language("ja" if language != "ja" else "en"),
-    )
-    assert [request.response_language for request in provider.requests] == [language, language]
-    assert [request.stream for request in provider.requests] == [True, False]
-    assert callbacks == [good]
-    assert events == [TextDelta(good)]
-    assert result.message.content == good
-    assert result.message.tool_calls == ()
-    assert len(result.raw_attempts) == 2
-    assert result.raw_attempts[0].message.content == bad
-    assert result.raw_attempts[0].message.tool_calls == (failed_call,)
+    callbacks, events, fallbacks = [], [], []
+    with pytest.raises(ModelProviderError) as failure:
+        collect_response(
+            provider, ModelRequest((UserMessage("Check X0"),)),
+            on_content_chunk=callbacks.append, on_reasoning_chunk=callbacks.append,
+            on_event=events.append, fallback_to_non_stream=True, on_fallback=fallbacks.append,
+        )
+    assert [request.response_language for request in provider.requests] == [language]
+    assert [request.stream for request in provider.requests] == [True]
+    assert callbacks == events == fallbacks == []
+    assert len(failure.value.raw_attempts) == 1
+    assert failure.value.raw_attempts[0].message.content == bad
+    assert failure.value.raw_attempts[0].message.tool_calls == (failed_call,)
 
 
 def test_wrong_fallback_retains_both_attempts_without_publishing_either():
     provider = FakeProvider([
-        [TextDelta("Partial attempt."), ModelProviderError("fixture timeout", code="timeout")],
+        [ModelProviderError("fixture stream rejection", code="stream_not_supported")],
         [TextDelta("输出已经启动。")],
     ])
     published = []
@@ -516,7 +510,7 @@ def test_wrong_fallback_retains_both_attempts_without_publishing_either():
                          on_content_chunk=published.append, on_event=published.append)
     assert published == []
     assert len(captured.value.raw_attempts) == 2
-    assert captured.value.raw_attempts[0].message.content == "Partial attempt."
+    assert captured.value.raw_attempts[0].message.content == ""
     assert captured.value.raw_attempts[1].message.content == "输出已经启动。"
 
 
@@ -635,7 +629,7 @@ def test_json_final_contract_allows_tool_only_turn_but_still_checks_final_prose(
     {"possible_causes": "新写中文。"},
 ])
 def test_legacy_inspection_shapes_cannot_bypass_language_acceptance(payload):
-    from workflow_response_contracts import INSPECTION_RESPONSE
+    from application.response_contracts import INSPECTION_RESPONSE
     with pytest.raises(ResponseRejectedError):
         collect_response(
             FakeProvider([[TextDelta(json.dumps(payload, ensure_ascii=False))]]),

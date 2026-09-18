@@ -6,8 +6,8 @@ import re
 from pathlib import Path
 from typing import Protocol
 
-from plc_agent_tools import ToolContext, build_tool_context
-from session_store import SessionStore
+from agent_runtime.plc_tools import ToolContext, build_tool_context
+from storage.session import SessionStore
 
 
 class ContextUnavailableError(ValueError):

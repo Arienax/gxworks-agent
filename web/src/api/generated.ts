@@ -569,6 +569,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/versions/{version_id}/exports/gxworks2-csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fresh Gxworks2 Csv
+         * @description Download a fresh CSV pair from the saved IR without calling a model.
+         */
+        get: operations["fresh_gxworks2_csv_api_projects__project_id__versions__version_id__exports_gxworks2_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/versions/{version_id}/hardware": {
         parameters: {
             query?: never;
@@ -948,6 +968,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/detect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Detect Model Profile */
+        post: operations["detect_model_profile_api_settings_detect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/profiles": {
         parameters: {
             query?: never;
@@ -1011,6 +1048,40 @@ export interface paths {
         put?: never;
         /** Test Model Connection */
         post: operations["test_model_connection_api_settings_profiles__profile_id__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Model Profile */
+        post: operations["resolve_model_profile_api_settings_resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify Model Profile */
+        post: operations["verify_model_profile_api_settings_verify_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1669,13 +1740,44 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "connected" | "failed";
+            status: "connected" | "failed" | "resolved" | "unverified";
         };
         /** ModelConnectionTest */
         ModelConnectionTest: {
             /** Api Key */
             api_key?: string | null;
             profile?: components["schemas"]["ModelProfileUpdate"] | null;
+        };
+        /** ModelDiscoveryRequest */
+        ModelDiscoveryRequest: {
+            /**
+             * Mode
+             * @default resolve
+             * @enum {string}
+             */
+            mode: "list" | "quick" | "resolve" | "deep";
+            profile: components["schemas"]["ModelProfileCreate"];
+            /**
+             * Refresh
+             * @default false
+             */
+            refresh: boolean;
+        };
+        /** ModelDiscoveryResult */
+        ModelDiscoveryResult: {
+            /** Discovery */
+            discovery?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Message */
+            message: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "connected" | "failed" | "resolved" | "unverified";
         };
         /** ModelKeyUpdate */
         ModelKeyUpdate: {
@@ -1690,8 +1792,16 @@ export interface components {
             capabilities?: {
                 [key: string]: boolean;
             };
+            /** Capability Overrides */
+            capability_overrides?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
             /** Configured */
             configured: boolean;
+            /** Contract */
+            contract?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
             /**
              * Deletable
              * @default false
@@ -1707,8 +1817,16 @@ export interface components {
             model?: string | null;
             /** Name */
             name?: string | null;
+            /** Parameter Support */
+            parameter_support?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
             /** Request Overrides */
             request_overrides?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /** User Settings */
+            user_settings?: {
                 [key: string]: components["schemas"]["JsonValue"];
             };
         };
@@ -1722,6 +1840,14 @@ export interface components {
             capabilities?: {
                 [key: string]: boolean;
             };
+            /** Capability Overrides */
+            capability_overrides?: {
+                [key: string]: unknown;
+            };
+            /** Contract */
+            contract?: {
+                [key: string]: unknown;
+            };
             /** Generation Defaults */
             generation_defaults?: {
                 [key: string]: unknown;
@@ -1732,8 +1858,16 @@ export interface components {
             model: string;
             /** Name */
             name: string;
+            /** Parameter Support */
+            parameter_support?: {
+                [key: string]: unknown;
+            };
             /** Request Overrides */
             request_overrides?: {
+                [key: string]: unknown;
+            };
+            /** User Settings */
+            user_settings?: {
                 [key: string]: unknown;
             };
         };
@@ -1745,6 +1879,14 @@ export interface components {
             capabilities?: {
                 [key: string]: boolean;
             } | null;
+            /** Capability Overrides */
+            capability_overrides?: {
+                [key: string]: unknown;
+            } | null;
+            /** Contract */
+            contract?: {
+                [key: string]: unknown;
+            } | null;
             /** Generation Defaults */
             generation_defaults?: {
                 [key: string]: unknown;
@@ -1755,8 +1897,16 @@ export interface components {
             model?: string | null;
             /** Name */
             name?: string | null;
+            /** Parameter Support */
+            parameter_support?: {
+                [key: string]: unknown;
+            } | null;
             /** Request Overrides */
             request_overrides?: {
+                [key: string]: unknown;
+            } | null;
+            /** User Settings */
+            user_settings?: {
                 [key: string]: unknown;
             } | null;
         };
@@ -1768,6 +1918,24 @@ export interface components {
             language: string;
             /** Profiles */
             profiles?: components["schemas"]["ModelProfile"][];
+        };
+        /** ModelVerificationRequest */
+        ModelVerificationRequest: {
+            /**
+             * Consent
+             * @default false
+             */
+            consent: boolean;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "parameter" | "capability" | "chat";
+            profile: components["schemas"]["ModelProfileCreate"];
+            /** Target */
+            target: string;
+            /** Value */
+            value?: unknown;
         };
         /** NativeValidationRecord */
         NativeValidationRecord: {
@@ -1970,6 +2138,8 @@ export interface components {
         };
         /** ResponseViolation */
         ResponseViolation: {
+            /** Observed Opcode */
+            observed_opcode?: string | null;
             /** Path */
             path: string;
             /**
@@ -3294,6 +3464,38 @@ export interface operations {
             };
         };
     };
+    fresh_gxworks2_csv_api_projects__project_id__versions__version_id__exports_gxworks2_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     status_api_projects__project_id__versions__version_id__hardware_get: {
         parameters: {
             query?: never;
@@ -4159,6 +4361,39 @@ export interface operations {
             };
         };
     };
+    detect_model_profile_api_settings_detect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelDiscoveryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelDiscoveryResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_model_profile_api_settings_profiles_post: {
         parameters: {
             query?: never;
@@ -4311,6 +4546,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelConnectionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_model_profile_api_settings_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelDiscoveryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelDiscoveryResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_model_profile_api_settings_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelVerificationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelDiscoveryResult"];
                 };
             };
             /** @description Validation Error */

@@ -12,7 +12,7 @@ import pytest
 from application.jobs import JobManager
 from application.proposals import ProposalService
 from application.workspace import ConflictError, WorkspaceBusyError, WorkspaceWriterLock, atomic_json
-from session_store import SessionStore
+from storage.session import SessionStore
 
 
 @pytest.fixture
@@ -32,7 +32,7 @@ def _bytes(root):
 
 
 def _program():
-    from plc_ir import build_plc_ir
+    from plc.ir import build_plc_ir
     return build_plc_ir({"device_comments": {}, "rungs": [{"rung_id": 1, "debug_note": "启动", "header_element": None,
         "shared_inputs": [], "branches": [{"branch_id": 1, "y_offset_level": 0,
         "inputs": [{"type": "NO", "address": "X0", "label": ""}],
@@ -41,7 +41,7 @@ def _program():
 
 
 def _base(store, project_id):
-    from plc_core import PLCCore
+    from plc.core import PLCCore
     program = _program()
     version_id, output = store.prepare_version(project_id)
     metadata = store._ir_metadata(program)
@@ -273,12 +273,12 @@ def test_proposal_manifest_paths_rejected_before_artifact_hash_reads(services, m
 
 
 def test_proposal_patch_reuses_core_without_legacy_migration(services):
-    from plc_core import PLCCore
+    from plc.core import PLCCore
     store, project, lock, state = services
     version, program = _base(store, project["id"])
     replacement = copy.deepcopy(program["networks"][0]["ladder"])
     replacement["branches"][0]["inputs"].append({"type": "NC", "address": "X1", "label": ""})
-    from plc_ir import canonical_sha256
+    from plc.ir import canonical_sha256
     candidate = PLCCore().patch_program(program, {"base_revision": 1, "base_ir_sha256": canonical_sha256(program),
         "target_revision": 2, "operations": [{"operation": "modify_network", "network": "N0001", "ladder": replacement}]})
     service = ProposalService(store, state, lock)

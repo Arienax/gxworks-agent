@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "id": "openai-gpt41",
+  "extends": "generic-openai-compatible",
+  "match": {
+    "endpoints": [
+      "https://api.openai.com/v1"
+    ],
+    "models": [
+      "gpt-4.1",
+      "gpt-4.1-2025-04-14"
+    ]
+  },
+  "parameters": {
+    "temperature": {
+      "type": "number",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard",
+        "minimum": 0,
+        "maximum": 2
+      },
+      "default_mode": "omit",
+      "ui_hint": {
+        "step": 0.01
+      }
+    },
+    "top_p": {
+      "type": "number",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "default_mode": "omit",
+      "ui_hint": {
+        "step": 0.01
+      }
+    },
+    "max_completion_tokens": {
+      "type": "integer",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard",
+        "minimum": 1,
+        "maximum": 32768
+      },
+      "default_mode": "omit"
+    },
+    "reasoning_effort": {
+      "type": "enum",
+      "status": "unsupported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard"
+      },
+      "default_mode": "omit"
+    }
+  },
+  "capabilities": {
+    "tools": {
+      "status": "supported",
+      "source": "catalog"
+    },
+    "vision": {
+      "status": "supported",
+      "source": "catalog"
+    },
+    "streaming": {
+      "status": "supported",
+      "source": "catalog"
+    },
+    "structured_output": {
+      "status": "supported",
+      "source": "catalog",
+      "modes": [
+        "json_object",
+        "json_schema"
+      ]
+    },
+    "context_window": {
+      "status": "supported",
+      "source": "catalog",
+      "value": 1047576
+    }
+  },
+  "references": [
+    "https://developers.openai.com/api/docs/models/gpt-4.1",
+    "https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create"
+  ],
+  "reviewed_at": "2026-09-18"
+}
