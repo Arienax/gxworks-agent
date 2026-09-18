@@ -1,0 +1,51 @@
+name: Confirmed Generation Compatibility
+
+on:
+  push:
+    branches: [feat/universal-api-capabilities]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'web/**'
+      - 'resources/**'
+      - '.github/workflows/confirmed-generation.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'web/**'
+      - 'resources/**'
+      - '.github/workflows/confirmed-generation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Archive exact tested source
+        run: git archive --format=zip --output=confirmed-generation-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: confirmed-generation-source
+          path: confirmed-generation-source.zip
+          retention-days: 7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install test dependencies
+        run: python -m pip install -r requirements/web.txt pytest jsonschema
+      - name: Test confirmed generation and specification persistence
+        env:
+          PYTHONPATH: src
+        run: python -m pytest -q tests/test_generation_agent_boundary.py tests/test_spec_choice_metadata.py --junitxml=confirmed-generation-tests.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: confirmed-generation-results
+          path: confirmed-generation-tests.xml
+          retention-days: 7
