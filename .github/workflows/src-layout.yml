@@ -63,6 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           lfs: true
           persist-credentials: false
       - uses: actions/setup-python@v5
@@ -70,11 +71,11 @@ jobs:
           python-version: '3.12'
       - name: Install desktop and shared runtime dependencies
         run: python -m pip install -r requirements.txt -r requirements/web.txt jsonschema olefile
-      - name: Check relocated Qt workbench and configuration paths
-        run: >-
-          python -m pytest -q tests/test_source_layout.py tests/test_spec_review_workbench.py
-          tests/test_config_dialog_profiles.py tests/test_codicon_safety.py
-          tests/test_display_names.py tests/test_i18n.py --junitxml=desktop-layout-tests.xml
+      - name: Compare relocated Qt workbench with the pre-refactor baseline
+        shell: pwsh
+        run: |
+          git worktree add --detach "$env:RUNNER_TEMP/source-layout-desktop-baseline" 295378d6ac5d24949c03a1c799906f4afe0fd4c9
+          python scripts/check_source_layout_regressions.py --baseline "$env:RUNNER_TEMP/source-layout-desktop-baseline" --output "$env:RUNNER_TEMP/source-layout-desktop-results" --tests tests/test_spec_review_workbench.py tests/test_config_dialog_profiles.py tests/test_codicon_safety.py tests/test_display_names.py tests/test_i18n.py --candidate-tests tests/test_source_layout.py
       - name: Build the actual desktop package
         run: python -m PyInstaller --noconfirm packaging/pyinstaller/desktop.spec
       - name: Smoke-test packaged SDK imports without a model request
@@ -87,6 +88,6 @@ jobs:
         with:
           name: source-layout-desktop-results
           path: |
-            desktop-layout-tests.xml
+            ${{ runner.temp }}/source-layout-desktop-results/
             build/desktop/warn-desktop.txt
           retention-days: 7

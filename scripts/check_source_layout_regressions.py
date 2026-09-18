@@ -15,13 +15,13 @@ RENAMED_TESTS = {
 }
 
 
-def run(checkout: Path, output: Path, label: str):
+def run(checkout: Path, output: Path, label: str, tests=()):
     report = output / (label + '.xml')
     env = {**os.environ, 'PYTHONPATH': str(checkout / 'src'),
            'PYTHONDONTWRITEBYTECODE': '1', 'QT_QPA_PLATFORM': 'offscreen'}
     with (output / (label + '.log')).open('w', encoding='utf-8') as log:
         completed = subprocess.run(
-            [sys.executable, '-m', 'pytest', '-q', '--junitxml=' + str(report)],
+            [sys.executable, '-m', 'pytest', '-q', *tests, '--junitxml=' + str(report)],
             cwd=checkout, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=1200,
         )
     if completed.returncode not in (0, 1) or not report.is_file():
@@ -66,10 +66,17 @@ def main():
     parser.add_argument('--baseline', required=True, type=Path)
     parser.add_argument('--candidate', type=Path, default=Path.cwd())
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--tests', nargs='+', default=[],
+                        help='Same selected test paths in both checkouts; omit for the full suite')
+    parser.add_argument('--candidate-tests', nargs='+', default=[],
+                        help='Additional newly introduced tests that exist only in the candidate')
     args = parser.parse_args()
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=True)
-    result = compare(run(args.baseline.resolve(), output, 'baseline'),
-                     run(args.candidate.resolve(), output, 'candidate'))
+    if args.candidate_tests and not args.tests:
+        parser.error('--candidate-tests requires an explicit --tests selection')
+    result = compare(run(args.baseline.resolve(), output, 'baseline', args.tests),
+                     run(args.candidate.resolve(), output, 'candidate',
+                         [*args.tests, *args.candidate_tests]))
     text = json.dumps(result, ensure_ascii=False, indent=2)
     (output / 'comparison.json').write_text(text + '\n', encoding='utf-8')
     print(text)
