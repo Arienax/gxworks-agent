@@ -1,0 +1,56 @@
+name: Python Core Boundaries
+
+on:
+  push:
+    branches: [refactor/python-core-boundaries-20260919]
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'web/**'
+      - 'simulator_gateway/**'
+      - 'hardware_reader/**'
+      - 'tests/**'
+      - 'tools/**'
+      - '.github/workflows/core-boundaries.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-baseline:
+    name: Reproducible source and frontend toolchain
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          lfs: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install pinned frontend dependencies
+        run: npm ci --prefix web
+      - name: Capture tracked source and pinned frontend dependencies
+        run: |
+          mkdir -p boundary-evidence
+          git rev-parse HEAD > boundary-evidence/commit.txt
+          python - <<'PY'
+          import pathlib, subprocess, zipfile
+          root = pathlib.Path.cwd()
+          paths = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
+          with zipfile.ZipFile('boundary-evidence/source.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
+              for name in paths:
+                  path = root / name
+                  if name and path.is_file():
+                      archive.write(path, name)
+          PY
+          tar -czf boundary-evidence/frontend-dependencies.tar.gz web/node_modules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-core-boundary-baseline
+          path: boundary-evidence/
+          retention-days: 7
