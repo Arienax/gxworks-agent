@@ -69,12 +69,14 @@ def _repair_short_circuit(function, args, kwargs):
 def model_call(function, *args, **kwargs):
     """Guard model invocations while deterministic repair stays model-free."""
     from model_provider import ResponseRejectedError, public_model_error
+    from application.compact_protocol import CompactProtocolError
+    from plc_json_validator import PLCJsonValidationError
     try:
         local = _repair_short_circuit(function, args, kwargs)
         if local is not None:
             return local
         return function(*args, **kwargs)
-    except ResponseRejectedError:
+    except (ResponseRejectedError, CompactProtocolError, PLCJsonValidationError):
         raise
     except Exception as error:
         safe_error = public_model_error(error)

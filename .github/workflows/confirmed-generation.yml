@@ -27,6 +27,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Archive exact tested source
         run: git archive --format=zip --output=confirmed-generation-source.zip HEAD
       - uses: actions/upload-artifact@v4
@@ -39,10 +41,32 @@ jobs:
           python-version: '3.11'
       - name: Install test dependencies
         run: python -m pip install -r requirements/web.txt pytest jsonschema
-      - name: Test confirmed generation and specification persistence
+      - name: Test confirmation through saved ladder artifacts and shared boundaries
         env:
           PYTHONPATH: src
-        run: python -m pytest -q tests/test_generation_agent_boundary.py tests/test_spec_choice_metadata.py --junitxml=confirmed-generation-tests.xml
+        run: >-
+          python -m pytest -q
+          tests/test_generation_agent_boundary.py
+          tests/test_spec_choice_metadata.py
+          tests/test_confirmed_compatibility.py
+          tests/test_hybrid_compact_recovery.py
+          tests/test_generation_delivery.py
+          tests/test_context_refresh_runtime.py
+          tests/test_approval_modes.py
+          tests/test_program_exploration.py
+          tests/test_confirmed_generation_regressions_20260914.py
+          tests/test_review_noise_regressions.py
+          tests/test_user_confirmed_generation_repair.py
+          tests/test_model_provider.py
+          tests/test_web_contract.py
+          tests/test_web_frontend_state_flow.py
+          tests/test_model_contract.py
+          tests/test_model_catalog_v3.py
+          tests/test_model_capabilities.py
+          tests/test_model_stream_cancellation.py
+          tests/test_model_presentation.py
+          tests/test_plc_core_boundary.py
+          --junitxml=confirmed-generation-tests.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
