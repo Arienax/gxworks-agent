@@ -10,10 +10,10 @@ from application.settings import SettingsService
 
 @pytest.fixture
 def settings_env(tmp_path, monkeypatch):
-    import config_manager
-    import credential_store
-    import model_provider
-    import resource_paths
+    import storage.config as config_manager
+    import storage.credentials as credential_store
+    import model_runtime.provider as model_provider
+    import shared.paths as resource_paths
     config_path = tmp_path / "user" / "config.json"
     template = tmp_path / "config.default.json"
     config = {"language": "zh-CN", "activeModelProfileId": "fake", "modelProfiles": [{
@@ -78,7 +78,7 @@ def test_missing_config_reads_template_without_creating_file(settings_env):
 
 
 def test_explicit_save_migrates_legacy_key_to_original_profile_when_switching(settings_env):
-    from credential_store import credential_target_for_profile
+    from storage.credentials import credential_target_for_profile
     env = settings_env
     env.persist({"base_url": "https://custom.invalid", "default_model": "old-model", "api_key": "old-key"})
     env.service.update(active_profile_id="deepseek-default", language="ja")
@@ -89,7 +89,7 @@ def test_explicit_save_migrates_legacy_key_to_original_profile_when_switching(se
 
 
 def test_create_update_sample_and_delete_profile_with_isolated_key(settings_env):
-    from credential_store import credential_target_for_profile
+    from storage.credentials import credential_target_for_profile
     env = settings_env
     created = env.service.create_profile(id="custom-two", name="Second", base_url="http://localhost:8080/v1",
         model="other", api_key="second-key", capabilities={"tool_stream": True, "thinking_required": True},
@@ -123,7 +123,7 @@ def test_delete_missing_profile_rejected_without_writes(settings_env):
 
 
 def test_key_commands_do_not_affect_other_profiles_or_revive_legacy_key(settings_env):
-    from credential_store import CREDENTIAL_TARGET
+    from storage.credentials import CREDENTIAL_TARGET
     env = settings_env
     env.service.set_key("fake", "new-key")
     assert _profile(env.service.public_settings())["configured"]
@@ -175,7 +175,7 @@ def test_public_advanced_values_strip_nested_credentials_and_url_credentials(set
 
 
 def test_test_connection_uses_unsaved_draft_and_key_without_any_mutation(settings_env, monkeypatch):
-    import model_provider
+    import model_runtime.provider as model_provider
     env = settings_env
     monkeypatch.setattr(model_provider, "create_provider",
         lambda *args, **kwargs: pytest.fail("connection test must not run capability discovery"))
@@ -190,7 +190,7 @@ def test_test_connection_uses_unsaved_draft_and_key_without_any_mutation(setting
 
 
 def test_test_connection_does_not_echo_provider_errors(settings_env, monkeypatch):
-    import model_provider
+    import model_runtime.provider as model_provider
     env = settings_env
     def failed(*args):
         raise model_provider.ModelProviderError("Authentication Bearer very-private-key D:\\private\\config.json", code="authentication")
@@ -261,9 +261,9 @@ def test_read_only_server_rejects_even_explicit_connection_test(settings_env, tm
 
 
 def test_browser_demo_uses_real_settings_with_only_temporary_io(tmp_path, monkeypatch):
-    import config_manager
-    import credential_store
-    import model_provider
+    import storage.config as config_manager
+    import storage.credentials as credential_store
+    import model_runtime.provider as model_provider
     from scripts.web_demo import isolated_demo_settings
     def forbidden(*args, **kwargs):
         pytest.fail("Demo touched a real credential or network dependency")
@@ -291,7 +291,7 @@ def test_browser_demo_uses_real_settings_with_only_temporary_io(tmp_path, monkey
 def test_browser_demo_main_analysis_confirm_generation_autosaves_with_private_audit(monkeypatch):
     pytest.importorskip("fastapi")
     pytest.importorskip("httpx")
-    import model_provider
+    import model_runtime.provider as model_provider
     import uvicorn
     from fastapi.testclient import TestClient
     from scripts import web_demo
@@ -330,7 +330,7 @@ def test_browser_demo_main_analysis_confirm_generation_autosaves_with_private_au
 
 def test_demo_failure_diagnostics_only_contain_exception_types_and_code_locations(capsys):
     from scripts.web_demo import _demo_exception_diagnostic
-    import model_provider
+    import model_runtime.provider as model_provider
     try:
         try:
             raise model_provider.ModelProviderError("Bearer sdk-secret-and-private-path", code="authentication")
@@ -346,8 +346,8 @@ def test_demo_failure_diagnostics_only_contain_exception_types_and_code_location
 
 def test_first_unsaved_profile_can_detect_without_writing_settings_or_credentials(settings_env, monkeypatch):
     from test_model_capabilities import Endpoint
-    from model_provider import OpenAICompatibleProvider
-    import model_provider
+    from model_runtime.provider import OpenAICompatibleProvider
+    import model_runtime.provider as model_provider
     env = settings_env
     endpoint = Endpoint()
     monkeypatch.setattr(model_provider, "create_provider", lambda p, k: OpenAICompatibleProvider(p, k, client=endpoint))
@@ -369,7 +369,7 @@ def test_detect_does_not_reuse_saved_key_for_changed_endpoint(settings_env):
 
 
 def test_parameter_contract_roundtrips_and_is_invalidated_on_model_or_key_change(settings_env):
-    from model_capabilities import capability_scope
+    from model_runtime.capabilities import capability_scope
     env = settings_env
     source = copy.deepcopy(env.config["modelProfiles"][0])
     support = {"scope": capability_scope(source), "parameters": {
@@ -389,9 +389,9 @@ def test_discovery_http_requires_operator_csrf_and_accepts_an_unsaved_profile(se
     from fastapi.testclient import TestClient
     from application.workbench import WorkbenchService
     from integrations.web.app import create_app
-    from model_provider import OpenAICompatibleProvider
+    from model_runtime.provider import OpenAICompatibleProvider
     from test_model_capabilities import Endpoint
-    import model_provider
+    import model_runtime.provider as model_provider
     monkeypatch.setattr(model_provider, "create_provider", lambda p, k: OpenAICompatibleProvider(p, k, client=Endpoint()))
     env = settings_env
     origin = "http://127.0.0.1:8765"

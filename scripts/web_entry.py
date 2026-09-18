@@ -5,7 +5,7 @@ import sys
 
 def run():
     if sys.argv[1:] == ["--context-policy-info"]:
-        from prompt_context_policy import resolve_context_policy
+        from shared.context_policy import resolve_context_policy
         policy = resolve_context_policy()
         print(json.dumps({"context_policy": policy.snapshot(),
                           "automatic_manuals": policy.manuals,

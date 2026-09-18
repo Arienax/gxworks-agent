@@ -257,7 +257,7 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
         if not service.jobs:
             raise KeyError(job_id)
         job = service.jobs.get(job_id)
-        from runtime_diagnostics import export_diagnostics
+        from shared.diagnostics import export_diagnostics
         data = export_diagnostics(service.state_dir, job)
         return Response(data, media_type="application/zip", headers={
             "Content-Disposition": f'attachment; filename="gxworks-diagnostics-{job["id"]}.zip"',

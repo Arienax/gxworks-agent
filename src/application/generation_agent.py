@@ -11,27 +11,24 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-import runtime_diagnostics as diagnostics
+import shared.diagnostics as diagnostics
 from application.compact_protocol import (
     PROTOCOL_VERSION, CompactProtocolError, compact_response_schema as _compact_response_schema,
     decode_compact as _json_object, expand_compact_ladder as _expand_compact_ladder,
     normalize_compact, _simple_input, _branch_input, _output, _confirmed_comments,
 )
 
-from plc_device_identity import canonical_device, canonical_io_rows, canonical_ladder_devices
-from model_provider import TextDelta
-from plc_generation_context import _build_knowledge_context, public_generation_specification
-from prompt_context_policy import audit_section
-from response_language import ResponseContract
+from plc.device_identity import canonical_ladder_devices
+from model_runtime.provider import TextDelta
+from application.generation_context import _build_knowledge_context
+from shared.context_policy import audit_section
+from model_runtime.responses import ResponseContract
 
 
-_GENERATION_REQUEST = (
-    "根据已经由用户确认的规格生成完整梯形图。"
-    "不得重新分析需求、提出问题或改变已确认 I/O、触点极性、参数和所选方案。"
-    "输入条件的 OR 必须在同一个输出分支中表示；"
-    "不得把 (A OR B) -> 同一输出 拆成多个 output branch/多个 branches 来表达。"
-    "只返回一份最终 JSON；顶层对象闭合后立即结束回复，"
-    "不得在同一次 completion 中自检后再重写或追加第二份完整 JSON。"
+from application.confirmed_generation_context import (
+    CONFIRMED_GENERATION_REQUEST as _GENERATION_REQUEST,
+    build_confirmed_generation_context,
+    project_confirmed_specification as _strict_generation_projection,
 )
 
 _COMPACT_RESPONSE = ResponseContract("compact_ladder", "json")
@@ -157,36 +154,12 @@ class _FirstJSONObjectProvider:
 
 
 def _response_options(provider, *, model_name=None, effort=None):
-    from model_response_format import response_plan
+    from model_runtime.response_format import response_plan
     return response_plan(
         getattr(provider, "profile", {}), _compact_response_schema(),
         model=model_name, api_key=getattr(provider, "api_key", None),
         hints={"reasoning_effort": effort} if effort is not None else {},
     )[0]
-
-
-
-def _strict_generation_projection(confirmed_spec):
-    """Expose structured confirmed facts, not Agent-A implementation prose."""
-    projected = public_generation_specification(confirmed_spec) or {}
-    bindings = confirmed_spec.get("io_bindings") if isinstance(confirmed_spec, dict) else None
-    if isinstance(bindings, list):
-        projected["io_bindings"] = [
-            {key: copy.deepcopy(row[key]) for key in ("binding_id", "role", "kind", "address", "source_parameter_id", "name") if key in row}
-            for row in bindings if isinstance(row, dict)
-        ]
-    if isinstance(projected.get("io_table"), list):
-        projected["io_table"] = canonical_io_rows(projected["io_table"])
-    for row in projected.get("io_bindings", []):
-        if "address" in row:
-            row["address"] = canonical_device(row["address"])
-    selected = projected.get("selected_approach")
-    if isinstance(selected, dict):
-        selected.pop("name", None)
-        selected.pop("description", None)
-        selected.pop("generation_guide", None)
-    return projected
-
 
 
 
@@ -201,7 +174,7 @@ def _decode_generated_ladder(value, projected, plc_model):
         return _expand_compact_ladder(value, projected), "compact_ladder"
     if isinstance(value, dict) and "rungs" in value and set(value) <= {"rungs", "device_comments"}:
         from application.compact_alias import expand_hybrid_compact_ladder
-        from plc_json_validator import validate_ladder_candidate_structure
+        from plc.validation import validate_ladder_candidate_structure
         converted = expand_hybrid_compact_ladder(value, projected)
         ladder = converted if converted is not None else copy.deepcopy(value)
         # Choosing a known representation is not accepting an unchecked program.
@@ -212,15 +185,12 @@ def _decode_generated_ladder(value, projected, plc_model):
 
 
 def _build_agent_b_prompt(projected, plc_model):
-    model = str(plc_model or "FX3U").strip().upper() or "FX3U"
-    evidence = _build_knowledge_context(
-        _GENERATION_REQUEST,
-        plc_model=model,
-        task_type="generate",
-        confirmed_context=projected,
-        evidence=None,
+    context = build_confirmed_generation_context(
+        projected, plc_model, knowledge_builder=_build_knowledge_context,
     )
-    confirmed = json.dumps(projected, ensure_ascii=False, separators=(",", ":"))
+    model = context.plc_model
+    evidence = context.knowledge_context
+    confirmed = json.dumps(context.confirmed_spec, ensure_ascii=False, separators=(",", ":"))
     prompt = (
         _COMPACT_PROTOCOL
         + f"\n# Selected PLC\n{model}\n"
@@ -241,7 +211,7 @@ def generate_confirmed_ladder(
     on_stage=None,
 ):
     """Make one streaming model call, then locally expand the compact plan."""
-    import api
+    import application.model_api as api
 
     model = str(plc_model or "FX3U").strip().upper() or "FX3U"
     projected = _strict_generation_projection(confirmed_spec)
@@ -252,16 +222,16 @@ def generate_confirmed_ladder(
     if on_stage:
         on_stage("confirmed_spec_generation", "正在根据已确认规格生成梯形图")
 
-    base_provider = api._workflow_provider()
+    base_provider = api.current_provider()
     provider = _FirstJSONObjectProvider(base_provider)
-    from model_response_format import response_plan
+    from model_runtime.response_format import response_plan
     options, streaming = response_plan(
         getattr(base_provider, "profile", {}), _compact_response_schema(),
         model=model_name, api_key=getattr(base_provider, "api_key", None),
         hints={"reasoning_effort": effort} if effort is not None else {},
     )
     with api.provider_scope(provider, model_name=model_name):
-        response = api._request_model(
+        response = api.request_model(
             [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": _GENERATION_REQUEST},
@@ -284,7 +254,7 @@ def generate_confirmed_ladder(
     ladder, representation = _decode_generated_ladder(compact, projected, model)
     diagnostics.emit("generation_representation", stage="compact_protocol", representation=representation)
     ladder = canonical_ladder_devices(ladder)
-    from plc_confirmed_checks import check_direct_self_hold
+    from plc.specification.checks import check_direct_self_hold
     behavior = check_direct_self_hold(ladder, projected)
     diagnostics.emit("confirmed_primitive_check", stage="generation_validation", **behavior)
     return {"ladder": ladder, "model_calls": 1}

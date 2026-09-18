@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from i18n import tr
+from shared.i18n import tr
 
 import ast
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional
 
-from display_names import (
+from shared.display_names import (
     naturalize_display_text,
     naturalize_identifier,
     preferred_display_name,

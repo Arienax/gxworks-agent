@@ -2,9 +2,9 @@
 import copy
 import pytest
 from application.model_detection import inspect_openai_compatible
-from model_catalog import resolve_capabilities
-from model_contract import CapabilityContract
-from model_provider import ModelProviderError
+from model_runtime.catalog import resolve_capabilities
+from model_runtime.contract import CapabilityContract
+from model_runtime.provider import ModelProviderError
 from test_model_capabilities import Endpoint, provider, profile, Rejection
 from test_application_settings import settings_env
 
@@ -43,7 +43,7 @@ def test_listing_errors_do_not_fallback_to_paid_generation(status):
 
 
 def test_missing_key_does_not_block_offline_editable_contract(settings_env,monkeypatch):
-    monkeypatch.setattr('model_provider.create_provider',lambda *a,**k:pytest.fail('no SDK on local resolution'))
+    monkeypatch.setattr('model_runtime.provider.create_provider',lambda *a,**k:pytest.fail('no SDK on local resolution'))
     result=settings_env.service.detect_profile(name='New',model='not-in-catalog',base_url='https://new.invalid/v1')
     assert result['status']=='resolved' and result['discovery']['generation_requests']==0
     c=CapabilityContract.from_dict(result['discovery']['contract']);c.parameters['temperature'].validate(.73)
@@ -54,7 +54,7 @@ def test_http_resolve_and_verify_consent_keep_operator_csrf_boundary(settings_en
     from fastapi.testclient import TestClient
     from application.workbench import WorkbenchService
     from integrations.web.app import create_app
-    monkeypatch.setattr('model_provider.create_provider',lambda *a,**k:pytest.fail('No model client allowed'))
+    monkeypatch.setattr('model_runtime.provider.create_provider',lambda *a,**k:pytest.fail('No model client allowed'))
     origin='http://127.0.0.1:8765'
     service=WorkbenchService(tmp_path/'workspace',tmp_path/'state',settings=settings_env.service)
     app=create_app(service.store.base_dir,service=service,origin=origin,operator_token='operator')

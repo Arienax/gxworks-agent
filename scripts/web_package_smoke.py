@@ -51,7 +51,7 @@ def check_package(package, archive_path=None):
         from PyInstaller.archive.readers import ZlibArchiveReader
 
         archive = ZlibArchiveReader(str(archive_path))
-        forbidden = {"main", "qt_compat", "PyQt5", "PyQt6", "PySide2", "PySide6"}
+        forbidden = {"main", "ui", "PyQt5", "PyQt6", "PySide2", "PySide6"}
         qt_excluded = not any(name.split(".")[0] in forbidden for name in archive.toc)
         if not qt_excluded:
             raise RuntimeError("Desktop UI modules were included in the Web archive.")

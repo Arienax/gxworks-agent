@@ -9,7 +9,7 @@ import uuid
 from application.events import utc_now
 from application.projects import public
 from application.workspace import atomic_json, canonical_hash, contained, read_json, record_id
-from plc_hardware import HardwareError, HardwareReader, normalize_read_addresses
+from gxworks2.hardware_reader import HardwareError, HardwareReader, normalize_read_addresses
 
 
 class HardwareService:

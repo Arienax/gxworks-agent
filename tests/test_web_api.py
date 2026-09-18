@@ -13,12 +13,12 @@ pytest.importorskip("fastapi", reason="Web integration requires requirements-web
 pytest.importorskip("httpx", reason="Web integration requires requirements-web.txt")
 from fastapi.testclient import TestClient
 
-import api
+import application.model_api as api
 from application.workbench import WorkbenchService
-from draw import AdvancedSVGLadder
+from rendering.ladder_svg import AdvancedSVGLadder
 from integrations.web.app import create_app
-from model_provider import TextDelta
-from session_store import SessionStore
+from model_runtime.provider import TextDelta
+from storage.session import SessionStore
 
 
 ORIGIN = "http://127.0.0.1:8765"
@@ -215,28 +215,7 @@ def test_candidate_and_execution_preview_theme_preserves_ir_diff_and_proposal_ha
 def test_http_read_surface_imports_without_qt_model_or_automation(tmp_path):
     workspace = tmp_path / "workspace"
     _, project, version, _ = _legacy_workspace(workspace)
-    script = '''
-import importlib.abc, sys
-class BlockDesktop(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path=None, target=None):
-        if fullname == "main" or fullname == "qt_compat" or fullname.startswith(("PyQt", "PySide", "pywinauto")):
-            raise AssertionError("Desktop import: " + fullname)
-sys.meta_path.insert(0, BlockDesktop())
-from fastapi.testclient import TestClient
-from integrations.web.app import create_app
-from application.workbench import WorkbenchService
-def forbidden():
-    raise AssertionError("Model factory invoked")
-service = WorkbenchService(sys.argv[1], sys.argv[2], read_only=True, model_factory=forbidden)
-app = create_app(sys.argv[1], state_dir=sys.argv[2], origin="http://127.0.0.1:8765", operator_token="operator-test", service=service)
-with TestClient(app, base_url="http://127.0.0.1:8765") as client:
-    assert client.post("/api/session", json={"token":"operator-test"}).status_code == 200
-    assert client.get("/api/projects").status_code == 200
-    assert client.get("/api/projects/" + sys.argv[3] + "/versions/" + sys.argv[4] + "/program").status_code == 200
-assert "qt_compat" not in sys.modules and "main" not in sys.modules
-assert "api" not in sys.modules
-assert "simulator.runtime" not in sys.modules
-'''
+    script = '\nimport importlib.abc, sys\nclass BlockDesktop(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if fullname == "main" or fullname == "qt_compat" or fullname.startswith(("PyQt", "PySide", "pywinauto")):\n            raise AssertionError("Desktop import: " + fullname)\nsys.meta_path.insert(0, BlockDesktop())\nfrom fastapi.testclient import TestClient\nfrom integrations.web.app import create_app\nfrom application.workbench import WorkbenchService\ndef forbidden():\n    raise AssertionError("Model factory invoked")\nservice = WorkbenchService(sys.argv[1], sys.argv[2], read_only=True, model_factory=forbidden)\napp = create_app(sys.argv[1], state_dir=sys.argv[2], origin="http://127.0.0.1:8765", operator_token="operator-test", service=service)\nwith TestClient(app, base_url="http://127.0.0.1:8765") as client:\n    assert client.post("/api/session", json={"token":"operator-test"}).status_code == 200\n    assert client.get("/api/projects").status_code == 200\n    assert client.get("/api/projects/" + sys.argv[3] + "/versions/" + sys.argv[4] + "/program").status_code == 200\nassert \'ui.desktop.qt\' not in sys.modules and \'ui.desktop.main_window\' not in sys.modules\nassert \'application.model_api\' not in sys.modules\nassert "simulator.runtime" not in sys.modules\n'
     env = dict(os.environ, PYTHONPATH=str(Path("src").resolve()))
     result = subprocess.run([sys.executable, "-c", script, str(workspace), str(tmp_path / "state"), project, version],
                             env=env, capture_output=True, text=True, timeout=30)

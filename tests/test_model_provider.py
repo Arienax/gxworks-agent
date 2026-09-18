@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-import api
-from config_manager import DEFAULT_MODEL_PROFILES
-from model_provider import (
+import application.model_api as api
+from storage.config import DEFAULT_MODEL_PROFILES
+from model_runtime.provider import (
     AssistantMessage,
     ImageAttachment,
     ModelProviderError,
@@ -322,11 +322,11 @@ def test_assistant_reasoning_is_replayed_only_by_transport_adapter():
 
 @pytest.mark.parametrize("profile_id", ["deepseek-default", "zhipu-glm-5.3-flash"])
 def test_hidden_reasoning_replays_only_to_vendor_in_multiround_tool_requests(profile_id, monkeypatch):
-    import plc_agent
-    from tool_messages import ToolResult
-    from tool_runtime import public_tool_result_data
+    import agent_runtime.agent as plc_agent
+    from agent_runtime.messages import ToolResult
+    from agent_runtime.runtime import public_tool_result_data
     from application.projects import public
-    from model_provider import strip_legacy_provider_fields
+    from model_runtime.provider import strip_legacy_provider_fields
 
     private = "The internal analysis requires a tool before answering."
     arguments = '{"network_id":"N0001"}'
@@ -379,7 +379,7 @@ def test_hidden_reasoning_replays_only_to_vendor_in_multiround_tool_requests(pro
 
 
 def test_private_reasoning_cannot_be_injected_from_message_dictionaries():
-    from model_provider import coerce_message
+    from model_runtime.provider import coerce_message
     message = coerce_message({"role": "assistant", "content": "公开正文。", "_provider_reasoning": "Untrusted replay."})
     assert message.reasoning == "" and message._provider_reasoning == ""
     provider = OpenAICompatibleProvider(_profile("deepseek-default"), "offline-key", client=_Client([]))
@@ -495,8 +495,8 @@ def test_deprecated_vendor_named_entrypoint_is_only_a_forwarding_alias(monkeypat
 def test_real_request_parameters_keep_language_and_native_schema_before_acceptance(
     monkeypatch, profile_id, stream
 ):
-    from model_provider import ResponseRejectedError
-    from response_language import ResponseContract
+    from model_runtime.provider import ResponseRejectedError
+    from model_runtime.responses import ResponseContract
 
     raw = json.dumps({"summary": "仍然返回中文。"}, ensure_ascii=False)
     wire_response = iter([_chunk(content=raw)]) if stream else SimpleNamespace(

@@ -2,7 +2,7 @@
 import copy
 import json
 
-from i18n import get_language, language_context
+from shared.i18n import get_language, language_context
 
 
 class WorkflowError(RuntimeError):
@@ -68,9 +68,9 @@ def _repair_short_circuit(function, args, kwargs):
 
 def model_call(function, *args, **kwargs):
     """Guard model invocations while deterministic repair stays model-free."""
-    from model_provider import ResponseRejectedError, public_model_error
+    from model_runtime.provider import ResponseRejectedError, public_model_error
     from application.compact_protocol import CompactProtocolError
-    from plc_json_validator import PLCJsonValidationError
+    from plc.validation import PLCJsonValidationError
     try:
         local = _repair_short_circuit(function, args, kwargs)
         if local is not None:
@@ -98,7 +98,7 @@ class Workflow:
             self.on_event(event_type, copy.deepcopy(payload))
 
     def run(self):
-        import api
+        import application.model_api as api
 
         with language_context(self.response_language), api.provider_scope(self.provider, model_name=self.model_name):
             return self._run()

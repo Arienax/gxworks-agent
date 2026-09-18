@@ -4,9 +4,9 @@ import json
 
 import pytest
 
-from plc_condition_normalizer import normalize_shared_conditions
-from plc_ir import lower_rung_instructions
-from plc_json_validator import validate_ladder_candidate_structure
+from plc.condition_normalizer import normalize_shared_conditions
+from plc.ir import lower_rung_instructions
+from plc.validation import validate_ladder_candidate_structure
 
 
 def contact(address, kind="NO"):

@@ -2,7 +2,7 @@
 
 import copy
 
-from confirmed_spec import (
+from plc.specification.confirmed import (
     build_review_draft,
     canonicalize_confirmed_spec,
     restore_review_choices,

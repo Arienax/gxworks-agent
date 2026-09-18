@@ -34,7 +34,7 @@ SQLite 与 `instruction_registry` 刻意承担不同职责：
 
 ### 按任务组装 Prompt
 
-`plc_generation_context.py` 不再为每次请求重放一个巨大的历史 Prompt，而是根据当前操作组装模型上下文。普通 Ladder 生成可以包含已确认规格、当前程序或修改范围、定向检索到的 SQLite 证据、必要的专用上下文，以及由指令契约派生的机器可读输出 schema。
+`application/generation_context.py` 不再为每次请求重放一个巨大的历史 Prompt，而是根据当前操作组装模型上下文。普通 Ladder 生成可以包含已确认规格、当前程序或修改范围、定向检索到的 SQLite 证据、必要的专用上下文，以及由指令契约派生的机器可读输出 schema。
 
 Repair 路径会主动缩减上下文：contract repair 只拿失败 baseline 和允许修复的范围；format repair 则不会注入 PLC 知识上下文。
 

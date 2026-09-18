@@ -22,7 +22,7 @@ import sqlite3
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from gxw2_skill_concepts import (
+from knowledge.gxworks2_concepts import (
     CONCEPT_ROUTES, LEGACY_DERIVED_CONCEPTS, STRONG_CONCEPTS, TASK_SCOPE,
 )
 

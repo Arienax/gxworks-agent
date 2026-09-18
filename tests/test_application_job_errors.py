@@ -5,9 +5,9 @@ import pytest
 
 from application.jobs import JobManager
 from application.workspace import WorkspaceWriterLock, public_payload
-from model_provider import AssistantMessage, ModelRequest, RawModelResponse, ResponseRejectedError, UserMessage
-from response_language import LanguageViolation
-from workflow_response_contracts import ANALYSIS_RESPONSE
+from model_runtime.provider import AssistantMessage, ModelRequest, RawModelResponse, ResponseRejectedError, UserMessage
+from model_runtime.responses import LanguageViolation
+from application.response_contracts import ANALYSIS_RESPONSE
 
 
 def _rejection(violations=None):
@@ -141,8 +141,8 @@ def test_http_job_and_sse_deliver_same_safe_diagnostic(manager, tmp_path):
 
 
 def test_generation_failure_details_survive_job_http_and_sse(manager, tmp_path):
-    from application.generation_repair import GenerationValidationError
-    from plc_json_validator import PLCJsonValidationError
+    from plc.candidate_repair import GenerationValidationError
+    from plc.validation import PLCJsonValidationError
     from fastapi.testclient import TestClient
     from application.workbench import WorkbenchService
     from integrations.web.app import create_app

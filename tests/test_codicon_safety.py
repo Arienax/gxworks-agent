@@ -1,7 +1,7 @@
 import ast
 from pathlib import Path
 
-from codicons import ICON_CODEPOINTS, codicon
+from ui.desktop.icons import ICON_CODEPOINTS, codicon
 
 
 def _literal_icon_references(project_root):

@@ -2,9 +2,9 @@
 import copy
 import json
 import pytest
-from model_contract import CapabilityContract, ParameterDescriptor, UserModelSettings, contract_scope
-from model_catalog import ModelCatalog, resolve_capabilities
-from model_request_policy import resolve_request
+from model_runtime.contract import CapabilityContract, ParameterDescriptor, UserModelSettings, contract_scope
+from model_runtime.catalog import ModelCatalog, resolve_capabilities
+from model_runtime.request_policy import resolve_request
 from test_model_capabilities import profile
 
 
@@ -155,13 +155,13 @@ def test_malformed_hint_is_rejected_as_validation_error(hint):
         ParameterDescriptor.from_dict('temperature',{'type':'number','status':'unknown','source':'generic','ui_hint':hint})
 
 def test_endpoint_metadata_cannot_manufacture_local_capability_evidence():
-    from model_contract import metadata_contract_parts
+    from model_runtime.contract import metadata_contract_parts
     _, caps, _ = metadata_contract_parts({'capabilities': {'tools': {
         'status':'supported','evidence':{'accepted_values':[True]}}}})
     assert caps['tools'].source=='metadata' and not caps['tools'].evidence
 
 def test_profile_normalization_does_not_freeze_runtime_observations_past_ttl():
-    from model_contract import normalize_contract
+    from model_runtime.contract import normalize_contract
     c=resolve_capabilities(profile())['contract']
     c['parameters']['temperature']['evidence']={'accepted_values':[1], 'observations':[
         {'outcome':'accepted','value':.733,'context':'0'*64,'at':1,'source':'observation'}]}

@@ -3,7 +3,7 @@ import re
 import sqlite3
 from pathlib import Path
 
-from resource_paths import resource_path
+from shared.paths import resource_path
 
 
 def _database() -> Path:

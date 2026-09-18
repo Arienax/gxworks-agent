@@ -1,7 +1,7 @@
 import json
 from types import SimpleNamespace as S
 
-import api
+import application.model_api as api
 
 
 def payload():

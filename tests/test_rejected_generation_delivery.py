@@ -1,6 +1,6 @@
 import json
 
-from application.generation_repair import GenerationValidationError
+from plc.candidate_repair import GenerationValidationError
 from application.jobs import JobManager
 from application.projects import ProjectService
 from application.proposals import ProposalService
@@ -9,7 +9,7 @@ from application.rejected_generation_preview import (
     recover_compact_for_validation,
 )
 from application.workspace import WorkspaceWriterLock
-from session_store import SessionStore
+from storage.session import SessionStore
 
 
 BROKEN_COMPACT = (

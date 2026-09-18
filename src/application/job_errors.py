@@ -5,7 +5,7 @@ import re
 from functools import lru_cache
 from typing import Mapping
 
-from application.generation_repair import REPAIR_REASONS, GenerationValidationError
+from plc.candidate_repair import REPAIR_REASONS, GenerationValidationError
 from application.compact_protocol import CompactProtocolError
 
 
@@ -18,8 +18,8 @@ _MAX_VIOLATIONS = 16
 
 @lru_cache(maxsize=1)
 def _schema_segments():
-    from response_language import ResponseContract
-    import workflow_response_contracts
+    from model_runtime.responses import ResponseContract
+    import application.response_contracts as workflow_response_contracts
     result = {"ladder", "patch", "arguments", "comment", "shared_inputs", "header_element", "inputs", "outputs", "branches", "type", "rung_id", "branch_id", "y_offset_level", "address", "expression", "opcode", "operands", "value", "mode", "delete_rung_ids", "confirmed_spec", "selected_approach", "networks"}
     result.update({"r", "h", "s", "b", "i", "o", "or"})
     for contract in vars(workflow_response_contracts).values():
@@ -113,7 +113,7 @@ def acceptance_error_details(error):
     while isinstance(error, BaseException) and id(error) not in seen and len(seen) < 8:
         seen.add(id(error))
         if type(error).__name__ == "ResponseRejectedError":
-            from model_provider import ResponseRejectedError
+            from model_runtime.provider import ResponseRejectedError
             if isinstance(error, ResponseRejectedError):
                 digest = getattr(error, "response_sha256", "")
                 violations = getattr(error, "violations", ())
@@ -136,7 +136,7 @@ def generation_error_details(error):
         if isinstance(error, GenerationValidationError):
             return public_error_details(error.diagnostics)
         if isinstance(error, CompactProtocolError):
-            from i18n import get_language
+            from shared.i18n import get_language
             return public_error_details({
                 "response_language": get_language(), "contract_name": "compact_ladder",
                 "diagnostic_id": error.diagnostic_id,
@@ -150,8 +150,8 @@ def generation_error_details(error):
 
 def workflow_error_code(error):
     """Classify only known exceptions; never expose SDK messages/attributes."""
-    from model_provider import ModelProviderError
-    from application.generation_repair import GenerationError
+    from model_runtime.provider import ModelProviderError
+    from plc.candidate_repair import GenerationError
     seen, generation = set(), False
     while isinstance(error, BaseException) and id(error) not in seen and len(seen) < 8:
         seen.add(id(error))

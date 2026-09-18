@@ -85,3 +85,7 @@ dist-web/
 
 # Editable GXW experiment copies; immutable evidence is archived separately.
 /research/experiments/
+
+# Model capability observations are local runtime data, not source files.
+model-observations.sqlite
+model-observations.sqlite-journal

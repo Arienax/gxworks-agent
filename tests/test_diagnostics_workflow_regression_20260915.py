@@ -4,11 +4,11 @@ from pathlib import Path
 
 import pytest
 
-import api
+import application.model_api as api
 from application.job_errors import workflow_error_code
 from application.jobs import JobManager
 from application.workspace import WorkspaceWriterLock
-from model_provider import ModelProviderError
+from model_runtime.provider import ModelProviderError
 
 
 FIXTURE = json.loads(

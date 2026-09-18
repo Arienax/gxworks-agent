@@ -178,7 +178,7 @@ def test_successful_workbench_import_uses_nonblocking_status(monkeypatch):
     # GX Works2 is foreground after import. A modal success message owned by
     # the workbench can be hidden behind it and make the application appear
     # frozen, so pure success must be reported without any QMessageBox.
-    from main import QMessageBox, _IndustrialWorkbenchUI
+    from ui.desktop.main_window import QMessageBox, _IndustrialWorkbenchUI
 
     class _Button:
         def __init__(self):
@@ -250,7 +250,7 @@ def test_successful_workbench_import_uses_nonblocking_status(monkeypatch):
 def test_workbench_retains_each_qthread_until_finished_signal():
     """Result callbacks must not destroy a worker before run() returns."""
 
-    from main import _IndustrialWorkbenchUI
+    from ui.desktop.main_window import _IndustrialWorkbenchUI
 
     class _Signal:
         def __init__(self):
@@ -295,7 +295,7 @@ def test_workbench_retains_each_qthread_until_finished_signal():
 
 
 def test_simulator_button_converts_cache_read_exception_to_warning(monkeypatch):
-    from main import QMessageBox, _IndustrialWorkbenchUI
+    from ui.desktop.main_window import QMessageBox, _IndustrialWorkbenchUI
 
     class _Button:
         def __init__(self):
@@ -358,7 +358,7 @@ def test_simulator_button_converts_cache_read_exception_to_warning(monkeypatch):
 
 def test_simulator_completion_dialog_includes_observed_scan_monitor_values():
     import ast
-    import main as main_module
+    import ui.desktop.main_window as main_module
 
     source = Path(main_module.__file__).read_text(encoding="utf-8")
     tree = ast.parse(source)

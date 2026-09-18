@@ -2,16 +2,16 @@ import copy
 
 import pytest
 
-from api import _normalize_analysis_result, _routing_text_with_selected_approach
-from approach_contracts import (
+from application.model_api import _normalize_analysis_result, _routing_text_with_selected_approach
+from plc.specification.approach import (
     format_contract_summary,
     inspect_ladder_features,
     normalize_approach,
     validate_ladder_against_selected_approach,
 )
-from confirmed_spec import build_review_draft, canonicalize_confirmed_spec, validate_spec_draft
-from pattern_library import classify_request
-from plc_json_validator import PLCJsonValidationError, validate_ladder_full
+from plc.specification.confirmed import build_review_draft, canonicalize_confirmed_spec, validate_spec_draft
+from knowledge.patterns import classify_request
+from plc.validation import PLCJsonValidationError, validate_ladder_full
 
 
 def _branch(inputs, outputs):

@@ -1,5 +1,5 @@
-from plc_ir import build_plc_ir
-from plc_timing import (
+from plc.ir import build_plc_ir
+from plc.timing import (
     analyze_scan_timing,
     decode_scan_monitor_values,
     estimate_instruction,
@@ -113,7 +113,7 @@ def test_fx5u_timing_is_unavailable_instead_of_reusing_fx3u_values():
 
 
 def test_explicit_short_input_pulse_gets_evidence_backed_capture_warning():
-    from plc_semantics import infer_semantic_requirements
+    from plc.semantics import infer_semantic_requirements
 
     requirements = infer_semantic_requirements(
         "X0 输入脉宽 50us，每次上升沿触发一次计数，INC D0"
@@ -145,7 +145,7 @@ def test_explicit_short_input_pulse_gets_evidence_backed_capture_warning():
 
 
 def test_pulse_capture_does_not_invent_risk_without_width_or_for_output_width():
-    from plc_semantics import infer_semantic_requirements
+    from plc.semantics import infer_semantic_requirements
 
     ladder_data = ladder(
         rung(
@@ -171,7 +171,7 @@ def test_pulse_capture_does_not_invent_risk_without_width_or_for_output_width():
 
 
 def test_scan_budget_participates_in_pulse_capture_decision_without_claiming_proof():
-    from plc_semantics import infer_semantic_requirements
+    from plc.semantics import infer_semantic_requirements
 
     program = build_plc_ir(
         ladder(

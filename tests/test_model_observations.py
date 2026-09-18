@@ -3,9 +3,9 @@ import copy
 import sqlite3
 import time
 import pytest
-from model_observations import ObservationStore, request_observer, digest
-from model_contract import CapabilityContract
-from model_provider import ModelRequest, UserMessage
+from model_runtime.observations import ObservationStore, request_observer, digest
+from model_runtime.contract import CapabilityContract
+from model_runtime.provider import ModelRequest, UserMessage
 from test_model_verification import scoped_provider, WireEndpoint
 from test_model_capabilities import Rejection
 
@@ -76,7 +76,7 @@ def test_corrupt_cache_and_expired_samples_are_ignored(tmp_path):
 
 
 def test_cache_bound_and_clear_do_not_mutate_profile(tmp_path,monkeypatch):
-    import model_observations
+    import model_runtime.observations as model_observations
     monkeypatch.setattr(model_observations,'MAX_ROWS',8)
     p=scoped_provider();c=CapabilityContract.from_dict(p.profile['capabilityContract']);store=ObservationStore(tmp_path/'obs.sqlite')
     for i in range(24):store.record(c.scope,'temperature','accepted',i/100,context=digest(i))

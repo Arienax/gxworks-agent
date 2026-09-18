@@ -12,7 +12,7 @@ from mcp.types import (
     PaginatedRequestParams,
 )
 
-from tool_runtime import ToolRuntime, build_default_tool_runtime
+from agent_runtime.runtime import ToolRuntime, build_default_tool_runtime
 
 from .context_provider import ToolContextProvider
 from .tool_adapter import MCPToolAdapter

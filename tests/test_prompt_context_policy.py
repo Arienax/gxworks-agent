@@ -7,7 +7,7 @@ import threading
 from types import SimpleNamespace
 
 import pytest
-from prompt_context_policy import (
+from shared.context_policy import (
     ContextAudit, ContextPolicy, ContextPolicyError, POLICY_ENV, POLICY_NAMES,
     audit_request, audit_section, audit_retrieval_fragment, context_policy_scope, controlled_dynamic_prompt,
     manual_lookup_decision, resolve_context_policy, select_base_prompt,

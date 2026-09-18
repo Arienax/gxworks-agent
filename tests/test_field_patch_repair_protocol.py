@@ -5,7 +5,7 @@ import pytest
 from application.field_repair import (
     apply, base_sha256, deterministic_response, plan,
 )
-from application.generation_repair import RepairAssemblyError
+from plc.candidate_repair import RepairAssemblyError
 
 
 def _base():

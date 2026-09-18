@@ -4,19 +4,19 @@
 
 ## 架构边界
 
-- 内置路径：`plc_agent.py → ModelProvider / ToolRuntime → PLC Core`。
+- 内置路径：`agent_runtime/agent.py → ModelProvider / ToolRuntime → PLC Core`。
 - 外部路径：`integrations/mcp → ToolRuntime → PLC Core`。工具定义来自现有注册表，不能为 Codex、Claude、Cursor 等维护另一套 PLC 工具。
 - PLC 工程逻辑属于 PLC Core、现有校验/渲染模块和 ToolRuntime 工具实现。适配层只转换协议、上下文和结果，不直接调用 GX/仿真或操作界面。
-- `model_provider.py` 负责模型协议；PLC Core 不导入模型 SDK、Agent 或 MCP。
+- `model_runtime/provider.py` 负责模型协议；PLC Core 不导入模型 SDK、Agent 或 MCP。
 
 ## 重要入口
 
 - `start-web.cmd`：Windows 发布包/源码 Web 工作台启动入口；`build-web.bat`：源码前端一键构建入口。
-- `src/main.py`、`src/qt_compat.py`：保留的 PyQt 桌面及 Win7 兼容层。
-- `src/plc_agent.py`、`src/model_provider.py`：内置编排及规范消息类型。
-- `src/tool_runtime.py`、`src/plc_agent_tools.py`：共享运行时、注册表、白名单、ToolContext。
-- `src/plc_core.py`、`src/plc_ir.py`、`src/plc_*validator.py`、`src/plc_static_analyzer.py`：确定性工程逻辑。
-- `src/session_store.py`：现有项目/版本持久化；默认桌面读取可迁移旧版本，外部读取须禁止迁移写入。
+- `src/main.py`、`src/ui/desktop/qt.py`：保留的 PyQt 桌面及 Win7 兼容层。
+- `src/agent_runtime/agent.py`、`src/model_runtime/provider.py`：内置编排及规范消息类型。
+- `src/agent_runtime/runtime.py`、`src/agent_runtime/plc_tools.py`：共享运行时、注册表、白名单、ToolContext。
+- `src/plc/core.py`、`src/plc/ir.py`、`src/plc/validation.py`、`src/plc/static_analysis.py`：确定性工程逻辑。
+- `src/storage/session.py`：现有项目/版本持久化；默认桌面读取可迁移旧版本，外部读取须禁止迁移写入。
 - `src/integrations/mcp/`：独立 MCP 服务、上下文提供器与协议适配。
 - `src/gxworks2/`、`src/simulator/`、`simulator_gateway/`：GX Works2、GX Simulator2 与 MX Component 网关边界。
 - `docs/integrations/mcp.md`、`docs/integrations/codex.md`：启动、配置、已实现与未来边界。
@@ -42,3 +42,24 @@ python scripts/mcp_smoke.py
 ```
 
 完整桌面测试需要根目录 `requirements.txt`（Win7 使用 `requirements/win7.txt`）；Web 环境使用 `requirements/web.txt`；MCP 测试/烟测另需 Python 3.10+ 和 `requirements/mcp.txt`。未安装 MCP 时该测试模块跳过，不能据此声称 MCP 验证通过。GX/Simulator/MX 的实际集成需要相应 Windows 软件；单元测试使用临时项目和模拟后端，不操作真实 PLC。提交前检查全部改动，保留用户已有修改。
+
+
+## 源码目录（完整归位）
+
+- `src/` 只保留 `main.py` 和 `api.py` 两个稳定入口；禁止新增根目录业务模块。
+- `model_runtime/`：模型契约、能力目录、请求策略、协议、观测和验证；不导入 PLC、UI、GX 或 MCP。
+- `knowledge/`：检索、重排、向量索引和模式库。SQLite 和指令注册表仍是不同职责。
+- `plc/`：确定性 IR、指令、规格、校验、修复和编译；不导入 application、模型、UI 或适配层。
+- `agent_runtime/`：规范工具消息、运行时、内置编排和工程工具。中立消息/运行时不依赖模型 SDK。
+- `application/`：用例、状态、任务、审批、生成上下文、模型工作流；不导入 Qt。
+- `rendering/`：无 GUI 的 SVG 渲染和显示编号；CSV 位于 `gxworks2/csv_export.py`。
+- `inspection/`：检查和展示数据；Qt 控件只在 `ui/desktop/`。
+- `storage/`：配置、会话、凭据；`shared/`：资源路径、语言、追踪和上下文策略。
+- `src/ui/desktop/main_window.py` 是工作台控制器；styles、workers、dialogs、workbench 和 SFC 已分离。
+- 旧 `model_*` / `plc_*` 等导入壳已移除；使用 `tools/source_layout.json` 的精确映射，不再导入旧根模块。
+- `src/main.py` 保持桌面启动方式；`api.py` 仅显式转出已有公共函数，内部调用使用 `application.model_api`。
+- 配置仍位于源码 `src/config.json` 或打包可执行文件旁；知识库、目录资源、历史会话不随模块位置变化。
+- 历史 Prompt 对照只在 `research/baselines/generation_context.py`，禁止产品导入研究目录。
+- 新文件同时受 `tests/test_source_layout.py` 和架构边界测试约束；不要通过空目录、兼容壳或修改 allowlist 隐藏违规。
+
+完整目录、测试及迁移约定见 `docs/architecture/source-layout.md`。

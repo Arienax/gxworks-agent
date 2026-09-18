@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-import config_manager
-import credential_store
+import storage.config as config_manager
+import storage.credentials as credential_store
 from application.settings import SettingsService
 
 

@@ -12,7 +12,7 @@ import json
 import re
 from typing import Any
 
-from response_language import ResponseContract
+from model_runtime.responses import ResponseContract
 
 
 FORMAT_PATCH_RESPONSE = ResponseContract("ladder_format_patch", "json")
@@ -240,7 +240,7 @@ def format_repair_response(
         "rejected_candidate": raw,
     }
     try:
-        import api
+        import application.model_api as api
 
         response = api._request_model(
             [

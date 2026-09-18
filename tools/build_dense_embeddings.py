@@ -58,7 +58,7 @@ def main():
         import numpy as np
     except ImportError as error:
         raise SystemExit("numpy is required to build dense embeddings") from error
-    from dense_retriever import dense_features
+    from knowledge.dense import dense_features
 
     database = args.database.expanduser().resolve()
     output = args.output.expanduser().resolve()

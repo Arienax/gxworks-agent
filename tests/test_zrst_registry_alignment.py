@@ -1,7 +1,7 @@
 import pytest
 
-from instruction_registry import DEFAULT_INSTRUCTION_REGISTRY, generation_app_instr_mnemonics
-from plc_json_validator import PLCJsonValidationError, validate_ladder_full
+from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, generation_app_instr_mnemonics
+from plc.validation import PLCJsonValidationError, validate_ladder_full
 
 
 def _ladder(opcode, operands):

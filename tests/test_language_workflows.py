@@ -14,12 +14,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 
-import api
-import main
-from i18n import get_language, language_context, set_language
-from model_provider import ModelProviderError, ResponseRejectedError, TextDelta
-from qt_compat import QApplication, QLabel
-from workbench_widgets import MessageBubble
+import application.model_api as api
+import ui.desktop.main_window as main
+from shared.i18n import get_language, language_context, set_language
+from model_runtime.provider import ModelProviderError, ResponseRejectedError, TextDelta
+from ui.desktop.qt import QApplication, QLabel
+from ui.desktop.workbench import MessageBubble
 
 
 _APPLICATION = QApplication.instance() or QApplication([])
@@ -62,7 +62,10 @@ def offline(monkeypatch):
     """No credentials, network retrieval, saved history, or real device I/O."""
     monkeypatch.setattr(api, "load_full_config", lambda: {})
     monkeypatch.setattr(api, "_active_model_name", lambda *_args: "fake-model")
+    from ui.desktop import workers
+    monkeypatch.setattr(workers, "load_full_config", lambda: {})
     monkeypatch.setattr(main, "load_full_config", lambda: {})
+    monkeypatch.setattr(workers, "get_active_model_name", lambda *_args: "fake-model")
     monkeypatch.setattr(main, "get_active_model_name", lambda *_args: "fake-model")
     monkeypatch.setattr(api, "_build_model_context", lambda *_a, **_k: "")
     monkeypatch.setattr(
@@ -228,9 +231,8 @@ def test_compiler_transport_fallback_preserves_language_and_discards_partial_out
         def stream(self, request):
             if request.stream:
                 self.requests.append(request)
-                yield TextDelta("Rejected partial stream")
                 set_language("ja")
-                raise ModelProviderError("Offline transport failure")
+                raise ModelProviderError("Offline stream rejection", code="stream_not_supported")
             yield from super().stream(request)
 
     provider = Provider(accepted)

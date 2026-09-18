@@ -10,7 +10,7 @@
 
 ## 参数合同与滑条
 
-`model_capabilities.py` 定义 `parameterSupport`；HTTP 使用 `parameter_support`。合同包含端点、模型 ID、非采样请求扩展指纹，以及 `reasoning_effort` / `temperature` 的状态、来源和合法值。模型名称不参与判断逻辑。
+`model_runtime/capabilities.py` 定义 `parameterSupport`；HTTP 使用 `parameter_support`。合同包含端点、模型 ID、非采样请求扩展指纹，以及 `reasoning_effort` / `temperature` 的状态、来源和合法值。模型名称不参与判断逻辑。
 
 优先使用当前端点 `/models` 返回的明确 `parameters` / `parameter_schema`（JSON Schema 的 `enum`、`const`、`minimum`、`maximum`、`multipleOf`）。没有参数模式时，以固定短提示进行探测：先发送无效对照值，只有服务明确拒绝该参数的无效值后，才枚举合法候选值。推理候选为 none、minimal、low、medium、high、xhigh、max；元数据可声明其他档位。温度探测 0、0.5、1、1.5、2；只验证了离散值时仅提供这些刻度，**不虚构连续取值范围**。有明确范围元数据时按其步长提供细分滑条。
 

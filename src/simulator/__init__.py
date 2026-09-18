@@ -15,11 +15,6 @@ from .planning import (
     normalize_generated_test_suite,
 )
 from .runner import PLCTestRunner
-from .runtime import (
-    SimulatorGatewayRuntime,
-    SimulatorRuntimeError,
-    get_simulator_gateway_runtime,
-)
 from .service import SimulatorRegressionService
 from .workflow import SimulatorVersionWorkflowService, SimulatorWorkflowError
 
@@ -47,3 +42,13 @@ __all__ = [
     "run_test_case",
     "simulator_status",
 ]
+
+
+def __getattr__(name):
+    # Importing schemas or offline services must not initialize desktop execution.
+    if name not in {"SimulatorGatewayRuntime", "SimulatorRuntimeError", "get_simulator_gateway_runtime"}:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    from . import runtime
+    value = getattr(runtime, name)
+    globals()[name] = value
+    return value

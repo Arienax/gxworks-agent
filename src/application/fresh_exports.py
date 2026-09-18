@@ -38,7 +38,7 @@ def build_gxworks2_csv_bundle(projects: Any, project_id: str, version_id: str) -
     if not isinstance(program, Mapping):
         raise KeyError("Canonical program is unavailable")
 
-    from plc_ir import canonical_sha256
+    from plc.ir import canonical_sha256
 
     ir_sha256 = canonical_sha256(program)
     expected = str(version.get("ir_sha256") or "")
@@ -48,7 +48,7 @@ def build_gxworks2_csv_bundle(projects: Any, project_id: str, version_id: str) -
     # Import here so the newest deterministic exporter is always used.  On the
     # native-CSV branch this includes FX3U step widths, the 24-row OR lowering,
     # and any later exporter-only compatibility fixes.
-    from draw import generate_gx_works2_csv
+    from gxworks2.csv_export import generate_gx_works2_csv
 
     with tempfile.TemporaryDirectory(prefix="gxworks2-fresh-export-") as directory:
         root = Path(directory)

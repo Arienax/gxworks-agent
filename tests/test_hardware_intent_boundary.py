@@ -4,9 +4,9 @@ import json
 
 import pytest
 
-from api import _normalize_analysis_result
-from confirmed_spec import build_review_draft, canonicalize_confirmed_spec, validate_spec_draft
-from hardware_profiles import ensure_hardware_questions, hardware_requirement_flags
+from application.model_api import _normalize_analysis_result
+from plc.specification.confirmed import build_review_draft, canonicalize_confirmed_spec, validate_spec_draft
+from plc.hardware_profiles import ensure_hardware_questions, hardware_requirement_flags
 
 
 def hallucinated_analysis():

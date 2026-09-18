@@ -1,6 +1,6 @@
 from application.model_detection import inspect_openai_compatible
-from model_provider import TextDelta, ToolCallEnd
-from tool_messages import ToolCall
+from model_runtime.provider import TextDelta, ToolCallEnd
+from agent_runtime.messages import ToolCall
 
 
 class _Provider:

@@ -2,14 +2,14 @@ import json
 
 import pytest
 
-import api
-from ladder_repair import (
+import application.model_api as api
+from plc.ladder_repair import (
     normalize_app_instr_out_outputs,
     normalize_legacy_counter_outputs,
 )
-from pattern_library import classify_request, load_library
-from plc_json_validator import PLCJsonValidationError, validate_ladder_full
-from plc_workflow_review import review_ladder
+from knowledge.patterns import classify_request, load_library
+from plc.validation import PLCJsonValidationError, validate_ladder_full
+from plc.review import review_ladder
 
 
 def _output_rung(rung_id, output, *, inputs=None, header=None, note=""):

@@ -21,7 +21,7 @@ for folder in (ROOT, ROOT / 'src', ROOT / 'tests'):
 from playwright.async_api import async_playwright, expect
 from scripts.web_demo import isolated_demo_settings
 from scripts.web_generation_e2e import Server, Provider, open_page
-from model_provider import ModelRequest, OpenAICompatibleProvider, UserMessage, test_model_profile
+from model_runtime.provider import ModelRequest, OpenAICompatibleProvider, UserMessage, test_model_profile
 from test_model_verification import WireEndpoint
 
 
@@ -42,7 +42,7 @@ async def run(web_dist, evidence, *, executable=None, component_fixture=False):
     requests = lambda: sum(len(e.calls) for e in endpoints)
     with tempfile.TemporaryDirectory(prefix='gx-catalog-v3-') as directory:
         root = Path(directory)
-        with isolated_demo_settings(root,factory) as settings, patch('model_provider.test_model_profile',test_model_profile):
+        with isolated_demo_settings(root,factory) as settings, patch('model_runtime.provider.test_model_profile',test_model_profile):
             settings.delete_profile('offline')
             server = Server(root,web_dist,Provider())
             server.service.settings = settings

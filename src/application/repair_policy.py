@@ -152,7 +152,7 @@ def structural_repair_response(repair_payload, model_name, effort, *, mode="part
     """Call the model only for a structure-only rung rewrite with frozen behavior."""
     if mode != "partial" or not isinstance(repair_payload, dict):
         raise ValueError("structural repair requires a partial repair payload")
-    import api
+    import application.model_api as api
 
     payload = dict(repair_payload)
     payload.pop("repair_contract", None)

@@ -1,6 +1,6 @@
 import pytest
 
-from main import _is_regenerate_locked_spec_request
+from application.request_intent import _is_regenerate_locked_spec_request
 
 
 @pytest.mark.parametrize(

@@ -1,0 +1,136 @@
+name: Source Layout Validation
+
+on:
+  push:
+    branches: [refactor/src-layout-complete-20260918]
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'tools/**'
+      - 'packaging/**'
+      - '.github/workflows/source-layout.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    name: Full suites and explicit baseline comparison
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: candidate
+          persist-credentials: false
+          lfs: true
+      - uses: actions/checkout@v4
+        with:
+          path: baseline
+          ref: 295378d6ac5d24949c03a1c799906f4afe0fd4c9
+          persist-credentials: false
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install desktop and Web test dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libegl1 libopengl0 libxkbcommon-x11-0
+          python -m pip install -r candidate/requirements/web.txt PyQt6==6.11.0 pytest==9.1.1 olefile==0.47 jsonschema httpx
+      - name: Run the entire unchanged baseline suite
+        working-directory: baseline
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/validation"
+          set +e
+          python -m pytest -q --junitxml="$GITHUB_WORKSPACE/validation/baseline.xml" > "$GITHUB_WORKSPACE/validation/baseline.log" 2>&1
+          status=$?
+          printf '%s\n' "$status" > "$GITHUB_WORKSPACE/validation/baseline.exit"
+          cat "$GITHUB_WORKSPACE/validation/baseline.log"
+          exit 0
+      - name: Compile and run the entire candidate suite
+        working-directory: candidate
+        run: |
+          python -m compileall -q src
+          set +e
+          python -m pytest -q --junitxml="$GITHUB_WORKSPACE/validation/candidate.xml" > "$GITHUB_WORKSPACE/validation/candidate.log" 2>&1
+          status=$?
+          printf '%s\n' "$status" > "$GITHUB_WORKSPACE/validation/candidate.exit"
+          cat "$GITHUB_WORKSPACE/validation/candidate.log"
+          exit 0
+      - name: Reject new failures, skips, missing tests or incomplete suites
+        working-directory: candidate
+        run: |
+          python scripts/source_layout_regression.py ../validation/baseline.xml ../validation/candidate.xml --baseline-exit ../validation/baseline.exit --candidate-exit ../validation/candidate.exit --output ../validation/comparison.json
+          echo '### Full-suite baseline comparison (not an all-tests-pass claim)' >> "$GITHUB_STEP_SUMMARY"
+          cat ../validation/comparison.json >> "$GITHUB_STEP_SUMMARY"
+      - name: MCP real stdio smoke without credentials or model calls
+        working-directory: candidate
+        run: python scripts/mcp_smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: source-layout-full-suite-results
+          path: validation
+          retention-days: 7
+
+  web:
+    name: Web contract, tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements/web.txt
+          npm ci --prefix web
+      - name: Verify unchanged schema and frontend
+        run: |
+          python scripts/export_web_schema.py
+          npm run types --prefix web
+          git diff --exit-code -- web/openapi.json web/src/api/generated.ts
+          node --experimental-strip-types --test web/tests/*.test.mjs
+          npm run build --prefix web
+
+  desktop-package:
+    name: Windows desktop package and offline SDK smoke
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install build dependencies
+        run: python -m pip install -r requirements.txt -r requirements/web.txt
+      - name: Build desktop using normal package imports
+        run: python -m PyInstaller --noconfirm packaging/pyinstaller/desktop.spec
+      - name: Verify packaged SDK and required resources without a model call
+        shell: pwsh
+        run: |
+          $package = Join-Path (Get-Location) 'dist/GXWorks2-ST-Ladder-Helper'
+          $process = Start-Process -FilePath "$package/GXWorks2-ST-Ladder-Helper.exe" -ArgumentList '--self-test-openai-sdk' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Packaged SDK smoke failed: $($process.ExitCode)" }
+          foreach ($path in @('_internal/resources/model_catalog/generic-openai-compatible.json', '_internal/knowledge/fx3u_knowledge.sqlite', '_internal/gxw/templates/fx3u.gxw')) {
+            if (!(Test-Path (Join-Path $package $path))) { throw "Missing packaged resource: $path" }
+          }

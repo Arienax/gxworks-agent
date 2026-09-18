@@ -12,6 +12,7 @@ import copy
 import json
 import re
 from pathlib import Path
+from plc.ir import canonical_sha256
 from typing import Any, Mapping
 
 
@@ -241,7 +242,7 @@ def recover_rejected_ladder(raw_text: str, *, confirmed_spec=None) -> tuple[dict
 def _diagnostic_program(ladder: Mapping[str, Any], *, plc_model="FX3U", program_name="MAIN", revision=1,
                         confirmed_spec=None) -> dict[str, Any]:
     """Build internally consistent IR without re-running blocking ladder checks."""
-    from plc_ir import build_plc_ir, validate_plc_ir
+    from plc.ir import build_plc_ir, validate_plc_ir
 
     program = build_plc_ir(
         ladder,
@@ -258,8 +259,9 @@ def _diagnostic_program(ladder: Mapping[str, Any], *, plc_model="FX3U", program_
 
 def render_diagnostic_program(program: Mapping[str, Any], output_dir) -> dict[str, str]:
     """Render a rejected diagnostic IR without applying blocking ladder validation."""
-    from plc_ir import ir_to_ladder, validate_plc_ir
-    from draw import AdvancedSVGLadder, generate_gx_works2_csv
+    from plc.ir import ir_to_ladder, validate_plc_ir
+    from rendering.ladder_svg import AdvancedSVGLadder
+    from gxworks2.csv_export import generate_gx_works2_csv
 
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
@@ -304,7 +306,7 @@ def materialize_rejected_preview(raw_text: str, output_dir, *, confirmed_spec=No
         "validation_profile": "generation_structural",
         "program_name": str(program_name or "MAIN"),
         "revision": int(program.get("revision", 1)),
-        "ir_sha256": __import__("plc_ir").canonical_sha256(program),
+        "ir_sha256": canonical_sha256(program),
         "ladder_sha256": program["source"]["ladder_sha256"],
         "validation": {
             "status": "invalid_candidate",
