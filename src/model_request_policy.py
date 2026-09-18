@@ -148,7 +148,7 @@ def validate_capability_use(options, contract):
             continue
         if desc.status == "unsupported" or not all(c.satisfied(context) for c in constraints_for(contract, name, desc)):
             raise ValueError(name + ": requested operation conflicts with the capability contract")
-        if name == "structured_output" and desc.status in {"supported", "conditional"} and desc.modes:
+        if name == "structured_output" and desc.status in {"supported", "conditional"} and desc.modes and desc.source in {"metadata", "catalog", "manual"}:
             if (options.get("response_format") or {}).get("type") not in desc.modes:
                 raise ValueError("structured_output: this mode has not been declared or observed")
 

@@ -384,10 +384,11 @@ class ModelProfile(PublicResource):
     parameter_support: JsonObject = Field(default_factory=dict)
     contract: JsonObject = Field(default_factory=dict)
     user_settings: JsonObject = Field(default_factory=dict)
+    capability_overrides: JsonObject = Field(default_factory=dict)
 
 
 class ModelConnectionResult(PublicResource):
-    status: Literal["connected", "failed"]
+    status: Literal["connected", "failed", "resolved", "unverified"]
     message: str
     error_code: str | None = None
 

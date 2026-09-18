@@ -20,6 +20,8 @@ on:
       - 'scripts/start_web.ps1'
       - 'build-web.bat'
       - 'scripts/build_web_source.ps1'
+      - 'resources/model_catalog/**'
+      - 'packaging/pyinstaller/web.spec'
       - 'web/**'
       - '.github/workflows/model-api-compatibility.yml'
   pull_request:
@@ -41,6 +43,8 @@ on:
       - 'scripts/start_web.ps1'
       - 'build-web.bat'
       - 'scripts/build_web_source.ps1'
+      - 'resources/model_catalog/**'
+      - 'packaging/pyinstaller/web.spec'
       - 'web/**'
       - '.github/workflows/model-api-compatibility.yml'
   workflow_dispatch:
@@ -88,7 +92,7 @@ jobs:
           mkdir -p model-api-evidence
           python -m compileall -q src tests scripts/web_model_settings_e2e.py
           # Includes the regression that Test connection never invokes capability discovery.
-          python -m pytest -q tests/test_model_contract.py tests/test_model_capabilities.py tests/test_application_settings.py tests/test_model_provider.py tests/test_model_detection.py tests/test_model_detection_stages.py tests/test_model_detection_cache.py tests/test_model_profile_config.py tests/test_model_profile_deletion.py tests/test_web_contract.py tests/test_web_frontend_state_flow.py tests/test_model_stream_cancellation.py tests/test_model_presentation.py tests/test_plc_core_boundary.py --junitxml=model-api-evidence/python.xml
+          python -m pytest -q tests/test_model_contract.py tests/test_model_capabilities.py tests/test_application_settings.py tests/test_model_provider.py tests/test_model_detection.py tests/test_model_detection_stages.py tests/test_model_detection_cache.py tests/test_model_catalog_v3.py tests/test_model_verification.py tests/test_model_observations.py tests/test_model_profile_config.py tests/test_model_profile_deletion.py tests/test_web_contract.py tests/test_web_frontend_state_flow.py tests/test_model_stream_cancellation.py tests/test_model_presentation.py tests/test_plc_core_boundary.py --junitxml=model-api-evidence/python.xml
       - name: Test parameter controls and build Web frontend
         run: |
           node --experimental-strip-types --test web/tests/model-parameters.test.mjs web/tests/module-resolution.test.mjs

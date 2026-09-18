@@ -19,7 +19,7 @@ from model_request_policy import public_contract_settings
 
 _SETTINGS_LOCK = threading.RLock()
 _PROFILE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
-_PROFILE_FIELDS = {"id", "name", "model", "base_url", "capabilities", "generation_defaults", "request_overrides", "parameter_support", "contract", "user_settings"}
+_PROFILE_FIELDS = {"id", "name", "model", "base_url", "capabilities", "generation_defaults", "request_overrides", "parameter_support", "contract", "user_settings", "capability_overrides"}
 _SENSITIVE_NAMES = {"key", "accesskey", "auth", "bearer", "token", "headers", "extraheaders", "cookie", "cookies", "authentication", "proxyauth"}
 
 
@@ -127,7 +127,8 @@ class SettingsService:
                     "deletable": True,
                     "capabilities": {key: value for key, value in profile["capabilities"].items()
                                      if not _sensitive(key) and isinstance(value, bool)},
-                    "contract": contract,
+                    "contract": self._observations().decorate(CapabilityContract.from_dict(contract)).to_dict() if contract else {},
+                    "capability_overrides": _safe_options(profile.get("capabilityOverrides") or {}),
                     "user_settings": user_settings,
                     "generation_defaults": _safe_options(profile["generationDefaults"]),
                     "request_overrides": _safe_options(profile["requestOverrides"]),
@@ -152,7 +153,7 @@ class SettingsService:
         if "base_url" in values:
             chosen["baseUrl"] = _base_url(values["base_url"], strict=True)
         for key, stored in (("capabilities", "capabilities"), ("generation_defaults", "generationDefaults"),
-                            ("request_overrides", "requestOverrides")):
+                            ("request_overrides", "requestOverrides"), ("capability_overrides", "capabilityOverrides")):
             if key not in values:
                 continue
             value = values[key]
@@ -161,11 +162,6 @@ class SettingsService:
             value = _safe_options(value, strict=True)
             if key == "capabilities" and any(not isinstance(item, bool) for item in value.values()):
                 raise ValueError("Capabilities must contain boolean values")
-            if key == "generation_defaults" and not (values.get("contract") or chosen.get("capabilityContract")):
-                for name, upper in (("temperature", 2), ("top_p", 1)):
-                    number = value.get(name)
-                    if number is not None and (isinstance(number, bool) or not isinstance(number, (int, float)) or not 0 <= number <= upper):
-                        raise ValueError("Sampling parameter outside supported range")
             chosen[stored] = value
         if "parameter_support" in values:
             support = normalize_parameter_support(_safe_options(values["parameter_support"], strict=True))
@@ -207,6 +203,12 @@ class SettingsService:
             profile["userModelSettings"] = {}
 
     @staticmethod
+    def _validate_manual(profile):
+        if profile.get("capabilityOverrides"):
+            from model_catalog import resolve_capabilities
+            resolve_capabilities(profile)
+
+    @staticmethod
     def _save(config, legacy, *, skip_legacy=()):
         from config_manager import save_config
         from credential_store import read_api_key, write_api_key
@@ -230,6 +232,7 @@ class SettingsService:
             if profile is not None:
                 selected = get_model_profile(config, _profile_id(profile["id"]))
                 self._apply_profile(selected, profile)
+                self._validate_manual(selected)
                 self._validate_binding(selected, api_key if api_key is not None else self._key(config, selected),
                     explicit=bool(profile.get("contract")))
                 config["modelProfiles"] = [selected if p["id"] == selected["id"] else p for p in config["modelProfiles"]]
@@ -262,6 +265,7 @@ class SettingsService:
                        "credentialTarget": credential_target_for_profile(profile_id)}
             self._apply_profile(profile, values)
             profile = _normalize_profile(profile)
+            self._validate_manual(profile)
             self._validate_binding(profile, api_key or "", explicit=bool(values.get("contract")))
             config["modelProfiles"].append(profile)
             if not config.get("activeModelProfileId"):
@@ -305,22 +309,21 @@ class SettingsService:
             delete_api_key(profile["credentialTarget"])
             return self.public_settings()
 
-    def detect_profile(self, *, id=None, api_key=None, mode="quick", refresh=False, **values):
-        """Read-only draft discovery, including the very first unsaved profile."""
+    @staticmethod
+    def _observations():
+        from config_manager import get_config_path
+        from model_observations import ObservationStore
+        return ObservationStore(Path(get_config_path()).parent / "model-observations.sqlite")
+
+    def _draft(self, id=None, api_key=None, **values):
         from config_manager import get_model_profile, _normalize_profile
         from credential_store import credential_target_for_profile
-        from model_provider import create_provider
-        from application.model_detection import inspect_openai_compatible
-        if mode not in {"list", "quick", "deep"} or not isinstance(refresh, bool):
-            raise ValueError("Invalid discovery mode")
         with _SETTINGS_LOCK:
             if id:
                 config = self.read_config()
                 selected = get_model_profile(config, _profile_id(id))
                 old_url = selected.get("baseUrl")
                 self._apply_profile(selected, values)
-                # Do not send a saved credential to a different endpoint merely
-                # because the user selected another connection preset.
                 key = api_key if api_key is not None else (
                     self._key(config, selected) if old_url == selected.get("baseUrl") else "")
             else:
@@ -328,18 +331,54 @@ class SettingsService:
                             "credentialTarget": credential_target_for_profile("discovery-draft")}
                 self._apply_profile(selected, values)
                 key = api_key or ""
-            selected = _normalize_profile(selected)
-            if not str(key).strip():
-                return {"status": "failed", "message": "请先配置 API Key；更换服务地址时请重新输入密钥。", "error_code": "missing_key"}
+            return _normalize_profile(selected), key
+
+    def detect_profile(self, *, id=None, api_key=None, mode="quick", refresh=False, **values):
+        """Compatibility route: local resolve or model list; never completion."""
+        from application.model_detection import resolve_profile_contract, inspect_openai_compatible
+        if mode not in {"list", "quick", "resolve", "deep"} or not isinstance(refresh, bool):
+            raise ValueError("Invalid discovery mode")
+        if mode == "deep":
+            raise ValueError("Batch scanning has been removed; use explicit single-target verification")
+        selected, key = self._draft(id=id, api_key=api_key, **values)
+        if mode != "list" and selected["model"] != "__discover__":
+            result = resolve_profile_contract(selected, key, observations=self._observations())
+            return {"status": "resolved", "message": result["note"], "discovery": result}
+        if not str(key).strip():
+            return {"status": "failed", "message": "获取模型列表需要当前服务的 API Key。", "error_code": "missing_key"}
+        from model_provider import create_provider
         try:
-            result = inspect_openai_compatible(create_provider(selected, key), selected["model"], selected["capabilities"],
-                mode=mode, refresh=refresh)
+            result = inspect_openai_compatible(create_provider(selected, key), selected["model"], mode="list")
             return {"status": "connected", "message": result["note"], "discovery": result}
         except Exception as error:
             code = getattr(error, "code", "provider_error")
             if code not in {"authentication", "rate_limit", "timeout", "invalid_request", "unavailable", "protocol"}:
                 code = "provider_error"
-            return {"status": "failed", "message": "检测失败，请检查兼容 API 地址、模型 ID 和密钥；模型列表不可用时请手动填写模型。", "error_code": code}
+            return {"status": "failed", "message": "模型列表不可用；可以手动填写模型并加载本地能力配置。未发送生成请求。", "error_code": code}
+
+    def verify_profile(self, *, target, kind, value=None, consent=False, profile):
+        if consent is not True:
+            raise ValueError("Explicit verification consent is required")
+        from application.model_detection import resolve_profile_contract
+        from model_provider import create_provider
+        from model_verification import verify_one
+        selected, key = self._draft(**profile)
+        if not str(key).strip():
+            return {"status":"failed", "message":"请配置当前服务的 API Key。", "error_code":"missing_key"}
+        store = self._observations()
+        resolved = resolve_profile_contract(selected, key, observations=store)
+        try:
+            result = verify_one(create_provider(selected,key), resolved["contract"], target,
+                kind=kind,value=value,consent=consent,store=store)
+        except Exception as error:
+            code = getattr(error, "code", "invalid_request")
+            if code not in {"authentication", "rate_limit", "timeout", "invalid_request", "unavailable", "protocol"}:
+                code = "provider_error"
+            return {"status":"failed", "message":"单项验证未完成或被拒绝；未自动重试，也未修改设置。", "error_code":code}
+        resolved = resolve_profile_contract(selected, key, observations=store)
+        resolved.update(result)
+        return {"status":"connected" if result["outcome"] != "inconclusive" else "unverified",
+                "message":result["note"],"discovery":resolved}
 
     def test_connection(self, profile_id, *, profile=None, api_key=None):
         from config_manager import get_model_profile
@@ -363,6 +402,8 @@ class SettingsService:
             return {"status": "connected", "message": message}
         except Exception as error:
             code = getattr(error, "code", "provider_error")
+            if code == "metadata_unavailable":
+                return {"status":"unverified", "message":"服务未提供模型列表；当前模型与密钥尚未验证。没有发送生成请求。", "error_code":code}
             if code not in ("authentication", "rate_limit", "timeout", "invalid_request", "unavailable"):
                 code = "provider_error"
             # Provider error bodies can echo authentication data. Never publish them.
@@ -378,6 +419,10 @@ class SettingsService:
             if not key:
                 raise ValueError("请先在模型设置中配置 API Key。")
             # Provider/key lives only in the worker closure, never in job JSON.
-            return create_provider(copy.deepcopy(profile), key), {
+            provider = create_provider(copy.deepcopy(profile), key)
+            from model_observations import request_observer
+            if hasattr(provider, "observation_sink"):
+                provider.observation_sink = request_observer(provider, self._observations())
+            return provider, {
                 "profile_id": profile["id"], "model": profile.get("model"),
                 "response_language": config.get("language", "zh-CN")}

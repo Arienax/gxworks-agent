@@ -2010,7 +2010,9 @@
           "status": {
             "enum": [
               "connected",
-              "failed"
+              "failed",
+              "resolved",
+              "unverified"
             ],
             "title": "Status",
             "type": "string"
@@ -2057,10 +2059,11 @@
         "additionalProperties": false,
         "properties": {
           "mode": {
-            "default": "quick",
+            "default": "resolve",
             "enum": [
               "list",
               "quick",
+              "resolve",
               "deep"
             ],
             "title": "Mode",
@@ -2116,7 +2119,9 @@
           "status": {
             "enum": [
               "connected",
-              "failed"
+              "failed",
+              "resolved",
+              "unverified"
             ],
             "title": "Status",
             "type": "string"
@@ -2164,6 +2169,13 @@
               "type": "boolean"
             },
             "title": "Capabilities",
+            "type": "object"
+          },
+          "capability_overrides": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Capability Overrides",
             "type": "object"
           },
           "configured": {
@@ -2273,6 +2285,11 @@
             "title": "Capabilities",
             "type": "object"
           },
+          "capability_overrides": {
+            "additionalProperties": true,
+            "title": "Capability Overrides",
+            "type": "object"
+          },
           "contract": {
             "additionalProperties": true,
             "title": "Contract",
@@ -2360,6 +2377,18 @@
               }
             ],
             "title": "Capabilities"
+          },
+          "capability_overrides": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capability Overrides"
           },
           "contract": {
             "anyOf": [
@@ -2489,6 +2518,44 @@
           "language"
         ],
         "title": "ModelSettings",
+        "type": "object"
+      },
+      "ModelVerificationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "consent": {
+            "default": false,
+            "title": "Consent",
+            "type": "boolean"
+          },
+          "kind": {
+            "enum": [
+              "parameter",
+              "capability",
+              "chat"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ModelProfileCreate"
+          },
+          "target": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Target",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value"
+          }
+        },
+        "required": [
+          "profile",
+          "target",
+          "kind"
+        ],
+        "title": "ModelVerificationRequest",
         "type": "object"
       },
       "NativeValidationRecord": {
@@ -6976,6 +7043,82 @@
           }
         },
         "summary": "Test Model Connection"
+      }
+    },
+    "/api/settings/resolve": {
+      "post": {
+        "operationId": "resolve_model_profile_api_settings_resolve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelDiscoveryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelDiscoveryResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resolve Model Profile"
+      }
+    },
+    "/api/settings/verify": {
+      "post": {
+        "operationId": "verify_model_profile_api_settings_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelVerificationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelDiscoveryResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify Model Profile"
       }
     },
     "/api/sfc/requirement": {

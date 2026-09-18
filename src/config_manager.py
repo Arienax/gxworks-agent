@@ -269,7 +269,7 @@ def _normalize_profile(profile):
         raise ValueError(f"模型 Profile {profile_id} 缺少 baseUrl。")
     if not normalized["model"]:
         raise ValueError(f"模型 Profile {profile_id} 缺少 model。")
-    for key in ("capabilities", "generationDefaults", "requestOverrides", "parameterSupport", "capabilityContract", "userModelSettings"):
+    for key in ("capabilities", "generationDefaults", "requestOverrides", "parameterSupport", "capabilityContract", "userModelSettings", "capabilityOverrides"):
         value = normalized.get(key)
         if value is not None and not isinstance(value, dict):
             raise ValueError(f"模型 Profile {profile_id} 的 {key} 必须是对象。")

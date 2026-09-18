@@ -27,7 +27,7 @@ from .mcp_routes import register_mcp_routes
 from . import responses as dto
 from .schemas import (Login, ProjectCreate, ProjectUpdate, ActivateVersion, SpecUpdate,
                       JobCreate, GenerationRepair, ProposalDecision, ExecutionProposal, AgentCall,
-                      SettingsUpdate, ApprovalSettingsUpdate, ModelProfileCreate, ModelKeyUpdate, ModelConnectionTest, ModelDiscoveryRequest,
+                      SettingsUpdate, ApprovalSettingsUpdate, ModelProfileCreate, ModelKeyUpdate, ModelConnectionTest, ModelDiscoveryRequest, ModelVerificationRequest,
                       AttachmentUpload, SFCInput, FBDProposal)
 
 
@@ -335,6 +335,16 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
         service.writable()
         return service.settings.detect_profile(mode=command.mode, refresh=command.refresh,
             **command.profile.model_dump(exclude_none=True))
+
+    @app.post("/api/settings/resolve", response_model=dto.ModelDiscoveryResult, response_model_exclude_none=True)
+    def resolve_model_profile(command: ModelDiscoveryRequest):
+        service.writable()
+        return service.settings.detect_profile(mode="resolve", **command.profile.model_dump(exclude_none=True))
+
+    @app.post("/api/settings/verify", response_model=dto.ModelDiscoveryResult, response_model_exclude_none=True)
+    def verify_model_profile(command: ModelVerificationRequest):
+        service.writable()
+        return service.settings.verify_profile(**command.model_dump(exclude_none=True))
 
     @app.post("/api/settings/profiles", status_code=201, response_model=dto.ModelSettings)
     def create_model_profile(command: ModelProfileCreate):

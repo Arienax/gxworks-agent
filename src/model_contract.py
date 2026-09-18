@@ -13,10 +13,11 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Optional, Tuple
 from urllib.parse import urlsplit
+from model_domain import prepare as prepare_domain
 
 PARAMETER_STATUSES = frozenset({"supported", "accepted", "unknown", "unsupported", "fixed", "conditional"})
 CAPABILITY_STATUSES = frozenset({"supported", "unsupported", "unknown", "conditional"})
-SOURCES = frozenset({"metadata", "probe", "manual", "legacy"})
+SOURCES = frozenset({"metadata", "probe", "manual", "legacy", "catalog", "generic", "observation"})
 TYPES = frozenset({"enum", "number", "integer", "boolean", "string"})
 # Protocol and credential ownership is NOT delegated to provider metadata.
 RESERVED = frozenset({"model", "messages", "tools", "tool_choice", "functions", "function_call",
@@ -141,12 +142,20 @@ class ParameterDescriptor:
     constraints: ConstraintDescriptor = field(default_factory=ConstraintDescriptor)
     # Coverage of the registered finite candidate set, NOT the whole value domain.
     scan: Optional[str] = None
+    evidence: Mapping[str, Any] = field(default_factory=dict)
+    ui_hint: Mapping[str, Any] = field(default_factory=dict)
+    domain_source: str = "metadata"
+    enforcement: str = "hard"
+    zero_anchored: bool = False
+    exclusive_minimum: Optional[float] = None
+    exclusive_maximum: Optional[float] = None
 
     @classmethod
     def from_dict(cls, name, value):
         identifier(name)
+        value, observed, hints, domain_source, enforcement, zero_anchored = prepare_domain(value)
         value = checked_object(value, {"type", "status", "source", "values", "minimum", "maximum", "step",
-            "wire_location", "wire_name", "wire_path", "label", "default_mode", "requires", "conflicts_with", "scan"}, "parameter descriptor")
+            "wire_location", "wire_name", "wire_path", "label", "default_mode", "requires", "conflicts_with", "scan", "exclusive_minimum", "exclusive_maximum"}, "parameter descriptor")
         kind, status, source = value.get("type"), value.get("status"), value.get("source")
         if kind not in TYPES or status not in PARAMETER_STATUSES or source not in SOURCES:
             raise ValueError("Invalid parameter type or evidence")
@@ -195,7 +204,11 @@ class ParameterDescriptor:
         if scan is not None and (scan not in {"partial", "complete"} or source != "probe"):
             raise ValueError("Invalid probe scan coverage")
         result = cls(kind, status, source, tuple(values) if values is not None else None,
-            lower, upper, step, location, tuple(path), label, value.get("default_mode", "omit"), constraints, scan)
+            lower, upper, step, location, tuple(path), label, value.get("default_mode", "omit"), constraints, scan, observed, hints, domain_source, enforcement, zero_anchored,
+            value.get("exclusive_minimum"), value.get("exclusive_maximum"))
+        for bound in (result.exclusive_minimum, result.exclusive_maximum):
+            if bound is not None and (kind not in {"number", "integer"} or not finite(bound)):
+                raise ValueError("Invalid exclusive numeric bound")
         for item in values or ():
             result.validate(item)
         return result
@@ -208,29 +221,31 @@ class ParameterDescriptor:
                 raise ValueError("Invalid numeric parameter type")
         elif self.type == "boolean" and not isinstance(value, bool):
             raise ValueError("Expected a boolean parameter")
-        elif self.type == "string" and not isinstance(value, str):
+        elif self.type in {"string", "enum"} and self.values is None and not isinstance(value, str):
             raise ValueError("Expected a string parameter")
         if self.values is not None and not member(value, self.values):
             raise ValueError("Parameter value is not in its declared or verified values")
         if self.minimum is not None and value < self.minimum or self.maximum is not None and value > self.maximum:
             raise ValueError("Parameter value is outside its declared bounds")
+        if self.exclusive_minimum is not None and value <= self.exclusive_minimum or self.exclusive_maximum is not None and value >= self.exclusive_maximum:
+            raise ValueError("Parameter value is outside exclusive bounds")
         if self.step is not None:
             # step is a grid anchored at minimum (or zero), not a guess of a
             # continuous range from a few successful probe values.
-            units = (value - (self.minimum or 0)) / self.step
+            units = (value - (0 if self.zero_anchored else self.minimum or 0)) / self.step
             if not math.isclose(units, round(units), rel_tol=0, abs_tol=1e-7):
                 raise ValueError("Parameter value does not match its declared step")
 
     def to_dict(self):
-        result = {"type": self.type, "status": self.status, "source": self.source,
-            "wire_location": self.wire_location, "wire_path": list(self.wire_path), "default_mode": self.default_mode}
+        domain = {"source": self.domain_source, "enforcement": self.enforcement}
         if self.values is not None:
-            result["values"] = list(self.values)
-        for key in ("minimum", "maximum", "step"):
+            domain["values"] = list(self.values)
+        for key in ("minimum", "maximum", "step", "exclusive_minimum", "exclusive_maximum"):
             if getattr(self, key) is not None:
-                result[key] = getattr(self, key)
-        if self.scan is not None:
-            result["scan"] = self.scan
+                domain["multiple_of" if key == "step" and self.zero_anchored else key] = getattr(self, key)
+        result = {"type": self.type, "status": self.status, "source": self.source,
+            "wire_location": self.wire_location, "wire_path": list(self.wire_path), "default_mode": self.default_mode,
+            "domain": domain, "evidence": copy.deepcopy(dict(self.evidence)), "ui_hint": copy.deepcopy(dict(self.ui_hint))}
         if self.label:
             result["label"] = self.label
         return {**result, **self.constraints.to_dict()}
@@ -255,10 +270,11 @@ class CapabilityDescriptor:
     modes: Tuple[str, ...] = ()
     value: Any = None
     constraints: ConstraintDescriptor = field(default_factory=ConstraintDescriptor)
+    evidence: Mapping[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, value):
-        checked_object(value, {"status", "source", "modes", "value", "requires", "conflicts_with"}, "capability")
+        checked_object(value, {"status", "source", "modes", "value", "requires", "conflicts_with", "evidence"}, "capability")
         if value.get("status") not in CAPABILITY_STATUSES or value.get("source") not in SOURCES:
             raise ValueError("Invalid capability evidence")
         modes = value.get("modes", [])
@@ -267,7 +283,8 @@ class CapabilityDescriptor:
         constraints = ConstraintDescriptor.from_dict({k: value[k] for k in ("requires", "conflicts_with") if k in value})
         if value["status"] == "conditional" and not constraints.to_dict():
             raise ValueError("Conditional capabilities require a constraint")
-        return cls(value["status"], value["source"], tuple(identifier(v) for v in modes), value.get("value"), constraints)
+        from model_domain import evidence
+        return cls(value["status"], value["source"], tuple(identifier(v) for v in modes), value.get("value"), constraints, evidence(value.get("evidence", {})))
 
     def to_dict(self):
         result = {"status": self.status, "source": self.source, **self.constraints.to_dict()}
@@ -275,6 +292,8 @@ class CapabilityDescriptor:
             result["modes"] = list(self.modes)
         if self.value is not None:
             result["value"] = self.value
+        if self.evidence:
+            result["evidence"] = copy.deepcopy(self.evidence)
         return result
 
 
@@ -284,12 +303,12 @@ class CapabilityContract:
     capabilities: Mapping[str, CapabilityDescriptor] = field(default_factory=dict)
     parameters: Mapping[str, ParameterDescriptor] = field(default_factory=dict)
     constraints: Mapping[str, ConstraintDescriptor] = field(default_factory=dict)
-    schema_version: int = 2
+    schema_version: int = 3
 
     @classmethod
     def from_dict(cls, value):
         checked_object(value, {"schema_version", "scope", "capabilities", "parameters", "constraints"}, "capability contract")
-        if value.get("schema_version") != 2:
+        if value.get("schema_version") not in {2, 3}:
             raise ValueError("Unsupported capability contract version")
         scope = value.get("scope")
         if not isinstance(scope, Mapping) or set(scope) != {"endpoint", "model", "context", "binding"}:
@@ -306,7 +325,8 @@ class CapabilityContract:
         parameters = {k: ParameterDescriptor.from_dict(k, v) for k, v in bounded_map(value.get("parameters", {})).items()}
         validate_parameter_paths(parameters)
         capabilities = {k: CapabilityDescriptor.from_dict(v) for k, v in bounded_map(value.get("capabilities", {})).items()}
-        constraints = {k: ConstraintDescriptor.from_dict(v) for k, v in bounded_map(value.get("constraints", {})).items()}
+        constraints = {k: ConstraintDescriptor.from_dict(v) for k, v in bounded_map(value.get("constraints", {})).items()
+            if not (value.get("schema_version") == 2 and value.get("parameters", {}).get(k, {}).get("source") == "probe")}
         if set(constraints) - set(parameters) - set(capabilities):
             raise ValueError("Constraint target is not declared")
         for name, desc in list(capabilities.items()) + list(parameters.items()):
@@ -323,7 +343,7 @@ class CapabilityContract:
         return result
 
     def to_dict(self):
-        return {"schema_version": 2, "scope": dict(self.scope),
+        return {"schema_version": 3, "scope": dict(self.scope),
             "capabilities": {k: v.to_dict() for k, v in self.capabilities.items()},
             "parameters": {k: v.to_dict() for k, v in self.parameters.items()},
             "constraints": {k: v.to_dict() for k, v in self.constraints.items()}}
@@ -354,6 +374,8 @@ def contract_scope(profile, parameters, model=None, api_key=None):
         context[group] = options
     # These legacy switches affect the actual request shape, unlike detected
     # capability observations. They remain part of the context identity.
+    if profile.get("capabilityOverrides"):
+        context["manual_overrides"] = profile["capabilityOverrides"]
     context["transport_flags"] = {k: v for k, v in (profile.get("capabilities") or {}).items()
         if k in {"thinking_required", "tool_stream", "disable_tool_choice_with_thinking"}}
     return {"endpoint": str(profile.get("baseUrl") or "").strip().rstrip("/"),
@@ -365,7 +387,14 @@ def contract_scope(profile, parameters, model=None, api_key=None):
 def normalize_contract(value):
     if value is None or isinstance(value, dict) and not value:
         return {}
-    return CapabilityContract.from_dict(value).to_dict()
+    result = CapabilityContract.from_dict(value).to_dict()
+    # The TTL-bounded observation database owns runtime records. Do not freeze
+    # transient observations in a saved profile and resurrect them after expiry.
+    for group in ("parameters", "capabilities"):
+        for descriptor in result.get(group, {}).values():
+            evidence = descriptor.get("evidence", {})
+            evidence.pop("observations", None)
+    return CapabilityContract.from_dict(result).to_dict()
 
 
 def scoped_contract(profile, model=None, api_key=None):
@@ -437,8 +466,8 @@ def legacy_contract(profile, api_key=None):
     selections = {}
     for name, desc in parameters.items():
         value = effective_parameter(profile, name)
-        if desc.status in {"supported", "fixed", "unsupported"}:
-            selections[name] = {"mode": "omit"} if value is None or desc.status != "supported" else {"mode": "value", "value": value}
+        if desc.status in {"supported", "accepted", "unknown", "fixed", "unsupported"}:
+            selections[name] = {"mode": "omit"} if value is None or desc.status in {"fixed", "unsupported"} else {"mode": "value", "value": value}
     return contract, UserModelSettings(dict(contract.scope), selections).to_dict()
 
 
@@ -493,6 +522,7 @@ def metadata_contract_parts(metadata):
                 identifier(name)
                 item = {"status": "supported" if raw else "unsupported"} if isinstance(raw, bool) else dict(raw)
                 item["source"] = "metadata"
+                item.pop("evidence", None)  # Remote declarations cannot manufacture local observations.
                 capabilities[name] = CapabilityDescriptor.from_dict(item)
             except (TypeError, ValueError):
                 continue

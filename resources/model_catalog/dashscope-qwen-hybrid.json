@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "id": "dashscope-qwen-hybrid",
+  "extends": "generic-openai-compatible",
+  "match": {
+    "endpoints": [
+      "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+    ],
+    "models": [
+      "qwen-plus",
+      "qwen3.5-plus",
+      "qwen3.6-plus",
+      "qwen3.7-plus",
+      "qwen3.8-max",
+      "qwen3.8-flash"
+    ]
+  },
+  "parameters": {
+    "temperature": {
+      "type": "number",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard",
+        "minimum": 0,
+        "exclusive_maximum": 2
+      },
+      "default_mode": "omit",
+      "ui_hint": {
+        "step": 0.01,
+        "maximum": 1.99
+      }
+    },
+    "top_p": {
+      "type": "number",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard",
+        "maximum": 1,
+        "exclusive_minimum": 0
+      },
+      "default_mode": "omit",
+      "ui_hint": {
+        "step": 0.01,
+        "minimum": 0.01
+      }
+    },
+    "enable_thinking": {
+      "type": "boolean",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard"
+      },
+      "default_mode": "omit",
+      "wire_location": "body",
+      "wire_path": [
+        "enable_thinking"
+      ]
+    },
+    "max_completion_tokens": {
+      "type": "integer",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard",
+        "minimum": 1
+      },
+      "default_mode": "omit",
+      "wire_location": "body",
+      "wire_path": [
+        "max_tokens"
+      ]
+    }
+  },
+  "capabilities": {
+    "streaming": {
+      "status": "supported",
+      "source": "catalog"
+    }
+  },
+  "references": [
+    "https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions",
+    "https://www.alibabacloud.com/help/en/model-studio/deep-thinking"
+  ],
+  "reviewed_at": "2026-09-18"
+}

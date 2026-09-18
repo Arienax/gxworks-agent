@@ -147,7 +147,6 @@ def test_key_commands_do_not_affect_other_profiles_or_revive_legacy_key(settings
     {"capabilities": {"private_payload": True}}, {"capabilities": {"tools": "yes"}},
     {"base_url": "https://name:password@example.invalid/v1"},
     {"base_url": "https://example.invalid/v1?api_key=secret"},
-    {"generation_defaults": {"temperature": 3}}, {"generation_defaults": {"top_p": -0.1}},
     {"generation_defaults": {"temperature": float("nan")}},
 ])
 def test_unsafe_profile_values_rejected_before_persistence(settings_env, values):
@@ -354,8 +353,9 @@ def test_first_unsaved_profile_can_detect_without_writing_settings_or_credential
     monkeypatch.setattr(model_provider, "create_provider", lambda p, k: OpenAICompatibleProvider(p, k, client=endpoint))
     result = env.service.detect_profile(name="First", base_url="https://gateway.invalid/custom/v2/",
                                        model="tenant-alias", api_key="temporary-key")
-    assert result["status"] == "connected"
-    assert result["discovery"]["contract"]["parameters"]["reasoning_effort"]["values"] == ["low"]
+    assert result["status"] == "resolved"
+    assert result["discovery"]["contract"]["parameters"]["reasoning_effort"]["status"] == "unknown"
+    assert endpoint.calls == []
     assert not env.path.exists() and not env.writes and not env.deletes
     assert "temporary-key" not in json.dumps(result)
 
@@ -363,7 +363,7 @@ def test_first_unsaved_profile_can_detect_without_writing_settings_or_credential
 def test_detect_does_not_reuse_saved_key_for_changed_endpoint(settings_env):
     env = settings_env
     env.keys["test-target"] = "do-not-send-to-another-host"
-    result = env.service.detect_profile(id="fake", base_url="https://other.invalid/v1")
+    result = env.service.detect_profile(id="fake", base_url="https://other.invalid/v1", mode="list")
     assert result["status"] == "failed" and result["error_code"] == "missing_key"
     assert not env.calls and not env.path.exists()
 
@@ -404,6 +404,14 @@ def test_discovery_http_requires_operator_csrf_and_accepts_an_unsaved_profile(se
         login = client.post("/api/session", json={"token": "operator"}, headers={"Origin": origin}).json()
         assert client.post("/api/settings/detect", json=body, headers={"Origin": origin}).status_code == 403
         response = client.post("/api/settings/detect", json=body, headers={"Origin": origin, "X-CSRF-Token": login["csrf"]})
-        assert response.status_code == 200 and response.json()["status"] == "connected"
+        assert response.status_code == 200 and response.json()["status"] == "resolved"
         assert "private-draft-key" not in response.text
     assert not env.path.exists() and not env.writes
+
+
+def test_manual_override_is_validated_before_configuration_write(settings_env):
+    env = settings_env
+    with pytest.raises(ValueError):
+        env.service.update(profile={'id':'fake','capability_overrides':{'parameters':{
+            'unsafe':{'type':'string','status':'unknown','wire_path':['messages']}}}})
+    assert not env.path.exists() and not env.writes and not env.deletes

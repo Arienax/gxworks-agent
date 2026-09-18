@@ -1054,6 +1054,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Model Profile */
+        post: operations["resolve_model_profile_api_settings_resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify Model Profile */
+        post: operations["verify_model_profile_api_settings_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sfc/requirement": {
         parameters: {
             query?: never;
@@ -1706,7 +1740,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "connected" | "failed";
+            status: "connected" | "failed" | "resolved" | "unverified";
         };
         /** ModelConnectionTest */
         ModelConnectionTest: {
@@ -1718,10 +1752,10 @@ export interface components {
         ModelDiscoveryRequest: {
             /**
              * Mode
-             * @default quick
+             * @default resolve
              * @enum {string}
              */
-            mode: "list" | "quick" | "deep";
+            mode: "list" | "quick" | "resolve" | "deep";
             profile: components["schemas"]["ModelProfileCreate"];
             /**
              * Refresh
@@ -1743,7 +1777,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "connected" | "failed";
+            status: "connected" | "failed" | "resolved" | "unverified";
         };
         /** ModelKeyUpdate */
         ModelKeyUpdate: {
@@ -1757,6 +1791,10 @@ export interface components {
             /** Capabilities */
             capabilities?: {
                 [key: string]: boolean;
+            };
+            /** Capability Overrides */
+            capability_overrides?: {
+                [key: string]: components["schemas"]["JsonValue"];
             };
             /** Configured */
             configured: boolean;
@@ -1802,6 +1840,10 @@ export interface components {
             capabilities?: {
                 [key: string]: boolean;
             };
+            /** Capability Overrides */
+            capability_overrides?: {
+                [key: string]: unknown;
+            };
             /** Contract */
             contract?: {
                 [key: string]: unknown;
@@ -1836,6 +1878,10 @@ export interface components {
             /** Capabilities */
             capabilities?: {
                 [key: string]: boolean;
+            } | null;
+            /** Capability Overrides */
+            capability_overrides?: {
+                [key: string]: unknown;
             } | null;
             /** Contract */
             contract?: {
@@ -1872,6 +1918,24 @@ export interface components {
             language: string;
             /** Profiles */
             profiles?: components["schemas"]["ModelProfile"][];
+        };
+        /** ModelVerificationRequest */
+        ModelVerificationRequest: {
+            /**
+             * Consent
+             * @default false
+             */
+            consent: boolean;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "parameter" | "capability" | "chat";
+            profile: components["schemas"]["ModelProfileCreate"];
+            /** Target */
+            target: string;
+            /** Value */
+            value?: unknown;
         };
         /** NativeValidationRecord */
         NativeValidationRecord: {
@@ -4482,6 +4546,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelConnectionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_model_profile_api_settings_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelDiscoveryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelDiscoveryResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_model_profile_api_settings_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelVerificationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelDiscoveryResult"];
                 };
             };
             /** @description Validation Error */

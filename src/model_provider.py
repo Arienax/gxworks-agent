@@ -161,6 +161,8 @@ class ModelRequest:
     tool_response_contracts: Tuple[Tuple[str, ResponseContract], ...] = ()
     preserved_annotations: Tuple[str, ...] = ()
     enforce_response_language: bool = field(default_factory=lambda: _language_enforcement.get())
+    # Backend-only synthetic verification sends no application prompt/context.
+    _synthetic_probe: bool = field(default=False, repr=False, compare=False)
 
     def __post_init__(self):
         object.__setattr__(self, "response_language", normalize_language(self.response_language))
@@ -517,6 +519,7 @@ class OpenAICompatibleProvider:
         if not self.api_key:
             raise ValueError("未配置当前模型 Profile 的 API Key。")
         self._client = client or self._create_client()
+        self.observation_sink = None
 
     def _create_client(self):
         from openai import OpenAI
@@ -527,7 +530,8 @@ class OpenAICompatibleProvider:
         )
 
     def _request_params(self, request: ModelRequest) -> Dict[str, Any]:
-        request = with_response_language(request)
+        if not request._synthetic_probe:
+            request = with_response_language(request)
         response_format_unset = object()
         explicit_response_format = (
             copy.deepcopy(request.options["response_format"])
@@ -733,12 +737,34 @@ class OpenAICompatibleProvider:
                     if isinstance(response_format, Mapping) else "unspecified"),
                 max_tokens=params.get("max_tokens"), max_completion_tokens=params.get("max_completion_tokens"))
             response = client.chat.completions.create(**self._sdk_params(client.chat.completions.create, params))
-            if request.stream:
-                yield from self._streaming_events(response, origin=self._origin(params["model"]))
-            else:
-                yield from self._complete_events(response, origin=self._origin(params["model"]))
+            events = self._streaming_events(response, origin=self._origin(params["model"])) if request.stream else self._complete_events(response, origin=self._origin(params["model"]))
+            observed, size = [], 0
+            try:
+                for event in events:
+                    if self.observation_sink and isinstance(event, (TextDelta, ToolCallEnd)):
+                        size += len(event.text) if isinstance(event, TextDelta) else len(str(event.tool_call.arguments))
+                        if size <= 65536:
+                            observed.append(event)
+                    yield event
+            finally:
+                events.close()
+            if size > 65536:
+                observed = []
+            self._observe(params, observed)
         except Exception as error:
+            if "response" in locals():
+                self._observe(params, [], error)
+            elif "params" in locals():
+                self._observe(params, [], error)
             raise _normalize_error(error) from error
+
+    def _observe(self, params, events, error=None):
+        if self.observation_sink is not None:
+            try:
+                self.observation_sink(params, events, error)
+            except Exception:
+                # Observation storage is best-effort, never a retry trigger.
+                pass
 
     def _complete_events(self, response: Any, *, origin=None) -> Iterator[ModelEvent]:
         choices = list(_value(response, "choices", []) or [])
@@ -1104,16 +1130,14 @@ def test_model_profile(profile: Mapping[str, Any], api_key: str) -> str:
     provider = create_provider(profile, api_key)
     selected = str(profile.get("model") or "")
     try:
-        model_ids = set(provider.list_models(timeout=15.0))
+        model_ids = set(provider.list_models(timeout=5.0))
     except ModelProviderError as error:
-        if error.code in {"authentication", "rate_limit"}:
-            raise
-        # A custom deployment can expose chat/completions without GET /models.
-        provider.for_detection().probe_parameter(selected, timeout=15.0)
-        return "连接成功；服务未提供模型列表，已验证当前模型的聊天接口。"
+        if error.status_code in {404, 405, 501}:
+            raise ModelProviderError("服务未提供模型列表。", code="metadata_unavailable", status_code=error.status_code) from error
+        raise
     if model_ids and selected not in model_ids:
-        return "连接成功；模型列表中未找到当前模型，请确认模型名称。"
-    return "连接成功，API Key 和服务地址有效。"
+        return "模型列表接口可访问，但列表中未找到当前模型；尚未验证其生成权限。"
+    return "模型列表接口可访问；尚未验证当前模型的生成权限。没有发送生成请求。"
 
 
 def sdk_runtime_self_test() -> bool:

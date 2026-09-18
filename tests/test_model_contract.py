@@ -13,7 +13,7 @@ from model_contract import (
 from model_request_policy import resolve_request, public_contract_settings
 from model_provider import OpenAICompatibleProvider, ModelRequest, ModelProviderError, UserMessage
 from application.model_detection import inspect_openai_compatible
-from model_probes import ParameterProbe
+from application.model_detection import list_metadata
 from test_model_capabilities import Endpoint, profile, provider, descriptor
 from test_application_settings import settings_env
 
@@ -161,7 +161,9 @@ def test_metadata_supplies_arbitrary_controls_without_any_new_probe():
         "custom_verbosity": {"enum": ["quiet", "normal", "verbose"]}},
         "capabilities": {"vision": True, "audio": False, "structured_output": {"status": "supported", "modes": ["json_schema"]}},
         "context_window": 262144}])
-    result = inspect_openai_compatible(provider(endpoint), "tenant-alias")
+    model_provider = provider(endpoint)
+    list_metadata(model_provider)
+    result = inspect_openai_compatible(model_provider, "tenant-alias")
     assert "parameter_support" not in result and "probe_results" not in result
     contract = CapabilityContract.from_dict(result["contract"])
     assert contract.parameters["vendor_budget"].wire_path == ("thinking", "budget_tokens")
@@ -171,12 +173,12 @@ def test_metadata_supplies_arbitrary_controls_without_any_new_probe():
     assert not any("vendor_budget" in call or "vendor_flag" in call for call in endpoint.calls)
 
 
-def test_additional_probe_registration_requires_no_provider_or_ui_branch():
-    endpoint = Endpoint(ignore=True)
-    result = inspect_openai_compatible(provider(endpoint), "tenant-alias", probes={
-        "new_knob": ParameterProbe("new_knob", "integer", (1, 2), -1)})
-    assert set(result["contract"]["parameters"]) == {"new_knob"}
-    assert result["contract"]["parameters"]["new_knob"]["status"] == "accepted"
+def test_metadata_addition_requires_no_verifier_or_provider_branch():
+    endpoint = Endpoint(metadata=[{"id":"tenant-alias","parameters":{"new_knob":{"type":"integer"}}}])
+    list_metadata(provider(endpoint))
+    result = inspect_openai_compatible(provider(endpoint), "tenant-alias")
+    assert result["contract"]["parameters"]["new_knob"]["type"] == "integer"
+    assert endpoint.calls == []
 
 
 def test_capability_probe_failure_is_unknown_not_unsupported():
@@ -196,7 +198,9 @@ def test_v1_migration_keeps_evidence_and_user_values_separate_without_mutation()
         temperature={"status": "supported", "source": "probe", "values": [0, .5], "reasoning_effort": "high"})
     before = copy.deepcopy(p)
     c, user = legacy_contract(p, "key")
-    assert c.parameters["temperature"].constraints.requires == {"reasoning_effort": ("high",)}
+    assert c.parameters["temperature"].constraints.requires == {}
+    assert c.parameters["temperature"].evidence["observed_context"] == {"requires":{"reasoning_effort":["high"]}}
+    c.parameters["temperature"].validate(.73)
     assert user["parameters"]["reasoning_effort"] == {"mode": "value", "value": "high"}
     assert "value" not in c.parameters["reasoning_effort"].to_dict()
     assert p == before

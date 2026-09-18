@@ -24,6 +24,7 @@ if not (root / "resources/instructions/mitsubishi").is_dir():
 datas = [
     (str(root / "src/gxw/templates"), "gxw/templates"),
     (str(root / "web/dist"), "web/dist"),
+    (str(root / "resources/model_catalog"), "resources/model_catalog"),
     (str(root / "resources/config.default.json"), "."),
     (str(root / "resources/pattern_library.json"), "."),
     (str(root / "resources/plc_models.json"), "."),

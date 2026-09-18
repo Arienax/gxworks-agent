@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { adoptSelections, changeSelection, clearKnown, conditionsMatch, controlValues, effectiveValue,
-  parameterEnabled, selectedValues, validValue, ENDPOINT_PRESETS } from '../src/features/modelParameters.ts';
+  parameterEnabled, selectedValues, validValue, sliderRange, ENDPOINT_PRESETS } from '../src/features/modelParameters.ts';
 
 const scope = { endpoint: 'https://test.invalid/v1', model: 'model-unknown', context: 'a'.repeat(64), binding: 'b'.repeat(64) };
 const spec = (extra = {}) => ({ type: 'number', status: 'supported', source: 'metadata', default_mode: 'omit', ...extra });
@@ -15,11 +15,12 @@ const contract = { schema_version: 2, scope, capabilities: {}, constraints: {}, 
 test('arbitrary metadata controls, booleans and large integer ranges need no name-specific UI', () => {
   assert.deepEqual(controlValues(contract.parameters.effort), ['off', 'economy', 'thorough']);
   assert.deepEqual(controlValues(contract.parameters.unseen_flag), [false, true]);
-  assert.equal(controlValues(contract.parameters.budget).length, 33);
-  assert.deepEqual(controlValues(spec({ minimum: 0, maximum: 1, step: .25 })), [0, .25, .5, .75, 1]);
+  assert.deepEqual(controlValues(contract.parameters.budget), []);
+  assert.deepEqual(sliderRange(contract.parameters.budget), {minimum:0,maximum:32768,step:1024});
+  assert.deepEqual(controlValues(spec({ minimum: 0, maximum: 1, step: .25 })), []);
   assert.deepEqual(controlValues(spec({ minimum: 0, maximum: 1 })), []);
   assert.deepEqual(controlValues(spec({ minimum: 0, maximum: 10000, step: .001 })), []);
-  for (const status of ['unknown', 'accepted', 'unsupported']) assert.deepEqual(controlValues(spec({ status, values: [0, 1] })), []);
+  for (const status of ['unknown', 'accepted']) assert.equal(validValue(spec({ status, source:"generic" }), .733), true);
 });
 test('adoption separates observed schemas, defaults and selections', () => {
   const defaults = { effort: 'off', temp: .5, extra_body: { thinking: { budget_tokens: 8192, type: 'enabled' } } };
@@ -29,10 +30,10 @@ test('adoption separates observed schemas, defaults and selections', () => {
   assert.deepEqual(user.parameters.unseen_flag, { mode: 'omit' });
   assert.equal(JSON.stringify([contract, defaults]), before);
 });
-test('changing a dependency clears its selected dependents without erasing the observation', () => {
+test('changing a dependency preserves the explicit value and exposes its conflict', () => {
   const user = adoptSelections(contract, {}, { effort: 'off', temp: .5 }, {});
   const next = changeSelection(contract, user, 'effort', { mode: 'value', value: 'thorough' });
-  assert.deepEqual(next.parameters.temp, { mode: 'omit' });
+  assert.deepEqual(next.parameters.temp, { mode: 'value', value:.5 });
   assert.deepEqual(user.parameters.temp, { mode: 'value', value: .5 });
   assert.equal(parameterEnabled('temp', contract, selectedValues(contract, next)), false);
   assert.deepEqual(contract.parameters.temp.requires, { effort: ['off'] });
@@ -50,7 +51,7 @@ test('false is an explicit boolean value, never numeric zero or absence', () => 
   assert.equal(validValue(contract.parameters.unseen_flag, 0), false);
   assert.equal(validValue(spec({ values: [0, 1] }), true), false);
 });
-test('only verified discrete values are selectable; declared grids validate fractions', () => {
+test('only declared numeric enums constrain values; declared grids validate fractions', () => {
   assert.equal(validValue(contract.parameters.temp, .7), false);
   assert.equal(validValue(spec({ minimum: 0, maximum: 2, step: .1 }), .7), true);
   assert.equal(validValue(spec({ minimum: 0, maximum: 2, step: .1 }), .75), false);
@@ -87,8 +88,8 @@ test('presets contain endpoints, never model names or tuning defaults', () => {
 
 test('partial samples never invent a numeric range or imply a fixed parameter', () => {
   const partial = spec({ source: 'probe', values: [1], scan: 'partial' });
-  assert.deepEqual(controlValues(partial), [1]);
-  assert.equal(validValue(partial, .7), false);
+  assert.deepEqual(controlValues(partial), []);
+  assert.equal(validValue(partial, .733), true);
   assert.equal(partial.status, 'supported');
 });
 
@@ -103,11 +104,47 @@ test('extending a quick domain preserves explicit choices and omission', () => {
   }
 });
 
-test('deep scanning requires a contract from the selected endpoint and model', async () => {
-  const { canDeepScan } = await import('../src/features/modelParameters.ts');
-  assert.equal(canDeepScan({}, scope.endpoint, scope.model), false);
-  assert.equal(canDeepScan(contract, scope.endpoint + '/', scope.model), true);
-  assert.equal(canDeepScan(contract, 'https://other.invalid/v1', scope.model), false);
-  assert.equal(canDeepScan(contract, scope.endpoint, 'other-model'), false);
-  assert.equal(canDeepScan(contract, scope.endpoint, ''), false);
+test('continuous numeric domain never borrows the observed sample grid', () => {
+  const desc = spec({ source:'catalog', domain:{minimum:0,maximum:2,source:'catalog',enforcement:'hard'},
+    ui_hint:{step:.01}, evidence:{accepted_values:[0,.5,1,1.5,2]} });
+  assert.deepEqual(controlValues(desc), []);
+  assert.deepEqual(sliderRange(desc), {minimum:0,maximum:2,step:.01});
+  for (const v of [.73,.733,0,2]) assert.equal(validValue(desc,v),true);
+  assert.equal(validValue(desc,2.1),false);
+});
+test('unknown suggested ranges are not validation limits or presumed support', () => {
+  const desc=spec({status:'unknown',source:'generic',ui_hint:{minimum:0,maximum:2,step:.01}});
+  assert.deepEqual(sliderRange(desc),{minimum:0,maximum:2,step:.01});
+  assert.equal(validValue(desc,3.17),true);
+  assert.equal(desc.status,'unknown');
+});
+test('unknown effort suggestions permit user-defined strings, without claiming an enum', () => {
+  const desc=spec({type:'enum',source:'generic',status:'unknown',ui_hint:{suggestions:['low','medium','high']}});
+  assert.deepEqual(controlValues(desc),['low','medium','high']);
+  assert.equal(validValue(desc,'max'),true);
+  assert.equal(validValue(desc,false),false);
+});
+test('domain updates never silently erase an invalid explicit selection', () => {
+  const c={...contract,parameters:{temp:spec({domain:{minimum:0,maximum:1,enforcement:'hard',source:'metadata'}})}};
+  const previous={scope,parameters:{temp:{mode:'value',value:1.73}}};
+  const adopted=adoptSelections(c,previous,{},{});
+  assert.deepEqual(adopted.parameters.temp,previous.parameters.temp);
+  assert.equal(validValue(c.parameters.temp,1.73),false);
+});
+test('exclusive numeric bounds and multipleOf are independent of slider precision', () => {
+  const desc=spec({domain:{minimum:0,exclusive_maximum:2,enforcement:'hard',source:'metadata'},ui_hint:{maximum:1.99,step:.01}});
+  assert.equal(validValue(desc,1.999),true);
+  assert.equal(validValue(desc,2),false);
+  const grid=spec({domain:{minimum:.1,maximum:1,multiple_of:.2,enforcement:'hard',source:'metadata'}});
+  assert.equal(validValue(grid,.2),true);
+  assert.equal(validValue(grid,.3),false);
+});
+
+test('range presentation respects zero-anchored multiples and exclusive bounds', () => {
+  const d={type:'number',status:'supported',source:'manual',domain:{enforcement:'hard',minimum:.1,maximum:1,multiple_of:.2}};
+  assert.deepEqual(sliderRange(d),{minimum:.2,maximum:1,step:.2});
+  assert.equal(validValue(d,.2),true); assert.equal(validValue(d,.3),false);
+  const exclusive={type:'number',status:'supported',source:'metadata',domain:{enforcement:'hard',minimum:0,maximum:2,exclusive_minimum:0,exclusive_maximum:2},ui_hint:{minimum:0,maximum:2,step:.01}};
+  assert.deepEqual(sliderRange(exclusive),{minimum:.01,maximum:1.99,step:.01});
+  assert.equal(validValue(exclusive,1.999),true);
 });

@@ -4,8 +4,8 @@ import type { Json, ModelSettings } from "../api/client";
 import type { components } from "../api/generated";
 import { Button, Badge } from "../components/ui";
 import { ModelParameters } from "./ModelParameterControls";
-import { ENDPOINT_PRESETS, adoptSelections, clearKnown, canDeepScan } from "./modelParameters";
-import type { CapabilityContract, UserModelSettings, DiscoveryMode } from "./modelParameters";
+import { ENDPOINT_PRESETS, adoptSelections, clearKnown } from "./modelParameters";
+import type { CapabilityContract, UserModelSettings, DiscoveryMode, Scalar } from "./modelParameters";
 
 type Profile = NonNullable<ModelSettings["profiles"]>[number] & {
   deletable?: boolean;
@@ -13,6 +13,7 @@ type Profile = NonNullable<ModelSettings["profiles"]>[number] & {
   request_overrides?: Record<string, Json>;
   contract?: Record<string, Json>;
   user_settings?: Record<string, Json>;
+  capability_overrides?: Record<string, Json>;
 };
 
 type Discovery = {
@@ -245,7 +246,7 @@ export function Settings({
   const [userSettings, setUserSettings] = useState<UserModelSettings>({});
   const [scanMode, setScanMode] = useState<DiscoveryMode | null>(null);
   const [scanSeconds, setScanSeconds] = useState(0);
-  const [refreshScan, setRefreshScan] = useState(false);
+  const [manualOverrides, setManualOverrides] = useState("{}");
   useEffect(() => {
     if (!scanMode) return;
     const started = Date.now();
@@ -269,7 +270,7 @@ export function Settings({
     } catch { /* Keep invalid advanced JSON for the user to repair. */ }
   };
   const changeModel = (next: string) => {
-    if (next !== model) { invalidate(); setCapabilities({}); setCompatibilityText("{}"); clearParameterValues(); }
+    if (next !== model) { setManualOverrides("{}"); invalidate(); setCapabilities({}); setCompatibilityText("{}"); clearParameterValues(); }
     setModel(next);
   };
   useEffect(() => () => { draftRevision.current += 1; }, []);
@@ -287,6 +288,7 @@ export function Settings({
     setCompatibilityText(JSON.stringify(profile?.capabilities || {}, null, 2));
     setContract((profile?.contract || {}) as CapabilityContract);
     setUserSettings((profile?.user_settings || {}) as UserModelSettings);
+    setManualOverrides(JSON.stringify(profile?.capability_overrides || {}, null, 2));
     setDefaults(JSON.stringify(profile?.generation_defaults || {}, null, 2));
     setOverrides(JSON.stringify(profile?.request_overrides || {}, null, 2));
     setDeleting(false);
@@ -299,7 +301,13 @@ export function Settings({
       throw new Error(t("配置数据必须是有效 JSON 对象。"));
     return result;
   };
-  const command = () => ({
+  const command = () => {
+    const invalid = document.querySelector<HTMLInputElement>(".model-parameters input:invalid");
+    if (invalid || document.querySelector('.model-parameters [data-invalid="true"]')) {
+      invalid?.reportValidity();
+      throw new Error(t("请先修正参数类型、范围或关联条件冲突。"));
+    }
+    return ({
     ...(creating ? {} : { id: selected }),
     name,
     model,
@@ -308,8 +316,10 @@ export function Settings({
     generation_defaults: parse(defaults),
     request_overrides: parse(overrides),
     contract,
-    user_settings: userSettings,
+    user_settings: contract.scope ? userSettings : {},
+    capability_overrides: parse(manualOverrides),
   });
+  };
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
     setError("");
@@ -336,14 +346,14 @@ export function Settings({
         model: model.trim() || "__discover__",
         base_url: baseUrl, capabilities,
         generation_defaults: parse(defaults), request_overrides: parse(overrides),
-        contract, user_settings: userSettings,
+        contract, user_settings: contract.scope ? userSettings : {}, capability_overrides: parse(manualOverrides),
         ...(secret ? { api_key: secret } : {}),
       };
       const result = await api<{ status: string; message: string; discovery?: Discovery }>(
-        "/settings/detect", "POST", { profile: draft, mode, refresh: refreshScan },
+        mode === "list" ? "/settings/detect" : "/settings/resolve", "POST", { profile: draft, mode },
       );
       if (revision !== draftRevision.current) return;
-      if (result.status !== "connected") throw new Error(result.message || t("连接失败"));
+      if (!["connected", "resolved"].includes(result.status)) throw new Error(result.message || t("连接失败"));
       const discovery = result.discovery || parseDiscovery(result.message);
       if (!discovery) { setMessage(result.message || t("连接成功")); return; }
       setDiscoveredModels(discovery.models || []);
@@ -353,7 +363,7 @@ export function Settings({
         setUserSettings(adoptSelections(discovery.contract, userSettings, parse(defaults), parse(overrides)));
       }
       const timing = discovery.elapsed_ms == null ? "" : ` · ${t("耗时")} ${(discovery.elapsed_ms / 1000).toFixed(1)} s`;
-      setMessage((discovery.note || t("模型列表与能力检测完成")) + timing +
+      setMessage((discovery.note || t("能力配置已加载（无生成请求）")) + timing +
         (discovery.budget_exhausted ? ` · ${t("已达到检测预算，未完成项保留为未知或部分扫描。")}` : ""));
     } catch (e) {
       if (revision === draftRevision.current) throw e;
@@ -371,6 +381,7 @@ export function Settings({
     invalidate(true);
     setDefaults("{}");
     setOverrides("{}");
+    setManualOverrides("{}");
     setDiscoveredModels([]);
     setError("");
     setMessage("");
@@ -388,6 +399,23 @@ export function Settings({
       </div>
     );
   }
+
+  const verify = (target: string, kind: "parameter" | "capability" | "chat", value?: Scalar) => {
+    if (!window.confirm(t("将发送 1 次模型请求，可能计费；不自动重试。是否继续？") + `\n${target}${value === undefined ? "" : ` = ${value}`}`)) return;
+    void run(async () => {
+      const revision = draftRevision.current;
+      const result = await api<{status: string; message: string; discovery?: Discovery}>("/settings/verify", "POST", {
+        profile: {...command(), ...(secret ? {api_key:secret} : {})}, target, kind, value, consent:true,
+      });
+      if (revision !== draftRevision.current) return;
+      if (result.status === "failed") throw new Error(result.message);
+      if (result.discovery?.contract) {
+        setContract(result.discovery.contract);
+        setUserSettings(adoptSelections(result.discovery.contract, userSettings, parse(defaults), parse(overrides)));
+      }
+      setMessage(result.message);
+    });
+  };
 
   return (
     <div>
@@ -443,7 +471,7 @@ export function Settings({
           API URL
           <input
             value={baseUrl}
-            onChange={(e) => { setBaseUrl(e.target.value); invalidate(true); setCapabilities({}); setCompatibilityText("{}"); clearParameterValues(); }}
+            onChange={(e) => { setBaseUrl(e.target.value); setManualOverrides("{}"); invalidate(true); setCapabilities({}); setCompatibilityText("{}"); clearParameterValues(); }}
             placeholder="https://api.example.com/v1"
           />
         </label>
@@ -465,17 +493,14 @@ export function Settings({
           <Button disabled={!discoverReady} onClick={() => discover("list")}>
             {t("获取模型列表")}
           </Button>
-          <Button disabled={!discoverReady || !model.trim()} onClick={() => discover("quick")}>
-            {t("快速能力检测")}
-          </Button>
-          <Button disabled={!discoverReady || !canDeepScan(contract, baseUrl, model)} onClick={() => discover("deep")}>
-            {t("深度参数扫描")}
+          <Button disabled={busy || disabled || !baseUrl.trim() || !model.trim()} onClick={() => discover("resolve")}>
+            {t("加载能力配置（零生成请求）")}
           </Button>
         </div>
-        <p className="muted">{t("先获取列表并选择模型，再快速检测；需要更多档位时手动深度扫描。不会自动扫描所有模型。")}</p>
+        <p className="muted">{t("已知模型使用本地 JSON 预设；未知模型使用可编辑通用模板。加载配置、切换参数和保存都不调用模型。")}</p>
         {scanMode && <p role="status" aria-live="polite">
-          {t(scanMode === "list" ? "正在获取模型列表…" : scanMode === "quick" ? "快速检测中…" : "深度扫描中…")}
-          {` ${scanSeconds} s · `}{t("请勿重复提交；完成后显示实际耗时。")}
+          {t(scanMode === "list" ? "正在获取模型列表…" : "正在解析本地配置…")}
+          {` ${scanSeconds} s`}
         </p>}
         <label>
           {t("模型")}
@@ -485,16 +510,21 @@ export function Settings({
             {discoveredModels.map(item => <option value={item} key={item} />)}
           </datalist>
         </label>
-        <p className="muted">{t("检测会发送少量测试请求，可能产生 API 费用；仅使用固定测试文本，不发送工程内容。")}</p>
+        <p className="muted">{t("仅“验证”按钮会发送固定测试文本并可能计费；不发送工程内容，不进行全档位扫描。")}</p>
         <ModelParameters contract={contract} settings={userSettings} defaults={defaults} overrides={overrides}
-          disabled={busy || disabled} t={t} onChange={(next) => {
+          disabled={busy || disabled} t={t} onVerify={verify} onChange={(next) => {
             draftRevision.current += 1;
             setUserSettings(next);
           }} />
         <details>
           <summary>{t("高级设置")}</summary>
-          <label><input type="checkbox" checked={refreshScan} disabled={busy || disabled}
-            onChange={e => setRefreshScan(e.target.checked)} />{t("重新验证已有结果（增加请求；深度扫描仅重测参数）")}</label>
+          <label>{t("手动能力覆盖 JSON（仅影响当前配置）")}
+            <textarea className="mono" aria-label={t("手动能力覆盖 JSON")} value={manualOverrides}
+              onChange={e=>{setManualOverrides(e.target.value);draftRevision.current+=1;setContract({});}} />
+          </label>
+          <p className="muted">{t("格式：parameters / capabilities / constraints。修改后重新加载能力配置。不能覆盖消息、工具定义、密钥或服务地址。")}</p>
+          <Button disabled={busy || disabled || !model.trim() || !contract.scope}
+            onClick={()=>verify("chat","chat")}>{t("验证模型可生成（1 次请求）")}</Button>
           <p className="muted">
             {t("如供应商要求特定参数，可在此调整模型能力、生成参数和请求覆盖参数。")}
           </p>
@@ -577,7 +607,7 @@ export function Settings({
                   "POST",
                   { profile: command(), ...(secret ? { api_key: secret } : {}) },
                 );
-                if (result.status === "connected")
+                if (["connected", "unverified"].includes(result.status))
                   setMessage(result.message || t("连接成功"));
                 else setError(result.message || t("连接失败"));
               })

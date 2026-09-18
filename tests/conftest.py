@@ -13,3 +13,15 @@ def isolate_application_language():
     set_language("zh-CN")
     yield
     set_language("zh-CN")
+
+
+@pytest.fixture(autouse=True)
+def reset_model_metadata_cache():
+    import sys
+    module = sys.modules.get("application.model_detection")
+    if module is not None:
+        module._cache.clear()
+    yield
+    module = sys.modules.get("application.model_detection")
+    if module is not None:
+        module._cache.clear()

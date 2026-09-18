@@ -37,19 +37,10 @@ def test_discovery_lists_models_without_guessing_or_probing_first_result():
     assert provider.stream_calls == 0
 
 
-def test_explicit_selected_model_is_probed_and_receives_contract():
+def test_explicit_selected_model_resolves_without_network_or_generating():
     provider = _Provider()
-    result = inspect_openai_compatible(
-        provider,
-        "model-b",
-        {"reasoning": True, "tools": False, "structured_output": False},
-    )
-    assert result["models"] == ["model-a", "model-b"]
+    result = inspect_openai_compatible(provider, "model-b")
     assert result["recommended_model"] == "model-b"
-    assert result["selected_model_available"] is True
     assert result["contract"]["scope"]["model"] == "model-b"
-    assert result["contract"]["capabilities"]["reasoning"]["status"] == "supported"
-    assert result["contract"]["capabilities"]["tools"]["status"] == "supported"
-    assert result["contract"]["capabilities"]["structured_output"]["status"] == "supported"
-    assert "probe_results" not in result and "parameter_support" not in result
-    assert provider.stream_calls > 0
+    assert result["contract"]["capabilities"]["tools"]["status"] == "unknown"
+    assert provider.stream_calls == 0 and result["generation_requests"] == 0

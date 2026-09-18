@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "id": "deepseek-chat",
+  "extends": "generic-openai-compatible",
+  "match": {
+    "endpoints": [
+      "https://api.deepseek.com",
+      "https://api.deepseek.com/v1"
+    ],
+    "models": [
+      "deepseek-flash",
+      "deepseek-v4-flash",
+      "deepseek-v4-pro"
+    ]
+  },
+  "parameters": {
+    "temperature": {
+      "type": "number",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard",
+        "minimum": 0,
+        "maximum": 2
+      },
+      "default_mode": "omit",
+      "ui_hint": {
+        "step": 0.01
+      },
+      "requires": {
+        "thinking_mode": [
+          "disabled"
+        ]
+      }
+    },
+    "thinking_mode": {
+      "type": "enum",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard",
+        "values": [
+          "enabled",
+          "disabled"
+        ]
+      },
+      "default_mode": "omit",
+      "wire_location": "extra_body",
+      "wire_path": [
+        "thinking",
+        "type"
+      ]
+    },
+    "reasoning_effort": {
+      "type": "enum",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard",
+        "values": [
+          "low",
+          "high",
+          "max"
+        ]
+      },
+      "default_mode": "omit"
+    },
+    "max_completion_tokens": {
+      "type": "integer",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard",
+        "minimum": 1
+      },
+      "default_mode": "omit",
+      "wire_location": "body",
+      "wire_path": [
+        "max_tokens"
+      ]
+    }
+  },
+  "capabilities": {
+    "tools": {
+      "status": "supported",
+      "source": "catalog"
+    },
+    "streaming": {
+      "status": "supported",
+      "source": "catalog"
+    },
+    "structured_output": {
+      "status": "supported",
+      "source": "catalog",
+      "modes": [
+        "json_object"
+      ]
+    }
+  },
+  "references": [
+    "https://api-docs.deepseek.com/api/create-chat-completion/",
+    "https://api-docs.deepseek.com/guides/thinking_mode/"
+  ],
+  "reviewed_at": "2026-09-18"
+}

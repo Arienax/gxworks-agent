@@ -1,76 +1,64 @@
-"""Quick checks must validate changed draft samples, not just reuse a model scope."""
+"""Cached evidence is not an allowlist and never causes new paid probes."""
 import copy
-
 import pytest
-
-from application.model_detection import inspect_openai_compatible
-from model_contract import member
+from application.model_detection import inspect_openai_compatible, list_metadata
+from model_catalog import resolve_capabilities
 from model_request_policy import resolve_request
-from test_model_capabilities import Endpoint, provider
+from test_model_capabilities import Endpoint, provider, profile
 
 
-@pytest.mark.parametrize(('name', 'value'), [
-    ('reasoning_effort', 'high'),
-    ('temperature', .5),
-])
-def test_quick_cache_extends_samples_for_changed_explicit_draft(name, value):
-    first = inspect_openai_compatible(provider(Endpoint()), 'tenant-alias')
+@pytest.mark.parametrize(('name','value'), [('reasoning_effort','high'),('temperature',.73)])
+def test_changed_explicit_value_needs_no_new_probe_or_domain_expansion(name,value):
     endpoint = Endpoint()
-    p = provider(endpoint, capabilityContract=first['contract'],
-                 generationDefaults={name: value})
+    p = provider(endpoint)
+    p.profile['capabilityContract'] = inspect_openai_compatible(p,'tenant-alias')['contract']
     before = copy.deepcopy(p.profile)
-    result = inspect_openai_compatible(p, 'tenant-alias', mode='quick')
-    observed = result['contract']['parameters'][name]
-    assert member(value, observed['values'])
-    assert observed['scan'] == 'partial'
-    assert name not in result['parameters_reused']
-    assert any(call.get(name) == value for call in endpoint.calls)
-    assert not any(call.get('tools') or call.get('response_format') for call in endpoint.calls)
-    assert len(endpoint.calls) <= 5
-    if name == 'reasoning_effort':
-        assert observed['values'] == ['low', 'high']
-        assert result['contract']['parameters']['temperature']['requires'] == {
-            'reasoning_effort': ['high']}
-    else:
-        assert observed['values'] == [.5, 1.0]
+    p.profile['generationDefaults'][name] = value
+    result = inspect_openai_compatible(p,'tenant-alias')
     p.profile['capabilityContract'] = result['contract']
-    assert resolve_request(p.profile, {}, api_key=p.api_key).options[name] == value
-    p.profile['capabilityContract'] = before['capabilityContract']
-    assert p.profile == before
+    assert resolve_request(p.profile,{},api_key=p.api_key).options[name] == value
+    assert endpoint.calls == [] and endpoint.options == []
+    assert not result['contract']['parameters'][name].get('evidence')
+    assert before['generationDefaults'] == {}
 
 
-def test_new_quick_sample_timeout_preserves_old_positive_evidence():
-    from model_provider import ModelProviderError
-
-    first = inspect_openai_compatible(provider(Endpoint()), 'tenant-alias')
-
-    class Interrupted(Endpoint):
-        def create(self, **params):
-            if params.get('temperature') == .5:
-                self.calls.append(params)
-                raise ModelProviderError('private-provider-error', code='timeout')
-            return super().create(**params)
-
-    endpoint = Interrupted()
-    result = inspect_openai_compatible(provider(endpoint, capabilityContract=first['contract'],
-        generationDefaults={'temperature': .5}), 'tenant-alias')
-    temp = result['contract']['parameters']['temperature']
-    assert any(call.get('temperature') == .5 for call in endpoint.calls)
-    assert temp['values'] == [1.0] and temp['scan'] == 'partial'
-    assert temp['status'] == 'supported'
-    assert 'private-provider-error' not in str(result)
+def test_metadata_cache_is_scoped_to_exact_endpoint_and_credentials():
+    endpoint = Endpoint(metadata=[{'id':'tenant-alias','parameters':{'knob':{'type':'boolean'}}}])
+    p = provider(endpoint)
+    list_metadata(p)
+    assert 'knob' in inspect_openai_compatible(p,'tenant-alias')['contract']['parameters']
+    for change in ({'api_key':'another-key'},{'baseUrl':'https://other.invalid/v1'}):
+        other = provider(Endpoint())
+        if 'api_key' in change:other.api_key=change['api_key']
+        else:other.profile.update(change)
+        assert 'knob' not in inspect_openai_compatible(other,'tenant-alias')['contract']['parameters']
+        assert other._client.calls == [] and other._client.options == []
 
 
-def test_capability_probe_reads_remaining_budget_once_before_dispatch():
-    from model_probes import CapabilityProbe, ProbeContext
+def test_expired_metadata_cache_falls_back_locally_without_refetch(monkeypatch):
+    import application.model_detection as discovery
+    endpoint=Endpoint(metadata=[{'id':'tenant-alias','parameters':{'knob':{'type':'boolean'}}}])
+    p=provider(endpoint);list_metadata(p)
+    with discovery._lock:
+        key=next(iter(discovery._cache));stamp,data=discovery._cache[key]
+        discovery._cache[key]=(stamp-1000,data)
+    endpoint.list_error=RuntimeError('network must not be used')
+    result=inspect_openai_compatible(p,'tenant-alias')
+    assert 'knob' not in result['contract']['parameters'] and endpoint.calls==[]
 
-    budgets = iter([.01, 0.0])
-    timeouts = []
 
-    def check(_provider, _model, timeout):
-        timeouts.append(timeout)
-        return True
+def test_persisted_metadata_domain_survives_offline_resolve_without_becoming_probe_values():
+    p=profile()
+    raw=resolve_capabilities(p,metadata={'parameters':{'temperature':{'type':'number','minimum':0,'maximum':1}}},api_key='key')['contract']
+    p['capabilityContract']=raw
+    resolved=resolve_capabilities(p,api_key='key')['contract']['parameters']['temperature']
+    assert resolved['domain']['maximum']==1 and resolved['domain']['source']=='metadata'
 
-    probe = CapabilityProbe('test_capability', check)
-    result = probe.run(ProbeContext(object(), 'model', lambda: next(budgets)))
-    assert result.status == 'supported' and timeouts == [.01]
+
+@pytest.mark.parametrize('change',[{'baseUrl':'https://other.invalid/v1'},{'model':'alias-other'},
+    {'requestOverrides':{'extra_body':{'deployment_mode':'other'}}}])
+def test_old_declared_domains_are_not_reused_for_different_scope(change):
+    p=profile()
+    p['capabilityContract']=resolve_capabilities(p,metadata={'parameters':{'temperature':{'type':'number','maximum':1}}},api_key='key')['contract']
+    p.update(change)
+    assert resolve_capabilities(p,api_key='key')['contract']['parameters']['temperature']['source']=='generic'
