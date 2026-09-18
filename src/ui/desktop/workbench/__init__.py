@@ -2,6 +2,7 @@
 from .review import (
     DebugContextWidget, DebugReportCard, InspectionReportCard, MessageBubble,
     RequirementReviewCard, SpecificationWorkbenchDialog,
+    _LegacyRequirementReviewCard,
 )
 __all__ = [
     "DebugContextWidget", "DebugReportCard", "InspectionReportCard", "MessageBubble",
