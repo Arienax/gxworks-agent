@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from plc_device_identity import canonical_device, canonical_operand, canonical_ladder_devices
-from plc_ir import build_plc_ir, validate_plc_ir, ir_to_ladder, canonical_sha256
-from plc_generation import prepare_ladder_candidate, render_generation_artifacts
-from plc_explorer import explore_program
+from plc.device_identity import canonical_device, canonical_operand, canonical_ladder_devices
+from plc.ir import build_plc_ir, validate_plc_ir, ir_to_ladder, canonical_sha256
+from plc.generation import prepare_ladder_candidate, render_generation_artifacts
+from plc.explorer import explore_program
 
 
 def ladder_fixture(*, padded_logic=False, output="Y0"):
@@ -101,7 +101,7 @@ def test_old_saved_ir_is_projected_without_mutating_its_hash_or_original_content
 
 
 def test_alias_comment_update_or_delete_targets_the_same_physical_device():
-    from plc_ir import apply_network_patch
+    from plc.ir import apply_network_patch
     base = build_plc_ir(ladder_fixture())
     rung = base["networks"][0]["ladder"]
     for comment in ("新的停止按钮注释", None, ""):
@@ -117,7 +117,7 @@ def test_alias_comment_update_or_delete_targets_the_same_physical_device():
 
 
 def test_cpu_range_validation_is_not_bypassed_by_normalizing_padding():
-    from plc_json_validator import PLCJsonValidationError
+    from plc.validation import PLCJsonValidationError
     raw = ladder_fixture()
     raw["rungs"][0]["branches"][0]["inputs"][0]["address"] = "X008"
     with pytest.raises(PLCJsonValidationError):
@@ -127,7 +127,7 @@ def test_cpu_range_validation_is_not_bypassed_by_normalizing_padding():
 
 
 def test_alias_spec_rows_and_binding_values_coalesce_without_losing_roles():
-    from confirmed_spec import canonicalize_confirmed_spec
+    from plc.specification.confirmed import canonicalize_confirmed_spec
     from test_confirmed_compatibility import operator_spec
     raw = operator_spec()
     for p, address in zip(raw["parameters"], ("x000", "X001", "Y001")):
@@ -147,11 +147,11 @@ def test_alias_spec_rows_and_binding_values_coalesce_without_losing_roles():
 @pytest.mark.parametrize("representation", ["compact", "ladder_v1"])
 @pytest.mark.parametrize("padded_logic", [True, False])
 def test_http_analysis_confirmation_delivery_keeps_comments_without_bogus_vfd(tmp_path, monkeypatch, representation, padded_logic):
-    import api
+    import application.model_workflows as api
     from fastapi.testclient import TestClient
     from application.workbench import WorkbenchService
     from integrations.web.app import create_app
-    from model_provider import SystemMessage, TextDelta
+    from model_runtime.provider import SystemMessage, TextDelta
     from test_web_api import ORIGIN, OPERATOR, _login, _complete
     from test_hardware_intent_boundary import hallucinated_analysis
     monkeypatch.setattr(api, "_build_knowledge_context", lambda *a, **k: "")
@@ -227,7 +227,7 @@ def test_typed_semantic_and_analysis_addresses_use_the_same_identity():
 
 
 def test_scoped_patch_keeps_unmodified_legacy_networks_byte_equivalent():
-    from plc_ir import apply_network_patch
+    from plc.ir import apply_network_patch
     source = ladder_fixture(padded_logic=True)
     second = copy.deepcopy(source["rungs"][0])
     second["rung_id"] = 2

@@ -3,11 +3,11 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-import api
-import main
-from model_provider import ImageAttachment, UserMessage
-from qt_compat import QApplication
-from session_store import SessionStore
+import application.model_workflows as api
+import ui.desktop.main_window as main
+from model_runtime.provider import ImageAttachment, UserMessage
+from ui.desktop.qt import QApplication
+from storage.session import SessionStore
 
 
 _APPLICATION = QApplication.instance() or QApplication([])

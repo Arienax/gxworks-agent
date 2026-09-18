@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from draw import generate_gx_works2_csv
+from rendering.ladder import generate_gx_works2_csv
 from gxworks2.csv_importer import (
     materialize_gxworks2_version,
     parse_gxworks2_csv,
@@ -747,8 +747,8 @@ def test_project_inspection_preserves_empty_uia_timeout_details():
 
 def test_sync_failure_dialog_expands_details_and_hides_unsafe_retry():
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    from main import GXWorks2SyncErrorDialog
-    from qt_compat import QApplication
+    from ui.desktop.main_window import GXWorks2SyncErrorDialog
+    from ui.desktop.qt import QApplication
 
     app = QApplication.instance() or QApplication([])
     retryable = GXWorks2SyncService._error(
@@ -786,7 +786,7 @@ def test_sync_failure_dialog_expands_details_and_hides_unsafe_retry():
 
 def test_pending_manual_retry_waits_until_the_worker_is_released():
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    from main import _IndustrialWorkbenchUI
+    from ui.desktop.main_window import _IndustrialWorkbenchUI
 
     class _Workbench:
         def __init__(self):

@@ -13,8 +13,8 @@ from dataclasses import replace
 
 import pytest
 
-from i18n import get_language, language_context, set_language
-from model_provider import (
+from shared.i18n import get_language, language_context, set_language
+from model_runtime.provider import (
     ModelProviderError,
     ModelRequest,
     ReasoningDelta,
@@ -29,9 +29,9 @@ from model_provider import (
     UserMessage,
     collect_response,
 )
-from plc_agent import run_tool_agent
-from response_language import ResponseContract, preserved_annotations
-from workflow_response_contracts import (
+from agent_runtime.agent import run_tool_agent
+from model_runtime.response_language import ResponseContract, preserved_annotations
+from application.response_contracts import (
     ANALYSIS_RESPONSE,
     LADDER_RESPONSE,
     ST_RESPONSE,
@@ -635,7 +635,7 @@ def test_json_final_contract_allows_tool_only_turn_but_still_checks_final_prose(
     {"possible_causes": "新写中文。"},
 ])
 def test_legacy_inspection_shapes_cannot_bypass_language_acceptance(payload):
-    from workflow_response_contracts import INSPECTION_RESPONSE
+    from application.response_contracts import INSPECTION_RESPONSE
     with pytest.raises(ResponseRejectedError):
         collect_response(
             FakeProvider([[TextDelta(json.dumps(payload, ensure_ascii=False))]]),

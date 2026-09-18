@@ -3,8 +3,8 @@ from .models import GXWFormatError
 
 
 def ladder_to_object_model(program):
-    from plc_ir import ir_to_ladder, is_plc_ir, validate_plc_ir
-    from plc_json_validator import validate_ladder_full
+    from plc.ir import ir_to_ladder, is_plc_ir, validate_plc_ir
+    from plc.validation import validate_ladder_full
     if is_plc_ir(program):
         validate_plc_ir(program)
         if program["plc"]["cpu"].upper() != "FX3U":

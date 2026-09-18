@@ -85,3 +85,6 @@ dist-web/
 
 # Editable GXW experiment copies; immutable evidence is archived separately.
 /research/experiments/
+
+# Local model transport telemetry (never source-controlled)
+/src/model-observations.sqlite

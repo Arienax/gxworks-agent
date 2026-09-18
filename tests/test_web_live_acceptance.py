@@ -10,9 +10,9 @@ from scripts.web_live_acceptance import (
 
 
 def test_live_key_stays_in_memory_and_real_provider_functions_are_preserved(tmp_path, monkeypatch):
-    import config_manager
-    import credential_store
-    import model_provider
+    import storage.config as config_manager
+    import storage.credentials as credential_store
+    import model_runtime.provider as model_provider
 
     original_create = model_provider.create_provider
     original_test = model_provider.test_model_profile

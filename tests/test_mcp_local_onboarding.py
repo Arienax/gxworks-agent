@@ -22,7 +22,7 @@ def test_windows_service_binding_roundtrip(monkeypatch):
         read_secret=lambda target: store.get(target, ""),
         delete_secret=lambda target: store.pop(target, None),
     )
-    monkeypatch.setitem(sys.modules, "windows_credentials", fake)
+    monkeypatch.setitem(sys.modules, "storage.windows_credentials", fake)
     monkeypatch.setattr(credentials, "_is_windows", lambda: True)
 
     assert credentials.save_service_binding("http://127.0.0.1:8765", "agent-secret")
@@ -181,7 +181,7 @@ def test_onboarding_rejects_another_service_without_changing_its_binding(monkeyp
         "project_id": "original_project",
     })
     store = {credentials.SERVICE_CREDENTIAL_TARGET: saved}
-    monkeypatch.setitem(sys.modules, "windows_credentials", SimpleNamespace(
+    monkeypatch.setitem(sys.modules, "storage.windows_credentials", SimpleNamespace(
         write_secret=lambda value, target: store.__setitem__(target, value),
         read_secret=lambda target: store.get(target, ""),
     ))

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from draw import AdvancedSVGLadder, generate_gx_works2_csv
-from plc_ir import (
+from rendering.ladder import AdvancedSVGLadder, generate_gx_works2_csv
+from plc.ir import (
     PLCIRValidationError,
     apply_ladder_partial_to_ir,
     apply_network_patch,
@@ -16,7 +16,7 @@ from plc_ir import (
     ir_to_ladder,
     validate_plc_ir,
 )
-from plc_st_renderer import (
+from plc.st_renderer import (
     STTranslationError,
     render_plc_ir_to_st,
     validate_st_traceability,
@@ -320,9 +320,9 @@ def test_ir_st_renderer_fails_closed_on_unrepresentable_free_form_operand():
 
 
 def test_compiler_thread_persists_ir_and_all_legacy_artifacts(monkeypatch, tmp_path):
-    import api
-    import main as main_module
-    from main import CompilerThread
+    import application.model_workflows as api
+    import ui.desktop.main_window as main_module
+    from ui.desktop.main_window import CompilerThread
 
     ladder = sample_ladder()
     monkeypatch.setattr(
@@ -405,9 +405,9 @@ def test_compiler_thread_persists_ir_and_all_legacy_artifacts(monkeypatch, tmp_p
 def test_compiler_does_not_repair_semantic_mismatch_after_confirmed_generation(
     monkeypatch, tmp_path
 ):
-    import api
-    import main
-    from main import CompilerThread
+    import application.model_workflows as api
+    import ui.desktop.main_window as main
+    from ui.desktop.main_window import CompilerThread
 
     level = {
         "device_comments": {"X0": "按钮", "D0": "计数"},
@@ -464,8 +464,8 @@ def test_compiler_does_not_repair_semantic_mismatch_after_confirmed_generation(
 def test_compiler_partial_edit_uses_ir_revision_and_preserves_other_networks(
     monkeypatch, tmp_path
 ):
-    import api
-    from main import CompilerThread
+    import application.model_workflows as api
+    from ui.desktop.main_window import CompilerThread
 
     ladder = sample_ladder()
     base_ir = build_plc_ir(ladder, revision=23)
@@ -514,7 +514,7 @@ def test_compiler_partial_edit_uses_ir_revision_and_preserves_other_networks(
 
 
 def test_session_store_reads_ir_first_and_persistently_upgrades_legacy(tmp_path):
-    from session_store import SessionStore
+    from storage.session import SessionStore
 
     store = SessionStore(base_dir=tmp_path / "workspace", legacy_dir=tmp_path)
     project = store.create_project(name="IR project", plc_model="FX3U")
@@ -566,7 +566,7 @@ def test_session_store_reads_ir_first_and_persistently_upgrades_legacy(tmp_path)
 
 
 def test_session_store_never_overwrites_an_existing_future_ir(tmp_path):
-    from session_store import SessionStore
+    from storage.session import SessionStore
 
     store = SessionStore(base_dir=tmp_path / "workspace", legacy_dir=tmp_path)
     project = store.create_project(name="Future IR", plc_model="FX3U")

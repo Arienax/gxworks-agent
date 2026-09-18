@@ -2,9 +2,9 @@ import json
 
 import pytest
 
-import plc_generation_context as compact
-import plc_generation_context_legacy as legacy
-from prompt_context_policy import context_policy_scope
+import application.generation_context as compact
+import application.generation_context_support as legacy
+from shared.context_policy import context_policy_scope
 
 
 def _rung(identifier):

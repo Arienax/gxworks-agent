@@ -1,8 +1,8 @@
 import pytest
 
-from approach_contracts import inspect_ladder_features
-from plc_ir import build_plc_ir
-from plc_json_validator import PLCJsonValidationError, validate_ladder_full
+from plc.specification.approach import inspect_ladder_features
+from plc.ir import build_plc_ir
+from plc.validation import PLCJsonValidationError, validate_ladder_full
 
 
 def _analog_ladder(opcode, operands):

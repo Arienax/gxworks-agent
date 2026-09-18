@@ -9,9 +9,9 @@ import json
 import threading
 import time
 from collections import OrderedDict
-from model_catalog import endpoint_id, resolve_capabilities
-from model_contract import credential_fingerprint
-from model_provider import ModelProviderError
+from model_runtime.catalog import endpoint_id, resolve_capabilities
+from model_runtime.contract import credential_fingerprint
+from model_runtime.provider import ModelProviderError
 
 _cache = OrderedDict()
 _lock = threading.Lock()

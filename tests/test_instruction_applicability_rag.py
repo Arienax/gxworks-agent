@@ -3,8 +3,8 @@ import re
 import sqlite3
 from pathlib import Path
 
-import knowledge_retriever_core as core
-from resource_paths import resource_path
+import knowledge.core as core
+from shared.paths import resource_path
 
 
 def _database() -> Path:

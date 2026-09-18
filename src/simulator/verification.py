@@ -10,7 +10,7 @@ from collections import Counter
 import math
 from typing import Any, Mapping
 
-from plc_ir import canonical_sha256
+from plc.ir import canonical_sha256
 
 from .models import normalize_test_suite
 

@@ -3,8 +3,8 @@ import json
 
 import pytest
 
-from plc_ir import build_plc_ir, validate_plc_ir
-from plc_json_validator import (
+from plc.ir import build_plc_ir, validate_plc_ir
+from plc.validation import (
     PLCJsonValidationError,
     validate_ladder_candidate_structure,
     validate_ladder_full,

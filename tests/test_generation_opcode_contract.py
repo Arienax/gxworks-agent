@@ -1,7 +1,7 @@
-from instruction_registry import generation_app_instr_mnemonics
-from plc_generation_contract import ladder_response_schema
-from plc_generation_context import _select_system_prompt
-from plc_json_validator import APP_INSTR_WHITELIST
+from plc.instructions import generation_app_instr_mnemonics
+from plc.generation_contract import ladder_response_schema
+from application.generation_context import _select_system_prompt
+from plc.validation import APP_INSTR_WHITELIST
 
 
 def _opcode_rule(schema):

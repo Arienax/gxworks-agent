@@ -83,7 +83,7 @@ def test_unknown_resource_fields_fail_instead_of_disappearing_silently():
 
 
 def test_real_job_events_and_connected_proposal_obey_read_contracts(tmp_path):
-    from session_store import SessionStore
+    from storage.session import SessionStore
     store = SessionStore(base_dir=tmp_path / "workspace", legacy_dir=tmp_path)
     project = store.create_project("Contract fixture")["id"]
     service = WorkbenchService(store.base_dir, tmp_path / "state")

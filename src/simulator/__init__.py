@@ -15,11 +15,6 @@ from .planning import (
     normalize_generated_test_suite,
 )
 from .runner import PLCTestRunner
-from .runtime import (
-    SimulatorGatewayRuntime,
-    SimulatorRuntimeError,
-    get_simulator_gateway_runtime,
-)
 from .service import SimulatorRegressionService
 from .workflow import SimulatorVersionWorkflowService, SimulatorWorkflowError
 
@@ -47,3 +42,13 @@ __all__ = [
     "run_test_case",
     "simulator_status",
 ]
+
+
+def __getattr__(name):
+    """Preserve runtime exports without loading the optional gateway on import."""
+    if name in {"SimulatorGatewayRuntime", "SimulatorRuntimeError", "get_simulator_gateway_runtime"}:
+        from importlib import import_module
+        value = getattr(import_module(".runtime", __name__), name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

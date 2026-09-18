@@ -1,10 +1,10 @@
 import inspect
 import json
 
-import api
-import knowledge_retriever
-from pattern_library import build_workflow_prompt
-from prompt_context_policy import context_policy_scope
+import application.model_workflows as api
+import knowledge.retriever as knowledge_retriever
+from knowledge.patterns import build_workflow_prompt
+from shared.context_policy import context_policy_scope
 
 
 def test_phase_one_routes_as_analysis():

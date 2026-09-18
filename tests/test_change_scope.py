@@ -6,11 +6,11 @@ import pytest
 
 from application.workbench import WorkbenchService
 from application.workspace import ConflictError, canonical_hash
-from plc_change_scope import (ChangeScopeError, candidate_impact, enforce_change_scope,
+from plc.change_scope import (ChangeScopeError, candidate_impact, enforce_change_scope,
                               normalize_change_scope, validate_scope_baseline)
-from plc_core import PLCCore
-from plc_ir import build_plc_ir, ir_to_ladder
-from session_store import SessionStore
+from plc.core import PLCCore
+from plc.ir import build_plc_ir, ir_to_ladder
+from storage.session import SessionStore
 
 
 def program(first="X0", second="X1", *, comments=None, reverse=False, name="MAIN"):
@@ -174,12 +174,12 @@ def test_async_candidates_reject_outside_scope_and_report_reason(engineering, mo
                     "artifacts": PLCCore().compile_project(after, self.output_dir)["artifacts"]}
         monkeypatch.setattr(GenerationWorkflow, "run", generate)
     else:
-        from plc_agent import AgentRunResult
+        from agent_runtime.agent import AgentRunResult
         def agent(text, **kwargs):
             assert '"network_ids": ["N0001"]' in text
             return AgentRunResult("候选待确认", [{"type": "accept_generated_program", "project_id": project_id,
                 "_candidate_ir": after, "change_scope": None}])
-        monkeypatch.setattr("plc_agent.run_tool_agent", agent)
+        monkeypatch.setattr("agent_runtime.agent.run_tool_agent", agent)
     before = snapshot_files(store.base_dir)
     job = workbench.submit({"project_id": project_id, "version_id": version_id, "kind": kind,
         "text": "修改第一网络", "response_language": "zh-CN", "request_id": "scoped-" + kind,
@@ -228,7 +228,7 @@ class _ScopedProvider:
         self.requests = []
 
     def stream(self, request):
-        from model_provider import TextDelta
+        from model_runtime.provider import TextDelta
         self.requests.append(request)
         yield TextDelta(json.dumps(self.outputs[len(self.requests) - 1], ensure_ascii=False))
 
@@ -246,7 +246,7 @@ def _finish(workbench, job):
 
 @pytest.mark.parametrize("mode", ["ask", "auto", "full"])
 def test_scoped_generation_autosaves_once_and_preserves_structural_profile(engineering, mode):
-    from plc_json_validator import PLCJsonValidationError, validate_ladder_full
+    from plc.validation import PLCJsonValidationError, validate_ladder_full
     workbench, store, project_id, version_id, _ = engineering
     workbench.update_approval_settings(mode=mode, expected_revision=0, confirm_full_access=True)
     spec = {"summary": "局部修改", "io_table": [], "parameters": [],

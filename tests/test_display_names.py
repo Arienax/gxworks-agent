@@ -5,7 +5,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 
-from display_names import (
+from shared.display_names import (
     DisplayTextStream,
     looks_like_internal_identifier,
     naturalize_display_text,
@@ -16,7 +16,7 @@ from display_names import (
 )
 # These assertions intentionally exercise the detailed legacy table editor,
 # which the new review workbench now embeds rather than exposing on its facade.
-from workbench_widgets import _LegacyRequirementReviewCard as RequirementReviewCard
+from ui.desktop.workbench import _LegacyRequirementReviewCard as RequirementReviewCard
 
 
 def test_function_style_identifier_is_presented_as_a_business_label():

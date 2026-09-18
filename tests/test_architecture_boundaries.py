@@ -33,15 +33,15 @@ def _transport_field_accesses(path):
 
 def test_plc_and_gx_core_do_not_import_model_or_vendor_clients():
     core_files = [
-        SOURCE_ROOT / "plc_core.py",
-        SOURCE_ROOT / "plc_generation_contract.py",
-        SOURCE_ROOT / "plc_ir.py",
-        SOURCE_ROOT / "plc_json_validator.py",
-        SOURCE_ROOT / "plc_semantics.py",
-        SOURCE_ROOT / "plc_static_analyzer.py",
-        SOURCE_ROOT / "plc_timing.py",
-        SOURCE_ROOT / "plc_st_renderer.py",
-        SOURCE_ROOT / "draw.py",
+        SOURCE_ROOT / "plc/core.py",
+        SOURCE_ROOT / "plc/generation_contract.py",
+        SOURCE_ROOT / "plc/ir.py",
+        SOURCE_ROOT / "plc/validation.py",
+        SOURCE_ROOT / "plc/semantics.py",
+        SOURCE_ROOT / "plc/static_analysis.py",
+        SOURCE_ROOT / "plc/timing.py",
+        SOURCE_ROOT / "plc/st_renderer.py",
+        SOURCE_ROOT / "rendering/ladder.py",
         *sorted((SOURCE_ROOT / "gxworks2").rglob("*.py")),
         *sorted((SOURCE_ROOT / "simulator").rglob("*.py")),
     ]
@@ -49,8 +49,8 @@ def test_plc_and_gx_core_do_not_import_model_or_vendor_clients():
         "openai",
         "anthropic",
         "zhipuai",
-        "model_provider",
-        "plc_agent",
+        "model_runtime.provider",
+        "agent_runtime.agent",
         "mcp",
         "mcp_types",
         "integrations",
@@ -59,37 +59,37 @@ def test_plc_and_gx_core_do_not_import_model_or_vendor_clients():
     violations = []
     for path in core_files:
         for imported in _imports(path):
-            if imported.split(".", 1)[0] in forbidden_roots:
+            if _blocked(imported, forbidden_roots):
                 violations.append(f"{path.relative_to(ROOT)} -> {imported}")
     assert violations == []
 
 
 def test_provider_does_not_import_plc_gx_or_automation_implementation():
-    forbidden_roots = {"plc_ir", "plc_core", "gxworks2", "simulator", "pywinauto", "draw"}
+    forbidden_roots = {"plc.ir", "plc.core", "gxworks2", "simulator", "pywinauto", "rendering.ladder"}
     violations = [
         imported
-        for imported in _imports(SOURCE_ROOT / "model_provider.py")
-        if imported.split(".", 1)[0] in forbidden_roots
+        for imported in _imports(SOURCE_ROOT / "model_runtime/provider.py")
+        if _blocked(imported, forbidden_roots)
     ]
     assert violations == []
 
 
 def test_agent_depends_on_runtime_not_plc_implementation():
-    imports = _imports(SOURCE_ROOT / "plc_agent.py")
-    forbidden_roots = {"plc_core", "plc_ir", "plc_agent_tools", "gxworks2", "pywinauto"}
+    imports = _imports(SOURCE_ROOT / "agent_runtime/agent.py")
+    forbidden_roots = {"plc.core", "plc.ir", "agent_runtime.plc_tools", "gxworks2", "pywinauto"}
     assert [
         imported
         for imported in imports
-        if imported.split(".", 1)[0] in forbidden_roots
+        if _blocked(imported, forbidden_roots)
     ] == []
-    assert "tool_runtime" in imports
-    assert "model_provider" in imports
+    assert "agent_runtime.runtime" in imports
+    assert "model_runtime.provider" in imports
 
 
 def test_only_model_provider_imports_openai_sdk():
     violations = []
     for path in SOURCE_ROOT.rglob("*.py"):
-        if path.name == "model_provider.py":
+        if path == SOURCE_ROOT / "model_runtime/provider.py":
             continue
         if any(imported.split(".", 1)[0] == "openai" for imported in _imports(path)):
             violations.append(str(path.relative_to(ROOT)))
@@ -97,53 +97,64 @@ def test_only_model_provider_imports_openai_sdk():
 
 
 def test_agent_and_api_do_not_parse_vendor_response_fields():
-    assert _transport_field_accesses(SOURCE_ROOT / "api.py") == []
-    assert _transport_field_accesses(SOURCE_ROOT / "plc_agent.py") == []
+    assert _transport_field_accesses(SOURCE_ROOT / "application/model_workflows.py") == []
+    assert _transport_field_accesses(SOURCE_ROOT / "agent_runtime/agent.py") == []
 
 
 def test_mcp_adapters_do_not_import_plc_or_desktop_implementations():
     adapter_root = SOURCE_ROOT / "integrations" / "mcp"
     forbidden = {
-        "plc_core", "plc_ir", "plc_json_validator", "plc_semantics",
-        "plc_static_analyzer", "plc_timing", "draw", "inspection_engine",
-        "knowledge_retriever", "gxworks2", "simulator", "pywinauto",
-        "qt_compat", "PyQt5", "PyQt6", "main", "plc_agent", "openai",
-        "api", "model_provider", "config", "config_manager", "credential_store",
+        "plc.core", "plc.ir", "plc.validation", "plc.semantics",
+        "plc.static_analysis", "plc.timing", "rendering.ladder", "inspection.engine",
+        "knowledge.retriever", "gxworks2", "simulator", "pywinauto",
+        "ui.desktop.qt", "PyQt5", "PyQt6", "ui.desktop.main_window", "agent_runtime.agent", "openai",
+        "application.model_workflows", "model_runtime.provider", "config", "storage.config", "storage.credentials",
     }
     violations = [
         f"{path.relative_to(ROOT)} -> {imported}"
         for path in adapter_root.rglob("*.py")
         for imported in _imports(path)
-        if imported.split(".", 1)[0] in forbidden
+        if _blocked(imported, forbidden)
     ]
     assert violations == []
-    assert "tool_runtime" in _imports(adapter_root / "tool_adapter.py")
-    assert "tool_runtime" in _imports(adapter_root / "server.py")
-    assert "session_store" in _imports(adapter_root / "context_provider.py")
+    assert "agent_runtime.runtime" in _imports(adapter_root / "tool_adapter.py")
+    assert "agent_runtime.runtime" in _imports(adapter_root / "server.py")
+    assert "storage.session" in _imports(adapter_root / "context_provider.py")
 
 
 def test_runtime_and_builtin_agent_do_not_depend_on_optional_mcp_sdk():
-    for name in ("tool_runtime.py", "tool_messages.py", "plc_generation_contract.py", "plc_agent.py", "plc_agent_tools.py", "model_provider.py", "session_store.py"):
+    for name in ("agent_runtime/runtime.py", "agent_runtime/messages.py", "plc/generation_contract.py", "agent_runtime/agent.py", "agent_runtime/plc_tools.py", "model_runtime/provider.py", "storage/session.py"):
         assert not {"mcp", "mcp_types", "integrations"}.intersection(
             imported.split(".", 1)[0] for imported in _imports(SOURCE_ROOT / name)
         )
 
 
-def test_generation_contract_and_tool_messages_depend_only_on_standard_library():
-    allowed = {"__future__", "copy", "re", "typing", "dataclasses"}
-    for name in ("plc_generation_contract.py", "tool_messages.py"):
-        assert {item.split(".", 1)[0] for item in _imports(SOURCE_ROOT / name)} <= allowed
+def test_generation_contract_and_tool_messages_have_only_declared_support_dependencies():
+    # The generation schema now derives opcodes from the instruction catalog.
+    # Validate that exact support chain, not a blanket exemption for PLC modules.
+    expected = {
+        "plc/generation_contract.py": {"__future__", "copy", "re", "typing", "plc.instructions"},
+        "agent_runtime/messages.py": {"__future__", "dataclasses", "typing"},
+        "plc/instructions.py": {"__future__", "shared.paths", "json", "os", "sys", "dataclasses", "enum", "pathlib", "typing"},
+        "shared/paths.py": {"pathlib", "sys"},
+    }
+    for name, allowed in expected.items():
+        assert set(_imports(SOURCE_ROOT / name)) <= allowed
 
 
 def test_external_tool_runtime_has_no_model_or_credential_dependency():
-    forbidden = {"api", "model_provider", "config", "config_manager", "credential_store", "openai", "qt_compat", "PyQt5", "PyQt6"}
-    for name in ("tool_runtime.py", "tool_messages.py", "plc_agent_tools.py", "plc_generation_contract.py"):
-        assert not forbidden.intersection(item.split(".", 1)[0] for item in _imports(SOURCE_ROOT / name))
+    forbidden = {"application.model_workflows", "model_runtime.provider", "config", "storage.config", "storage.credentials", "openai", "ui.desktop.qt", "PyQt5", "PyQt6"}
+    for name in ("agent_runtime/runtime.py", "agent_runtime/messages.py", "agent_runtime/plc_tools.py", "plc/generation_contract.py"):
+        assert not [item for item in _imports(SOURCE_ROOT / name) if _blocked(item, forbidden)]
 
 
 def test_model_provider_reexports_the_same_neutral_tool_types():
-    import model_provider
-    import tool_messages
+    import model_runtime.provider as model_provider
+    import agent_runtime.messages as tool_messages
 
     assert model_provider.ToolCall is tool_messages.ToolCall
     assert model_provider.ToolResult is tool_messages.ToolResult
+
+
+def _blocked(module, prefixes):
+    return any(module == prefix or module.startswith(prefix + ".") for prefix in prefixes)

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import api
+import application.model_workflows as api
 from application.base import model_call
 from application.format_patch_repair import (
     FORMAT_PATCH_SYSTEM_PROMPT,

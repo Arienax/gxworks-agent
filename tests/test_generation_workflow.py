@@ -7,12 +7,12 @@ import sys
 
 import pytest
 
-import api
+import application.model_workflows as api
 from application.generation import (
     GenerationDependencies, GenerationError, GenerationRequest, GenerationValidationError, GenerationWorkflow,
 )
-from i18n import set_language
-from model_provider import ModelProviderError, TextDelta
+from shared.i18n import set_language
+from model_runtime.provider import ModelProviderError, TextDelta
 
 
 def _ladder():

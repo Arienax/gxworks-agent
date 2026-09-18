@@ -54,7 +54,7 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        "PyQt5", "PyQt6", "PySide2", "PySide6", "qt_compat", "main",
+        "PyQt5", "PyQt6", "PySide2", "PySide6", "ui.desktop", "main",
         "tkinter", "openai", "pywinauto", "win32com", "comtypes", "mcp.cli",
     ],
     noarchive=False,

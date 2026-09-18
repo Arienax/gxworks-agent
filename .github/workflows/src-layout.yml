@@ -1,0 +1,119 @@
+name: Source Layout Regression and Packaging
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'packaging/**'
+      - 'docs/architecture/source-layout*'
+      - '.github/workflows/src-layout.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      PYTHONUTF8: '1'
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install headless and Qt test dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libegl1 libopengl0
+          python -m pip install -r requirements/web.txt PyQt6==6.11.0 pytest jsonschema olefile
+      - name: Check syntax and source boundaries
+        run: |
+          python -m compileall -q src tests scripts tools
+          python -m pytest -q tests/test_source_layout.py tests/test_architecture_boundaries.py tests/test_web_architecture.py
+      - name: Compare full suite with the verified pre-refactor baseline
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/source-layout-baseline" 295378d6ac5d24949c03a1c799906f4afe0fd4c9
+          python scripts/check_source_layout_regressions.py --baseline "$RUNNER_TEMP/source-layout-baseline" --output "$RUNNER_TEMP/source-layout-results"
+      - name: Confirm HTTP schema is unchanged
+        run: |
+          python scripts/export_web_schema.py
+          git diff --exit-code -- web/openapi.json web/src/api/generated.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: source-layout-regression-results
+          path: ${{ runner.temp }}/source-layout-results/
+          retention-days: 7
+
+  desktop-package:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    env:
+      PYTHONUTF8: '1'
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install desktop and shared runtime dependencies
+        run: python -m pip install -r requirements.txt -r requirements/web.txt jsonschema olefile
+      - name: Compare relocated Qt workbench with the pre-refactor baseline
+        shell: pwsh
+        run: |
+          git worktree add --detach "$env:RUNNER_TEMP/source-layout-desktop-baseline" 295378d6ac5d24949c03a1c799906f4afe0fd4c9
+          python scripts/check_source_layout_regressions.py --baseline "$env:RUNNER_TEMP/source-layout-desktop-baseline" --output "$env:RUNNER_TEMP/source-layout-desktop-results" --tests tests/test_spec_review_workbench.py tests/test_config_dialog_profiles.py tests/test_codicon_safety.py tests/test_display_names.py tests/test_i18n.py --candidate-tests tests/test_source_layout.py
+      - name: Build the actual desktop package
+        run: python -m PyInstaller --noconfirm packaging/pyinstaller/desktop.spec
+      - name: Smoke-test packaged SDK imports without a model request
+        shell: python
+        run: |
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+
+          executable = Path('dist/GXWorks2-ST-Ladder-Helper/GXWorks2-ST-Ladder-Helper.exe').resolve()
+          output = Path(os.environ['RUNNER_TEMP']) / 'source-layout-desktop-results'
+          output.mkdir(parents=True, exist_ok=True)
+          # A windowed EXE does not reliably populate PowerShell's LASTEXITCODE.
+          # Wait for the actual process; a timeout or nonzero status is a failure.
+          result = {'executable': executable.name, 'timeout_seconds': 120}
+          try:
+              completed = subprocess.run(
+                  [str(executable), '--self-test-openai-sdk'],
+                  cwd=executable.parent, timeout=120, capture_output=True,
+                  text=True, encoding='utf-8', errors='replace',
+              )
+              result.update(returncode=completed.returncode, timed_out=False,
+                            stdout=completed.stdout, stderr=completed.stderr)
+          except subprocess.TimeoutExpired:
+              result.update(returncode=None, timed_out=True)
+          except OSError as error:
+              result.update(returncode=None, timed_out=False, error=str(error))
+          text = json.dumps(result, indent=2)
+          (output / 'packaged-sdk-smoke.json').write_text(text + '\n', encoding='utf-8')
+          print(text)
+          if result['returncode'] != 0:
+              raise SystemExit('Packaged SDK self-test did not exit successfully')
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: source-layout-desktop-results
+          path: |
+            ${{ runner.temp }}/source-layout-desktop-results/
+            build/desktop/warn-desktop.txt
+          retention-days: 7

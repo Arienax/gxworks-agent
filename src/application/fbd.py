@@ -119,8 +119,8 @@ def graph_diff(before, after):
 
 def generate_candidate(output, snapshot, images, ctx):
     """Ask the existing provider for the supported object contract, then validate it."""
-    from api import _request_model, _user_message_with_images
-    from response_language import ResponseContract
+    from application.model_workflows import _request_model, _user_message_with_images
+    from model_runtime.response_language import ResponseContract
     project = snapshot["project"]
     baseline = base64.b64decode(snapshot["fbd_baseline"]) if snapshot.get("fbd_baseline") else None
     source, declarations, _ = read_project(baseline or default_baseline(), snapshot.get("fbd_program"))

@@ -3,11 +3,11 @@ import threading
 
 import pytest
 
-import api
+import application.model_workflows as api
 from application.base import WorkflowError
 from application.planning import EvidenceDebugPlanWorkflow, SimulatorTestPlanWorkflow
 from application.review import InspectionWorkflow
-from plc_ir import build_plc_ir
+from plc.ir import build_plc_ir
 from test_generation_workflow import _ladder
 from test_plc_debug_loop import _diagnosis, _knowledge, _patch, _project_with_failure
 from test_plc_multi_agent import _specialist_output
@@ -89,7 +89,7 @@ def test_test_plan_uses_frozen_ir_and_checks_under_write_lock(monkeypatch, stale
 
 
 def test_evidence_plan_persists_bound_candidate_without_activating_version(monkeypatch, tmp_path):
-    import plc_debug_loop
+    import application.debug_loop as plc_debug_loop
     store, project, version, program, run_id = _project_with_failure(tmp_path)
     monkeypatch.setattr(plc_debug_loop, "retrieve_knowledge", _knowledge)
     monkeypatch.setattr(api, "debug_evidence_diagnosis", lambda *a, **k: _diagnosis())

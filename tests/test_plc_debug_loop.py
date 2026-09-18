@@ -3,7 +3,7 @@ import copy
 import pytest
 
 from gxworks2.models import ImportResult
-from plc_debug_loop import (
+from application.debug_loop import (
     DebugLoopError,
     DebugPatchLoopService,
     build_failure_evidence,
@@ -11,8 +11,8 @@ from plc_debug_loop import (
     normalize_debug_diagnosis,
     render_candidate_artifacts,
 )
-from plc_ir import build_plc_ir, canonical_sha256
-from session_store import SessionStore
+from plc.ir import build_plc_ir, canonical_sha256
+from storage.session import SessionStore
 from simulator import InMemoryTestBackend, SimulatorRegressionService
 
 

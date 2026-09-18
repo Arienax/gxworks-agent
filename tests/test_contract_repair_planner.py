@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from contract_repair import (
+from plc.specification.repair import (
     build_contract_repair_plan,
     patch_device_addresses,
     structured_contract_violations,
@@ -177,7 +177,7 @@ def test_plan_is_json_serializable_for_audit_metadata():
 
 
 def test_main_integrates_contract_repair_as_scoped_partial_patch():
-    source = Path("src/main.py").read_text(encoding="utf-8")
+    source = Path("src/ui/desktop/main_window.py").read_text(encoding="utf-8")
     assert "build_contract_repair_plan" in source
     assert 'task_type="contract_repair"' in source
     assert "allowed_rung_ids=plan[\"allowed_rung_ids\"]" in source
@@ -214,6 +214,6 @@ def test_indexed_devices_are_enforced_by_patch_scope():
 
 
 def test_contract_repair_router_gets_repair_safety_bundles():
-    source = Path("src/pattern_library.py").read_text(encoding="utf-8")
+    source = Path("src/knowledge/patterns.py").read_text(encoding="utf-8")
     assert '"contract_repair"' in source
     assert '"repair", "debug_fix", "contract_repair"' in source

@@ -2,8 +2,8 @@
 import copy
 import pytest
 from application.model_detection import inspect_openai_compatible, list_metadata
-from model_catalog import resolve_capabilities
-from model_request_policy import resolve_request
+from model_runtime.catalog import resolve_capabilities
+from model_runtime.request_policy import resolve_request
 from test_model_capabilities import Endpoint, provider, profile
 
 

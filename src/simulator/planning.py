@@ -6,7 +6,7 @@ import copy
 import re
 from typing import Any, Dict, Mapping, Set
 
-from plc_ir import canonical_sha256, validate_plc_ir
+from plc.ir import canonical_sha256, validate_plc_ir
 
 from .models import normalize_test_suite
 

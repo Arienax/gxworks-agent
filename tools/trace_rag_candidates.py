@@ -15,10 +15,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT))
 
-import knowledge_retriever as facade
-import knowledge_retriever_core as core
-from knowledge_retriever_phase2c import rerank
-from gxw2_skill_concepts import query_skill_concepts
+import knowledge.retriever as facade
+import knowledge.core as core
+from knowledge.supporting_reranker import rerank
+from knowledge.gxw2_skill import query_skill_concepts
 from tools.evaluate_rag_benchmark import result_matches
 
 

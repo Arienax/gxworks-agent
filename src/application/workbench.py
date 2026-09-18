@@ -8,17 +8,17 @@ import json
 import re
 import tempfile
 import uuid
-import runtime_diagnostics as diagnostics
+import shared.diagnostics as diagnostics
 from datetime import datetime, timezone
 from pathlib import Path
 
 from application.projects import ProjectService, contained, public, record_id
 from application.settings import SettingsService
 from application.workspace import WorkspaceWriterLock, ConflictError, atomic_json, canonical_hash, read_json
-from tool_messages import ToolCall
-from tool_runtime import public_tool_result_data
-from plc_change_scope import ChangeScopeError
-from prompt_context_policy import ContextAudit, context_policy_scope, resolve_context_policy
+from agent_runtime.messages import ToolCall
+from agent_runtime.runtime import public_tool_result_data
+from plc.change_scope import ChangeScopeError
+from shared.context_policy import ContextAudit, context_policy_scope, resolve_context_policy
 
 
 class WorkbenchService:
@@ -144,8 +144,8 @@ class WorkbenchService:
             return self.projects.project(project_id)
 
     def set_spec(self, project_id, spec, expected_hash):
-        from confirmed_spec import canonicalize_confirmed_spec, validate_spec_draft
-        from plc_ir import canonical_sha256
+        from plc.specification.confirmed import canonicalize_confirmed_spec, validate_spec_draft
+        from plc.ir import canonical_sha256
         self.writable()
 
         def audited(result):
@@ -172,7 +172,7 @@ class WorkbenchService:
             return audited({"valid": True, "spec": public(persisted), "hash": canonical_sha256(persisted)})
 
     def upload_attachment(self, project_id, filename, data_base64):
-        from session_store import detect_image_media_type
+        from storage.session import detect_image_media_type
         self.writable()
         self.projects.raw_project(project_id)
         data = base64.b64decode(data_base64, validate=True)
@@ -189,7 +189,7 @@ class WorkbenchService:
             return {key: record[key] for key in ("attachment_id", "filename", "media_type", "size_bytes")}
 
     def _attachments(self, project_id, ids):
-        from model_provider import ImageAttachment
+        from model_runtime.provider import ImageAttachment
         attachments = []
         for attachment_id in ids:
             path = contained(self.state_dir / "attachments" / (record_id(attachment_id) + ".json"), self.state_dir)
@@ -228,7 +228,7 @@ class WorkbenchService:
             raise KeyError("No output is available yet")
         output = read_json(path)
         if isinstance(output, dict) and isinstance(output.get("analysis"), dict):
-            from confirmed_spec import restore_review_choices
+            from plc.specification.confirmed import restore_review_choices
             if isinstance(output.get("spec_draft"), dict):
                 output["spec_draft"] = restore_review_choices(output["spec_draft"], output["analysis"])
         return public(output)
@@ -237,9 +237,9 @@ class WorkbenchService:
         self, program, *, theme=None, confirmed_spec=None, validation_profile="strict"
     ):
         """Deterministic, in-memory view. Never trust an old rendered-file cache."""
-        from plc_ir import ir_to_ladder, validate_plc_ir
-        from plc_st_renderer import render_plc_ir_to_st
-        from draw import AdvancedSVGLadder
+        from plc.ir import ir_to_ladder, validate_plc_ir
+        from plc.st_renderer import render_plc_ir_to_st
+        from rendering.ladder import AdvancedSVGLadder
 
         validate_plc_ir(
             program, confirmed_spec=confirmed_spec,
@@ -256,7 +256,7 @@ class WorkbenchService:
         A missing/corrupt SVG can be recovered as a display-only response. The
         original files, approval state, project history and GX state stay intact.
         """
-        from plc_ir import canonical_sha256
+        from plc.ir import canonical_sha256
 
         version = self.projects.raw_version(project_id, version_id)
         if version.get("target_mode") != "ladder":
@@ -278,7 +278,7 @@ class WorkbenchService:
         This is not an acceptance route. Legacy completed jobs retain their
         staged IR and can be inspected without paying for another generation.
         """
-        from plc_ir import canonical_sha256
+        from plc.ir import canonical_sha256
 
         if not self.jobs:
             raise KeyError("Generation jobs are unavailable")
@@ -380,7 +380,7 @@ class WorkbenchService:
             # model on a partial replacement contract and enforce the same scope
             # again after materialization. Syntax-broken JSON has no trustworthy
             # rung identity and therefore uses the separate full-format path.
-            from application.generation_repair import candidate_base
+            from plc.candidate_repair import candidate_base
             from application.field_repair import plan as plan_field_patch
             inherited_repair_base = (
                 candidate_base(snapshot.get("repair_baseline"))
@@ -455,7 +455,7 @@ class WorkbenchService:
                         and not isinstance(rung.get("rung_id"), bool)
                     }
                 selected = [rung for rung in rungs if rung.get("rung_id") in allowed_rung_ids]
-                from contract_repair import patch_device_addresses
+                from plc.specification.repair import patch_device_addresses
                 allowed_addresses.update(patch_device_addresses({
                     "mode": "partial", "rungs": selected,
                     "delete_rung_ids": [], "device_comments": {},
@@ -586,9 +586,9 @@ class WorkbenchService:
                 except ChangeScopeError as error:
                     ctx.emit("progress", {"message": str(error), "code": "change_scope_violation"})
                     raise
-            from api import provider_scope
-            from i18n import language_context
-            from model_provider import response_policy_scope
+            from application.model_workflows import provider_scope
+            from shared.i18n import language_context
+            from model_runtime.provider import response_policy_scope
             from application.model_progress import ModelJobContext, ModelProgressReporter
             ctx.checkpoint()
             model_context = ModelJobContext(ctx)
@@ -635,11 +635,11 @@ class WorkbenchService:
         project, version = snapshot["project"], snapshot.get("version")
         language = snapshot["response_language"]
         output = None
-        from plc_change_scope import scope_instruction
+        from plc.change_scope import scope_instruction
         scoped_text = text + scope_instruction(snapshot.get("change_scope"))
         if kind == "analysis":
-            from api import analyze_requirement_streaming
-            from confirmed_spec import build_review_draft
+            from application.model_workflows import analyze_requirement_streaming
+            from plc.specification.confirmed import build_review_draft
             ctx.emit("progress", {"message": "正在分析需求"})
             analysis = analyze_requirement_streaming(text, confirmed_spec=project.get("confirmed_spec"),
                 conversation_history=project.get("messages", []), image_attachments=images,
@@ -652,7 +652,7 @@ class WorkbenchService:
                       "spec_base_hash": public_spec_hash(project.get("confirmed_spec")), "base_version_id": snapshot.get("version_id")}
         elif kind == "generation":
             from application.generation import GenerationRequest, GenerationWorkflow, GenerationDependencies
-            from plc_ir import ir_to_ladder
+            from plc.ir import ir_to_ladder
             out_dir = self.state_dir / "staging" / ctx.job_id
             if project["target_mode"] == "fbd" or (version or {}).get("target_mode") == "fbd":
                 from application.fbd import generate_candidate
@@ -711,7 +711,7 @@ class WorkbenchService:
             ctx.emit("progress", {"stage": "version_saved", "version_id": output["version_id"],
                 "message": "程序已根据确认规格生成并自动保存；可选 Review、仿真或 GX 验证。"})
         elif kind == "agent":
-            from plc_agent import run_tool_agent
+            from agent_runtime.agent import run_tool_agent
             result = run_tool_agent(scoped_text, context=context, runtime=self.projects.runtime, provider=provider,
                 conversation_history=project.get("messages", []), response_language=language,
                 on_progress=lambda m: ctx.emit("progress", {"message": m}),
@@ -738,7 +738,7 @@ class WorkbenchService:
         # are kept here, outside HTTP routes, to share them with the Qt adapters.
         from application.review import InspectionWorkflow
         from application.planning import SimulatorTestPlanWorkflow, EvidenceDebugPlanWorkflow
-        from plc_ir import ir_to_ladder
+        from plc.ir import ir_to_ladder
         project, version, program = snapshot["project"], snapshot.get("version"), snapshot.get("program_ir")
         if not version or not program:
             raise ValueError("当前版本没有可用于检查或测试的 PLC IR。")
@@ -853,7 +853,7 @@ class WorkbenchService:
 
     @staticmethod
     def _command_scope(command, context):
-        from plc_change_scope import validate_scope_baseline
+        from plc.change_scope import validate_scope_baseline
         scope = command.get("change_scope")
         if scope is not None and command.get("kind") not in (None, "generation", "agent", "gx_read"):
             raise ValueError("修改范围仅适用于生成程序、Agent 和读取程序候选。")
@@ -934,7 +934,7 @@ class WorkbenchService:
     def _candidate_diff(self, project_id, base_version_id, payload):
         """Review the proposal's bound version, never the UI's active selection."""
         if "_candidate_ir" in payload:
-            from plc_core import PLCCore
+            from plc.core import PLCCore
             before = self.projects.program(project_id, base_version_id) if base_version_id else None
             expected = payload.get("base_ir_sha256")
             if expected and canonical_hash(before) != expected:
@@ -1034,7 +1034,7 @@ def sfc_requirement(steps):
 
 
 def public_spec_hash(spec):
-    from plc_ir import canonical_sha256
+    from plc.ir import canonical_sha256
     return canonical_sha256(spec) if spec is not None else None
 
 

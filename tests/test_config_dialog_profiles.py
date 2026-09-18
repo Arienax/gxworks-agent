@@ -4,10 +4,10 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-import config_dialog
-from config_manager import DEFAULT_MODEL_PROFILES
-from credential_store import credential_target_for_profile
-from qt_compat import QApplication, QDialog, QMessageBox
+import ui.desktop.dialogs.config as config_dialog
+from storage.config import DEFAULT_MODEL_PROFILES
+from storage.credentials import credential_target_for_profile
+from ui.desktop.qt import QApplication, QDialog, QMessageBox
 
 
 _APPLICATION = QApplication.instance() or QApplication([])
@@ -202,7 +202,7 @@ def test_advanced_sliders_save_generation_defaults_for_selected_profile(
 
 
 def test_main_window_no_longer_overrides_profile_reasoning_effort():
-    source = (Path(__file__).parents[1] / "src" / "main.py").read_text(
+    source = (Path(__file__).parents[1] / "src" / "ui/desktop/main_window.py").read_text(
         encoding="utf-8"
     )
     assert "effort_combo" not in source

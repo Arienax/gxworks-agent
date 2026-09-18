@@ -4,8 +4,8 @@ import csv
 
 import pytest
 
-from draw import generate_gx_works2_csv
-from plc_ir import build_plc_ir
+from rendering.ladder import generate_gx_works2_csv
+from plc.ir import build_plc_ir
 
 
 def _ladder():

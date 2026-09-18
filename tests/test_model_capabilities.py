@@ -7,11 +7,11 @@ from types import SimpleNamespace
 import pytest
 
 from application.model_detection import inspect_openai_compatible
-from model_capabilities import (
+from model_runtime.capabilities import (
     apply_parameter_contract, capability_scope, metadata_parameters,
     normalize_parameter_support, parameter_error, scoped_parameters,
 )
-from model_provider import (
+from model_runtime.provider import (
     AssistantMessage, ModelProviderError, ModelRequest, OpenAICompatibleProvider,
     ToolCall, UserMessage, collect_response, coerce_message, strip_legacy_provider_fields,
 )
@@ -82,7 +82,7 @@ def descriptor(p, **parameters):
 
 
 def test_generic_detection_does_not_need_a_model_or_vendor_table():
-    from model_contract import CapabilityContract
+    from model_runtime.contract import CapabilityContract
     endpoint = Endpoint()
     p = provider(endpoint, generationDefaults={"temperature":.73,"reasoning_effort":"max"})
     before = copy.deepcopy(p.profile)
@@ -103,8 +103,8 @@ def test_invalid_values_accepted_is_not_proof_of_support():
 
 
 def test_declared_unsupported_is_distinct_from_unknown_and_omits_stale_defaults():
-    from model_catalog import resolve_capabilities
-    from model_request_policy import resolve_request
+    from model_runtime.catalog import resolve_capabilities
+    from model_runtime.request_policy import resolve_request
     p = profile()
     result = resolve_capabilities(p,metadata={"parameters":{
         "reasoning_effort":{"type":"enum","status":"unsupported"},
@@ -117,14 +117,14 @@ def test_declared_unsupported_is_distinct_from_unknown_and_omits_stale_defaults(
 
 
 def test_only_declared_fixed_temperature_has_no_adjustable_range():
-    from model_catalog import resolve_capabilities
+    from model_runtime.catalog import resolve_capabilities
     result = resolve_capabilities(profile(),metadata={"parameters":{"temperature":{"type":"number","const":1}}})
     desc = result["contract"]["parameters"]["temperature"]
     assert desc["status"] == "fixed" and desc["domain"]["values"] == [1]
 
 
 def test_metadata_preserves_declared_ranges_and_new_effort_values():
-    from model_catalog import resolve_capabilities
+    from model_runtime.catalog import resolve_capabilities
     result = resolve_capabilities(profile(),metadata={"parameters":{
         "temperature":{"minimum":0,"maximum":1,"multipleOf":.1},
         "reasoning_effort":{"enum":["economy","balanced","thorough"]}}})
@@ -283,7 +283,7 @@ def test_falsy_nonobject_contract_is_rejected(invalid):
 
 
 def test_effective_parameter_matches_sdk_extra_body_precedence_and_deletion():
-    from model_capabilities import effective_parameter
+    from model_runtime.capabilities import effective_parameter
     p = profile(generationDefaults={"reasoning_effort": "low", "extra_body": {"reasoning_effort": "high"}},
                 requestOverrides={"reasoning_effort": "max"})
     assert effective_parameter(p, "reasoning_effort") == "high"
@@ -295,8 +295,8 @@ def test_effective_parameter_matches_sdk_extra_body_precedence_and_deletion():
 
 @pytest.mark.parametrize("selected", ["low", "max", None])
 def test_slider_and_server_default_override_real_workflow_and_agent_hints(selected):
-    import api
-    import plc_agent
+    import application.model_workflows as api
+    import agent_runtime.agent as plc_agent
     from test_model_provider import _Client, _chunk
 
     settings = profile(generationDefaults={"temperature": .5})

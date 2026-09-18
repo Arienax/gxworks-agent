@@ -17,9 +17,9 @@ import urllib.request
 import uuid
 from typing import Any
 
-from plc_agent_tools import FORBIDDEN_TOOL_NAMES, SAFE_TOOL_NAMES
-from tool_messages import ToolCall, ToolResult
-from tool_runtime import public_tool_result_data
+from agent_runtime.plc_tools import FORBIDDEN_TOOL_NAMES, SAFE_TOOL_NAMES
+from agent_runtime.messages import ToolCall, ToolResult
+from agent_runtime.runtime import public_tool_result_data
 
 
 class ServiceConnectionError(RuntimeError):

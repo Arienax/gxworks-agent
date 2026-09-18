@@ -11,9 +11,9 @@ from application.execution import GXExecutionCoordinator
 from gxworks2.csv_manager import CSVManager
 from gxworks2.models import GXWorks2Session
 from gxworks2.sync_service import GXWorks2SyncService
-from plc_core import PLCCore
-from plc_ir import build_plc_ir, ir_to_ladder
-from session_store import SessionStore
+from plc.core import PLCCore
+from plc.ir import build_plc_ir, ir_to_ladder
+from storage.session import SessionStore
 
 
 def _program(output="Y0"):

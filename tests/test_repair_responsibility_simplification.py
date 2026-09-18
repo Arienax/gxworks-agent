@@ -5,10 +5,10 @@ import pytest
 
 from application.base import _structural_repair_payload, model_call
 from application.field_repair import apply, plan
-from application.generation_repair import RepairAssemblyError
+from plc.candidate_repair import RepairAssemblyError
 from application.repair_policy import _restrict_opcode_schema
-from plc_generation import prepare_ladder_candidate
-from plc_json_validator import PLCJsonValidationError
+from plc.generation import prepare_ladder_candidate
+from plc.validation import PLCJsonValidationError
 
 
 def _coil_rung():

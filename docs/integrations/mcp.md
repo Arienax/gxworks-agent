@@ -158,7 +158,7 @@ get_current_project
 `generation_instructions` and `generation_request` use the same API prompt,
 output discipline, routing, selected PLC profile, confirmed specification,
 current ladder and local RAG assembly in
-[`plc_generation_context.py`](../../src/plc_generation_context.py). The current
+[`application/generation_context.py`](../../src/application/generation_context.py). The current
 request improves routing and retrieval. Automatic generation/edit retrieval
 retains the API's policy and budget (five results, 7,000 characters); a retrieval
 failure retains the full model profile rather than calling a model or failing
@@ -179,7 +179,7 @@ specification remains local for candidate construction and binding hashes.
 `output_contract.schema` describes the recommended API response: full ladder
 JSON, or full/partial alternatives when a current ladder exists. It is output
 guidance, not an additional MCP-only validator. The authoritative parser is
-[`prepare_ladder_candidate`](../../src/plc_generation.py), shared by the API
+[`prepare_ladder_candidate`](../../src/plc/generation.py), shared by the API
 workflow and PLC Core.
 
 `create_program_candidate` accepts only these model-owned arguments:

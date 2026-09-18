@@ -2,8 +2,8 @@ import copy
 
 import pytest
 
-from plc_ir import build_plc_ir, canonical_sha256
-from plc_multi_agent import (
+from plc.ir import build_plc_ir, canonical_sha256
+from agent_runtime.multi_agent import (
     DEBUG_AGENT,
     PATCH_AGENT,
     REVIEWER,
@@ -12,7 +12,7 @@ from plc_multi_agent import (
     MultiAgentError,
     build_review_context,
 )
-from session_store import SessionStore
+from storage.session import SessionStore
 
 
 def _contact(kind, address):
@@ -50,7 +50,7 @@ def _program():
 
 
 def _local_report(program):
-    from inspection_engine import run_local_inspection
+    from inspection.engine import run_local_inspection
 
     return run_local_inspection(
         _ladder(),
@@ -225,7 +225,7 @@ def _saved_project(tmp_path):
     project = store.create_project(name="multi-agent", plc_model="FX3U")
     version_id, version_dir = store.prepare_version(project["id"])
     program = _program()
-    from plc_debug_loop import render_candidate_artifacts
+    from application.debug_loop import render_candidate_artifacts
 
     artifacts = render_candidate_artifacts(program, version_dir)
     store.complete_version(
@@ -288,7 +288,7 @@ def test_session_store_rejects_cross_version_multi_agent_audit(tmp_path):
 
 
 def test_api_specialist_prompts_expose_no_operational_or_delegation_authority():
-    import api
+    import application.model_workflows as api
 
     assert set(api.MULTI_AGENT_SPECIALIST_PROMPTS) == {REVIEWER, TIMING_PLANNER}
     for prompt in api.MULTI_AGENT_SPECIALIST_PROMPTS.values():
@@ -299,7 +299,7 @@ def test_api_specialist_prompts_expose_no_operational_or_delegation_authority():
 
 
 def test_review_specialists_receive_p8_knowledge_context(monkeypatch):
-    import api
+    import application.model_workflows as api
 
     captured = {}
 
@@ -345,6 +345,6 @@ def test_review_specialists_receive_p8_knowledge_context(monkeypatch):
 
 
 def test_p9_exports_only_routes_with_real_supervisor_entrypoints():
-    import plc_multi_agent
+    import agent_runtime.multi_agent as plc_multi_agent
 
     assert not hasattr(plc_multi_agent, "REQUIREMENT_AGENT")
