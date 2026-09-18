@@ -8,9 +8,9 @@ import re
 from pathlib import Path
 from typing import Any, Mapping
 
-from session_store import SessionStore
-from tool_messages import ToolCall
-from tool_runtime import build_default_tool_runtime, public_tool_result_data
+from storage.session import SessionStore
+from agent_runtime.messages import ToolCall
+from agent_runtime.runtime import build_default_tool_runtime, public_tool_result_data
 from .workspace import artifact_relative_path
 
 
@@ -138,7 +138,7 @@ class ProjectService:
             return svg_text
         if theme not in ("light", "dark"):
             raise ProjectError("Unsupported SVG theme")
-        from draw import normalize_svg_for_preview
+        from rendering.ladder import normalize_svg_for_preview
         return normalize_svg_for_preview(svg_text, theme)
 
     def svg_preview(self, project_id: str, version_id: str, artifact_id="svg", *, theme=None) -> str:
@@ -175,8 +175,8 @@ class ProjectService:
         return self.store.load_program_ir(project_id, version_id, persist_legacy=False)
 
     def tool_context(self, project_id: str, version_id: str | None = None):
-        from plc_agent_tools import build_tool_context
-        from plc_ir import ir_to_ladder
+        from agent_runtime.plc_tools import build_tool_context
+        from plc.ir import ir_to_ladder
         project = self.raw_project(project_id)
         selected = version_id or project.get("active_version_id")
         version = self.raw_version(project_id, selected) if selected else None
@@ -188,7 +188,7 @@ class ProjectService:
 
     def verified_program(self, project_id: str, version_id: str) -> dict | None:
         """Bind navigation and evidence to the saved IR without semantic revalidation."""
-        from plc_ir import canonical_sha256
+        from plc.ir import canonical_sha256
         from .workspace import ConflictError
         version = self.raw_version(project_id, version_id)
         program = self.program(project_id, version_id)
@@ -258,9 +258,9 @@ class ProjectService:
         if not path.is_file():
             raise KeyError("Plan not found")
         plan = self.store.load_debug_plan(project_id, plan_id)
-        from plc_debug_loop import (DEBUG_LOOP_SCHEMA_VERSION, build_failure_evidence,
+        from application.debug_loop import (DEBUG_LOOP_SCHEMA_VERSION, build_failure_evidence,
                                     normalize_debug_diagnosis, normalize_and_apply_debug_patch)
-        from plc_ir import canonical_sha256
+        from plc.ir import canonical_sha256
         if (not isinstance(plan, dict) or plan.get("schema_version") != DEBUG_LOOP_SCHEMA_VERSION
                 or plan.get("plan_id") != plan_id or plan.get("project_id") != project_id
                 or plan.get("base_version_id") != version_id):

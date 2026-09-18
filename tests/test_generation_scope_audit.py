@@ -5,10 +5,10 @@ import json
 import pytest
 
 from application.workbench import WorkbenchService
-from plc_change_scope import ChangeScopeError
-from plc_core import PLCCore
-from plc_ir import build_plc_ir, ir_to_ladder
-from session_store import SessionStore
+from plc.change_scope import ChangeScopeError
+from plc.core import PLCCore
+from plc.ir import build_plc_ir, ir_to_ladder
+from storage.session import SessionStore
 
 
 def _rung(identifier, address, output):

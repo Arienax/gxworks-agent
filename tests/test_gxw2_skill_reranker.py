@@ -1,7 +1,7 @@
-import knowledge_retriever as retriever
+import knowledge.retriever as retriever
 import pytest
-from gxw2_skill_concepts import query_skill_concepts
-from knowledge_retriever_phase2c import rerank
+from knowledge.gxw2_skill import query_skill_concepts
+from knowledge.supporting_reranker import rerank
 
 
 def _candidate(chunk_type, *, task_signal=True, matched="CONTINUE"):

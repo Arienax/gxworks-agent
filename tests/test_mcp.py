@@ -24,18 +24,18 @@ from integrations.mcp.context_provider import (
 )
 from integrations.mcp.server import create_server
 from integrations.mcp.tool_adapter import MCPToolAdapter, to_mcp_result
-from tool_messages import ToolCall, ToolResult
-from plc_agent_tools import (
+from agent_runtime.messages import ToolCall, ToolResult
+from agent_runtime.plc_tools import (
     FORBIDDEN_TOOL_NAMES,
     SAFE_TOOL_NAMES,
     ToolDefinition,
     ToolRegistry,
     build_tool_context,
 )
-from plc_core import PLCCore
-from plc_ir import build_plc_ir, canonical_sha256
-from session_store import SessionStore
-from tool_runtime import InProcessToolRuntime, build_default_tool_runtime
+from plc.core import PLCCore
+from plc.ir import build_plc_ir, canonical_sha256
+from storage.session import SessionStore
+from agent_runtime.runtime import InProcessToolRuntime, build_default_tool_runtime
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -361,7 +361,7 @@ def test_project_without_version_has_a_valid_context(tmp_path):
 
 
 def test_generation_tool_schemas_describe_only_model_owned_input(empty_project):
-    from plc_generation_contract import ladder_v1_schema
+    from plc.generation_contract import ladder_v1_schema
 
     store, project_id = empty_project
     adapter = MCPToolAdapter(build_default_tool_runtime(), SessionToolContextProvider(store.base_dir, project_id))
@@ -399,7 +399,7 @@ def test_generation_tool_schemas_describe_only_model_owned_input(empty_project):
     {"type": "APP_INSTR", "opcode": "MOV", "operands": ["K1", "D10"]},
 ])
 def test_generation_schema_and_core_accept_the_documented_element_types(output):
-    from plc_generation_contract import ladder_v1_schema
+    from plc.generation_contract import ladder_v1_schema
 
     ladder = _generation_ladder()
     rung = ladder["rungs"][0]
@@ -421,7 +421,7 @@ def test_generation_schema_and_core_accept_the_documented_element_types(output):
     {"type": "COIL", "address": "Y0", "label": "L" * 65},
 ])
 def test_generation_schema_and_core_reject_output_escape_hatches(invalid):
-    from plc_generation_contract import ladder_v1_schema
+    from plc.generation_contract import ladder_v1_schema
 
     ladder = _generation_ladder()
     ladder["rungs"][0]["branches"][0]["outputs"] = [invalid]

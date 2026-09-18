@@ -14,12 +14,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 
-import api
-import main
-from i18n import get_language, language_context, set_language
-from model_provider import ModelProviderError, ResponseRejectedError, TextDelta
-from qt_compat import QApplication, QLabel
-from workbench_widgets import MessageBubble
+import application.model_workflows as api
+import ui.desktop.main_window as main
+from shared.i18n import get_language, language_context, set_language
+from model_runtime.provider import ModelProviderError, ResponseRejectedError, TextDelta
+from ui.desktop.qt import QApplication, QLabel
+from ui.desktop.workbench import MessageBubble
 
 
 _APPLICATION = QApplication.instance() or QApplication([])

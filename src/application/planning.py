@@ -3,7 +3,7 @@ import copy
 from contextlib import nullcontext
 
 from application.base import Workflow, WorkflowError, model_call
-from i18n import tr
+from shared.i18n import tr
 
 
 class EvidenceDebugPlanWorkflow(Workflow):
@@ -48,15 +48,15 @@ class EvidenceDebugPlanWorkflow(Workflow):
 
     def _run(self):
         try:
-            from api import (
+            from application.model_workflows import (
                 debug_evidence_diagnosis,
                 debug_evidence_patch,
             )
-            from plc_debug_loop import (
+            from application.debug_loop import (
                 DebugPatchLoopService,
                 build_failure_evidence,
             )
-            from plc_multi_agent import (
+            from agent_runtime.multi_agent import (
                 DEBUG_AGENT,
                 PATCH_AGENT,
                 DeterministicMultiAgentSupervisor,
@@ -151,7 +151,7 @@ class SimulatorTestPlanWorkflow(Workflow):
 
     def _run(self):
         try:
-            from api import generate_simulator_test_suite
+            from application.model_workflows import generate_simulator_test_suite
             from simulator.planning import (
                 build_test_generation_context,
                 normalize_generated_test_suite,

@@ -8,11 +8,11 @@ import sys
 
 import pytest
 
-import api
-import knowledge_retriever
-from plc_agent_tools import build_default_tool_registry, build_tool_context
-from plc_generation_context import generation_user_input, public_generation_ladder
-from prompt_context_policy import POLICY_NAMES, context_policy_scope
+import application.model_workflows as api
+import knowledge.retriever as knowledge_retriever
+from agent_runtime.plc_tools import build_default_tool_registry, build_tool_context
+from application.generation_context import generation_user_input, public_generation_ladder
+from shared.context_policy import POLICY_NAMES, context_policy_scope
 
 
 def _ladder():
@@ -151,12 +151,12 @@ def test_context_can_run_in_a_process_with_provider_config_and_desktop_imports_b
     script = '''import importlib.abc, json, sys, types
 class BlockPrivate(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.split('.')[0] in {'api', 'model_provider', 'openai', 'config_manager', 'credential_store',
+        if fullname.split('.')[0] in {'api', 'model_runtime', 'storage', 'ui', 'openai', 'config_manager', 'credential_store',
                                      'PyQt5', 'PyQt6', 'qt_compat', 'main', 'pywinauto', 'win32com'}:
             raise AssertionError('Unexpected dependency: ' + fullname)
 sys.meta_path.insert(0, BlockPrivate())
-sys.modules['knowledge_retriever'] = types.SimpleNamespace(build_knowledge_context=lambda *a, **k: '')
-from plc_agent_tools import build_default_tool_registry, build_tool_context
+sys.modules['knowledge.retriever'] = types.SimpleNamespace(build_knowledge_context=lambda *a, **k: '')
+from agent_runtime.plc_tools import build_default_tool_registry, build_tool_context
 result = build_default_tool_registry().call('get_generation_context', {'user_requirement': 'FX3U T1 K30'},
     build_tool_context({'id': 'isolated', 'plc_model': 'FX3U'}))
 assert result['ok'], result

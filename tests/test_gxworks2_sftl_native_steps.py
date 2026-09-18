@@ -1,6 +1,6 @@
 import csv
 
-from draw import generate_gx_works2_csv
+from rendering.ladder import generate_gx_works2_csv
 
 
 def _instruction_rows(path):

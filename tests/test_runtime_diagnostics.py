@@ -6,10 +6,10 @@ from types import SimpleNamespace as S
 from concurrent.futures import ThreadPoolExecutor
 import zipfile
 import pytest
-import runtime_diagnostics as d
-from application.generation_repair import GenerationValidationError
-from plc_json_validator import PLCJsonValidationError, validate_ladder_candidate_structure
-from model_provider import (OpenAICompatibleProvider, ModelRequest, SystemMessage, UserMessage,
+import shared.diagnostics as d
+from plc.candidate_repair import GenerationValidationError
+from plc.validation import PLCJsonValidationError, validate_ladder_candidate_structure
+from model_runtime.provider import (OpenAICompatibleProvider, ModelRequest, SystemMessage, UserMessage,
     ResponseRejectedError, ResponseContract, collect_response, ModelProviderError)
 
 
@@ -221,7 +221,7 @@ def test_raw_adapter_finish_and_rejection_are_observed_not_repaired(tmp_path,str
     assert len(calls)==1 and emitted==[]
     raw=json.dumps(log)
     assert all(secret not in raw for secret in ['PRIVATE_RESPONSE','PRIVATE_REASONING','PRIVATE_PROMPT','PRIVATE_CREDENTIAL','PRIVATE_ENDPOINT'])
-    assert 'model_provider.py' in raw and 'response_acceptance' in raw
+    assert 'model_runtime/provider.py' in raw and 'response_acceptance' in raw
     assert calls[0]['messages'][-1]['content']=='PRIVATE_PROMPT'
 
 

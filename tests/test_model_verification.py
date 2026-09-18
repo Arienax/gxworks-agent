@@ -1,11 +1,11 @@
 """The actual provider adapter with a synthetic SDK transport; no external API."""
 import copy
 import pytest
-from model_catalog import resolve_capabilities
-from model_contract import CapabilityContract
-from model_provider import ModelRequest, UserMessage, ModelProviderError, TextDelta
-from model_observations import ObservationStore, request_observer
-from model_verification import verify_one
+from model_runtime.catalog import resolve_capabilities
+from model_runtime.contract import CapabilityContract
+from model_runtime.provider import ModelRequest, UserMessage, ModelProviderError, TextDelta
+from model_runtime.observations import ObservationStore, request_observer
+from model_runtime.verification import verify_one
 from test_model_capabilities import Endpoint, Rejection, provider
 from test_application_settings import settings_env
 
@@ -70,8 +70,8 @@ def test_unsupported_output_limit_does_not_generate_again_with_another_field():
 
 def test_private_transport_error_is_not_published_by_settings(settings_env,monkeypatch):
     endpoint=WireEndpoint(unsupported=True)
-    from model_provider import OpenAICompatibleProvider
-    monkeypatch.setattr('model_provider.create_provider',lambda p,k:OpenAICompatibleProvider(p,k,client=endpoint))
+    from model_runtime.provider import OpenAICompatibleProvider
+    monkeypatch.setattr('model_runtime.provider.create_provider',lambda p,k:OpenAICompatibleProvider(p,k,client=endpoint))
     result=settings_env.service.verify_profile(profile={'name':'Draft','base_url':'https://unknown.invalid/v1','model':'tenant-alias','api_key':'test-key'},
         target='temperature',kind='parameter',value=.73,consent=True)
     assert result['status']=='failed' and len(endpoint.calls)==1

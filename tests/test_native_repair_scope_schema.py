@@ -1,6 +1,6 @@
-import api
-from application.generation_repair import validation_diagnostic
-from plc_json_validator import PLCJsonValidationError
+import application.model_workflows as api
+from plc.candidate_repair import validation_diagnostic
+from plc.validation import PLCJsonValidationError
 
 
 def _walk(rule):

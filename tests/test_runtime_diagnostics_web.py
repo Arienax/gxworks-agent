@@ -3,10 +3,10 @@ import io
 import json
 import zipfile
 import pytest
-import api
+import application.model_workflows as api
 from fastapi.testclient import TestClient
 from application.workbench import WorkbenchService
-from model_provider import TextDelta
+from model_runtime.provider import TextDelta
 from test_web_api import ORIGIN, AGENT, _app, _login
 
 

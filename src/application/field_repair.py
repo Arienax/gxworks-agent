@@ -12,9 +12,9 @@ import hashlib
 import json
 import re
 
-from application.generation_repair import RepairAssemblyError, candidate_base
-from instruction_registry import DEFAULT_INSTRUCTION_REGISTRY, generation_app_instr_mnemonics
-from plc_generation_contract import MAX_LABEL_LEN
+from plc.candidate_repair import RepairAssemblyError, candidate_base
+from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, generation_app_instr_mnemonics
+from plc.generation_contract import MAX_LABEL_LEN
 
 MODE = "field_patch"
 SCHEMA_VERSION = 1

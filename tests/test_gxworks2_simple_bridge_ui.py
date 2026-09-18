@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 def test_simple_gx_bridge_actions_are_primary_ui():
-    text = Path("src/main.py").read_text(encoding="utf-8")
+    text = Path("src/ui/desktop/main_window.py").read_text(encoding="utf-8")
     assert "QPushButton(tr('写入 GX Works2'))" in text
     assert "QPushButton(tr('读取 GX Works2'))" in text
     assert "QPushButton(tr('高级同步'))" in text
@@ -13,7 +13,7 @@ def test_simple_gx_bridge_actions_are_primary_ui():
 
 
 def test_empty_project_pull_has_bootstrap_request():
-    text = Path("src/main.py").read_text(encoding="utf-8")
+    text = Path("src/ui/desktop/main_window.py").read_text(encoding="utf-8")
     assert "def _gx_pull_request(self):" in text
     assert '"bootstrap": True' in text
     assert 'snapshot_only=bool(request.get("bootstrap"))' in text
@@ -22,7 +22,7 @@ def test_empty_project_pull_has_bootstrap_request():
 
 
 def test_pull_button_only_requires_selected_project():
-    text = Path("src/main.py").read_text(encoding="utf-8")
+    text = Path("src/ui/desktop/main_window.py").read_text(encoding="utf-8")
     state = text.split("def _update_gx_sync_button_enabled", 1)[1].split("    def ", 1)[0]
     assert "project_ready = bool(self.current_project_id)" in state
     assert "ladder_ready = bool(version" in state
@@ -32,7 +32,7 @@ def test_pull_button_only_requires_selected_project():
 
 
 def test_bootstrap_pull_creates_root_version():
-    text = Path("src/main.py").read_text(encoding="utf-8")
+    text = Path("src/ui/desktop/main_window.py").read_text(encoding="utf-8")
     completed = text.split("def _gxworks2_pull_completed", 1)[1].split("    def ", 1)[0]
     assert "tr('从GX Works2导入的初始程序')" in completed
     assert '"gxworks2_bootstrap"' in completed
@@ -40,7 +40,7 @@ def test_bootstrap_pull_creates_root_version():
 
 
 def test_direct_pull_does_not_force_three_way_choice():
-    text = Path("src/main.py").read_text(encoding="utf-8")
+    text = Path("src/ui/desktop/main_window.py").read_text(encoding="utf-8")
     assert 'if intent == "pull":' in text
     assert "self._start_gxworks2_pull(result, request)" in text
 
@@ -51,7 +51,7 @@ def test_external_modification_points_to_advanced_sync():
 
 
 def test_snapshot_only_thread_uses_public_read_api():
-    text = Path("src/main.py").read_text(encoding="utf-8")
+    text = Path("src/ui/desktop/main_window.py").read_text(encoding="utf-8")
     thread = text.split("class GXWorks2SyncInspectThread", 1)[1].split(
         "class GXWorks2SyncErrorDialog", 1
     )[0]

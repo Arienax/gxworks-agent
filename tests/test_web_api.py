@@ -13,12 +13,12 @@ pytest.importorskip("fastapi", reason="Web integration requires requirements-web
 pytest.importorskip("httpx", reason="Web integration requires requirements-web.txt")
 from fastapi.testclient import TestClient
 
-import api
+import application.model_workflows as api
 from application.workbench import WorkbenchService
-from draw import AdvancedSVGLadder
+from rendering.ladder import AdvancedSVGLadder
 from integrations.web.app import create_app
-from model_provider import TextDelta
-from session_store import SessionStore
+from model_runtime.provider import TextDelta
+from storage.session import SessionStore
 
 
 ORIGIN = "http://127.0.0.1:8765"

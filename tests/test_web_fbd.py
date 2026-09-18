@@ -102,7 +102,7 @@ def test_changed_artifact_and_false_preview_are_rejected_before_acceptance(servi
 
 
 def test_existing_ladder_converts_with_comments_in_source_artifact(service):
-    from plc_core import PLCCore
+    from plc.core import PLCCore
     p = service.create_project(name="Relay", target_mode="ladder")
     source = _program()
     vid, root = service.store.prepare_version(p["id"])
@@ -138,7 +138,7 @@ def test_http_import_download_review_and_csrf_are_consistent(tmp_path):
 
 
 def test_generation_uses_model_contract_and_freezes_gxw_before_worker(service, monkeypatch):
-    import api
+    import application.model_workflows as api
     captured = []
     def model(messages, **kwargs):
         captured.append((messages, kwargs))
@@ -163,7 +163,7 @@ def test_generation_uses_model_contract_and_freezes_gxw_before_worker(service, m
 
 @pytest.mark.parametrize("invalid_connection", [False, True])
 def test_english_fbd_summary_is_allowed_but_dangling_connection_is_rejected(service, invalid_connection):
-    from model_provider import ReasoningDelta, TextDelta
+    from model_runtime.provider import ReasoningDelta, TextDelta
     model = two_timers()
     if invalid_connection:
         model["wires"][0]["from"] = "nonexistent_node.Q"

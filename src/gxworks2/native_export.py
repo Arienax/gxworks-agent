@@ -12,7 +12,7 @@ import copy
 import re
 from typing import Any, Dict, List, Mapping, MutableSequence, Sequence
 
-from plc_ir import ir_to_ladder, is_plc_ir
+from plc.ir import ir_to_ladder, is_plc_ir
 
 GXWORKS2_MAX_LADDER_BLOCK_ROWS = 24
 FX3U_GENERAL_M_MAX = 7679

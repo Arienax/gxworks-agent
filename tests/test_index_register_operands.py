@@ -1,14 +1,14 @@
 import pytest
 
-from confirmed_spec import _validate_device_address as validate_spec_device
-from plc_ir import analyze_instruction_access, build_plc_ir, ir_to_ladder
-from plc_json_validator import (
+from plc.specification.confirmed import _validate_device_address as validate_spec_device
+from plc.ir import analyze_instruction_access, build_plc_ir, ir_to_ladder
+from plc.validation import (
     PLCJsonValidationError,
     parse_device_address,
     parse_indexed_device_address,
     validate_ladder_full,
 )
-from plc_st_renderer import render_plc_ir_to_st
+from plc.st_renderer import render_plc_ir_to_st
 
 
 def app(opcode, *operands):

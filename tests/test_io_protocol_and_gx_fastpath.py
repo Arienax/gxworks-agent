@@ -1,7 +1,7 @@
 import types
 from pathlib import Path
 
-import api
+import application.model_workflows as api
 import gxworks2.ui_automation as uia_module
 from application.execution import GXExecutionCoordinator
 from gxworks2.ui_automation import PywinautoGXWorks2UIAutomation

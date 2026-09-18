@@ -4,15 +4,15 @@ from pathlib import Path
 
 import pytest
 
-from confirmed_spec import build_review_draft, validate_spec_draft
-from hardware_profiles import build_hardware_profile, ensure_hardware_questions
-from pattern_library import (
+from plc.specification.confirmed import build_review_draft, validate_spec_draft
+from plc.hardware_profiles import build_hardware_profile, ensure_hardware_questions
+from knowledge.patterns import (
     KnowledgeRouter,
     build_workflow_prompt,
     classify_request,
     load_library,
 )
-from plc_json_validator import PLCJsonValidationError, validate_ladder_full
+from plc.validation import PLCJsonValidationError, validate_ladder_full
 
 
 def _motion_ladder(opcode="DRVI", pulse="Y0", direction="Y7", speed="K2000"):
@@ -369,7 +369,7 @@ def test_vfd_and_servo_parameters_do_not_overwrite_each_other():
 
 
 def test_analysis_prompt_documents_instruction_aware_motion_questions():
-    prompt = (Path(__file__).resolve().parents[1] / "src" / "api.py").read_text(
+    prompt = (Path(__file__).resolve().parents[1] / "src" / "application/model_workflows.py").read_text(
         encoding="utf-8"
     )
 

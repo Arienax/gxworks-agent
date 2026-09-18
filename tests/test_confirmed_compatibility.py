@@ -8,14 +8,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from confirmed_spec import canonicalize_confirmed_spec, validate_spec_draft, build_review_draft
+from plc.specification.confirmed import canonicalize_confirmed_spec, validate_spec_draft, build_review_draft
 from application.compact_protocol import (
     CompactProtocolError, compact_response_schema, decode_compact,
     normalize_compact, expand_compact_ladder,
 )
-from model_contract import CapabilityContract, ParameterDescriptor, CapabilityDescriptor, contract_scope
-from model_response_format import response_plan
-from model_request_policy import resolve_request
+from model_runtime.contract import CapabilityContract, ParameterDescriptor, CapabilityDescriptor, contract_scope
+from model_runtime.response_format import response_plan
+from model_runtime.request_policy import resolve_request
 
 
 def operator_spec(polarity="NO"):
@@ -267,9 +267,9 @@ def test_http_confirmation_to_saved_ladder_svg_and_csv(tmp_path, mode, shared, p
     from fastapi.testclient import TestClient
     from integrations.web.app import create_app
     from application.workbench import WorkbenchService
-    from model_provider import OpenAICompatibleProvider
+    from model_runtime.provider import OpenAICompatibleProvider
     from test_web_api import ORIGIN, OPERATOR, _login, _complete
-    from plc_ir import ir_to_ladder
+    from plc.ir import ir_to_ladder
     sdk = SDKFixture(shared, polarity, representation=representation)
     # The no-schema case also exercises a declared non-streaming endpoint.
     profile = profile_for(mode, streaming=mode is not None, model="fixture-" + str(mode))
@@ -310,8 +310,8 @@ def test_http_confirmation_to_saved_ladder_svg_and_csv(tmp_path, mode, shared, p
 
 
 def test_null_normalization_never_invents_a_missing_stop_condition():
-    from plc_confirmed_checks import check_direct_self_hold
-    from plc_json_validator import PLCJsonValidationError
+    from plc.confirmed_checks import check_direct_self_hold
+    from plc.validation import PLCJsonValidationError
     # Synthetic negative equivalent: this is NOT a golden correct start/stop
     # candidate, even though its JSON syntax and optional-null form are valid.
     bad = {"r": [{"s": None, "b": [{"i": [{"or": [["NO X1"], ["NO Y0"]]}], "o": ["COIL Y0"]}]}]}
@@ -341,7 +341,7 @@ def test_local_compact_error_retains_path_and_is_not_an_api_error():
 
 
 def test_unsupported_boolean_shapes_do_not_gain_a_new_semantic_gate():
-    from plc_confirmed_checks import check_direct_self_hold
+    from plc.confirmed_checks import check_direct_self_hold
     spec = canonicalize_confirmed_spec(operator_spec())
     ladder = expand_compact_ladder(_compact([]))
     ladder["rungs"][0]["branches"][0]["inputs"][0] = {"type": "COMPARE", "expression": "> D0 K1"}
@@ -374,7 +374,7 @@ def test_scoped_contract_overrides_legacy_format_flags_without_model_name_rules(
 
 def test_known_ladder_representations_never_bypass_validation():
     from application.generation_agent import _decode_generated_ladder
-    from plc_json_validator import PLCJsonValidationError
+    from plc.validation import PLCJsonValidationError
     good = expand_compact_ladder(_compact([]))
     bad = copy.deepcopy(good)
     bad["rungs"][0]["branches"][0]["outputs"][0]["address"] = "NOT_A_DEVICE"

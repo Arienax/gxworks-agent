@@ -18,10 +18,10 @@ import anyio
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
-from plc_agent_tools import FORBIDDEN_TOOL_NAMES, SAFE_TOOL_NAMES
-from plc_core import PLCCore
-from plc_ir import build_plc_ir, ir_to_ladder
-from session_store import SessionStore
+from agent_runtime.plc_tools import FORBIDDEN_TOOL_NAMES, SAFE_TOOL_NAMES
+from plc.core import PLCCore
+from plc.ir import build_plc_ir, ir_to_ladder
+from storage.session import SessionStore
 
 
 async def smoke() -> dict:

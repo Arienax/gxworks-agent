@@ -11,10 +11,10 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 # Public service error shared with desktop/CLI model selection.
-from config_manager import ModelConfigurationRequiredError
-from model_capabilities import capability_scope, normalize_parameter_support
-from model_contract import CapabilityContract, UserModelSettings, scoped_contract, normalize_contract, credential_fingerprint
-from model_request_policy import public_contract_settings
+from storage.config import ModelConfigurationRequiredError
+from model_runtime.capabilities import capability_scope, normalize_parameter_support
+from model_runtime.contract import CapabilityContract, UserModelSettings, scoped_contract, normalize_contract, credential_fingerprint
+from model_runtime.request_policy import public_contract_settings
 
 
 _SETTINGS_LOCK = threading.RLock()
@@ -82,9 +82,9 @@ def _profile_id(value):
 class SettingsService:
     def read_config(self):
         # Reuse the desktop normalizers without its file/credential migration.
-        from config_manager import get_config_path, _normalize_profile_selection
-        from resource_paths import resource_path
-        from i18n import normalize_language
+        from storage.config import get_config_path, _normalize_profile_selection
+        from shared.paths import resource_path
+        from shared.i18n import normalize_language
         path = Path(get_config_path())
         if not path.is_file():
             path = resource_path("config.default.json")
@@ -94,8 +94,8 @@ class SettingsService:
 
     @staticmethod
     def _legacy_credential(config):
-        from config_manager import _is_legacy_api_key
-        from credential_store import CREDENTIAL_TARGET, read_api_key
+        from storage.config import _is_legacy_api_key
+        from storage.credentials import CREDENTIAL_TARGET, read_api_key
         if not any(key in config for key in ("api_key", "base_url", "default_model", "request_template")):
             return None
         key = read_api_key(CREDENTIAL_TARGET).strip()
@@ -104,7 +104,7 @@ class SettingsService:
         return (config["activeModelProfileId"], key) if key else None
 
     def _key(self, config, profile):
-        from credential_store import read_api_key
+        from storage.credentials import read_api_key
         key = read_api_key(profile["credentialTarget"]).strip()
         if not key:
             legacy = self._legacy_credential(config)
@@ -113,7 +113,7 @@ class SettingsService:
         return key
 
     def public_settings(self):
-        from config_manager import get_model_profile
+        from storage.config import get_model_profile
         with _SETTINGS_LOCK:
             config = self.read_config()
             profiles = []
@@ -205,13 +205,13 @@ class SettingsService:
     @staticmethod
     def _validate_manual(profile):
         if profile.get("capabilityOverrides"):
-            from model_catalog import resolve_capabilities
+            from model_runtime.catalog import resolve_capabilities
             resolve_capabilities(profile)
 
     @staticmethod
     def _save(config, legacy, *, skip_legacy=()):
-        from config_manager import save_config
-        from credential_store import read_api_key, write_api_key
+        from storage.config import save_config
+        from storage.credentials import read_api_key, write_api_key
         if legacy and legacy[0] not in skip_legacy:
             old = next((p for p in config["modelProfiles"] if p["id"] == legacy[0]), None)
             if old and not read_api_key(old["credentialTarget"]).strip():
@@ -220,8 +220,8 @@ class SettingsService:
         save_config(config)
 
     def update(self, *, language=None, active_profile_id=None, profile=None, api_key=None):
-        from config_manager import get_model_profile
-        from credential_store import write_api_key
+        from storage.config import get_model_profile
+        from storage.credentials import write_api_key
         with _SETTINGS_LOCK:
             config = self.read_config()
             legacy = self._legacy_credential(config)
@@ -253,8 +253,8 @@ class SettingsService:
             return self.public_settings()
 
     def create_profile(self, *, id=None, api_key=None, **values):
-        from config_manager import _normalize_profile
-        from credential_store import credential_target_for_profile, write_api_key
+        from storage.config import _normalize_profile
+        from storage.credentials import credential_target_for_profile, write_api_key
         with _SETTINGS_LOCK:
             config = self.read_config()
             legacy = self._legacy_credential(config)
@@ -276,8 +276,8 @@ class SettingsService:
             return self.public_settings()
 
     def delete_profile(self, profile_id):
-        from config_manager import get_model_profile
-        from credential_store import delete_api_key
+        from storage.config import get_model_profile
+        from storage.credentials import delete_api_key
         with _SETTINGS_LOCK:
             config = self.read_config()
             legacy = self._legacy_credential(config)
@@ -293,8 +293,8 @@ class SettingsService:
         return self.update(profile={"id": _profile_id(profile_id)}, api_key=api_key)
 
     def delete_key(self, profile_id):
-        from config_manager import get_model_profile
-        from credential_store import delete_api_key
+        from storage.config import get_model_profile
+        from storage.credentials import delete_api_key
         with _SETTINGS_LOCK:
             config = self.read_config()
             legacy = self._legacy_credential(config)
@@ -311,13 +311,13 @@ class SettingsService:
 
     @staticmethod
     def _observations():
-        from config_manager import get_config_path
-        from model_observations import ObservationStore
+        from storage.config import get_config_path
+        from model_runtime.observations import ObservationStore
         return ObservationStore(Path(get_config_path()).parent / "model-observations.sqlite")
 
     def _draft(self, id=None, api_key=None, **values):
-        from config_manager import get_model_profile, _normalize_profile
-        from credential_store import credential_target_for_profile
+        from storage.config import get_model_profile, _normalize_profile
+        from storage.credentials import credential_target_for_profile
         with _SETTINGS_LOCK:
             if id:
                 config = self.read_config()
@@ -346,7 +346,7 @@ class SettingsService:
             return {"status": "resolved", "message": result["note"], "discovery": result}
         if not str(key).strip():
             return {"status": "failed", "message": "获取模型列表需要当前服务的 API Key。", "error_code": "missing_key"}
-        from model_provider import create_provider
+        from model_runtime.provider import create_provider
         try:
             result = inspect_openai_compatible(create_provider(selected, key), selected["model"], mode="list")
             return {"status": "connected", "message": result["note"], "discovery": result}
@@ -360,8 +360,8 @@ class SettingsService:
         if consent is not True:
             raise ValueError("Explicit verification consent is required")
         from application.model_detection import resolve_profile_contract
-        from model_provider import create_provider
-        from model_verification import verify_one
+        from model_runtime.provider import create_provider
+        from model_runtime.verification import verify_one
         selected, key = self._draft(**profile)
         if not str(key).strip():
             return {"status":"failed", "message":"请配置当前服务的 API Key。", "error_code":"missing_key"}
@@ -381,8 +381,8 @@ class SettingsService:
                 "message":result["note"],"discovery":resolved}
 
     def test_connection(self, profile_id, *, profile=None, api_key=None):
-        from config_manager import get_model_profile
-        from model_provider import test_model_profile
+        from storage.config import get_model_profile
+        from model_runtime.provider import test_model_profile
         with _SETTINGS_LOCK:
             config = self.read_config()
             selected = get_model_profile(config, _profile_id(profile_id))
@@ -410,8 +410,8 @@ class SettingsService:
             return {"status": "failed", "message": "连接测试失败，请检查服务地址、模型和密钥。", "error_code": code}
 
     def model_snapshot(self):
-        from config_manager import get_model_profile
-        from model_provider import create_provider
+        from storage.config import get_model_profile
+        from model_runtime.provider import create_provider
         with _SETTINGS_LOCK:
             config = self.read_config()
             profile = get_model_profile(config)
@@ -420,7 +420,7 @@ class SettingsService:
                 raise ValueError("请先在模型设置中配置 API Key。")
             # Provider/key lives only in the worker closure, never in job JSON.
             provider = create_provider(copy.deepcopy(profile), key)
-            from model_observations import request_observer
+            from model_runtime.observations import request_observer
             if hasattr(provider, "observation_sink"):
                 provider.observation_sink = request_observer(provider, self._observations())
             return provider, {

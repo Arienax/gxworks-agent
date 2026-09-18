@@ -31,7 +31,7 @@ import uvicorn
 from playwright.async_api import async_playwright, expect
 from application.workbench import WorkbenchService
 from integrations.web.app import create_app
-from model_provider import TextDelta, Usage, ModelProviderError, OpenAICompatibleProvider
+from model_runtime.provider import TextDelta, Usage, ModelProviderError, OpenAICompatibleProvider
 
 
 LADER = {'device_comments': {'X0': '输入', 'Y0': '输出'}, 'rungs': [

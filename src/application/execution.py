@@ -320,7 +320,7 @@ class GXExecutionCoordinator:
                 result["message"] = sync["message"]
         if operation == "read_gx":
             from gxworks2.csv_importer import materialize_gxworks2_version, parse_gxworks2_csv
-            from plc_json_validator import find_unverified_app_instructions
+            from plc.validation import find_unverified_app_instructions
 
             exported_program = Path(str(sync.get("exported_program_path") or ""))
             exported_comments = Path(str(sync.get("exported_comment_path") or ""))
@@ -419,7 +419,7 @@ class GXExecutionCoordinator:
             )
             result = _mapping(service.run_approved_plan(project_id, version_id, plan, progress=progress, test_progress=test_progress))
         else:
-            from plc_debug_loop import DebugPatchLoopService
+            from application.debug_loop import DebugPatchLoopService
 
             if plan.get("project_id") != project_id or plan.get("base_version_id") != version_id:
                 raise ValueError("Debug plan does not belong to the approved version.")

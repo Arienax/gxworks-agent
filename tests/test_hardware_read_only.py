@@ -7,10 +7,10 @@ import pytest
 
 from application.hardware import HardwareService
 from application.workbench import WorkbenchService
-from plc_core import PLCCore
-from plc_hardware import HardwareError, HardwareReader, normalize_read_addresses
-from plc_ir import build_plc_ir
-from session_store import SessionStore
+from plc.core import PLCCore
+from gxworks2.hardware_read import HardwareError, HardwareReader, normalize_read_addresses
+from plc.ir import build_plc_ir
+from storage.session import SessionStore
 
 
 class ReaderDouble:
@@ -235,7 +235,7 @@ def test_child_process_read_schema_is_fixed_and_response_is_checked(tmp_path, mo
         calls.append((args, kwargs))
         return SimpleNamespace(returncode=0, stdout=json.dumps({"status": "read", "backend": "mx_logical_station_read_only",
             "logical_station": 2, "values": {"X0": 1}}))
-    monkeypatch.setattr("plc_hardware.subprocess.run", run)
+    monkeypatch.setattr("gxworks2.hardware_read.subprocess.run", run)
     assert reader.read_once(2, ["x00"], "FX3U", expected_fingerprint=reader.fingerprint(), timeout=3)["values"] == {"X0": 1}
     args, kwargs = calls[0]
     assert args == [str(executable)]
@@ -271,8 +271,8 @@ def test_reader_fingerprint_check_cannot_extend_remaining_permission(tmp_path, m
         clock[0] += 10
         return "a" * 64
     monkeypatch.setattr(reader, "fingerprint", slow_fingerprint)
-    monkeypatch.setattr("plc_hardware.time.monotonic", lambda: clock[0])
-    monkeypatch.setattr("plc_hardware.subprocess.run", lambda *args, **kwargs: pytest.fail("Expired permission must not start any process"))
+    monkeypatch.setattr("gxworks2.hardware_read.time.monotonic", lambda: clock[0])
+    monkeypatch.setattr("gxworks2.hardware_read.subprocess.run", lambda *args, **kwargs: pytest.fail("Expired permission must not start any process"))
     with pytest.raises(HardwareError, match="没有启动读取进程"):
         reader.read_once(2, ["X0"], "FX3U", expected_fingerprint="a" * 64, timeout=3)
 

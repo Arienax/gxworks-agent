@@ -2,8 +2,8 @@ import copy
 
 import pytest
 
-import pattern_library
-from pattern_library import classify_request, load_library
+import knowledge.patterns as pattern_library
+from knowledge.patterns import classify_request, load_library
 
 
 @pytest.mark.parametrize(

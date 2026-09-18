@@ -2,9 +2,9 @@ import copy
 
 import pytest
 
-from api import _normalize_analysis_result
-from plc_ir import PLCIRValidationError, build_plc_ir, validate_plc_ir
-from plc_semantics import (
+from application.model_workflows import _normalize_analysis_result
+from plc.ir import PLCIRValidationError, build_plc_ir, validate_plc_ir
+from plc.semantics import (
     SUPPORTED_EXECUTION_SEMANTICS,
     infer_semantic_requirements,
     semantic_requirements_from_spec,

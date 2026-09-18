@@ -4,12 +4,12 @@ import re
 import sqlite3
 import time
 
-import api
-import dense_retriever
-import knowledge_retriever
+import application.model_workflows as api
+import knowledge.dense as dense_retriever
+import knowledge.retriever as knowledge_retriever
 import pytest
-from knowledge_retriever import build_knowledge_context, retrieve_knowledge
-from resource_paths import resource_path
+from knowledge.retriever import build_knowledge_context, retrieve_knowledge
+from shared.paths import resource_path
 
 
 INDEX_PATH = Path(resource_path("knowledge/fx3u_knowledge.sqlite"))

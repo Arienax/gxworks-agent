@@ -35,6 +35,7 @@ a = Analysis(
         (str(root / 'resources/locales'), 'resources/locales'),
         (str(root / 'resources/pattern_library.json'), '.'),
         (str(root / 'resources/plc_models.json'), '.'),
+        (str(root / 'resources/model_catalog'), 'resources/model_catalog'),
         (str(root / 'resources/instructions/mitsubishi'), 'resources/instructions/mitsubishi'),
         (str(root / 'README.md'), '.'),
         (str(root / 'resources/app.ico'), '.'),
@@ -42,11 +43,10 @@ a = Analysis(
         (str(root / 'resources/knowledge/fx3u_knowledge.sqlite'), 'knowledge'),
         (str(root / 'resources/knowledge/fx3u_dense_lsa.npz'), 'knowledge'),
         (str(root / 'resources/knowledge/manifest.json'), 'knowledge'),
-        # workbench_widgets is now a package facade; the historical module is
-        # loaded as the editor engine at runtime and therefore must remain as data.
-        (str(root / 'src/workbench_widgets.py'), '.'),
     ] + sdk_datas,
     hiddenimports=[
+        'ui.desktop.workbench.editor',
+        'ui.desktop.workbench.review',
         'openai',
         'openai._client',
         'pywinauto',

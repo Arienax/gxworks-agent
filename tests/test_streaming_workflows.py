@@ -1,11 +1,11 @@
 import copy
 import json
 
-import api
-import plc_agent
-from main import SimulatorTestPlanThread, ToolAgentThread
-from model_provider import ReasoningDelta, TextDelta
-from plc_ir import build_plc_ir
+import application.model_workflows as api
+import agent_runtime.agent as plc_agent
+from ui.desktop.main_window import SimulatorTestPlanThread, ToolAgentThread
+from model_runtime.provider import ReasoningDelta, TextDelta
+from plc.ir import build_plc_ir
 
 
 class _StreamingProvider:

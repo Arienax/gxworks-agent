@@ -2,7 +2,7 @@
 
 import pytest
 
-from i18n import set_language
+from shared.i18n import set_language
 
 
 @pytest.fixture(autouse=True)

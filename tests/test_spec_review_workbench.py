@@ -3,8 +3,8 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from qt_compat import QApplication
-from workbench_widgets import RequirementReviewCard, SpecificationWorkbenchDialog
+from ui.desktop.qt import QApplication
+from ui.desktop.workbench import RequirementReviewCard, SpecificationWorkbenchDialog
 
 
 def _app():
@@ -99,5 +99,6 @@ def test_pyinstaller_specs_keep_legacy_editor_as_runtime_data():
         "packaging/pyinstaller/desktop-win7.spec",
     ):
         text = (Path(relative)).read_text(encoding="utf-8")
-        assert "workbench_widgets.py" in text
+        assert "ui.desktop.workbench.editor" in text
+        assert "src/workbench_widgets.py" not in text
         assert "Path(SPECPATH).resolve().parents[1]" in text

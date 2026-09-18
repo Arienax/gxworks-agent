@@ -23,7 +23,7 @@ def onboarding(tmp_path, monkeypatch):
     from integrations.mcp import service_credentials as credentials
 
     secrets = {}
-    monkeypatch.setitem(sys.modules, "windows_credentials", SimpleNamespace(
+    monkeypatch.setitem(sys.modules, "storage.windows_credentials", SimpleNamespace(
         write_secret=lambda value, target: secrets.__setitem__(target, value),
         read_secret=lambda target: secrets.get(target, ""),
         delete_secret=lambda target: secrets.pop(target, None),

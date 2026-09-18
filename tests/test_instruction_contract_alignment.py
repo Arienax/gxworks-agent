@@ -3,9 +3,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-import knowledge_retriever_core as core
-from instruction_registry import DEFAULT_INSTRUCTION_REGISTRY, generation_app_instr_mnemonics
-from plc_json_validator import validate_ladder_full
+import knowledge.core as core
+from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, generation_app_instr_mnemonics
+from plc.validation import validate_ladder_full
 
 
 ROOT = Path(__file__).resolve().parents[1]

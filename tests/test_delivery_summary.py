@@ -84,7 +84,7 @@ def test_fbd_handoff_contains_source_and_returned_file_fingerprints_and_operator
 
 
 def test_structural_generation_handoff_keeps_profile_and_parent_changes(version, tmp_path):
-    from plc_ir import build_plc_ir, canonical_sha256, ir_to_ladder, validate_plc_ir
+    from plc.ir import build_plc_ir, canonical_sha256, ir_to_ladder, validate_plc_ir
 
     store, pid, base_id, base, _ = version
     ladder = ir_to_ladder(base)

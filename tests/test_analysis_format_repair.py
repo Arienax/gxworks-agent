@@ -4,12 +4,12 @@ import json
 
 import pytest
 
-import api
-from model_provider import (
+import application.model_workflows as api
+from model_runtime.provider import (
     ModelProviderError, ReasoningDelta, ResponseRejectedError,
     TextDelta, UserMessage,
 )
-from workflow_response_contracts import ANALYSIS_RESPONSE
+from application.response_contracts import ANALYSIS_RESPONSE
 
 
 # Minimized from the 2026-09-10 GLM stream, which ended with finish_reason=stop

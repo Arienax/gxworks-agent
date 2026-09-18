@@ -71,9 +71,9 @@ class BoundedDeepSeekTransport(httpx.BaseTransport):
 
 @contextmanager
 def live_settings(directory, api_key, *, model="deepseek-v4-flash"):
-    import config_manager
-    import credential_store
-    import model_provider
+    import storage.config as config_manager
+    import storage.credentials as credential_store
+    import model_runtime.provider as model_provider
     from application.settings import SettingsService
     from openai import OpenAI
 

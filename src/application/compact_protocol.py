@@ -5,7 +5,7 @@ import copy
 import hashlib
 import json
 import re
-from plc_device_identity import canonical_device_map
+from plc.device_identity import canonical_device_map
 
 PROTOCOL_VERSION = "compact_ladder/1.1"
 _MAX_BYTES = 2 * 1024 * 1024

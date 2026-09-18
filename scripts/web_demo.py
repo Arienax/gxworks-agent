@@ -39,9 +39,9 @@ def _demo_exception_diagnostic(error):
 @contextmanager
 def isolated_demo_settings(directory, provider_factory=None):
     """Keep the real settings service, replacing only its process-local I/O."""
-    import config_manager
-    import credential_store
-    import model_provider
+    import storage.config as config_manager
+    import storage.credentials as credential_store
+    import model_runtime.provider as model_provider
     from application.settings import SettingsService
 
     config_path = Path(directory) / "demo-config.json"
@@ -107,7 +107,7 @@ class DemoProvider:
         self.delay = delay
 
     def stream(self, request):
-        from model_provider import TextDelta
+        from model_runtime.provider import TextDelta
         kind = "analysis" if request.response_contract.name == "analysis" else "generation"
         print(f"DEMO_MODEL_CALL {next(self.calls)} {kind}", file=sys.stderr, flush=True)
         time.sleep(self.delay)
@@ -170,7 +170,7 @@ class DemoHardwareReader:
                 "message": "离线演示禁止真实 PLC 读取；不会使用本机已配置的适配器或逻辑站。"}
 
     def fingerprint(self):
-        from plc_hardware import HardwareError
+        from gxworks2.hardware_read import HardwareError
         raise HardwareError(self.availability()["message"])
 
     def read_once(self, *_args, **_kwargs):
@@ -180,10 +180,10 @@ class DemoHardwareReader:
 def create_demo_fixture(root, settings):
     from application.hardware import HardwareService
     from application.workbench import WorkbenchService
-    from plc_core import PLCCore
-    from plc_ir import build_plc_ir
-    from plc_semantics import normalize_semantic_requirements
-    from session_store import SessionStore
+    from plc.core import PLCCore
+    from plc.ir import build_plc_ir
+    from plc.semantics import normalize_semantic_requirements
+    from storage.session import SessionStore
     from simulator import InMemoryTestBackend, SimulatorRegressionService
 
     root = Path(root)

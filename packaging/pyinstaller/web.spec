@@ -67,7 +67,7 @@ a = Analysis(
     [str(root / "scripts/web_entry.py")], pathex=[str(root / "src")],
     binaries=binaries, datas=datas, hiddenimports=hiddenimports,
     hookspath=[], hooksconfig={}, runtime_hooks=[],
-    excludes=["PyQt5", "PyQt6", "PySide2", "PySide6", "qt_compat", "main", "tkinter", "mcp"],
+    excludes=["PyQt5", "PyQt6", "PySide2", "PySide6", "ui.desktop", "main", "tkinter", "mcp"],
     noarchive=False, optimize=1,
 )
 pyz = PYZ(a.pure)

@@ -1,6 +1,6 @@
 import json
 
-import runtime_diagnostics as diagnostics
+import shared.diagnostics as diagnostics
 from application.jobs import JobContext
 
 

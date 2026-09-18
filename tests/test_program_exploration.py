@@ -3,8 +3,8 @@ import copy
 
 import pytest
 
-from plc_explorer import explore_program, issue_cards
-from plc_ir import build_plc_ir
+from plc.explorer import explore_program, issue_cards
+from plc.ir import build_plc_ir
 from test_web_api import offline
 
 
@@ -42,7 +42,7 @@ def test_issue_cards_preserve_evidence_and_do_not_invent_missing_networks():
 
 
 def test_combined_instruction_addresses_remain_clickable():
-    from plc_ir import ir_to_ladder
+    from plc.ir import ir_to_ladder
     ladder = ir_to_ladder(_program())
     ladder["rungs"][0]["branches"][0]["outputs"][0] = {
         "type": "APP_INSTR", "opcode": "SET", "operands": ["M0"]}

@@ -6,7 +6,7 @@ import pytest
 
 from application.jobs import JobCancelled
 from application.model_progress import ModelProgressReporter
-from model_provider import (
+from model_runtime.provider import (
     ModelRequest,
     ResponseProgress,
     TextDelta,

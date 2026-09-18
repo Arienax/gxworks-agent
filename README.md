@@ -34,7 +34,7 @@ The registry is shared by generation, validation, import, and PLC IR analysis. C
 
 ### Task-shaped prompt assembly
 
-`plc_generation_context.py` assembles the model context for the current operation instead of replaying one large historical prompt. A normal Ladder generation request can include the confirmed specification, current program/edit scope, targeted SQLite evidence, specialist context when needed, and a machine-readable output schema derived from the instruction contract.
+`application/generation_context.py` assembles the model context for the current operation instead of replaying one large historical prompt. A normal Ladder generation request can include the confirmed specification, current program/edit scope, targeted SQLite evidence, specialist context when needed, and a machine-readable output schema derived from the instruction contract.
 
 Repair paths intentionally receive less context: contract repair is restricted to the failed baseline and allowed scope, while format repair does not receive PLC knowledge context at all.
 

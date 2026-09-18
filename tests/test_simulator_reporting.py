@@ -5,7 +5,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtWidgets import QApplication, QPushButton, QTabWidget, QTextBrowser
 
 from simulator.reporting import build_simulator_report, render_simulator_report_text
-from simulator_report_dialog import SimulatorReportDialog
+from ui.desktop.dialogs.simulator_report import SimulatorReportDialog
 
 
 def _workflow(result, *, message="仿真测试已结束。", run_id="sim_fixture"):

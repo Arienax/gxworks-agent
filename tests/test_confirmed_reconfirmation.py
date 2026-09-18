@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from confirmed_spec import build_review_draft, canonicalize_confirmed_spec, validate_spec_draft
+from plc.specification.confirmed import build_review_draft, canonicalize_confirmed_spec, validate_spec_draft
 from test_confirmed_compatibility import operator_spec, profile_for
 
 
@@ -79,7 +79,7 @@ def test_deleted_row_is_not_recreated_or_forwarded_from_persisted_binding(combin
 
 
 def test_shared_physical_address_aliases_follow_the_bound_row_without_stale_copy():
-    from spec_bindings import bind_answers
+    from plc.specification.bindings import bind_answers
     params = [{"id": key, "name": key, "value": "X0", "source": "user",
                "io_binding": {"binding_id": key, "kind": "X"}}
               for key in ("motor1_enable", "motor2_enable")]
@@ -154,10 +154,10 @@ def test_http_reconfirmation_after_address_edit_outputs_the_new_wiring(tmp_path,
     from fastapi.testclient import TestClient
     from integrations.web.app import create_app
     from application.workbench import WorkbenchService
-    from model_provider import OpenAICompatibleProvider
+    from model_runtime.provider import OpenAICompatibleProvider
     from test_web_api import ORIGIN, OPERATOR, _login, _complete
     from test_spec_choice_metadata import _analysis
-    from plc_ir import ir_to_ladder
+    from plc.ir import ir_to_ladder
     calls = []
 
     class Endpoint:

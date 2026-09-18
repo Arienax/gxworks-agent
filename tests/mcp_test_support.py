@@ -18,7 +18,7 @@ def isolated_mcp_command(*args, entry=None):
     setup = """import runpy, sys, types
 def forbidden(*args, **kwargs):
     raise AssertionError('A launcher test cannot write credentials')
-sys.modules['windows_credentials'] = types.SimpleNamespace(
+sys.modules['storage.windows_credentials'] = types.SimpleNamespace(
     read_secret=lambda target: '', write_secret=forbidden, delete_secret=forbidden)
 mode, target, *arguments = sys.argv[1:]
 sys.argv = [target, *arguments]

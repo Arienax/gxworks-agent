@@ -1,6 +1,6 @@
-from inspection_engine import run_local_inspection
-from inspection_models import merge_inspection_reports, normalize_finding
-from plc_workflow_review import review_ladder
+from inspection.engine import run_local_inspection
+from inspection.models import merge_inspection_reports, normalize_finding
+from inspection.rules import review_ladder
 
 
 def rung(rung_id, inputs=None, outputs=None, header=None, shared=None, note=""):

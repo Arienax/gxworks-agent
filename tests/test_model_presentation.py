@@ -6,10 +6,10 @@ import threading
 import pytest
 
 from application.model_progress import ModelJobContext, ModelProgressReporter
-from model_provider import (ModelRequest, ResponseProgress, ResponsePreview, ResponseRejectedError,
+from model_runtime.provider import (ModelRequest, ResponseProgress, ResponsePreview, ResponseRejectedError,
     TextDelta, ReasoningDelta, ToolCall, ToolCallEnd, UserMessage,
     collect_response, response_policy_scope)
-from workflow_response_contracts import ANALYSIS_RESPONSE, tool_argument_contract
+from application.response_contracts import ANALYSIS_RESPONSE, tool_argument_contract
 
 
 class Provider:
