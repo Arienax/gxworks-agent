@@ -13,6 +13,7 @@ from pathlib import Path
 from application.generation_repair import check_candidate_containers, materialize_partial
 from contract_repair import patch_device_addresses
 from i18n import tr
+from plc_device_identity import canonical_ladder_devices
 from ladder_repair import normalize_app_instr_out_outputs, normalize_legacy_counter_outputs
 from plc_ir import build_plc_ir, ir_to_ladder, validate_plc_ir
 from plc_json_validator import (
@@ -243,6 +244,10 @@ def prepare_ladder_candidate(
 
     if not parsed.get("rungs"):
         raise PLCJsonValidationError("$.rungs: generated program must not be empty")
+    # A fresh candidate owns the entire representation. Partial repairs retain
+    # the immutable baseline spelling outside their authorized scope.
+    if previous_ladder is None and not repair_mode:
+        parsed = canonical_ladder_devices(parsed)
     progress(tr('正在解析模型输出：检查结构与地址'))
     validate_ladder_candidate_structure(parsed, plc_model=plc_model, require_catalogued_instructions=True)
     from plc_condition_normalizer import normalize_shared_conditions
@@ -256,7 +261,8 @@ def prepare_ladder_candidate(
     progress(tr('正在解析模型输出：构建 PLC IR'))
     program = build_plc_ir(parsed, plc_model=plc_model, program_name=program_name,
                            revision=revision, confirmed_spec=confirmed_spec,
-                           semantic_requirements=semantics)
+                           semantic_requirements=semantics,
+                           _canonicalize_devices=previous_ladder is None and not repair_mode)
     validate_plc_ir(program, validate_ladder=False)
     return {"ladder": parsed, "program_ir": program, "validation_messages": messages,
             "normalization": normalization_summary(normalization), "validation_profile": GENERATION_VALIDATION_PROFILE}

@@ -2,6 +2,8 @@ import copy
 import difflib
 import re
 
+from spec_bindings import bind_answers, binding_hint, single_address, restore_bound_choices
+
 from approach_contracts import (
     contract_definition_issues,
     generation_contract_signature,
@@ -541,6 +543,28 @@ def validate_spec_draft(spec, plc_model=None):
                 )
             )
 
+    seen_bindings = {}
+    for index, parameter in enumerate(parameters):
+        if not isinstance(parameter, dict) or not str(parameter.get("value") or "").strip():
+            continue
+        hint = binding_hint(parameter)
+        if hint is None or parameter.get("id") in QUESTION_IDS:
+            continue
+        address = single_address(parameter["value"], hint["kind"])
+        if address is None:
+            errors.append(_validation_issue("invalid_io_answer", "请为该输入/输出选择一个明确的软元件地址",
+                                            f"$.parameters[{index}].value", row=index))
+            continue
+        error, _warning, _prefix, _number = _validate_device_address(address, model)
+        if error:
+            errors.append(_validation_issue("invalid_io_address", error,
+                                            f"$.parameters[{index}].value", row=index))
+        identity = hint["binding_id"]
+        if identity in seen_bindings and seen_bindings[identity] != address:
+            errors.append(_validation_issue("conflicting_io_binding", "同一输入/输出绑定选择了不同地址，请统一选择",
+                                            f"$.parameters[{index}].value", row=index))
+        seen_bindings[identity] = address
+
     io_table = spec.get("io_table")
     if io_table is None:
         io_table = []
@@ -934,6 +958,10 @@ def _suggested_io_to_table(suggested_io):
 def _parameter_choice_metadata(item):
     """Keep choices separate from prose and from the user's confirmed value."""
     metadata = {}
+    if isinstance(item.get("io_binding"), dict):
+        hint = binding_hint(item)
+        if hint is not None:
+            metadata["io_binding"] = hint
     if isinstance(item.get("options"), (list, tuple)):
         metadata["options"] = [str(option) for option in item["options"] if str(option).strip()]
     if "suggested_default" in item:
@@ -955,7 +983,8 @@ def _missing_info_to_parameters(missing_info):
         # An AI-proposed default is a suggestion, not user confirmation.  Keep
         # the editable value empty so required choices (especially hardware
         # interfaces) block confirmation until the user actively selects one.
-        value = ""
+        value = (str(item["confirmed_value"]) if item.get("source") == "confirmed_request_fact"
+                 and item.get("id") == "control_method" and "confirmed_value" in item else "")
         notes = list(options)
         if default is not None and str(default).strip():
             notes.append(f"AI建议：{str(default).strip()}（尚未确认）")
@@ -968,6 +997,10 @@ def _missing_info_to_parameters(missing_info):
             "note": " / ".join(notes),
             "options": options,
         }
+        if isinstance(item.get("io_binding"), dict):
+            hint = binding_hint(item)
+            if hint is not None:
+                parameter["io_binding"] = hint
         if default is not None:
             parameter["suggested_default"] = str(default)
         if isinstance(item.get("required_when"), dict):
@@ -979,7 +1012,8 @@ def _missing_info_to_parameters(missing_info):
 def _merge_io_rows(base_rows, incoming_rows):
     merged = []
     by_address = {}
-    for row in list(base_rows or []) + list(incoming_rows or []):
+    base_count = len(base_rows or [])
+    for position, row in enumerate(list(base_rows or []) + list(incoming_rows or [])):
         if not isinstance(row, dict):
             continue
         address = str(row.get("address", "")).strip().upper()
@@ -991,7 +1025,29 @@ def _merge_io_rows(base_rows, incoming_rows):
             "label": str(row.get("label", "")).strip(),
             "source": str(row.get("source", "")).strip() or "analysis",
         }
+        for field in ("binding_id", "source_parameter_id", "row_id"):
+            if isinstance(row.get(field), str):
+                clean[field] = row[field]
+        if position >= base_count and not clean.get("binding_id"):
+            previous = merged[by_address[address]] if address in by_address else None
+            if previous and previous.get("binding_id"):
+                # A new analysis is a suggestion, not a user edit to the row
+                # already confirmed at this address (including its purpose).
+                continue
+            exact_bound_labels = [r for r in merged if r.get("binding_id")
+                                  and r["kind"] == clean["kind"] and r["label"]
+                                  and r["label"].casefold() == clean["label"].casefold()]
+            if address not in by_address and len(exact_bound_labels) == 1:
+                # Reanalysis often repeats its original suggested address after
+                # the operator has changed it. Do not add a second row for the
+                # same exact, already-bound purpose. New typed answers are still
+                # independently bound when the user confirms them.
+                continue
         if address in by_address:
+            previous = merged[by_address[address]]
+            for field in ("binding_id", "source_parameter_id", "row_id"):
+                if field in previous:
+                    clean.setdefault(field, previous[field])
             merged[by_address[address]] = clean
         else:
             by_address[address] = len(merged)
@@ -1041,7 +1097,11 @@ def _merge_parameters(base_parameters, incoming_parameters):
         name_key = name.casefold()
         position = by_id.get(stable_id) if stable_id else None
         if position is None:
-            position = by_name.get(name_key)
+            candidate = by_name.get(name_key)
+            # Different stable identities can share a display label (e.g.
+            # two motors' start inputs). Wording alone must not merge them.
+            if candidate is not None and (not stable_id or not merged[candidate].get("id")):
+                position = candidate
         if position is not None:
             existing = merged[position]
             for key, value in _parameter_choice_metadata(existing).items():
@@ -1092,7 +1152,7 @@ def build_review_draft(analysis, previous_spec=None):
     plc_model = str(
         analysis.get("plc_model") or previous.get("plc_model") or "FX3U"
     ).strip().upper()
-    analysis = ensure_hardware_questions(analysis, plc_model)
+    analysis = ensure_hardware_questions(analysis, plc_model, confirmed_spec=previous)
     suggested_rows = _suggested_io_to_table(analysis.get("suggested_io", {}))
     previous_rows = previous.get("io_table") or raw_to_io_table(
         previous.get("io_allocation_raw", "")
@@ -1118,10 +1178,23 @@ def build_review_draft(analysis, previous_spec=None):
             item["required"] = False
             item.pop("required_when", None)
         retained_parameters.append(item)
+    intent = analysis.get("hardware_intent") or {}
+    drop_prior_vfd = intent.get("source") == "user_request" and not intent.get("flags", {}).get("vfd")
+    if drop_prior_vfd:
+        # A current explicit equipment removal also removes its old question
+        # values/dependents from the NEW draft, never from the stored revision.
+        filtered = ensure_hardware_questions({
+            "hardware_intent": intent,
+            "missing_info": [{**item, "question": item["name"]} for item in retained_parameters],
+        }, plc_model)["missing_info"]
+        retained_parameters = [{k: v for k, v in item.items() if k != "question"} for item in filtered]
     previous_parameters = retained_parameters
     parameters = _merge_parameters(
         previous_parameters,
-        _missing_info_to_parameters(analysis.get("missing_info", [])),
+        restore_bound_choices(
+            _missing_info_to_parameters(analysis.get("missing_info", [])),
+            previous_rows, previous.get("io_bindings", []),
+        ),
     )
 
     approaches = [
@@ -1161,13 +1234,29 @@ def build_review_draft(analysis, previous_spec=None):
             or []
         ),
     }
+    if drop_prior_vfd:
+        cleaned = ensure_hardware_questions({
+            "hardware_intent": intent, "hardware_config": draft["hardware_context"],
+            "approaches": [draft["selected_approach"]] if draft["selected_approach"] else [],
+            "missing_info": [],
+        }, plc_model)
+        draft["hardware_context"] = cleaned.get("hardware_config", {})
+        if not cleaned.get("approaches"):
+            draft["selected_approach"] = {}
+    if isinstance(analysis.get("hardware_intent"), dict):
+        draft["hardware_intent"] = copy.deepcopy(analysis["hardware_intent"])
+    if previous.get("io_bindings"):
+        draft["io_bindings"] = copy.deepcopy(previous["io_bindings"])
     draft["hardware_profile"] = build_hardware_profile(draft, plc_model)
     return restore_review_choices(draft, analysis)
 
 
 def _io_parameter_kind(parameter):
     parameter_id = str(parameter.get("id", "")).strip().casefold()
-    explicit_ids = {"start_input": "X", "stop_input": "X", "output_coil": "Y"}
+    hint = binding_hint(parameter)
+    if hint is not None:
+        return hint["kind"]
+    explicit_ids = {"start_input": "X", "stop_input": "X", "output_coil": "Y", "output_address": "Y"}
     if parameter_id in explicit_ids:
         return explicit_ids[parameter_id]
     question = str(parameter.get("name", "")).replace(" ", "").upper()
@@ -1256,83 +1345,42 @@ def canonicalize_confirmed_spec(spec):
     canonical["selected_approach"] = normalize_approach(
         canonical.get("selected_approach") or {}
     )
+    # Structured rows are authoritative. Legacy raw text is imported only when
+    # no table exists, never used as a lossy round-trip storage format.
     io_table = canonical.get("io_table")
-    original_io_by_address = {}
-    if isinstance(io_table, list):
-        for row in io_table:
-            if not isinstance(row, dict):
-                continue
-            address = str(row.get("address", "")).strip().upper()
-            if address:
-                original_io_by_address[address] = row
     if not isinstance(io_table, list):
         io_table = raw_to_io_table(canonical.get("io_allocation_raw", ""))
-    io_text = io_table_to_raw(io_table)
-    if not io_text:
-        io_text = str(canonical.get("io_allocation_raw", "")).strip()
-    answers = canonical.get("missing_answers", {})
-    io_text, remaining_answers, applied_io_answers = apply_missing_answers_to_io(
-        io_text,
-        answers,
+    parameters = _merge_parameters([], canonical.get("parameters", []) or [])
+    for parameter in parameters:
+        if not parameter.get("source"):
+            parameter["source"] = "user"
+    answers = canonical.get("missing_answers")
+    legacy = _parameters_from_missing_answers(answers)
+    rows, retained, bindings, applied = bind_answers(
+        io_table, parameters + legacy, canonical.get("io_bindings", []),
+        protected_ids=QUESTION_IDS,
     )
-    parameters = []
-    deduplicated_parameters = _merge_parameters(
-        [], canonical.get("parameters", []) or []
-    )
-    for item in deduplicated_parameters:
-        if not isinstance(item, dict):
-            continue
-        parameter = {
-            "id": str(item.get("id", "")).strip(),
-            "name": str(item.get("name", "")).strip(),
-            "value": str(item.get("value", "")).strip(),
-            "source": str(item.get("source", "")).strip() or "user",
-            "required": bool(item.get("required", False)),
-            "note": str(item.get("note", "")).strip(),
-        }
-        parameter.update(_parameter_choice_metadata(item))
-        if isinstance(item.get("required_when"), dict):
-            parameter["required_when"] = copy.deepcopy(item["required_when"])
-        if not parameter["name"]:
-            continue
-        # CPU order codes (for example FX3U-32MT/ES-A) and wiring mappings
-        # legitimately contain X/Y-like text.  They are hardware facts, not
-        # answers that may rewrite canonical I/O rows.
-        if parameter.get("id") in QUESTION_IDS:
-            parameters.append(parameter)
-            continue
-        updated_io, remaining, applied = apply_missing_answers_to_io(
-            io_text,
-            {parameter["name"]: parameter["value"]},
-        )
-        if applied:
-            io_text = updated_io
-            applied_io_answers.update(applied)
-            # Preserve the user's contact answer alongside the allocation,
-            # without interpreting physical wiring as a ladder contact type.
-            if _has_contact_type(parameter["value"]):
-                parameters.append(parameter)
-        else:
-            parameters.append(parameter)
-
-    canonical["missing_answers"] = remaining_answers
-    canonical["io_allocation_raw"] = io_text
-    canonical_rows = raw_to_io_table(io_text)
-    # The legacy text representation cannot distinguish an FX3U special relay
-    # such as M8013 from an ordinary M device.  Preserve an explicitly
-    # confirmed category/source when the address survives the round trip.
-    for row in canonical_rows:
-        original = original_io_by_address.get(row.get("address"))
-        if not original:
-            continue
-        original_kind = str(original.get("kind", "")).strip()
-        if original_kind in _VALID_IO_KINDS:
-            row["kind"] = original_kind
-        original_source = str(original.get("source", "")).strip()
-        if original_source:
-            row["source"] = original_source
-    canonical["io_table"] = canonical_rows
-    canonical["parameters"] = parameters
+    for row in rows:
+        row["address"] = str(row.get("address") or "").strip().upper()
+        row["kind"] = str(row.get("kind") or _device_kind(row["address"])).strip()
+        row["label"] = str(row.get("label") or "").strip()
+        row["source"] = str(row.get("source") or "raw").strip()
+    canonical["io_table"] = rows
+    canonical["io_allocation_raw"] = io_table_to_raw(rows)
+    # Legacy unanswered/non-address facts remain in their original slot, not
+    # duplicated as new editable questions. Address provenance is stored apart
+    # from parameters so normal review does not keep asking completed questions.
+    parameter_names = {p.get("name") for p in parameters}
+    canonical["parameters"] = [p for p in retained if p.get("name") in parameter_names]
+    canonical["missing_answers"] = {
+        str(key): str(value).strip() for key, value in (answers or {}).items() if str(key) not in applied
+    } if isinstance(answers, dict) else {}
+    if bindings:
+        canonical["io_bindings"] = bindings
+    else:
+        canonical.pop("io_bindings", None)
+    applied_io_answers = dict(canonical.get("io_overrides_applied") or {})
+    applied_io_answers.update(applied)
     canonical["plc_model"] = str(canonical.get("plc_model") or "FX3U").strip().upper()
     canonical["hardware_profile"] = build_hardware_profile(
         canonical,

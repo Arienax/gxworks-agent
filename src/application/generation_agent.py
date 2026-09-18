@@ -9,8 +9,16 @@ validators, IR builder and persistence path see it.
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
+import runtime_diagnostics as diagnostics
+from application.compact_protocol import (
+    PROTOCOL_VERSION, CompactProtocolError, compact_response_schema as _compact_response_schema,
+    decode_compact as _json_object, expand_compact_ladder as _expand_compact_ladder,
+    normalize_compact, _simple_input, _branch_input, _output, _confirmed_comments,
+)
 
+from plc_device_identity import canonical_device, canonical_io_rows, canonical_ladder_devices
 from model_provider import TextDelta
 from plc_generation_context import _build_knowledge_context, public_generation_specification
 from prompt_context_policy import audit_section
@@ -27,9 +35,6 @@ _GENERATION_REQUEST = (
 )
 
 _COMPACT_RESPONSE = ResponseContract("compact_ladder", "json")
-_CONTACT_TYPES = frozenset({"NO", "NC", "P", "F", "RISING", "FALLING"})
-_COMPARE_PREFIXES = frozenset({"=", "==", "<>", ">=", "<=", ">", "<"})
-_TYPED_OUTPUTS = frozenset({"COIL", "PLS", "PLF", "TIMER", "COUNTER"})
 
 _COMPACT_PROTOCOL = """# Agent B compact ladder protocol
 你只负责把已确认规格翻译成紧凑梯级计划；不要重新设计需求。
@@ -47,6 +52,8 @@ _COMPACT_PROTOCOL = """# Agent B compact ladder protocol
 返回形状只有：`{"r":[rung,...]}`。
 - rung: `{"h":可选简单输入或null,"s":可选简单输入数组,"b":[branch,...]}`；通常只需要 `b`。
 - branch: `{"i":可选输入数组,"o":[输出字符串,...]}`；无条件时可省略 `i`。
+- 未使用的 s/i 数组请写 []，不要写 null；h 没有首触点时可以写 null。
+- io_bindings 是已确认的用途与地址绑定；不得把启动和停止合并为一个输入。已确认的停止/联锁必须在输出控制路径中实际起作用，而不是只出现在注释中。
 - 简单输入：`"NO X0"`、`"NC M1"`、`"P X2"` 或比较 `"> D0 K3"`。
 - OR 输入：`{"or":[["NO M20"],["NO M21"],["NO M22"]]}`；串联条件可写成同一子数组中的多个字符串。
 - 标准输出：`"COIL Y0"`、`"PLS M0"`、`"PLF M0"`、`"TIMER T0 K10"`、`"COUNTER C0 K9"`。
@@ -56,46 +63,6 @@ _COMPACT_PROTOCOL = """# Agent B compact ladder protocol
 """
 
 
-def _compact_response_schema():
-    """Small transport schema; engineering validity remains in existing validators."""
-    simple = {"type": "string", "minLength": 1, "maxLength": 160}
-    parallel = {
-        "type": "object",
-        "properties": {
-            "or": {
-                "type": "array",
-                "minItems": 1,
-                "items": {"type": "array", "minItems": 1, "items": copy.deepcopy(simple)},
-            }
-        },
-        "required": ["or"],
-        "additionalProperties": False,
-    }
-    branch = {
-        "type": "object",
-        "properties": {
-            "i": {"type": "array", "items": {"oneOf": [copy.deepcopy(simple), parallel]}},
-            "o": {"type": "array", "minItems": 1, "items": copy.deepcopy(simple)},
-        },
-        "required": ["o"],
-        "additionalProperties": False,
-    }
-    rung = {
-        "type": "object",
-        "properties": {
-            "h": {"type": ["string", "null"], "maxLength": 160},
-            "s": {"type": "array", "items": copy.deepcopy(simple)},
-            "b": {"type": "array", "minItems": 1, "items": branch},
-        },
-        "required": ["b"],
-        "additionalProperties": False,
-    }
-    return {
-        "type": "object",
-        "properties": {"r": {"type": "array", "minItems": 1, "items": rung}},
-        "required": ["r"],
-        "additionalProperties": False,
-    }
 
 
 class _FirstJSONObjectStream:
@@ -179,6 +146,7 @@ class _FirstJSONObjectProvider:
                     if text:
                         yield TextDelta(text)
                     if complete:
+                        diagnostics.emit("local_json_complete", stage="response_framing", protocol=PROTOCOL_VERSION)
                         return
                 else:
                     yield event
@@ -188,39 +156,30 @@ class _FirstJSONObjectProvider:
                 close()
 
 
-def _response_options(provider):
-    """Constrain only the compact transport object, never the verbose ladder_v1."""
-    profile = getattr(provider, "profile", None)
-    capabilities = profile.get("capabilities", {}) if isinstance(profile, dict) else {}
-    if capabilities.get("json_schema_response_format"):
-        return {
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "confirmed_spec_compact_ladder",
-                    "strict": True,
-                    "schema": _compact_response_schema(),
-                },
-            }
-        }
-    return {"response_format": {"type": "json_object"}}
+def _response_options(provider, *, model_name=None, effort=None):
+    from model_response_format import response_plan
+    return response_plan(
+        getattr(provider, "profile", {}), _compact_response_schema(),
+        model=model_name, api_key=getattr(provider, "api_key", None),
+        hints={"reasoning_effort": effort} if effort is not None else {},
+    )[0]
 
-
-def _json_object(text):
-    raw = str(text or "").strip()
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[1] if "\n" in raw else ""
-    if raw.endswith("```"):
-        raw = raw.rsplit("\n", 1)[0]
-    value = json.loads(raw.strip())
-    if not isinstance(value, dict):
-        raise ValueError("confirmed-spec generation must return one JSON object")
-    return value
 
 
 def _strict_generation_projection(confirmed_spec):
     """Expose structured confirmed facts, not Agent-A implementation prose."""
     projected = public_generation_specification(confirmed_spec) or {}
+    bindings = confirmed_spec.get("io_bindings") if isinstance(confirmed_spec, dict) else None
+    if isinstance(bindings, list):
+        projected["io_bindings"] = [
+            {key: copy.deepcopy(row[key]) for key in ("binding_id", "role", "kind", "address", "source_parameter_id", "name") if key in row}
+            for row in bindings if isinstance(row, dict)
+        ]
+    if isinstance(projected.get("io_table"), list):
+        projected["io_table"] = canonical_io_rows(projected["io_table"])
+    for row in projected.get("io_bindings", []):
+        if "address" in row:
+            row["address"] = canonical_device(row["address"])
     selected = projected.get("selected_approach")
     if isinstance(selected, dict):
         selected.pop("name", None)
@@ -229,136 +188,27 @@ def _strict_generation_projection(confirmed_spec):
     return projected
 
 
-def _simple_input(value, path):
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{path}: expected compact input string")
-    token = value.strip()
-    head, *tail = token.split(maxsplit=1)
-    kind = head.upper()
-    if kind in _CONTACT_TYPES:
-        if not tail or not tail[0] or any(char.isspace() for char in tail[0]):
-            raise ValueError(f"{path}: contact requires one address")
-        return {"type": kind, "address": tail[0]}
-    if kind in _COMPARE_PREFIXES:
-        if not tail:
-            raise ValueError(f"{path}: comparison requires two operands")
-        return {"type": "COMPARE", "expression": token}
-    raise ValueError(f"{path}: unsupported compact input {head!r}")
 
 
-def _branch_input(value, path):
-    if isinstance(value, str):
-        return _simple_input(value, path)
-    if not isinstance(value, dict) or set(value) != {"or"}:
-        raise ValueError(f"{path}: input must be a string or one OR block")
-    branches = value.get("or")
-    if not isinstance(branches, list) or not branches:
-        raise ValueError(f"{path}.or: requires at least one branch")
-    decoded = []
-    for branch_index, branch in enumerate(branches):
-        if not isinstance(branch, list) or not branch:
-            raise ValueError(f"{path}.or[{branch_index}]: requires at least one simple input")
-        decoded.append([
-            _simple_input(item, f"{path}.or[{branch_index}][{item_index}]")
-            for item_index, item in enumerate(branch)
-        ])
-    return {"type": "parallel_block", "branches": decoded}
+def _decode_generated_ladder(value, projected, plc_model):
+    """Accept documented representations, never guess an unknown wrapper.
 
-
-def _output(value, path):
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{path}: expected compact output string")
-    parts = value.strip().split()
-    kind = parts[0].upper()
-    if kind in {"COIL", "PLS", "PLF"}:
-        if len(parts) != 2:
-            raise ValueError(f"{path}: {kind} requires one address")
-        return {"type": kind, "address": parts[1]}
-    if kind in {"TIMER", "COUNTER"}:
-        if len(parts) != 3:
-            raise ValueError(f"{path}: {kind} requires address and preset")
-        return {"type": kind, "address": parts[1], "value": parts[2]}
-    if kind == "APP":
-        if len(parts) < 2:
-            raise ValueError(f"{path}: APP requires an opcode")
-        kind, operands = parts[1].upper(), parts[2:]
-    else:
-        operands = parts[1:]
-    if kind in _TYPED_OUTPUTS:
-        raise ValueError(f"{path}: malformed typed output")
-    return {"type": "APP_INSTR", "opcode": kind, "operands": operands}
-
-
-def _confirmed_comments(projected):
-    comments = {}
-    for row in projected.get("io_table", []) if isinstance(projected, dict) else []:
-        if not isinstance(row, dict):
-            continue
-        address = str(row.get("address") or "").strip().upper()
-        text = str(row.get("label") or row.get("description") or "").strip()
-        if address and text:
-            comments[address] = text[:64]
-    return comments
-
-
-def _expand_compact_ladder(compact, projected=None):
-    """Deterministically expand Agent B's short protocol into ladder_v1."""
-    if not isinstance(compact, dict) or set(compact) != {"r"}:
-        raise ValueError("compact ladder must contain only top-level field 'r'")
-    rows = compact.get("r")
-    if not isinstance(rows, list) or not rows:
-        raise ValueError("compact ladder requires at least one rung")
-
-    rungs = []
-    for rung_index, row in enumerate(rows, start=1):
-        path = f"r[{rung_index - 1}]"
-        if not isinstance(row, dict) or not set(row).issubset({"h", "s", "b"}):
-            raise ValueError(f"{path}: invalid compact rung fields")
-        branches = row.get("b")
-        if not isinstance(branches, list) or not branches:
-            raise ValueError(f"{path}.b: requires at least one branch")
-        shared = row.get("s", [])
-        if not isinstance(shared, list):
-            raise ValueError(f"{path}.s: expected list")
-        header = row.get("h")
-        if header is not None:
-            header = _simple_input(header, f"{path}.h")
-
-        expanded_branches = []
-        for branch_index, branch in enumerate(branches, start=1):
-            branch_path = f"{path}.b[{branch_index - 1}]"
-            if not isinstance(branch, dict) or not set(branch).issubset({"i", "o"}):
-                raise ValueError(f"{branch_path}: invalid compact branch fields")
-            inputs = branch.get("i", [])
-            outputs = branch.get("o")
-            if not isinstance(inputs, list):
-                raise ValueError(f"{branch_path}.i: expected list")
-            if not isinstance(outputs, list) or not outputs:
-                raise ValueError(f"{branch_path}.o: requires at least one output")
-            expanded_branches.append({
-                "branch_id": branch_index,
-                "y_offset_level": branch_index - 1,
-                "inputs": [
-                    _branch_input(item, f"{branch_path}.i[{index}]")
-                    for index, item in enumerate(inputs)
-                ],
-                "outputs": [
-                    _output(item, f"{branch_path}.o[{index}]")
-                    for index, item in enumerate(outputs)
-                ],
-            })
-
-        rungs.append({
-            "rung_id": rung_index,
-            "header_element": header,
-            "shared_inputs": [
-                _simple_input(item, f"{path}.s[{index}]")
-                for index, item in enumerate(shared)
-            ],
-            "branches": expanded_branches,
-        })
-
-    return {"device_comments": _confirmed_comments(projected or {}), "rungs": rungs}
+    Some compatible endpoints return the existing ladder_v1 representation or
+    its already-supported long-key compact alias despite the compact prompt.
+    Reuse their validators/converter rather than pay for a new generation.
+    """
+    if isinstance(value, dict) and set(value) == {"r"}:
+        return _expand_compact_ladder(value, projected), "compact_ladder"
+    if isinstance(value, dict) and "rungs" in value and set(value) <= {"rungs", "device_comments"}:
+        from application.compact_alias import expand_hybrid_compact_ladder
+        from plc_json_validator import validate_ladder_candidate_structure
+        converted = expand_hybrid_compact_ladder(value, projected)
+        ladder = converted if converted is not None else copy.deepcopy(value)
+        # Choosing a known representation is not accepting an unchecked program.
+        validate_ladder_candidate_structure(ladder, plc_model=plc_model,
+                                            require_catalogued_instructions=True)
+        return ladder, "compact_alias_ladder" if converted is not None else "ladder_v1"
+    raise CompactProtocolError("unknown or ambiguous ladder representation")
 
 
 def _build_agent_b_prompt(projected, plc_model):
@@ -404,6 +254,12 @@ def generate_confirmed_ladder(
 
     base_provider = api._workflow_provider()
     provider = _FirstJSONObjectProvider(base_provider)
+    from model_response_format import response_plan
+    options, streaming = response_plan(
+        getattr(base_provider, "profile", {}), _compact_response_schema(),
+        model=model_name, api_key=getattr(base_provider, "api_key", None),
+        hints={"reasoning_effort": effort} if effort is not None else {},
+    )
     with api.provider_scope(provider, model_name=model_name):
         response = api._request_model(
             [
@@ -412,10 +268,23 @@ def generate_confirmed_ladder(
             ],
             model_name=model_name,
             effort=effort,
-            stream=True,
+            stream=streaming,
             max_retries=0,
-            options=_response_options(provider),
+            options=options,
             response_contract=_COMPACT_RESPONSE,
         )
+    raw_digest = hashlib.sha256(response.message.content.encode("utf-8")).hexdigest()
     compact = _json_object(response.message.content)
-    return {"ladder": _expand_compact_ladder(compact, projected), "model_calls": 1}
+    compact, changes = normalize_compact(compact)
+    if changes:
+        diagnostics.emit("compact_normalized", stage="compact_protocol", protocol=PROTOCOL_VERSION, changes=changes, raw_sha256=raw_digest,
+                         canonical_sha256=hashlib.sha256(json.dumps(compact, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest())
+        if on_stage:
+            on_stage("compact_normalized", "已在本地兼容空的可选字段；正在展开梯形图，未增加模型请求")
+    ladder, representation = _decode_generated_ladder(compact, projected, model)
+    diagnostics.emit("generation_representation", stage="compact_protocol", representation=representation)
+    ladder = canonical_ladder_devices(ladder)
+    from plc_confirmed_checks import check_direct_self_hold
+    behavior = check_direct_self_hold(ladder, projected)
+    diagnostics.emit("confirmed_primitive_check", stage="generation_validation", **behavior)
+    return {"ladder": ladder, "model_calls": 1}

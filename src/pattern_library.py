@@ -111,6 +111,8 @@ the only generation source.
 """,
     "vfd_control": """
 ## Variable-frequency drive command selection
+- Apply this section only when the user request or confirmed project actually
+  involves a VFD. A retrieved example or proposed question is not hardware evidence.
 - Do not treat every request containing speed, frequency, or jog as PLC
   positioning. First identify how the drive accepts its frequency command.
 - Discrete preset-speed terminals: PLC Y outputs switch drive terminals such as

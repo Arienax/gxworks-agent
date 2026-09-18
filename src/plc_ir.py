@@ -20,6 +20,10 @@ import re
 from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Set, Tuple
 
 from instruction_registry import DEFAULT_INSTRUCTION_REGISTRY
+from plc_device_identity import (
+    canonical_device, canonical_device_map, canonical_io_rows, canonical_ladder_devices,
+    canonical_requirement_devices, canonical_analysis_devices,
+)
 
 
 IR_KIND = "plc_program_ir"
@@ -465,6 +469,7 @@ def build_plc_ir(
     io_map: Optional[Any] = None,
     semantic_requirements: Optional[Sequence[Mapping[str, Any]]] = None,
     analysis_config: Optional[Mapping[str, Any]] = None,
+    _canonicalize_devices: bool = True,
 ) -> Dict[str, Any]:
     if is_plc_ir(ladder):
         if semantic_requirements is None:
@@ -478,6 +483,17 @@ def build_plc_ir(
         ladder = ir_to_ladder(ladder)
     if not isinstance(ladder, Mapping):
         raise PLCIRValidationError("ladder must be an object")
+    if _canonicalize_devices:
+        ladder = canonical_ladder_devices(ladder)
+        semantic_requirements = canonical_requirement_devices(semantic_requirements)
+        if isinstance(io_map, Mapping):
+            io_map = canonical_device_map(io_map)
+            io_map = {address: {**value, "address": address} if isinstance(value, Mapping) else value
+                      for address, value in io_map.items()}
+        elif isinstance(io_map, list):
+            io_map = canonical_io_rows(io_map)
+        elif isinstance(confirmed_spec, Mapping):
+            io_map = canonical_io_rows(list(confirmed_spec.get("io_table", []) or []))
     rungs = ladder.get("rungs")
     comments = ladder.get("device_comments")
     if not isinstance(rungs, list) or not isinstance(comments, Mapping):
@@ -568,6 +584,8 @@ def build_plc_ir(
         confirmed_spec=confirmed_spec,
         devices=devices,
     )
+    if _canonicalize_devices:
+        normalized_analysis_config = canonical_analysis_devices(normalized_analysis_config)
     timing = copy.deepcopy(semantic_analysis["timing"])
     timing_config = normalized_analysis_config.get("timing") or {}
     timing["performance"] = analyze_scan_timing(
@@ -715,6 +733,7 @@ def validate_plc_ir(
         io_map=program.get("io_map", {}),
         semantic_requirements=(program.get("logic") or {}).get("requirements", []),
         analysis_config=(program.get("analysis") or {}).get("config", {}),
+        _canonicalize_devices=False,
     )
     for field in (
         "networks", "devices", "timing", "logic", "analysis", "io_map", "source"
@@ -818,9 +837,13 @@ def apply_network_patch(program: Mapping[str, Any], patch: Mapping[str, Any]) ->
         address = _normalized_device(raw_address)
         if not address:
             raise PLCIRValidationError(f"invalid comment address {raw_address!r}")
-        if raw_comment is None:
-            ladder["device_comments"].pop(address, None)
-        else:
+        # A patch key is an explicit update to one physical device. Remove its
+        # old padding aliases before applying it, including explicit deletion.
+        address = canonical_device(address)
+        for alias in list(ladder["device_comments"]):
+            if canonical_device(alias) == address:
+                del ladder["device_comments"][alias]
+        if raw_comment is not None:
             ladder["device_comments"][address] = str(raw_comment)
 
     current_revision = int(program.get("revision", 0))
@@ -837,6 +860,7 @@ def apply_network_patch(program: Mapping[str, Any], patch: Mapping[str, Any]) ->
         io_map=program.get("io_map", {}),
         semantic_requirements=(program.get("logic") or {}).get("requirements", []),
         analysis_config=(program.get("analysis") or {}).get("config", {}),
+        _canonicalize_devices=False,
     )
     validate_plc_ir(rebuilt)
     return rebuilt

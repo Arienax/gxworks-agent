@@ -617,6 +617,9 @@ def materialize_gxworks2_version(
         plc_model=selected_model,
         program_name=program_name or parsed.program_name,
         revision=revision,
+        # Native snapshots retain their exported spelling for forensic round-trip.
+        # Explorer/export projections coalesce aliases without rewriting evidence.
+        _canonicalize_devices=False,
     )
     validate_plc_ir(
         program_ir,
