@@ -41,6 +41,8 @@ jobs:
           python-version: '3.11'
       - name: Install test dependencies
         run: python -m pip install -r requirements/web.txt pytest jsonschema
+      # Three Qt worker integration tests are outside this headless Web job.
+      # Core IR tests, native CSV fixtures and read-only legacy views still run.
       - name: Test confirmation through saved ladder artifacts and shared boundaries
         env:
           PYTHONPATH: src
@@ -67,6 +69,18 @@ jobs:
           tests/test_model_stream_cancellation.py
           tests/test_model_presentation.py
           tests/test_plc_core_boundary.py
+          tests/test_hardware_intent_boundary.py
+          tests/test_device_identity_delivery.py
+          tests/test_optional_hardware_parameters.py
+          tests/test_motion_control_regressions.py
+          tests/test_gxworks2_comment_export.py
+          tests/test_execution_read.py
+          tests/test_plc_condition_normalizer.py
+          tests/test_approach_contracts.py
+          tests/test_plc_ir.py
+          tests/test_plc_semantics.py
+          tests/test_plc_static_analysis.py
+          -k 'not test_compiler_thread_persists_ir_and_all_legacy_artifacts and not test_compiler_does_not_repair_semantic_mismatch_after_confirmed_generation and not test_compiler_partial_edit_uses_ir_revision_and_preserves_other_networks'
           --junitxml=confirmed-generation-tests.xml
       - uses: actions/setup-node@v4
         with:

@@ -58,3 +58,50 @@ Web dependency environment; consult that run's JUnit rather than counting skippe
 local cases as passed. The read-only workflow also checks generated OpenAPI/types,
 all three frontend test files, and the actual TypeScript/Vite build. No live model,
 GX Works2 or physical PLC acceptance is claimed.
+
+## Hardware intent and device-alias follow-up
+
+The hardware question boundary now separates current user evidence and already
+confirmed project facts from Agent-A analysis. Model-generated summaries,
+questions, options, assumptions and derived flags cannot establish VFD hardware.
+Ordinary contactor start/hold/stop requests discard speculative VFD-only questions
+and their dependent parameters before the confirmation card. Genuine VFD or
+motor-frequency requirements still ask for an unresolved command interface;
+explicitly chosen interfaces are retained as facts, not asked as a new required
+choice. Current explicit removal overrides an old VFD context, while unrelated
+edits can retain genuinely confirmed drive facts. Cached flags alone no longer
+manufacture a required question. The prompt states this scope too; the local
+boundary does not rely on every model obeying the prompt.
+
+`plc_device_identity.py` gives simple device aliases one representation without
+renumbering: `X000 -> X0`, `X001 -> X1`, `Y001 -> Y1`, `X010 -> X10` (not X8).
+The same normalization now covers generated ladder operands, comments, canonical
+I/O rows and bindings, new IR device/reference indexes, typed semantic references,
+and CSV export. Constants, quoted text, labels, polarities and network order are
+not rewritten. Conflicting comment aliases retain the exporter's established
+first-declaration rule, including an explicitly empty comment; source evidence
+is not erased. Native GX CSV can still use its required padded spelling, with
+only one comment row per physical device.
+
+Existing saved IR and native-GX snapshots retain their source spelling and
+integrity checks. The explorer creates a transient canonical view with merged
+comments and actual references but returns the original saved hash. It does not
+rewrite the version on read. Local/scoped patches leave unrelated historical
+networks untouched, and explicit comment updates/deletions target the physical
+device regardless of zero padding.
+
+The two new regression files contain 57 cases, including four real HTTP paths
+from adversarial analysis through user confirmation, generation, artifact save
+and explorer retrieval. Those paths deliberately return speculative VFD questions
+and mix padded/unpadded compact/full-ladder outputs; they verify no unwanted VFD
+confirmation, one physical device entry, correct comments/references and saved
+JSON/IR/SVG/program-CSV/comment-CSV artifacts. Model services are offline fixtures,
+not live paid endpoints. Additional regressions cover aliases in typed semantics,
+read-only historical projections and unchanged scoped neighbors.
+
+Local headless selected run: 627 passed, 5 SDK-dependent skips, 3 explicitly
+excluded Qt-worker integration cases. The read-only CI job includes the two new
+files plus the related hardware/motion, comment export, native read, core IR,
+semantic/static-analysis and existing Web/model tests. The Qt exclusions are
+named in the workflow; they are not counted as passing. Final published CI
+results are recorded in PR #13 after the branch is updated.

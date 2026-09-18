@@ -983,7 +983,8 @@ def _missing_info_to_parameters(missing_info):
         # An AI-proposed default is a suggestion, not user confirmation.  Keep
         # the editable value empty so required choices (especially hardware
         # interfaces) block confirmation until the user actively selects one.
-        value = ""
+        value = (str(item["confirmed_value"]) if item.get("source") == "confirmed_request_fact"
+                 and item.get("id") == "control_method" and "confirmed_value" in item else "")
         notes = list(options)
         if default is not None and str(default).strip():
             notes.append(f"AI建议：{str(default).strip()}（尚未确认）")
@@ -1151,7 +1152,7 @@ def build_review_draft(analysis, previous_spec=None):
     plc_model = str(
         analysis.get("plc_model") or previous.get("plc_model") or "FX3U"
     ).strip().upper()
-    analysis = ensure_hardware_questions(analysis, plc_model)
+    analysis = ensure_hardware_questions(analysis, plc_model, confirmed_spec=previous)
     suggested_rows = _suggested_io_to_table(analysis.get("suggested_io", {}))
     previous_rows = previous.get("io_table") or raw_to_io_table(
         previous.get("io_allocation_raw", "")
@@ -1177,6 +1178,16 @@ def build_review_draft(analysis, previous_spec=None):
             item["required"] = False
             item.pop("required_when", None)
         retained_parameters.append(item)
+    intent = analysis.get("hardware_intent") or {}
+    drop_prior_vfd = intent.get("source") == "user_request" and not intent.get("flags", {}).get("vfd")
+    if drop_prior_vfd:
+        # A current explicit equipment removal also removes its old question
+        # values/dependents from the NEW draft, never from the stored revision.
+        filtered = ensure_hardware_questions({
+            "hardware_intent": intent,
+            "missing_info": [{**item, "question": item["name"]} for item in retained_parameters],
+        }, plc_model)["missing_info"]
+        retained_parameters = [{k: v for k, v in item.items() if k != "question"} for item in filtered]
     previous_parameters = retained_parameters
     parameters = _merge_parameters(
         previous_parameters,
@@ -1223,6 +1234,17 @@ def build_review_draft(analysis, previous_spec=None):
             or []
         ),
     }
+    if drop_prior_vfd:
+        cleaned = ensure_hardware_questions({
+            "hardware_intent": intent, "hardware_config": draft["hardware_context"],
+            "approaches": [draft["selected_approach"]] if draft["selected_approach"] else [],
+            "missing_info": [],
+        }, plc_model)
+        draft["hardware_context"] = cleaned.get("hardware_config", {})
+        if not cleaned.get("approaches"):
+            draft["selected_approach"] = {}
+    if isinstance(analysis.get("hardware_intent"), dict):
+        draft["hardware_intent"] = copy.deepcopy(analysis["hardware_intent"])
     if previous.get("io_bindings"):
         draft["io_bindings"] = copy.deepcopy(previous["io_bindings"])
     draft["hardware_profile"] = build_hardware_profile(draft, plc_model)

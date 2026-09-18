@@ -5,13 +5,26 @@ import hashlib
 import json
 import re
 
-from plc_ir import canonical_sha256, ir_to_ladder, validate_plc_ir
+from plc_ir import build_plc_ir, canonical_sha256, ir_to_ladder, validate_plc_ir
+from plc_device_identity import canonical_device_map, canonical_ladder_devices
 
 
 def explore_program(program, *, theme="dark"):
     from draw import AdvancedSVGLadder, normalize_svg_for_preview
 
     validate_plc_ir(program, validate_ladder=False)
+    saved_digest = canonical_sha256(program)
+    ladder = ir_to_ladder(program)
+    canonical = canonical_ladder_devices(ladder)
+    canonical_io = canonical_device_map(program.get("io_map", {}))
+    if canonical != ladder or canonical_io != program.get("io_map", {}):
+        # Navigation is a read-only projection. Coalesce legacy aliases without
+        # rewriting saved evidence or changing the version's integrity hash.
+        program = build_plc_ir(canonical, plc_model=program["plc"]["cpu"],
+                               program_name=program["program_name"], revision=program["revision"],
+                               io_map=canonical_io,
+                               semantic_requirements=(program.get("logic") or {}).get("requirements", []),
+                               analysis_config=(program.get("analysis") or {}).get("config", {}))
     class NavigationDrawer(AdvancedSVGLadder):
         def __init__(self):
             super().__init__()
@@ -38,7 +51,7 @@ def explore_program(program, *, theme="dark"):
         networks.append({key: network.get(key) for key in
                          ("id", "order", "rung_id", "comment", "reads", "writes", "instructions")}
                         | {"bounds": bounds})
-    return {"ir_sha256": canonical_sha256(program), "networks": networks,
+    return {"ir_sha256": saved_digest, "networks": networks,
             "devices": program.get("devices", {}), "width": drawer.width, "height": drawer.height,
             "address_targets": drawer.address_targets, "svg": normalize_svg_for_preview(svg, theme)}
 

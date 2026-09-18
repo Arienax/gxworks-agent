@@ -253,51 +253,179 @@ def _sanitize_analysis_approaches(result, user_text):
         result["format_diagnostics"] = diagnostics
 
 
-def _analysis_text(analysis, user_text=""):
-    try:
-        payload = json.dumps(analysis or {}, ensure_ascii=False, sort_keys=True)
-    except (TypeError, ValueError):
-        payload = str(analysis or "")
-    return (str(user_text or "") + "\n" + payload).casefold()
+_FLAG_NAMES = ("hardware_dependent", "vfd", "pulse", "motion", "analog", "serial")
+_INTENT_VERSION = 1
 
 
-def _hardware_evidence(value):
-    """Exclude derived flags and explicit prohibitions from feature detection.
+def _positive_hardware_text(value):
+    """Exclude explicit equipment/interface denials, not all negative sentences.
 
-    A model can correctly forbid ``vfd_multi_speed``/``PLSY`` in an ordinary
-    relay program. Those contract values constrain generation; they do not
-    establish a drive or pulse-output requirement. Keep required/alternative
-    contract fields and the original analysis unchanged.
+    'Do not stop the VFD' still contains a drive. Only a declaration such as
+    'without a VFD' is negative hardware evidence. Never scan model suggestions
+    to decide whether the user's project contains that hardware.
     """
-    if isinstance(value, dict):
-        excluded = {
-            "hardware_requirements", "forbidden_opcodes", "forbidden_devices",
-            "forbidden_structures", "forbidden_instructions", "forbidden_features",
-        }
-        return {key: _hardware_evidence(item) for key, item in value.items() if key not in excluded}
-    if isinstance(value, (list, tuple)):
-        return [_hardware_evidence(item) for item in value]
-    return value
+    text = str(value or "").casefold()
+    equipment = r"(?:变频器|vfd|inverter|インバータ(?:ー)?|伺服|servo|stepper|步进电机|高速脉冲|模拟量|modbus|rs-?485)"
+    text = re.sub(r"(?:不需要|不使用|不采用|不涉及|不用|无需|不接入|不添加|没有|非)\s*(?:任何|外部的?)?\s*" + equipment,
+                  " ", text)
+    text = re.sub(r"\b(?:without|no|not\s+(?:using|requiring))\s+(?:(?:a|an|any|the)\s+)?" + equipment + r"\b", " ", text)
+    text = re.sub(equipment + r"\s*(?:は不要|を使用しない|不要)", " ", text)
+    return text
 
 
-def hardware_requirement_flags(analysis, user_text=""):
-    """Return deterministic feature flags without consulting the model again."""
-    scan_source = _hardware_evidence(analysis)
-    text = _analysis_text(scan_source, user_text)
-    hardware_dependent = any(marker.casefold() in text for marker in _HARDWARE_MARKERS)
-    vfd = any(marker.casefold() in text for marker in _VFD_MARKERS)
-    pulse = any(marker.casefold() in text for marker in _PULSE_MARKERS)
-    motion = any(marker.casefold() in text for marker in _MOTION_MARKERS)
+def _has_marker(text, marker):
+    if marker.isascii():
+        return bool(re.search(r"(?<![a-z0-9])" + re.escape(marker) + r"(?![a-z0-9])", text))
+    return marker in text
+
+
+def _flags_from_evidence(text):
+    text = _positive_hardware_text(text)
+    vfd = any(_has_marker(text, marker) for marker in _VFD_MARKERS) or "インバータ" in text
+    # A motor with explicit Hz setpoints is positive frequency-command intent;
+    # bare 'motor speed' could equally mean a servo or another mechanism.
+    hz_setpoints = bool(re.search(r"\d+(?:\s*[/、,，]\s*\d+)+\s*hz(?![a-z])", text))
+    vfd = vfd or hz_setpoints and any(x in text for x in ("电机", "motor", "调速", "频率"))
+    pulse = any(_has_marker(text, marker) for marker in _PULSE_MARKERS)
+    motion = any(_has_marker(text, marker) for marker in _MOTION_MARKERS)
     analog = any(marker in text for marker in ("模拟量", "0-10v", "4-20ma", "4da"))
-    serial = any(marker in text for marker in ("modbus", "rs485", "通信", "通讯"))
-    return {
-        "hardware_dependent": hardware_dependent,
-        "vfd": vfd,
-        "pulse": pulse,
-        "motion": motion,
-        "analog": analog,
-        "serial": serial,
-    }
+    serial = any(marker in text for marker in ("modbus", "rs485", "rs-485", "通信", "通讯"))
+    return {"hardware_dependent": bool(vfd or pulse or motion or analog or serial),
+            "vfd": bool(vfd), "pulse": pulse, "motion": motion, "analog": analog, "serial": serial}
+
+
+def _confirmed_hardware_evidence(spec):
+    """Use confirmed values and the selected contract, not old derived flags."""
+    if not isinstance(spec, dict):
+        return "", ""
+    parts, method_selected = [], ""
+    for item in spec.get("parameters", []) or []:
+        if not isinstance(item, dict) or not str(item.get("value") or "").strip():
+            continue
+        identifier = str(item.get("id") or "")
+        value = str(item["value"])
+        if value.strip().casefold() in {"none", "no", "无", "不需要", "不使用"}:
+            continue
+        if identifier in {"drive_model", "control_method", "wiring_mapping"}:
+            parts.append("vfd " + value)
+            if identifier == "control_method":
+                method_selected = value
+        elif identifier in QUESTION_IDS:
+            parts.append(value)
+    profile = spec.get("hardware_profile") or {}
+    if isinstance(profile, dict):
+        for key in ("drive_model", "control_method", "control_method_label", "wiring_mapping"):
+            value = profile.get(key)
+            if value:
+                parts.append("vfd " + str(value))
+                if key in {"control_method", "control_method_label"}:
+                    method_selected = str(value)
+    selected = spec.get("selected_approach") or {}
+    contract = (selected.get("generation_contract") or {}) if isinstance(selected, dict) else {}
+    if isinstance(contract, dict):
+        parts.extend(_string_list(contract.get("required_structures")))
+    for row in spec.get("io_table", []) or []:
+        if isinstance(row, dict):
+            parts.append(str(row.get("label") or ""))
+    # This field is produced from user evidence after parsing Agent A. Raw model
+    # output cannot establish it: a call with user_text always recomputes it.
+    intent = spec.get("hardware_intent")
+    if isinstance(intent, dict) and intent.get("version") == _INTENT_VERSION:
+        known = intent.get("flags") or {}
+        if known.get("vfd") is True:
+            parts.append("vfd")
+        method_selected = str(intent.get("vfd_method_value") or method_selected)
+    return "\n".join(parts), method_selected
+
+
+def _hardware_intent(analysis, user_text="", confirmed_spec=None):
+    requirement = str(user_text or "").strip()
+    prior_text, prior_method = _confirmed_hardware_evidence(confirmed_spec)
+    prior = _flags_from_evidence(prior_text)
+    if requirement:
+        current = _flags_from_evidence(requirement)
+        # An explicit removal in the current request overrides an old confirmed
+        # drive. No unrelated new analysis field can turn the drive back on.
+        denied_vfd = any(marker in requirement.casefold() for marker in (*_VFD_MARKERS, "インバータ")) and not current["vfd"]
+        flags = {k: current[k] or prior[k] for k in _FLAG_NAMES}
+        if denied_vfd:
+            flags["vfd"] = False
+        flags["hardware_dependent"] = any(flags[k] for k in _FLAG_NAMES[1:])
+        method = _selected_vfd_method(requirement) or prior_method
+        return {"version": _INTENT_VERSION, "source": "user_request", "flags": flags,
+                "vfd_method_selected": bool(flags["vfd"] and method),
+                "vfd_method_value": method if flags["vfd"] else ""}
+    saved = analysis.get("hardware_intent") if isinstance(analysis, dict) else None
+    if isinstance(saved, dict) and saved.get("version") == _INTENT_VERSION and isinstance(saved.get("flags"), dict):
+        return {"version": _INTENT_VERSION, "source": saved.get("source", "legacy_unknown"),
+                "flags": {k: saved["flags"].get(k) is True for k in _FLAG_NAMES},
+                "vfd_method_selected": saved.get("vfd_method_selected") is True,
+                "vfd_method_value": str(saved.get("vfd_method_value") or "")}
+    # Legacy data without original-user evidence is unknown, not an invitation
+    # to manufacture a mandatory question from hardware_requirements booleans.
+    return {"version": _INTENT_VERSION, "source": "confirmed_spec" if prior["vfd"] else "legacy_unknown",
+            "flags": prior, "vfd_method_selected": bool(prior_method), "vfd_method_value": prior_method}
+
+
+def hardware_requirement_flags(analysis, user_text="", confirmed_spec=None):
+    """Feature flags derive from user evidence, never from Agent-A questions."""
+    return _hardware_intent(analysis, user_text, confirmed_spec)["flags"]
+
+
+def _without_unsupported_vfd(analysis, requirement):
+    """Do not promote speculative drive prose/contracts to confirmed facts."""
+    removed = []
+    approaches = analysis.get("approaches")
+    if isinstance(approaches, list):
+        kept = []
+        for item in approaches:
+            if not isinstance(item, dict):
+                continue
+            contract = item.get("generation_contract") or {}
+            positive = " ".join(str(item.get(k) or "") for k in ("name", "description", "generation_guide"))
+            if isinstance(contract, dict):
+                positive += " " + " ".join(_string_list(contract.get("required_structures")))
+                positive += " " + json.dumps(contract.get("any_of_structure_groups", []), ensure_ascii=False)
+            if _flags_from_evidence(positive)["vfd"]:
+                removed.append("approaches")
+            else:
+                kept.append(item)
+        analysis["approaches"] = kept
+    if requirement and _flags_from_evidence(analysis.get("summary", ""))["vfd"]:
+        # Keep the real requirement, not a model-added drive specification.
+        analysis["summary"] = _VERBATIM_REQUIREMENT_MARKER + "\n" + requirement
+        removed.append("summary")
+    hardware = analysis.get("hardware_config")
+    if isinstance(hardware, dict):
+        has_motion = bool(analysis.get("hardware_requirements", {}).get("motion"))
+        kept = {key: value for key, value in hardware.items()
+                if (has_motion or key not in {"drive", "drive_model", "control_method", "wiring_mapping"})
+                and not _flags_from_evidence(str(key) + " " + json.dumps(value, ensure_ascii=False))["vfd"]}
+        if kept != hardware:
+            removed.append("hardware_config")
+            analysis["hardware_config"] = kept
+    if removed:
+        diagnostics = analysis.setdefault("format_diagnostics", [])
+        if isinstance(diagnostics, list):
+            record = {"code": "unsupported_drive_assumptions_removed", "path": "analysis",
+                      "message": "未将缺少用户依据的变频器假设作为确认规格。"}
+            if record not in diagnostics:
+                diagnostics.append(record)
+
+
+def _question_dependencies(item):
+    result = set()
+    def visit(value):
+        if isinstance(value, dict):
+            parameter = value.get("parameter")
+            if isinstance(parameter, str):
+                result.add(parameter)
+            for key in ("all", "any"):
+                for child in value.get(key, []) or []:
+                    visit(child)
+    visit(item.get("required_when"))
+    return result
+
 
 
 def _infer_question_id(question):
@@ -393,24 +521,23 @@ def _infer_question_id(question):
     return ""
 
 
+def _selected_vfd_method(text):
+    """One positively chosen interface, not a list of alternatives or a denial."""
+    value = _positive_hardware_text(text)
+    candidates = []
+    for words, label in (
+        (("多段速", "stf", "rh/rm/rl", "multi_speed"), _VFD_CONTROL_METHOD_OPTIONS[0]),
+        (("模拟量", "0-10v", "4-20ma", "4da", "analog"), _VFD_CONTROL_METHOD_OPTIONS[1]),
+        (("rs485", "rs-485", "modbus", "serial"), _VFD_CONTROL_METHOD_OPTIONS[2]),
+        (("高速脉冲频率给定", "脉冲给定", "pulse"), _VFD_CONTROL_METHOD_OPTIONS[3]),
+    ):
+        if any(word in value for word in words):
+            candidates.append(label)
+    return candidates[0] if len(candidates) == 1 else ""
+
+
 def _explicit_vfd_control_method(text):
-    """Return whether the user's own text selects a concrete VFD interface."""
-    value = str(text or "").casefold()
-    markers = (
-        "多段速",
-        "stf",
-        "rh/rm/rl",
-        "模拟量",
-        "0-10v",
-        "4-20ma",
-        "4da",
-        "rs485",
-        "rs-485",
-        "modbus",
-        "高速脉冲频率给定",
-        "脉冲给定",
-    )
-    return any(marker in value for marker in markers)
+    return bool(_selected_vfd_method(text))
 
 
 def is_automatic_hardware_question(item):
@@ -435,7 +562,7 @@ def is_automatic_hardware_question(item):
     return question_id in RETIRED_PLC_PROFILE_QUESTION_IDS
 
 
-def ensure_hardware_questions(analysis, plc_model="FX3U", user_text=""):
+def ensure_hardware_questions(analysis, plc_model="FX3U", user_text="", confirmed_spec=None):
     """Remove retired PLC profile rows while preserving drive design choices.
 
     The function name is retained for compatibility with existing callers.
@@ -448,19 +575,18 @@ def ensure_hardware_questions(analysis, plc_model="FX3U", user_text=""):
         _preserve_verbatim_requirement(result, user_text)
         _sanitize_analysis_approaches(result, user_text)
 
-    existing_flags = result.get("hardware_requirements")
-    if not str(user_text or "").strip() and isinstance(existing_flags, dict):
-        flags = {
-            key: bool(existing_flags.get(key, False))
-            for key in ("hardware_dependent", "vfd", "pulse", "motion", "analog", "serial")
-        }
-    else:
-        flags = hardware_requirement_flags(result, user_text)
+    intent = _hardware_intent(result, user_text, confirmed_spec)
+    flags = intent["flags"]
     result["hardware_requirements"] = flags
+    result["hardware_intent"] = intent
+    bounded = intent["source"] != "legacy_unknown"
+    if bounded and not flags["vfd"]:
+        _without_unsupported_vfd(result, str(user_text or "").strip())
 
     existing = result.get("missing_info")
     if isinstance(existing, list):
         normalized_questions = []
+        excluded_questions = set()
         for raw_item in existing:
             if not isinstance(raw_item, dict) or is_automatic_hardware_question(raw_item):
                 continue
@@ -474,27 +600,42 @@ def ensure_hardware_questions(analysis, plc_model="FX3U", user_text=""):
             )
             if inferred_id in QUESTION_IDS:
                 item["id"] = inferred_id
+            is_vfd_question = inferred_id in {"control_method", "drive_model", "wiring_mapping"} or (
+                _flags_from_evidence(item.get("question", ""))["vfd"]
+                and not inferred_id.startswith("motion_"))
+            unsupported = bounded and not flags["vfd"] and is_vfd_question
+            answered = flags["vfd"] and inferred_id == "control_method" and intent["vfd_method_selected"]
+            item.pop("confirmed_value", None)
+            if unsupported:
+                excluded_questions.update({str(item.get("id") or ""), str(item.get("question") or "")})
+                continue
+            if answered and intent.get("vfd_method_value"):
+                # Keep dependency controllers visible but already answered from
+                # actual user facts; do not make the user confirm a model default.
+                item.update(required=False, source="confirmed_request_fact",
+                            confirmed_value=intent["vfd_method_value"])
             normalized_questions.append(item)
+        # Only remove dependents of an unsupported feature, not independent
+        # analog/motion questions or dependencies on a known answered method.
+        if bounded and not flags["vfd"]:
+            while True:
+                dropped = [q for q in normalized_questions
+                           if _question_dependencies(q) and _question_dependencies(q) <= excluded_questions]
+                if not dropped:
+                    break
+                for q in dropped:
+                    excluded_questions.update({str(q.get("id") or ""), str(q.get("question") or "")})
+                    normalized_questions.remove(q)
 
         question_ids = {
             str(item.get("id", "")).strip()
             or _infer_question_id(item.get("question") or item.get("name"))
             for item in normalized_questions
         }
-        should_restore_control_method = False
-        if flags.get("vfd") and "control_method" not in question_ids:
-            if str(user_text or "").strip():
-                should_restore_control_method = not _explicit_vfd_control_method(user_text)
-            else:
-                # Older normalized analyses lost the question but retained the
-                # analog/serial/pulse flags derived from its candidate options.
-                # Two or more candidates are a narrow, deterministic migration
-                # signal and avoid re-asking when the user explicitly selected
-                # one interface in the original request.
-                candidate_count = sum(
-                    bool(flags.get(key)) for key in ("analog", "serial", "pulse")
-                )
-                should_restore_control_method = candidate_count >= 2
+        should_restore_control_method = (
+            flags["vfd"] and "control_method" not in question_ids
+            and not intent["vfd_method_selected"] and bounded
+        )
         if should_restore_control_method:
             normalized_questions.insert(
                 0,

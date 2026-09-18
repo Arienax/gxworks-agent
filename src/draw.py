@@ -34,6 +34,12 @@ def generate_gx_works2_csv(
     The canonical ladder/IR is not changed. Oversized top-level parallel
     networks are lowered only for the GX Works2 CSV artifact.
     """
+    from plc_ir import ir_to_ladder, is_plc_ir
+    from plc_device_identity import canonical_ladder_devices
+    if is_plc_ir(json_data):
+        json_data = ir_to_ladder(json_data)
+    if isinstance(json_data, dict):
+        json_data = canonical_ladder_devices(json_data)
     try:
         export_ladder = lower_large_parallel_blocks_for_gxworks2(json_data)
     except GXNativeLoweringError as exc:

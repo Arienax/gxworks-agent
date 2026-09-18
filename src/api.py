@@ -224,7 +224,7 @@ def _iter_analysis_text(value):
         yield str(value)
 
 
-def _normalize_analysis_result(result, plc_model="FX3U", user_text=""):
+def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed_spec=None):
     """Normalize phase-one AI JSON before the specification editor sees it.
 
     Only actual PLC device addresses remain in ``suggested_io``.  Hardware
@@ -235,6 +235,9 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text=""):
         raise ValueError("Analysis response must be a JSON object")
 
     normalized = dict(result)
+    # Only the application can attach user-derived hardware evidence. A model
+    # cannot authenticate its own questions by emitting this metadata field.
+    normalized.pop("hardware_intent", None)
     normalized["approaches"] = [
         normalize_approach(item)
         for item in (normalized.get("approaches") or [])
@@ -425,17 +428,17 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text=""):
     normalized["execution_semantics"] = normalize_semantic_requirements(
         inferred_semantics
     )
-    return ensure_hardware_questions(normalized, plc_model, user_text)
+    return ensure_hardware_questions(normalized, plc_model, user_text, confirmed_spec)
 
 
-def _parse_analysis_response(raw, plc_model="FX3U", user_text=""):
+def _parse_analysis_response(raw, plc_model="FX3U", user_text="", confirmed_spec=None):
     text = str(raw or "").strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[1] if "\n" in text else ""
     if text.endswith("```"):
         text = text.rsplit("\n", 1)[0]
     result = json.loads(text.strip())
-    return _normalize_analysis_result(result, plc_model, user_text)
+    return _normalize_analysis_result(result, plc_model, user_text, confirmed_spec)
 
 
 def _request_analysis_response(messages, *, on_format_repair=None, **kwargs):
@@ -494,9 +497,10 @@ baseline > selected PLC model profile and routed task knowledge > history.
 If the user explicitly changes an address, parameter, or option in the current
 turn, reflect that change and do not restore older cached values.
 
-# 变频器控制方案确认
+# 变频器控制方案确认（仅在用户需求或已确认规格涉及变频器时适用）
+- 普通起保停、接触器控制、电机启停不等于变频器调速。不得仅因本提示词、检索资料、候选方案或你自己的问题中出现变频器而新增硬件及必填参数。
 - 数字多段速端子、模拟量给定、RS-485/Modbus、高速脉冲/频率给定是四种不同方案，会产生不同的梯形图结构、扩展模块和 I/O 分配，不能当作 PLC 铭牌参数静默删除。
-- 用户没有明确给定方式时，必须在 missing_info 中询问“变频器频率给定控制方式”，`id` 为 `control_method`、`required` 为 true。固定少量频率档位（例如 20/50/60Hz）可以把“普通 Y 输出组合控制 STF/RH/RM/RL，由变频器参数保存频率”列为推荐选项，但仍需用户确认。
+- 只有已存在变频器需求且用户没有明确给定方式时，才在 missing_info 中询问“变频器频率给定控制方式”，`id` 为 `control_method`、`required` 为 true。固定少量频率档位（例如 20/50/60Hz）可以把“普通 Y 输出组合控制 STF/RH/RM/RL，由变频器参数保存频率”列为推荐选项，但仍需用户确认。
 - 变频器型号与端子/通信映射按实现依赖提问：Modbus 寄存器、站号或型号专用功能依赖具体变频器时询问 `drive_model`；PLC 输出与 STF/RH/RM/RL、模拟量通道或通信寄存器的对应关系不明确时询问 `wiring_mapping`。可以使用 `required_when` 表达条件必填，不得因它们位于 PLC 外部而过滤。
 - 连续无级调速才比较模拟量与通信；只有驱动明确支持脉冲频率给定时才比较高速脉冲方案。
 - FX3U-4DA 与 FX3U-4DA-ADP 是不同硬件、访问方式不可混用。禁止臆造 D8260、缓冲起始 D 地址或任何未由所选型号资料提供的地址。
@@ -657,7 +661,7 @@ def analyze_requirement(
             raw = raw.rsplit("\n", 1)[0]
         raw = raw.strip()
 
-        result = _parse_analysis_response(raw, model, user_requirement)
+        result = _parse_analysis_response(raw, model, user_requirement, confirmed_context)
         print(f"阶段1 分析完成: {result.get('summary', '')[:80]}...")
         return result
 
@@ -738,7 +742,7 @@ def analyze_requirement_streaming(
             raw = raw.rsplit("\n", 1)[0]
         raw = raw.strip()
 
-        result = _parse_analysis_response(raw, model, user_requirement)
+        result = _parse_analysis_response(raw, model, user_requirement, confirmed_context)
         print(f"阶段1 分析完成: {result.get('summary', '')[:80]}...")
         return result
 

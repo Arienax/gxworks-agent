@@ -5,6 +5,7 @@ import copy
 import hashlib
 import json
 import re
+from plc_device_identity import canonical_device_map
 
 PROTOCOL_VERSION = "compact_ladder/1.1"
 _MAX_BYTES = 2 * 1024 * 1024
@@ -196,7 +197,7 @@ def _confirmed_comments(projected):
         text = str(row.get("label") or row.get("description") or "").strip()
         if address and text:
             comments[address] = text[:64]
-    return comments
+    return canonical_device_map(comments)
 
 
 def expand_compact_ladder(compact, projected=None):

@@ -84,15 +84,17 @@ def test_forbidden_generation_features_are_not_hardware_requirements(field, valu
     ("required_structures", ["vfd_multi_speed"]),
     ("any_of_structure_groups", [["vfd_multi_speed", "analog_control"]]),
 ])
-def test_positive_drive_contract_still_keeps_control_method_question(field, value):
+def test_model_proposed_drive_contract_does_not_establish_user_hardware(field, value):
     result = ensure_hardware_questions({
         "summary": "Speed selection",
         "approaches": [{"generation_contract": {field: value, "forbidden_opcodes": ["PLSY"]}}],
         "missing_info": [],
     }, "FX3U", "Select the motor speed")
-    assert result["hardware_requirements"]["vfd"] is True
+    # Positive model proposals are not user-confirmed hardware. Generic motor
+    # speed alone cannot choose a VFD over a servo/stepper/other implementation.
+    assert result["hardware_requirements"]["vfd"] is False
     assert result["hardware_requirements"]["pulse"] is False
-    assert result["missing_info"][0]["id"] == "control_method"
+    assert result["missing_info"] == []
 
 
 def test_level_follow_analysis_does_not_invent_required_vfd_question():
@@ -223,7 +225,7 @@ def test_legacy_deterministic_drive_question_is_not_removed_by_source_alone():
     assert result["missing_info"] == analysis["missing_info"]
 
 
-def test_cached_analysis_restores_vfd_control_question_lost_by_old_filter():
+def test_cached_derived_flags_alone_cannot_restore_a_required_vfd_question():
     analysis = {
         "hardware_requirements": {
             "hardware_dependent": True,
@@ -240,9 +242,8 @@ def test_cached_analysis_restores_vfd_control_question_lost_by_old_filter():
 
     result = ensure_hardware_questions(analysis, "FX3U")
 
-    assert len(result["missing_info"]) == 3
-    assert result["missing_info"][0]["id"] == "control_method"
-    assert result["missing_info"][0]["required"] is True
+    assert result["missing_info"] == analysis["missing_info"]
+    assert result["hardware_intent"]["source"] == "legacy_unknown"
 
 
 @pytest.mark.parametrize(

@@ -9,6 +9,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import re
+from plc_device_identity import canonical_device, canonical_io_rows
 
 _DEVICE = re.compile(r"(?<![A-Za-z0-9_])(?:SM|SD|[XYMTCSDVZ])\d+(?![A-Za-z0-9_])", re.I)
 _ALIASES = {"start_input": ("start", "X"), "stop_input": ("stop", "X"),
@@ -50,7 +51,7 @@ def single_address(value, kind=None):
     matches = list(_DEVICE.finditer(str(value)))
     if len(matches) != 1:
         return None
-    address = matches[0].group().upper()
+    address = canonical_device(matches[0].group())
     prefix = re.match(r"[A-Z]+", address).group()
     return address if kind is None or prefix == kind else None
 
@@ -106,9 +107,19 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
     exact legacy role label, then an already allocated exact address. Newly appended rows cannot become
     another answer's replacement target. This removes parameter-order dependence.
     """
-    rows = copy.deepcopy(list(rows or []))
+    original_alias_rows = copy.deepcopy(list(rows or []))
+    rows = canonical_io_rows(original_alias_rows)
     previous = {str(item.get("binding_id")): copy.deepcopy(item)
                 for item in bindings or () if isinstance(item, dict) and item.get("binding_id")}
+    owners = {r.get("address"): r.get("binding_id") for r in rows if isinstance(r, dict)}
+    old_owners = {r.get("binding_id"): canonical_device(r.get("address"))
+                  for r in original_alias_rows if isinstance(r, dict) and r.get("binding_id")}
+    for identity, binding in previous.items():
+        binding["address"] = canonical_device(binding.get("address"))
+        old_owner = binding.get("row_binding_id") or identity
+        owner_address = old_owners.get(old_owner)
+        if owner_address in owners and owners[owner_address]:
+            binding["row_binding_id"] = owners[owner_address]
     original_count = len(rows)
     original_rows = copy.deepcopy(rows)
     pending, remaining, applied = [], [], {}
@@ -130,6 +141,9 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
         if hint is None:
             identity = identifier or hashlib.sha256(name.encode("utf-8")).hexdigest()[:16]
             hint = {"binding_id": "question_" + identity, "kind": re.match(r"[A-Z]+", address).group()}
+        # Normalize only a confirmed address answer, not arbitrary prose. Keep
+        # physical-contact wording while removing the address's padding alias.
+        item["value"] = _DEVICE.sub(lambda _m: address, str(item["value"]), count=1)
         prior = previous.get(hint["binding_id"])
         if prior:
             prior_address = single_address(prior.get("value", ""), hint["kind"])

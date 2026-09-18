@@ -18,6 +18,7 @@ from application.compact_protocol import (
     normalize_compact, _simple_input, _branch_input, _output, _confirmed_comments,
 )
 
+from plc_device_identity import canonical_device, canonical_io_rows, canonical_ladder_devices
 from model_provider import TextDelta
 from plc_generation_context import _build_knowledge_context, public_generation_specification
 from prompt_context_policy import audit_section
@@ -174,6 +175,11 @@ def _strict_generation_projection(confirmed_spec):
             {key: copy.deepcopy(row[key]) for key in ("binding_id", "role", "kind", "address", "source_parameter_id", "name") if key in row}
             for row in bindings if isinstance(row, dict)
         ]
+    if isinstance(projected.get("io_table"), list):
+        projected["io_table"] = canonical_io_rows(projected["io_table"])
+    for row in projected.get("io_bindings", []):
+        if "address" in row:
+            row["address"] = canonical_device(row["address"])
     selected = projected.get("selected_approach")
     if isinstance(selected, dict):
         selected.pop("name", None)
@@ -277,6 +283,7 @@ def generate_confirmed_ladder(
             on_stage("compact_normalized", "已在本地兼容空的可选字段；正在展开梯形图，未增加模型请求")
     ladder, representation = _decode_generated_ladder(compact, projected, model)
     diagnostics.emit("generation_representation", stage="compact_protocol", representation=representation)
+    ladder = canonical_ladder_devices(ladder)
     from plc_confirmed_checks import check_direct_self_hold
     behavior = check_direct_self_hold(ladder, projected)
     diagnostics.emit("confirmed_primitive_check", stage="generation_validation", **behavior)
