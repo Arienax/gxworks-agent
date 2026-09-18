@@ -79,10 +79,36 @@ jobs:
       - name: Build the actual desktop package
         run: python -m PyInstaller --noconfirm packaging/pyinstaller/desktop.spec
       - name: Smoke-test packaged SDK imports without a model request
-        shell: pwsh
+        shell: python
         run: |
-          & .\dist\GXWorks2-ST-Ladder-Helper\GXWorks2-ST-Ladder-Helper.exe --self-test-openai-sdk
-          if ($LASTEXITCODE -ne 0) { throw 'Packaged SDK self-test failed' }
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+
+          executable = Path('dist/GXWorks2-ST-Ladder-Helper/GXWorks2-ST-Ladder-Helper.exe').resolve()
+          output = Path(os.environ['RUNNER_TEMP']) / 'source-layout-desktop-results'
+          output.mkdir(parents=True, exist_ok=True)
+          # A windowed EXE does not reliably populate PowerShell's LASTEXITCODE.
+          # Wait for the actual process; a timeout or nonzero status is a failure.
+          result = {'executable': executable.name, 'timeout_seconds': 120}
+          try:
+              completed = subprocess.run(
+                  [str(executable), '--self-test-openai-sdk'],
+                  cwd=executable.parent, timeout=120, capture_output=True,
+                  text=True, encoding='utf-8', errors='replace',
+              )
+              result.update(returncode=completed.returncode, timed_out=False,
+                            stdout=completed.stdout, stderr=completed.stderr)
+          except subprocess.TimeoutExpired:
+              result.update(returncode=None, timed_out=True)
+          except OSError as error:
+              result.update(returncode=None, timed_out=False, error=str(error))
+          text = json.dumps(result, indent=2)
+          (output / 'packaged-sdk-smoke.json').write_text(text + '\n', encoding='utf-8')
+          print(text)
+          if result['returncode'] != 0:
+              raise SystemExit('Packaged SDK self-test did not exit successfully')
       - uses: actions/upload-artifact@v4
         if: always()
         with:
