@@ -18,39 +18,38 @@ permissions:
   contents: read
 
 jobs:
-  source-baseline:
-    name: Reproducible source and frontend toolchain
+  regression-baseline:
+    name: Full Python baseline and pinned test environment
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    env:
+      QT_QPA_PLATFORM: offscreen
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
           lfs: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-python@v5
         with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: Install pinned frontend dependencies
-        run: npm ci --prefix web
-      - name: Capture tracked source and pinned frontend dependencies
+          python-version: '3.13'
+      - name: Install test environment
         run: |
-          mkdir -p boundary-evidence
+          sudo apt-get update -qq
+          sudo apt-get install -y libegl1 libopengl0 libxkbcommon-x11-0
+          mkdir -p boundary-evidence/wheels
+          python -m pip download -r requirements/web.txt PyQt6==6.11.0 pytest==9.1.1 olefile==0.47 jsonschema httpx -d boundary-evidence/wheels
+          python -m pip install --no-index --find-links boundary-evidence/wheels -r requirements/web.txt PyQt6==6.11.0 pytest==9.1.1 olefile==0.47 jsonschema httpx
+      - name: Record unchanged baseline (not an all-pass claim)
+        run: |
           git rev-parse HEAD > boundary-evidence/commit.txt
-          python - <<'PY'
-          import pathlib, subprocess, zipfile
-          root = pathlib.Path.cwd()
-          paths = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
-          with zipfile.ZipFile('boundary-evidence/source.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
-              for name in paths:
-                  path = root / name
-                  if name and path.is_file():
-                      archive.write(path, name)
-          PY
-          tar -czf boundary-evidence/frontend-dependencies.tar.gz web/node_modules
+          set +e
+          python -m pytest -q --junitxml=boundary-evidence/baseline.xml > boundary-evidence/baseline.log 2>&1
+          printf '%s\n' "$?" > boundary-evidence/baseline.exit
+          cat boundary-evidence/baseline.log
+          exit 0
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: python-core-boundary-baseline
+          name: python-core-boundary-test-baseline
           path: boundary-evidence/
           retention-days: 7
