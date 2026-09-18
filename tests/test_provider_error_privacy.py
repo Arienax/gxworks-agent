@@ -3,13 +3,13 @@ import json
 
 import pytest
 
-import api
+import application.model_api as api
 from application.generation import GenerationDependencies, GenerationRequest, GenerationWorkflow
 from application.planning import EvidenceDebugPlanWorkflow
 from application.base import WorkflowError
 from application.workbench import WorkbenchService
-from model_provider import ModelProviderError, ModelRequest, OpenAICompatibleProvider, UserMessage, collect_response
-from session_store import SessionStore
+from model_runtime.provider import ModelProviderError, ModelRequest, OpenAICompatibleProvider, UserMessage, collect_response
+from storage.session import SessionStore
 from test_candidate_diff import _program, _save
 
 

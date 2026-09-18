@@ -11,9 +11,9 @@ from application.projects import ProjectError, ProjectService
 from application.settings import SettingsService
 from application.workbench import WorkbenchService
 from application.workspace import ConflictError
-from plc_core import PLCCore
-from plc_ir import build_plc_ir
-from session_store import SessionStore
+from plc.core import PLCCore
+from plc.ir import build_plc_ir
+from storage.session import SessionStore
 
 
 _PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
@@ -90,8 +90,8 @@ def test_spec_save_rejects_duplicate_raw_rows_before_canonicalization(workbench,
 
 
 def test_saved_address_answers_return_actual_hash_and_keep_contact_choice(workbench, saved):
-    from confirmed_spec import build_review_draft
-    from plc_ir import canonical_sha256
+    from plc.specification.confirmed import build_review_draft
+    from plc.ir import canonical_sha256
 
     store, project, _, _ = saved
     draft = build_review_draft({"summary": "启停", "suggested_io": {"X": {"X0": "启动", "X1": "停止"}, "Y": {"Y0": "输出"}},
@@ -337,9 +337,9 @@ def test_snapshot_rejects_valid_ir_changed_in_place_without_metadata_change(save
 
 @pytest.fixture
 def settings_files(tmp_path, monkeypatch):
-    import config_manager
-    import credential_store
-    import resource_paths
+    import storage.config as config_manager
+    import storage.credentials as credential_store
+    import shared.paths as resource_paths
     config_path = tmp_path / "user" / "config.json"
     template = tmp_path / "config.default.json"
     config = {"language": "zh-CN", "activeModelProfileId": "fake", "modelProfiles": [{
@@ -436,7 +436,7 @@ def test_plan_validates_underlying_ir_manifest_before_loading(saved, monkeypatch
 @pytest.fixture
 def saved_debug_plan(tmp_path):
     from test_plc_debug_loop import _project_with_failure, _diagnosis, _patch, _knowledge
-    from plc_debug_loop import DebugPatchLoopService
+    from application.debug_loop import DebugPatchLoopService
     store, project_id, version_id, program, run_id = _project_with_failure(tmp_path)
     plan = DebugPatchLoopService(store, retriever=_knowledge).prepare_plan(project_id, version_id, run_id, _diagnosis(), _patch(program))
     saved = store.save_debug_plan(project_id, version_id, plan)

@@ -15,16 +15,5 @@ def isolated_mcp_environment(**overrides):
 def isolated_mcp_command(*args, entry=None):
     # Stub the low-level store before running the real entry. Tests must not
     # depend on, inspect, or update the signed-in user's Credential Manager.
-    setup = """import runpy, sys, types
-def forbidden(*args, **kwargs):
-    raise AssertionError('A launcher test cannot write credentials')
-sys.modules['windows_credentials'] = types.SimpleNamespace(
-    read_secret=lambda target: '', write_secret=forbidden, delete_secret=forbidden)
-mode, target, *arguments = sys.argv[1:]
-sys.argv = [target, *arguments]
-if mode == 'module':
-    runpy.run_module(target, run_name='__main__')
-else:
-    runpy.run_path(target, run_name='__main__')
-"""
+    setup = "import runpy, sys, types\ndef forbidden(*args, **kwargs):\n    raise AssertionError('A launcher test cannot write credentials')\nsys.modules['storage.windows_credentials'] = types.SimpleNamespace(\n    read_secret=lambda target: '', write_secret=forbidden, delete_secret=forbidden)\nmode, target, *arguments = sys.argv[1:]\nsys.argv = [target, *arguments]\nif mode == 'module':\n    runpy.run_module(target, run_name='__main__')\nelse:\n    runpy.run_path(target, run_name='__main__')\n"
     return [sys.executable, "-c", setup, "path" if entry else "module", str(entry or "integrations.mcp"), *args]

@@ -4,7 +4,7 @@ The acceptance target is a saved, usable ladder and its IR/SVG/CSV artifacts aft
 
 ## Specification identity
 
-`spec_bindings.py` binds address answers to explicit I/O identities. Stable parameter IDs migrate older start/stop/output questions; typed `io_binding` metadata supports multiple machines with identical display labels. A missing I/O table is no longer populated by successively replacing fuzzy-matched labels. Swapping addresses preserves the identities of the rows. The structured table is authoritative; `io_allocation_raw` is a derived display/legacy-import format. Consumed address answers remain available in `io_bindings` and the audit projection, but their old raw values are not replayed over subsequent direct edits.
+`plc/specification/bindings.py` binds address answers to explicit I/O identities. Stable parameter IDs migrate older start/stop/output questions; typed `io_binding` metadata supports multiple machines with identical display labels. A missing I/O table is no longer populated by successively replacing fuzzy-matched labels. Swapping addresses preserves the identities of the rows. The structured table is authoritative; `io_allocation_raw` is a derived display/legacy-import format. Consumed address answers remain available in `io_bindings` and the audit projection, but their old raw values are not replayed over subsequent direct edits.
 
 Already-corrupted saved specifications are not silently rewritten from historical audit records. Reopen the specification, explicitly confirm the intended complete allocation, and save it again. Existing projects and versions need not be deleted. The regression fixture covers this explicit recovery.
 
@@ -18,7 +18,7 @@ Agent B also recognizes the existing `ladder_v1` and the repository's existing l
 
 ## Semantic coverage and diagnostics
 
-For a narrowly specified, explicitly confirmed direct self-hold circuit with unambiguous start/stop/output bindings and physical stop polarity, `plc_confirmed_checks.py` verifies all eight Boolean states. It does not infer arbitrary machinery requirements, rewrite a candidate, or impose this gate on unsupported instruction/structure shapes. General PLC review and simulation remain separate. The original missing-stop candidate is a negative fixture, not a successful example after null normalization.
+For a narrowly specified, explicitly confirmed direct self-hold circuit with unambiguous start/stop/output bindings and physical stop polarity, `plc/specification/checks.py` verifies all eight Boolean states. It does not infer arbitrary machinery requirements, rewrite a candidate, or impose this gate on unsupported instruction/structure shapes. General PLC review and simulation remain separate. The original missing-stop candidate is a negative fixture, not a successful example after null normalization.
 
 Local compact/PLC errors retain their category rather than being relabelled as an API outage. Public diagnostics keep schema paths and bounded identifiers, not raw responses or credentials. Intentional first-object stream closure is recorded separately from a provider finish signal; absent usage is not evidence of zero billing.
 
@@ -73,7 +73,7 @@ edits can retain genuinely confirmed drive facts. Cached flags alone no longer
 manufacture a required question. The prompt states this scope too; the local
 boundary does not rely on every model obeying the prompt.
 
-`plc_device_identity.py` gives simple device aliases one representation without
+`plc/device_identity.py` gives simple device aliases one representation without
 renumbering: `X000 -> X0`, `X001 -> X1`, `Y001 -> Y1`, `X010 -> X10` (not X8).
 The same normalization now covers generated ladder operands, comments, canonical
 I/O rows and bindings, new IR device/reference indexes, typed semantic references,

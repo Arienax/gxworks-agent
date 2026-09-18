@@ -64,8 +64,8 @@ def structured_from_ladder(template: StructuredProgram, model: dict) -> Structur
     Unsupported branches, operators and annotations fail explicitly instead of
     silently producing a smaller/different program. This is not a new PLC IR.
     """
-    from plc_ir import ir_to_ladder, is_plc_ir, validate_plc_ir, lower_rung_instructions
-    from plc_json_validator import validate_ladder_full
+    from plc.ir import ir_to_ladder, is_plc_ir, validate_plc_ir, lower_rung_instructions
+    from plc.validation import validate_ladder_full
     if is_plc_ir(model):
         validate_plc_ir(model)
         if model["plc"]["cpu"].upper() != "FX3U":

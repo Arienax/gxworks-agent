@@ -104,7 +104,7 @@ def main() -> int:
     if not database.is_file() or not benchmark.is_file():
         raise SystemExit("database and benchmark must exist")
     sys.path.insert(0, str(root / "src"))
-    import knowledge_retriever as retriever
+    import knowledge.retriever as retriever
 
     retriever._index_path = lambda: database
     retriever._retrieve_cached.cache_clear()

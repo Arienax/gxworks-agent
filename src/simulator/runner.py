@@ -6,9 +6,9 @@ import copy
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
-from display_names import naturalize_display_text, naturalize_identifier, preferred_display_name
-from plc_ir import canonical_sha256
-from plc_timing import decode_scan_monitor_values, scan_monitor_profile
+from shared.display_names import naturalize_display_text, naturalize_identifier, preferred_display_name
+from plc.ir import canonical_sha256
+from plc.timing import decode_scan_monitor_values, scan_monitor_profile
 
 from .backends import FaultInjectingBackend
 from .gateway import is_gateway_environment_error

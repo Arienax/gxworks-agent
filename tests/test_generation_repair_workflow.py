@@ -3,9 +3,9 @@ import json
 import pytest
 
 from application.generation import GenerationDependencies, GenerationRequest, GenerationWorkflow
-from application.generation_repair import GenerationValidationError
+from plc.candidate_repair import GenerationValidationError
 from application.jobs import JobCancelled
-from model_provider import ModelProviderError
+from model_runtime.provider import ModelProviderError
 from test_generation_repair_assembly import ladder40
 
 

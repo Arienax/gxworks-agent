@@ -3,9 +3,9 @@ import sqlite3
 
 import pytest
 
-import knowledge_retriever as retriever
-import knowledge_retriever_core as core
-from resource_paths import resource_path
+import knowledge.retriever as retriever
+import knowledge.core as core
+from shared.paths import resource_path
 
 
 PROSE_QUERIES = [

@@ -7,7 +7,7 @@ import re
 
 from application.projects import public
 from application.workspace import ConflictError
-from plc_ir import canonical_sha256
+from plc.ir import canonical_sha256
 
 
 class SimulationWorkbenchError(ValueError):

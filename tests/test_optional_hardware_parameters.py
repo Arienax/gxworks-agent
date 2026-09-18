@@ -2,13 +2,13 @@ import copy
 
 import pytest
 
-from confirmed_spec import (
+from plc.specification.confirmed import (
     build_review_draft,
     canonicalize_confirmed_spec,
     validate_spec_draft,
 )
-from hardware_profiles import ensure_hardware_questions, hardware_requirement_flags, validate_hardware_spec
-from plc_json_validator import PLCJsonValidationError, validate_ladder_full
+from plc.hardware_profiles import ensure_hardware_questions, hardware_requirement_flags, validate_hardware_spec
+from plc.validation import PLCJsonValidationError, validate_ladder_full
 
 
 HARDWARE_QUESTIONS = [
@@ -98,7 +98,7 @@ def test_model_proposed_drive_contract_does_not_establish_user_hardware(field, v
 
 
 def test_level_follow_analysis_does_not_invent_required_vfd_question():
-    from api import _normalize_analysis_result
+    from application.model_api import _normalize_analysis_result
 
     request = "FX3U，普通梯形图，两路独立电平控制：网络1使用常开X0直接控制Y0，网络2使用常开X1直接控制Y1。无需自锁、定时、计数或额外中间继电器；上电输出随输入。请分析I/O并给出待确认规格。"
     analysis = {

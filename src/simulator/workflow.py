@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Callable, Dict, Mapping, Optional
 
-from plc_ir import canonical_sha256
+from plc.ir import canonical_sha256
 
 from .planning import normalize_generated_test_suite
 from .service import SimulatorRegressionService

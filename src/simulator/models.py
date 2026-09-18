@@ -11,7 +11,7 @@ import copy
 import re
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
-from plc_json_validator import parse_device_address
+from plc.validation import parse_device_address
 
 
 TEST_DSL_SCHEMA_VERSION = 1

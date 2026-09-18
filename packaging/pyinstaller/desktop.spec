@@ -32,6 +32,8 @@ a = Analysis(
     binaries=sdk_binaries,
     datas=[
         (str(root / 'resources/config.default.json'), '.'),
+        (str(root / 'resources/model_catalog'), 'resources/model_catalog'),
+        (str(root / 'src/gxw/templates'), 'gxw/templates'),
         (str(root / 'resources/locales'), 'resources/locales'),
         (str(root / 'resources/pattern_library.json'), '.'),
         (str(root / 'resources/plc_models.json'), '.'),
@@ -42,9 +44,6 @@ a = Analysis(
         (str(root / 'resources/knowledge/fx3u_knowledge.sqlite'), 'knowledge'),
         (str(root / 'resources/knowledge/fx3u_dense_lsa.npz'), 'knowledge'),
         (str(root / 'resources/knowledge/manifest.json'), 'knowledge'),
-        # workbench_widgets is now a package facade; the historical module is
-        # loaded as the editor engine at runtime and therefore must remain as data.
-        (str(root / 'src/workbench_widgets.py'), '.'),
     ] + sdk_datas,
     hiddenimports=[
         'openai',

@@ -11,18 +11,18 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-import runtime_diagnostics as diagnostics
+import shared.diagnostics as diagnostics
 from application.compact_protocol import (
     PROTOCOL_VERSION, CompactProtocolError, compact_response_schema as _compact_response_schema,
     decode_compact as _json_object, expand_compact_ladder as _expand_compact_ladder,
     normalize_compact, _simple_input, _branch_input, _output, _confirmed_comments,
 )
 
-from plc_device_identity import canonical_device, canonical_io_rows, canonical_ladder_devices
-from model_provider import TextDelta
-from plc_generation_context import _build_knowledge_context, public_generation_specification
-from prompt_context_policy import audit_section
-from response_language import ResponseContract
+from plc.device_identity import canonical_device, canonical_io_rows, canonical_ladder_devices
+from model_runtime.provider import TextDelta
+from application.generation_context import _build_knowledge_context, public_generation_specification
+from shared.context_policy import audit_section
+from model_runtime.responses import ResponseContract
 
 
 _GENERATION_REQUEST = (
@@ -157,7 +157,7 @@ class _FirstJSONObjectProvider:
 
 
 def _response_options(provider, *, model_name=None, effort=None):
-    from model_response_format import response_plan
+    from model_runtime.response_format import response_plan
     return response_plan(
         getattr(provider, "profile", {}), _compact_response_schema(),
         model=model_name, api_key=getattr(provider, "api_key", None),
@@ -201,7 +201,7 @@ def _decode_generated_ladder(value, projected, plc_model):
         return _expand_compact_ladder(value, projected), "compact_ladder"
     if isinstance(value, dict) and "rungs" in value and set(value) <= {"rungs", "device_comments"}:
         from application.compact_alias import expand_hybrid_compact_ladder
-        from plc_json_validator import validate_ladder_candidate_structure
+        from plc.validation import validate_ladder_candidate_structure
         converted = expand_hybrid_compact_ladder(value, projected)
         ladder = converted if converted is not None else copy.deepcopy(value)
         # Choosing a known representation is not accepting an unchecked program.
@@ -241,7 +241,7 @@ def generate_confirmed_ladder(
     on_stage=None,
 ):
     """Make one streaming model call, then locally expand the compact plan."""
-    import api
+    import application.model_api as api
 
     model = str(plc_model or "FX3U").strip().upper() or "FX3U"
     projected = _strict_generation_projection(confirmed_spec)
@@ -254,7 +254,7 @@ def generate_confirmed_ladder(
 
     base_provider = api._workflow_provider()
     provider = _FirstJSONObjectProvider(base_provider)
-    from model_response_format import response_plan
+    from model_runtime.response_format import response_plan
     options, streaming = response_plan(
         getattr(base_provider, "profile", {}), _compact_response_schema(),
         model=model_name, api_key=getattr(base_provider, "api_key", None),
@@ -284,7 +284,7 @@ def generate_confirmed_ladder(
     ladder, representation = _decode_generated_ladder(compact, projected, model)
     diagnostics.emit("generation_representation", stage="compact_protocol", representation=representation)
     ladder = canonical_ladder_devices(ladder)
-    from plc_confirmed_checks import check_direct_self_hold
+    from plc.specification.checks import check_direct_self_hold
     behavior = check_direct_self_hold(ladder, projected)
     diagnostics.emit("confirmed_primitive_check", stage="generation_validation", **behavior)
     return {"ladder": ladder, "model_calls": 1}

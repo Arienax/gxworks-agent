@@ -14,7 +14,7 @@ def utc_now() -> str:
 
 def _public_context_audit(value) -> dict:
     """A dedicated metadata projection; never widen the generic event whitelist."""
-    from prompt_context_policy import POLICY_NAMES, POLICY_VERSION
+    from shared.context_policy import POLICY_NAMES, POLICY_VERSION
 
     def count(item):
         if type(item) is not int or not 0 <= item <= 2**53 - 1:

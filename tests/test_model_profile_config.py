@@ -3,8 +3,8 @@ import json
 
 import pytest
 
-import config_manager
-from credential_store import CREDENTIAL_TARGET, credential_target_for_profile
+import storage.config as config_manager
+from storage.credentials import CREDENTIAL_TARGET, credential_target_for_profile
 
 
 def _credential_fakes(monkeypatch, initial=None):
@@ -277,7 +277,7 @@ def test_default_config_file_uses_only_profile_schema():
 
 
 def test_legacy_chat_import_converts_reasoning_to_unified_metadata(tmp_path):
-    from session_store import SessionStore
+    from storage.session import SessionStore
 
     legacy_dir = tmp_path / "legacy"
     legacy_dir.mkdir()

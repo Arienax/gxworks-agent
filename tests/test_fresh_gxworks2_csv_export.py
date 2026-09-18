@@ -4,7 +4,7 @@ import json
 import zipfile
 
 from application.fresh_exports import build_gxworks2_csv_bundle
-from plc_ir import build_plc_ir, canonical_sha256
+from plc.ir import build_plc_ir, canonical_sha256
 
 
 def _range_network(output="M30"):

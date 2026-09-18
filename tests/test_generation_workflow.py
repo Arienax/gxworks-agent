@@ -7,12 +7,12 @@ import sys
 
 import pytest
 
-import api
+import application.model_api as api
 from application.generation import (
     GenerationDependencies, GenerationError, GenerationRequest, GenerationValidationError, GenerationWorkflow,
 )
-from i18n import set_language
-from model_provider import ModelProviderError, TextDelta
+from shared.i18n import set_language
+from model_runtime.provider import ModelProviderError, TextDelta
 
 
 def _ladder():
@@ -26,23 +26,7 @@ def _ladder():
 
 
 def test_generation_runs_with_all_gui_imports_blocked(tmp_path):
-    script = '''
-import importlib.abc, json, sys
-class BlockGUI(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path=None, target=None):
-        if fullname == "main" or fullname == "qt_compat" or fullname.startswith(("PyQt", "PySide")):
-            raise AssertionError("GUI import: " + fullname)
-sys.meta_path.insert(0, BlockGUI())
-from application.generation import GenerationWorkflow, GenerationRequest, GenerationDependencies
-from application.review import InspectionWorkflow
-from application.planning import EvidenceDebugPlanWorkflow, SimulatorTestPlanWorkflow
-result = GenerationWorkflow(
-    GenerationRequest("X0 controls Y0", target_mode="st", model_name="offline"), sys.argv[1],
-    dependencies=GenerationDependencies(stream_response=lambda *a, **k: ("", json.dumps({"st_code":"Y0 := X0;"}))),
-).run()
-assert result["artifacts"] == {"st": "program.st"}
-assert "main" not in sys.modules and "qt_compat" not in sys.modules
-'''
+    script = '\nimport importlib.abc, json, sys\nclass BlockGUI(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if fullname == "main" or fullname == "qt_compat" or fullname.startswith(("PyQt", "PySide")):\n            raise AssertionError("GUI import: " + fullname)\nsys.meta_path.insert(0, BlockGUI())\nfrom application.generation import GenerationWorkflow, GenerationRequest, GenerationDependencies\nfrom application.review import InspectionWorkflow\nfrom application.planning import EvidenceDebugPlanWorkflow, SimulatorTestPlanWorkflow\nresult = GenerationWorkflow(\n    GenerationRequest("X0 controls Y0", target_mode="st", model_name="offline"), sys.argv[1],\n    dependencies=GenerationDependencies(stream_response=lambda *a, **k: ("", json.dumps({"st_code":"Y0 := X0;"}))),\n).run()\nassert result["artifacts"] == {"st": "program.st"}\nassert \'ui.desktop.main_window\' not in sys.modules and \'ui.desktop.qt\' not in sys.modules\n'
     env = dict(os.environ, PYTHONPATH=str(Path("src").resolve()))
     completed = subprocess.run([sys.executable, "-c", script, str(tmp_path)],
                                env=env, capture_output=True, text=True)

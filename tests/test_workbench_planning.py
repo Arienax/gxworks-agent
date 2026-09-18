@@ -8,7 +8,7 @@ pytest.importorskip("httpx")
 from fastapi.testclient import TestClient
 
 from application.workbench import WorkbenchService
-from model_provider import TextDelta
+from model_runtime.provider import TextDelta
 from test_web_api import ORIGIN, _app, _login
 from test_workbench_service import saved
 

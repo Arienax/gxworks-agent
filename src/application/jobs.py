@@ -7,7 +7,7 @@ import json
 import uuid
 import threading
 import time
-import runtime_diagnostics as diagnostics
+import shared.diagnostics as diagnostics
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -198,7 +198,7 @@ class JobManager:
         consistent IR for navigation, activate the diagnostic version, and let the
         existing GX-import path send those CSVs to GX Works2 for native diagnostics.
         """
-        from application.generation_repair import GenerationValidationError
+        from plc.candidate_repair import GenerationValidationError
 
         if not isinstance(error, GenerationValidationError):
             return None
@@ -249,7 +249,7 @@ class JobManager:
 
         version_id = None
         try:
-            from session_store import SessionStore
+            from storage.session import SessionStore
 
             with self.lock.thread_lock:
                 self.lock.require_acquired()
@@ -310,7 +310,7 @@ class JobManager:
             diagnostics.exception_record(save_error)
             if version_id is not None:
                 try:
-                    from session_store import SessionStore
+                    from storage.session import SessionStore
                     with self.lock.thread_lock:
                         store = SessionStore(base_dir=self.lock.workspace, create=False)
                         if store.get_version(project_id, version_id) is None:

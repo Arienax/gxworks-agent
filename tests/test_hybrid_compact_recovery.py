@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-import api
+import application.model_api as api
 from application.compact_alias import expand_hybrid_compact_ladder
 from application.format_patch_repair import format_repair_response
 from application.rejected_generation_preview import materialize_rejected_preview, recover_rejected_ladder

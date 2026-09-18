@@ -19,14 +19,14 @@ import anyio
 from mcp import Client
 
 from application.generation import GenerationDependencies, GenerationRequest, GenerationWorkflow
-from application.generation_repair import GenerationValidationError
+from plc.candidate_repair import GenerationValidationError
 from application.workbench import WorkbenchService
 from integrations.mcp.context_provider import SessionToolContextProvider
 from integrations.mcp.server import create_server
-from plc_ir import canonical_sha256, ir_to_ladder
-from plc_json_validator import PLCJsonValidationError, validate_ladder_full
-from session_store import SessionStore
-from tool_runtime import build_default_tool_runtime
+from plc.ir import canonical_sha256, ir_to_ladder
+from plc.validation import PLCJsonValidationError, validate_ladder_full
+from storage.session import SessionStore
+from agent_runtime.runtime import build_default_tool_runtime
 
 
 PROGRAM_NAME = "PARITY_MAIN"
@@ -115,7 +115,7 @@ def _mcp(candidate, store, project_id, monkeypatch):
     No validation result is substituted. The MCP public response must still
     redact the private IR, and the standalone call must not save a version.
     """
-    import plc_generation
+    import plc.generation as plc_generation
 
     original = copy.deepcopy(candidate)
     runtime = build_default_tool_runtime()

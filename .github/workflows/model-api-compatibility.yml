@@ -4,12 +4,13 @@ on:
   push:
     branches: [main, feat/universal-api-capabilities]
     paths:
-      - 'src/model_*.py'
+      - 'src/model_runtime/**'
       - 'src/application/settings.py'
       - 'src/application/model_detection.py'
-      - 'src/config_manager.py'
+      - 'src/storage/config.py'
       - 'src/integrations/web/**'
-      - 'src/plc_generation_context_legacy.py'
+      - 'src/application/generation_context.py'
+      - 'src/application/generation_support.py'
       - 'tests/test_model_*.py'
       - 'tests/test_application_settings.py'
       - 'tests/test_web_*.py'
@@ -27,12 +28,13 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'src/model_*.py'
+      - 'src/model_runtime/**'
       - 'src/application/settings.py'
       - 'src/application/model_detection.py'
-      - 'src/config_manager.py'
+      - 'src/storage/config.py'
       - 'src/integrations/web/**'
-      - 'src/plc_generation_context_legacy.py'
+      - 'src/application/generation_context.py'
+      - 'src/application/generation_support.py'
       - 'tests/test_model_*.py'
       - 'tests/test_application_settings.py'
       - 'tests/test_web_*.py'

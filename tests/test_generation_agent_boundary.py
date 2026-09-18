@@ -1,7 +1,7 @@
 import json
 
 from application.generation import GenerationDependencies, GenerationRequest, GenerationWorkflow
-from model_provider import TextDelta
+from model_runtime.provider import TextDelta
 
 
 def _spec():
@@ -121,7 +121,7 @@ def test_injected_direct_generator_remains_one_call(tmp_path):
 def test_builtin_deepseek_chat_profile_uses_json_object_transport():
     from types import SimpleNamespace
     from application.generation_agent import _response_options
-    from config_manager import DEFAULT_MODEL_PROFILES
+    from storage.config import DEFAULT_MODEL_PROFILES
 
     profile = next(item for item in DEFAULT_MODEL_PROFILES if item["id"] == "deepseek-default")
     assert _response_options(SimpleNamespace(profile=profile)) == {

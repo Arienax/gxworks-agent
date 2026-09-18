@@ -10,19 +10,19 @@ from pathlib import Path
 from typing import Callable, Optional
 import copy
 
-import api
+import application.model_api as api
 from application.base import model_call
 from application.jobs import JobCancelled
-from application.generation_repair import (
+from plc.candidate_repair import (
     GenerationError, GenerationValidationError, candidate_base, validation_diagnostic,
 )
-from i18n import get_language, language_context, tr
-from config_manager import get_active_model_name, load_full_config
-from plc_generation import prepare_ladder_candidate, render_generation_artifacts
-from plc_json_validator import (
+from shared.i18n import get_language, language_context, tr
+from storage.config import get_active_model_name, load_full_config
+from plc.generation import prepare_ladder_candidate, render_generation_artifacts
+from plc.validation import (
     PLCJsonValidationError, validate_st_json,
 )
-from plc_ir import (
+from plc.ir import (
     IR_SCHEMA_VERSION, PLCIRValidationError, canonical_sha256, is_plc_ir,
 )
 
@@ -167,7 +167,7 @@ class GenerationWorkflow:
                 privately so the operator can repair them explicitly. No other
                 response-acceptance failure is downgraded here.
                 """
-                from model_provider import ResponseRejectedError
+                from model_runtime.provider import ResponseRejectedError
 
                 if not isinstance(error, ResponseRejectedError):
                     return None
@@ -222,7 +222,7 @@ class GenerationWorkflow:
             full_content = ""
             streaming_succeeded = False
             is_edit_mode = self.target_mode == "ladder" and self.previous_json is not None
-            from plc_generation_context import generation_user_input
+            from application.generation_context import generation_user_input
             model_user_input = generation_user_input(
                 self.user_input, is_edit_mode=is_edit_mode,
                 target_mode=self.target_mode, repair_mode=(self.repair_mode or self.format_repair),
@@ -364,7 +364,7 @@ class GenerationWorkflow:
                 emit_parsing_progress(tr('正在解析模型输出：清理流式文本'))
                 streaming_succeeded = True
             except Exception as stream_err:
-                from model_provider import ResponseRejectedError
+                from model_runtime.provider import ResponseRejectedError
 
                 if isinstance(stream_err, JobCancelled):
                     raise
@@ -554,7 +554,7 @@ class GenerationWorkflow:
                 rung_id = rung.get("rung_id") if isinstance(rung, dict) else None
                 if isinstance(rung_id, bool) or not isinstance(rung_id, int):
                     return None
-                from contract_repair import patch_device_addresses
+                from plc.specification.repair import patch_device_addresses
                 addresses = sorted(patch_device_addresses({"mode":"partial","device_comments":{},"rungs":[rung],"delete_rung_ids":[]}))
                 payload = {"repair_mode":"partial","plc_model":self.plc_model,
                     "instruction":f"JSON 格式已经恢复，但结构校验仍发现局部协议错误。只修复该梯级的协议/结构表示，不改变控制语义、地址、参数或触点极性。错误位置：{path}；原因：{diagnostic.get('reason','invalid_ladder_structure')}",
@@ -596,11 +596,11 @@ class GenerationWorkflow:
                 })
                 rendered = render_generation_artifacts(program_ir, self.output_dir)
                 artifacts = rendered["artifacts"]
-                from plc_st_renderer import ST_RENDERER_SCHEMA_VERSION
+                from plc.st_renderer import ST_RENDERER_SCHEMA_VERSION
 
-                from plc_semantics import SEMANTICS_SCHEMA_VERSION
-                from plc_static_analyzer import STATIC_ANALYSIS_SCHEMA_VERSION
-                from plc_timing import TIMING_ANALYSIS_SCHEMA_VERSION
+                from plc.semantics import SEMANTICS_SCHEMA_VERSION
+                from plc.static_analysis import STATIC_ANALYSIS_SCHEMA_VERSION
+                from plc.timing import TIMING_ANALYSIS_SCHEMA_VERSION
                 return {
                     "target_mode": "ladder",
                     "repair_attempts": repair_attempts,

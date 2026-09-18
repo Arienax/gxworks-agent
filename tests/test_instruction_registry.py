@@ -1,13 +1,13 @@
 import pytest
 
 from gxworks2.csv_importer import RawInstruction, _output_element
-from instruction_registry import (
+from plc.instructions import (
     DEFAULT_INSTRUCTION_REGISTRY,
     InstructionCategory,
     generation_app_instr_mnemonics,
 )
-from plc_ir import analyze_instruction_access
-from plc_json_validator import (
+from plc.ir import analyze_instruction_access
+from plc.validation import (
     PLCJsonValidationError,
     find_unverified_app_instructions,
     validate_ladder_full,

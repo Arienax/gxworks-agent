@@ -1,8 +1,8 @@
 import copy
 
-from plc_ir import apply_network_patch, build_plc_ir, canonical_sha256
-from plc_semantics import infer_semantic_requirements
-from plc_static_analyzer import trace_upstream
+from plc.ir import apply_network_patch, build_plc_ir, canonical_sha256
+from plc.semantics import infer_semantic_requirements
+from plc.static_analysis import trace_upstream
 
 
 def contact(kind, address, label=""):

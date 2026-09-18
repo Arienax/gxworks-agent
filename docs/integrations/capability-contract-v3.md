@@ -19,7 +19,7 @@ This change is a local review candidate; it is not a release or a live-provider 
 
 Verification asks for a maximum of 64 completion tokens and an 8-second SDK I/O timeout. Compatible services may count reasoning differently or ignore limits; this is not an absolute monetary cap. Verifying a larger output-token limit is refused locally. Change that limit for normal work instead. The interface shows a fee confirmation and sends no request when it is cancelled.
 
-The former `quick` API mode now resolves locally. The former `deep` mode fails before I/O with a migration message. The normal interface no longer offers batch scanning. `model_probes.py` now registers bounded single-capability fixtures, not a model/parameter allowlist. No background model calls occur when a control is changed.
+The former `quick` API mode now resolves locally. The former `deep` mode fails before I/O with a migration message. The normal interface no longer offers batch scanning. `model_runtime/probes.py` now registers bounded single-capability fixtures, not a model/parameter allowlist. No background model calls occur when a control is changed.
 
 ## Domain, evidence, hint and selection are distinct
 

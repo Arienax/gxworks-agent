@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "src"
 APPLICATION = SOURCE / "application"
 WEB = SOURCE / "integrations" / "web"
-GUI_MODULES = {"main", "qt_compat", "qtpy", "PyQt5", "PyQt6", "PySide2", "PySide6"}
+GUI_MODULES = {"main", "ui", "qtpy", "PyQt5", "PyQt6", "PySide2", "PySide6"}
 VENDOR_SDKS = {"openai", "anthropic", "zhipuai"}
 
 
@@ -47,8 +47,8 @@ def _assert_no_dependencies(paths, forbidden):
     violations = []
     for path in paths:
         for line, module in _module_references(path):
-            root = module.removeprefix("src.").split(".", 1)[0]
-            if root in forbidden:
+            reference = module.removeprefix("src.")
+            if any(reference == prefix or reference.startswith(prefix + ".") for prefix in forbidden):
                 violations.append(f"{path.relative_to(ROOT)}:{line} -> {module}")
     assert not violations, "\n".join(violations)
 
@@ -61,27 +61,27 @@ def test_application_and_web_never_import_qt_desktop_or_vendor_sdks():
 
 def test_http_adapters_use_application_services_not_engineering_or_model_implementations():
     _assert_no_dependencies(WEB.rglob("*.py"), {
-        "api", "model_provider", "plc_core", "plc_ir", "plc_agent", "plc_agent_tools",
-        "plc_json_validator", "plc_static_analyzer", "draw", "gxworks2", "simulator",
-        "pywinauto", "pythoncom", "credential_store", "config_manager",
+        "api", "model_runtime.provider", "plc.core", "plc.ir", "agent_runtime.agent", "agent_runtime.plc_tools",
+        "plc.validation", "plc.static_analysis", "rendering", "gxworks2", "simulator",
+        "pywinauto", "pythoncom", "storage.credentials", "storage.config",
     })
 
 
 def test_deterministic_core_does_not_depend_on_application_or_model_protocol():
     paths = {SOURCE / name for name in (
-        "plc_core.py", "plc_ir.py", "plc_generation_contract.py", "plc_semantics.py",
-        "plc_static_analyzer.py", "plc_timing.py", "plc_st_renderer.py", "draw.py",
-        "contract_repair.py", "ladder_repair.py",
-    )} | set(SOURCE.glob("plc_*validator.py"))
+        'plc/core.py', 'plc/ir.py', 'plc/generation_contract.py', 'plc/semantics.py',
+        'plc/static_analysis.py', 'plc/timing.py', 'plc/st_renderer.py', "rendering/ladder_svg.py",
+        'plc/specification/repair.py', 'plc/ladder_repair.py',
+    )} | set((SOURCE / "plc").rglob("*.py"))
     _assert_no_dependencies(paths, GUI_MODULES | VENDOR_SDKS | {
-        "api", "model_provider", "plc_agent", "application", "integrations", "mcp",
+        "api", "model_runtime.provider", "agent_runtime.agent", "application", "integrations", "mcp",
     })
 
 
 def test_model_protocol_does_not_import_application_or_engineering_implementation():
-    _assert_no_dependencies([SOURCE / "model_provider.py", SOURCE / "tool_messages.py"],
-        GUI_MODULES | {"application", "integrations", "api", "plc_agent", "plc_core",
-                       "plc_ir", "gxworks2", "simulator", "draw", "pywinauto", "pythoncom"})
+    _assert_no_dependencies([SOURCE / 'model_runtime/provider.py', SOURCE / 'agent_runtime/messages.py'],
+        GUI_MODULES | {"application", "integrations", "api", "agent_runtime.agent", "plc.core",
+                       "plc.ir", "gxworks2", "simulator", "rendering", "pywinauto", "pythoncom"})
 
 
 def test_all_application_and_web_modules_import_with_gui_and_desktop_execution_blocked(tmp_path):
@@ -95,7 +95,7 @@ def test_all_application_and_web_modules_import_with_gui_and_desktop_execution_b
         modules.append(".".join(parts))
     script = '''
 import importlib, importlib.abc, json, sys
-blocked = {"main", "qt_compat", "qtpy", "PyQt5", "PyQt6", "PySide2", "PySide6",
+blocked = {"main", "ui", "qtpy", "PyQt5", "PyQt6", "PySide2", "PySide6",
            "pywinauto", "pythoncom", "simulator.runtime"}
 attempts = []
 class BlockDesktop(importlib.abc.MetaPathFinder):

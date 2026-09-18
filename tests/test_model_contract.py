@@ -6,12 +6,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from model_contract import (
+from model_runtime.contract import (
     CapabilityContract, CapabilityDescriptor, ConstraintDescriptor, ParameterDescriptor,
     UserModelSettings, contract_scope, legacy_contract, metadata_contract_parts, normalize_contract,
 )
-from model_request_policy import resolve_request, public_contract_settings
-from model_provider import OpenAICompatibleProvider, ModelRequest, ModelProviderError, UserMessage
+from model_runtime.request_policy import resolve_request, public_contract_settings
+from model_runtime.provider import OpenAICompatibleProvider, ModelRequest, ModelProviderError, UserMessage
 from application.model_detection import inspect_openai_compatible
 from application.model_detection import list_metadata
 from test_model_capabilities import Endpoint, profile, provider, descriptor
@@ -256,7 +256,7 @@ def test_parent_deletion_does_not_resurrect_a_mapped_default(overlay):
 
 
 def test_json_schema_multiple_of_stays_anchored_at_zero():
-    from model_contract import metadata_contract_parts
+    from model_runtime.contract import metadata_contract_parts
     parameters, _, _ = metadata_contract_parts({"parameters": {"budget": {
         "type": "integer", "minimum": 100, "maximum": 4096, "multipleOf": 1024}}})
     budget = parameters["budget"]
@@ -270,7 +270,7 @@ def test_legacy_transport_defaults_coexist_with_nested_user_mapping():
         "wire_path": ["thinking", "budget_tokens"]}}, capabilities={})
     p["capabilities"] = {"thinking_required": True}
     # Transport flags form part of the observation context.
-    from model_contract import contract_scope, CapabilityContract
+    from model_runtime.contract import contract_scope, CapabilityContract
     c = CapabilityContract.from_dict(p["capabilityContract"])
     p["capabilityContract"]["scope"] = contract_scope(p, c.parameters, api_key="key")
     select(p, budget=2048)
@@ -292,8 +292,8 @@ def test_public_http_settings_schema_roundtrips_v2_without_exposing_key(settings
 
 
 def test_v2_selections_override_production_workflow_hints():
-    import api
-    import plc_agent
+    import application.model_api as api
+    import agent_runtime.agent as plc_agent
     from types import SimpleNamespace
     from test_model_provider import _Client, _chunk
     p = select(make_profile({"reasoning_effort": {"type": "enum", "values": ["low", "max"]},
@@ -310,7 +310,7 @@ def test_v2_selections_override_production_workflow_hints():
 
 
 def test_conditional_vision_uses_effective_user_value():
-    from model_provider import ImageAttachment
+    from model_runtime.provider import ImageAttachment
     p = select(make_profile({"image_mode": {"type": "boolean"}}, capabilities={"vision": {
         "status": "conditional", "requires": {"image_mode": [True]}}}), image_mode=True)
     request = ModelRequest((UserMessage("check", (ImageAttachment("x.png", "image/png", b"synthetic"),)),), stream=False)

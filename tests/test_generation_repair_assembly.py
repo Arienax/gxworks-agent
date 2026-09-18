@@ -1,12 +1,12 @@
 """Pure candidate assembly regression; no model, credentials or GX is used."""
 import copy
 import pytest
-from application.generation_repair import (
+from plc.candidate_repair import (
     RepairAssemblyError, assemble_validation_repair, candidate_base,
     check_candidate_containers, materialize_partial, validation_diagnostic,
 )
-from plc_json_validator import PLCJsonValidationError, validate_ladder_full
-from plc_generation_contract import ladder_response_schema
+from plc.validation import PLCJsonValidationError, validate_ladder_full
+from plc.generation_contract import ladder_response_schema
 
 
 def contact(kind, address):

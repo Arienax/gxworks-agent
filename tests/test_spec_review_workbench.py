@@ -3,12 +3,17 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from qt_compat import QApplication
-from workbench_widgets import RequirementReviewCard, SpecificationWorkbenchDialog
+from ui.desktop.qt import QApplication
+from ui.desktop.workbench import RequirementReviewCard, SpecificationWorkbenchDialog
+
+
+_APPLICATION = None
 
 
 def _app():
-    return QApplication.instance() or QApplication([])
+    global _APPLICATION
+    _APPLICATION = QApplication.instance() or QApplication([])
+    return _APPLICATION
 
 
 def _analysis():
@@ -93,11 +98,14 @@ def test_specification_workbench_marks_previous_spec_as_delta():
     dialog.close()
 
 
-def test_pyinstaller_specs_keep_legacy_editor_as_runtime_data():
+def test_pyinstaller_specs_use_importable_editor_package():
+    assert Path("src/ui/desktop/workbench/editor.py").is_file()
+    facade = Path("src/ui/desktop/workbench/__init__.py").read_text(encoding="utf-8")
+    assert "from .review import RequirementReviewCard, SpecificationWorkbenchDialog" in facade
     for relative in (
         "packaging/pyinstaller/desktop.spec",
         "packaging/pyinstaller/desktop-win7.spec",
     ):
         text = (Path(relative)).read_text(encoding="utf-8")
-        assert "workbench_widgets.py" in text
+        assert 'src/ui/desktop/workbench.py' not in text
         assert "Path(SPECPATH).resolve().parents[1]" in text

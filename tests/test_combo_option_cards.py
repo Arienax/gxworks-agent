@@ -2,8 +2,8 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from qt_compat import QApplication
-from ui_controls import (
+from ui.desktop.qt import QApplication
+from ui.desktop.controls import (
     BorderedComboBox,
     OPTION_SUBTITLE_ROLE,
     split_option_card_text,
