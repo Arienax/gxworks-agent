@@ -246,7 +246,7 @@ def test_confirmed_contract_survives_review_and_canonicalization():
     assert validate_spec_draft(canonical, "FX3U")["errors"] == []
 
 
-def test_duplicate_candidate_contracts_are_rejected_before_confirmation():
+def test_duplicate_candidate_contracts_do_not_block_confirmation():
     first = _approach(
         "方案一",
         "直接逻辑",
@@ -255,6 +255,7 @@ def test_duplicate_candidate_contracts_are_rejected_before_confirmation():
     second = copy.deepcopy(first)
     second["approach_id"] = "second"
     second["name"] = "方案二"
+    second["generation_guide"] = "同一硬约束下使用不同的数据组织与生成步骤"
     spec = {
         "plc_model": "FX3U",
         "approaches": [first, second],
@@ -263,9 +264,94 @@ def test_duplicate_candidate_contracts_are_rejected_before_confirmation():
         "io_table": [],
     }
 
-    errors = validate_spec_draft(spec, "FX3U")["errors"]
+    issues = validate_spec_draft(spec, "FX3U")
 
-    assert any(item["code"] == "duplicate_approach_contract" for item in errors)
+    assert issues["errors"] == []
+    assert not any(item["code"] == "duplicate_approach_contract" for item in issues["warnings"])
+
+
+def test_unselected_candidate_contract_problem_is_advisory_only():
+    selected = _approach(
+        "可用方案",
+        "直接逻辑",
+        {"required_structures": ["direct_logic"]},
+    )
+    broken = _approach(
+        "未选坏方案",
+        "模型候选里出现自相矛盾的结构约束",
+        {
+            "required_structures": ["register_state_machine"],
+            "forbidden_structures": ["register_state_machine"],
+        },
+    )
+    spec = {
+        "plc_model": "FX3U",
+        "approaches": [selected, broken],
+        "selected_approach": selected,
+        "parameters": [],
+        "io_table": [],
+    }
+
+    issues = validate_spec_draft(spec, "FX3U")
+
+    assert issues["errors"] == []
+    assert any(
+        item["code"] == "candidate_approach_contract_warning"
+        for item in issues["warnings"]
+    )
+
+
+def test_selected_approach_may_be_confirmed_even_if_not_in_candidate_list():
+    candidate = _approach(
+        "候选方案",
+        "候选实现",
+        {"required_structures": ["direct_logic"]},
+    )
+    selected = _approach(
+        "用户当前方案",
+        "用户直接修改后的独立实现",
+        {"required_structures": ["register_state_machine"]},
+    )
+    selected["approach_id"] = "user-current"
+    spec = {
+        "plc_model": "FX3U",
+        "approaches": [candidate],
+        "selected_approach": selected,
+        "parameters": [],
+        "io_table": [],
+    }
+
+    issues = validate_spec_draft(spec, "FX3U")
+
+    assert issues["errors"] == []
+    assert any(
+        item["code"] == "selected_approach_not_in_candidates"
+        and item.get("blocking") is False
+        for item in issues["warnings"]
+    )
+
+
+def test_selected_self_contradictory_contract_still_fails_before_model_call():
+    selected = _approach(
+        "矛盾方案",
+        "用户明确写出的不可同时满足约束",
+        {
+            "required_structures": ["direct_logic"],
+            "forbidden_structures": ["direct_logic"],
+        },
+    )
+    issues = validate_spec_draft(
+        {
+            "plc_model": "FX3U",
+            "approaches": [selected],
+            "selected_approach": selected,
+            "parameters": [],
+            "io_table": [],
+        },
+        "FX3U",
+    )
+
+    assert any(item["code"] == "invalid_approach_contract" for item in issues["errors"])
 
 
 def test_selected_register_state_machine_is_enforced_by_full_validator():

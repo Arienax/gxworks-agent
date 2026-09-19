@@ -6,7 +6,6 @@ from plc.specification.bindings import bind_answers, binding_hint, single_addres
 
 from plc.specification.approach import (
     contract_definition_issues,
-    generation_contract_signature,
     normalize_approach,
 )
 from plc.hardware_profiles import (
@@ -403,28 +402,28 @@ def validate_spec_draft(spec, plc_model=None):
     approaches = [
         item for item in (spec.get("approaches") or []) if isinstance(item, dict)
     ]
-    contract_signatures = {}
+    # Candidate quality must never block the user's next step. Different
+    # approaches may legitimately share the same hard generation contract and
+    # differ only in generation_guide / data model / sequencing semantics.
+    # Likewise, an unselected candidate with a malformed contract is advisory:
+    # only the selected contract can affect generation.
     for index, approach in enumerate(approaches):
         path = f"$.approaches[{index}].generation_contract"
         for message in contract_definition_issues(approach):
-            errors.append(
-                _validation_issue("invalid_approach_contract", message, path)
-            )
-        signature = generation_contract_signature(approach)
-        if signature in contract_signatures:
-            first = contract_signatures[signature]
-            errors.append(
+            warnings.append(
                 _validation_issue(
-                    "duplicate_approach_contract",
-                    f"方案与第 {first + 1} 个方案使用了相同生成约束，无法保证选项代表不同实现",
+                    "candidate_approach_contract_warning",
+                    message,
                     path,
+                    blocking=False,
                 )
             )
-        else:
-            contract_signatures[signature] = index
 
     selected_approach = spec.get("selected_approach")
     if selected_approach:
+        # A self-contradictory selected hard contract is still a real local
+        # impossibility. Keep that pre-model-call guard so we do not spend
+        # generation tokens on a contract that cannot be satisfied.
         for message in contract_definition_issues(selected_approach):
             errors.append(
                 _validation_issue(
@@ -438,11 +437,12 @@ def validate_spec_draft(spec, plc_model=None):
             normalize_approach(item).get("approach_id") for item in approaches
         }
         if approaches and selected_id not in available_ids:
-            errors.append(
+            warnings.append(
                 _validation_issue(
                     "selected_approach_not_in_candidates",
-                    "当前选择的方案不在本轮候选方案中，请重新选择",
+                    "当前选择方案不在本轮候选列表中；将按当前选择方案继续确认",
                     "$.selected_approach.approach_id",
+                    blocking=False,
                 )
             )
 
