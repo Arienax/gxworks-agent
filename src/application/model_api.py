@@ -319,6 +319,7 @@ def analyze_requirement(
     task_type=None,
     image_attachments=None,
     on_format_repair=None,
+    analysis_mode="direct",
 ) -> dict:
     """
     Phase 1: fast analysis with effort=low.
@@ -331,6 +332,7 @@ def analyze_requirement(
         user_requirement,
         plc_model=model,
         confirmed_context=confirmed_context,
+        analysis_mode=analysis_mode,
         model_loader=_load_plc_models,
         knowledge_builder=_build_knowledge_context,
         resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form,
@@ -362,6 +364,8 @@ def analyze_requirement(
         raw = raw.strip()
 
         result = _parse_analysis_response(raw, model, user_requirement, confirmed_context)
+        # Application metadata, not a mode selected by the model response.
+        result["analysis_mode"] = "design" if analysis_prompt.route.include_design else "direct"
         from application.analysis_results import attach_analysis_evidence
         result = attach_analysis_evidence(result, knowledge_ctx, plc_model=model,
                                           knowledge_builder=_build_knowledge_context)
@@ -386,6 +390,7 @@ def analyze_requirement_streaming(
     task_type=None,
     image_attachments=None,
     on_format_repair=None,
+    analysis_mode="direct",
 ):
     """
     阶段1 流式版：分析用户需求，实时显示思考过程。
@@ -399,6 +404,7 @@ def analyze_requirement_streaming(
         user_requirement,
         plc_model=model,
         confirmed_context=confirmed_context,
+        analysis_mode=analysis_mode,
         model_loader=_load_plc_models,
         knowledge_builder=_build_knowledge_context,
         resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form,
@@ -433,6 +439,8 @@ def analyze_requirement_streaming(
         raw = raw.strip()
 
         result = _parse_analysis_response(raw, model, user_requirement, confirmed_context)
+        # Application metadata, not a mode selected by the model response.
+        result["analysis_mode"] = "design" if analysis_prompt.route.include_design else "direct"
         from application.analysis_results import attach_analysis_evidence
         result = attach_analysis_evidence(result, knowledge_ctx, plc_model=model,
                                           knowledge_builder=_build_knowledge_context)

@@ -175,21 +175,12 @@ def _select_system_prompt(target_mode, is_edit_mode=False, user_requirement="", 
 
 def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="generate",
                              confirmed_context=None, evidence=None,
-                             include_design=None, design_query=None):
+                             include_design=False, design_query=None):
     from knowledge.evidence import KnowledgeContext, context_manifest, text_sha256
     from plc.specification.provenance import retrieval_projection
 
     normalized_task = str(task_type or "generate").strip().casefold()
-    if normalized_task == "analysis" and include_design is None:
-        from knowledge.analysis_router import route_analysis_request
-        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
-        route = route_analysis_request(
-            primary_query, confirmed_context,
-            resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form,
-        )
-        include_design = route.include_design
-        if include_design and design_query is None:
-            design_query = route.query_text
+    # Retrieval executes the caller's choice. Omitted/None never means "infer".
     def absent(status, reason):
         audit_section("manual_context", status=status, reason=reason, source="manual_retriever")
         return KnowledgeContext("", {"stage": normalized_task, "status": status,

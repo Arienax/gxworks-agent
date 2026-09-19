@@ -527,6 +527,12 @@ class WorkbenchService:
 
     def submit(self, command):
         self.writable()
+        # Mode is a frozen job input, never a PLC contract or mutable UI setting.
+        command = copy.deepcopy(command)
+        if command.get("kind") == "analysis":
+            command["analysis_mode"] = "design" if command.get("analysis_mode") == "design" else "direct"
+        else:
+            command.pop("analysis_mode", None)
         # Retry identity is the original HTTP command, not a newly observed
         # project/model snapshot. This also avoids reopening credentials on retry.
         request_key = hashlib.sha256(command["request_id"].encode()).hexdigest()
@@ -536,7 +542,16 @@ class WorkbenchService:
             if path.exists():
                 saved = read_json(path)
                 if saved["command_hash"] != digest:
-                    raise ConflictError("Request ID is already bound to another command")
+                    # A retry from an older client may predate this field. Reuse
+                    # that old job; never reinterpret or rerun its analysis.
+                    legacy = {key: value for key, value in command.items() if key != "analysis_mode"}
+                    legacy_direct_retry = (
+                        command.get("kind") == "analysis"
+                        and command.get("analysis_mode") == "direct"
+                        and saved["command_hash"] == canonical_hash(legacy)
+                    )
+                    if not legacy_direct_retry:
+                        raise ConflictError("Request ID is already bound to another command")
                 return self.jobs.get(saved["job_id"])
             job = self._submit_job(command)
             atomic_json(path, {"command_hash": digest, "job_id": job["id"]})
@@ -641,14 +656,17 @@ class WorkbenchService:
             from application.model_api import analyze_requirement_streaming
             from plc.specification.confirmed import build_review_draft
             ctx.emit("progress", {"message": "正在分析需求"})
+            analysis_mode = snapshot.get("analysis_mode", "direct")
             analysis = analyze_requirement_streaming(text, confirmed_spec=project.get("confirmed_spec"),
+                analysis_mode=analysis_mode,
                 conversation_history=project.get("messages", []), image_attachments=images,
                 on_reasoning_chunk=lambda t: ctx.emit("reasoning", {"text": t}),
                 on_content_chunk=lambda t: ctx.emit("content", {"text": t}), response_language=language,
                 on_format_repair=lambda: ctx.emit("progress", {"message": "正在修正需求分析的回复格式"}))
             if not isinstance(analysis, dict):
                 raise ValueError("需求分析未完成。")
-            output = {"analysis": analysis, "spec_draft": build_review_draft(analysis, project.get("confirmed_spec")),
+            output = {"analysis_mode": analysis_mode, "analysis": analysis,
+                      "spec_draft": build_review_draft(analysis, project.get("confirmed_spec")),
                       "spec_base_hash": public_spec_hash(project.get("confirmed_spec")), "base_version_id": snapshot.get("version_id")}
         elif kind == "generation":
             from application.generation import GenerationRequest, GenerationWorkflow, GenerationDependencies

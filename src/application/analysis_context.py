@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from knowledge.analysis_router import AnalysisRoute, route_analysis_request
 from application.prompts import (
-    ANALYSIS_SYSTEM_PROMPT, ANALYSIS_PINNED_PROMPT, ANALYSIS_DESIGN_PROMPT,
+    ANALYSIS_SYSTEM_PROMPT, ANALYSIS_DIRECT_PROMPT, ANALYSIS_PINNED_PROMPT, ANALYSIS_DESIGN_PROMPT,
     ANALYSIS_VFD_PROMPT, ANALYSIS_MOTION_PROMPT, ANALYSIS_MOTION_FAMILY_PROMPTS,
     ANALYSIS_PUMP_PROMPT,
 )
@@ -83,9 +83,12 @@ class AnalysisPrompt:
 
 
 def assemble_analysis_prompt(user_request, *, plc_model, confirmed_context=None,
-                             model_loader, knowledge_builder, resolve_opcode=None, audit=None):
+                             model_loader, knowledge_builder, resolve_opcode=None, audit=None,
+                             analysis_mode="direct"):
     """Compose first; a route is not a label added after broad prompt assembly."""
-    route = route_analysis_request(user_request, confirmed_context, resolve_opcode=resolve_opcode)
+    route = route_analysis_request(
+        user_request, confirmed_context, analysis_mode=analysis_mode, resolve_opcode=resolve_opcode,
+    )
     profile = minimal_analysis_profile(plc_model, model_loader(), route)
     instruction_facts = {}
     if resolve_opcode is not None:
@@ -120,7 +123,9 @@ def assemble_analysis_prompt(user_request, *, plc_model, confirmed_context=None,
                       if name in ANALYSIS_MOTION_FAMILY_PROMPTS)
     if "pump" in route.topics:
         deltas.append(ANALYSIS_PUMP_PROMPT)
-    mode_prompt = ANALYSIS_DESIGN_PROMPT if route.include_design else ANALYSIS_PINNED_PROMPT
+    mode_prompt = ANALYSIS_DESIGN_PROMPT if route.include_design else ANALYSIS_DIRECT_PROMPT
+    if route.mode == "pinned":
+        mode_prompt += "\n\n" + ANALYSIS_PINNED_PROMPT
     model_context = "# Relevant PLC model facts\n" + json.dumps(profile, ensure_ascii=False, separators=(",", ":"))
     baseline = _baseline_for_analysis(confirmed_context)
     parts = [ANALYSIS_SYSTEM_PROMPT, mode_prompt, *deltas, model_context, str(knowledge)]

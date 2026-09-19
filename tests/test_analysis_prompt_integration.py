@@ -13,7 +13,9 @@ from shared.context_policy import context_policy_scope
 
 
 @pytest.mark.parametrize("streaming", [False, True])
-def test_analysis_entry_uses_routed_assembly_and_one_model_call(monkeypatch, streaming):
+@pytest.mark.parametrize("mode", [None, "direct", "design"])
+@pytest.mark.parametrize("selected", [False, True])
+def test_analysis_entry_uses_routed_assembly_and_one_model_call(monkeypatch, streaming, mode, selected):
     knowledge_calls, model_calls = [], []
     monkeypatch.setattr(api, "_resolve_plc_model", lambda *args: "FX3U")
     monkeypatch.setattr(api, "_load_plc_models", lambda: {"FX3U": {
@@ -29,18 +31,23 @@ def test_analysis_entry_uses_routed_assembly_and_one_model_call(monkeypatch, str
         return "TARGETED_FACTS"
     def response(messages, **kwargs):
         model_calls.append((messages, kwargs))
-        return SimpleNamespace(message=SimpleNamespace(content='{"summary":"ok"}'))
+        return SimpleNamespace(message=SimpleNamespace(content='{"summary":"ok","analysis_mode":"untrusted-model-mode"}'))
     monkeypatch.setattr(api, "_build_knowledge_context", knowledge)
     monkeypatch.setattr(api, "_request_analysis_response", response)
     function = api.analyze_requirement_streaming if streaming else api.analyze_requirement
-    result = function("FX3U 使用 SFTL M10 M100 K128 K1，由 LDP M8012 触发")
+    kwargs = {} if mode is None else {"analysis_mode": mode}
+    baseline = {"selected_approach": {"name": "SFTL chain"}} if selected else None
+    result = function("FX3U 比较 SFTL M10 M100 K128 K1，由 LDP M8012 触发",
+                      confirmed_context=baseline, **kwargs)
+    assert result["analysis_mode"] == (mode or "direct")
     assert result["summary"] == "ok"
     assert len(model_calls) == 1
     assert model_calls[0][1]["stream"] is streaming
     assert len(knowledge_calls) == 1
-    assert knowledge_calls[0][1]["include_design"] is False
+    assert knowledge_calls[0][1]["include_design"] is (mode == "design")
     prompt = model_calls[0][0][0]["content"]
-    assert "Analysis mode: pinned / extract" in prompt
+    assert f"Analysis mode: {mode or 'direct'}" in prompt
+    assert ("Direct substate: pinned" in prompt) == (selected and mode != "design")
     assert "TARGETED_FACTS" in prompt
     assert "PLC workflow router" not in prompt
     assert "Scan cycle and output ownership review" not in prompt
@@ -57,14 +64,15 @@ def _design():
             "title": "Architecture", "text": "DESIGN_PATTERN_SENTINEL", "page": 1}
 
 
-def test_pinned_retrieval_never_calls_design_lane_or_leaks_design_as_fact(monkeypatch):
+@pytest.mark.parametrize("options", [{}, {"include_design": None}, {"include_design": False}])
+def test_direct_retrieval_never_calls_design_lane_or_leaks_design_as_fact(monkeypatch, options):
     def unexpected(*args, **kwargs):
         raise AssertionError("Pinned requests must not call design RAG")
     monkeypatch.setattr(retriever, "retrieve_design_knowledge", unexpected)
     monkeypatch.setattr(retriever, "retrieve_knowledge", lambda *args, **kwargs: [_design(), _fact()])
     monkeypatch.setattr(retriever._core, "_format_result_block", lambda item: item["text"])
     context = retriever.build_knowledge_context(
-        "FX3U SFTL M8012", task_type="analysis", include_design=False, top_k=4, char_budget=12000)
+        "FX3U 比较 SFTL 与 WSFL 多种架构", task_type="analysis", top_k=4, char_budget=12000, **options)
     assert "SFTL fact" in context
     assert "DESIGN_PATTERN_SENTINEL" not in context
     assert context_manifest(context)["design_enabled"] is False
@@ -109,7 +117,8 @@ def test_application_passes_analysis_policy_to_retriever(monkeypatch):
     assert seen[0]["design_query"] is None
 
 
-def test_direct_analysis_knowledge_call_is_also_routed(monkeypatch):
+@pytest.mark.parametrize("options", [{}, {"include_design": None}, {"include_design": False}])
+def test_analysis_knowledge_defaults_never_infer_design(monkeypatch, options):
     seen = []
     def capture(query, **kwargs):
         seen.append(kwargs)
@@ -117,5 +126,5 @@ def test_direct_analysis_knowledge_call_is_also_routed(monkeypatch):
     monkeypatch.setattr(retriever, "build_knowledge_context", capture)
     with context_policy_scope("adaptive"):
         generation_context._build_knowledge_context(
-            "FX3U 使用 SFTL M10 M100 K128 K1", task_type="analysis")
+            "FX3U 比较 SFTL 和 WSFL，其他结构由你设计", task_type="analysis", **options)
     assert seen[0]["include_design"] is False

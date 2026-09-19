@@ -161,7 +161,7 @@ def retrieve_design_knowledge(
 
 def build_knowledge_context(
     query, plc_model="FX3U", task_type="generate", top_k=5, char_budget=6000,
-    token_budget=None, include_design=None, design_query=None,
+    token_budget=None, include_design=False, design_query=None,
 ):
     """Return prompt text plus a detached manifest of the blocks actually used.
 
@@ -195,12 +195,7 @@ def build_knowledge_context(
     available_tokens = (token_limit - header_tokens) if token_limit is not None else None
     # The public top_k still caps included blocks. Recall a bounded larger pool
     # so a long first chunk does not hide a shorter usable factual reference.
-    if task == "analysis" and include_design is None:
-        from knowledge.analysis_router import route_analysis_request
-        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
-        include_design = route_analysis_request(
-            query, resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form,
-        ).include_design
+    # Explicit opt-in only, including direct calls that bypass the assembler.
     design_enabled = task == "analysis" and bool(include_design)
     manifest["design_enabled"] = design_enabled
     if design_enabled:

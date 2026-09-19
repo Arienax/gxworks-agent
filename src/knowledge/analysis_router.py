@@ -1,4 +1,4 @@
-"""Deterministic analysis routing; no model call and no acceptance policy."""
+"""Route PLC facts; analysis mode is an explicit caller choice, never inferred."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,22 +12,6 @@ _NEGATED = re.compile(
     r"(?:不要|不用|不使用|不采用|没有(?!(?:[^，,。；;\n]{0,24})(?:型号|参数|地址|信息))|无需|不需要|不涉及|不包含|不是|不比较|不讨论|禁止|without\b|do not\b|don't\b|no\b)"
     r"(?:(?!改用|改为|改成|而是|但是|\bbut\b|\binstead\b)[^，,。；;\n])*", re.I,
 )
-_OPEN = re.compile(
-    r"(?:其他|其余|剩余|未定|开放)(?:的)?[^，,。；;\n]{0,20}(?:设计|方案|架构)|"
-    r"比较|对比|重新设计|重做方案|替代方案|其他方案|其它方案|哪种(?:实现|方案|架构)|"
-    r"(?:推荐|选择|优化|改进)[^，,。；;\n]{0,24}(?:方案|架构|实现)|"
-    r"(?:方案|架构)[^，,。；;\n]{0,16}(?:更好|合适|怎么选)|"
-    r"如何组织[^，,。；;\n]{0,12}架构|怎么选(?:方案|架构)|"
-    r"\b(?:compare|alternatives?|redesign)\b", re.I,
-)
-_EXTRACT = re.compile(
-    r"(?:只|仅)(?:需|要)?[^，,。；;\n]{0,12}(?:整理|提取|补充|抽取)|"
-    r"(?:整理|提取|抽取)[^，,。；;\n]{0,16}(?:需求|规格|参数|json)|"
-    r"按(?:照)?(?:上述|以下|这个|原|已确认|既定)[^，,。；;\n]{0,12}(?:方案|规格|实现)|"
-    r"(?:保持|沿用)[^，,。；;\n]{0,12}(?:方案|架构)|"
-    r"\bextract\b|\bdo not redesign\b|不要重新设计", re.I,
-)
-_FIXED = re.compile(r"(?:使用|采用|固定|必须|就用|改用|改为|用|use\b|using\b)[^，,。；;\n]*", re.I)
 _MOTION = re.compile(
     r"伺服|步进电机|步进驱动|运动控制|定位轴|高速脉冲输出|回原点|回零|"
     r"\b(?:servo|stepper|positioning|homing)\b|\bmotion\s+control\b", re.I,
@@ -83,12 +67,14 @@ class AnalysisRoute:
         return self.mode == "design"
 
 
-def route_analysis_request(user_request, confirmed_context=None, *, resolve_opcode: Callable | None = None):
+def route_analysis_request(user_request, confirmed_context=None, *, analysis_mode="direct",
+                           resolve_opcode: Callable | None = None):
+    """Only the supplied mode can enable design; pinned is a Direct substate."""
     current = str(user_request or "")
     positive = _NEGATED.sub("", current)
     baseline = _NEGATED.sub("", _selected_text(confirmed_context))
     text = "\n".join(part for part in (positive, baseline) if part.strip())
-    current_ops, opcodes, bases = [], [], set()
+    opcodes, bases = [], set()
     if resolve_opcode is not None:
         for token in _TOKEN.finditer(text):
             raw_token = token.group()
@@ -102,27 +88,16 @@ def route_analysis_request(user_request, confirmed_context=None, *, resolve_opco
             if opcode not in opcodes:
                 opcodes.append(opcode)
             bases.add(str(getattr(resolution, "base_mnemonic", opcode)).upper())
-            if token.start() < len(positive) and opcode not in current_ops:
-                current_ops.append(opcode)
     selected = confirmed_context.get("selected_approach") if isinstance(confirmed_context, Mapping) else None
     has_selected = isinstance(selected, Mapping) and bool(selected)
-    has_call = any(re.search(
-        rf"(?<![A-Za-z0-9_]){re.escape(op)}\s+[KHDXYMTSCRVZ]\d+(?![A-Za-z0-9_])",
-        positive, re.I,
-    ) for op in current_ops)
-    fixed_opcode = any(
-        any(re.search(rf"(?<![A-Za-z0-9_]){re.escape(op)}(?![A-Za-z0-9_])", match.group(), re.I)
-            for op in current_ops)
-        for match in _FIXED.finditer(positive)
-    )
-    if _OPEN.search(positive):
-        mode, reason = "design", "explicit_design_request"
-    elif _EXTRACT.search(current) or has_call or fixed_opcode:
-        mode, reason = "pinned", "explicit_implementation_or_extraction"
+    # No keyword/complexity/missing-parameter heuristic may open design.
+    # A selected baseline only refines Direct; it cannot override Design.
+    if analysis_mode == "design":
+        mode, reason = "design", "user_selected_design"
     elif has_selected:
-        mode, reason = "pinned", "selected_approach_baseline"
+        mode, reason = "pinned", "direct_selected_approach_baseline"
     else:
-        mode, reason = "design", "implementation_open"
+        mode, reason = "direct", "direct_single_implementation"
     families = tuple(name for name, members in _FAMILIES.items() if bases & members)
     topics = []
     negated = "\n".join(match.group() for match in _NEGATED.finditer(current))

@@ -75,6 +75,8 @@ def test_bundled_design_knowledge_is_injected_through_production_analysis_path()
             query,
             plc_model="FX3U",
             task_type="analysis",
+            include_design=True,
+            design_query=query,
         )
     assert "Curated PLC Control Architecture Design Knowledge" in context
     assert "CONTROL ARCHITECTURE:" in context

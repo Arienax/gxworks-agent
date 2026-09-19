@@ -37,26 +37,26 @@ def resolve(opcode):
     return SimpleNamespace(base_mnemonic=base)
 
 
-def route(text, spec=None):
-    return route_analysis_request(text, spec, resolve_opcode=resolve)
+def route(text, spec=None, analysis_mode="direct"):
+    return route_analysis_request(text, spec, analysis_mode=analysis_mode, resolve_opcode=resolve)
 
 
-def build(text=SFTL_REQUEST, spec=None, evidence="FACT_EVIDENCE", profile=PROFILE):
+def build(text=SFTL_REQUEST, spec=None, evidence="FACT_EVIDENCE", profile=PROFILE, analysis_mode="direct"):
     calls, audits = [], []
     def knowledge(query, **kwargs):
         calls.append((query, kwargs))
         return evidence
     assembled = assemble_analysis_prompt(
-        text, plc_model="FX3U", confirmed_context=spec,
+        text, plc_model="FX3U", confirmed_context=spec, analysis_mode=analysis_mode,
         model_loader=lambda: profile, knowledge_builder=knowledge, resolve_opcode=resolve,
         audit=lambda *args, **kwargs: audits.append((args, kwargs)),
     )
     return assembled, calls, audits
 
 
-def test_fixed_sftl_is_extraction_even_with_missing_stop_parameter():
+def test_direct_sftl_does_not_explore_despite_missing_stop_parameter():
     result = route(SFTL_REQUEST)
-    assert result.mode == "pinned"
+    assert result.mode == "direct"
     assert result.opcodes == ("SFTL", "LDP")
     assert not result.include_design
     assert result.topics == ()
@@ -67,25 +67,28 @@ def test_fixed_sftl_is_extraction_even_with_missing_stop_parameter():
     "只整理以下需求为规格，传感器地址未给", "不要重新设计，只补充参数",
 ])
 def test_fixed_or_extract_requests_do_not_require_complete_parameters_to_route(text):
-    assert route(text).mode == "pinned"
+    assert route(text).mode == "direct"
 
 
 @pytest.mark.parametrize("text", [
     "FX3U 三工位依次执行，包含顺序和延时，如何组织控制架构", "设计一个普通起保停",
     "比较 SFTL 和 WSFL 方案", "使用 SFTL 或 WSFL 哪种方案更好", "推荐控制架构",
 ])
-def test_open_requests_retain_design(text):
-    assert route(text).include_design
+def test_keywords_never_open_design_without_explicit_mode(text):
+    assert not route(text).include_design
+    assert not route(text, analysis_mode="direct").include_design
+    assert route(text, analysis_mode="design").include_design
 
 
 def test_ordinary_how_to_implement_does_not_reopen_an_explicit_plan():
-    assert route("使用 SFTL M10 M100 K128 K1，如何实现？").mode == "pinned"
+    assert route("使用 SFTL M10 M100 K128 K1，如何实现？").mode == "direct"
 
 
-def test_current_request_can_reopen_selected_approach():
+def test_only_explicit_mode_can_reopen_selected_approach():
     selected = {"selected_approach": {"name": "SFTL chain"}}
     assert route("参数改成K64", selected).mode == "pinned"
-    assert route("比较一下其他方案", selected).include_design
+    assert not route("比较一下其他方案", selected).include_design
+    assert route("参数改成K64", selected, analysis_mode="design").include_design
 
 
 def test_unselected_candidates_history_and_model_questions_cannot_route():
@@ -119,18 +122,21 @@ def test_negated_old_hardware_is_not_reintroduced_from_baseline():
 
 def test_negative_old_opcode_does_not_erase_the_new_choice():
     result = route("不用 SFTL 改用 WSFL 实现")
-    assert result.mode == "pinned"
+    assert result.mode == "direct"
     assert result.opcodes == ("WSFL",)
 
 
 def test_lowercase_english_prepositions_are_not_fixed_opcodes():
-    assert route("use a motor to open or close the gate").mode == "design"
+    result = route("use a motor to open or close the gate")
+    assert result.mode == "direct"
+    assert result.opcodes == ()
 
 
-def test_pinned_prompt_contains_facts_not_generic_architecture_rules():
+def test_direct_prompt_contains_facts_not_generic_architecture_rules():
     result, calls, audits = build()
     prompt = result.system_prompt
-    assert "Analysis mode: pinned / extract" in prompt
+    assert "Analysis mode: direct" in prompt
+    assert "Direct substate: pinned" not in prompt
     for forbidden in ("PLC workflow router", "Scan cycle and output ownership review", "Analysis mode: design",
                       "Relevant questions: VFD", "Relevant questions: motion", "Relevant questions: pump",
                       "irrelevant_motion_table", "irrelevant_analog_table", "D8345"):
@@ -139,11 +145,11 @@ def test_pinned_prompt_contains_facts_not_generic_architecture_rules():
     assert calls == [("FX3U\nSFTL LDP M8012", {
         "plc_model": "FX3U", "task_type": "analysis", "include_design": False, "design_query": None,
     })]
-    assert any(args[0] == "system_prompt" and kw["reason"] == "analysis_pinned" for args, kw in audits)
+    assert any(args[0] == "system_prompt" and kw["reason"] == "analysis_direct" for args, kw in audits)
 
 
 def test_open_design_has_a_separate_design_query():
-    result, calls, _ = build("比较 SFTL 与 WSFL 分拣架构")
+    result, calls, _ = build("比较 SFTL 与 WSFL 分拣架构", analysis_mode="design")
     assert "Analysis mode: design / open" in result.system_prompt
     assert calls[0][1]["include_design"] is True
     assert "分拣架构" in calls[0][1]["design_query"]
@@ -222,7 +228,8 @@ def test_core_shape_and_required_parameter_instructions_remain():
 
 
 def test_partly_fixed_request_can_delegate_the_remaining_design():
-    assert route("使用 SFTL，其他控制结构由你设计").include_design
+    assert route("使用 SFTL，其他控制结构由你设计", analysis_mode="design").include_design
+    assert not route("使用 SFTL，其他控制结构由你设计").include_design
 
 
 def test_model_capability_catalog_is_not_hardware_intent():
@@ -234,5 +241,35 @@ def test_model_capability_catalog_is_not_hardware_intent():
 
 def test_unknown_instruction_is_not_a_new_rejection_or_silent_deletion():
     result, calls, _ = build("只提取规格：MYINSTR D0 D2")
-    assert result.route.mode == "pinned"
+    assert result.route.mode == "direct"
     assert "MYINSTR D0 D2" in calls[0][0]
+
+
+@pytest.mark.parametrize("text", [
+    "三气缸顺序控制", "三泵启停", "十步顺控", "SET/RST 状态机", "SFTL 移位",
+    "复杂伺服定位，采用 DRVI D0 K1000 Y0 Y1，目标还没给", "优化模拟量通信架构",
+])
+@pytest.mark.parametrize("selected", [None, {"selected_approach": {"name": "现有实现"}}])
+def test_modes_change_exploration_not_the_fact_route(text, selected):
+    direct, direct_calls, _ = build(text, selected, analysis_mode="direct")
+    design, design_calls, _ = build(text, selected, analysis_mode="design")
+    assert direct_calls[0][1]["include_design"] is False
+    assert direct_calls[0][1]["design_query"] is None
+    assert design_calls[0][1]["include_design"] is True
+    assert direct.route.topics == design.route.topics
+    assert direct.route.opcodes == design.route.opcodes
+    assert direct.route.devices == design.route.devices
+    assert "Analysis mode: direct" in direct.system_prompt
+    assert ("Direct substate: pinned / extract" in direct.system_prompt) == bool(selected)
+    assert "Analysis mode: design" not in direct.system_prompt
+    assert "Direct substate: pinned" not in design.system_prompt
+    assert "Analysis mode: direct" not in design.system_prompt
+
+
+def test_direct_is_not_a_lossy_engineering_spec_contract():
+    from application.prompts import ANALYSIS_DIRECT_PROMPT, ANALYSIS_PINNED_PROMPT
+    assert "exactly one approach" in ANALYSIS_DIRECT_PROMPT
+    assert "pros/cons 默认 []" in ANALYSIS_DIRECT_PROMPT
+    assert "generation_guide 必须完整保留" in ANALYSIS_DIRECT_PROMPT
+    assert "不编造已确认答案" in ANALYSIS_DIRECT_PROMPT
+    assert "本轮明确修订" in ANALYSIS_PINNED_PROMPT

@@ -1183,6 +1183,15 @@
       "JobCreate": {
         "additionalProperties": false,
         "properties": {
+          "analysis_mode": {
+            "default": "direct",
+            "enum": [
+              "direct",
+              "design"
+            ],
+            "title": "Analysis Mode",
+            "type": "string"
+          },
           "attachment_ids": {
             "items": {
               "type": "string"

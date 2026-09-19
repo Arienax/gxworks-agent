@@ -1540,6 +1540,12 @@ export interface components {
         };
         /** JobCreate */
         JobCreate: {
+            /**
+             * Analysis Mode
+             * @default direct
+             * @enum {string}
+             */
+            analysis_mode: "direct" | "design";
             /** Attachment Ids */
             attachment_ids?: string[];
             change_scope?: components["schemas"]["ChangeScope"] | null;
