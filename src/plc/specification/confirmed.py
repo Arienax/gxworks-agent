@@ -1245,6 +1245,11 @@ def build_review_draft(analysis, previous_spec=None):
             draft["selected_approach"] = {}
     if isinstance(analysis.get("hardware_intent"), dict):
         draft["hardware_intent"] = copy.deepcopy(analysis["hardware_intent"])
+    if isinstance(analysis.get("engineering_context"), dict):
+        draft["engineering_context"] = copy.deepcopy(analysis["engineering_context"])
+    elif isinstance(previous.get("engineering_context"), dict):
+        draft["engineering_context"] = copy.deepcopy(previous["engineering_context"])
+        draft["engineering_context"]["confirmation"] = {"status": "draft"}
     if previous.get("io_bindings"):
         draft["io_bindings"] = copy.deepcopy(previous["io_bindings"])
     draft["hardware_profile"] = build_hardware_profile(draft, plc_model)

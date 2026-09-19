@@ -72,13 +72,12 @@ def _build_knowledge_query(*values, char_limit=24000):
 
     fragments = []
     seen = set()
+    truncated = False
 
     def add(value):
-        text = " ".join(str(value or "").strip().split())
+        text = " ".join(str(value if value is not None else "").strip().split())
         if not text or text.casefold() in _KNOWLEDGE_GENERIC_VALUES:
             return
-        if len(text) > 600:
-            text = text[:600]
         marker = text.casefold()
         if marker in seen:
             return
@@ -86,7 +85,11 @@ def _build_knowledge_query(*values, char_limit=24000):
         fragments.append(text)
 
     def walk(value, depth=0):
-        if value is None or depth > 12 or len(fragments) >= 400:
+        nonlocal truncated
+        if value is None:
+            return
+        if depth > 12 or len(fragments) >= 400:
+            truncated = True
             return
         if isinstance(value, dict):
             for nested in value.values():
@@ -96,7 +99,7 @@ def _build_knowledge_query(*values, char_limit=24000):
             for nested in value:
                 walk(nested, depth + 1)
             return
-        if isinstance(value, str):
+        if isinstance(value, (str, int, float)) and not isinstance(value, bool):
             add(value)
 
     for item in values:
@@ -107,41 +110,25 @@ def _build_knowledge_query(*values, char_limit=24000):
     for fragment in fragments:
         cost = len(fragment) + (1 if selected else 0)
         if used + cost > char_limit:
+            truncated = True
+            remaining = char_limit - used - (1 if selected else 0)
+            if remaining > 0:
+                # Preserve both ends when the *whole query* exceeds its budget.
+                # The full request remains in the confirmed generation snapshot.
+                head = (remaining + 1) // 2
+                tail = remaining - head
+                selected.append(fragment[:head] + (fragment[-tail:] if tail else ""))
             break
         selected.append(fragment)
         used += cost
-    return "\n".join(selected)
+    from knowledge.evidence import KnowledgeQuery
+    return KnowledgeQuery("\n".join(selected), truncated=truncated)
 
 
 def _routing_text_with_selected_approach(user_requirement, confirmed_context=None):
-    """Route generation using both the request and the user's chosen method.
-
-    The confirmed specification is appended to the final prompt later, but
-    pattern routing happens earlier.  Without this bridge a user-selected
-    state-machine, counter, motion, analog or communication method could miss
-    its specialist pattern merely because the original request did not name
-    that method.
-    """
-
-    parts = [str(user_requirement or "")]
-    if isinstance(confirmed_context, dict):
-        selected = normalize_approach(
-            confirmed_context.get("selected_approach") or {}
-        )
-        if selected:
-            parts.extend(
-                [
-                    selected.get("name", ""),
-                    selected.get("description", ""),
-                    selected.get("generation_guide", ""),
-                    json.dumps(
-                        selected.get("generation_contract") or {},
-                        ensure_ascii=False,
-                        separators=(",", ":"),
-                    ),
-                ]
-            )
-    return "\n".join(str(item) for item in parts if str(item).strip())
+    """Route from the chosen engineering plan, never from unselected alternatives."""
+    from plc.specification.provenance import retrieval_projection
+    return _build_knowledge_query(user_requirement, retrieval_projection(confirmed_context))
 
 
 def _load_plc_models():

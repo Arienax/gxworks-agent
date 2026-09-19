@@ -790,6 +790,7 @@ class CompilerThread(LanguageScopedThread):
         allowed_addresses=None,
         repair_plan=None,
         image_attachments=None,
+        source_handoff=None,
     ):
         super().__init__()
         self.task_id = task_id
@@ -822,6 +823,7 @@ class CompilerThread(LanguageScopedThread):
         }
         self.repair_plan = copy.deepcopy(repair_plan) if isinstance(repair_plan, dict) else None
         self.image_attachments = tuple(image_attachments or ())
+        self.source_handoff = copy.deepcopy(source_handoff)
         # 从配置文件读取默认模型
         try:
             self.model_name = get_active_model_name(load_full_config())

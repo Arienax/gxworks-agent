@@ -408,7 +408,8 @@ class SessionStore:
         if confirmed_spec is not None:
             from plc.specification.confirmed import canonicalize_confirmed_spec
 
-            confirmed_spec = canonicalize_confirmed_spec(confirmed_spec)
+            from plc.specification.provenance import confirm_context
+            confirmed_spec = confirm_context(canonicalize_confirmed_spec(confirmed_spec))
         project["confirmed_spec"] = confirmed_spec
         return self.save_project(project)
 

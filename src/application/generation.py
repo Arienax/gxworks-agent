@@ -48,6 +48,7 @@ class GenerationRequest:
     allowed_rung_ids: object = None
     allowed_addresses: object = None
     repair_plan: object = None
+    source_handoff: object = None
     image_attachments: object = None
     model_name: Optional[str] = None
     response_language: Optional[str] = None
@@ -240,6 +241,27 @@ class GenerationWorkflow:
                 and self.dependencies.stream_response is None
                 and self.dependencies.generate_json is None
             )
+            from plc.specification.provenance import handoff_snapshot
+            generation_handoff = handoff_snapshot(self.confirmed_context or {}, stage=(
+                "format_repair" if self.format_repair else "contract_repair" if self.repair_mode else self.task_type or "generate"))
+            if is_edit_mode or repair_call:
+                from application.generation_support import public_generation_value
+                generation_handoff["change_request"] = {
+                    "source": "user_repair_request" if repair_call else "user_edit_request",
+                    "text": public_generation_value(self.requirement_text or self.user_input),
+                }
+            if isinstance(self.source_handoff, dict):
+                generation_handoff["baseline_handoff"] = {
+                    "receipt_sha256": canonical_sha256(self.source_handoff),
+                    "projection_sha256": self.source_handoff.get("projection_sha256"),
+                    "confirmed_spec_sha256": self.source_handoff.get("confirmed_spec_sha256"),
+                    "generation_evidence": copy.deepcopy(self.source_handoff.get("generation_evidence", {})),
+                }
+            if repair_call:
+                generation_handoff["generation_evidence"] = {
+                    "stage": generation_handoff["stage"], "status": "excluded",
+                    "reason": "scoped_repair_no_fresh_rag", "records": [],
+                }
             generation_agent_metadata = None
             repair_payload = None
             repair_kind = "format"
@@ -331,6 +353,7 @@ class GenerationWorkflow:
                         self.plc_model,
                         model_name=self.model_name,
                         effort=self.effort,
+                        on_context=lambda value: generation_handoff.update(copy.deepcopy(value)),
                         on_stage=lambda stage, message: self._emit(
                             "progress", {"stage": stage, "message": message}
                         ),
@@ -338,6 +361,7 @@ class GenerationWorkflow:
                     full_content = json.dumps(
                         result["ladder"], ensure_ascii=False, separators=(",", ":")
                     )
+                    generation_handoff = copy.deepcopy(result.get("generation_handoff") or {})
                     generation_agent_metadata = {
                         "mode": "confirmed_spec",
                         "model_calls": int(result.get("model_calls", 1)),
@@ -347,7 +371,10 @@ class GenerationWorkflow:
                     )
                     on_content(full_content)
                 else:
+                    def capture_generation_context(value):
+                        generation_handoff.update(copy.deepcopy(value))
                     transport_hooks = {} if self.dependencies.stream_response is not None else {
+                        "on_generation_context": capture_generation_context,
                         "on_fallback": lambda _error: self._emit("progress", {
                             "stage": "fallback", "severity": "warning",
                             "message": tr('流式调用失败，切换普通模式：{v0}', v0=_error),
@@ -471,6 +498,8 @@ class GenerationWorkflow:
                 if not json_str.strip() or len(json_str) > 512000:
                     return
                 (self.output_dir / "repair_candidate.json").write_text(json_str, encoding="utf-8")
+                (self.output_dir / "generation_handoff.json").write_text(
+                    json.dumps(generation_handoff, ensure_ascii=False), encoding="utf-8")
 
             validation_errors = (PLCJsonValidationError, PLCIRValidationError, json.JSONDecodeError)
 
@@ -575,6 +604,8 @@ class GenerationWorkflow:
                     "target_mode": "ladder",
                     "repair_attempts": repair_attempts,
                     "first_pass_pipeline": generation_agent_metadata or {"mode": "direct"},
+                    "generation_handoff": {**generation_handoff,
+                        "confirmed_spec_sha256": canonical_sha256(self.confirmed_context) if self.confirmed_context is not None else None},
                     "validation_profile": "generation_structural",
                     "program_name": self.program_name,
                     "revision": self.revision,

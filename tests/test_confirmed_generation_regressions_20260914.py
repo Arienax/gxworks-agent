@@ -188,8 +188,8 @@ def test_agent_a_cannot_drop_verbatim_classification_or_promote_guessed_contract
     )
     draft = build_review_draft(normalized)
 
-    assert requirement in draft["summary"]
-    assert "【当前用户明确要求（逐字保留）】" in draft["summary"]
+    assert draft["engineering_context"]["requests"][0]["text"] == requirement
+    assert "【当前用户明确要求（逐字保留）】" not in draft["summary"]
 
     contract = draft["selected_approach"]["generation_contract"]
     assert contract["required_opcodes"] == []
@@ -200,6 +200,7 @@ def test_agent_a_cannot_drop_verbatim_classification_or_promote_guessed_contract
 
 
 def test_agent_b_receives_structured_approach_contract_but_not_agent_a_prose():
+    """Keep the historical test ID; selected plans are not private Agent-A reasoning."""
     normalized = _normalize_analysis_result(
         _bad_analysis(),
         plc_model="FX3U",
@@ -211,9 +212,12 @@ def test_agent_b_receives_structured_approach_contract_but_not_agent_a_prose():
 
     assert selected["approach_id"] == "model_guess"
     assert selected["generation_contract"]["required_structures"] == ["direct_logic"]
-    assert "name" not in selected
-    assert "description" not in selected
-    assert "generation_guide" not in selected
+    assert selected["name"] == draft["selected_approach"]["name"]
+    assert selected["description"] == draft["selected_approach"]["description"]
+    assert selected["generation_guide"] == draft["selected_approach"]["generation_guide"]
+    assert selected["implementation_preferences"]["enforce"] is False
+    assert "reasoning_content" not in selected
+    assert projected["engineering_context"]["proposals"][0]["source"] == "model_proposal"
 
 
 def test_agent_a_low_level_opcode_survives_only_when_user_explicitly_names_it():

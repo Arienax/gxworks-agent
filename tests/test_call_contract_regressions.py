@@ -45,8 +45,8 @@ def specification(model="FX3U"):
                          {"kind": "Y", "address": "Y000", "label": "Run"}],
             "io_bindings": [{"binding_id": "start", "kind": "X", "address": "X000",
                              "role": "start", "name": "Start", "private": "PRIVATE_BINDING"}],
-            "selected_approach": {"name": "PRIVATE_NAME", "description": "PRIVATE_VFD_PROSE",
-                                  "generation_guide": "PRIVATE_UNCONFIRMED_GUIDE",
+            "selected_approach": {"name": "SELECTED_SHIFT_PLAN", "description": "SELECTED_SHIFT_DESCRIPTION",
+                                  "generation_guide": "SELECTED_SHIFT_GUIDE",
                                   "generation_contract": {"required_opcodes": ["SFTL"],
                                                           "forbidden_opcodes": ["SFTR"]}},
             "history": [{"content": "PRIVATE_HISTORY"}], "api_key": "PRIVATE_CREDENTIAL"}
@@ -109,8 +109,9 @@ def test_compact_and_mcp_adapters_share_confirmed_facts_and_retrieval(monkeypatc
     assert compact_spec["io_bindings"][0]["address"] == "X0"
     assert compact_spec["selected_approach"]["generation_contract"]["required_opcodes"] == ["SFTL"]
     wire = compact_prompt + json.dumps(data)
-    for private in ("PRIVATE_NAME", "PRIVATE_VFD_PROSE", "PRIVATE_UNCONFIRMED_GUIDE",
-                    "PRIVATE_HISTORY", "PRIVATE_CREDENTIAL", "PRIVATE_BINDING", "PRIVATE_UNCONFIRMED_REQUEST"):
+    for key in ("name", "description", "generation_guide"):
+        assert compact_spec["selected_approach"][key] == spec["selected_approach"][key]
+    for private in ("PRIVATE_HISTORY", "PRIVATE_CREDENTIAL", "PRIVATE_BINDING", "PRIVATE_UNCONFIRMED_REQUEST"):
         assert private not in wire
     assert spec == original
     assert "Agent B compact" in compact_prompt and "Machine-readable output schema" in data["generation_instructions"]

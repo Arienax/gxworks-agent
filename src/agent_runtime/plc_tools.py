@@ -311,6 +311,9 @@ def _get_generation_context(
     model_request = generation_user_input(
         user_requirement, is_edit_mode=is_edit_mode, target_mode=target_mode,
     )
+    generation_handoff = {}
+    def capture_context(value):
+        generation_handoff.update(value)
     with context_policy_scope():
         instructions = build_generation_instructions(
             model_request,
@@ -321,8 +324,8 @@ def _get_generation_context(
             current_version_json=current_ladder,
             # Clean retrieved text before assembly; generic path matching must
             # never rewrite application-owned schema patterns in the prompt.
-            knowledge_builder=lambda *args, **kwargs: public_generation_value(
-                _build_knowledge_context(*args, **kwargs)),
+            knowledge_builder=_build_knowledge_context,
+            on_context=capture_context,
         )
     return {
         "project_id": context.project_id,
@@ -334,12 +337,13 @@ def _get_generation_context(
         "output_contract": generation_output_contract(allow_partial=is_edit_mode, plc_model=context.plc_model),
         "current_version_id": context.version_id or None,
         "generation_instructions": instructions,
+        "generation_handoff": public_generation_value(generation_handoff),
         "generation_request": model_request,
     }
 
 
 def _create_program_candidate(
-    context: ToolContext, arguments: Mapping[str, Any]
+    context: ToolContext, arguments: Mapping[str, Any], *, generation_handoff=None,
 ) -> Dict[str, Any]:
     from plc.core import PLCCore
     from plc.ir import canonical_sha256
@@ -356,6 +360,18 @@ def _create_program_candidate(
         previous_program=context.program_ir,
     )
     compiled = core.compile_project(candidate["candidate_ir"], validation_profile=candidate["validation_profile"])
+    if not isinstance(generation_handoff, dict):
+        from application.confirmed_generation_context import project_confirmed_specification
+        from plc.specification.provenance import handoff_snapshot
+        generation_handoff = handoff_snapshot(
+            project_confirmed_specification(confirmed_spec), stage="external_generate",
+            evidence={"stage": "external_generate", "status": "not_recorded", "records": [],
+                      "reason": "external_context_not_correlated"},
+        )
+    generation_handoff = copy.deepcopy(generation_handoff)
+    generation_handoff["confirmed_spec_sha256"] = (
+        canonical_sha256(confirmed_spec) if confirmed_spec is not None else None)
+    generation_handoff["external_model_use"] = "not_observed"
     action = {
         "type": "accept_generated_program",
         "project_id": context.project_id,
@@ -375,6 +391,7 @@ def _create_program_candidate(
         "_confirmed_spec": confirmed_spec,
         "_validation_profile": candidate["validation_profile"],
         "normalization": copy.deepcopy(candidate["normalization"]),
+        "_generation_handoff": generation_handoff,
     }
     if context.program_ir is not None:
         action.update(base_version_id=context.version_id, base_ir_sha256=canonical_sha256(context.program_ir))
@@ -387,6 +404,7 @@ def _create_program_candidate(
         "diagnostics": copy.deepcopy(candidate["diagnostics"]),
         "validation_profile": candidate["validation_profile"],
         "normalization": copy.deepcopy(candidate["normalization"]),
+        "generation_handoff": copy.deepcopy(generation_handoff),
         "verification": {
             "structural_checks_passed": True,
             "deterministic_checks_passed": True,
@@ -709,6 +727,43 @@ def _request_gxworks2_import(
 
 
 def build_default_tool_registry() -> ToolRegistry:
+    from application.generation_receipts import GenerationReceiptCache
+    from plc.ir import canonical_sha256
+
+    receipts = GenerationReceiptCache()
+
+    def receipt_binding(context):
+        from application.confirmed_generation_context import project_confirmed_specification
+        from application.generation_support import public_generation_ladder
+        from plc.ir import ir_to_ladder
+
+        # Bind the engineering snapshot that was actually exposed, not arbitrary
+        # UI/provider objects retained by a host in its private ToolContext.
+        # Private metadata must neither leak nor break this optional observation.
+        program = (ir_to_ladder(context.program_ir) if isinstance(context.program_ir, Mapping)
+                   else context.ladder)
+        return canonical_sha256({
+            "project_id": context.project_id, "version_id": context.version_id,
+            "plc_model": context.plc_model,
+            "target_mode": str(context.project.get("target_mode") or "ladder"),
+            "confirmed_spec": project_confirmed_specification(_confirmed_spec(context)),
+            "program": public_generation_ladder(program),
+        })
+
+    def generation_context(context, arguments):
+        result = _get_generation_context(context, arguments)
+        if result.get("generation_handoff"):
+            result["generation_context_id"] = receipts.remember(
+                receipt_binding(context), result["generation_handoff"],
+            )
+        return result
+
+    def program_candidate(context, arguments):
+        receipt_id = arguments.get("generation_context_id")
+        handoff = receipts.resolve(receipt_id, receipt_binding(context)) if receipt_id else None
+        if handoff is not None:
+            handoff["external_context_id"] = receipt_id
+        return _create_program_candidate(context, arguments, generation_handoff=handoff)
 
     registry = ToolRegistry()
     registry.register(
@@ -733,7 +788,7 @@ def build_default_tool_registry() -> ToolRegistry:
                 },
                 "additionalProperties": False,
             },
-            _get_generation_context,
+            generation_context,
         )
     )
     registry.register(
@@ -751,11 +806,15 @@ def build_default_tool_registry() -> ToolRegistry:
                         "type": "object",
                         "description": "Full or partial ladder JSON from get_generation_context; the shared API parser validates and normalizes compatible encodings.",
                     },
+                    "generation_context_id": {
+                        "type": "string", "maxLength": 128,
+                        "description": "Copy the ID returned by get_generation_context to preserve source lineage. Optional; absence or expiry is recorded as a trace gap, not a validation failure.",
+                    },
                 },
                 "required": ["ladder"],
                 "additionalProperties": False,
             },
-            _create_program_candidate,
+            program_candidate,
             confirmation_required=True,
         )
     )

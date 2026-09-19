@@ -39,8 +39,9 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     # Only the application can attach user-derived hardware evidence. A model
     # cannot authenticate its own questions by emitting this metadata field.
     normalized.pop("hardware_intent", None)
+    normalized.pop("engineering_context", None)
     normalized["approaches"] = [
-        normalize_approach(item)
+        normalize_approach({key: value for key, value in item.items() if key != "implementation_preferences"})
         for item in (normalized.get("approaches") or [])
         if isinstance(item, dict)
     ]
@@ -229,5 +230,46 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     normalized["execution_semantics"] = normalize_semantic_requirements(
         inferred_semantics
     )
-    return ensure_hardware_questions(normalized, plc_model, user_text, confirmed_spec)
+    normalized = ensure_hardware_questions(normalized, plc_model, user_text, confirmed_spec)
+    from plc.specification.provenance import analysis_context
+    from application.generation_support import public_generation_value
+    normalized["engineering_context"] = analysis_context(
+        public_generation_value(user_text), normalized.get("approaches", []), confirmed_spec,
+    )
+    return normalized
 
+
+
+def attach_analysis_evidence(result, analysis_evidence, *, plc_model="FX3U", knowledge_builder=None):
+    """Bind engine-produced evidence to candidate identities before user review.
+
+    Candidate lookup is evidence collection, not a claim that the plan was verified.
+    No extra model request, hidden analysis text or inferred hard constraint is used.
+    """
+    from knowledge.evidence import context_manifest
+    from plc.specification.provenance import evidence_snapshot
+    from application.generation_support import public_generation_value
+    if knowledge_builder is None:
+        from application.generation_context import _build_knowledge_context
+        knowledge_builder = _build_knowledge_context
+    context = result["engineering_context"]
+    context["analysis_evidence"] = public_generation_value(evidence_snapshot(
+        context_manifest(analysis_evidence, stage="analysis")))
+    by_id = {row.get("approach_id"): row for row in result.get("approaches", [])}
+    for index, record in enumerate(context.get("proposals", [])):
+        if index >= 3:
+            record["evidence"] = {"stage": "candidate", "status": "excluded",
+                                  "reason": "candidate_budget", "records": []}
+            continue
+        approach = by_id.get(record.get("approach_id"))
+        if not approach:
+            continue
+        try:
+            evidence = knowledge_builder("", plc_model=plc_model, task_type="generate",
+                                         confirmed_context={"selected_approach": approach})
+            manifest = context_manifest(evidence, stage="candidate")
+            manifest["stage"] = "candidate"
+        except Exception:
+            manifest = {"stage": "candidate", "status": "unavailable", "records": []}
+        record["evidence"] = public_generation_value(evidence_snapshot(manifest))
+    return result

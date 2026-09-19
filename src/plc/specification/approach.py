@@ -317,9 +317,9 @@ _CONTRACT_GROUP_FIELDS = (
 def _explicit_contract_fields(raw):
     """Return constraint fields explicitly supplied by the structured contract.
 
-    ``generation_guide`` inference is a compatibility/fallback source.  It may
-    fill fields omitted by a structured contract, but it never overrides a
-    constraint that was explicitly supplied by the analysis result/user.
+    ``generation_guide`` inference is a compatibility source only when the
+    entire structured contract is missing/empty. A present partial contract
+    never gets additional constraints from prose in omitted dimensions.
     """
 
     return {
@@ -465,7 +465,7 @@ def normalize_generation_contract(contract=None, *, approach=None):
             raw[canonical] = raw[alias]
 
     explicit_fields = _explicit_contract_fields(raw)
-    inferred = _infer_contract_from_guide(approach or {})
+    inferred = {} if isinstance(contract, Mapping) and contract else _infer_contract_from_guide(approach or {})
 
     def value_source(key):
         return raw.get(key) if key in explicit_fields else inferred.get(key)
@@ -487,7 +487,8 @@ def normalize_generation_contract(contract=None, *, approach=None):
         # A selected approach is never advisory. Ignore a model-proposed false
         # value so it cannot opt itself out of the user's decision.
         "enforce": True,
-        "source": "explicit" if explicit_fields else inferred.get("source", "inferred"),
+        "source": raw.get("source") if raw.get("source") in {"explicit", "inferred", "analysis_sanitized"} else (
+            "explicit" if isinstance(contract, Mapping) and contract else inferred.get("source", "inferred")),
     }
     return _resolve_contract_constraints(normalized, explicit_fields)
 
@@ -561,21 +562,8 @@ def contract_definition_issues(approach):
     )
     if unknown_structures:
         issues.append("包含无法校验的方案结构：" + ", ".join(unknown_structures))
-    constraint_count = sum(
-        len(contract.get(key) or [])
-        for key in (
-            "required_opcodes",
-            "forbidden_opcodes",
-            "required_devices",
-            "forbidden_devices",
-            "required_structures",
-            "forbidden_structures",
-            "any_of_opcode_groups",
-            "any_of_structure_groups",
-        )
-    )
-    if constraint_count == 0:
-        issues.append("方案缺少可执行的生成约束，请明确必用/禁用指令或结构")
+    # Empty contracts are valid boundaries. A chosen engineering plan may leave
+    # every opcode/device choice open; prose and preferences are not obligations.
     return list(dict.fromkeys(issues))
 
 

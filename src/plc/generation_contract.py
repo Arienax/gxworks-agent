@@ -218,12 +218,41 @@ _HARDWARE_CONTEXT_FIELDS = {**_HARDWARE_FIELDS, **_COMPONENT_FIELDS}
 _HARDWARE_CONTEXT_FIELDS.update({key: _COMPONENT_FIELDS for key in (
     "drive", "analog_module", "analog_output", "analog_input", "motion", "positioning",
 )})
+EVIDENCE_RECORD_FIELDS = dict.fromkeys((
+    "id", "source", "manual_id", "manual_number", "revision", "manual_type",
+    "chunk_type", "instruction_opcode", "section", "page", "page_end", "pdf_page",
+    "content_sha256", "role",
+))
+EVIDENCE_FIELDS = {
+    **dict.fromkeys(("stage", "status", "query_sha256", "context_sha256", "plc_model",
+                    "char_budget", "used_chars", "query_truncated", "reason")),
+    "records": [EVIDENCE_RECORD_FIELDS],
+    "omitted_ids": [None],
+}
+ENGINEERING_CONTEXT_FIELDS = {
+    "schema_version": None,
+    "requests": [dict.fromkeys(("id", "text", "source"))],
+    "proposals": [{
+        **dict.fromkeys(("approach_id", "proposal_sha256", "source")),
+        "request_ids": [None], "evidence": EVIDENCE_FIELDS,
+    }],
+    "analysis_evidence": EVIDENCE_FIELDS,
+    "confirmation": {
+        **dict.fromkeys(("status", "source", "approach_id", "selected_sha256",
+                        "fields_sha256", "selected_origin")),
+        "request_ids": [None],
+    },
+}
+
+
 _SPEC_FIELDS = {
+    "engineering_context": ENGINEERING_CONTEXT_FIELDS,
     **_HARDWARE_FIELDS,  # Legacy specs sometimes store the hardware profile inline.
     **dict.fromkeys(("schema_version", "summary", "user_notes", "scan_budget_ms", "scan_warning_ms")),
     "selected_approach": {
         **dict.fromkeys(("id", "approach_id", "name", "description", "generation_guide")),
         "generation_contract": _CONTRACT_FIELDS,
+        "implementation_preferences": _CONTRACT_FIELDS,
     },
     "parameters": [dict.fromkeys(("id", "name", "value", "note", "source"))],
     "io_table": [dict.fromkeys(("address", "kind", "label", "description", "source"))],

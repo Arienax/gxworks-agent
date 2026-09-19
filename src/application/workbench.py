@@ -682,6 +682,7 @@ class WorkbenchService:
                     requirement_text=text, repair_mode=repair_mode, format_repair=format_repair,
                     allowed_rung_ids=snapshot.get("allowed_rung_ids"),
                     allowed_addresses=snapshot.get("allowed_addresses"), repair_plan=repair_plan,
+                    source_handoff=(version or {}).get("generation_handoff"),
                     image_attachments=images, model_name=snapshot.get("model", {}).get("model"), response_language=language)
                 metadata = GenerationWorkflow(request, out_dir, ctx.emit, GenerationDependencies(
                     provider=provider, check_cancelled=ctx.checkpoint, preserve_rejected_candidate=True
@@ -691,6 +692,7 @@ class WorkbenchService:
             payload = {"project_id": project_id, "target_mode": metadata["target_mode"],
                        "plc_model": project.get("plc_model", "FX3U"), "_confirmed_spec": project.get("confirmed_spec"),
                        "_validation_profile": metadata.get("validation_profile", "strict"),
+                       "_generation_handoff": copy.deepcopy(metadata.get("generation_handoff")),
                        "normalization": metadata.get("normalization"),
                        "change_scope": snapshot.get("change_scope")}
             if metadata["target_mode"] == "ladder":

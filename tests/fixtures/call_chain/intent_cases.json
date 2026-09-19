@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "description": "Synthetic source-handoff corpus. word_stream is a reduced failure pattern from the user-supplied WSFL trace; none of these cases asserts that an instruction recipe is technically correct. No raw trace, model reasoning, credentials or local paths are included.",
+  "cases": [
+    {"id": "word_stream", "request": "每件工件携带类别值，类别按先后顺序存入字级队列；节拍推进一次，下游工位按位置读取类别。", "guide": "保留字级类别流、节拍与位置索引之间的对应关系，候选使用 WSFL；停止时保留队列，复位时清空。", "forbidden": "SFTL", "required_devices": ["D0"]},
+    {"id": "bit_stream", "request": "仅跟踪有料和无料，每个位置一个布尔标志；按传送节拍推进，暂停保留位置。", "guide": "使用 SFTL 的位级存在标志方案；每个位置仍只表示有料或无料，不变成类别寄存器。", "forbidden": "WSFL", "required_devices": ["M10"]},
+    {"id": "batch_counter", "request": "X0 每次上升沿计一件；暂停后继续累计，只有复位按钮才能清零批次数。", "guide": "批次采用 C0 计数，复位使用 RST；暂停不能当作批次复位。", "forbidden": "WSFL", "required_devices": ["C0"]},
+    {"id": "register_sequence", "request": "用一个整数记录当前工序，停止后从原工序继续，只有人工复位回到初始工序。", "guide": "D20 记录工序，MOV 更新状态，比较状态驱动对应工序；不要把停止替换为复位。", "forbidden": "SFTL", "required_devices": ["D20"]},
+    {"id": "timer_event", "request": "启动后延迟两秒动作，每次启动只触发一次；输入持续保持不得反复触发。", "guide": "保留事件与电平的区别，T0 表示确认的延时，内部边沿标志不改变外部地址。", "forbidden": "MOV", "required_devices": ["T0"]},
+    {"id": "analog_units", "request": "运算使用工程量，输出前才转换为原始值；负数必须保留符号，单位不得混用。", "guide": "区分工程量 D100 与原始量 D110，MUL 运算是候选实现细节，不能改变符号和单位。", "forbidden": "SFTL", "required_devices": ["D100", "D110"]}
+  ]
+}

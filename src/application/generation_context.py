@@ -175,33 +175,43 @@ def _select_system_prompt(target_mode, is_edit_mode=False, user_requirement="", 
 
 def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="generate",
                              confirmed_context=None, evidence=None):
+    from knowledge.evidence import KnowledgeContext, context_manifest, text_sha256
+    from plc.specification.provenance import retrieval_projection
+
     normalized_task = str(task_type or "generate").strip().casefold()
+    def absent(status, reason):
+        audit_section("manual_context", status=status, reason=reason, source="manual_retriever")
+        return KnowledgeContext("", {"stage": normalized_task, "status": status,
+                                     "reason": reason, "records": [], "plc_model": plc_model})
     if normalized_task in {"contract_repair", "format_repair"}:
-        audit_section("manual_context", status="excluded", reason="repair_scope_only", source="manual_retriever")
-        return ""
+        return absent("excluded", "repair_scope_only")
     top_k, char_budget = _KNOWLEDGE_TASK_SETTINGS.get(normalized_task, _KNOWLEDGE_TASK_SETTINGS["generate"])
-    query = _build_knowledge_query(primary_query, confirmed_context, evidence)
+    engineering = retrieval_projection(confirmed_context)
+    query = (_build_knowledge_query(engineering, primary_query, evidence) if normalized_task == "generate"
+             else _build_knowledge_query(primary_query, engineering, evidence))
     should_lookup, lookup_reason = manual_lookup_decision(query)
     if (not should_lookup and normalized_task == "analysis" and
             resolve_context_policy().manuals == "adaptive" and query.strip()):
         should_lookup, lookup_reason = True, "analysis_design_retrieval"
     if not should_lookup:
-        audit_section("manual_context", status="excluded", reason=lookup_reason, source="manual_retriever")
-        return ""
+        return absent("excluded", lookup_reason)
     try:
         from knowledge.retriever import build_knowledge_context as retrieve_context
         context = retrieve_context(query, plc_model=plc_model, task_type=normalized_task,
                                    top_k=top_k, char_budget=char_budget)
     except Exception:
-        audit_section("manual_context", status="unavailable", reason="retrieval_failed", source="manual_retriever")
         print("PLC knowledge retrieval unavailable", file=sys.stderr)
-        return ""
-    if not context:
-        audit_section("manual_context", status="empty", reason="no_relevant_results", source="manual_retriever")
-        return ""
-    result = "\n\n# Retrieved PLC evidence\n" + str(context).strip() + "\n"
-    audit_section("manual_context", result, reason=lookup_reason, source="manual_retriever")
-    return result
+        return absent("unavailable", "retrieval_failed")
+    manifest = context_manifest(context, stage=normalized_task)
+    manifest.update(query_truncated=bool(getattr(query, "truncated", False)),
+                    query_sha256=text_sha256(query), plc_model=plc_model)
+    result = "\n\n# Retrieved PLC evidence\n" + str(context).strip() + "\n" if context else ""
+    result = public_generation_value(result)
+    manifest = public_generation_value(manifest)
+    manifest["context_sha256"] = text_sha256(result)
+    audit_section("manual_context", result, status="included" if result else "empty",
+                  reason=lookup_reason, source="manual_retriever")
+    return KnowledgeContext(result, manifest)
 
 
 def _confirmed_context_text(confirmed_context):
@@ -362,7 +372,7 @@ def _current_version_context(user_requirement, current_version_json, *, target_m
 def build_generation_instructions(user_requirement, *, plc_model, target_mode="ladder", is_edit_mode=False,
                                   task_type=None, review_mode=None, confirmed_context=None,
                                   current_version_json=None, prompt_builder=None, knowledge_builder=None,
-                                  profile_builder=None, confirmed_builder=None):
+                                  profile_builder=None, confirmed_builder=None, on_context=None):
     normalized_task = str(task_type or review_mode or ("edit" if is_edit_mode else "generate")).strip().casefold()
     if _is_format_repair(normalized_task, user_requirement):
         audit_section("model_profile", status="excluded", reason="format_repair", source="model_registry")
@@ -405,13 +415,16 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
         confirmed_context = context.confirmed_spec
         user_requirement = context.generation_request
         knowledge_ctx = context.knowledge_context
+        if on_context:
+            on_context(copy.deepcopy(context.handoff))
     else:
         knowledge_ctx = knowledge_builder(user_requirement, plc_model=plc_model, task_type=normalized_task,
                                           confirmed_context=confirmed_context, evidence=retrieval_evidence)
     selected_prompt = prompt_builder(target_mode, is_edit_mode=is_edit_mode, user_requirement=user_requirement,
                                      task_type=task_type, review_mode=review_mode, plc_model=plc_model,
                                      confirmed_context=confirmed_context)
-    system_prompt = confirmed_builder(selected_prompt + profile_builder(
+    from plc.specification.provenance import SOURCE_PRECEDENCE
+    system_prompt = confirmed_builder(selected_prompt + SOURCE_PRECEDENCE + profile_builder(
         plc_model, confirmed_context, compact=bool(knowledge_ctx)) + knowledge_ctx, confirmed_context)
     if current_context:
         system_prompt += "\n\n" + current_context

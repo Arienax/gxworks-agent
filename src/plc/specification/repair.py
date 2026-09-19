@@ -342,7 +342,12 @@ def build_contract_repair_plan(
             ),
         }
 
+    from plc.specification.provenance import handoff_snapshot
+    lineage = handoff_snapshot(confirmed_spec or {}, stage="contract_repair")
+    # Request IDs/evidence identities retain origin without replaying the entire
+    # analysis or unrelated original requests into a bounded patch task.
     serializable = {
+        "handoff": lineage,
         "approach": {
             "name": approach.get("name") or "已选方案",
             "description": approach.get("description") or "",
@@ -371,6 +376,8 @@ def build_contract_repair_plan(
 已选方案：{approach.get('name') or '已选方案'}
 方案说明：{approach.get('description') or ''}
 方案生成要点：{approach.get('generation_guide') or ''}
+方案文字是实现上下文；不要从中推导新硬约束。以下为现有硬契约及来源记录，检索记录不是验证结论：
+{json.dumps({"generation_contract": contract, "source_handoff": lineage}, ensure_ascii=False, sort_keys=True)}
 
 待修复违例：
 {violation_lines}
@@ -400,6 +407,7 @@ def build_contract_repair_plan(
         "scope_reasons": scope_reasons,
         "fallback_scope": fallback_scope,
         "baseline_features": features,
+        "source_handoff": lineage,
         "prompt": prompt,
     }
 

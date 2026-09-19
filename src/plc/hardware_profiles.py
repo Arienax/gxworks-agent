@@ -118,7 +118,6 @@ _ANALYSIS_CONTRACT_GROUP_FIELDS = (
 _ANALYSIS_OPCODE_FIELDS = ("required_opcodes", "forbidden_opcodes")
 _ANALYSIS_DEVICE_FIELDS = ("required_devices", "forbidden_devices")
 _COUNTER_STRUCTURES = {"hardware_counter", "data_register_counter"}
-_VERBATIM_REQUIREMENT_MARKER = "【当前用户明确要求（逐字保留）】"
 _COUNTER_INTENT_RE = re.compile(
     r"计数|计次|次数|counter|(?<![A-Za-z])count(?:ing|s|ed)?(?![A-Za-z])",
     re.IGNORECASE,
@@ -151,15 +150,6 @@ def _string_list(value):
     return result
 
 
-def _preserve_verbatim_requirement(result, user_text):
-    requirement = str(user_text or "").strip()
-    if not requirement:
-        return
-    block = _VERBATIM_REQUIREMENT_MARKER + "\n" + requirement
-    summary = str(result.get("summary") or "").strip()
-    if block not in summary:
-        result["summary"] = (summary + "\n\n" if summary else "") + block
-
 
 def _sanitize_analysis_approaches(result, user_text):
     """Prevent Agent-A guesses from becoming hard confirmed constraints.
@@ -169,6 +159,8 @@ def _sanitize_analysis_approaches(result, user_text):
     except counter structures when the request contains no counter intent at all.
     Every contract field is materialized, including empty lists, which blocks the
     legacy generation_guide inference path from recreating removed constraints.
+    Removed obligations remain model-sourced preferences; an empty hard contract
+    does not invalidate or delete a candidate.
     """
     requirement = str(user_text or "").strip()
     approaches = result.get("approaches")
@@ -177,7 +169,6 @@ def _sanitize_analysis_approaches(result, user_text):
 
     has_counter_intent = bool(_COUNTER_INTENT_RE.search(requirement))
     sanitized = []
-    dropped = 0
     for raw_approach in approaches:
         if not isinstance(raw_approach, dict):
             continue
@@ -227,30 +218,21 @@ def _sanitize_analysis_approaches(result, user_text):
                 group for group in contract["any_of_structure_groups"] if group
             ]
 
+        # Retain the proposal under its real origin. Removing an unconfirmed
+        # hard obligation must not delete the architecture or its implementation
+        # choices. These preferences are context only, never validator inputs.
+        prior = approach.get("implementation_preferences")
+        original = (prior if isinstance(prior, dict) and isinstance(raw_contract, dict)
+                    and raw_contract.get("source") == "analysis_sanitized" else raw_contract)
+        preferences = copy.deepcopy(original) if isinstance(original, dict) else {}
+        preferences["source"] = "model_proposal"
+        preferences["enforce"] = False
+        approach["implementation_preferences"] = preferences
         contract["source"] = "analysis_sanitized"
         approach["generation_contract"] = contract
-        has_constraint = any(
-            contract.get(field)
-            for field in (*_ANALYSIS_CONTRACT_VALUE_FIELDS, *_ANALYSIS_CONTRACT_GROUP_FIELDS)
-        )
-        if has_constraint:
-            sanitized.append(approach)
-        else:
-            dropped += 1
+        sanitized.append(approach)
 
     result["approaches"] = sanitized
-    if dropped:
-        diagnostics = result.get("format_diagnostics")
-        diagnostics = list(diagnostics) if isinstance(diagnostics, list) else []
-        diagnostics.append(
-            {
-                "code": "analysis_approach_hard_constraints_removed",
-                "path": "approaches",
-                "message": "已丢弃仅由模型低层猜测构成、没有用户证据的硬约束方案。",
-                "count": dropped,
-            }
-        )
-        result["format_diagnostics"] = diagnostics
 
 
 _FLAG_NAMES = ("hardware_dependent", "vfd", "pulse", "motion", "analog", "serial")
@@ -393,7 +375,7 @@ def _without_unsupported_vfd(analysis, requirement):
         analysis["approaches"] = kept
     if requirement and _flags_from_evidence(analysis.get("summary", ""))["vfd"]:
         # Keep the real requirement, not a model-added drive specification.
-        analysis["summary"] = _VERBATIM_REQUIREMENT_MARKER + "\n" + requirement
+        analysis["summary"] = requirement
         removed.append("summary")
     hardware = analysis.get("hardware_config")
     if isinstance(hardware, dict):
@@ -572,7 +554,6 @@ def ensure_hardware_questions(analysis, plc_model="FX3U", user_text="", confirme
     """
     result = copy.deepcopy(analysis or {})
     if str(user_text or "").strip():
-        _preserve_verbatim_requirement(result, user_text)
         _sanitize_analysis_approaches(result, user_text)
 
     intent = _hardware_intent(result, user_text, confirmed_spec)
