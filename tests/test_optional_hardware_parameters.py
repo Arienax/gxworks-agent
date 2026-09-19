@@ -9,6 +9,7 @@ from plc.specification.confirmed import (
 )
 from plc.hardware_profiles import ensure_hardware_questions, hardware_requirement_flags, validate_hardware_spec
 from plc.validation import PLCJsonValidationError, validate_ladder_full
+from plc.generation_contract import generation_specification
 
 
 HARDWARE_QUESTIONS = [
@@ -316,7 +317,7 @@ def test_missing_hardware_context_never_blocks_requirement_confirmation():
     assert validate_spec_draft(spec, "FX3U")["errors"] == []
 
 
-def test_nonhardware_missing_information_keeps_its_existing_required_behavior():
+def test_model_required_missing_information_is_advisory_not_blocking():
     draft = build_review_draft(
         {
             "plc_model": "FX3U",
@@ -330,10 +331,43 @@ def test_nonhardware_missing_information_keeps_its_existing_required_behavior():
     )
 
     assert draft["parameters"][0]["required"] is True
+    issues = validate_spec_draft(draft, "FX3U")
+    assert issues["errors"] == []
     assert any(
         item["code"] == "required_parameter_missing"
-        for item in validate_spec_draft(draft, "FX3U")["errors"]
+        and item.get("blocking") is False
+        for item in issues["warnings"]
     )
+
+
+def test_unanswered_review_questions_are_not_generation_facts():
+    projected = generation_specification(
+        {
+            "parameters": [
+                {
+                    "id": "unanswered",
+                    "name": "模型提出但用户未回答的问题",
+                    "value": "",
+                    "source": "analysis",
+                },
+                {
+                    "id": "confirmed",
+                    "name": "已确认参数",
+                    "value": "K30",
+                    "source": "user",
+                },
+            ]
+        }
+    )
+
+    assert projected["parameters"] == [
+        {
+            "id": "confirmed",
+            "name": "已确认参数",
+            "value": "K30",
+            "source": "user",
+        }
+    ]
 
 
 def test_unknown_output_type_does_not_block_pulse_generation():

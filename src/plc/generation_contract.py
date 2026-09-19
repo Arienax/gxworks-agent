@@ -292,6 +292,16 @@ def generation_specification(confirmed_spec: Any) -> dict | None:
     if not isinstance(confirmed_spec, Mapping):
         return None
     result = _project(confirmed_spec, _SPEC_FIELDS)
+    # Review questions with no confirmed value are provenance/UI state, not
+    # engineering facts. They may remain in the persisted specification, but
+    # must not consume generation context or invite Agent B to invent an answer.
+    if isinstance(result.get("parameters"), list):
+        result["parameters"] = [
+            row for row in result["parameters"]
+            if isinstance(row, Mapping)
+            and row.get("value") is not None
+            and str(row.get("value")).strip()
+        ]
     # Old specs can predate the canonical table. Do not lose their I/O constraints.
     if not result.get("io_table") and isinstance(confirmed_spec.get("io_allocation_raw"), str):
         result["io_allocation_raw"] = confirmed_spec["io_allocation_raw"]

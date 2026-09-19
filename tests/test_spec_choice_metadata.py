@@ -31,7 +31,9 @@ def test_analysis_choices_and_suggestion_survive_merge_and_canonicalization():
     assert parameter["options"] == ["0-10V / 4-20mA", "RS-485"]
     assert parameter["suggested_default"] == "RS-485"
     assert parameter["value"] == ""
-    assert "required_parameter_missing" in {issue["code"] for issue in validate_spec_draft(draft)["errors"]}
+    issues = validate_spec_draft(draft)
+    assert issues["errors"] == []
+    assert "required_parameter_missing" in {issue["code"] for issue in issues["warnings"]}
 
     parameter.update(value="用户自定义接口", source="user")
     merged = build_review_draft(analysis, draft)
@@ -93,8 +95,14 @@ def test_address_alone_does_not_answer_a_combined_contact_question():
     draft = build_review_draft(_analysis())
     for parameter, value in zip(draft["parameters"], ["X0", "X1", "Y0"]):
         parameter["value"] = value
-    errors = validate_spec_draft(draft)["errors"]
-    assert any(issue["code"] == "contact_type_missing" and issue["path"] == "$.parameters[1].value" for issue in errors)
+    issues = validate_spec_draft(draft)
+    assert issues["errors"] == []
+    assert any(
+        issue["code"] == "contact_type_missing"
+        and issue["path"] == "$.parameters[1].value"
+        and issue.get("blocking") is False
+        for issue in issues["warnings"]
+    )
 
 
 def test_unallocated_or_non_address_questions_do_not_gain_invented_options():

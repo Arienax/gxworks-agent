@@ -486,20 +486,19 @@ def validate_spec_draft(spec, plc_model=None):
             first = seen_parameter_ids.get(id_key)
             if first is not None:
                 first_value = str(parameters[first].get("value", "")).strip()
-                code = (
-                    "conflicting_parameter_id"
-                    if first_value != value
-                    else "duplicate_parameter_id"
+                conflicting = first_value != value
+                issue = _validation_issue(
+                    "conflicting_parameter_id" if conflicting else "duplicate_parameter_id",
+                    f"参数ID“{parameter_id}”重复（首次位于第 {first + 1} 行）",
+                    f"{path}.id",
+                    row=index,
+                    first_row=first,
                 )
-                errors.append(
-                    _validation_issue(
-                        code,
-                        f"参数ID“{parameter_id}”重复（首次位于第 {first + 1} 行）",
-                        f"{path}.id",
-                        row=index,
-                        first_row=first,
-                    )
-                )
+                if conflicting:
+                    errors.append(issue)
+                else:
+                    issue["blocking"] = False
+                    warnings.append(issue)
             else:
                 seen_parameter_ids[id_key] = index
         if not name:
@@ -525,21 +524,27 @@ def validate_spec_draft(spec, plc_model=None):
         if required and isinstance(required_when, dict):
             required = _required_when_matches(required_when, parameter_values)
         if required and not value:
-            errors.append(
+            # Agent-A may propose a question as required, but model-authored
+            # completeness metadata must not become a user confirmation gate.
+            # Keep the unanswered question in the stored review draft while
+            # omitting its empty value from generation input.
+            warnings.append(
                 _validation_issue(
                     "required_parameter_missing",
-                    f"必填参数“{name or index + 1}”尚未填写",
+                    f"参数“{name or index + 1}”尚未填写；可继续确认，未确认值不会作为生成事实",
                     f"{path}.value",
                     row=index,
+                    blocking=False,
                 )
             )
         if value and _asks_contact_type(name) and _io_parameter_kind(parameter) and not _has_contact_type(value):
-            errors.append(
+            warnings.append(
                 _validation_issue(
                     "contact_type_missing",
-                    f"参数“{name}”还需明确常开或常闭",
+                    f"参数“{name}”未明确常开或常闭；可继续确认，当前答案不会被扩写成未确认极性",
                     f"{path}.value",
                     row=index,
+                    blocking=False,
                 )
             )
 
