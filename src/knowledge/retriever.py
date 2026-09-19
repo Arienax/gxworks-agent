@@ -161,7 +161,7 @@ def retrieve_design_knowledge(
 
 def build_knowledge_context(
     query, plc_model="FX3U", task_type="generate", top_k=5, char_budget=6000,
-    token_budget=None,
+    token_budget=None, include_design=None, design_query=None,
 ):
     """Return prompt text plus a detached manifest of the blocks actually used.
 
@@ -195,11 +195,22 @@ def build_knowledge_context(
     available_tokens = (token_limit - header_tokens) if token_limit is not None else None
     # The public top_k still caps included blocks. Recall a bounded larger pool
     # so a long first chunk does not hide a shorter usable factual reference.
-    design_slots = min(2, count // 3) if task == "analysis" else 0
+    if task == "analysis" and include_design is None:
+        from knowledge.analysis_router import route_analysis_request
+        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+        include_design = route_analysis_request(
+            query, resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form,
+        ).include_design
+    design_enabled = task == "analysis" and bool(include_design)
+    manifest["design_enabled"] = design_enabled
+    if design_enabled:
+        manifest["design_query_sha256"] = text_sha256(query if design_query is None else design_query)
+    design_slots = min(2, count // 3) if design_enabled else 0
     design_budget = available // 3 if design_slots else 0
     design_token_budget = available_tokens // 3 if design_slots and available_tokens is not None else None
     design_results = (retrieve_design_knowledge(
-        query, plc_model=plc_model, task_type=task, top_k=max(2, design_slots * 3),
+        query if design_query is None else design_query,
+        plc_model=plc_model, task_type=task, top_k=max(2, design_slots * 3),
         char_budget=sys.maxsize,
     ) if design_slots else [])
     seen = set()
@@ -235,6 +246,11 @@ def build_knowledge_context(
         query, plc_model=plc_model, task_type=task,
         top_k=min(_core._MAX_TOP_K, max(12, fact_slots * 3)), char_budget=sys.maxsize,
     )
+    # Curated designs belong only to the design lane, even if a broad fact
+    # retriever happens to return one. Disabling design is not just a slot label.
+    fact_results = [item for item in fact_results
+                    if item.get("chunk_type") != "design_pattern"
+                    and item.get("manual_id") != "curated_control_design"]
     fact_token_budget = (available_tokens - design_used_tokens) if available_tokens is not None else None
     fact_blocks, fact_records, _, fact_used_tokens = select(
         fact_results, fact_slots, available - design_used, fact_token_budget)

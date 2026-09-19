@@ -174,11 +174,22 @@ def _select_system_prompt(target_mode, is_edit_mode=False, user_requirement="", 
 
 
 def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="generate",
-                             confirmed_context=None, evidence=None):
+                             confirmed_context=None, evidence=None,
+                             include_design=None, design_query=None):
     from knowledge.evidence import KnowledgeContext, context_manifest, text_sha256
     from plc.specification.provenance import retrieval_projection
 
     normalized_task = str(task_type or "generate").strip().casefold()
+    if normalized_task == "analysis" and include_design is None:
+        from knowledge.analysis_router import route_analysis_request
+        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+        route = route_analysis_request(
+            primary_query, confirmed_context,
+            resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form,
+        )
+        include_design = route.include_design
+        if include_design and design_query is None:
+            design_query = route.query_text
     def absent(status, reason):
         audit_section("manual_context", status=status, reason=reason, source="manual_retriever")
         return KnowledgeContext("", {"stage": normalized_task, "status": status,
@@ -195,7 +206,8 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
     should_lookup, lookup_reason = manual_lookup_decision(query)
     if (not should_lookup and normalized_task == "analysis" and
             resolve_context_policy().manuals == "adaptive" and query.strip()):
-        should_lookup, lookup_reason = True, "analysis_design_retrieval"
+        should_lookup = True
+        lookup_reason = "analysis_design_retrieval" if include_design else "analysis_fact_retrieval"
     if not should_lookup:
         return absent("excluded", lookup_reason)
     try:
@@ -203,9 +215,11 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
         query_meta = getattr(query, "metadata", {}) if getattr(query, "precompiled", False) else {}
         token_budget = query_meta.get("rag_evidence_token_budget") if isinstance(query_meta, dict) else None
         retrieval_char_budget = sys.maxsize if token_budget is not None else char_budget
+        analysis_options = ({"include_design": bool(include_design), "design_query": design_query}
+                            if normalized_task == "analysis" else {})
         context = retrieve_context(query, plc_model=plc_model, task_type=normalized_task,
                                    top_k=top_k, char_budget=retrieval_char_budget,
-                                   token_budget=token_budget)
+                                   token_budget=token_budget, **analysis_options)
     except Exception:
         print("PLC knowledge retrieval unavailable", file=sys.stderr)
         return absent("unavailable", "retrieval_failed")

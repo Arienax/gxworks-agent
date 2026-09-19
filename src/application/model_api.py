@@ -1,3 +1,5 @@
+from application.analysis_context import assemble_analysis_prompt
+
 import copy
 import os
 import json
@@ -325,30 +327,17 @@ def analyze_requirement(
     """
     confirmed_context = confirmed_spec if confirmed_spec is not None else confirmed_context
     model = _resolve_plc_model(user_requirement, confirmed_context)
-    routing_requirement = _routing_text_with_selected_approach(
-        user_requirement,
-        confirmed_context,
-    )
-    workflow_prompt, _route = build_workflow_prompt(
-        routing_requirement,
-        target_mode="ladder",
-        forced_task=task_type or "analysis",
-    )
-    knowledge_ctx = _build_knowledge_context(
+    analysis_prompt = assemble_analysis_prompt(
         user_requirement,
         plc_model=model,
-        task_type="analysis",
         confirmed_context=confirmed_context,
+        model_loader=_load_plc_models,
+        knowledge_builder=_build_knowledge_context,
+        resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form,
+        audit=audit_section,
     )
-    model_ctx = _build_model_context(
-        model,
-        confirmed_context,
-        compact=bool(knowledge_ctx),
-    )
-    sys_prompt = _with_confirmed_context(
-        ANALYSIS_SYSTEM_PROMPT + model_ctx + workflow_prompt + knowledge_ctx,
-        confirmed_context,
-    )
+    knowledge_ctx = analysis_prompt.knowledge_context
+    sys_prompt = analysis_prompt.system_prompt
     print(f"阶段1: 需求分析中... (effort=low, PLC={model})")
 
     messages = _build_clean_messages(conversation_history or [], sys_prompt)
@@ -406,30 +395,17 @@ def analyze_requirement_streaming(
     """
     confirmed_context = confirmed_spec if confirmed_spec is not None else confirmed_context
     model = _resolve_plc_model(user_requirement, confirmed_context)
-    routing_requirement = _routing_text_with_selected_approach(
-        user_requirement,
-        confirmed_context,
-    )
-    workflow_prompt, _route = build_workflow_prompt(
-        routing_requirement,
-        target_mode="ladder",
-        forced_task=task_type or "analysis",
-    )
-    knowledge_ctx = _build_knowledge_context(
+    analysis_prompt = assemble_analysis_prompt(
         user_requirement,
         plc_model=model,
-        task_type="analysis",
         confirmed_context=confirmed_context,
+        model_loader=_load_plc_models,
+        knowledge_builder=_build_knowledge_context,
+        resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form,
+        audit=audit_section,
     )
-    model_ctx = _build_model_context(
-        model,
-        confirmed_context,
-        compact=bool(knowledge_ctx),
-    )
-    sys_prompt = _with_confirmed_context(
-        ANALYSIS_SYSTEM_PROMPT + model_ctx + workflow_prompt + knowledge_ctx,
-        confirmed_context,
-    )
+    knowledge_ctx = analysis_prompt.knowledge_context
+    sys_prompt = analysis_prompt.system_prompt
     print(f"阶段1(流式): 需求分析中... (effort=low, PLC={model})")
 
     messages = _build_clean_messages(conversation_history or [], sys_prompt)
