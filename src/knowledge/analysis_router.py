@@ -115,3 +115,26 @@ def route_analysis_request(user_request, confirmed_context=None, *, analysis_mod
         mode, reason, tuple(topics), families, tuple(opcodes),
         tuple(dict.fromkeys(item.upper() for item in _DEVICE.findall(text))), text,
     )
+
+
+_GENERATION_FACT_TOPIC = re.compile(
+    r"手册|查证|查阅|查询指令|错误码|编译错误|缓冲存储器|"
+    r"定时|计时|计数|闪烁|时钟|寄存器|索引|移位|数组|算术|比较|通信|通讯|"
+    r"\b(?:timer|counter|clock|register|shift|arithmetic|modbus|rs-?485|"
+    r"manual|datasheet|documentation|VAR_IN_OUT|ABI)\b|"
+    r"\b(?:FX[0-9A-Z]+|Q[0-9A-Z]+|L[0-9A-Z]+)-[0-9A-Z-]+", re.I,
+)
+
+
+def has_generation_fact_target(query):
+    """Select retrieval work only, never analysis mode or program acceptance.
+
+    A resolved wiring form is not a request for every manual mentioning its
+    ordinary I/O. The compiler has already separated those facts from the query.
+    Keep explicit lookups, instruction/device references and technical families;
+    absent lookup targets mean empty evidence, not an unsupported program.
+    """
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+    route = route_analysis_request(query, resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form)
+    return bool(route.opcodes or route.devices or route.topics
+                or _GENERATION_FACT_TOPIC.search(str(query or "")))

@@ -52,6 +52,7 @@ LADDER_SYSTEM_PROMPT = """# Role
 输出 schema > 本轮明确修改 > 当前确认规格/canonical I/O/selected_approach.generation_contract > 当前型号资料与检索证据 > 本轮匹配的专用控制提示 > 历史上下文。
 
 # Ladder semantic kernel
+- io_bindings.active_level 表示物理信号动作时的输入位值，不是程序触点类型。程序 NO 检查位=1，NC 检查位=0；停止 active_level=0 时，运行允许条件用 NO，反之用 NC。不得把物理常闭直接翻译成程序 NC。
 - 不得擅自新增 I/O、停止/急停、硬件、模块寄存器或未确认别名；用户明确给出的地址、NO/NC 极性和参数必须保持。
 - selected_approach.generation_contract 是硬约束；required_* 必须满足，forbidden_* 不得出现。
 - 同一普通 Y/M 只保留一个 COIL owner；多条件合并到该输出的条件结构中。
@@ -201,11 +202,17 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
         lookup_reason = "analysis_design_retrieval" if include_design else "analysis_fact_retrieval"
     if not should_lookup:
         return absent("excluded", lookup_reason)
+    if normalized_task in {"generate", "edit"} and getattr(query, "precompiled", False):
+        from knowledge.analysis_router import has_generation_fact_target
+        if not has_generation_fact_target(query):
+            return absent("excluded", "no_specific_fact_target")
     try:
         from knowledge.retriever import build_knowledge_context as retrieve_context
         query_meta = getattr(query, "metadata", {}) if getattr(query, "precompiled", False) else {}
         token_budget = query_meta.get("rag_evidence_token_budget") if isinstance(query_meta, dict) else None
-        retrieval_char_budget = sys.maxsize if token_budget is not None else char_budget
+        # Model capacity is a ceiling, not a reason to fill the context with
+        # whole chapters. Respect both the task allowance and token reserve.
+        retrieval_char_budget = char_budget
         analysis_options = ({"include_design": bool(include_design), "design_query": design_query}
                             if normalized_task == "analysis" else {})
         context = retrieve_context(query, plc_model=plc_model, task_type=normalized_task,

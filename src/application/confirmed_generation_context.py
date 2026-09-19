@@ -28,14 +28,24 @@ CONFIRMED_GENERATION_REQUEST = (
 
 def project_confirmed_specification(confirmed_spec):
     """Expose the same allowlisted, canonical confirmed facts to every adapter."""
-    source = dict(confirmed_spec) if isinstance(confirmed_spec, Mapping) else None
+    from plc.specification.bindings import generation_io_snapshot
+    from plc.hardware_profiles import QUESTION_IDS
+    source = (generation_io_snapshot(dict(confirmed_spec), protected_ids=QUESTION_IDS)
+              if isinstance(confirmed_spec, Mapping) else None)
     projected = public_generation_specification(source) or {}
+    # Preserve the existing public-projection contract: malformed optional
+    # label metadata is omitted, not replaced while enriching electrical facts.
+    raw_bindings = confirmed_spec.get("io_bindings") if isinstance(confirmed_spec, Mapping) else None
+    invalid_labels = {row.get("binding_id") for row in raw_bindings
+                      if isinstance(row, Mapping) and "label" in row
+                      and not isinstance(row["label"], str)} if isinstance(raw_bindings, list) else set()
     bindings = source.get("io_bindings") if source is not None else None
     if isinstance(bindings, list):
         projected["io_bindings"] = [
             {key: public_generation_value(copy.deepcopy(row[key]))
-             for key in ("binding_id", "role", "kind", "address", "source_parameter_id", "name", "label")
-             if key in row and (key != "label" or isinstance(row[key], str))}
+             for key in ("binding_id", "role", "kind", "address", "source_parameter_id", "name",
+                         "active_level", "inactive_level", "label")
+             if key in row and (key != "label" or isinstance(row[key], str) and row.get("binding_id") not in invalid_labels)}
             for row in bindings if isinstance(row, Mapping)
         ]
     if isinstance(projected.get("io_table"), list):

@@ -199,20 +199,55 @@ def _positive_selected(selected):
     )
 
 
+_QUERY_METADATA = frozenset({"id", "source", "schema_version", "min_reader_version",
+                             "binding_id", "row_binding_id", "source_parameter_id"})
+
+
 def _flatten(value, prefix=""):
+    """Index engineering values, not JSON paths or provenance identifiers."""
     rows = []
     if isinstance(value, Mapping):
         for key, nested in value.items():
-            path = f"{prefix}.{key}" if prefix else str(key)
-            rows.extend(_flatten(nested, path))
+            if key not in _QUERY_METADATA:
+                rows.extend(_flatten(nested))
     elif isinstance(value, (list, tuple)):
-        for index, nested in enumerate(value):
-            rows.extend(_flatten(nested, f"{prefix}[{index}]"))
+        for nested in value:
+            rows.extend(_flatten(nested))
     elif value is not None and not isinstance(value, bool):
         text = " ".join(str(value).strip().split())
         if text:
-            rows.append(f"{prefix}: {text}" if prefix else text)
+            rows.append(text)
     return rows
+
+
+def _retrieval_facts(facts):
+    """Do not search manuals for form choices or repeat resolved wire bindings.
+
+    The complete bindings/answers remain in the generation packet. Hardware
+    parameters and unbound engineering rows still contribute retrieval values.
+    Explicit device/instruction references in the user's request or plan are
+    kept, including operands; this is not a request-complexity classifier.
+    """
+    result = copy.deepcopy(facts)
+    bindings = result.pop("io_bindings", [])
+    bindings = [row for row in bindings if isinstance(row, Mapping)
+                and row.get("kind") in {"X", "Y"}
+                and row.get("role") in {"start", "stop", "output"}]
+    bound_ids = {row.get("source_parameter_id") for row in bindings
+                 if isinstance(row, Mapping) and row.get("source_parameter_id")}
+    bound_addresses = {row.get("address") for row in bindings
+                       if isinstance(row, Mapping) and row.get("source_parameter_id")}
+    if isinstance(result.get("parameters"), list):
+        result["parameters"] = [
+            {key: row[key] for key in ("name", "value") if key in row}
+            for row in result["parameters"] if isinstance(row, Mapping)
+            and str(row.get("value") if row.get("value") is not None else "").strip()
+            and row.get("id") not in bound_ids
+        ]
+    if isinstance(result.get("io_table"), list):
+        result["io_table"] = [row for row in result["io_table"] if isinstance(row, Mapping)
+                              and row.get("address") not in bound_addresses]
+    return result
 
 
 def _trim_to_tokens(text, limit):
@@ -249,7 +284,14 @@ def _pack_sections(sections, token_budget):
     packed, report = [], {}
     used_total = 0
     leftovers = []
+    seen_fragments = set()
     for name, fragments in sections:
+        unique = []
+        for fragment in fragments:
+            if fragment not in seen_fragments:
+                seen_fragments.add(fragment)
+                unique.append(fragment)
+        fragments = unique
         quota = max(64, int(token_budget * weights.get(name, 0)))
         used = 0
         included = []
@@ -392,12 +434,14 @@ class ContextCompiler:
         requests = [row for row in runtime_context.get("requests", []) if isinstance(row, Mapping)]
         latest = [requests[-1].get("text", "")] if requests and requests[-1].get("text") else []
         older = [row.get("text", "") for row in requests[:-1] if row.get("text")]
+        if value.task_type == "edit" and value.generation_request:
+            latest = [value.generation_request, *latest]
         facts = {key: copy.deepcopy(runtime[key]) for key in (
             "parameters", "io_table", "io_bindings", "execution_semantics",
             "hardware_profile", "hardware_context", "user_notes",
         ) if key in runtime}
         sections = [
-            ("confirmed_facts", _flatten(facts)),
+            ("confirmed_facts", _flatten(_retrieval_facts(facts))),
             ("selected_method", _flatten(method)),
             ("latest_amendment", _flatten(latest)),
             ("implementation_preferences", _flatten(prefs)),

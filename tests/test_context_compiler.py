@@ -92,8 +92,9 @@ def test_small_context_high_utilization_stays_deterministic_and_flags_semantic_e
 def test_retrieval_priority_keeps_current_facts_ahead_of_old_requests_and_long_guide():
     compiled = compile(spec(guide="Long selected method " * 20_000))
     query = compiled.retrieval_packet["query"]
-    assert "io_table[0].address: X1" in query
-    assert "parameters[0].value: K30" in query
+    assert "X1" in query.splitlines()
+    assert "K30" in query.splitlines()
+    assert "io_table[" not in query and "parameters[" not in query
     assert "P0" not in query and "P1" not in query  # priorities are metadata, not PLC-looking query text
     if "Start was X0" in query:
         assert query.index("X1") < query.index("Start was X0")

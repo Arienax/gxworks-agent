@@ -72,7 +72,7 @@ def test_api_and_external_context_have_identical_generation_instructions(monkeyp
         assert options["task_type"] == ("edit" if editing else "generate")
         assert options["top_k"] == 5
         assert options["token_budget"] == 12000
-        assert options["char_budget"] == sys.maxsize
+        assert options["char_budget"] == 7000
     assert data["current_version_id"] == ("v0001" if editing else None)
     assert "Private old conversation" not in json.dumps(data)
     assert persist is False and len(history) == (2 if editing else 1)
