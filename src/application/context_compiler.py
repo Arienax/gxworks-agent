@@ -77,17 +77,31 @@ def model_budget(profile):
     protocol_overhead = 4096
     safety_margin = min(16384, max(2048, int(window * 0.02))) if window else 4096
     usable = max(0, window - reserved_output - protocol_overhead - safety_margin) if window else None
-    # Retrieval is a search expression, not a mirror of the generation window.
-    retrieval = 16000 if not usable else min(24000, max(6000, usable // 8))
+    # Unknown capacity and known exhaustion are different states. An unknown
+    # model keeps the conservative fallback budgets; a known zero-input budget
+    # must not schedule retrieval that cannot fit in the model context.
+    if window is None:
+        budget_state = "unknown"
+        retrieval = 16000
+        rag_evidence = 12000
+    elif usable <= 0:
+        budget_state = "unusable"
+        retrieval = 0
+        rag_evidence = 0
+    else:
+        budget_state = "available"
+        retrieval = min(24000, max(6000, usable // 8))
+        rag_evidence = min(32000, max(4000, usable // 8))
     return {
         "context_window": window,
         "budget_confidence": "known" if window else "unknown",
+        "budget_state": budget_state,
         "reserved_output_tokens": reserved_output,
         "protocol_overhead_tokens": protocol_overhead,
         "safety_margin_tokens": safety_margin,
         "usable_input_tokens": usable,
         "retrieval_query_token_budget": retrieval,
-        "rag_evidence_token_budget": (12000 if not usable else min(32000, max(4000, usable // 8))),
+        "rag_evidence_token_budget": rag_evidence,
     }
 
 
@@ -227,6 +241,11 @@ def _trim_to_tokens(text, limit):
 def _pack_sections(sections, token_budget):
     weights = {"confirmed_facts": .45, "selected_method": .20, "latest_amendment": .10,
                "implementation_preferences": .08, "positive_contract": .10, "older_requests": .07}
+    if token_budget <= 0:
+        return "", {
+            name: {"budget_tokens": 0, "included_tokens": 0, "omitted_fragments": len(fragments)}
+            for name, fragments in sections
+        }, 0
     packed, report = [], {}
     used_total = 0
     leftovers = []
@@ -403,14 +422,21 @@ class ContextCompiler:
         original_packet = _generation_packet(runtime, value, evidence_text)
         original_payload_tokens = _estimate(original_packet)
         original_estimated = original_payload_tokens + budget["protocol_overhead_tokens"]
-        original_utilization = (original_estimated / usable) if usable else None
-        pressure = _pressure(original_utilization)
+        if usable is None:
+            original_utilization = None
+            pressure = "unknown"
+        elif usable <= 0:
+            original_utilization = None
+            pressure = "critical"
+        else:
+            original_utilization = original_estimated / usable
+            pressure = _pressure(original_utilization)
 
         compacted_runtime, provenance_saved = _compact_runtime_provenance(runtime, pressure)
         generation_packet = _generation_packet(compacted_runtime, value, evidence_text)
         compiled_payload_tokens = _estimate(generation_packet)
         compiled_estimated = compiled_payload_tokens + budget["protocol_overhead_tokens"]
-        utilization = (compiled_estimated / usable) if usable else None
+        utilization = (compiled_estimated / usable) if usable is not None and usable > 0 else None
         if pressure == "unknown":
             mode = "unknown_budget"
         elif pressure == "low":
@@ -422,6 +448,7 @@ class ContextCompiler:
         report = {
             "model_context_window": budget["context_window"],
             "budget_confidence": budget["budget_confidence"],
+            "budget_state": budget["budget_state"],
             "reserved_output_tokens": budget["reserved_output_tokens"],
             "protocol_overhead_tokens": budget["protocol_overhead_tokens"],
             "safety_margin_tokens": budget["safety_margin_tokens"],

@@ -191,6 +191,37 @@ def test_unknown_context_window_is_not_treated_as_low_pressure():
     assert compiled.budget_report["context_utilization"] is None
 
 
+def test_known_zero_usable_budget_is_not_treated_as_unknown():
+    model = profile(12_000, output=8192)
+    budget = model_budget(model)
+    assert budget["budget_confidence"] == "known"
+    assert budget["budget_state"] == "unusable"
+    assert budget["usable_input_tokens"] == 0
+    assert budget["retrieval_query_token_budget"] == 0
+    assert budget["rag_evidence_token_budget"] == 0
+
+    value = spec()
+    compiled = ContextCompiler().compile(ContextCompilerInput(
+        confirmed_spec=value,
+        engineering_context=value["engineering_context"],
+        selected_approach=value["selected_approach"],
+        model_profile=model,
+        plc_model="FX3U",
+        task_type="generate",
+        generation_request="Generate.",
+    ))
+    report = compiled.budget_report
+    assert report["budget_confidence"] == "known"
+    assert report["budget_state"] == "unusable"
+    assert report["context_pressure"] == "critical"
+    assert report["compression_mode"] == "aggressive_deterministic"
+    assert report["pre_compaction_context_utilization"] is None
+    assert report["context_utilization"] is None
+    assert report["budget_exceeded_after_compaction"] is True
+    assert compiled.retrieval_packet["query"] == ""
+    assert compiled.retrieval_packet["estimated_tokens"] == 0
+
+
 def test_request_override_controls_reserved_output_tokens():
     model = profile(128_000, output=32_768)
     model["generationDefaults"] = {"max_completion_tokens": 4096}
