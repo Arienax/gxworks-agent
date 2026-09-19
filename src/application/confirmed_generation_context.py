@@ -34,8 +34,8 @@ def project_confirmed_specification(confirmed_spec):
     if isinstance(bindings, list):
         projected["io_bindings"] = [
             {key: public_generation_value(copy.deepcopy(row[key]))
-             for key in ("binding_id", "role", "kind", "address", "source_parameter_id", "name")
-             if key in row}
+             for key in ("binding_id", "role", "kind", "address", "source_parameter_id", "name", "label")
+             if key in row and (key != "label" or isinstance(row[key], str))}
             for row in bindings if isinstance(row, Mapping)
         ]
     if isinstance(projected.get("io_table"), list):

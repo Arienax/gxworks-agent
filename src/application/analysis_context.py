@@ -17,6 +17,11 @@ from application.prompts import (
 _DEVICE = re.compile(r"(?<![A-Za-z0-9_])(?:SM|SD|[XYMDTCSVZ])\d+(?![A-Za-z0-9_])", re.I)
 _PRIVATE = {"reasoning_content", "raw_response", "raw_attempts", "_provider_reasoning", "_provider_fields"}
 
+# Transport metadata for the shared Core binding, not an inferred PLC rule.
+_IO_BINDING_PROMPT = """# I/O purpose metadata
+每个地址确认问题另带 io_binding，例如 {"binding_id":"device.start","kind":"X","label":"启动按钮"}；binding_id 稳定且区分不同控制对象，沿用已有绑定。kind 是地址类别，不在此预填未知地址。
+label 是独立的简短用途名称，不是 question：不含提问、选项、触点极性推导或实现解释；用途未知可省略或留空，不为注释新增确认问题。question 保留完整确认问题，实际地址/极性仍由用户回答。已有 I/O 用途以用户编辑的值为准；suggested_io 中的说明也只写用途名称。"""
+
 
 def _address_notes(value, requested, result):
     """Select complete matching registry entries; never truncate source facts."""
@@ -128,12 +133,13 @@ def assemble_analysis_prompt(user_request, *, plc_model, confirmed_context=None,
         mode_prompt += "\n\n" + ANALYSIS_PINNED_PROMPT
     model_context = "# Relevant PLC model facts\n" + json.dumps(profile, ensure_ascii=False, separators=(",", ":"))
     baseline = _baseline_for_analysis(confirmed_context)
-    parts = [ANALYSIS_SYSTEM_PROMPT, mode_prompt, *deltas, model_context, str(knowledge)]
+    core_prompt = ANALYSIS_SYSTEM_PROMPT + "\n\n" + _IO_BINDING_PROMPT
+    parts = [core_prompt, mode_prompt, *deltas, model_context, str(knowledge)]
     if baseline:
         parts.append("# Confirmed project specification\n" + baseline)
     system_prompt = "\n\n".join(part.strip() for part in parts if part and part.strip())
     if audit is not None:
-        audit("base_prompt", ANALYSIS_SYSTEM_PROMPT, reason="analysis_core", source="analysis_assembler")
+        audit("base_prompt", core_prompt, reason="analysis_core", source="analysis_assembler")
         audit("dynamic_prompt", "\n\n".join([mode_prompt, *deltas]), reason=route.reason, source="analysis_router")
         audit("model_profile", model_context, reason="analysis_targeted", source="model_registry")
         audit("workflow_prompt", status="excluded", reason="analysis_routed_before_assembly", source="analysis_router")

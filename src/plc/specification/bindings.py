@@ -34,6 +34,11 @@ def binding_hint(parameter):
         kind = str(raw.get("kind") or "").upper()
         if binding_id and len(binding_id) <= 128 and kind in _ORDER:
             result = {"binding_id": binding_id, "kind": kind}
+            # Purpose is independent of the question/answer text. Missing or
+            # malformed optional labels do not create a confirmation gate.
+            label = raw.get("label")
+            if isinstance(label, str):
+                result["label"] = label.strip()
             for key in ("role", "row_id"):
                 value = raw.get(key)
                 if isinstance(value, str) and 0 < len(value) <= 128:
@@ -62,7 +67,15 @@ def _question_is_address(name):
     return any(s in text for s in ("哪个输入", "哪个输出", "哪个x", "哪个y", "哪个轴", "输入点", "输出点", "输入地址", "输出地址", "x输入", "y输出", "接什么输入", "接什么输出", "接哪", "which input", "which output", "input address", "output address"))
 
 
+def _purpose_label(hint):
+    """Explicit purpose first; old typed roles may use a neutral short name."""
+    if "label" in hint:
+        return hint["label"]
+    return {"start": "启动输入", "stop": "停止输入", "output": "控制输出"}.get(hint.get("role"), "")
+
+
 def _answer_label(name):
+    """Match historical unbound rows only; never create a new device comment."""
     text = str(name)
     for phrase in ("使用哪个轴", "接哪个输入点", "接哪个输出点", "分别接什么输入", "接什么输入", "接什么输出", "是否有", "分别", "哪个", "？", "?"):
         text = text.replace(phrase, "")
@@ -76,7 +89,9 @@ def _row_matches(row, hint, name):
         return row.get("binding_id") == hint["row_id"] or row.get("row_id") == hint["row_id"]
     if row.get("binding_id"):
         return row["binding_id"] == hint["binding_id"]
-    key = label_key(row.get("label", ""))
+    key = label_key(str(row.get("label") or "").strip())
+    if key and key == label_key(hint.get("label", "")):
+        return True  # Exact purpose match; ambiguous matches are not rebound.
     if key and key == label_key(_answer_label(name)):
         return True
     # Only exact, unqualified legacy labels. "Motor 2 start" must never be
@@ -187,7 +202,7 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
         else:
             index = len(rows)
             rows.append({"kind": hint["kind"], "address": address,
-                         "label": _answer_label(name), "source": item.get("source") or "user"})
+                         "label": _purpose_label(hint), "source": item.get("source") or "user"})
         row = rows[index]
         # Never consume an existing different binding merely to attach a role.
         # Shared addresses can have several provenance records, but only one
@@ -198,12 +213,16 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
             row["source_parameter_id"] = str(item.get("id") or "")
             row["address"] = address
             row["source"] = item.get("source") or "user"
-            if not row.get("label"):
-                row["label"] = _answer_label(name)
+            # Existing labels (including an intentionally empty one) belong to
+            # the I/O table. Reconfirmation must not restore a model's label.
+            row.setdefault("label", _purpose_label(hint))
+        if isinstance(item.get("io_binding"), dict):
+            item["io_binding"]["label"] = str(row.get("label") or "").strip()
         claimed.add(index)
         previous[identity] = {**hint, "address": address,
                               "source_parameter_id": str(item.get("id") or ""),
-                              "name": name, "value": str(item.get("value") or ""),
+                              "name": name, "label": str(row.get("label") or "").strip(),
+                              "value": str(item.get("value") or ""),
                               "source": item.get("source") or "user",
                               "row_binding_id": row.get("binding_id") or identity}
         applied[name] = str(item.get("value") or "")
@@ -222,6 +241,7 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
         if row is not None:
             binding["address"] = str(row.get("address") or "").strip().upper()
             binding["row_binding_id"] = row.get("binding_id") or identity
+            binding["label"] = str(row.get("label") or "").strip()
             active[identity] = binding
     # A deleted row has no active binding. Do not feed its stale address to
     # Agent B merely because it still occurs in historical provenance.
@@ -256,4 +276,6 @@ def restore_bound_choices(questions, rows, bindings):
             continue
         question["value"] = _DEVICE.sub(lambda _m: address, value, count=1)
         question["source"] = binding.get("source") or "previous"
+        if isinstance(question.get("io_binding"), dict):
+            question["io_binding"]["label"] = str(row.get("label") or "").strip()
     return result

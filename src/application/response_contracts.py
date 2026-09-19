@@ -23,6 +23,8 @@ ANALYSIS_RESPONSE = ResponseContract("analysis", "json", (
 # control_type is a legacy Chinese enum. options/default/required_when are
 # interdependent comparison values. execution_semantics.evidence is user text.
 # None may be translated or treated as a newly authored prose field.
+# io_binding.label is optional purpose metadata, not response prose. Core
+# ignores non-string labels; short/user-supplied names must not trigger repair.
 DEBUG_RESPONSE = ResponseContract("debug", "json", (
     "summary", "possible_causes", "recommended_changes", "fix_instruction",
 ))
