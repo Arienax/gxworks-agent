@@ -13,7 +13,7 @@ def test_explicit_required_opcode_overrides_inferred_forbidden_opcode():
     assert contract["required_opcodes"] == ["MOV"]
     assert "MOV" not in contract["forbidden_opcodes"]
     assert contract["source"] == "explicit"
-    assert any("显式必用指令覆盖" in item for item in contract.get("normalization_warnings", []))
+    assert not contract.get("normalization_warnings")
 
 
 def test_explicit_forbidden_opcode_overrides_inferred_required_opcode():
@@ -99,7 +99,8 @@ def test_explicit_any_of_group_wins_when_only_inferred_forbids_make_it_impossibl
     assert contract["any_of_opcode_groups"] == [["SET", "RST"]]
     assert "SET" not in contract["forbidden_opcodes"]
     assert "RST" not in contract["forbidden_opcodes"]
-    assert any("显式指令任选组覆盖" in item for item in contract.get("normalization_warnings", []))
+    # No prose inference was applied, so there is no fabricated conflict warning.
+    assert not contract.get("normalization_warnings")
 
 
 def test_explicit_fields_can_coexist_with_inference_for_omitted_dimensions():
@@ -109,5 +110,7 @@ def test_explicit_fields_can_coexist_with_inference_for_omitted_dimensions():
     )
 
     assert contract["forbidden_opcodes"] == ["SET"]
-    assert "register_state_machine" in contract["required_structures"]
-    assert "MOV" in contract["required_opcodes"]
+    # A present partial contract is authoritative. Missing dimensions remain
+    # empty; the selected guide is delivered separately as engineering context.
+    assert contract["required_structures"] == []
+    assert contract["required_opcodes"] == []

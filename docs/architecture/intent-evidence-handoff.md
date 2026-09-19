@@ -144,3 +144,28 @@ expects the literal `GX Works3` in the FX5U/ST base prompt. It is not added to t
 existing workflow or hidden by changing that test in this patch. Windows/GX Works2,
 GX Simulator2, physical PLC behavior and live paid-model acceptance remain
 separate, unperformed integration checks for this change.
+
+## Follow-up compatibility review
+
+The full-suite comparison exposed two real call-site regressions missed by the
+initial headless subset. `CompilerThread` now supplies the optional
+`source_handoff` field when constructing `GenerationRequest`; this is a frozen
+Qt compatibility fix, not a new UI workflow. The optional tool receipt binds the
+public engineering specification and program, not private host/widget/provider
+objects that may not be JSON serializable. Version, project, selected-plan,
+parameter and program changes still prevent correlation without blocking a
+candidate's existing validation/confirmation route.
+
+A custom knowledge builder can supply text that is subsequently privacy-cleaned.
+The handoff now hashes the text actually passed to generation, while retaining
+original source-block hashes as source identities. The injected text and source
+identities are deliberately different measurements.
+
+Regression expectations were updated where they encoded the behavior this audit
+was requested to remove: deleting selected plan prose, inferring missing hard
+constraints from a partial contract, replaying first-generation assistant history,
+and truncating tool JSON at 18,000 characters. Privacy checks, explicit contract
+contradictions, schema ownership and stale-receipt isolation remain covered.
+Historical test identities are preserved for the existing full-suite comparator;
+its baseline, failure rules and rename allowlist are unchanged. No test is skipped
+to obtain a passing comparison.

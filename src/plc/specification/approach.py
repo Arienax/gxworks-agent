@@ -317,9 +317,9 @@ _CONTRACT_GROUP_FIELDS = (
 def _explicit_contract_fields(raw):
     """Return constraint fields explicitly supplied by the structured contract.
 
-    ``generation_guide`` inference is a compatibility/fallback source.  It may
-    fill fields omitted by a structured contract, but it never overrides a
-    constraint that was explicitly supplied by the analysis result/user.
+    ``generation_guide`` inference is a compatibility source only when the
+    entire structured contract is missing/empty. A present partial contract
+    never gets additional constraints from prose in omitted dimensions.
     """
 
     return {

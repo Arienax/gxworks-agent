@@ -72,7 +72,10 @@ def test_api_and_external_context_have_identical_generation_instructions(monkeyp
                            "top_k": 5, "char_budget": 7000}
     assert data["current_version_id"] == ("v0001" if editing else None)
     assert "Private old conversation" not in json.dumps(data)
-    assert persist is False and len(history) == 2
+    assert persist is False and len(history) == (2 if editing else 1)
+    if not editing:
+        assert "Private old conversation" not in json.dumps(messages + history)
+        assert history == [{"role": "user", "content": CONFIRMED_GENERATION_REQUEST}]
     assert context.ladder == ladder
 
 

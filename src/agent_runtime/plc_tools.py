@@ -733,11 +733,21 @@ def build_default_tool_registry() -> ToolRegistry:
     receipts = GenerationReceiptCache()
 
     def receipt_binding(context):
+        from application.confirmed_generation_context import project_confirmed_specification
+        from application.generation_support import public_generation_ladder
+        from plc.ir import ir_to_ladder
+
+        # Bind the engineering snapshot that was actually exposed, not arbitrary
+        # UI/provider objects retained by a host in its private ToolContext.
+        # Private metadata must neither leak nor break this optional observation.
+        program = (ir_to_ladder(context.program_ir) if isinstance(context.program_ir, Mapping)
+                   else context.ladder)
         return canonical_sha256({
             "project_id": context.project_id, "version_id": context.version_id,
-            "plc_model": context.plc_model, "target_mode": context.project.get("target_mode"),
-            "confirmed_spec": _confirmed_spec(context),
-            "program": context.program_ir if context.program_ir is not None else context.ladder,
+            "plc_model": context.plc_model,
+            "target_mode": str(context.project.get("target_mode") or "ladder"),
+            "confirmed_spec": project_confirmed_specification(_confirmed_spec(context)),
+            "program": public_generation_ladder(program),
         })
 
     def generation_context(context, arguments):

@@ -411,3 +411,76 @@ def test_optional_legacy_source_fields_do_not_become_required_inputs():
     context = build_confirmed_generation_context(confirm_context(spec), "FX3U", knowledge_builder=lambda *a, **kw: "")
     assert context.confirmed_spec["engineering_context"]["requests"] == []
     assert context.handoff["request_ids"] == []
+
+
+def test_context_receipt_hashes_the_sanitized_text_actually_given_to_generation():
+    from knowledge.evidence import text_sha256
+    raw = _evidence()
+    raw = KnowledgeContext(str(raw) + " api_key=private-fixture C:/private/manual.txt", raw.manifest)
+    before = copy.deepcopy(raw.manifest)
+    context = build_confirmed_generation_context(_confirmed(), "FX3U", knowledge_builder=lambda *a, **kw: raw)
+    evidence = context.handoff["generation_evidence"]
+    assert "private-fixture" not in context.knowledge_context
+    assert "C:/private" not in context.knowledge_context
+    assert evidence["context_sha256"] == text_sha256(context.knowledge_context)
+    assert evidence["context_sha256"] != text_sha256(raw)
+    assert evidence["records"] == before["records"]  # Source identity is not rewritten.
+    assert raw.manifest == before
+
+
+def test_optional_receipt_binding_uses_public_engineering_snapshot_not_private_objects(monkeypatch):
+    import application.generation_context as gc
+    from agent_runtime.plc_tools import build_default_tool_registry, build_tool_context
+    from test_generation_agent_boundary import _ladder
+    monkeypatch.setattr(gc, "_build_knowledge_context", lambda *a, **kw: _evidence())
+    spec = _confirmed()
+    spec["parameters"].append({"name": "delay", "value": "K10", "widget": object()})
+    spec["selected_approach"]["provider"] = object()
+    context = build_tool_context({"id": "private-objects", "plc_model": "FX3U", "confirmed_spec": spec})
+    registry = build_default_tool_registry()
+    result = registry.call("get_generation_context", {}, context)
+    assert result["ok"], result
+    public = result["data"]
+    assert public["generation_context_id"]
+    assert "widget" not in json.dumps(public) and "provider" not in json.dumps(public)
+    # Serialization-only host metadata must not invalidate the exposed snapshot.
+    from application.confirmed_generation_context import project_confirmed_specification
+    clean_context = build_tool_context({"id": "private-objects", "plc_model": "FX3U",
+                                       "confirmed_spec": project_confirmed_specification(spec)})
+    candidate = registry.call("create_program_candidate", {
+        "ladder": _ladder(), "generation_context_id": public["generation_context_id"],
+    }, clean_context)
+    assert candidate["ok"], candidate
+    assert candidate["data"]["generation_handoff"]["external_context_id"] == public["generation_context_id"]
+
+
+@pytest.mark.parametrize("change", ["project", "version", "program", "parameter", "guide"])
+def test_receipt_cannot_cross_a_changed_engineering_binding(monkeypatch, change):
+    import application.generation_context as gc
+    from agent_runtime.plc_tools import build_default_tool_registry, build_tool_context
+    from test_generation_agent_boundary import _ladder
+    monkeypatch.setattr(gc, "_build_knowledge_context", lambda *a, **kw: _evidence())
+    project = {"id": "bound-receipt", "plc_model": "FX3U", "confirmed_spec": _confirmed()}
+    program = _ladder()
+    registry = build_default_tool_registry()
+    context = build_tool_context(project, ladder=program)
+    issued = registry.call("get_generation_context", {}, context)["data"]
+    version = None
+    if change == "project":
+        project["id"] = "other-project"
+    elif change == "version":
+        version = {"id": "other-version", "confirmed_spec_snapshot": copy.deepcopy(project["confirmed_spec"])}
+    elif change == "program":
+        program["device_comments"]["Y0"] = "Changed output purpose"
+    elif change == "parameter":
+        project["confirmed_spec"]["parameters"].append({"name": "delay", "value": "K20"})
+    else:
+        project["confirmed_spec"]["selected_approach"]["generation_guide"] += " 明确修订"
+    changed = build_tool_context(project, version=version, ladder=program)
+    candidate = registry.call("create_program_candidate", {
+        "ladder": _ladder(), "generation_context_id": issued["generation_context_id"],
+    }, changed)
+    assert candidate["ok"] and candidate["status"] == "confirmation_required", candidate
+    receipt = candidate["data"]["generation_handoff"]
+    assert receipt["generation_evidence"]["status"] == "not_recorded"
+    assert "external_context_id" not in receipt

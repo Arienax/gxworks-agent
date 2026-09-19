@@ -95,13 +95,19 @@ def build_confirmed_generation_context(
         confirmed_context=projected, evidence=public_generation_value(evidence),
     )
     from plc.specification.provenance import handoff_snapshot
-    from knowledge.evidence import context_manifest
+    from knowledge.evidence import context_manifest, text_sha256
     selected = projected.get("selected_approach") or {}
-    handoff = handoff_snapshot(projected, evidence=context_manifest(knowledge, stage=task_type), stage=task_type)
+    knowledge_text = public_generation_value(knowledge or "")
+    manifest = context_manifest(knowledge, stage=task_type)
+    # A custom builder may return unsanitized text. The source hashes still
+    # identify retrieved blocks; the context hash must identify the actual
+    # privacy-cleaned text delivered to either generation adapter.
+    manifest["context_sha256"] = text_sha256(knowledge_text)
+    handoff = handoff_snapshot(projected, evidence=manifest, stage=task_type)
     return ConfirmedGenerationContext(
         plc_model=model, confirmed_spec=projected,
         io_bindings=projected.get("io_bindings") or [],
         generation_contract=selected.get("generation_contract") or {},
-        knowledge_context=public_generation_value(knowledge or ""),
+        knowledge_context=knowledge_text,
         current_program=current, generation_request=request, handoff=public_generation_value(handoff),
     )

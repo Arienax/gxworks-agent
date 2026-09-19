@@ -199,7 +199,8 @@ def test_agent_a_cannot_drop_verbatim_classification_or_promote_guessed_contract
     assert contract["required_structures"] == ["direct_logic"]
 
 
-def test_agent_b_receives_selected_plan_with_its_origin_but_not_private_reasoning():
+def test_agent_b_receives_structured_approach_contract_but_not_agent_a_prose():
+    """Keep the historical test ID; selected plans are not private Agent-A reasoning."""
     normalized = _normalize_analysis_result(
         _bad_analysis(),
         plc_model="FX3U",
