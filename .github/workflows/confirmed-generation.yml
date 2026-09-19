@@ -65,7 +65,7 @@ jobs:
           tests/test_context_refresh_runtime.py
           tests/test_approval_modes.py
           tests/test_program_exploration.py
-          tests/test_confirmed_generation_regressions_20260914.py
+          tests/test_confirmed_generation_regressions.py
           tests/test_review_noise_regressions.py
           tests/test_user_confirmed_generation_repair.py
           tests/test_model_provider.py

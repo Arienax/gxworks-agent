@@ -147,7 +147,7 @@ the model. The UI shows an elapsed timer while waiting and actual timing on
 completion, never a fabricated percentage. No secret or raw provider error body
 is included.
 
-Regression coverage: `tests/test_model_detection_stages.py`, updated HTTP tests,
+Regression coverage: `tests/test_model_detection.py`, updated HTTP tests,
 `web/tests/model-parameters.test.mjs`, and `scripts/web_model_settings_e2e.py`.
 All use synthetic transports and disposable settings; they are not live provider
 or PLC acceptance tests.

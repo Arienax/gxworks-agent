@@ -201,7 +201,7 @@ category=st_rule；task_type=st；expected chunk_type=st_rule；expected manual_
 
 ```powershell
 python tools/tune_gxw2_skill_ranking.py
-python -m pytest tests/test_gxw2_skill_import.py tests/test_gxw2_skill_ranking.py tests/test_gxw2_skill_reranker.py tests/test_rag_benchmark_evaluator.py tests/test_fx3u_rag.py -v
+python -m pytest tests/test_gxw2_skill_import.py tests/test_gxw2_skill_ranking.py tests/test_gxw2_skill_reranker.py tests/test_fx3u_rag.py -v
 python -m pytest -q -rs
 python tools/evaluate_rag_benchmark.py --benchmark benchmarks/gxw2_skill_rag_benchmark.jsonl --output benchmarks/gxw2_skill_rag_benchmark_report.json --fail-under-recall-10 0.90
 python tools/evaluate_rag_benchmark.py --benchmark benchmarks/fx3u_rag_benchmark_pre_skill.jsonl --output benchmarks/fx3u_rag_benchmark_pre_skill_report.json --fail-under-recall-10 0.98

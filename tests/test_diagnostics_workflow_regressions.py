@@ -12,7 +12,7 @@ from model_runtime.provider import ModelProviderError
 
 
 FIXTURE = json.loads(
-    (Path(__file__).parent / "fixtures" / "diagnostics_workflow_regression_20260915.json")
+    (Path(__file__).parent / "fixtures" / "diagnostics_workflow_regression.json")
     .read_text(encoding="utf-8")
 )
 APP = (Path(__file__).parents[1] / "web" / "src" / "App.tsx").read_text(encoding="utf-8")
