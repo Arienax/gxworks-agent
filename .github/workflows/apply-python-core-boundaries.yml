@@ -18,18 +18,17 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: true
-      - name: Create clean refactor commit
+      - name: Commit refactor on protected branch
         shell: bash
         env:
-          BASE_SHA: 97dfc2457cb5a9b77ab671bf5a62d08c4aa9d368
           TARGET_BRANCH: refactor/python-core-boundaries-20260919
         run: |
           cp .github/tmp/python-core-boundaries.patch "$RUNNER_TEMP/python-core-boundaries.patch"
-          git checkout --detach "$BASE_SHA"
+          rm -f .github/tmp/python-core-boundaries.patch
+          rm -f .github/workflows/apply-python-core-boundaries.yml
           git apply "$RUNNER_TEMP/python-core-boundaries.patch"
           git add -A
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "refactor: centralize PLC semantics in Python Core"
-          git push --force origin "HEAD:refs/heads/$TARGET_BRANCH"
-# transport retry: exact patch bytes reconstructed from conversation artifact
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
