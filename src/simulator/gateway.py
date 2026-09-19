@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -12,11 +13,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence
 
+from plc.device_policy import native_read_plan, native_write_plan, native_reset_plan, simulator_run_monitor
+
 
 DEFAULT_GATEWAY_URL = "http://127.0.0.1:17831"
-GATEWAY_PROTOCOL_VERSION = 2
+GATEWAY_PROTOCOL_VERSION = 3
 REQUIRED_GATEWAY_CAPABILITIES = frozenset(
-    {"device_read", "device_write", "cpu_reset"}
+    {"device_read", "device_write", "cpu_reset", "native_device_plan"}
 )
 # GX Simulator2 does not use one consistent executable name across CPU
 # families.  In particular, FX projects run as FXSimRun2.exe while the small
@@ -341,19 +344,25 @@ class GXSimulatorGatewayClient:
             finally:
                 self.connected = False
 
+    def _read_plan(self, plan, *, timeout=None) -> Dict[str, Any]:
+        result = self._request("POST", "/devices/read",
+            {"protocol_version": GATEWAY_PROTOCOL_VERSION, "devices": plan}, timeout=timeout)
+        values = result.get("values")
+        if not isinstance(values, Mapping):
+            raise GatewayProtocolError("gateway read response must contain a values object")
+        return dict(values)
+
     def read_many(self, addresses: Sequence[str]) -> Dict[str, Any]:
         if not self.connected:
             raise RuntimeError("GX Simulator2 gateway is not connected")
-        result = self._request("POST", "/devices/read", {"addresses": list(addresses)})
-        values = result.get("values")
-        if not isinstance(values, Mapping):
-            raise RuntimeError("gateway response is missing values")
-        return {str(key).upper(): value for key, value in values.items()}
+        return self._read_plan(native_read_plan(list(addresses)))
 
     def write_many(self, values: Mapping[str, Any]) -> None:
         if not self.connected:
             raise RuntimeError("GX Simulator2 gateway is not connected")
-        self._request("POST", "/devices/write", {"values": dict(values)})
+        plan = native_write_plan(values)
+        self._request("POST", "/devices/write",
+            {"protocol_version": GATEWAY_PROTOCOL_VERSION, "devices": plan})
 
     def reset_cpu(
         self,
@@ -362,18 +371,31 @@ class GXSimulatorGatewayClient:
     ) -> Dict[str, Any]:
         if not self.connected:
             raise RuntimeError("GX Simulator2 gateway is not connected")
-        return self._request(
-            "POST",
-            "/cpu/reset",
-            {
-                "devices": [str(address).upper() for address in devices],
-                "initial_values": {
-                    str(address).upper(): value
-                    for address, value in (initial_values or {}).items()
-                },
-            },
-            timeout=self.reset_timeout,
-        )
+        # Validate ALL addresses/values before any remote STOP or other mutation.
+        plan = native_reset_plan(list(devices), initial_values if initial_values is not None else {})
+        monitor, expected = simulator_run_monitor()
+        monitor_plan = native_read_plan([monitor])
+        deadline = time.monotonic() + self.reset_timeout
+        result = self._request("POST", "/cpu/reset",
+            {"protocol_version": GATEWAY_PROTOCOL_VERSION, **plan}, timeout=self.reset_timeout)
+        if result.get("reset") is not True:
+            raise GatewayProtocolError("gateway CPU reset was not acknowledged")
+        # A successful native RUN call is not a PLC-level readiness verdict.
+        # The model-specific monitor and expected value belong to Python Core.
+        while (remaining := deadline - time.monotonic()) > 0:
+            try:
+                values = self._read_plan(monitor_plan, timeout=min(self.timeout, remaining))
+            except GatewayOperationError as error:
+                # Preserve the former native monitor loop: a temporary MX read
+                # failure during RESET is retried until its existing deadline.
+                if error.code != "MX_READ_FAILED":
+                    raise
+            else:
+                if values.get(monitor) == expected:
+                    return {**result, "cpu_run": True, "run_monitor": values[monitor]}
+            time.sleep(min(0.05, max(0.0, deadline - time.monotonic())))
+        raise GatewayOperationError("Simulator2 CPU did not return to RUN after reset",
+                                    status=503, code="CPU_RUN_TIMEOUT")
 
     def advance_ms(self, milliseconds: int) -> None:
         import time

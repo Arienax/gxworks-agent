@@ -28,9 +28,10 @@ if (-not $compiler) {
 
 New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
 $sourcePath = Join-Path $repositoryRoot "simulator_gateway\Program.cs"
+$contractSource = Join-Path $repositoryRoot "native_adapters\NativeRequest.cs"
 $executablePath = Join-Path $resolvedOutput "PlcAi.GxSimulator2Gateway.exe"
 & $compiler /nologo /target:exe /platform:x86 /optimize+ "/out:$executablePath" `
-    /reference:System.Web.Extensions.dll /reference:Microsoft.CSharp.dll $sourcePath
+    /reference:System.Web.Extensions.dll /reference:Microsoft.CSharp.dll $sourcePath $contractSource
 if ($LASTEXITCODE -ne 0) {
     throw "Simulator gateway compilation failed with exit code $LASTEXITCODE."
 }

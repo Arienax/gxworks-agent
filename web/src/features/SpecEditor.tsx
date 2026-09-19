@@ -1,5 +1,6 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Plus, Check } from "lucide-react";
+import { api } from "../api/client";
 import type { Spec, Json } from "../api/client";
 import { Button } from "../components/ui";
 import { ChoiceInput } from "../components/ChoiceInput";
@@ -22,6 +23,9 @@ export function SpecEditor({
   const [draft, setDraft] = useState<Spec | null>(value);
   const [raw, setRaw] = useState("");
   const [parseError, setParseError] = useState(false);
+  const [ioPending, setIOPending] = useState(false), [ioError, setIOError] = useState("");
+  const [ioEditing, setIOEditing] = useState<number | null>(null);
+  const current = useRef(value), ioRequest = useRef(0);
   const approachGroup = useId();
   const parseSpec = (text: string): Spec => {
     const parsed = JSON.parse(text);
@@ -30,6 +34,7 @@ export function SpecEditor({
     return parsed;
   };
   useEffect(() => {
+    if (current.current !== value) { current.current = value; ioRequest.current++; setIOPending(false); setIOError(""); }
     setDraft(value);
     setRaw(JSON.stringify(value, null, 2));
     setParseError(false);
@@ -37,10 +42,26 @@ export function SpecEditor({
   if (!draft)
     return <div className="panel-empty">{t("先分析需求以建立规格草稿。")}</div>;
   function patch(next: Spec) {
+    current.current = next;
     setDraft(next);
     onChange(next);
     setRaw(JSON.stringify(next, null, 2));
     setParseError(false);
+  }
+  async function editIORow(index: number | null, address?: string) {
+    const source = current.current;
+    if (!source) return;
+    const requestId = ++ioRequest.current;
+    const sourceRow = index === null ? undefined : source.io_table?.[index];
+    if (index !== null && sourceRow) patch({ ...source, io_table: source.io_table?.map((row, i) => i === index ? { ...row, address: address ?? "" } : row) });
+    setIOEditing(index); setIOPending(true); setIOError("");
+    try {
+      const row = await api<Record<string, Json>>("/spec/io-row", "POST", { row: sourceRow || null, address: address ?? null });
+      if (ioRequest.current !== requestId || !current.current) return;
+      const latest = current.current;
+      patch({ ...latest, io_table: index === null ? [...(latest.io_table || []), row] : (latest.io_table || []).map((item, i) => i === index ? { ...item, address: row.address, kind: row.kind } : item) });
+    } catch (error) { if (ioRequest.current === requestId) setIOError(error instanceof Error ? error.message : String(error)); }
+    finally { if (ioRequest.current === requestId) setIOPending(false); }
   }
   const approachId = (a?: Record<string, Json>) => String(a?.approach_id || a?.id || "");
   const rows = draft.io_table || [];
@@ -90,12 +111,8 @@ export function SpecEditor({
         <Button
           variant="ghost"
           aria-label={t("新增 I/O")}
-          onClick={() =>
-            patch({
-              ...draft,
-              io_table: [...rows, { address: "", label: "", kind: "X" }],
-            })
-          }
+          disabled={ioPending}
+          onClick={() => void editIORow(null)}
         >
           <Plus size={14} />
         </Button>
@@ -105,22 +122,10 @@ export function SpecEditor({
           <input
             aria-label={`I/O ${i + 1}`}
             className="mono"
+            disabled={ioPending && ioEditing !== i}
             value={String(row.address || "")}
             placeholder="X0"
-            onChange={(e) =>
-              patch({
-                ...draft,
-                io_table: rows.map((r, j) =>
-                  i === j
-                    ? {
-                        ...r,
-                        address: e.target.value.toUpperCase(),
-                        kind: e.target.value.charAt(0).toUpperCase(),
-                      }
-                    : r,
-                ),
-              })
-            }
+            onChange={(e) => void editIORow(i, e.target.value)}
           />
           <input
             aria-label={`${t("动作")} ${i + 1}`}
@@ -143,9 +148,10 @@ export function SpecEditor({
           />
           <button
             className="text-button"
+            disabled={ioPending}
             aria-label={t("清除")}
             onClick={() =>
-              patch({ ...draft, io_table: rows.filter((_, j) => i !== j) })
+              (ioRequest.current++, setIOPending(false), patch({ ...draft, io_table: rows.filter((_, j) => i !== j) }))
             }
           >
             ×
@@ -175,7 +181,7 @@ export function SpecEditor({
           }}
           onBlur={() => {
             try {
-              patch(parseSpec(raw));
+              ioRequest.current++; setIOPending(false); setIOError(""); patch(parseSpec(raw));
             } catch {
               setParseError(true);
             }
@@ -183,6 +189,7 @@ export function SpecEditor({
         />
       </details>
       {issues.filter((issue) => !issue.path.startsWith("$.parameters[")).map((issue, i) => <p className="error-text" role="alert" key={i}>{issue.message}</p>)}
+      {ioError && <p role="alert" className="error-text">{ioError}</p>}
       {parseError && (
         <p role="alert" className="error-text">
           {t("规格数据不是有效 JSON 对象。")}
@@ -190,7 +197,7 @@ export function SpecEditor({
       )}
       <Button
         variant="primary"
-        disabled={disabled || parseError}
+        disabled={disabled || parseError || ioPending || !!ioError}
         onClick={() => {
           try {
             onSave(parseSpec(raw));

@@ -1,5 +1,7 @@
 # Web 迁移交付核对表
 
+> 维护策略更新（2026-09-19）：Qt 为 `legacy/frozen`，不再追求新功能 parity，只修严重 bug。以下历史迁移对照仍用于确认 Web 覆盖冻结时的必要工作流，不要求把新能力回填 Qt。语言职责与删除条件以 [language-boundaries.md](language-boundaries.md) 为准。
+
 本表区分代码实现、隔离回归和实际环境验收。迁移分支与迁移前固定输入证据见[行为基线](web-migration-baseline.md)。没有完成的实机/交付项必须保留；不得用模拟后端通过或前端构建成功替代 Windows 现场验收。
 
 ## PR 0–6 对照

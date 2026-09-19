@@ -56,7 +56,7 @@ import type { ApprovalSettings } from "./features/ApprovalSettings";
 import { ProjectToolbar, artifactLabel } from "./features/ProjectToolbar";
 import { submitGXSend } from "./features/gxSend";
 import type { GXSendSelection } from "./features/gxSend";
-import { FBDPanel, FBDImport, emptyFBD } from "./features/FBDPanel";
+import { FBDPanel, FBDImport } from "./features/FBDPanel";
 import type { FBDModel } from "./features/FBDPanel";
 import { ProgramExplorer, IssueCards } from "./features/ProgramExplorer";
 import type { IssueContext } from "./features/ProgramExplorer";
@@ -132,7 +132,17 @@ export default function App() {
     [busy, setBusy] = useState(false);
   const [modal, setModal] = useState(""),
     [newName, setNewName] = useState(""),
-    [newMode, setNewMode] = useState<"ladder" | "st" | "fbd">("ladder");
+    [newMode, setNewMode] = useState("");
+  const [creation, setCreation] = useState<{ plc_model: string; default_target_mode: string; starter_requirement: string; target_modes: { value: string; label: string }[] } | null>(null);
+  const [defaultOperations, setDefaultOperations] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (!session?.authenticated) return;
+    let active = true;
+    api<{ creation: typeof creation; operations: Record<string, boolean> }>("/capabilities")
+      .then(value => { if (active) { setCreation(value.creation); setDefaultOperations(value.operations); setNewMode(value.creation?.default_target_mode || ""); } })
+      .catch(error => { if (active) setError(String(error instanceof Error ? error.message : error)); });
+    return () => { active = false; };
+  }, [session?.authenticated]);
   const [steps, setSteps] = useState([
     { name: "", action: "", transition: "" },
   ]);
@@ -217,7 +227,7 @@ export default function App() {
     !!project.confirmed_spec && !specDirty.current && !jobs.some(activeJob);
   const canSubmit = canWrite && !!pid && project?.id === pid &&
     (intent === "generation" ? canGenerate : !!text.trim());
-  const operations = version?.capabilities?.operations || {};
+  const operations = version?.capabilities?.operations || defaultOperations;
   const refreshAll = () => setRefresh((n) => n + 1);
   const guarded = async (action: () => Promise<void>) => {
     // State updates are asynchronous: hold a synchronous submission lock too.
@@ -1115,14 +1125,14 @@ export default function App() {
           {version && status(displayedVersionStatus)}
         </div>
         <ProjectToolbar pid={pid} vid={vid} artifacts={version?.artifacts || []}
-          exportable={!!version && !preview} canRead={canWrite && !!pid && version?.target_mode !== "fbd"}
+          exportable={!!version && !preview} canRead={canWrite && !!pid && !!operations.gx_inspect}
           canSend={canWrite && !preview && !jobs.some(activeJob) && !!operations.gx_import}
           canRefresh={!!session && !!pid && !busy && !loading && !jobs.some(activeJob)}
           refreshing={refreshingDrawing} onRead={() => void guarded(() => submitJob("gx_read"))}
           onSend={requestGXSend} onRefresh={() => void guarded(refreshDrawing)} t={t}
           more={<>
             <Button disabled={!canWrite || !pid} onClick={() => setModal("fbd-import")}><FolderOpen size={15}/>{t("导入 GXW")}</Button>
-            <Button disabled={!canWrite || !pid || version?.target_mode === "fbd"} onClick={() => void guarded(() => submitJob("gx_inspect"))}>
+            <Button disabled={!canWrite || !pid || !operations.gx_inspect} onClick={() => void guarded(() => submitJob("gx_inspect"))}>
               <GitBranch size={15}/>{t("检查同步")}
             </Button>
             {operations.fbd_convert && <Button disabled={!canWrite || !!preview} onClick={() => void guarded(async () => {
@@ -1208,7 +1218,7 @@ export default function App() {
               </Button>
             </div>
           ) : tab === "fbd" && (preview?.target_mode === "fbd" || (!preview && (version?.target_mode === "fbd" || (!version && project.target_mode === "fbd")))) ? (
-            <FBDPanel key={`${pid}:${vid}:${selectedProposal?.id || "version"}`} value={Array.isArray(visibleProgram?.nodes) ? visibleProgram as unknown as FBDModel : emptyFBD()}
+            <FBDPanel key={`${pid}:${vid}:${selectedProposal?.id || "version"}`} value={Array.isArray(visibleProgram?.nodes) ? visibleProgram as unknown as FBDModel : null}
               svg={svg} pid={pid} vid={vid} readOnly={!canWrite} preview={!!preview} t={t} onProposal={showFBDProposal} />
           ) : tab === "fbd" ? (
             <div className="empty-state"><GitBranch size={38}/><h2>{t("结构化梯形图/FBD")}</h2><p>{t("导入 GXW 工程，或将当前梯形图转换为 FBD。也可以新建 FBD 工程直接生成。")}</p></div>
@@ -1228,7 +1238,7 @@ export default function App() {
               <Badge>
                 {project.plc_model} · {project.target_mode.toUpperCase()}
               </Badge>
-            </div>) : (<FirstProjectGuide t={t} hasSpec={!!project.confirmed_spec} disabled={!canWrite || jobs.some(activeJob)}
+            </div>) : (<FirstProjectGuide example={creation?.starter_requirement || ""} t={t} hasSpec={!!project.confirmed_spec} disabled={!canWrite || jobs.some(activeJob)}
               onExample={value=>{setText(value);setIntent("analysis");setPanel("agent");}}
               onSpec={()=>setPanel("spec")} onGenerate={()=>void guarded(()=>submitJob("generation"))} />)
           ) : tab === "delivery" ? (
@@ -1335,7 +1345,7 @@ export default function App() {
                   {t("生成测试方案")}
                 </Button>
               </div>
-              {version?.target_mode === "ladder" ? <SimulationWorkbench key={`${pid}:${vid}`} pid={pid} vid={vid} readOnly={!canWrite || !operations.simulation}
+              {operations.simulation ? <SimulationWorkbench key={`${pid}:${vid}`} pid={pid} vid={vid} readOnly={!canWrite || !operations.simulation}
                 t={t} refreshKey={`${refresh}:${jobs.filter(job => !activeJob(job)).map(job => `${job.id}:${job.status}`).join("|")}`} onSaved={refreshAll} issueContext={issueContext} initialPlanId={issueContext?.planId}
                 onExecute={planId=>guarded(()=>proposeExecution("simulation",planId))}
                 onDebug={runId=>guarded(()=>submitJob("debug_plan",{run_id:runId}))}/> : <p>{t("此程序形式尚未接通仿真。")}</p>}
@@ -1415,7 +1425,7 @@ export default function App() {
                 <h2>{t("工程工作台")}</h2>
                 <p>{t(hasSavedVersions ? "描述希望修改的行为，或查看当前程序与验证结果。" : "描述控制需求，确认规格后生成第一个程序。")}</p>
                 <div className="context-chips">
-                  <Badge>{project?.plc_model || "FX3U"}</Badge>
+                  <Badge>{project?.plc_model || "—"}</Badge>
                   {vid && <Badge>{vid}</Badge>}
                   {project?.confirmed_spec && (
                     <Badge tone="good">
@@ -1847,7 +1857,7 @@ export default function App() {
               const p = await api<Project>("/projects", "POST", {
                 name: newName,
                 target_mode: newMode,
-                plc_model: "FX3U",
+                plc_model: creation?.plc_model,
               });
               setPid(p.id);
               setVid("");
@@ -1872,12 +1882,10 @@ export default function App() {
               value={newMode}
               onChange={(e) => setNewMode(e.target.value as typeof newMode)}
             >
-              <option value="ladder">{t("梯形图")} · FX3U</option>
-              <option value="st">ST · FX3U</option>
-              <option value="fbd">FBD / {t("结构化梯形图")} · FX3U</option>
+              {creation?.target_modes.map(mode => <option key={mode.value} value={mode.value}>{t(mode.label)} · {creation.plc_model}</option>)}
             </select>
           </label>
-          <Button variant="primary" disabled={busy}>
+          <Button variant="primary" disabled={busy || !creation || !newMode}>
             <Plus size={15} />
             {t("创建")}
           </Button>

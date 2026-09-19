@@ -26,12 +26,13 @@ def _compatible_gateway_health(**overrides):
     result = {
         "service": "plc-ai-gx-simulator2-gateway",
         "simulator_only": True,
-        "protocol_version": 2,
+        "protocol_version": 3,
         "capabilities": {
             "device_read": True,
             "device_write": True,
             "cpu_reset": True,
             "scan_monitor": True,
+            "native_device_plan": True,
         },
     }
     result.update(overrides)
@@ -623,6 +624,7 @@ def test_gateway_client_rejects_legacy_protocol_before_connect(monkeypatch):
 
 def test_gateway_client_uses_independent_cpu_reset_timeout(monkeypatch):
     captured = {}
+    replies = iter([b'{"ok": true, "reset": true}', b'{"ok": true, "values": {"M8000": 1}}'])
 
     class Response:
         def __enter__(self):
@@ -633,10 +635,10 @@ def test_gateway_client_uses_independent_cpu_reset_timeout(monkeypatch):
 
         @staticmethod
         def read():
-            return b'{"ok": true, "reset": true}'
+            return next(replies)
 
     def urlopen(_request, timeout):
-        captured["timeout"] = timeout
+        captured[_request.full_url] = timeout
         return Response()
 
     client = GXSimulatorGatewayClient(
@@ -649,7 +651,7 @@ def test_gateway_client_uses_independent_cpu_reset_timeout(monkeypatch):
 
     client.reset_cpu(["M0"], initial_values={"X0": 0})
 
-    assert captured["timeout"] == 17.0
+    assert captured[client.base_url + "/cpu/reset"] == 17.0
 
 
 def test_gateway_http_errors_preserve_status_and_error_code(monkeypatch):

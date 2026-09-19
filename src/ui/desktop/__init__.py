@@ -1,1 +1,1 @@
-"""Desktop package. Import the required submodule explicitly."""
+"""Legacy/frozen Qt presentation: critical fixes only, no new feature parity."""

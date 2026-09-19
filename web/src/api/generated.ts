@@ -89,6 +89,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fbd/editor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Edit Draft */
+        post: operations["edit_draft_api_fbd_editor_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fbd/inspect": {
         parameters: {
             query?: never;
@@ -794,6 +811,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/versions/{version_id}/simulation-workbench/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Edit Simulation Draft */
+        post: operations["edit_simulation_draft_api_projects__project_id__versions__version_id__simulation_workbench_draft_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/versions/{version_id}/simulation-workbench/plans": {
         parameters: {
             query?: never;
@@ -1105,6 +1139,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/spec/io-row": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Edit Spec Io Row */
+        post: operations["edit_spec_io_row_api_spec_io_row_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1224,6 +1275,7 @@ export interface components {
         Capabilities: {
             /** Body Form */
             body_form: string;
+            creation?: components["schemas"]["ProjectCreationOptions"] | null;
             /** Operations */
             operations: {
                 [key: string]: boolean;
@@ -1337,6 +1389,21 @@ export interface components {
             kind: "fbd";
             /** Unified Diff */
             unified_diff: string;
+        };
+        /** FBDDraftEdit */
+        FBDDraftEdit: {
+            /** Command */
+            command?: {
+                [key: string]: unknown;
+            };
+            /** Model */
+            model?: {
+                [key: string]: unknown;
+            } | null;
+            /** Project Id */
+            project_id: string;
+            /** Version Id */
+            version_id?: string | null;
         };
         /** FBDPreview */
         "FBDPreview-Input": {
@@ -2036,6 +2103,17 @@ export interface components {
              */
             target_mode: "ladder" | "st" | "fbd";
         };
+        /** ProjectCreationOptions */
+        ProjectCreationOptions: {
+            /** Default Target Mode */
+            default_target_mode: string;
+            /** Plc Model */
+            plc_model: string;
+            /** Starter Requirement */
+            starter_requirement: string;
+            /** Target Modes */
+            target_modes: components["schemas"]["ProjectModeOption"][];
+        };
         /** ProjectList */
         ProjectList: {
             /** Projects */
@@ -2053,6 +2131,13 @@ export interface components {
             kind?: string | null;
             /** Role */
             role?: string | null;
+        };
+        /** ProjectModeOption */
+        ProjectModeOption: {
+            /** Label */
+            label: string;
+            /** Value */
+            value: string;
         };
         /** ProjectUpdate */
         ProjectUpdate: {
@@ -2223,6 +2308,17 @@ export interface components {
             language?: ("zh-CN" | "en" | "ja") | null;
             profile?: components["schemas"]["ModelProfileUpdate"] | null;
         };
+        /** SimulatorDraftEdit */
+        SimulatorDraftEdit: {
+            /** Command */
+            command: {
+                [key: string]: unknown;
+            };
+            /** Suite */
+            suite: {
+                [key: string]: unknown;
+            };
+        };
         /** SimulatorPlanSave */
         SimulatorPlanSave: {
             /** Expected Ir Sha256 */
@@ -2239,6 +2335,15 @@ export interface components {
             suite: {
                 [key: string]: unknown;
             };
+        };
+        /** SpecIORowEdit */
+        SpecIORowEdit: {
+            /** Address */
+            address?: string | null;
+            /** Row */
+            row?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** SpecResult */
         SpecResult: {
@@ -2449,6 +2554,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicObject"];
+                };
+            };
+        };
+    };
+    edit_draft_api_fbd_editor_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FBDDraftEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicObject"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3937,6 +4075,42 @@ export interface operations {
             };
         };
     };
+    edit_simulation_draft_api_projects__project_id__versions__version_id__simulation_workbench_draft_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimulatorDraftEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicObject"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     save_simulation_plan_api_projects__project_id__versions__version_id__simulation_workbench_plans_post: {
         parameters: {
             query?: never;
@@ -4645,6 +4819,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SFCRequirement"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_spec_io_row_api_spec_io_row_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpecIORowEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicObject"];
                 };
             };
             /** @description Validation Error */

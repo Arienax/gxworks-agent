@@ -14,28 +14,9 @@ import time
 from pathlib import Path
 
 
-class HardwareError(ValueError):
-    """An operator-readable rejection without implementation paths."""
+from plc.device_policy import HardwareError, native_read_plan, normalize_read_addresses
 
-
-def normalize_read_addresses(addresses, plc_model):
-    from plc.validation import parse_device_address
-    if plc_model not in ("FX3U", "FX5U"):
-        raise HardwareError("只读接入目前支持 FX3U 和 FX5U。")
-    if not isinstance(addresses, list) or not 1 <= len(addresses) <= 64:
-        raise HardwareError("每次只读授权需要 1 至 64 个地址。")
-    result = []
-    for value in addresses:
-        if not isinstance(value, str) or not re.fullmatch(r"(?:X|Y|M|D|S|T|C)\d+", value.strip(), re.I):
-            raise HardwareError("只读地址必须是单个 X、Y、M、D、S、T 或 C 软元件，不支持间接地址或地址范围。")
-        parsed = parse_device_address(value, plc_model)
-        if parsed is None:
-            raise HardwareError("地址不在此 PLC 型号的有效范围内。")
-        prefix, number = parsed
-        canonical = prefix + (format(number, "o") if plc_model == "FX3U" and prefix in ("X", "Y") else str(number))
-        if canonical not in result:
-            result.append(canonical)
-    return result
+HARDWARE_READER_PROTOCOL_VERSION = 2
 
 
 class HardwareReader:
@@ -63,7 +44,9 @@ class HardwareReader:
         addresses = normalize_read_addresses(addresses, plc_model)
         if self.fingerprint() != expected_fingerprint:
             raise HardwareError("只读适配器已变化，请重新审查授权。")
-        request = {"operation": "read", "logical_station": logical_station, "addresses": addresses, "plc_model": plc_model}
+        request = {"operation": "read", "protocol_version": HARDWARE_READER_PROTOCOL_VERSION,
+                   "logical_station": logical_station,
+                   "devices": native_read_plan(addresses, plc_model, maximum=64)}
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise HardwareError("只读授权已过期，本次没有启动读取进程。")

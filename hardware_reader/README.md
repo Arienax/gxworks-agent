@@ -42,3 +42,7 @@ Communication Setup Utility 的逻辑站号，范围 0–1023；`GetDevice` 读�
 的控制属性和 GetDevice 章节，以及
 [MX Component Version 5 Reference Manual，SH-082395ENG-H](https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh082395eng/sh082395engh.pdf)
 的 utility setting type 与示例程序章节。
+
+## Adapter boundary
+
+C# is vendor/native only. Python Core prepares device names and values, including address policy and T/C current-value mapping. This build uses native-plan protocol v2; rebuild the helper with its existing PowerShell build script when upgrading Python. `native_adapters/NativeRequest.cs` is compiled with it. Existing read-only / Simulator2-only routes and transport protections remain; no PLC rule tables should be reintroduced here.

@@ -636,12 +636,13 @@ def test_gateway_source_has_simulator_route_and_build_stays_outside_repo():
     assert "UnitSimulator2 = 0x30" in source
     assert "control.ActUnitType = UnitSimulator2" in source
     assert "ActLogicalStationNumber" not in source
-    assert 'prefix != "X" && prefix != "M" && prefix != "D"' in source
-    assert '_control.SetCpuStatus(3)' in source
-    assert '_control.SetCpuStatus(0)' in source
+    policy = (root / "src/plc/device_policy.py").read_text(encoding="utf-8")
+    assert '_STIMULUS_PREFIXES = frozenset({"X", "M", "D"})' in policy
+    assert 'CpuStatus(3, "MX_CPU_RESET_FAILED")' in source
+    assert 'CpuStatus(0, "MX_CPU_RUN_FAILED")' in source
     assert source.index(
-        "foreach (KeyValuePair<string, object> item in rawInitialValues)"
-    ) < source.index("_control.SetCpuStatus(3)")
+        'WriteCalls(initial, "MX_INITIALIZE_FAILED")'
+    ) < source.index('CpuStatus(3, "MX_CPU_RESET_FAILED")')
     assert 'request.Path == "/cpu/reset"' in source
     assert "must be built outside the project directory" in build_script
     assert 'Join-Path $bundleRoot "simulator-gateway"' in release_script

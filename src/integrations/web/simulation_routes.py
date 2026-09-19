@@ -10,6 +10,11 @@ from .schemas import Command
 from .responses import PublicObject
 
 
+class SimulatorDraftEdit(Command):
+    suite: dict[str, Any]
+    command: dict[str, Any]
+
+
 class SimulatorPlanSave(Command):
     suite: dict[str, Any]
     requirement_links: dict[str, list[str]] = Field(default_factory=dict)
@@ -30,6 +35,10 @@ def register(app, service):
     @app.get(prefix, response_model=PublicObject)
     def read_simulation_workbench(project_id: str, version_id: str):
         return simulation.read(project_id, version_id)
+
+    @app.post(prefix + "/draft", response_model=PublicObject)
+    def edit_simulation_draft(project_id: str, version_id: str, command: SimulatorDraftEdit):
+        return simulation.edit_draft(project_id, version_id, **command.model_dump())
 
     @app.post(prefix + "/plans", status_code=201, response_model=PublicObject)
     def save_simulation_plan(project_id: str, version_id: str, command: SimulatorPlanSave):

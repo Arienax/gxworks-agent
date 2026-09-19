@@ -8,13 +8,17 @@ therefore separate trust boundaries.
 from __future__ import annotations
 
 import copy
-import re
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
-from plc.validation import parse_device_address
+from plc.device_policy import device_address, stimulus_value
 
 
 TEST_DSL_SCHEMA_VERSION = 1
+DEFAULT_SAMPLE_MS = 10
+DEFAULT_WAIT_TIMEOUT_MS = 1000
+DEFAULT_POLL_MS = 10
+DEFAULT_CASE_TIMEOUT_MS = 5000
+EXPECTATION_OPERATORS = ("eq", "ne", "gt", "ge", "lt", "le", "between")
 MAX_TESTS_PER_SUITE = 200
 MAX_STEPS_PER_TEST = 500
 MAX_TRACE_DEVICES = 256
@@ -34,10 +38,6 @@ FAULT_TYPES = {
     "drop_signal",
 }
 
-_SAFE_WRITE_PREFIXES = {"X", "M", "D"}
-_READ_ONLY_SPECIAL_RE = re.compile(r"^(?:M8\d{3}|D8\d{3}|SM\d+|SD\d+)$", re.I)
-
-
 class TestCaseValidationError(ValueError):
     pass
 
@@ -47,17 +47,10 @@ def _fail(path: str, message: str) -> None:
 
 
 def _device(value: Any, plc_model: str, path: str, *, writable: bool = False) -> str:
-    address = str(value or "").strip().upper()
-    parsed = parse_device_address(address, plc_model)
-    if parsed is None:
-        _fail(path, f"invalid {plc_model} device address {address!r}")
-    prefix = parsed[0].upper()
-    if writable:
-        if prefix not in _SAFE_WRITE_PREFIXES:
-            _fail(path, f"writes to {prefix} devices are not allowed by the test DSL")
-        if _READ_ONLY_SPECIAL_RE.fullmatch(address):
-            _fail(path, "CPU-owned special devices cannot be written by a test")
-    return address
+    try:
+        return device_address(value, plc_model, access="stimulus" if writable else "read")
+    except ValueError as error:
+        _fail(path, str(error))
 
 
 def _number(value: Any, path: str, *, minimum: float = 0.0) -> float:
@@ -87,17 +80,11 @@ def _scalar(value: Any, path: str) -> Any:
     _fail(path, "must be a scalar PLC value")
 
 
-def _write_scalar(address: str, value: Any, path: str) -> int:
-    if isinstance(value, bool):
-        value = int(value)
-    if not isinstance(value, int):
-        _fail(path, "test inputs must be integer PLC values")
-    prefix = re.match(r"^[A-Z]+", address).group(0)
-    if prefix in {"X", "M"} and value not in {0, 1}:
-        _fail(path, "bit devices accept only 0 or 1")
-    if prefix == "D" and not -32768 <= value <= 65535:
-        _fail(path, "D device value must fit one 16-bit word")
-    return value
+def _write_scalar(address: str, value: Any, path: str, plc_model: str = "FX3U") -> int:
+    try:
+        return stimulus_value(address, value, plc_model)
+    except ValueError as error:
+        _fail(path, str(error))
 
 
 def _device_values(
@@ -117,7 +104,7 @@ def _device_values(
         if address in result:
             _fail(path, f"duplicate address {address}")
         result[address] = (
-            _write_scalar(address, raw_value, f"{path}.{raw_address}")
+            _write_scalar(address, raw_value, f"{path}.{raw_address}", plc_model)
             if writable
             else _scalar(raw_value, f"{path}.{raw_address}")
         )
@@ -129,7 +116,7 @@ def _expectation(value: Any, plc_model: str, path: str) -> Dict[str, Any]:
         _fail(path, "must be an object")
     address = _device(value.get("address"), plc_model, f"{path}.address")
     operator = str(value.get("operator") or "eq").strip().lower()
-    if operator not in {"eq", "ne", "gt", "ge", "lt", "le", "between"}:
+    if operator not in EXPECTATION_OPERATORS:
         _fail(f"{path}.operator", "unsupported comparison operator")
     result = {"address": address, "operator": operator}
     if operator == "between":
@@ -289,10 +276,10 @@ def normalize_test_case(value: Any, *, plc_model: str = "FX3U") -> Dict[str, Any
         }
         if wait_for:
             step["timeout_ms"] = _int_ms(
-                raw.get("timeout_ms", 1000), f"{path}.timeout_ms", minimum=1
+                raw.get("timeout_ms", DEFAULT_WAIT_TIMEOUT_MS), f"{path}.timeout_ms", minimum=1
             )
             step["poll_ms"] = _int_ms(
-                raw.get("poll_ms", 10), f"{path}.poll_ms", minimum=1
+                raw.get("poll_ms", DEFAULT_POLL_MS), f"{path}.poll_ms", minimum=1
             )
         steps.append(step)
 
@@ -341,9 +328,9 @@ def normalize_test_case(value: Any, *, plc_model: str = "FX3U") -> Dict[str, Any
             "$.initial",
             "must define every stimulus/fault device: " + ", ".join(missing_initial),
         )
-    sample_ms = _int_ms(value.get("sample_ms", 10), "$.sample_ms", minimum=1)
+    sample_ms = _int_ms(value.get("sample_ms", DEFAULT_SAMPLE_MS), "$.sample_ms", minimum=1)
     timeout_ms = _int_ms(
-        value.get("timeout_ms", max(item["at_ms"] for item in steps) + 5000),
+        value.get("timeout_ms", max(item["at_ms"] for item in steps) + DEFAULT_CASE_TIMEOUT_MS),
         "$.timeout_ms",
         minimum=1,
     )

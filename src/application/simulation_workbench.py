@@ -8,6 +8,8 @@ import re
 from application.projects import public
 from application.workspace import ConflictError
 from plc.ir import canonical_sha256
+from plc.device_policy import is_stimulus_device
+from simulator.editor import editor_metadata, edit_suite, parse_editor_suite
 
 
 class SimulationWorkbenchError(ValueError):
@@ -73,7 +75,7 @@ class SimulationWorkbenchService:
         devices = []
         for address, row in sorted(declared.items()):
             devices.append({"address": address, "label": str((row.get("comment") or row.get("label") or "") if isinstance(row, dict) else row or ""),
-                            "writable": bool(re.fullmatch(r"(?:X|M|D)\d+", address)) and not bool(re.fullmatch(r"(?:M|D)8\d{3}", address))})
+                            "writable": is_stimulus_device(address, program["plc"]["cpu"])})
         requirements = requirements_for(program, version)
         execution_by_test, latest_by_requirement, unavailable_runs = {}, {}, []
         for record in reversed(version.get("simulator_runs") or []):
@@ -108,7 +110,14 @@ class SimulationWorkbenchService:
         return public({"project_id": project_id, "version_id": version_id, "ir_sha256": canonical_sha256(program),
                        "plc_model": program["plc"]["cpu"], "devices": devices, "plans": plans,
                        "unavailable_plans": unavailable, "unavailable_runs": unavailable_runs,
-                       "requirements": requirements, "runs": runs})
+                       "requirements": requirements, "runs": runs, "editor": editor_metadata(program["plc"]["cpu"])})
+
+    def edit_draft(self, project_id, version_id, *, suite, command):
+        _, program = self._context(project_id, version_id)
+        try:
+            return {"suite": edit_suite(suite, command, program["plc"]["cpu"])}
+        except (ValueError, KeyError, TypeError) as error:
+            raise SimulationWorkbenchError(str(error)) from error
 
     def save(self, project_id, version_id, *, suite, requirement_links, issue_ids,
              expected_ir_sha256, source_plan_id=None):
@@ -130,7 +139,7 @@ class SimulationWorkbenchService:
             # Strict DSL validation first: hand edits must not be silently repaired
             # into a different input sequence by the model-output shape repairer.
             try:
-                candidate = normalize_test_suite(suite, plc_model=program["plc"]["cpu"])
+                candidate = normalize_test_suite(parse_editor_suite(suite), plc_model=program["plc"]["cpu"])
                 names = {test["name"] for test in candidate["tests"]}
                 if set(requirement_links) - names:
                     raise SimulationWorkbenchError("关联引用了方案中不存在的测试。")

@@ -2,17 +2,30 @@
 
 面向三菱 FX PLC 的工程工作台。内置 Agent 和外部 MCP 客户端共用确定性的工程工具；不要把计划功能描述成已经实现。
 
+## 语言职责与维护状态（2026-09-19 决定）
+
+- **PLC 领域语义的唯一所有者是 Python Core**：IR、地址/进制/型号范围、指令与操作数、规格和编译、FBD/SFC 建模、仿真断言与设备权限不得在 UI 或原生适配器另写一套。
+- Core 是无 UI 的 Python 领域实现，不是一个大文件：`plc/`、`gxw/`、`simulator/` 的领域模块与 `rendering/`；`application/` 组织用例，`integrations/` 只转协议。
+- **TypeScript 仅 presentation**：表单原始值、组件状态、选择/缩放/布局、本地化、HTTP 传输、Core 返回结果的展示。默认工程、FBD 修改、声明合并、仿真输入解释由 Python 提供；不在前端推导程序正确性或安全性。
+- **C# 仅 vendor/native adapter**：COM/SDK/PInvoke、厂商 ABI、资源释放、错误码与传输；执行 Core 准备的 `key/device/value` 原生调用计划，不判断 PLC 地址类别、范围、写入权限、T/C 语义或 RUN 监视含义。
+- 原生适配器继续保留已有鉴权、loopback、请求大小/类型、只读接口和 Simulator2 路由隔离；职责迁移不是删除安全限制。
+- **Qt = `legacy/frozen`**：不再增加新功能，不再追求 Web 新功能 parity；只修安全问题、崩溃、数据损坏或关键流程不可用等严重 bug。必要的共享 Core 接口适配不应扩展 Qt 功能。禁止让 Core/Web 反向依赖 Qt。
+- Qt 的删除条件是 Web 覆盖冻结时仍需支持的工作流，并完成实际 Windows/GX 使用验收和历史工程迁移准备；届时删除 Qt，不是删除 Web。本轮保留现有 Qt/Win7 启动、依赖与打包入口。
+- 本次不引入新的架构检查器、校验层或 CI 门禁；运行已有测试只为检查现有行为是否保留。
+
+详细约定见 `docs/architecture/language-boundaries.md`。
+
 ## 架构边界
 
 - 内置路径：`agent_runtime/agent.py → ModelProvider / ToolRuntime → PLC Core`。
 - 外部路径：`integrations/mcp → ToolRuntime → PLC Core`。工具定义来自现有注册表，不能为 Codex、Claude、Cursor 等维护另一套 PLC 工具。
-- PLC 工程逻辑属于 PLC Core、现有校验/渲染模块和 ToolRuntime 工具实现。适配层只转换协议、上下文和结果，不直接调用 GX/仿真或操作界面。
+- PLC 工程语义属于 Python Core；ToolRuntime 工具实现只组合 Core 用例。适配层只转换协议、上下文和结果，不直接调用 GX/仿真或操作界面。
 - `model_runtime/provider.py` 负责模型协议；PLC Core 不导入模型 SDK、Agent 或 MCP。
 
 ## 重要入口
 
 - `start-web.cmd`：Windows 发布包/源码 Web 工作台启动入口；`build-web.bat`：源码前端一键构建入口。
-- `src/main.py`、`src/ui/desktop/qt.py`：保留的 PyQt 桌面及 Win7 兼容层。
+- `src/main.py`、`src/ui/desktop/qt.py`：`legacy/frozen` 的 PyQt 桌面及 Win7 兼容层。
 - `src/agent_runtime/agent.py`、`src/model_runtime/provider.py`：内置编排及规范消息类型。
 - `src/agent_runtime/runtime.py`、`src/agent_runtime/plc_tools.py`：共享运行时、注册表、白名单、ToolContext。
 - `src/plc/core.py`、`src/plc/ir.py`、`src/plc/validation.py`、`src/plc/static_analysis.py`：确定性工程逻辑。

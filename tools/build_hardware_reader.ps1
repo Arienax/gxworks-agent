@@ -20,7 +20,8 @@ $compiler = Join-Path $env:WINDIR "Microsoft.NET\Framework\v4.0.30319\csc.exe"
 if (-not (Test-Path -LiteralPath $compiler)) { throw "A .NET Framework C# compiler was not found." }
 New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
 $source = Join-Path $repositoryRoot "hardware_reader\Program.cs"
+$contractSource = Join-Path $repositoryRoot "native_adapters\NativeRequest.cs"
 $executable = Join-Path $resolvedOutput "PlcAi.HardwareReader.exe"
-& $compiler /nologo /target:exe "/platform:$Platform" /optimize+ "/out:$executable" /reference:System.Web.Extensions.dll /reference:Microsoft.CSharp.dll $source
+& $compiler /nologo /target:exe "/platform:$Platform" /optimize+ "/out:$executable" /reference:System.Web.Extensions.dll /reference:Microsoft.CSharp.dll $source $contractSource
 if ($LASTEXITCODE -ne 0) { throw "Hardware reader compilation failed." }
 Write-Output $executable
