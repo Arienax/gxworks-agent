@@ -1,0 +1,42 @@
+name: Apply handoff compatibility follow-up
+on:
+  push:
+    branches: [fix/intent-evidence-handoff-20260919]
+    paths: [.github/workflows/apply-handoff-followup.yml]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+      - name: Apply exact reviewed patch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = e58c6fbc5bcb3f1c44ef33e94a168a27de575480
+          python - <<'PY'
+          import base64, hashlib, json, os, subprocess
+          from pathlib import Path
+          sha = '4a3c1277bd577325982500153d7e922d6b2457ef'
+          record = json.loads(subprocess.check_output(['gh','api',f'repos/{os.environ["REPOSITORY"]}/git/blobs/{sha}']))
+          assert record['sha'] == sha
+          patch = base64.b64decode(record['content'])
+          assert hashlib.sha256(patch).hexdigest() == '9933637eb338b29565d70cee6e2d76102e4aad7ce24f05b640981ca754317885'
+          Path('/tmp/followup.patch').write_bytes(patch)
+          PY
+          git apply --check --index /tmp/followup.patch
+          git apply --index /tmp/followup.patch
+          git diff --cached --check
+          python -m compileall -q src
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: complete handoff compatibility and privacy-safe source receipts'
+          git push origin HEAD:refs/heads/fix/intent-evidence-handoff-20260919
+          git rev-parse HEAD
