@@ -6,6 +6,7 @@
 - [声明绑定与 FB 显式连线](../docs/research/gxw_declaration_binding_and_fb_wire_20260910.md)
 - [通用声明、跨表扩容与 Web FBD](../docs/research/gxw_declarations_allocation_web_fbd_20260910.md)
 - [Structured block 边界与 C2034 消除](../docs/research/gxw_network_boundaries_20260913.md)
+- [ABI harvesting 与 2026-09-19 阶段固化](../docs/research/gxw_abi_harvesting_20260913.md)：SET 控制、原生截图和待完成项；证据为 `evidence/gxw-abi-checkpoint-20260919.zip`，清单与差分在 `results/abi-checkpoint-20260919/`。流水线尚未完成新 ABI 生产注册。
 
 `results/regression.json` 索引六组自动比较；`results/gxworks_validation.json` 单独记录实际 GUI 观察，避免将 parser 通过当作编译通过。JSON 中 offset 属于相应逻辑流，CFB 字段变化另行列出。
 
