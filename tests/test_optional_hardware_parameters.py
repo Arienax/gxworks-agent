@@ -317,7 +317,7 @@ def test_missing_hardware_context_never_blocks_requirement_confirmation():
     assert validate_spec_draft(spec, "FX3U")["errors"] == []
 
 
-def test_model_required_missing_information_is_advisory_not_blocking():
+def test_nonhardware_missing_information_keeps_its_existing_required_behavior():
     draft = build_review_draft(
         {
             "plc_model": "FX3U",
@@ -331,12 +331,9 @@ def test_model_required_missing_information_is_advisory_not_blocking():
     )
 
     assert draft["parameters"][0]["required"] is True
-    issues = validate_spec_draft(draft, "FX3U")
-    assert issues["errors"] == []
     assert any(
         item["code"] == "required_parameter_missing"
-        and item.get("blocking") is False
-        for item in issues["warnings"]
+        for item in validate_spec_draft(draft, "FX3U")["errors"]
     )
 
 

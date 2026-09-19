@@ -524,27 +524,21 @@ def validate_spec_draft(spec, plc_model=None):
         if required and isinstance(required_when, dict):
             required = _required_when_matches(required_when, parameter_values)
         if required and not value:
-            # Agent-A may propose a question as required, but model-authored
-            # completeness metadata must not become a user confirmation gate.
-            # Keep the unanswered question in the stored review draft while
-            # omitting its empty value from generation input.
-            warnings.append(
+            errors.append(
                 _validation_issue(
                     "required_parameter_missing",
-                    f"参数“{name or index + 1}”尚未填写；可继续确认，未确认值不会作为生成事实",
+                    f"必填参数“{name or index + 1}”尚未填写",
                     f"{path}.value",
                     row=index,
-                    blocking=False,
                 )
             )
         if value and _asks_contact_type(name) and _io_parameter_kind(parameter) and not _has_contact_type(value):
-            warnings.append(
+            errors.append(
                 _validation_issue(
                     "contact_type_missing",
-                    f"参数“{name}”未明确常开或常闭；可继续确认，当前答案不会被扩写成未确认极性",
+                    f"参数“{name}”还需明确常开或常闭",
                     f"{path}.value",
                     row=index,
-                    blocking=False,
                 )
             )
 

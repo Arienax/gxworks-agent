@@ -147,13 +147,8 @@ def test_homing_method_is_required_only_when_homing_is_selected():
     next(item for item in with_homing["parameters"] if item["id"] == "homing_required")[
         "value"
     ] = "是（需要）"
-    issues = validate_spec_draft(with_homing, "FX3U")
-    assert issues["errors"] == []
-    assert any(
-        item["code"] == "required_parameter_missing"
-        and item.get("blocking") is False
-        for item in issues["warnings"]
-    )
+    errors = validate_spec_draft(with_homing, "FX3U")["errors"]
+    assert any(item["code"] == "required_parameter_missing" for item in errors)
 
 
 def test_positioning_module_model_is_conditional_on_external_implementation():
@@ -186,13 +181,8 @@ def test_positioning_module_model_is_conditional_on_external_implementation():
     next(
         item for item in external["parameters"] if item["id"] == "positioning_implementation"
     )["value"] = "外接定位模块/高速输出适配器"
-    issues = validate_spec_draft(external, "FX3U")
-    assert issues["errors"] == []
-    assert any(
-        item["code"] == "required_parameter_missing"
-        and item.get("blocking") is False
-        for item in issues["warnings"]
-    )
+    errors = validate_spec_draft(external, "FX3U")["errors"]
+    assert any(item["code"] == "required_parameter_missing" for item in errors)
 
 
 def test_second_high_speed_adapter_is_required_only_for_y2_y3_axes():
@@ -231,13 +221,8 @@ def test_second_high_speed_adapter_is_required_only_for_y2_y3_axes():
     second_adapter = copy.deepcopy(draft)
     set_value(second_adapter, "positioning_module_model", "FX3U-2HSY-ADP")
     set_value(second_adapter, "pulse_output_axis", "Y3")
-    issues = validate_spec_draft(second_adapter, "FX3U")
-    assert issues["errors"] == []
-    assert any(
-        item["code"] == "required_parameter_missing"
-        and item.get("blocking") is False
-        for item in issues["warnings"]
-    )
+    errors = validate_spec_draft(second_adapter, "FX3U")["errors"]
+    assert any(item["code"] == "required_parameter_missing" for item in errors)
 
 
 @pytest.mark.parametrize(
