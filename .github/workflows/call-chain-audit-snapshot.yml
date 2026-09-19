@@ -1,0 +1,22 @@
+name: Call-chain audit snapshot
+on:
+  push:
+    branches: [fix/intent-evidence-handoff-20260919]
+    paths: [.github/workflows/call-chain-audit-snapshot.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cbe046246d10238dfbcea847d0cfa3e79e685040
+          persist-credentials: false
+      - name: Archive exact audit baseline
+        run: git archive --format=zip HEAD -o /tmp/gxworks-cbe0462.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: call-chain-audit-baseline-cbe0462
+          path: /tmp/gxworks-cbe0462.zip
+          retention-days: 3
