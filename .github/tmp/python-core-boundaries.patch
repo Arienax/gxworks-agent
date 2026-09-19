@@ -997,7 +997,8 @@ index 0000000..19d50c2
 +from .object_model import catalog_description, default_baseline, read_project
 +
 +
-+GENERATION_PLC_MODELS = ("FX3U",)+
++GENERATION_PLC_MODELS = ("FX3U",)
++
 +
 +def empty_model():
 +    source, _, _ = read_project(default_baseline())
@@ -1996,7 +1997,8 @@ index d3a8774..9fe3c80 100644
 +                if values.get(monitor) == expected:
 +                    return {**result, "cpu_run": True, "run_monitor": values[monitor]}
 +            time.sleep(min(0.05, max(0.0, deadline - time.monotonic())))
-+        raise GatewayOperationError("Simulator2 CPU did not return to RUN after reset",+                                    status=503, code="CPU_RUN_TIMEOUT")
++        raise GatewayOperationError("Simulator2 CPU did not return to RUN after reset",
++                                    status=503, code="CPU_RUN_TIMEOUT")
  
      def advance_ms(self, milliseconds: int) -> None:
          import time
@@ -2995,7 +2997,8 @@ index 30fa2d4..da12932 100644
                  onExecute={planId=>guarded(()=>proposeExecution("simulation",planId))}
                  onDebug={runId=>guarded(()=>submitJob("debug_plan",{run_id:runId}))}/> : <p>{t("此程序形式尚未接通仿真。")}</p>}
 @@ -1415,7 +1425,7 @@ export default function App() {
-                 <h2>{t("工程工作台")}</h2>                 <p>{t(hasSavedVersions ? "描述希望修改的行为，或查看当前程序与验证结果。" : "描述控制需求，确认规格后生成第一个程序。")}</p>
+                 <h2>{t("工程工作台")}</h2>
+                 <p>{t(hasSavedVersions ? "描述希望修改的行为，或查看当前程序与验证结果。" : "描述控制需求，确认规格后生成第一个程序。")}</p>
                  <div className="context-chips">
 -                  <Badge>{project?.plc_model || "FX3U"}</Badge>
 +                  <Badge>{project?.plc_model || "—"}</Badge>
