@@ -824,11 +824,13 @@ def validate_hardware_spec(spec, plc_model=None):
             )
             approach_method = control_method_key(approach_text)
             if approach_method and approach_method != method:
-                issue(
-                    "control_method_approach_conflict",
-                    "已确认的变频器控制方式与当前选择方案不一致；请重新选择匹配方案，或恢复该方案对应的控制方式",
-                    "control_method",
-                )
+                # Prose can mention a rejected/previous interface. A lexical
+                # match is not proof of a physical or user-constraint conflict.
+                warnings.append({
+                    "code": "control_method_approach_conflict",
+                    "message": "方案文字提及其他控制方式；按已确认的控制方式生成，保留文字供核对",
+                    "path": path_for("control_method"), "blocking": False,
+                })
         if (
             method == "pulse"
             and output_is_relay

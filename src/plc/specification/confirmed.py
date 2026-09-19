@@ -6,6 +6,7 @@ from plc.specification.bindings import bind_answers, binding_hint, single_addres
 
 from plc.specification.approach import (
     contract_definition_issues,
+    contract_definition_warnings,
     normalize_approach,
 )
 from plc.hardware_profiles import (
@@ -432,6 +433,11 @@ def validate_spec_draft(spec, plc_model=None):
                     "$.selected_approach.generation_contract",
                 )
             )
+        for message in contract_definition_warnings(selected_approach):
+            warnings.append(_validation_issue(
+                "unverified_approach_contract", message,
+                "$.selected_approach.generation_contract", blocking=False,
+            ))
         selected_id = normalize_approach(selected_approach).get("approach_id")
         available_ids = {
             normalize_approach(item).get("approach_id") for item in approaches

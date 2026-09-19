@@ -199,6 +199,14 @@ _CONTRACT_FIELDS.update({key: [None] for key in (
 _CONTRACT_FIELDS.update({key: [[None]] for key in (
     "any_of_opcode_groups", "any_of_structure_groups", "one_of_opcodes", "one_of_structures",
 )})
+# Opaque semantics remain visible to all generation adapters, but outside the
+# machine-enforced required/forbidden lists. No arbitrary metadata is exposed.
+_CONTRACT_FIELDS["unverified_constraints"] = {
+    **{key: [None] for key in ("required_opcodes", "forbidden_opcodes",
+                              "required_devices", "forbidden_devices",
+                              "required_structures", "forbidden_structures")},
+    **{key: [[None]] for key in ("any_of_opcode_groups", "any_of_structure_groups")},
+}
 _HARDWARE_FIELDS = dict.fromkeys((
     "plc_family", "cpu_full_model", "output_type", "firmware", "drive_model",
     "control_method", "control_method_label", "wiring_mapping", "motion_drive_model",
@@ -292,6 +300,12 @@ def generation_specification(confirmed_spec: Any) -> dict | None:
     if not isinstance(confirmed_spec, Mapping):
         return None
     result = _project(confirmed_spec, _SPEC_FIELDS)
+    selected = result.get("selected_approach")
+    if isinstance(selected, Mapping):
+        from plc.specification.approach import normalize_generation_contract
+        contract = normalize_generation_contract(selected.get("generation_contract"), approach=selected)
+        if contract.get("unverified_constraints"):
+            selected["generation_contract"] = _project(contract, _CONTRACT_FIELDS)
     # Review questions with no confirmed value are provenance/UI state, not
     # engineering facts. They may remain in the persisted specification, but
     # must not consume generation context or invite Agent B to invent an answer.

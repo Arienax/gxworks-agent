@@ -301,7 +301,10 @@ def build_contract_repair_plan(
             "repairability": "not_needed",
             "approach_name": approach.get("name") or "已选方案",
             "violations": [],
-            "reason": "当前程序已经满足 generation_contract",
+            "verification_status": "partial" if contract.get("unverified_constraints") else "checked",
+            "reason": ("可机检约束未发现违例；其余方案语义未校验，不自动请求修复"
+                       if contract.get("unverified_constraints")
+                       else "当前程序已经满足 generation_contract"),
         }
 
     features = inspect_ladder_features(ladder or {})

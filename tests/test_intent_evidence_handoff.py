@@ -88,7 +88,9 @@ def test_explicit_partial_contract_never_fills_omitted_fields_from_guide(case):
 
 def test_legacy_inference_stays_compatible_and_keeps_inferred_origin():
     approach = normalize_approach({"name": "旧方案", "generation_guide": "MOV K1 D0 更新状态"})
-    assert "MOV" in approach["generation_contract"]["required_opcodes"]
+    assert approach["generation_contract"]["required_opcodes"] == []
+    assert "MOV" in approach["generation_contract"]["unverified_constraints"]["required_opcodes"]
+    assert approach["generation_guide"] == "MOV K1 D0 更新状态"
     assert approach["generation_contract"]["source"] == "inferred"
     assert normalize_approach(approach)["generation_contract"]["source"] == "inferred"
     legacy = build_confirmed_generation_context({"summary": "legacy", "selected_approach": approach}, "FX3U",
@@ -149,7 +151,7 @@ def test_fact_lane_is_not_starved_by_large_design_reference(monkeypatch):
     monkeypatch.setattr(retriever, "retrieve_knowledge", facts)
     monkeypatch.setattr(retriever, "retrieve_design_knowledge", lambda *a, **kw: [
         {"id": "large-design", "source": "curated", "manual_type": "curated_design", "text": "D" * 3000}])
-    context = retriever.build_knowledge_context("FX3U", task_type="analysis", top_k=4, char_budget=1500)
+    context = retriever.build_knowledge_context("FX3U", task_type="analysis", top_k=4, char_budget=1500, include_design=True)
     assert 3 <= calls[0]["top_k"] <= retriever._MAX_TOP_K
     assert all(f"fact-{i}" in context for i in range(3))
     assert "large-design" not in context

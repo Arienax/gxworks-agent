@@ -399,7 +399,8 @@ def test_legacy_prose_scheme_does_not_retroactively_invalidate_saved_version():
     }
 
     inferred = normalize_approach(legacy_approach)["generation_contract"]
-    assert "bit_state_machine" in inferred["required_structures"]
+    assert inferred["required_structures"] == []
+    assert "bit_state_machine" in inferred["unverified_constraints"]["required_structures"]
     assert inferred["required_devices"] == []
 
     # Historical confirmed specs did not persist generation_contract.  They
@@ -513,6 +514,14 @@ def test_legacy_m_bit_state_plan_detects_substituted_state_device():
     issues = validate_ladder_against_selected_approach(
         ladder, {"selected_approach": selected}
     )
+    # Legacy prose alone remains visible but cannot fabricate a hard gate.
+    assert issues == []
+    normalized = normalize_approach(selected)
+    assert "bit_state_machine" in normalized["generation_contract"]["unverified_constraints"]["required_structures"]
+    assert normalized["generation_guide"] == selected["generation_guide"]
+    # The same choice, explicitly recorded as a structure, is still enforced.
+    selected["generation_contract"] = {"required_structures": ["bit_state_machine"]}
+    issues = validate_ladder_against_selected_approach(ladder, {"selected_approach": selected})
     assert any("M/S位状态机" in item for item in issues)
 
 
