@@ -19,6 +19,10 @@
 
 ---
 
+## 架构与维护策略
+
+PLC 领域语义只由无 GUI 的 Python Core 持有；TypeScript 仅负责 presentation，C# 仅负责 vendor/native adapter。Qt 已定义为 **legacy/frozen**：不再追求新功能 parity，只修严重 bug。Web 覆盖冻结时的必要工作流并完成 Windows/GX 迁移验收后，再删除 Qt；本轮保留旧入口。详见[语言边界](docs/architecture/language-boundaries.md)。
+
 ## 项目目前最核心的设计
 
 ### SQLite 证据层 + 确定性指令契约

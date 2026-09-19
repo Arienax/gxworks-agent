@@ -125,29 +125,8 @@ def generate_candidate(output, snapshot, images, ctx):
     baseline = base64.b64decode(snapshot["fbd_baseline"]) if snapshot.get("fbd_baseline") else None
     source, declarations, _ = read_project(baseline or default_baseline(), snapshot.get("fbd_program"))
     previous = export_object_model(source, declarations) if baseline else None
-    prompt = """Generate a GX Works2 structured ladder/FBD object model. Return JSON only:
-{"summary":"human-readable summary", "model":{...}}. This is a candidate, not a compiled program.
-Honor the confirmed specification and explicit I/O; never invent stop/emergency addresses.
-Use only the supplied native templates and ports. If the requested behavior needs an unsupported
-ABI, return {"unsupported":"explanation"} instead of approximating it.
-Model: schema_version=1, program=the supplied name, canvas_height=integer,
-nodes=[{id,template,symbol,x,y}], wires=[{from:"node_id.port",to:"node_id.port",via:[[x,y],...]}]
-or wires=[{start:[x,y],end:[x,y]}]. Coordinates are nonnegative editor grid integers.
-Dimensions and local port offsets come from the catalog. Port point=(node x+port x,node y+port y).
-Only coincident ports, wire endpoints/T junctions connect; ordinary crossings do not.
-Wires must be orthogonal; specify via points for bends. Keep objects separated.
-Contacts/coils use symbols such as X0/Y0. INPUT/OUTPUT terminals contain devices or IEC literals,
-e.g. T#1s. Functions keep their catalog symbol; FB symbol is its unique instance name.
-FB declarations are synchronized automatically. Other variables need explicit declarations:
-declaration_edits={table:{upserts:[{name,data_type,kind:"variable"|"function_block",
-class_name,initial_value,device,iec_address,comment}],renames:{old:new},remove:[name]}}.
-Known basic types: BOOL INT DINT WORD DWORD REAL TIME STRING; ARRAY [a..b] OF base.
-Local classes VAR/VAR_CONSTANT; global VAR_GLOBAL/VAR_GLOBAL_CONSTANT.
-For edits preserve source_offset on existing nodes/wires and all unrelated objects.
-labels,issues,unknown_record_count are read-only source projections; do not change them.
-Unknown source objects are retained only when their source_offset/template are unchanged.
-Do not assert semantic equivalence or compilation merely because a model was generated.
-"""
+    from gxw.generation_contract import FBD_GENERATION_PROMPT
+    prompt = FBD_GENERATION_PROMPT
     context = {"program": source.logical_name, "catalog": catalog_description(),
                "declaration_tables": {k: v.scope for k, v in declarations.items()},
                "confirmed_spec": project.get("confirmed_spec"), "previous": previous,
@@ -173,6 +152,19 @@ Do not assert semantic equivalence or compilation merely because a model was gen
 class FBDService:
     def __init__(self, workbench):
         self.workbench = workbench
+
+    def editor(self, project_id, model=None, command=None, version_id=None):
+        from gxw.editor import edit_draft
+        from gxw.models import GXWFormatError
+        wb = self.workbench
+        with wb.lock.thread_lock if wb.lock else nullcontext():
+            project = wb.projects.raw_project(project_id)
+            if version_id:
+                wb.projects.raw_version(project_id, version_id)
+            try:
+                return edit_draft(model, command)
+            except (GXWFormatError, KeyError, TypeError) as error:
+                raise FBDValidationError(str(error)) from error
 
     def preview(self, project_id, model, version_id=None):
         """Validate/render the current draft without saving a proposal or version."""

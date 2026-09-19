@@ -1398,3 +1398,18 @@ def canonicalize_confirmed_spec(spec):
     )
     canonical["schema_version"] = 3
     return canonical
+
+
+def edit_io_row(row=None, address=None):
+    """Prepare a form row; validity is still decided by validate_spec_draft."""
+    result = copy.deepcopy(row) if row is not None else {"address": "", "label": "", "kind": "X"}
+    if address is not None:
+        result["address"] = address.upper()
+        result["kind"] = _device_kind(address)
+    return result
+
+
+def editor_io_kind(value):
+    """The existing desktop category display normalization, owned by Core."""
+    normalized = value.strip().upper()
+    return normalized if not normalized or normalized in {"X", "Y", "M", "T", "C", "D", "S"} else "特殊"

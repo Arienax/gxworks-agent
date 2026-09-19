@@ -113,7 +113,20 @@ class Validation(ExtensibleResource):
     messages: list[str] = Field(default_factory=list)
 
 
+class ProjectModeOption(PublicResource):
+    value: str
+    label: str
+
+
+class ProjectCreationOptions(PublicResource):
+    plc_model: str
+    default_target_mode: str
+    starter_requirement: str
+    target_modes: list[ProjectModeOption]
+
+
 class Capabilities(ExtensibleResource):
+    creation: ProjectCreationOptions | None = None
     body_form: str
     operations: dict[str, bool]
     project_type: str | None = None

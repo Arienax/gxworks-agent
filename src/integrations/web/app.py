@@ -141,8 +141,8 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
 
     @app.get("/api/fbd/catalog", response_model=dto.PublicObject)
     def fbd_catalog():
-        from application.fbd import catalog_description
-        return {"nodes": catalog_description(), "generation_plc_models": ["FX3U"]}
+        from gxw.editor import editor_catalog
+        return editor_catalog()
 
     @app.post("/api/fbd/inspect", response_model=dto.PublicObject)
     def fbd_inspect(command: AttachmentUpload):

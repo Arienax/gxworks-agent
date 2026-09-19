@@ -239,7 +239,7 @@ def test_child_process_read_schema_is_fixed_and_response_is_checked(tmp_path, mo
     assert reader.read_once(2, ["x00"], "FX3U", expected_fingerprint=reader.fingerprint(), timeout=3)["values"] == {"X0": 1}
     args, kwargs = calls[0]
     assert args == [str(executable)]
-    assert json.loads(kwargs["input"]) == {"operation": "read", "logical_station": 2, "addresses": ["X0"], "plc_model": "FX3U"}
+    assert json.loads(kwargs["input"]) == {"operation": "read", "protocol_version": 2, "logical_station": 2, "devices": [{"key": "X0", "device": "X0"}]}
     assert 0 < kwargs["timeout"] <= 3
     assert not kwargs.get("shell")
     with pytest.raises(HardwareError, match="目标或地址"):

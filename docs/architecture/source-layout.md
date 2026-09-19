@@ -1,5 +1,7 @@
 # Source layout
 
+> 维护策略更新（2026-09-19）：Qt 为 `legacy/frozen`，不再追求新功能 parity，只修严重 bug。以下历史迁移对照仍用于确认 Web 覆盖冻结时的必要工作流，不要求把新能力回填 Qt。语言职责与删除条件以 [language-boundaries.md](language-boundaries.md) 为准。
+
 This layout is based on `fix/confirmed-generation-compatibility-20260918` at
 `295378d6ac5d24949c03a1c799906f4afe0fd4c9`. It preserves the existing launch
 commands and persisted engineering formats. It is a package organization change,

@@ -12,7 +12,10 @@ type Suite = { name: string; plc_model: string; tests: TestCase[] };
 type Plan = { binding: { plan_id: string; version_id: string }; source: string; suite: Suite; requirement_links: Record<string, string[]>; issue_ids: string[] };
 type RequirementRun = { run_id: string; test_name: string; created_at: string; backend_kind: string | null; status: string; recorded_status: string; verification: { status: string; category?: string } };
 type Requirement = { id: string; text: string; devices: string[]; status: string; latest_run: RequirementRun | null; tests: { plan_id: string; test_name: string; latest_run: RequirementRun | null }[] };
-type Workbench = { version_id: string; ir_sha256: string; plc_model: string; devices: { address: string; label: string; writable: boolean }[]; plans: Plan[]; unavailable_plans: { plan_id: string; message: string }[]; unavailable_runs: string[]; requirements: Requirement[]; runs: { run_id: string; suite_name: string; status: string; created_at: string }[] };
+type EditorMetadata = { empty_suite: Suite; default_expectation: Expectation; default_input_value: number;
+  wait_timeout_ms: number; poll_ms: number; minimum_interval_ms: number; maximum_duration_ms: number;
+  operators: { value: string; label: string; initial_value: Value; placeholder: string }[] };
+type Workbench = { editor: EditorMetadata; version_id: string; ir_sha256: string; plc_model: string; devices: { address: string; label: string; writable: boolean }[]; plans: Plan[]; unavailable_plans: { plan_id: string; message: string }[]; unavailable_runs: string[]; requirements: Requirement[]; runs: { run_id: string; suite_name: string; status: string; created_at: string }[] };
 type Observation = { at_ms: number; event: string; values: Record<string, Value> };
 type ReplayCase = { name: string; status: string; backend_kind: string; observations: Observation[]; duration_ms: number; sample_ms: number; assertions: { passed?: boolean; at_ms?: number; step_id?: string; address?: string; actual?: Value; expected?: unknown; message?: string }[]; invariant_violations: unknown[]; requirement_ids: string[]; issue_ids: string[]; steps: Step[] };
 type Replay = { run_id: string; version_id: string; status: string; verification: { status: string; category?: string; program_repair_allowed?: boolean }; cases: ReplayCase[] };
@@ -20,7 +23,6 @@ export type SimulationIssueContext = { id: string; title: string; addresses: str
 type Props = { pid: string; vid: string; readOnly: boolean; t: (s: string) => string; onExecute: (planId: string) => Promise<void>; onDebug?: (runId: string) => Promise<void>; onSaved?: () => void; issueContext?: SimulationIssueContext; initialPlanId?: string; refreshKey?: string | number };
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
-const scalar = (text: string): Value => text.trim() !== "" && Number.isFinite(Number(text)) ? Number(text) : text;
 const statusLabel = (status: string) => ({ passed: "通过", failed: "失败", error: "执行出错", unavailable: "环境不可用", blocked: "证据未获验收" }[status] || status);
 const encode = encodeURIComponent;
 
@@ -49,7 +51,7 @@ export function SimulationWorkbench({ pid, vid, readOnly, t, onExecute, onDebug,
       const requested = initialPlanId ? value.plans.find(plan => plan.binding.plan_id === initialPlanId && plan.binding.version_id === vid) : value.plans[0];
       if (requested) { loadPlan(requested); if (initialPlanId) setTab("editor"); }
       else if (initialPlanId) setNotice(t("关联的方案不存在或已失效，请重新选择。"));
-      else setSuite({ name: t("手工仿真方案"), plc_model: value.plc_model, tests: [] });
+      else setSuite({ ...structuredClone(value.editor.empty_suite), name: t(value.editor.empty_suite.name) });
     }).catch(e => { if (active) setError(message(e)); });
     return () => { active = false; request.current++; };
   }, [path, initialPlanId]); // Explicit navigation reloads; run refreshes preserve drafts.
@@ -71,14 +73,21 @@ export function SimulationWorkbench({ pid, vid, readOnly, t, onExecute, onDebug,
   const writable = data?.devices.filter(d => d.writable).map(d => d.address) || [];
   function edit(change: (value: Suite) => void) { setSuite(old => { if (!old) return old; const next = structuredClone(old); change(next); return next; }); setNotice(""); }
   function editTest(change: (value: TestCase) => void) { edit(s => { if (s.tests[testIndex]) change(s.tests[testIndex]); }); }
-  function addTest() {
-    if (!suite) return;
-    let name = `${t("测试")} ${suite.tests.length + 1}`;
-    while (suite.tests.some(test => test.name === name)) name += " +";
-    edit(s => s.tests.push({ name, plc_model: s.plc_model, initial: {}, steps: [], trace_devices: [], sample_ms: 10, timeout_ms: 5000 }));
-    setTestIndex(suite.tests.length);
+  const draftPending = useRef(false);
+  async function editCommand(command: Record<string, unknown>) {
+    if (!suite || disabled || draftPending.current) return;
+    const generation = request.current;
+    draftPending.current = true; setBusy(true); setError("");
+    try {
+      const value = await api<{ suite: Suite }>(`${path}/draft`, "POST", { suite, command });
+      if (request.current !== generation) return;
+      setSuite(value.suite); setNotice("");
+      if (command.action === "add_test") setTestIndex(value.suite.tests.length - 1);
+    } catch (e) { if (request.current === generation) setError(message(e)); }
+    finally { draftPending.current = false; if (request.current === generation) setBusy(false); }
   }
-  function addStep() { editTest(test => test.steps.push({ id: `step_${crypto.randomUUID().slice(0, 8)}`, at_ms: (test.steps.at(-1)?.at_ms || 0) + (test.steps.length ? 100 : 0), set: {}, expect: [], wait_for: [] })); }
+  function addTest() { void editCommand({ action: "add_test", name_prefix: t("测试") }); }
+  function addStep() { void editCommand({ action: "add_step", test_index: testIndex }); }
   async function save() {
     if (!data || !suite) return;
     const generation = request.current; setBusy(true); setError("");
@@ -103,7 +112,7 @@ export function SimulationWorkbench({ pid, vid, readOnly, t, onExecute, onDebug,
     try { await onDebug(runId); } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   function openRun(run: RequirementRun) { setRunId(run.run_id); setRunTest(run.test_name); setTab("replay"); }
-  function newPlan() { setSource(""); setSuite({ name: t("手工仿真方案"), plc_model: data!.plc_model, tests: [] }); setLinks({}); setIssues([]); setSavedDraft(""); setNotice(""); }
+  function newPlan() { setSource(""); setSuite({ ...structuredClone(data!.editor.empty_suite), name: t(data!.editor.empty_suite.name) }); setLinks({}); setIssues([]); setSavedDraft(""); setNotice(""); }
   return <section className="simulation-workbench" aria-label={t("仿真工作台")}>
     <div className="sim-toolbar"><div><strong>{t("仿真工作台")}</strong><small>{t("编辑方案 → 确认执行 → 回放观测 → 对照需求")}</small></div>
       <div className="sim-tabs" role="tablist" aria-label={t("仿真工作台视图")}>{[["editor", "步骤编辑"], ["replay", "波形回放"], ["coverage", "需求覆盖"]].map(([key, name]) => <Button key={key} role="tab" aria-selected={tab === key} variant={tab === key ? "primary" : "ghost"} onClick={() => setTab(key)}>{t(name)}</Button>)}</div>
@@ -121,16 +130,16 @@ export function SimulationWorkbench({ pid, vid, readOnly, t, onExecute, onDebug,
           <div className="sim-toolbar"><label>{t("测试名称")}<input disabled={disabled} value={test.name} onChange={e => { const name = e.target.value; setLinks(old => { const next = { ...old, [name]: old[test.name] || [] }; delete next[test.name]; return next; }); editTest(v => { v.name = name; }); }} /></label>
             <Button disabled={disabled} aria-label={t("删除测试")} onClick={() => { setLinks(old => { const next = { ...old }; delete next[test.name]; return next; }); edit(s => s.tests.splice(testIndex, 1)); setTestIndex(Math.max(0, testIndex - 1)); }}><Trash2 size={15} />{t("删除测试")}</Button></div>
           <label>{t("验证目的")}<textarea disabled={disabled} value={test.description || ""} onChange={e => editTest(v => { v.description = e.target.value; })} /></label>
-          <div className="sim-timings"><label>{t("采样间隔 ms")}<input type="number" min={1} disabled={disabled} value={test.sample_ms} onChange={e => editTest(v => { v.sample_ms = Number(e.target.value); })} /></label><label>{t("总超时 ms")}<input type="number" min={1} max={300000} disabled={disabled} value={test.timeout_ms} onChange={e => editTest(v => { v.timeout_ms = Number(e.target.value); })} /></label></div>
-          <fieldset disabled={disabled}><legend>{t("初始输入")}</legend><DeviceValues values={test.initial} addresses={writable} onChange={values => editTest(v => { v.initial = values; })} t={t} /><small>{t("每个要改变的输入都必须在此定义初始值。")}</small></fieldset>
+          <div className="sim-timings"><label>{t("采样间隔 ms")}<input type="number" min={data.editor.minimum_interval_ms} disabled={disabled} value={test.sample_ms} onChange={e => editTest(v => { v.sample_ms = Number(e.target.value); })} /></label><label>{t("总超时 ms")}<input type="number" min={data.editor.minimum_interval_ms} max={data.editor.maximum_duration_ms} disabled={disabled} value={test.timeout_ms} onChange={e => editTest(v => { v.timeout_ms = Number(e.target.value); })} /></label></div>
+          <fieldset disabled={disabled}><legend>{t("初始输入")}</legend><DeviceValues defaultValue={data.editor.default_input_value} values={test.initial} addresses={writable} onChange={values => editTest(v => { v.initial = values; })} t={t} /><small>{t("每个要改变的输入都必须在此定义初始值。")}</small></fieldset>
           <fieldset disabled={disabled}><legend>{t("记录软元件")}</legend><div className="sim-checks">{addresses.map(a => <label key={a}><input type="checkbox" checked={test.trace_devices.includes(a)} onChange={e => editTest(v => { v.trace_devices = e.target.checked ? [...v.trace_devices, a] : v.trace_devices.filter(d => d !== a); })} />{a}</label>)}</div><small>{t("输入和断言涉及的地址会自动加入记录。")}</small></fieldset>
           <fieldset disabled={disabled}><legend>{t("关联本版本需求")}</legend>{data.requirements.length ? <div className="sim-checks">{data.requirements.map(r => <label key={r.id}><input type="checkbox" checked={(links[test.name] || []).includes(r.id)} onChange={e => setLinks(old => ({ ...old, [test.name]: e.target.checked ? [...(old[test.name] || []), r.id] : (old[test.name] || []).filter(id => id !== r.id) }))} />{r.id} · {r.text}</label>)}</div> : <p>{t("此版本未记录结构化需求；可以先编辑并执行测试。")}</p>}</fieldset>
           {test.steps.map((step, index) => <fieldset disabled={disabled} className="sim-step" key={step.id}><legend>{t("步骤")} {index + 1} · {step.id}</legend>
             <div className="sim-toolbar"><label>{t("触发时刻 ms")}<input type="number" min={0} value={step.at_ms} onChange={e => editTest(v => { v.steps[index].at_ms = Number(e.target.value); })} /></label><div className="sim-actions"><Button disabled={disabled || index === 0} aria-label={t("上移步骤")} onClick={() => editTest(v => { [v.steps[index - 1], v.steps[index]] = [v.steps[index], v.steps[index - 1]]; })}><ArrowUp size={14} /></Button><Button disabled={disabled || index === test.steps.length - 1} aria-label={t("下移步骤")} onClick={() => editTest(v => { [v.steps[index + 1], v.steps[index]] = [v.steps[index], v.steps[index + 1]]; })}><ArrowDown size={14} /></Button><Button disabled={disabled} aria-label={t("删除步骤")} onClick={() => editTest(v => { v.steps.splice(index, 1); })}><Trash2 size={14} /></Button></div></div>
-            <strong>{t("改变输入")}</strong><DeviceValues addresses={writable} values={step.set} onChange={values => editTest(v => { v.steps[index].set = values; })} t={t} />
-            <strong>{t("立即断言")}</strong><Expectations values={step.expect} addresses={addresses} onChange={values => editTest(v => { v.steps[index].expect = values; })} t={t} />
-            <strong>{t("等待条件满足")}</strong><Expectations values={step.wait_for} addresses={addresses} onChange={values => editTest(v => { v.steps[index].wait_for = values; v.steps[index].timeout_ms ||= 1000; v.steps[index].poll_ms ||= 10; })} t={t} />
-            {step.wait_for.length > 0 && <div className="sim-timings"><label>{t("等待超时 ms")}<input type="number" min={1} value={step.timeout_ms || 1000} onChange={e => editTest(v => { v.steps[index].timeout_ms = Number(e.target.value); })} /></label><label>{t("轮询间隔 ms")}<input type="number" min={1} value={step.poll_ms || 10} onChange={e => editTest(v => { v.steps[index].poll_ms = Number(e.target.value); })} /></label></div>}
+            <strong>{t("改变输入")}</strong><DeviceValues defaultValue={data.editor.default_input_value} addresses={writable} values={step.set} onChange={values => editTest(v => { v.steps[index].set = values; })} t={t} />
+            <strong>{t("立即断言")}</strong><Expectations metadata={data.editor} values={step.expect} addresses={addresses} onChange={values => editTest(v => { v.steps[index].expect = values; })} t={t} />
+            <strong>{t("等待条件满足")}</strong><Expectations metadata={data.editor} values={step.wait_for} addresses={addresses} onChange={values => editTest(v => { v.steps[index].wait_for = values; v.steps[index].timeout_ms ??= data.editor.wait_timeout_ms; v.steps[index].poll_ms ??= data.editor.poll_ms; })} t={t} />
+            {step.wait_for.length > 0 && <div className="sim-timings"><label>{t("等待超时 ms")}<input type="number" min={data.editor.minimum_interval_ms} value={step.timeout_ms ?? data.editor.wait_timeout_ms} onChange={e => editTest(v => { v.steps[index].timeout_ms = Number(e.target.value); })} /></label><label>{t("轮询间隔 ms")}<input type="number" min={data.editor.minimum_interval_ms} value={step.poll_ms ?? data.editor.poll_ms} onChange={e => editTest(v => { v.steps[index].poll_ms = Number(e.target.value); })} /></label></div>}
           </fieldset>)}
           <Button disabled={disabled} onClick={addStep}><Plus size={14} />{t("添加步骤")}</Button><p className="muted">{t("时刻相对于测试起点；较晚时刻表示等待到该时刻。步骤须按时间排列。")}</p>
           {!!((test.invariants?.length || 0) + (test.fault_injections?.length || 0)) && <details><summary>{t("已有不变量与故障注入（保存时保留）")}</summary><pre>{JSON.stringify({ invariants: test.invariants, fault_injections: test.fault_injections }, null, 2)}</pre></details>}
@@ -152,14 +161,14 @@ export function SimulationWorkbench({ pid, vid, readOnly, t, onExecute, onDebug,
   </section>;
 }
 
-function DeviceValues({ values, addresses, onChange, t }: { values: Record<string, number>; addresses: string[]; onChange: (v: Record<string, number>) => void; t: (s: string) => string }) {
+function DeviceValues({ values, addresses, onChange, defaultValue, t }: { defaultValue: number; values: Record<string, number>; addresses: string[]; onChange: (v: Record<string, number>) => void; t: (s: string) => string }) {
   const available = addresses.filter(a => !(a in values));
-  return <div className="sim-value-editor">{Object.entries(values).map(([address, value]) => <div className="sim-value-row" key={address}><select aria-label={t("输入地址")} value={address} onChange={e => { const next = { ...values }; delete next[address]; next[e.target.value] = value; onChange(next); }}>{[address, ...available].map(a => <option key={a}>{a}</option>)}</select><input aria-label={`${address} ${t("输入值")}`} type="number" value={value} onChange={e => onChange({ ...values, [address]: Number(e.target.value) })} /><Button aria-label={`${t("删除输入")} ${address}`} onClick={() => { const next = { ...values }; delete next[address]; onChange(next); }}><Trash2 size={13} /></Button></div>)}<Button disabled={!available.length} onClick={() => onChange({ ...values, [available[0]]: 0 })}><Plus size={13} />{t("添加输入")}</Button></div>;
+  return <div className="sim-value-editor">{Object.entries(values).map(([address, value]) => <div className="sim-value-row" key={address}><select aria-label={t("输入地址")} value={address} onChange={e => { const next = { ...values }; delete next[address]; next[e.target.value] = value; onChange(next); }}>{[address, ...available].map(a => <option key={a}>{a}</option>)}</select><input aria-label={`${address} ${t("输入值")}`} type="number" value={value} onChange={e => onChange({ ...values, [address]: Number(e.target.value) })} /><Button aria-label={`${t("删除输入")} ${address}`} onClick={() => { const next = { ...values }; delete next[address]; onChange(next); }}><Trash2 size={13} /></Button></div>)}<Button disabled={!available.length} onClick={() => onChange({ ...values, [available[0]]: defaultValue })}><Plus size={13} />{t("添加输入")}</Button></div>;
 }
 
-function Expectations({ values, addresses, onChange, t }: { values: Expectation[]; addresses: string[]; onChange: (v: Expectation[]) => void; t: (s: string) => string }) {
+function Expectations({ values, addresses, onChange, metadata, t }: { metadata: EditorMetadata; values: Expectation[]; addresses: string[]; onChange: (v: Expectation[]) => void; t: (s: string) => string }) {
   function edit(index: number, field: keyof Expectation, value: unknown) { const next = structuredClone(values); Object.assign(next[index], { [field]: value }); onChange(next); }
-  return <div className="sim-value-editor">{values.map((value, index) => <div className="sim-expect-row" key={index}><select aria-label={t("断言地址")} value={value.address} onChange={e => edit(index, "address", e.target.value)}><option value="">{t("选择地址")}</option>{addresses.map(a => <option key={a}>{a}</option>)}</select><select aria-label={t("比较方式")} value={value.operator} onChange={e => { const next = structuredClone(values); next[index].operator = e.target.value; next[index].value = e.target.value === "between" ? ["", ""] : ""; onChange(next); }}>{[["eq", "="], ["ne", "≠"], ["gt", ">"], ["ge", "≥"], ["lt", "<"], ["le", "≤"], ["between", "范围"]].map(([key, label]) => <option key={key} value={key}>{t(label)}</option>)}</select><input aria-label={t("期望值")} placeholder={t(value.operator === "between" ? "最小值,最大值" : "填写期望值")} value={Array.isArray(value.value) ? value.value.join(",") : String(value.value ?? "")} onChange={e => edit(index, "value", value.operator === "between" ? e.target.value.split(",").map(scalar) : scalar(e.target.value))} />{value.tolerance !== undefined && <input aria-label={t("允许误差")} type="number" min={0} value={value.tolerance} onChange={e => edit(index, "tolerance", Number(e.target.value))} />}<Button aria-label={t("删除断言")} onClick={() => onChange(values.filter((_, i) => i !== index))}><Trash2 size={13} /></Button></div>)}<Button onClick={() => onChange([...values, { address: "", operator: "eq", value: "" }])}><Plus size={13} />{t("添加条件")}</Button></div>;
+  return <div className="sim-value-editor">{values.map((value, index) => <div className="sim-expect-row" key={index}><select aria-label={t("断言地址")} value={value.address} onChange={e => edit(index, "address", e.target.value)}><option value="">{t("选择地址")}</option>{addresses.map(a => <option key={a}>{a}</option>)}</select><select aria-label={t("比较方式")} value={value.operator} onChange={e => { const next = structuredClone(values); next[index].operator = e.target.value; next[index].value = metadata.operators.find(op => op.value === e.target.value)!.initial_value; onChange(next); }}>{metadata.operators.map(op => <option key={op.value} value={op.value}>{t(op.label)}</option>)}</select><input aria-label={t("期望值")} placeholder={t(metadata.operators.find(op => op.value === value.operator)?.placeholder || "")} value={Array.isArray(value.value) ? value.value.join(",") : String(value.value ?? "")} onChange={e => edit(index, "value", e.target.value)} />{value.tolerance !== undefined && <input aria-label={t("允许误差")} type="number" min={0} value={value.tolerance} onChange={e => edit(index, "tolerance", Number(e.target.value))} />}<Button aria-label={t("删除断言")} onClick={() => onChange(values.filter((_, i) => i !== index))}><Trash2 size={13} /></Button></div>)}<Button onClick={() => onChange([...values, structuredClone(metadata.default_expectation)])}><Plus size={13} />{t("添加条件")}</Button></div>;
 }
 
 function WaveformReplay({ replay, initialTestName, t }: { replay: Replay; initialTestName?: string; t: (s: string) => string }) {

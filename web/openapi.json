@@ -349,6 +349,16 @@
             "title": "Body Form",
             "type": "string"
           },
+          "creation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProjectCreationOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "operations": {
             "additionalProperties": {
               "type": "boolean"
@@ -711,6 +721,48 @@
           "declarations_changed"
         ],
         "title": "FBDDiff",
+        "type": "object"
+      },
+      "FBDDraftEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "command": {
+            "additionalProperties": true,
+            "title": "Command",
+            "type": "object"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "title": "FBDDraftEdit",
         "type": "object"
       },
       "FBDPreview-Input": {
@@ -2862,6 +2914,38 @@
         "title": "ProjectCreate",
         "type": "object"
       },
+      "ProjectCreationOptions": {
+        "additionalProperties": false,
+        "properties": {
+          "default_target_mode": {
+            "title": "Default Target Mode",
+            "type": "string"
+          },
+          "plc_model": {
+            "title": "Plc Model",
+            "type": "string"
+          },
+          "starter_requirement": {
+            "title": "Starter Requirement",
+            "type": "string"
+          },
+          "target_modes": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectModeOption"
+            },
+            "title": "Target Modes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "plc_model",
+          "default_target_mode",
+          "starter_requirement",
+          "target_modes"
+        ],
+        "title": "ProjectCreationOptions",
+        "type": "object"
+      },
       "ProjectList": {
         "additionalProperties": false,
         "properties": {
@@ -2936,6 +3020,25 @@
           }
         },
         "title": "ProjectMessage",
+        "type": "object"
+      },
+      "ProjectModeOption": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "ProjectModeOption",
         "type": "object"
       },
       "ProjectUpdate": {
@@ -3540,6 +3643,27 @@
         "title": "SettingsUpdate",
         "type": "object"
       },
+      "SimulatorDraftEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "command": {
+            "additionalProperties": true,
+            "title": "Command",
+            "type": "object"
+          },
+          "suite": {
+            "additionalProperties": true,
+            "title": "Suite",
+            "type": "object"
+          }
+        },
+        "required": [
+          "suite",
+          "command"
+        ],
+        "title": "SimulatorDraftEdit",
+        "type": "object"
+      },
       "SimulatorPlanSave": {
         "additionalProperties": false,
         "properties": {
@@ -3589,6 +3713,36 @@
           "expected_ir_sha256"
         ],
         "title": "SimulatorPlanSave",
+        "type": "object"
+      },
+      "SpecIORowEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "row": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row"
+          }
+        },
+        "title": "SpecIORowEdit",
         "type": "object"
       },
       "SpecResult": {
@@ -4056,6 +4210,44 @@
           }
         },
         "summary": "Fbd Catalog"
+      }
+    },
+    "/api/fbd/editor": {
+      "post": {
+        "operationId": "edit_draft_api_fbd_editor_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FBDDraftEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicObject"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit Draft"
       }
     },
     "/api/fbd/inspect": {
@@ -6222,6 +6414,64 @@
         "summary": "Read Simulation Workbench"
       }
     },
+    "/api/projects/{project_id}/versions/{version_id}/simulation-workbench/draft": {
+      "post": {
+        "operationId": "edit_simulation_draft_api_projects__project_id__versions__version_id__simulation_workbench_draft_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulatorDraftEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicObject"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit Simulation Draft"
+      }
+    },
     "/api/projects/{project_id}/versions/{version_id}/simulation-workbench/plans": {
       "post": {
         "operationId": "save_simulation_plan_api_projects__project_id__versions__version_id__simulation_workbench_plans_post",
@@ -7157,6 +7407,44 @@
           }
         },
         "summary": "Sfc"
+      }
+    },
+    "/api/spec/io-row": {
+      "post": {
+        "operationId": "edit_spec_io_row_api_spec_io_row_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecIORowEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicObject"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit Spec Io Row"
       }
     }
   }

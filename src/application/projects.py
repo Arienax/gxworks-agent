@@ -102,16 +102,8 @@ class ProjectService:
 
     @staticmethod
     def capabilities(version=None) -> dict:
-        mode = str((version or {}).get("target_mode") or "ladder").lower()
-        ladder = mode == "ladder"
-        fbd = mode == "fbd"
-        return {"project_type": "fx", "body_form": mode,
-                "representations": ["ladder_svg", "st", "ir"] if ladder else ["fbd", "svg", "gxw"] if fbd else ["st"],
-                "operations": {"view": True, "generate": mode in ("ladder", "st", "fbd"),
-                               "diagnose": ladder, "patch": ladder, "gx_import": ladder or fbd,
-                               "simulation": ladder, "gx_compile": False, "fbd_edit": fbd,
-                               "fbd_convert": ladder},
-                "sfc": "requirement_input", "structured_semantics": "verified_native_templates" if fbd else "experimental_read_only"}
+        from plc.project_capabilities import project_capabilities
+        return project_capabilities(version)
 
     def artifact(self, project_id: str, version_id: str, artifact_id: str) -> Path:
         version = self.raw_version(project_id, version_id)

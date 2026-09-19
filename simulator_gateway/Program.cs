@@ -6,7 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Text.RegularExpressions;
+using PlcAi.NativeAdapter;
 using System.Threading;
 using System.Web.Script.Serialization;
 
@@ -74,11 +74,6 @@ namespace PlcAi.GxSimulator2Gateway
         private const int UnitSimulator2 = 0x30;
         private const int CpuFx3UC = 0x208;
         private const int TargetSimulatorForFxCpu = 0;
-        private static readonly Regex DevicePattern = new Regex(
-            "^(X|Y|M|D|T|C|S)([0-9]+)$",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
-        );
-
         private readonly string _configuredProgId;
         private dynamic _control;
         private string _activeProgId = "";
@@ -210,282 +205,74 @@ namespace PlcAi.GxSimulator2Gateway
             result["unit_type"] = UnitSimulator2;
             result["cpu_type"] = CpuFx3UC;
             result["target_simulator"] = TargetSimulatorForFxCpu;
-            result["plc_model"] = "FX3U";
             result["prog_id"] = _activeProgId;
             result["connected"] = Connected;
             return result;
         }
 
-        public IDictionary<string, object> ReadMany(IList<object> rawAddresses)
+        public IDictionary<string, object> ReadMany(List<DeviceCall> calls)
         {
             EnsureConnected();
-            if (rawAddresses == null || rawAddresses.Count == 0 || rawAddresses.Count > 256)
-            {
-                throw new GatewayException(400, "INVALID_ADDRESS_LIST", "Read requests require 1 to 256 addresses.");
-            }
-            List<string> addresses = new List<string>();
-            foreach (object item in rawAddresses)
-            {
-                addresses.Add(ValidateAddress(Convert.ToString(item, CultureInfo.InvariantCulture), false));
-            }
             Dictionary<string, object> values = new Dictionary<string, object>();
-            foreach (string address in addresses)
+            foreach (DeviceCall call in calls)
             {
-                Match match = DevicePattern.Match(address);
-                string prefix = match.Groups[1].Value.ToUpperInvariant();
-                string device = prefix == "C" ? "CN" + match.Groups[2].Value
-                    : prefix == "T" ? "TN" + match.Groups[2].Value
-                    : address;
                 int data = 0;
-                int result = Convert.ToInt32(_control.GetDevice(device, out data), CultureInfo.InvariantCulture);
+                int result = Convert.ToInt32(_control.GetDevice(call.Device, out data), CultureInfo.InvariantCulture);
                 if (result != 0)
-                {
-                    throw new GatewayException(
-                        502,
-                        "MX_READ_FAILED",
-                        "MX Component failed to read " + address + " (" + FormatMxCode(result) + ")."
-                    );
-                }
-                values[address] = data;
+                    throw new GatewayException(502, "MX_READ_FAILED", "MX Component read failed (" + FormatMxCode(result) + ").");
+                values[call.Key] = data;
             }
             return values;
         }
 
-        public void WriteMany(IDictionary<string, object> rawValues)
+        public void WriteMany(List<DeviceCall> calls)
         {
             EnsureConnected();
-            if (rawValues == null || rawValues.Count == 0 || rawValues.Count > 256)
-            {
-                throw new GatewayException(400, "INVALID_DEVICE_VALUES", "Write requests require 1 to 256 values.");
-            }
-            List<KeyValuePair<string, int>> values = new List<KeyValuePair<string, int>>();
-            foreach (KeyValuePair<string, object> item in rawValues)
-            {
-                string address = ValidateAddress(item.Key, true);
-                int value;
-                try
-                {
-                    value = Convert.ToInt32(item.Value, CultureInfo.InvariantCulture);
-                }
-                catch (Exception)
-                {
-                    throw new GatewayException(400, "INVALID_DEVICE_VALUE", address + " requires an integer value.");
-                }
-                string prefix = DevicePattern.Match(address).Groups[1].Value.ToUpperInvariant();
-                if ((prefix == "X" || prefix == "M") && value != 0 && value != 1)
-                {
-                    throw new GatewayException(400, "INVALID_BIT_VALUE", address + " accepts only 0 or 1.");
-                }
-                if (prefix == "D" && (value < -32768 || value > 65535))
-                {
-                    throw new GatewayException(400, "INVALID_WORD_VALUE", address + " is outside the 16-bit word range.");
-                }
-                values.Add(new KeyValuePair<string, int>(address, value));
-            }
+            WriteCalls(calls, "MX_WRITE_FAILED");
+        }
 
-            foreach (KeyValuePair<string, int> item in values)
+        private void WriteCalls(List<DeviceCall> calls, string code)
+        {
+            foreach (DeviceCall call in calls)
             {
-                int result = Convert.ToInt32(_control.SetDevice(item.Key, item.Value), CultureInfo.InvariantCulture);
+                int result = Convert.ToInt32(_control.SetDevice(call.Device, call.Value), CultureInfo.InvariantCulture);
                 if (result != 0)
-                {
-                    throw new GatewayException(
-                        502,
-                        "MX_WRITE_FAILED",
-                        "MX Component failed to write " + item.Key + " (" + FormatMxCode(result) + ")."
-                    );
-                }
+                    throw new GatewayException(502, code, "MX Component write failed (" + FormatMxCode(result) + ").");
             }
         }
 
-        public IDictionary<string, object> ResetCpu(
-            IList<object> rawDevices,
-            IDictionary<string, object> rawInitialValues
-        )
+        private void CpuStatus(int operation, string code)
+        {
+            int result = Convert.ToInt32(_control.SetCpuStatus(operation), CultureInfo.InvariantCulture);
+            if (result != 0)
+                throw new GatewayException(502, code, "MX Component CPU operation failed (" + FormatMxCode(result) + ").");
+        }
+
+        public IDictionary<string, object> ResetCpu(List<DeviceCall> clear, List<DeviceCall> initial)
         {
             EnsureConnected();
-            if (rawDevices == null || rawDevices.Count > 256)
-            {
-                throw new GatewayException(
-                    400,
-                    "INVALID_RESET_DEVICE_LIST",
-                    "CPU reset accepts zero to 256 program-owned devices."
-                );
-            }
-            if (rawInitialValues == null || rawInitialValues.Count > 256)
-            {
-                throw new GatewayException(
-                    400,
-                    "INVALID_INITIAL_VALUES",
-                    "CPU reset accepts zero to 256 initial input values."
-                );
-            }
-
-            // MX Component's official sample defines SetCpuStatus operations
-            // as 0=RUN, 1=STOP, 2=PAUSE, 3=RESET.  Simulator2 does not reliably
-            // clear every non-retentive device through remote RESET alone, so
-            // the caller also supplies the program-owned devices to clear.
-            int stopResult = Convert.ToInt32(
-                _control.SetCpuStatus(1),
-                CultureInfo.InvariantCulture
-            );
-            if (stopResult != 0)
-            {
-                throw new GatewayException(
-                    502,
-                    "MX_CPU_STOP_FAILED",
-                    "MX Component could not stop the Simulator2 CPU before reset (" + FormatMxCode(stopResult) + ")."
-                );
-            }
-
+            // Both complete plans have been checked by the request parser before
+            // the FIRST side effect. Python owns which devices/values they contain.
+            CpuStatus(1, "MX_CPU_STOP_FAILED");
             Thread.Sleep(100);
+            WriteCalls(clear, "MX_DEVICE_CLEAR_FAILED");
+            WriteCalls(initial, "MX_INITIALIZE_FAILED");
+            // Native ordering is essential: Simulator2 can resume scanning during
+            // RESET itself. Initial values must be applied BEFORE that native call.
+            CpuStatus(3, "MX_CPU_RESET_FAILED");
+            Thread.Sleep(100);
+            CpuStatus(0, "MX_CPU_RUN_FAILED");
             List<string> cleared = new List<string>();
-            foreach (object rawDevice in rawDevices)
-            {
-                string address = ValidateAddress(
-                    Convert.ToString(rawDevice, CultureInfo.InvariantCulture),
-                    false
-                );
-                Match match = DevicePattern.Match(address);
-                string prefix = match.Groups[1].Value.ToUpperInvariant();
-                int index = prefix == "X" || prefix == "Y"
-                    ? Convert.ToInt32(match.Groups[2].Value, 8)
-                    : Convert.ToInt32(match.Groups[2].Value, CultureInfo.InvariantCulture);
-                if (prefix == "X" || (prefix == "M" || prefix == "D") && index >= 8000)
-                {
-                    throw new GatewayException(
-                        403,
-                        "RESET_DEVICE_NOT_ALLOWED",
-                        "CPU reset may clear only program-owned M/D/T/C/S/Y devices."
-                    );
-                }
-                string target = prefix == "C" ? "CN" + match.Groups[2].Value
-                    : prefix == "T" ? "TN" + match.Groups[2].Value
-                    : address;
-                int clearResult = Convert.ToInt32(
-                    _control.SetDevice(target, 0),
-                    CultureInfo.InvariantCulture
-                );
-                if (clearResult != 0)
-                {
-                    throw new GatewayException(
-                        502,
-                        "MX_DEVICE_CLEAR_FAILED",
-                        "MX Component could not clear " + address + " before the test (" + FormatMxCode(clearResult) + ")."
-                    );
-                }
-                cleared.Add(address);
-            }
-
             Dictionary<string, int> initialized = new Dictionary<string, int>();
-            foreach (KeyValuePair<string, object> item in rawInitialValues)
+            foreach (DeviceCall call in clear) cleared.Add(call.Key);
+            foreach (DeviceCall call in initial) initialized.Add(call.Key, call.Value);
+            // Native calls succeeding is NOT evidence that the PLC is running.
+            // Python Core verifies the model-specific run monitor separately.
+            return new Dictionary<string, object>
             {
-                string address = ValidateAddress(item.Key, true);
-                int value;
-                try
-                {
-                    value = Convert.ToInt32(item.Value, CultureInfo.InvariantCulture);
-                }
-                catch (Exception)
-                {
-                    throw new GatewayException(
-                        400,
-                        "INVALID_DEVICE_VALUE",
-                        address + " requires an integer initial value."
-                    );
-                }
-                string prefix = DevicePattern.Match(address).Groups[1].Value.ToUpperInvariant();
-                if ((prefix == "X" || prefix == "M") && value != 0 && value != 1)
-                {
-                    throw new GatewayException(
-                        400,
-                        "INVALID_BIT_VALUE",
-                        address + " accepts only 0 or 1."
-                    );
-                }
-                if (prefix == "D" && (value < -32768 || value > 65535))
-                {
-                    throw new GatewayException(
-                        400,
-                        "INVALID_WORD_VALUE",
-                        address + " is outside the 16-bit word range."
-                    );
-                }
-                int initializeResult = Convert.ToInt32(
-                    _control.SetDevice(address, value),
-                    CultureInfo.InvariantCulture
-                );
-                if (initializeResult != 0)
-                {
-                    throw new GatewayException(
-                        502,
-                        "MX_INITIALIZE_FAILED",
-                        "MX Component could not initialize " + address + " before RUN (" + FormatMxCode(initializeResult) + ")."
-                    );
-                }
-                initialized[address] = value;
-            }
-
-            // Simulator2 may resume scanning as part of RESET itself.  Put
-            // every test's initial inputs/state in place while the CPU is
-            // definitely stopped, before RESET can execute a first scan.
-            // Doing this afterwards allows a stale ON input from the previous
-            // case to retrigger an ANDP/PLS instruction for one scan.
-            int resetResult = Convert.ToInt32(
-                _control.SetCpuStatus(3),
-                CultureInfo.InvariantCulture
-            );
-            if (resetResult != 0)
-            {
-                throw new GatewayException(
-                    502,
-                    "MX_CPU_RESET_FAILED",
-                    "MX Component could not reset the Simulator2 CPU (" + FormatMxCode(resetResult) + ")."
-                );
-            }
-
-            Thread.Sleep(100);
-
-            int runResult = Convert.ToInt32(
-                _control.SetCpuStatus(0),
-                CultureInfo.InvariantCulture
-            );
-            if (runResult != 0)
-            {
-                throw new GatewayException(
-                    502,
-                    "MX_CPU_RUN_FAILED",
-                    "MX Component could not return the Simulator2 CPU to RUN (" + FormatMxCode(runResult) + ")."
-                );
-            }
-
-            DateTime deadline = DateTime.UtcNow.AddSeconds(5);
-            int runMonitor = 0;
-            int monitorResult = -1;
-            while (DateTime.UtcNow < deadline)
-            {
-                monitorResult = Convert.ToInt32(
-                    _control.GetDevice("M8000", out runMonitor),
-                    CultureInfo.InvariantCulture
-                );
-                if (monitorResult == 0 && runMonitor == 1)
-                {
-                    return new Dictionary<string, object>
-                    {
-                        { "reset", true },
-                        { "cpu_run", true },
-                        { "run_monitor", runMonitor },
-                        { "cleared_devices", cleared.ToArray() },
-                        { "initial_values", initialized }
-                    };
-                }
-                Thread.Sleep(50);
-            }
-
-            throw new GatewayException(
-                503,
-                "CPU_RUN_TIMEOUT",
-                "Simulator2 CPU did not return to RUN after reset (" + FormatMxCode(monitorResult) + ")."
-            );
+                { "reset", true }, { "cleared_devices", cleared.ToArray() },
+                { "initial_values", initialized }
+            };
         }
 
         public void Disconnect()
@@ -509,61 +296,6 @@ namespace PlcAi.GxSimulator2Gateway
             {
                 ReleaseComObject(current);
             }
-        }
-
-        private static string ValidateAddress(string raw, bool writable)
-        {
-            string address = (raw ?? "").Trim().ToUpperInvariant();
-            Match match = DevicePattern.Match(address);
-            if (!match.Success)
-            {
-                throw new GatewayException(400, "INVALID_DEVICE_ADDRESS", "Unsupported FX3U device address: " + address);
-            }
-            string prefix = match.Groups[1].Value.ToUpperInvariant();
-            string digits = match.Groups[2].Value;
-            int index;
-            if (prefix == "X" || prefix == "Y")
-            {
-                foreach (char character in digits)
-                {
-                    if (character < '0' || character > '7')
-                    {
-                        throw new GatewayException(400, "INVALID_DEVICE_ADDRESS", address + " is not a valid FX3U octal address.");
-                    }
-                }
-                index = Convert.ToInt32(digits, 8);
-                if (index > Convert.ToInt32("367", 8))
-                {
-                    throw new GatewayException(400, "INVALID_DEVICE_ADDRESS", address + " exceeds the FX3U device range.");
-                }
-            }
-            else
-            {
-                if (!Int32.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out index))
-                {
-                    throw new GatewayException(400, "INVALID_DEVICE_ADDRESS", "Invalid device index: " + address);
-                }
-                int maximum = prefix == "M" || prefix == "D" ? 8511
-                    : prefix == "T" ? 511
-                    : prefix == "C" ? 255
-                    : 4095;
-                if (index > maximum)
-                {
-                    throw new GatewayException(400, "INVALID_DEVICE_ADDRESS", address + " exceeds the FX3U device range.");
-                }
-            }
-            if (writable)
-            {
-                if (prefix != "X" && prefix != "M" && prefix != "D")
-                {
-                    throw new GatewayException(403, "WRITE_NOT_ALLOWED", "Tests may write only X, M, or D devices.");
-                }
-                if ((prefix == "M" || prefix == "D") && index >= 8000)
-                {
-                    throw new GatewayException(403, "SPECIAL_DEVICE_WRITE_BLOCKED", "CPU-owned special devices cannot be written.");
-                }
-            }
-            return address;
         }
 
         private void EnsureConnected()
@@ -687,6 +419,11 @@ namespace PlcAi.GxSimulator2Gateway
                 status = error.HttpStatus;
                 response = Error(error.ErrorCode, error.Message);
             }
+            catch (ArgumentException error)
+            {
+                status = 400;
+                response = Error("INVALID_NATIVE_REQUEST", error.Message);
+            }
             catch (Exception error)
             {
                 status = 500;
@@ -701,19 +438,19 @@ namespace PlcAi.GxSimulator2Gateway
             {
                 Dictionary<string, object> health = new Dictionary<string, object>();
                 health["service"] = "plc-ai-gx-simulator2-gateway";
-                health["protocol_version"] = 2;
-                health["gateway_version"] = "2.0";
+                health["protocol_version"] = 3;
+                health["gateway_version"] = "3.0";
                 health["capabilities"] = new Dictionary<string, object>
                 {
                     { "device_read", true },
                     { "device_write", true },
                     { "cpu_reset", true },
-                    { "scan_monitor", true }
+                    { "scan_monitor", true },
+                    { "native_device_plan", true }
                 };
                 health["simulator_only"] = true;
                 health["route"] = "GX Simulator2";
                 health["unit_type"] = MxSimulatorConnection.SimulatorUnitType;
-                health["plc_model"] = "FX3U";
                 health["mx_component_available"] = !String.IsNullOrEmpty(_mx.FindAvailableProgId());
                 health["connected"] = _mx.Connected;
                 health["prog_id"] = _mx.ActiveProgId;
@@ -733,30 +470,28 @@ namespace PlcAi.GxSimulator2Gateway
             if (request.Method == "POST" && request.Path == "/devices/read")
             {
                 Dictionary<string, object> payload = ParseObject(request.Body);
-                IList<object> addresses = payload.ContainsKey("addresses") ? payload["addresses"] as IList<object> : null;
-                return new Dictionary<string, object> { { "values", _mx.ReadMany(addresses) } };
+                NativeRequest.Fields(payload, "protocol_version", "devices");
+                NativeRequest.Version(payload, 3);
+                List<DeviceCall> calls = NativeRequest.Devices(payload["devices"], false, 256, false);
+                return new Dictionary<string, object> { { "values", _mx.ReadMany(calls) } };
             }
             if (request.Method == "POST" && request.Path == "/devices/write")
             {
                 Dictionary<string, object> payload = ParseObject(request.Body);
-                IDictionary<string, object> values = payload.ContainsKey("values")
-                    ? payload["values"] as IDictionary<string, object>
-                    : null;
-                _mx.WriteMany(values);
-                return new Dictionary<string, object> { { "written", values.Count } };
+                NativeRequest.Fields(payload, "protocol_version", "devices");
+                NativeRequest.Version(payload, 3);
+                List<DeviceCall> calls = NativeRequest.Devices(payload["devices"], true, 256, false);
+                _mx.WriteMany(calls);
+                return new Dictionary<string, object> { { "written", calls.Count } };
             }
             if (request.Method == "POST" && request.Path == "/cpu/reset")
             {
                 Dictionary<string, object> payload = ParseObject(request.Body);
-                IList<object> devices = payload.ContainsKey("devices")
-                    ? payload["devices"] as IList<object>
-                    : new List<object>();
-                IDictionary<string, object> initialValues = payload.ContainsKey("initial_values")
-                    ? payload["initial_values"] as IDictionary<string, object>
-                    : new Dictionary<string, object>();
-                return new Dictionary<string, object>(
-                    _mx.ResetCpu(devices, initialValues)
-                );
+                NativeRequest.Fields(payload, "protocol_version", "clear", "initial");
+                NativeRequest.Version(payload, 3);
+                List<DeviceCall> clear = NativeRequest.Devices(payload["clear"], true, 256, true);
+                List<DeviceCall> initial = NativeRequest.Devices(payload["initial"], true, 256, true);
+                return new Dictionary<string, object>(_mx.ResetCpu(clear, initial));
             }
             if (request.Method == "POST" && request.Path == "/shutdown")
             {

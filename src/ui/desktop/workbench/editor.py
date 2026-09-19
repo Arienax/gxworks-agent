@@ -715,11 +715,9 @@ class RequirementReviewCard(QFrame):
                     finally:
                         self._updating_tables = False
             elif item.column() == 0:
-                normalized = item.text().strip().upper()
-                if normalized and normalized != tr('特殊') and normalized not in {
-                    "X", "Y", "M", "T", "C", "D", "S"
-                }:
-                    normalized = tr('特殊')
+                from plc.specification.confirmed import editor_io_kind
+                category = editor_io_kind(item.text())
+                normalized = tr('特殊') if category == '特殊' else category
                 if normalized != item.text():
                     self._updating_tables = True
                     try:

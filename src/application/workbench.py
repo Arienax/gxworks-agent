@@ -1030,7 +1030,8 @@ class WorkbenchService:
 
 
 def sfc_requirement(steps):
-    return "\n".join(f"步骤 {i + 1}：{s['name']}\n动作：{s['action']}\n转移条件：{s.get('transition') or '流程结束'}" for i, s in enumerate(steps))
+    from plc.sfc import linear_requirement
+    return linear_requirement(steps)
 
 
 def public_spec_hash(spec):

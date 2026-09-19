@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2, GitBranch, FileUp, Download } from "lucide-react";
 import { api, artifactUrl, key } from "../api/client";
 import type { Proposal } from "../api/client";
@@ -22,8 +22,6 @@ const templateLabel = (key: string, t: (s: string) => string) => {
   const labels: Record<string, string> = { contact: "常开触点", contact_nc: "常闭触点", coil: "线圈", input: "输入值", output: "输出变量" };
   return labels[key] ? t(labels[key]) : key.replace("function_block:", "FB · ").replace("function:", "Function · ");
 };
-
-export const emptyFBD = (): FBDModel => ({ schema_version: 1, program: "1.Program.pou", canvas_height: 12, nodes: [], wires: [] });
 
 function NativeValidationPanel({ pid, vid, disabled, t }: { pid: string; vid: string; disabled: boolean; t: (s: string) => string }) {
   const route = `/projects/${pid}/versions/${vid}/native-validation`;
@@ -130,23 +128,40 @@ export function FBDImport({ pid, vid, disabled, onProposal, t }: {
   </div>;
 }
 
+type EditorView = { model: FBDModel; presentation: { tables: string[]; rows: Record<string, Label[]>;
+  nodes: { id: string; symbol_editable: boolean; ports: Port[] }[];
+  endpoints: { value: string; label: string; point: number[] }[] }; gx_compile: string };
+
 export function FBDPanel({ value, svg, pid, vid, readOnly, preview, onProposal, t }: {
-  value: FBDModel; svg: string; pid: string; vid: string; readOnly: boolean; preview: boolean;
+  value: FBDModel | null; svg: string; pid: string; vid: string; readOnly: boolean; preview: boolean;
   onProposal: (proposal: Proposal) => Promise<void>; t: (s: string) => string;
 }) {
-  const [draft, setDraft] = useState<FBDModel>(() => structuredClone(value));
-  const sourceKey = JSON.stringify(value);
-  useEffect(() => { setDraft(JSON.parse(sourceKey)); setError(""); setPage(0); setFrom(""); setTo(""); }, [sourceKey, pid, vid]);
+  const [editor, setEditor] = useState<EditorView | null>(null), [sourceKey, setSourceKey] = useState("");
   const [section, setSection] = useState("diagram"), [catalog, setCatalog] = useState<CatalogNode[]>([]);
-  const [selectedTemplate, setSelectedTemplate] = useState("contact"), [busy, setBusy] = useState(false), [error, setError] = useState("");
-  const [from, setFrom] = useState(""), [to, setTo] = useState(""), [table, setTable] = useState(Object.keys(value.labels || {})[0] || "1.Labels.lh");
+  const [selectedTemplate, setSelectedTemplate] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [from, setFrom] = useState(""), [to, setTo] = useState(""), [table, setTable] = useState("");
   const [zoom, setZoom] = useState(1), [page, setPage] = useState(0);
   const [rendered, setRendered] = useState<{ identity: string; value?: DraftPreview; error?: string } | null>(null);
-  const draftKey = JSON.stringify(draft);
+  const generation = useRef(0), pending = useRef(false);
+  const inputKey = JSON.stringify(value);
+  useEffect(() => {
+    const current = ++generation.current;
+    pending.current = false; setBusy(false); setEditor(null); setError(""); setRendered(null);
+    setPage(0); setFrom(""); setTo("");
+    api<EditorView>("/fbd/editor", "POST", { project_id: pid, version_id: vid || null, model: JSON.parse(inputKey) })
+      .then(result => { if (generation.current === current) { setEditor(result); setSourceKey(JSON.stringify(result.model)); setTable(result.presentation.tables[0] || ""); } })
+      .catch(e => { if (generation.current === current) setError(e.message); });
+    return () => { generation.current++; };
+  }, [inputKey, pid, vid]);
+  useEffect(() => { let active = true;
+    api<{ nodes: CatalogNode[] }>("/fbd/catalog").then(v => { if (active) { setCatalog(v.nodes); setSelectedTemplate(v.nodes[0]?.template || ""); } })
+      .catch(e => { if (active) setError(e.message); });
+    return () => { active = false; };
+  }, []);
+  const draft = editor?.model;
+  const draftKey = JSON.stringify(draft), dirty = !!draft && draftKey !== sourceKey;
   const previewIdentity = `${pid}/${vid}/${draftKey}`;
-  const dirty = draftKey !== sourceKey;
   const disabled = readOnly || preview || busy;
-  useEffect(() => { let active = true; api<{ nodes: CatalogNode[] }>("/fbd/catalog").then(v => { if (active) setCatalog(v.nodes); }).catch(e => { if (active) setError(e.message); }); return () => { active = false; }; }, []);
   useEffect(() => {
     if (!dirty || preview) return;
     let active = true;
@@ -157,56 +172,50 @@ export function FBDPanel({ value, svg, pid, vid, readOnly, preview, onProposal, 
     }, 350);
     return () => { active = false; window.clearTimeout(timer); };
   }, [dirty, preview, pid, vid, draftKey, previewIdentity]);
-  const currentRender = rendered?.identity === previewIdentity ? rendered : null;
-  const diagram = dirty && !preview ? (currentRender?.value ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(currentRender.value.svg)}` : "") : svg;
-  const diagramIssues = currentRender?.value?.model.issues || (!dirty ? value.issues : []) || [];
-  function change(edit: (model: FBDModel) => void) { setDraft(old => { const next = structuredClone(old); edit(next); return next; }); }
-  const tableNames = [...new Set([...Object.keys(draft.labels || {"1.Labels.lh": [], "Global1.gh": []}), ...Object.keys(draft.declaration_edits || {})])];
-  const edit = draft.declaration_edits?.[table] || {};
-  const originalRows = (draft.labels?.[table] || []).filter(row => !edit.remove?.includes(row.name));
-  const rows = originalRows.map(row => { const name = edit.renames?.[row.name] || row.name; return { ...row, name, ...edit.upserts?.find(item => item.name === name) }; });
-  rows.push(...(edit.upserts || []).filter(item => !rows.some(row => row.name === item.name)));
-  function updateLabel(row: Label, field: keyof Label, value: string) {
-    change(d => {
-      d.declaration_edits ||= {}; const patch = d.declaration_edits[table] ||= {};
-      patch.upserts ||= [];
-      if (field === "name") {
-        const source = (d.labels?.[table] || []).find(r => (patch.renames?.[r.name] || r.name) === row.name);
-        if (source) { patch.renames ||= {}; patch.renames[source.name] = value; }
-        const item = patch.upserts.find(r => r.name === row.name); if (item) item.name = value;
-      } else {
-        let item = patch.upserts.find(r => r.name === row.name);
-        if (!item) { item = { name: row.name }; patch.upserts.push(item); }
-        item[field] = value;
-      }
-    });
+  async function edit(command: Record<string, unknown>) {
+    if (!editor || disabled || pending.current) return;
+    const current = generation.current;
+    pending.current = true; setBusy(true); setError("");
+    try {
+      const result = await api<EditorView>("/fbd/editor", "POST", { project_id: pid, version_id: vid || null, model: editor.model, command });
+      if (generation.current === current) setEditor(result);
+    } catch (e) { if (generation.current === current) setError(e instanceof Error ? e.message : String(e)); }
+    finally { if (generation.current === current) { pending.current = false; setBusy(false); } }
   }
-  function addWire() {
-    const endpoint = (text: string) => {
-      const dot = text.lastIndexOf("."); const node = draft.nodes.find(n => n.id === text.slice(0, dot));
-      const port = (node?.ports || catalog.find(c => c.template === node?.template)?.ports)?.find(p => p.name === text.slice(dot + 1));
-      return node && port ? [node.x + port.x, node.y + port.y] : null;
-    };
-    const a = endpoint(from), b = endpoint(to); if (!a || !b) return;
-    change(d => d.wires.push({ from, to, ...(a[0] !== b[0] && a[1] !== b[1] ? { via: [[Math.floor((a[0]+b[0])/2), a[1]], [Math.floor((a[0]+b[0])/2), b[1]]] } : {}) }));
+  async function discard() {
+    if (pending.current) return;
+    const current = generation.current;
+    pending.current = true; setBusy(true);
+    try {
+      const result = await api<EditorView>("/fbd/editor", "POST", { project_id: pid, version_id: vid || null, model: JSON.parse(sourceKey) });
+      if (generation.current === current) { setEditor(result); setError(""); }
+    } catch (e) { if (generation.current === current) setError(e instanceof Error ? e.message : String(e)); }
+    finally { if (generation.current === current) { pending.current = false; setBusy(false); } }
   }
   async function propose() {
-    setBusy(true); setError("");
+    if (!draft || pending.current || error) return;
+    const current = generation.current;
+    pending.current = true; setBusy(true); setError("");
     try {
       const proposal = await api<Proposal>("/fbd/proposals", "POST", { operation: vid ? "edit" : "generate",
         project_id: pid, version_id: vid || null, request_id: key(), model: draft });
-      await onProposal(proposal);
-    } catch (e) { setError(String(e instanceof Error ? e.message : e)); }
-    finally { setBusy(false); }
+      if (generation.current === current) await onProposal(proposal);
+    } catch (e) { if (generation.current === current) setError(e instanceof Error ? e.message : String(e)); }
+    finally { if (generation.current === current) { pending.current = false; setBusy(false); } }
   }
-  const endpoints = draft.nodes.flatMap(n => (n.ports || catalog.find(c => c.template === n.template)?.ports || []).map(p => ({ value: `${n.id}.${p.name}`, label: `${n.symbol} · ${p.name} (${n.id})` })));
+  if (!editor || !draft) return <div className="fbd-panel"><p role={error ? "alert" : "status"}>{error || t("正在读取…")}</p></div>;
+  const currentRender = rendered?.identity === previewIdentity ? rendered : null;
+  const diagram = dirty && !preview ? (currentRender?.value ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(currentRender.value.svg)}` : "") : svg;
+  const diagramIssues = currentRender?.value?.model.issues || (!dirty ? draft.issues : []) || [];
+  const rows = editor.presentation.rows[table] || [], endpoints = editor.presentation.endpoints;
+  const number = (text: string) => text.trim() === "" ? text : Number(text);
   return <div className="fbd-panel">
     <div className="fbd-toolbar"><strong>{draft.program.replace(".Program.pou", "")} · FBD</strong><span className="muted">{draft.nodes.length} {t("对象")} · {draft.wires.length} {t("导线")}</span>
       <div className="fbd-toolbar-actions">{vid && !preview && <a className="button" href={artifactUrl(pid, vid, "gxw", true)}><Download size={14} />GXW</a>}
-      {!preview && <Button disabled={disabled || !draft.nodes.length || (!!vid && !dirty)} variant="primary" onClick={() => void propose()}><GitBranch size={14} />{t("校验并保存版本")}</Button>}</div>
+      {!preview && <Button disabled={disabled || !!error || !draft.nodes.length || (!!vid && !dirty)} variant="primary" onClick={() => void propose()}><GitBranch size={14} />{t("校验并保存版本")}</Button>}</div>
     </div>
     <div className="fbd-sections">{[["diagram","图形"],["objects","对象"],["wires","连接"],["labels","声明"], ...(!preview && vid ? [["native", "原生验证"]] : [])].map(([id,label]) => <button className={section === id ? "active" : ""} key={id} onClick={() => setSection(id)}>{t(label)}</button>)}
-      {dirty && <><span role="status">{t(currentRender?.error ? "草稿有错误，请检查后重试。" : currentRender?.value ? "图形已与草稿同步；尚未保存、尚未原生编译。" : "正在校验并更新草稿图形…")}</span><Button disabled={disabled} onClick={() => setDraft(structuredClone(value))}>{t("撤销草稿")}</Button></>}
+      {dirty && <><span role="status">{t(currentRender?.error ? "草稿有错误，请检查后重试。" : currentRender?.value ? "图形已与草稿同步；尚未保存、尚未原生编译。" : "正在校验并更新草稿图形…")}</span><Button disabled={disabled} onClick={() => void discard()}>{t("撤销草稿")}</Button></>}
     </div>
     {error && <p role="alert" className="fbd-error">{error}</p>}
     {dirty && currentRender?.error && <p role="alert" className="fbd-error">{currentRender.error}</p>}
@@ -215,30 +224,28 @@ export function FBDPanel({ value, svg, pid, vid, readOnly, preview, onProposal, 
       {diagram ? <img alt={t(dirty ? "当前草稿结构化梯形图/FBD" : "结构化梯形图/FBD")} src={diagram} style={{ width: `${zoom*100}%`, maxWidth: "none" }} /> : dirty ? <div className="empty-state" role="status"><p>{t(currentRender?.error ? "修正对象、导线或声明后，图形会自动更新。" : "正在生成当前草稿图形…")}</p></div> : <div className="empty-state"><GitBranch size={38} /><h2>{t("生成 FBD 工程")}</h2><p>{t("在右侧描述需求并选择“生成程序”，或在对象和连接页签中创建程序。")}</p><Button onClick={() => setSection("objects")}>{t("添加对象")}</Button></div>}
     </div> : section === "objects" ? <div className="fbd-sheet">
       <div className="fbd-inline"><select aria-label={t("对象类型")} value={selectedTemplate} onChange={e => setSelectedTemplate(e.target.value)}>{catalog.map(c => <option key={c.template} value={c.template}>{templateLabel(c.template, t)}</option>)}</select>
-        <Button disabled={disabled} onClick={() => change(d => { const c = catalog.find(c => c.template === selectedTemplate); if (c) d.nodes.push({ id: `node_${key().replaceAll("-", "")}`, template: c.template, symbol: c.symbol || (c.kind === "function_block" ? `FB_${d.nodes.length+1}` : c.kind === "coil" || c.kind === "output" ? "Y0" : "X0"), x: 3, y: 2+d.nodes.length*5 }); })}><Plus size={14}/>{t("添加对象")}</Button></div>
-      <table><thead><tr>{["类型", "设备或实例名", "列", "行", "端口", ""].map((v,i) => <th key={i}>{t(v)}</th>)}</tr></thead><tbody>{draft.nodes.map((node, i) => <tr key={node.id}>
-        <td><select disabled={disabled} value={node.template} onChange={e => change(d => { const c = catalog.find(c => c.template === e.target.value)!; d.nodes[i].template = c.template; if (c.symbol) d.nodes[i].symbol = c.symbol; delete d.nodes[i].ports; delete d.nodes[i].width; delete d.nodes[i].height; })}>{!catalog.some(c => c.template === node.template) && <option>{node.template}</option>}{catalog.map(c => <option key={c.template} value={c.template}>{templateLabel(c.template, t)}</option>)}</select></td>
-        <td><input aria-label={`${t("设备或实例名")} ${i+1}`} disabled={disabled || node.template.startsWith("function:")} value={node.symbol} onChange={e => change(d => { d.nodes[i].symbol = e.target.value; })}/></td>
-        {(["x","y"] as const).map(coord => <td key={coord}><input aria-label={`${node.id} ${coord}`} className="fbd-number" type="number" min="0" disabled={disabled} value={node[coord]} onChange={e => change(d => { d.nodes[i][coord] = Number(e.target.value); })}/></td>)}
-        <td className="mono">{(node.ports || catalog.find(c => c.template === node.template)?.ports || []).map(p => p.name).join(" · ")}</td>
-        <td><Button aria-label={`${t("删除对象")} ${i+1}`} disabled={disabled} onClick={() => change(d => { d.nodes.splice(i,1); d.wires = d.wires.filter(w => !w.from?.startsWith(node.id+".") && !w.to?.startsWith(node.id+".")); })}><Trash2 size={14}/></Button></td></tr>)}</tbody></table>
+        <Button disabled={disabled || !selectedTemplate} onClick={() => void edit({ action: "add_node", template: selectedTemplate })}><Plus size={14}/>{t("添加对象")}</Button></div>
+      <table><thead><tr>{["类型", "设备或实例名", "列", "行", "端口", ""].map((v,i) => <th key={i}>{t(v)}</th>)}</tr></thead><tbody>{draft.nodes.map((node, i) => {
+        const view = editor.presentation.nodes.find(n => n.id === node.id);
+        return <tr key={node.id}>
+        <td><select disabled={disabled} value={node.template} onChange={e => void edit({ action: "update_node", id: node.id, field: "template", value: e.target.value })}>{!catalog.some(c => c.template === node.template) && <option>{node.template}</option>}{catalog.map(c => <option key={c.template} value={c.template}>{templateLabel(c.template, t)}</option>)}</select></td>
+        <td><input key={`${node.id}:symbol:${node.symbol}`} aria-label={`${t("设备或实例名")} ${i+1}`} disabled={disabled || !view?.symbol_editable} defaultValue={node.symbol} onBlur={e => { if (e.target.value !== node.symbol) void edit({ action: "update_node", id: node.id, field: "symbol", value: e.target.value }); }}/></td>
+        {(["x","y"] as const).map(coord => <td key={coord}><input key={`${node.id}:${coord}:${node[coord]}`} aria-label={`${node.id} ${coord}`} className="fbd-number" type="number" disabled={disabled} defaultValue={node[coord]} onBlur={e => { if (e.target.value !== String(node[coord])) void edit({ action: "update_node", id: node.id, field: coord, value: number(e.target.value) }); }}/></td>)}
+        <td className="mono">{view?.ports.map(p => p.name).join(" · ")}</td>
+        <td><Button aria-label={`${t("删除对象")} ${i+1}`} disabled={disabled} onClick={() => void edit({ action: "delete_node", id: node.id })}><Trash2 size={14}/></Button></td></tr>;
+      })}</tbody></table>
       <p className="muted">{t("移动对象后请在连接页签检查导线坐标。更换 FB 实例名会创建相应声明；旧声明可在声明页签中重命名或删除。")}</p>
     </div> : section === "wires" ? <div className="fbd-sheet"><div className="fbd-inline">
       <select aria-label={t("起点端口")} value={from} onChange={e => setFrom(e.target.value)}><option value="">{t("起点端口")}</option>{endpoints.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}</select><span>→</span>
       <select aria-label={t("终点端口")} value={to} onChange={e => setTo(e.target.value)}><option value="">{t("终点端口")}</option>{endpoints.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}</select>
-      <Button disabled={disabled || !from || !to || from===to} onClick={addWire}><Plus size={14}/>{t("连接端口")}</Button>
-      <Button disabled={disabled} onClick={() => change(d => d.wires.push({ start: [1,0], end: [1,d.canvas_height || 12] }))}>{t("添加左母线")}</Button></div>
-      <table><thead><tr><th>{t("起点")}</th><th>{t("终点")}</th><th>{t("折点")}</th><th/></tr></thead><tbody>{draft.wires.map((w,i) => <tr key={i}>{(["start","end"] as const).map((field,side) => <td key={field}>{w[field] ? <div className="fbd-inline">{[0,1].map(coord => <input key={coord} className="fbd-number" type="number" min="0" aria-label={`${t("导线")} ${i+1} ${field} ${coord}`} disabled={disabled} value={w[field]![coord]} onChange={e => change(d => { d.wires[i][field]![coord] = Number(e.target.value); })}/>)}</div> : <span className="mono">{side ? w.to : w.from}</span>}</td>)}
-      <td className="mono">{w.from ? <input key={`${i}:${JSON.stringify(w.via)}`} aria-label={`${t("折点")} ${i+1}`} disabled={disabled} defaultValue={w.via?.map(p => p.join(",")).join("; ") || ""} placeholder="x,y; x,y" onBlur={e => {
-        const text = e.currentTarget.value.trim();
-        const parts = text ? text.split(";").map(part => part.trim()) : [];
-        if (parts.some(part => !/^\d+\s*,\s*\d+$/.test(part))) { setError(t("折点请填写 x,y; x,y 格式的非负整数坐标。")); return; }
-        setError(""); change(d => { d.wires[i].via = parts.map(part => part.split(",").map(Number)); });
-      }}/> : "—"}</td><td><Button disabled={disabled} aria-label={`${t("删除导线")} ${i+1}`} onClick={() => change(d => { d.wires.splice(i,1); })}><Trash2 size={14}/></Button></td></tr>)}</tbody></table><p className="muted">{t("端口连线随对象位置重新计算起终点；移动后可编辑折点，保持每段导线水平或垂直。导入的坐标导线保留原始坐标，请检查移动后的连接。")}</p></div>
+      <Button disabled={disabled || !from || !to} onClick={() => void edit({ action: "add_wire", from, to })}><Plus size={14}/>{t("连接端口")}</Button>
+      <Button disabled={disabled} onClick={() => void edit({ action: "add_bus" })}>{t("添加左母线")}</Button></div>
+      <table><thead><tr><th>{t("起点")}</th><th>{t("终点")}</th><th>{t("折点")}</th><th/></tr></thead><tbody>{draft.wires.map((w,i) => <tr key={i}>{(["start","end"] as const).map((field,side) => <td key={field}>{w[field] ? <div className="fbd-inline">{[0,1].map(coord => <input key={`${coord}:${w[field]![coord]}`} className="fbd-number" type="number" aria-label={`${t("导线")} ${i+1} ${field} ${coord}`} disabled={disabled} defaultValue={w[field]![coord]} onBlur={e => { const value = [...w[field]!]; const next = number(e.target.value); if (next !== value[coord]) void edit({ action: "update_wire", index: i, field, value: value.map((v,j) => j === coord ? next : v) }); }}/>)}</div> : <span className="mono">{side ? w.to : w.from}</span>}</td>)}
+      <td className="mono">{w.from ? <input key={`${i}:${JSON.stringify(w.via)}`} aria-label={`${t("折点")} ${i+1}`} disabled={disabled} defaultValue={w.via?.map(p => p.join(",")).join("; ") || ""} placeholder="x,y; x,y" onBlur={e => { if (e.target.value !== (w.via?.map(p => p.join(",")).join("; ") || "")) void edit({ action: "update_wire", index: i, field: "via", value: e.target.value }); }}/> : "—"}</td><td><Button disabled={disabled} aria-label={`${t("删除导线")} ${i+1}`} onClick={() => void edit({ action: "delete_wire", index: i })}><Trash2 size={14}/></Button></td></tr>)}</tbody></table><p className="muted">{t("端口连线随对象位置重新计算起终点；移动后可编辑折点，保持每段导线水平或垂直。导入的坐标导线保留原始坐标，请检查移动后的连接。")}</p></div>
       : section === "native" && vid && !preview ? <NativeValidationPanel key={`${pid}/${vid}`} pid={pid} vid={vid} disabled={readOnly || busy || dirty} t={t}/>
-      : <div className="fbd-sheet"><div className="fbd-inline"><select aria-label={t("声明表")} value={table} onChange={e => { setTable(e.target.value); setPage(0); }}>{tableNames.map(n => <option key={n}>{n}</option>)}</select><Button disabled={disabled} onClick={() => change(d => { d.declaration_edits ||= {}; const p = d.declaration_edits[table] ||= {}; p.upserts ||= []; let index = rows.length+1; while(rows.some(r => r.name===`label_${index}`)) index++; p.upserts.push({ name:`label_${index}`, data_type:"BOOL", kind:"variable", class_name: table.endsWith(".gh") ? "VAR_GLOBAL" : "VAR" }); })}><Plus size={14}/>{t("添加声明")}</Button></div>
-      <table><thead><tr>{["名称","数据类型","类别","初始值","软元件","注释", ""].map((v,i) => <th key={i}>{t(v)}</th>)}</tr></thead><tbody>{rows.slice(page*50,(page+1)*50).map((row,i) => <tr key={page*50+i}>{(["name","data_type","class_name","initial_value","device","comment"] as const).map(field => <td key={field}><input disabled={disabled} aria-label={`${row.name} ${field}`} value={row[field] || ""} onChange={e => updateLabel(row,field,e.target.value)}/></td>)}<td><Button disabled={disabled} aria-label={`${t("删除声明")} ${row.name}`} onClick={() => change(d => { d.declaration_edits ||= {}; const p=d.declaration_edits[table] ||= {}; const source=d.labels?.[table]?.find(r => (p.renames?.[r.name] || r.name)===row.name); if(source) { p.remove ||= []; p.remove.push(source.name); if(p.renames) delete p.renames[source.name]; } p.upserts=p.upserts?.filter(r => r.name!==row.name); })}><Trash2 size={14}/></Button></td></tr>)}</tbody></table>
+      : <div className="fbd-sheet"><div className="fbd-inline"><select aria-label={t("声明表")} value={table} onChange={e => { setTable(e.target.value); setPage(0); }}>{editor.presentation.tables.map(n => <option key={n}>{n}</option>)}</select><Button disabled={disabled || !table} onClick={() => void edit({ action: "add_label", table })}><Plus size={14}/>{t("添加声明")}</Button></div>
+      <table><thead><tr>{["名称","数据类型","类别","初始值","软元件","注释", ""].map((v,i) => <th key={i}>{t(v)}</th>)}</tr></thead><tbody>{rows.slice(page*50,(page+1)*50).map(row => <tr key={`${table}:${row.name}`}>{(["name","data_type","class_name","initial_value","device","comment"] as const).map(field => <td key={field}><input key={`${row.name}:${field}:${row[field]}`} disabled={disabled} aria-label={`${row.name} ${field}`} defaultValue={row[field] || ""} onBlur={e => { if (e.target.value !== (row[field] || "")) void edit({ action: "update_label", table, name: row.name, field, value: e.target.value }); }}/></td>)}<td><Button disabled={disabled} aria-label={`${t("删除声明")} ${row.name}`} onClick={() => void edit({ action: "delete_label", table, name: row.name })}><Trash2 size={14}/></Button></td></tr>)}</tbody></table>
       <div className="fbd-inline"><Button disabled={page===0} onClick={() => setPage(p=>p-1)}>{t("上一页")}</Button><span>{page+1} / {Math.max(1,Math.ceil(rows.length/50))} · {rows.length}</span><Button disabled={(page+1)*50>=rows.length} onClick={() => setPage(p=>p+1)}>{t("下一页")}</Button></div>
-      <p className="muted">{t("FB 调用的实例与类型自动同步到声明表。未知声明字段和未知对象会保留；编译结果以 GX Works2 为准。")}</p></div>}
+      <p className="muted">{t("FB 调用的实例与类型自动同步到声明表。未知声明字段和未知对象会保留；不支持的编辑会被后端拒绝。")}</p></div>}
   </div>;
 }

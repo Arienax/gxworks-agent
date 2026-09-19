@@ -1,5 +1,7 @@
 # Web 工作台迁移：行为基线
 
+> 维护策略更新（2026-09-19）：Qt 为 `legacy/frozen`，不再追求新功能 parity，只修严重 bug。以下历史迁移对照仍用于确认 Web 覆盖冻结时的必要工作流，不要求把新能力回填 Qt。语言职责与删除条件以 [language-boundaries.md](language-boundaries.md) 为准。
+
 基线提交：`dff02be`（main）。迁移分支：`codex/web-workbench-migration`。
 2026-09-09 使用仓库 `.venv`、Python 3.13 执行；未调用真实模型、写入 GX 或操作 PLC。
 

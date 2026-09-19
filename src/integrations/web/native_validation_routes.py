@@ -15,6 +15,18 @@ class FBDPreview(Command):
     model: dict[str, Any]
 
 
+class FBDDraftEdit(Command):
+    project_id: str
+    version_id: str | None = None
+    model: dict[str, Any] | None = None
+    command: dict[str, Any] = Field(default_factory=dict)
+
+
+class SpecIORowEdit(Command):
+    row: dict[str, Any] | None = None
+    address: str | None = None
+
+
 class NativeValidationRecord(Command):
     request_id: str = Field(min_length=1, max_length=128)
     source_gxw_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -28,6 +40,15 @@ class NativeValidationRecord(Command):
 
 def register(app, service):
     native = NativeValidationService(service)
+
+    @app.post("/api/spec/io-row", response_model=PublicObject)
+    def edit_spec_io_row(command: SpecIORowEdit):
+        from plc.specification.confirmed import edit_io_row
+        return edit_io_row(command.row, command.address)
+
+    @app.post("/api/fbd/editor", response_model=PublicObject)
+    def edit_draft(command: FBDDraftEdit):
+        return service.fbd.editor(**command.model_dump())
 
     @app.post("/api/fbd/preview", response_model=PublicObject)
     def preview(command: FBDPreview):

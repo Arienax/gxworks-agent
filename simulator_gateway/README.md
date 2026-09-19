@@ -29,3 +29,7 @@ client uses the same environment variable. The gateway exposes only:
 The design follows Mitsubishi Electric's MX Component programming manual:
 GX Simulator2 uses `UNIT_SIMULATOR2 (0x30)`; `GetDevice` and `SetDevice` are
 the documented single-device operations.
+
+## Adapter boundary
+
+C# is vendor/native only. Python Core prepares device names and values, including address policy and T/C current-value mapping. This build uses native-plan protocol v3; rebuild the helper with its existing PowerShell build script when upgrading Python. `native_adapters/NativeRequest.cs` is compiled with it. Existing read-only / Simulator2-only routes and transport protections remain; no PLC rule tables should be reintroduced here.
