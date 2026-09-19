@@ -6,7 +6,7 @@ from plc.specification.bindings import bind_answers, binding_hint, single_addres
 
 from plc.specification.approach import (
     contract_definition_issues,
-    generation_contract_signature,
+    contract_definition_warnings,
     normalize_approach,
 )
 from plc.hardware_profiles import (
@@ -403,28 +403,28 @@ def validate_spec_draft(spec, plc_model=None):
     approaches = [
         item for item in (spec.get("approaches") or []) if isinstance(item, dict)
     ]
-    contract_signatures = {}
+    # Candidate quality must never block the user's next step. Different
+    # approaches may legitimately share the same hard generation contract and
+    # differ only in generation_guide / data model / sequencing semantics.
+    # Likewise, an unselected candidate with a malformed contract is advisory:
+    # only the selected contract can affect generation.
     for index, approach in enumerate(approaches):
         path = f"$.approaches[{index}].generation_contract"
         for message in contract_definition_issues(approach):
-            errors.append(
-                _validation_issue("invalid_approach_contract", message, path)
-            )
-        signature = generation_contract_signature(approach)
-        if signature in contract_signatures:
-            first = contract_signatures[signature]
-            errors.append(
+            warnings.append(
                 _validation_issue(
-                    "duplicate_approach_contract",
-                    f"方案与第 {first + 1} 个方案使用了相同生成约束，无法保证选项代表不同实现",
+                    "candidate_approach_contract_warning",
+                    message,
                     path,
+                    blocking=False,
                 )
             )
-        else:
-            contract_signatures[signature] = index
 
     selected_approach = spec.get("selected_approach")
     if selected_approach:
+        # A self-contradictory selected hard contract is still a real local
+        # impossibility. Keep that pre-model-call guard so we do not spend
+        # generation tokens on a contract that cannot be satisfied.
         for message in contract_definition_issues(selected_approach):
             errors.append(
                 _validation_issue(
@@ -433,16 +433,22 @@ def validate_spec_draft(spec, plc_model=None):
                     "$.selected_approach.generation_contract",
                 )
             )
+        for message in contract_definition_warnings(selected_approach):
+            warnings.append(_validation_issue(
+                "unverified_approach_contract", message,
+                "$.selected_approach.generation_contract", blocking=False,
+            ))
         selected_id = normalize_approach(selected_approach).get("approach_id")
         available_ids = {
             normalize_approach(item).get("approach_id") for item in approaches
         }
         if approaches and selected_id not in available_ids:
-            errors.append(
+            warnings.append(
                 _validation_issue(
                     "selected_approach_not_in_candidates",
-                    "当前选择的方案不在本轮候选方案中，请重新选择",
+                    "当前选择方案不在本轮候选列表中；将按当前选择方案继续确认",
                     "$.selected_approach.approach_id",
+                    blocking=False,
                 )
             )
 
@@ -486,20 +492,19 @@ def validate_spec_draft(spec, plc_model=None):
             first = seen_parameter_ids.get(id_key)
             if first is not None:
                 first_value = str(parameters[first].get("value", "")).strip()
-                code = (
-                    "conflicting_parameter_id"
-                    if first_value != value
-                    else "duplicate_parameter_id"
+                conflicting = first_value != value
+                issue = _validation_issue(
+                    "conflicting_parameter_id" if conflicting else "duplicate_parameter_id",
+                    f"参数ID“{parameter_id}”重复（首次位于第 {first + 1} 行）",
+                    f"{path}.id",
+                    row=index,
+                    first_row=first,
                 )
-                errors.append(
-                    _validation_issue(
-                        code,
-                        f"参数ID“{parameter_id}”重复（首次位于第 {first + 1} 行）",
-                        f"{path}.id",
-                        row=index,
-                        first_row=first,
-                    )
-                )
+                if conflicting:
+                    errors.append(issue)
+                else:
+                    issue["blocking"] = False
+                    warnings.append(issue)
             else:
                 seen_parameter_ids[id_key] = index
         if not name:
@@ -1245,6 +1250,11 @@ def build_review_draft(analysis, previous_spec=None):
             draft["selected_approach"] = {}
     if isinstance(analysis.get("hardware_intent"), dict):
         draft["hardware_intent"] = copy.deepcopy(analysis["hardware_intent"])
+    if isinstance(analysis.get("engineering_context"), dict):
+        draft["engineering_context"] = copy.deepcopy(analysis["engineering_context"])
+    elif isinstance(previous.get("engineering_context"), dict):
+        draft["engineering_context"] = copy.deepcopy(previous["engineering_context"])
+        draft["engineering_context"]["confirmation"] = {"status": "draft"}
     if previous.get("io_bindings"):
         draft["io_bindings"] = copy.deepcopy(previous["io_bindings"])
     draft["hardware_profile"] = build_hardware_profile(draft, plc_model)

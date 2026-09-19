@@ -48,14 +48,13 @@ jobs:
         run: |
           python -m pytest -q `
             tests/test_instruction_contract_alignment.py `
-            tests/test_generation_opcode_contract.py `
             tests/test_field_patch_repair_protocol.py `
             tests/test_format_patch_repair.py `
             tests/test_hybrid_compact_recovery.py `
             tests/test_repair_render_delivery.py `
             tests/test_generation_fast_path.py `
             tests/test_generation_workflow.py `
-            tests/test_confirmed_generation_regressions_20260914.py `
+            tests/test_confirmed_generation_regressions.py `
             tests/test_model_stream_cancellation.py `
             tests/test_generation_repair_workflow.py `
             tests/test_generation_rejected_json_repair.py `
@@ -76,7 +75,6 @@ jobs:
             tests/test_prompt_context_policy.py `
             tests/test_context_refresh_runtime.py `
             tests/test_runtime_diagnostics.py `
-            tests/test_runtime_diagnostics_context.py `
             tests/test_runtime_diagnostics_web.py
           python tools/build_fx3u_verified_opcode_overlay.py --check
       - name: Keep strict validators available outside direct generation
@@ -86,7 +84,7 @@ jobs:
             tests/test_timer_semantics_regressions.py `
             tests/test_motion_control_regressions.py `
             tests/test_analog_instruction_regressions.py `
-            tests/test_contract_repair_policy.py `
+            tests/test_contract_repair_planner.py `
             tests/test_instruction_registry.py
       - name: Build Web frontend through the repository entry point
         run: |

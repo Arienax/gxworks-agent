@@ -9,6 +9,7 @@ from plc.specification.confirmed import (
 )
 from plc.hardware_profiles import ensure_hardware_questions, hardware_requirement_flags, validate_hardware_spec
 from plc.validation import PLCJsonValidationError, validate_ladder_full
+from plc.generation_contract import generation_specification
 
 
 HARDWARE_QUESTIONS = [
@@ -336,6 +337,36 @@ def test_nonhardware_missing_information_keeps_its_existing_required_behavior():
     )
 
 
+def test_unanswered_review_questions_are_not_generation_facts():
+    projected = generation_specification(
+        {
+            "parameters": [
+                {
+                    "id": "unanswered",
+                    "name": "模型提出但用户未回答的问题",
+                    "value": "",
+                    "source": "analysis",
+                },
+                {
+                    "id": "confirmed",
+                    "name": "已确认参数",
+                    "value": "K30",
+                    "source": "user",
+                },
+            ]
+        }
+    )
+
+    assert projected["parameters"] == [
+        {
+            "id": "confirmed",
+            "name": "已确认参数",
+            "value": "K30",
+            "source": "user",
+        }
+    ]
+
+
 def test_unknown_output_type_does_not_block_pulse_generation():
     profile = {"hardware_profile": {"plc_family": "FX3U", "output_type": ""}}
 
@@ -469,6 +500,9 @@ def test_selected_vfd_approach_must_match_confirmed_control_method():
         },
     }
 
-    errors = validate_hardware_spec(spec, "FX3U")["errors"]
+    result = validate_hardware_spec(spec, "FX3U")
 
-    assert any(item["code"] == "control_method_approach_conflict" for item in errors)
+    # Prose disagreement is not proof of a physical or structured conflict.
+    assert result["errors"] == []
+    assert any(item["code"] == "control_method_approach_conflict"
+               and item.get("blocking") is False for item in result["warnings"])

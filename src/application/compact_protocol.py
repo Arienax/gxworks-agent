@@ -78,6 +78,21 @@ def normalize_compact(value):
                 row["s"] = []
                 changes.append({"rule": "optional_shared_inputs_null", "path": f"content.r.{index}.s",
                                 "from_type": "null", "to_type": "array"})
+            if not isinstance(row, dict) or not isinstance(row.get("b"), list):
+                continue
+            for branch_index, branch in enumerate(row["b"]):
+                if not isinstance(branch, dict):
+                    continue
+                inputs = branch.get("i")
+                if (isinstance(inputs, list) and len(inputs) == 1
+                        and isinstance(inputs[0], list) and inputs[0]
+                        and all(isinstance(item, str) or
+                                isinstance(item, dict) and set(item) == {"or"}
+                                for item in inputs[0])):
+                    branch["i"] = inputs[0]
+                    changes.append({"rule": "single_series_input_wrapper",
+                                    "path": f"content.r.{index}.b.{branch_index}.i",
+                                    "from_type": "wrapped_array", "to_type": "array"})
     return result, changes
 
 

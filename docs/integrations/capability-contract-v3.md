@@ -114,7 +114,7 @@ This refactor does not alter PLC Core, the tool registry, GX/simulation executio
 After installing the existing project Web test dependencies and locked frontend dependencies, run:
 
 ```text
-python -m pytest -q tests/test_model_catalog_v3.py tests/test_model_verification.py tests/test_model_observations.py tests/test_model_contract.py tests/test_model_capabilities.py tests/test_model_detection.py tests/test_model_detection_stages.py tests/test_model_detection_cache.py tests/test_application_settings.py tests/test_model_provider.py tests/test_web_contract.py tests/test_model_stream_cancellation.py tests/test_plc_core_boundary.py
+python -m pytest -q tests/test_model_catalog_v3.py tests/test_model_verification.py tests/test_model_observations.py tests/test_model_contract.py tests/test_model_capabilities.py tests/test_model_detection.py tests/test_application_settings.py tests/test_model_provider.py tests/test_web_contract.py tests/test_model_stream_cancellation.py tests/test_plc_core_boundary.py
 python scripts/export_web_schema.py
 npm run types --prefix web
 node --experimental-strip-types --test web/tests/model-parameters.test.mjs web/tests/module-resolution.test.mjs

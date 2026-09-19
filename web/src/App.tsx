@@ -47,6 +47,8 @@ import { Badge, Button, Modal } from "./components/ui";
 import { statusText, statusTone, translate } from "./i18n";
 import type { Locale } from "./i18n";
 import { SpecEditor } from "./features/SpecEditor";
+import { AnalysisModePicker } from "./features/AnalysisModePicker";
+import type { AnalysisMode } from "./features/AnalysisModePicker";
 import { JobFailure } from "./features/JobFailure";
 import { GenerationResult, useGenerationResult } from "./features/GenerationResult";
 import { JobProgress } from "./features/JobProgress";
@@ -126,6 +128,8 @@ export default function App() {
     [intent, setIntent] = useState<"analysis" | "generation" | "agent">(
       "analysis",
     );
+  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>("direct");
+  useEffect(() => { setAnalysisMode("direct"); }, [pid]);
   const [attachments, setAttachments] = useState<
       { attachment_id: string; filename: string }[]
     >([]),
@@ -663,6 +667,7 @@ export default function App() {
         ...(scopeAddresses.trim() ? {addresses: scopeAddresses.trim().toUpperCase().split(/[\s,，]+/)} : {}),
       }} : {}),
       ...extra,
+      ...(kind === "analysis" ? { analysis_mode: analysisMode } : {}),
     });
     if (activeProjectRef.current !== pid || epoch !== projectEpoch.current)
       return;
@@ -1575,6 +1580,9 @@ export default function App() {
                   SFC <Workflow size={13} />
                 </button>
               </div>
+              {intent === "analysis" && (
+                <AnalysisModePicker locale={locale} value={analysisMode} onChange={setAnalysisMode} />
+              )}
               <textarea
                 aria-label={t("描述你的控制需求…")}
                 placeholder={t(intent === "generation"

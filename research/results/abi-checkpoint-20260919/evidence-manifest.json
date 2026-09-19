@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "checkpoint_date": "2026-09-19",
+  "experiment_date": "2026-09-13",
+  "status": "in_progress",
+  "source_commit": "56c8c37",
+  "files": {
+    "frozen/base_spaced.gxw": {
+      "sha256": "26b28bfacd5c3024d605a033191c0650384ad3da244ea0006b5cb123f0fb88e5",
+      "size": 934400
+    },
+    "frozen/set_direct.gxw": {
+      "sha256": "4d4fad62f22c54ac0a80da6428c80af7eef5d08a09d1ca4b95e4da9d1afae443",
+      "size": 934912
+    },
+    "frozen/set_direct_compile.gxw": {
+      "sha256": "c5ea7ee3a1e9c2130f734cc8dd5f2a9fbf314252cb510e1f23814e8371621ca8",
+      "size": 934912
+    },
+    "frozen/set_spaced.gxw": {
+      "sha256": "08c69238832527bd5601dc596e0bfbdcdf5535be6411b057e5283e3e3ea8d547",
+      "size": 934912
+    },
+    "frozen/set_spaced_compile.gxw": {
+      "sha256": "df5c8c7e194a792804d8cd478a5618c7cca787fa398dd3c2dbecaeb55e5eeec3",
+      "size": 934912
+    },
+    "rst-direct-edit.png": {
+      "sha256": "e4ff974ee251435d8e93ea18cb3b79a7a3f9899836d6c86312aef214ac3229ea",
+      "size": 136291
+    },
+    "rst-type-ui.png": {
+      "sha256": "4a0695021d7705d215de79569c63718c02222a4e5e28bda7c363160146fb9ed3",
+      "size": 141078
+    },
+    "set-direct-closed.png": {
+      "sha256": "656ab67cafb2690b4ad673db52e6bb06da446015ff2718d48e9189cb8bd49da1",
+      "size": 93782
+    },
+    "set-direct-compile.png": {
+      "sha256": "6c6ccf08f1e333052cdd134788517a8277348548946ab2aceea2ee1f5087a600",
+      "size": 156891
+    },
+    "set-direct-edit.png": {
+      "sha256": "327251e0afdd975c3bacc93ef47686b9971e04a1d1728969e05e49c79547d24d",
+      "size": 135664
+    },
+    "set-direct-reopen.png": {
+      "sha256": "18a893907401086139c36d26913c07e6fa3ca0a1c9ca4851b813889ba20902ec",
+      "size": 134988
+    },
+    "set-spaced-closed.png": {
+      "sha256": "e2bb75454aa824ea84b8d9fbbac5a6a7c3a8305ea426d4a22de09f5e32c9b38a",
+      "size": 93844
+    },
+    "set-spaced-compile.png": {
+      "sha256": "7c03a80c7765f64a40cc139256eecdcb4245a9ca12075bdb6ee02b37b019c0a0",
+      "size": 156972
+    },
+    "set-spaced-edit.png": {
+      "sha256": "3d8efee68f49dee118b983ff13ab25c9adffce975963c1d706fd80a3c00a9067",
+      "size": 135289
+    },
+    "set-spaced-reopen.png": {
+      "sha256": "b398c49e7d2db99f04af533b41a4c089148e7f2965450584fe20d51257be6d51",
+      "size": 135077
+    },
+    "set-type-ui.png": {
+      "sha256": "69d9858983e295fad20000016a0f7226135a358848ba2eff69dfb337604194c5",
+      "size": 140952
+    },
+    "pending/rst_direct_recovered.gxw": {
+      "sha256": "9d78ba3794472028b4ddd39532cdf64a2cc70cedb2b80581632fed7e5c206e07",
+      "size": 934912
+    }
+  },
+  "archive": {
+    "path": "research/evidence/gxw-abi-checkpoint-20260919.zip",
+    "sha256": "902f38e79f0478cf414acacf70495eb362d5ff552f319eeb10deb5df1f3fda8a"
+  },
+  "observations": {
+    "SET": {
+      "kind": 7,
+      "type_control": "normal coil kind5 to kind7; only target record byte8 differs",
+      "geometry_control": "direct coincident and spaced explicit wire; identical topology",
+      "native": {
+        "observer": "Codex native GX Works2 UI observations in this conversation, 2026-09-13",
+        "steps": [
+          "compile_all",
+          "save",
+          "close",
+          "reopen"
+        ],
+        "direct": {
+          "errors": 0,
+          "warnings": 0,
+          "check_warnings": 0
+        },
+        "spaced": {
+          "errors": 0,
+          "warnings": 0,
+          "check_warnings": 0
+        }
+      },
+      "registry_status": "not_registered",
+      "remaining": [
+        "formal confidence manifest and negative tests",
+        "generated writer native roundtrip"
+      ]
+    },
+    "RST": {
+      "kind": 8,
+      "status": "native_validation_pending",
+      "remaining": [
+        "freeze controlled baseline/type pair",
+        "spaced variant",
+        "native compile/save/close/reopen",
+        "registry/writer/tests"
+      ]
+    }
+  }
+}

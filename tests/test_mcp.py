@@ -239,7 +239,9 @@ def test_public_projection_does_not_leak_or_truncate_structured_data():
     original = InProcessToolRuntime(registry).invoke(
         ToolCall("long", "get_current_project", {}), build_tool_context({"id": "test"})
     )
-    assert len(original.content) == 18000
+    assert len(original.content) > 19000
+    assert len(json.loads(original.content)["data"]["long_text"]) == 19000
+    assert "hidden-" not in original.content
     result = to_mcp_result(original)
     wire = result.model_dump_json(by_alias=True)
     assert "hidden-" not in wire
@@ -373,7 +375,9 @@ def test_generation_tool_schemas_describe_only_model_owned_input(empty_project):
     schema = schemas["create_program_candidate"]
     assert schema["required"] == ["ladder"]
     assert schema["additionalProperties"] is False
-    assert set(schema["properties"]) == {"program_name", "ladder"}
+    assert set(schema["properties"]) == {"program_name", "ladder", "generation_context_id"}
+    assert schema["properties"]["generation_context_id"]["type"] == "string"
+    assert "generation_context_id" not in schema["required"]
     assert schema["properties"]["program_name"]["default"] == "MAIN"
     assert schema["properties"]["ladder"]["type"] == "object"
     assert "oneOf" not in schema["properties"]["ladder"]

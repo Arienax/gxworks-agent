@@ -1,3 +1,6 @@
+from application.analysis_context import assemble_analysis_prompt
+
+import copy
 import os
 import json
 import re
@@ -174,6 +177,14 @@ def current_provider():
     return _workflow_provider()
 
 
+def bound_provider_profile():
+    """Return an already-bound profile without initializing credentials/providers."""
+    session = _provider_session.get()
+    provider = session[0] if session and session[0] is not None else None
+    profile = getattr(provider, "profile", None)
+    return copy.deepcopy(profile) if isinstance(profile, dict) else {}
+
+
 def request_model(
     messages, *, model_name=None, effort=None, stream=False, tools=None,
     request_timeout=None, max_retries=None, on_reasoning_chunk=None,
@@ -308,6 +319,7 @@ def analyze_requirement(
     task_type=None,
     image_attachments=None,
     on_format_repair=None,
+    analysis_mode="direct",
 ) -> dict:
     """
     Phase 1: fast analysis with effort=low.
@@ -316,30 +328,18 @@ def analyze_requirement(
     """
     confirmed_context = confirmed_spec if confirmed_spec is not None else confirmed_context
     model = _resolve_plc_model(user_requirement, confirmed_context)
-    routing_requirement = _routing_text_with_selected_approach(
-        user_requirement,
-        confirmed_context,
-    )
-    workflow_prompt, _route = build_workflow_prompt(
-        routing_requirement,
-        target_mode="ladder",
-        forced_task=task_type or "analysis",
-    )
-    knowledge_ctx = _build_knowledge_context(
+    analysis_prompt = assemble_analysis_prompt(
         user_requirement,
         plc_model=model,
-        task_type="analysis",
         confirmed_context=confirmed_context,
+        analysis_mode=analysis_mode,
+        model_loader=_load_plc_models,
+        knowledge_builder=_build_knowledge_context,
+        resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form,
+        audit=audit_section,
     )
-    model_ctx = _build_model_context(
-        model,
-        confirmed_context,
-        compact=bool(knowledge_ctx),
-    )
-    sys_prompt = _with_confirmed_context(
-        ANALYSIS_SYSTEM_PROMPT + model_ctx + workflow_prompt + knowledge_ctx,
-        confirmed_context,
-    )
+    knowledge_ctx = analysis_prompt.knowledge_context
+    sys_prompt = analysis_prompt.system_prompt
     print(f"阶段1: 需求分析中... (effort=low, PLC={model})")
 
     messages = _build_clean_messages(conversation_history or [], sys_prompt)
@@ -364,6 +364,11 @@ def analyze_requirement(
         raw = raw.strip()
 
         result = _parse_analysis_response(raw, model, user_requirement, confirmed_context)
+        # Application metadata, not a mode selected by the model response.
+        result["analysis_mode"] = "design" if analysis_prompt.route.include_design else "direct"
+        from application.analysis_results import attach_analysis_evidence
+        result = attach_analysis_evidence(result, knowledge_ctx, plc_model=model,
+                                          knowledge_builder=_build_knowledge_context)
         print(f"阶段1 分析完成: {result.get('summary', '')[:80]}...")
         return result
 
@@ -385,6 +390,7 @@ def analyze_requirement_streaming(
     task_type=None,
     image_attachments=None,
     on_format_repair=None,
+    analysis_mode="direct",
 ):
     """
     阶段1 流式版：分析用户需求，实时显示思考过程。
@@ -394,30 +400,18 @@ def analyze_requirement_streaming(
     """
     confirmed_context = confirmed_spec if confirmed_spec is not None else confirmed_context
     model = _resolve_plc_model(user_requirement, confirmed_context)
-    routing_requirement = _routing_text_with_selected_approach(
-        user_requirement,
-        confirmed_context,
-    )
-    workflow_prompt, _route = build_workflow_prompt(
-        routing_requirement,
-        target_mode="ladder",
-        forced_task=task_type or "analysis",
-    )
-    knowledge_ctx = _build_knowledge_context(
+    analysis_prompt = assemble_analysis_prompt(
         user_requirement,
         plc_model=model,
-        task_type="analysis",
         confirmed_context=confirmed_context,
+        analysis_mode=analysis_mode,
+        model_loader=_load_plc_models,
+        knowledge_builder=_build_knowledge_context,
+        resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form,
+        audit=audit_section,
     )
-    model_ctx = _build_model_context(
-        model,
-        confirmed_context,
-        compact=bool(knowledge_ctx),
-    )
-    sys_prompt = _with_confirmed_context(
-        ANALYSIS_SYSTEM_PROMPT + model_ctx + workflow_prompt + knowledge_ctx,
-        confirmed_context,
-    )
+    knowledge_ctx = analysis_prompt.knowledge_context
+    sys_prompt = analysis_prompt.system_prompt
     print(f"阶段1(流式): 需求分析中... (effort=low, PLC={model})")
 
     messages = _build_clean_messages(conversation_history or [], sys_prompt)
@@ -445,6 +439,11 @@ def analyze_requirement_streaming(
         raw = raw.strip()
 
         result = _parse_analysis_response(raw, model, user_requirement, confirmed_context)
+        # Application metadata, not a mode selected by the model response.
+        result["analysis_mode"] = "design" if analysis_prompt.route.include_design else "direct"
+        from application.analysis_results import attach_analysis_evidence
+        result = attach_analysis_evidence(result, knowledge_ctx, plc_model=model,
+                                          knowledge_builder=_build_knowledge_context)
         print(f"阶段1 分析完成: {result.get('summary', '')[:80]}...")
         return result
 
@@ -528,6 +527,7 @@ def _prepare_api_call(
     current_version_json=None,
     plc_model=None,
     image_attachments=None,
+    on_generation_context=None,
 ):
     """
     共用准备逻辑：加载历史、追加用户消息、保存、选取系统提示词、
@@ -547,6 +547,9 @@ def _prepare_api_call(
             and isinstance(confirmed_context, dict) and confirmed_context):
         from application.confirmed_generation_context import CONFIRMED_GENERATION_REQUEST
         user_requirement = CONFIRMED_GENERATION_REQUEST
+        # The full-wire adapter must have the same isolation as compact Agent B.
+        # Recorded user intent is already part of the confirmed source envelope.
+        conversation_history = []
     conversation_history.append({"role": "user", "content": user_requirement})
     if persist_history:
         _save_history(conversation_history)
@@ -570,6 +573,8 @@ def _prepare_api_call(
         knowledge_builder=_build_knowledge_context,
         profile_builder=_build_model_context,
         confirmed_builder=_with_confirmed_context,
+        on_context=on_generation_context,
+        model_profile=bound_provider_profile(),
     )
     messages_to_send = _build_clean_messages(conversation_history, system_prompt)
     if image_attachments:
@@ -1326,7 +1331,7 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
                              confirmed_spec=None,
                              current_version_json=None,
                              plc_model=None,
-                             image_attachments=None, on_fallback=None):
+                             image_attachments=None, on_fallback=None, on_generation_context=None):
     """
     通过当前 ModelProvider 流式调用模型，实时返回工程推理摘要。
 
@@ -1351,6 +1356,7 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
         current_version_json=current_version_json,
         plc_model=plc_model,
         image_attachments=image_attachments,
+        on_generation_context=on_generation_context,
     )
 
     native_options = (

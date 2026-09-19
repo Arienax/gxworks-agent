@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Mapping
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 
 from application.generation_support import (
     public_generation_ladder, public_generation_specification, public_generation_value,
@@ -28,14 +28,24 @@ CONFIRMED_GENERATION_REQUEST = (
 
 def project_confirmed_specification(confirmed_spec):
     """Expose the same allowlisted, canonical confirmed facts to every adapter."""
-    source = dict(confirmed_spec) if isinstance(confirmed_spec, Mapping) else None
+    from plc.specification.bindings import generation_io_snapshot
+    from plc.hardware_profiles import QUESTION_IDS
+    source = (generation_io_snapshot(dict(confirmed_spec), protected_ids=QUESTION_IDS)
+              if isinstance(confirmed_spec, Mapping) else None)
     projected = public_generation_specification(source) or {}
+    # Preserve the existing public-projection contract: malformed optional
+    # label metadata is omitted, not replaced while enriching electrical facts.
+    raw_bindings = confirmed_spec.get("io_bindings") if isinstance(confirmed_spec, Mapping) else None
+    invalid_labels = {row.get("binding_id") for row in raw_bindings
+                      if isinstance(row, Mapping) and "label" in row
+                      and not isinstance(row["label"], str)} if isinstance(raw_bindings, list) else set()
     bindings = source.get("io_bindings") if source is not None else None
     if isinstance(bindings, list):
         projected["io_bindings"] = [
             {key: public_generation_value(copy.deepcopy(row[key]))
-             for key in ("binding_id", "role", "kind", "address", "source_parameter_id", "name")
-             if key in row}
+             for key in ("binding_id", "role", "kind", "address", "source_parameter_id", "name",
+                         "active_level", "inactive_level", "label")
+             if key in row and (key != "label" or isinstance(row[key], str) and row.get("binding_id") not in invalid_labels)}
             for row in bindings if isinstance(row, Mapping)
         ]
     if isinstance(projected.get("io_table"), list):
@@ -43,10 +53,9 @@ def project_confirmed_specification(confirmed_spec):
     for row in projected.get("io_bindings", []):
         if "address" in row:
             row["address"] = canonical_device(row["address"])
-    selected = projected.get("selected_approach")
-    if isinstance(selected, dict):
-        for key in ("name", "description", "generation_guide"):
-            selected.pop(key, None)
+    from plc.specification.provenance import selected_context
+    if "engineering_context" in projected:
+        projected["engineering_context"] = selected_context(projected)
     return projected
 
 
@@ -60,6 +69,7 @@ class ConfirmedGenerationContext:
     knowledge_context: str
     current_program: dict | None
     generation_request: str
+    handoff: dict = field(default_factory=dict)
 
     def __post_init__(self):
         for item in fields(self):
@@ -71,7 +81,7 @@ class ConfirmedGenerationContext:
 
 def build_confirmed_generation_context(
     confirmed_spec, plc_model, *, user_requirement="", current_program=None,
-    task_type="generate", evidence=None, knowledge_builder=None,
+    task_type="generate", evidence=None, knowledge_builder=None, model_profile=None,
 ):
     """Project before routing/retrieval; first generation cannot replay Agent A.
 
@@ -90,15 +100,53 @@ def build_confirmed_generation_context(
     if knowledge_builder is None:
         from application.generation_context import _build_knowledge_context
         knowledge_builder = _build_knowledge_context
-    knowledge = knowledge_builder(
-        request, plc_model=model, task_type=task_type,
-        confirmed_context=projected, evidence=public_generation_value(evidence),
+    from application.context_compiler import ContextCompiler, ContextCompilerInput
+    from knowledge.evidence import KnowledgeQuery
+    compiler = ContextCompiler()
+    compiler_input = ContextCompilerInput(
+        confirmed_spec=projected,
+        engineering_context=projected.get("engineering_context") or {},
+        selected_approach=projected.get("selected_approach") or {},
+        evidence=public_generation_value(evidence),
+        plc_model=model,
+        model_profile=copy.deepcopy(model_profile or {}),
+        task_type=task_type,
+        generation_request=request,
+        current_program=current,
     )
-    selected = projected.get("selected_approach") or {}
+    precompiled = compiler.compile(compiler_input)
+    retrieval_query = KnowledgeQuery(
+        precompiled.retrieval_packet["query"],
+        precompiled= True,
+        metadata={
+            "context_plan": precompiled.provenance_receipt,
+            "rag_evidence_token_budget": precompiled.budget_report.get("rag_evidence_token_budget"),
+        },
+    )
+    knowledge = knowledge_builder(
+        retrieval_query, plc_model=model, task_type=task_type,
+        confirmed_context=precompiled.generation_packet["confirmed_spec"],
+        evidence=public_generation_value(evidence),
+    )
+    from plc.specification.provenance import handoff_snapshot
+    from knowledge.evidence import context_manifest, text_sha256
+    knowledge_text = public_generation_value(knowledge or "")
+    compiled = compiler.compile(compiler_input, evidence_text=knowledge_text)
+    knowledge_text = compiled.generation_packet["evidence"]
+    runtime_spec = compiled.generation_packet["confirmed_spec"]
+    selected = runtime_spec.get("selected_approach") or {}
+    manifest = context_manifest(knowledge, stage=task_type)
+    # A custom builder may return unsanitized text. The source hashes still
+    # identify retrieved blocks; the context hash must identify the actual
+    # privacy-cleaned text delivered to either generation adapter.
+    manifest["context_sha256"] = text_sha256(knowledge_text)
+    handoff = handoff_snapshot(projected, evidence=manifest, stage=task_type)
+    handoff.update(copy.deepcopy(compiled.provenance_receipt))
+    handoff["budget_report"] = copy.deepcopy(compiled.budget_report)
     return ConfirmedGenerationContext(
-        plc_model=model, confirmed_spec=projected,
-        io_bindings=projected.get("io_bindings") or [],
+        plc_model=model, confirmed_spec=runtime_spec,
+        io_bindings=runtime_spec.get("io_bindings") or [],
         generation_contract=selected.get("generation_contract") or {},
-        knowledge_context=public_generation_value(knowledge or ""),
-        current_program=current, generation_request=request,
+        knowledge_context=knowledge_text,
+        current_program=current, generation_request=request, handoff=public_generation_value(handoff),
     )

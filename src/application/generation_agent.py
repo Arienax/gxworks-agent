@@ -50,9 +50,12 @@ _COMPACT_PROTOCOL = """# Agent B compact ladder protocol
 - rung: `{"h":可选简单输入或null,"s":可选简单输入数组,"b":[branch,...]}`；通常只需要 `b`。
 - branch: `{"i":可选输入数组,"o":[输出字符串,...]}`；无条件时可省略 `i`。
 - 未使用的 s/i 数组请写 []，不要写 null；h 没有首触点时可以写 null。
-- io_bindings 是已确认的用途与地址绑定；不得把启动和停止合并为一个输入。已确认的停止/联锁必须在输出控制路径中实际起作用，而不是只出现在注释中。
+- io_bindings 是已确认的用途、地址和输入有效电平绑定；active_level=0 表示输入位为0时该信号动作，active_level=1 表示输入位为1时动作，不是程序触点的类型。
+- 物理常闭不等于程序 NC：程序 NO 检查位=1，NC 检查位=0。停止信号动作时必须切断输出；若停止 active_level=0，则运行允许条件检查位=1（NO），反之检查位=0（NC）。
+- 不得把启动和停止合并为一个输入。已确认的停止/联锁必须在输出控制路径中实际起作用，而不是只出现在注释中。
 - 简单输入：`"NO X0"`、`"NC M1"`、`"P X2"` 或比较 `"> D0 K3"`。
-- OR 输入：`{"or":[["NO M20"],["NO M21"],["NO M22"]]}`；串联条件可写成同一子数组中的多个字符串。
+- i 本身是一维串联列表，例如 `"i":[{"or":[["NO X0"],["NO Y0"]]},"NO X1"]`；不得再包成 `"i":[[...]]`。
+- 只有 OR 对象的 or 属性是二维数组；每个 or 子数组是一条串联支路，例如 `{"or":[["NO M20","NC M30"],["NO M21"]]}`。
 - 标准输出：`"COIL Y0"`、`"PLS M0"`、`"PLF M0"`、`"TIMER T0 K10"`、`"COUNTER C0 K9"`。
 - 其他输出字符串首 token 直接作为 APP_INSTR opcode，例如 `"MOV K1 D0"`、`"INC D0"`；后续 token 是 operands。
 - 不要输出 branch_id、y_offset_level、rung_id、label、debug_note、device_comments；这些由本地代码确定性补齐。
@@ -184,15 +187,16 @@ def _decode_generated_ladder(value, projected, plc_model):
     raise CompactProtocolError("unknown or ambiguous ladder representation")
 
 
-def _build_agent_b_prompt(projected, plc_model):
-    context = build_confirmed_generation_context(
+def _build_agent_b_prompt(projected, plc_model, *, context=None):
+    context = context or build_confirmed_generation_context(
         projected, plc_model, knowledge_builder=_build_knowledge_context,
     )
     model = context.plc_model
     evidence = context.knowledge_context
     confirmed = json.dumps(context.confirmed_spec, ensure_ascii=False, separators=(",", ":"))
+    from plc.specification.provenance import SOURCE_PRECEDENCE
     prompt = (
-        _COMPACT_PROTOCOL
+        _COMPACT_PROTOCOL + SOURCE_PRECEDENCE
         + f"\n# Selected PLC\n{model}\n"
         + "\n# Confirmed project specification\n"
         + confirmed
@@ -209,6 +213,7 @@ def generate_confirmed_ladder(
     model_name=None,
     effort=None,
     on_stage=None,
+    on_context=None,
 ):
     """Make one streaming model call, then locally expand the compact plan."""
     import application.model_api as api
@@ -218,11 +223,17 @@ def generate_confirmed_ladder(
     if not projected:
         raise ValueError("confirmed generation specification is empty")
 
-    system_prompt = _build_agent_b_prompt(projected, model)
+    base_provider = api.current_provider()
+    context = build_confirmed_generation_context(
+        projected, model, knowledge_builder=_build_knowledge_context,
+        model_profile=getattr(base_provider, "profile", {}),
+    )
+    if on_context:
+        on_context(context.to_dict()["handoff"])
+    system_prompt = _build_agent_b_prompt(projected, model, context=context)
     if on_stage:
         on_stage("confirmed_spec_generation", "正在根据已确认规格生成梯形图")
 
-    base_provider = api.current_provider()
     provider = _FirstJSONObjectProvider(base_provider)
     from model_runtime.response_format import response_plan
     options, streaming = response_plan(
@@ -250,11 +261,11 @@ def generate_confirmed_ladder(
         diagnostics.emit("compact_normalized", stage="compact_protocol", protocol=PROTOCOL_VERSION, changes=changes, raw_sha256=raw_digest,
                          canonical_sha256=hashlib.sha256(json.dumps(compact, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest())
         if on_stage:
-            on_stage("compact_normalized", "已在本地兼容空的可选字段；正在展开梯形图，未增加模型请求")
+            on_stage("compact_normalized", "已在本地兼容确定性的表示差异；正在展开梯形图，未增加模型请求")
     ladder, representation = _decode_generated_ladder(compact, projected, model)
     diagnostics.emit("generation_representation", stage="compact_protocol", representation=representation)
     ladder = canonical_ladder_devices(ladder)
     from plc.specification.checks import check_direct_self_hold
     behavior = check_direct_self_hold(ladder, projected)
     diagnostics.emit("confirmed_primitive_check", stage="generation_validation", **behavior)
-    return {"ladder": ladder, "model_calls": 1}
+    return {"ladder": ladder, "model_calls": 1, "generation_handoff": context.to_dict()["handoff"]}

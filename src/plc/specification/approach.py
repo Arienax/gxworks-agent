@@ -317,9 +317,9 @@ _CONTRACT_GROUP_FIELDS = (
 def _explicit_contract_fields(raw):
     """Return constraint fields explicitly supplied by the structured contract.
 
-    ``generation_guide`` inference is a compatibility/fallback source.  It may
-    fill fields omitted by a structured contract, but it never overrides a
-    constraint that was explicitly supplied by the analysis result/user.
+    ``generation_guide`` inference is a compatibility source only when the
+    entire structured contract is missing/empty. A present partial contract
+    never gets additional constraints from prose in omitted dimensions.
     """
 
     return {
@@ -458,6 +458,21 @@ def _resolve_contract_constraints(contract, explicit_fields):
     return contract
 
 
+def _constraint_values(raw):
+    """Copy only known constraint dimensions; annotations never become code."""
+    raw = raw if isinstance(raw, Mapping) else {}
+    values = {key: _unique_strings(raw.get(key)) for key in _CONTRACT_VALUE_FIELDS}
+    values.update({key: _normalize_groups(raw.get(key)) for key in _CONTRACT_GROUP_FIELDS})
+    return {key: value for key, value in values.items() if value}
+
+
+def _merge_unverified(target, source):
+    for key, values in _constraint_values(source).items():
+        for value in values:
+            if value not in target.setdefault(key, []):
+                target[key].append(copy.deepcopy(value))
+
+
 def normalize_generation_contract(contract=None, *, approach=None):
     raw = dict(contract) if isinstance(contract, Mapping) else {}
     for alias, canonical in _FIELD_ALIASES.items():
@@ -465,7 +480,7 @@ def normalize_generation_contract(contract=None, *, approach=None):
             raw[canonical] = raw[alias]
 
     explicit_fields = _explicit_contract_fields(raw)
-    inferred = _infer_contract_from_guide(approach or {})
+    inferred = {} if isinstance(contract, Mapping) and contract else _infer_contract_from_guide(approach or {})
 
     def value_source(key):
         return raw.get(key) if key in explicit_fields else inferred.get(key)
@@ -476,20 +491,67 @@ def normalize_generation_contract(contract=None, *, approach=None):
         "forbidden_opcodes": _unique_strings(value_source("forbidden_opcodes"), upper=True),
         "required_devices": _unique_strings(value_source("required_devices"), upper=True),
         "forbidden_devices": _unique_strings(value_source("forbidden_devices"), upper=True),
-        "required_structures": _unique_strings(value_source("required_structures"), lower=True),
-        "forbidden_structures": _unique_strings(value_source("forbidden_structures"), lower=True),
-        "any_of_opcode_groups": _normalize_groups(
-            value_source("any_of_opcode_groups"), upper=True
-        ),
-        "any_of_structure_groups": _normalize_groups(
-            value_source("any_of_structure_groups"), lower=True
-        ),
-        # A selected approach is never advisory. Ignore a model-proposed false
-        # value so it cannot opt itself out of the user's decision.
+        "required_structures": _unique_strings(value_source("required_structures")),
+        "forbidden_structures": _unique_strings(value_source("forbidden_structures")),
+        "any_of_opcode_groups": _normalize_groups(value_source("any_of_opcode_groups"), upper=True),
+        "any_of_structure_groups": _normalize_groups(value_source("any_of_structure_groups")),
+        # Explicit constraints cannot be disabled by model-authored enforce=false.
         "enforce": True,
-        "source": "explicit" if explicit_fields else inferred.get("source", "inferred"),
+        "source": raw.get("source") if raw.get("source") in {"explicit", "inferred", "analysis_sanitized"} else (
+            "explicit" if isinstance(contract, Mapping) and contract else inferred.get("source", "inferred")),
     }
-    return _resolve_contract_constraints(normalized, explicit_fields)
+    unverified = _constraint_values(raw.get("unverified_constraints"))
+    if normalized["source"] == "inferred":
+        # The chosen prose still reaches the generator. Historical keyword
+        # guesses are not explicit machine obligations, including old saved
+        # source=inferred contracts. Never upgrade them merely by reading them.
+        advisory = _resolve_contract_constraints(copy.deepcopy(normalized), set())
+        if advisory.get("normalization_warnings"):
+            normalized["normalization_warnings"] = advisory["normalization_warnings"]
+        inferred_fields = (*_CONTRACT_VALUE_FIELDS, *_CONTRACT_GROUP_FIELDS)
+        _merge_unverified(unverified, {key: normalized[key] for key in inferred_fields})
+        for key in inferred_fields:
+            normalized[key] = []
+    # Match vocabulary, not sentence meaning. Unknown descriptions are kept
+    # verbatim as unverified semantics, never silently deleted or guessed.
+    labels = {label.casefold(): key for key, label in STRUCTURE_LABELS.items()}
+
+    def structure(value):
+        token = value.casefold()
+        return token if token in SUPPORTED_STRUCTURES else labels.get(token)
+
+    for key in ("required_structures", "forbidden_structures"):
+        known = []
+        for value in normalized[key]:
+            token = structure(value)
+            if token is None:
+                _merge_unverified(unverified, {key: [value]})
+            elif token not in known:
+                known.append(token)
+        normalized[key] = known
+    groups = []
+    for group in normalized["any_of_structure_groups"]:
+        tokens = [structure(value) for value in group]
+        if any(token is None for token in tokens):
+            # Dropping just the opaque alternatives would turn A OR unknown
+            # into MUST A. Keep the whole disjunction outside the checker.
+            _merge_unverified(unverified, {"any_of_structure_groups": [group]})
+        else:
+            tokens = list(dict.fromkeys(tokens))
+            if tokens not in groups:
+                groups.append(tokens)
+    normalized["any_of_structure_groups"] = groups
+    normalized = _resolve_contract_constraints(
+        normalized, set() if normalized["source"] == "inferred" else explicit_fields)
+    if unverified:
+        normalized["unverified_constraints"] = unverified
+    # Preserve earlier normalization notes across save/read cycles, but never
+    # trust stale definition_errors; real contradictions were recomputed above.
+    notes = _unique_strings([*_unique_strings(raw.get("normalization_warnings")),
+                             *_unique_strings(normalized.get("normalization_warnings"))])
+    if notes:
+        normalized["normalization_warnings"] = notes
+    return normalized
 
 
 def normalize_approach(approach):
@@ -547,36 +609,19 @@ def contract_definition_issues(approach):
         )
         if conflict:
             issues.append(f"同一{label}同时被要求和禁止：{', '.join(conflict)}")
-    unknown_structures = sorted(
-        {
-            *(contract.get("required_structures") or []),
-            *(contract.get("forbidden_structures") or []),
-            *(
-                item
-                for group in contract.get("any_of_structure_groups") or []
-                for item in group
-            ),
-        }
-        - SUPPORTED_STRUCTURES
-    )
-    if unknown_structures:
-        issues.append("包含无法校验的方案结构：" + ", ".join(unknown_structures))
-    constraint_count = sum(
-        len(contract.get(key) or [])
-        for key in (
-            "required_opcodes",
-            "forbidden_opcodes",
-            "required_devices",
-            "forbidden_devices",
-            "required_structures",
-            "forbidden_structures",
-            "any_of_opcode_groups",
-            "any_of_structure_groups",
-        )
-    )
-    if constraint_count == 0:
-        issues.append("方案缺少可执行的生成约束，请明确必用/禁用指令或结构")
+    # Empty contracts are valid boundaries. A chosen engineering plan may leave
+    # every opcode/device choice open; prose and preferences are not obligations.
     return list(dict.fromkeys(issues))
+
+
+def contract_definition_warnings(approach):
+    """Checker coverage gaps are not errors in the user's control requirement."""
+    contract = normalize_approach(approach).get("generation_contract") or {}
+    unverified = contract.get("unverified_constraints")
+    if not unverified:
+        return []
+    return ["部分方案语义无法自动校验，已原样保留供生成使用：" +
+            json.dumps(unverified, ensure_ascii=False, separators=(",", ":"))]
 
 
 def generation_contract_signature(approach):
@@ -895,6 +940,8 @@ def format_contract_summary(approach, *, localized=False):
         )
     if contract.get("required_devices"):
         parts.append(label("指定软元件 ") + label("/").join(contract["required_devices"]))
+    if contract.get("unverified_constraints"):
+        parts.append(label("另有保留的未机检方案语义"))
     return label("；").join(parts)
 
 
@@ -902,6 +949,7 @@ __all__ = [
     "CONTRACT_SCHEMA_VERSION",
     "SUPPORTED_STRUCTURES",
     "contract_definition_issues",
+    "contract_definition_warnings",
     "format_contract_summary",
     "generation_contract_signature",
     "inspect_ladder_features",

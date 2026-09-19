@@ -29,6 +29,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          lfs: true
       - name: Archive exact tested source
         run: git archive --format=zip --output=confirmed-generation-source.zip HEAD
       - uses: actions/upload-artifact@v4
@@ -49,6 +50,13 @@ jobs:
         run: >-
           python -m pytest -q
           tests/test_generation_agent_boundary.py
+          tests/test_intent_evidence_handoff.py
+          tests/test_analysis_design_rag.py
+          tests/test_contract_repair_planner.py
+          tests/test_delivery_summary.py
+          tests/test_prompt_context_policy.py
+          tests/test_architecture_boundaries.py
+          tests/test_source_layout.py
           tests/test_spec_choice_metadata.py
           tests/test_confirmed_compatibility.py
           tests/test_confirmed_reconfirmation.py
@@ -57,7 +65,7 @@ jobs:
           tests/test_context_refresh_runtime.py
           tests/test_approval_modes.py
           tests/test_program_exploration.py
-          tests/test_confirmed_generation_regressions_20260914.py
+          tests/test_confirmed_generation_regressions.py
           tests/test_review_noise_regressions.py
           tests/test_user_confirmed_generation_repair.py
           tests/test_model_provider.py

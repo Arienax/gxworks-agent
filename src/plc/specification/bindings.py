@@ -14,6 +14,13 @@ from plc.device_identity import canonical_device, canonical_io_rows
 _DEVICE = re.compile(r"(?<![A-Za-z0-9_])(?:SM|SD|[XYMTCSDVZ])\d+(?![A-Za-z0-9_])", re.I)
 _ALIASES = {"start_input": ("start", "X"), "stop_input": ("stop", "X"),
             "output_coil": ("output", "Y"), "output_address": ("output", "Y")}
+# Exact historical question IDs only. Keep the fallback identities previously
+# persisted for these questions; do not merge arbitrary machine-specific roles.
+_QUESTION_ALIASES = {
+    "start_signal": ("start", "X"), "start_address": ("start", "X"),
+    "stop_signal": ("stop", "X"), "stop_address": ("stop", "X"),
+    "output_device": ("output", "Y"),
+}
 _ROLE_LABELS = {
     "start": {"启动", "启动按钮", "启动信号", "起动", "起动按钮", "start", "startbutton", "startsignal", "起動", "起動ボタン"},
     "stop": {"停止", "停止按钮", "停止信号", "stop", "stopbutton", "stopsignal", "停止ボタン"},
@@ -34,6 +41,11 @@ def binding_hint(parameter):
         kind = str(raw.get("kind") or "").upper()
         if binding_id and len(binding_id) <= 128 and kind in _ORDER:
             result = {"binding_id": binding_id, "kind": kind}
+            # Purpose is independent of the question/answer text. Missing or
+            # malformed optional labels do not create a confirmation gate.
+            label = raw.get("label")
+            if isinstance(label, str):
+                result["label"] = label.strip()
             for key in ("role", "row_id"):
                 value = raw.get(key)
                 if isinstance(value, str) and 0 < len(value) <= 128:
@@ -43,6 +55,9 @@ def binding_hint(parameter):
     if identifier in _ALIASES:
         role, kind = _ALIASES[identifier]
         return {"binding_id": "legacy_" + role, "role": role, "kind": kind}
+    if identifier in _QUESTION_ALIASES:
+        role, kind = _QUESTION_ALIASES[identifier]
+        return {"binding_id": "question_" + identifier, "role": role, "kind": kind}
     return None
 
 
@@ -56,13 +71,48 @@ def single_address(value, kind=None):
     return address if kind is None or prefix == kind else None
 
 
+def confirmed_input_levels(value):
+    """Decode a confirmed physical input answer, never options or model notes.
+
+    Active/inactive describe the input bit when the signal acts. They are not
+    ladder NO/NC contacts. Conflicting statements remain unresolved; this helper
+    neither fills an unanswered question nor changes generated logic.
+    """
+    text = str(value or "").casefold()
+    explicit = set()
+    for match in re.finditer(r"(?<!未)(?<!没)(?<!不)(?:按下|动作|有信号|押下)(?:时|時)?\s*(?:为|為|是|=|:|：)?\s*(on|off|1|0|接通|断开)(?![a-z0-9])", text):
+        explicit.add(1 if match[1] in {"on", "1", "接通"} else 0)
+    for match in re.finditer(r"(?<![a-z])(?:active|level)[_ -](high|low)(?![a-z])", text):
+        explicit.add(1 if match[1] == "high" else 0)
+    if explicit:
+        levels = explicit
+    else:
+        levels = set()
+        if re.search(r"常开|常開|normally[ _-]+open|(?<![a-z])no(?![a-z])", text):
+            levels.add(1)
+        if re.search(r"常闭|常閉|normally[ _-]+closed|(?<![a-z])nc(?![a-z])", text):
+            levels.add(0)
+    if len(levels) != 1:
+        return {}
+    active = levels.pop()
+    return {"active_level": active, "inactive_level": 1 - active}
+
+
 def _question_is_address(name):
     """Narrow legacy compatibility for questions without typed metadata."""
     text = str(name).casefold()
     return any(s in text for s in ("哪个输入", "哪个输出", "哪个x", "哪个y", "哪个轴", "输入点", "输出点", "输入地址", "输出地址", "x输入", "y输出", "接什么输入", "接什么输出", "接哪", "which input", "which output", "input address", "output address"))
 
 
+def _purpose_label(hint):
+    """Explicit purpose first; old typed roles may use a neutral short name."""
+    if "label" in hint:
+        return hint["label"]
+    return {"start": "启动输入", "stop": "停止输入", "output": "控制输出"}.get(hint.get("role"), "")
+
+
 def _answer_label(name):
+    """Match historical unbound rows only; never create a new device comment."""
     text = str(name)
     for phrase in ("使用哪个轴", "接哪个输入点", "接哪个输出点", "分别接什么输入", "接什么输入", "接什么输出", "是否有", "分别", "哪个", "？", "?"):
         text = text.replace(phrase, "")
@@ -76,7 +126,9 @@ def _row_matches(row, hint, name):
         return row.get("binding_id") == hint["row_id"] or row.get("row_id") == hint["row_id"]
     if row.get("binding_id"):
         return row["binding_id"] == hint["binding_id"]
-    key = label_key(row.get("label", ""))
+    key = label_key(str(row.get("label") or "").strip())
+    if key and key == label_key(hint.get("label", "")):
+        return True  # Exact purpose match; ambiguous matches are not rebound.
     if key and key == label_key(_answer_label(name)):
         return True
     # Only exact, unqualified legacy labels. "Motor 2 start" must never be
@@ -162,7 +214,7 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
                 # operator audit, not in the active generation specification.
                 continue
         pending.append((hint, item, address))
-        if re.search(r"常[开闭閉]|normally\s+(?:open|closed)|\b(?:NO|NC)\b", str(item.get("value")), re.I):
+        if re.search(r"常[开闭閉]|normally\s+(?:open|closed)|\b(?:NO|NC)\b|上升沿|下降沿|rising|falling|edge", str(item.get("value")), re.I):
             remaining.append(item)
 
     claimed = set()
@@ -187,7 +239,7 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
         else:
             index = len(rows)
             rows.append({"kind": hint["kind"], "address": address,
-                         "label": _answer_label(name), "source": item.get("source") or "user"})
+                         "label": _purpose_label(hint), "source": item.get("source") or "user"})
         row = rows[index]
         # Never consume an existing different binding merely to attach a role.
         # Shared addresses can have several provenance records, but only one
@@ -198,12 +250,16 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
             row["source_parameter_id"] = str(item.get("id") or "")
             row["address"] = address
             row["source"] = item.get("source") or "user"
-            if not row.get("label"):
-                row["label"] = _answer_label(name)
+            # Existing labels (including an intentionally empty one) belong to
+            # the I/O table. Reconfirmation must not restore a model's label.
+            row.setdefault("label", _purpose_label(hint))
+        if isinstance(item.get("io_binding"), dict):
+            item["io_binding"]["label"] = str(row.get("label") or "").strip()
         claimed.add(index)
         previous[identity] = {**hint, "address": address,
                               "source_parameter_id": str(item.get("id") or ""),
-                              "name": name, "value": str(item.get("value") or ""),
+                              "name": name, "label": str(row.get("label") or "").strip(),
+                              "value": str(item.get("value") or ""),
                               "source": item.get("source") or "user",
                               "row_binding_id": row.get("binding_id") or identity}
         applied[name] = str(item.get("value") or "")
@@ -222,6 +278,15 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
         if row is not None:
             binding["address"] = str(row.get("address") or "").strip().upper()
             binding["row_binding_id"] = row.get("binding_id") or identity
+            binding["label"] = str(row.get("label") or "").strip()
+            hint = binding_hint({"id": binding.get("source_parameter_id")})
+            if not binding.get("role") and hint and hint["kind"] == binding.get("kind"):
+                binding["role"] = hint["role"]
+            if binding.get("kind") == "X" and "value" in binding:
+                # Recompute, so a polarity edit cannot leave stale derived facts.
+                binding.pop("active_level", None)
+                binding.pop("inactive_level", None)
+                binding.update(confirmed_input_levels(binding["value"]))
             active[identity] = binding
     # A deleted row has no active binding. Do not feed its stale address to
     # Agent B merely because it still occurs in historical provenance.
@@ -256,4 +321,30 @@ def restore_bound_choices(questions, rows, bindings):
             continue
         question["value"] = _DEVICE.sub(lambda _m: address, value, count=1)
         question["source"] = binding.get("source") or "previous"
+        if isinstance(question.get("io_binding"), dict):
+            question["io_binding"]["label"] = str(row.get("label") or "").strip()
+    return result
+
+
+def generation_io_snapshot(spec, *, protected_ids=()):
+    """Repair old confirmed answer bindings on a copy for all generation paths.
+
+    Preserve row identity/deletions via bind_answers, not a fresh text-to-I/O
+    allocation. An already projected binding may lack private value/row IDs;
+    its explicit derived levels survive repeated projection unchanged.
+    """
+    result = copy.deepcopy(spec)
+    if not isinstance(result, dict) or not isinstance(result.get("io_table"), list):
+        return result
+    parameters = result.get("parameters")
+    bindings = result.get("io_bindings")
+    rows, remaining, bindings, _ = bind_answers(
+        result["io_table"], parameters if isinstance(parameters, list) else [],
+        bindings if isinstance(bindings, list) else [], protected_ids=protected_ids,
+    )
+    result["io_table"] = rows
+    if isinstance(parameters, list):
+        result["parameters"] = remaining
+    if bindings or "io_bindings" in result:
+        result["io_bindings"] = bindings
     return result

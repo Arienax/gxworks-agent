@@ -154,3 +154,36 @@ importlib.import_module(sys.argv[1])
                             env=env, capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr
     assert not list(tmp_path.iterdir())
+
+
+def test_test_boundary_registry_is_complete_and_current():
+    """Every executable test file must declare exactly one stable owner boundary."""
+    document = (ROOT / "tests" / "README.md").read_text(encoding="utf-8")
+    start_marker = "<!-- TEST-BOUNDARY-REGISTRY-START -->"
+    end_marker = "<!-- TEST-BOUNDARY-REGISTRY-END -->"
+    assert document.count(start_marker) == document.count(end_marker) == 1
+    registry = document.split(start_marker, 1)[1].split(end_marker, 1)[0]
+
+    listed = re.findall(
+        r"\|\s*`((?:tests/test_[^`]+\.py|web/tests/[^`]+\.test\.mjs))`\s*\|",
+        registry,
+    )
+    assert len(listed) == len(set(listed)), "duplicate test-file entries in tests/README.md"
+
+    actual = {
+        path.relative_to(ROOT).as_posix()
+        for path in (ROOT / "tests").glob("test_*.py")
+    }
+    actual.update(
+        path.relative_to(ROOT).as_posix()
+        for path in (ROOT / "web" / "tests").glob("*.test.mjs")
+    )
+    assert set(listed) == actual, (
+        "test ownership registry mismatch; "
+        f"undocumented={sorted(actual - set(listed))}, "
+        f"stale={sorted(set(listed) - actual)}"
+    )
+    assert not [
+        path for path in actual
+        if re.search(r"(?:_20\d{6}|_(?:pr|issue)_?\d+)\.py$", path, re.I)
+    ], "test files must be named after stable behavior, not dates/issues"

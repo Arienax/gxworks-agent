@@ -166,15 +166,17 @@ sanitized retrieval evidence. They do not share one model-completion protocol.
 For first generation from a confirmed specification, both use the same fixed
 translation request; optional unconfirmed request prose cannot reintroduce a new
 control design. Edits retain the explicit user delta and current baseline. The
-shared projection drops approach names/descriptions/guides before routing and
-retrieval. Automatic retrieval retains the existing policy/budget; no extra
-retrieval or duplicate engineering payload is added just to support two adapters.
+shared projection preserves the chosen name/description/guide, original caller
+requests and source roles, but excludes unselected alternatives and private state.
+Automatic generation retrieval retains its bounded policy; the same detached
+handoff supplies both adapters without duplicate generation retrieval.
 A retrieval failure remains an offline degradation, not permission to call a
 model. `search_plc_manual` is still available for a specific unresolved fact.
 
 The result also retains `project_id`, `plc_model`, `target_mode`, `workflow_mode`,
 `has_confirmed_spec`, `confirmed_spec`, `output_contract` and
-`current_version_id`. The specification comes from the selected version
+`current_version_id`, plus a detached `generation_handoff` and a runtime-issued
+`generation_context_id` when a confirmed context exists. The specification comes from the selected version
 snapshot, or the project when there is no snapshot. It is a field-by-field
 engineering projection: confirmed I/O, parameters, selected approach, hardware
 and execution constraints remain; unselected approaches, drafts, chat history,
@@ -198,6 +200,14 @@ Standalone MCP still creates only a candidate and a confirmation request.
 | --- | --- | --- |
 | `program_name` | Nonblank string, 1–64 characters; omission keeps the current program name, or `MAIN` for first creation | No |
 | `ladder` | Object accepted by the shared API parser: full ladder or partial edit | Yes |
+| `generation_context_id` | Echo the opaque ID returned by `get_generation_context` to preserve the engine-produced source receipt | No |
+
+Receipt correlation is optional and never another candidate acceptance gate.
+The bounded runtime cache holds at most 32 receipts and binds them to the same
+project/version/specification/program/model. A missing, expired or stale ID is
+recorded as a trace gap. A matched ID records which context the runtime returned,
+not proof that the external model used it (`external_model_use=not_observed`).
+See [intent and evidence handoff](../architecture/intent-evidence-handoff.md).
 
 A full response supplies `device_comments` and a nonempty `rungs` array. A
 partial response uses `mode: "partial"`, optional changed/new complete `rungs`,

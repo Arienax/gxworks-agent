@@ -340,6 +340,7 @@ class ProposalService:
                                 plc_model=(candidate.get("plc") or {}).get("cpu", "FX3U"),
                                 validation_profile=validation_profile)
                 metadata["normalization"] = copy.deepcopy(payload.get("normalization"))
+                metadata["generation_handoff"] = copy.deepcopy(payload.get("_generation_handoff"))
                 if compiled["artifacts"].get("st_from_ir"):
                     from plc.st_renderer import ST_RENDERER_SCHEMA_VERSION
                     metadata["st_from_ir_sha256"] = hashlib.sha256((output / compiled["artifacts"]["st_from_ir"]).read_bytes()).hexdigest()

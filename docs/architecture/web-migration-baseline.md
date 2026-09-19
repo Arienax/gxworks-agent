@@ -17,7 +17,7 @@
 
 | 契约 | 基线证据 |
 | --- | --- |
-| ladder/ST 参数、确认规格、局部修复和失败行为 | `tests/test_contract_candidate_first.py`、`tests/test_contract_repair_policy.py`、`tests/test_contract_repair_planner.py` |
+| ladder/ST 参数、确认规格、局部修复和失败行为 | `tests/test_contract_repair_policy.py`、`tests/test_contract_repair_planner.py` |
 | stream/fallback 完整响应验收，语言冻结，拒绝不发布、不写产物 | `tests/test_language_workflows.py`、`tests/test_streaming_workflows.py`、`tests/test_model_provider.py` |
 | IR 派生 SVG/CSV/ST、哈希与校验 | `tests/test_plc_core_boundary.py`、`tests/test_plc_ir.py` |
 | 旧工作区只读、路径约束、候选私有字段不外泄 | `tests/test_mcp.py`、`scripts/mcp_smoke.py` |

@@ -4,32 +4,30 @@ import json
 import application.model_api as api
 import knowledge.retriever as knowledge_retriever
 from knowledge.patterns import build_workflow_prompt
+from application.prompts import ANALYSIS_DESIGN_PROMPT
 from shared.context_policy import context_policy_scope
 
 
 def test_phase_one_routes_as_analysis():
     for function in (api.analyze_requirement, api.analyze_requirement_streaming):
         source = inspect.getsource(function)
-        assert 'forced_task=task_type or "analysis"' in source
-        assert 'forced_task=task_type or "generate"' not in source
+        assert "assemble_analysis_prompt(" in source
+        assert "build_workflow_prompt(" not in source
+        assert "_build_model_context(" not in source
 
-
-def test_analysis_prompt_has_meta_search_rules_without_candidate_few_shots():
+def test_analysis_prompt_has_meta_search_rules_only_in_design_delta():
     prompt = api.ANALYSIS_SYSTEM_PROMPT
-    assert "Retrieved PLC knowledge" in prompt
-    assert "不算新的架构方案" in prompt
-    assert "设计空间很窄时允许只给 1 个" in prompt
-    assert "方案示例（分拣/顺序控制）" not in prompt
-    assert "方案A「直接逻辑法」" not in prompt
-    assert "方案示例（三泵轮换）" not in prompt
-
+    assert "不算新的架构方案" not in prompt
+    assert "Retrieved PLC knowledge" in ANALYSIS_DESIGN_PROMPT
+    assert "不算新的架构方案" in ANALYSIS_DESIGN_PROMPT
+    assert "设计空间很窄时允许只给 1 个" in ANALYSIS_DESIGN_PROMPT
+    assert "方案示例（三泵轮换）" not in prompt + ANALYSIS_DESIGN_PROMPT
     example = prompt.split("返回纯JSON（不要```json包裹），格式：\n", 1)[1]
     example = example.split("\n# suggested_io", 1)[0]
     parsed = json.loads(example)
     assert parsed["approaches"] == []
     assert parsed["missing_info"] == []
     assert parsed["suggested_io"] == {}
-
 
 def test_adaptive_analysis_forces_sqlite_lookup_but_generic_generation_does_not(monkeypatch):
     calls = []
@@ -77,6 +75,8 @@ def test_bundled_design_knowledge_is_injected_through_production_analysis_path()
             query,
             plc_model="FX3U",
             task_type="analysis",
+            include_design=True,
+            design_query=query,
         )
     assert "Curated PLC Control Architecture Design Knowledge" in context
     assert "CONTROL ARCHITECTURE:" in context
