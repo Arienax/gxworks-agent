@@ -32,3 +32,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "refactor: centralize PLC semantics in Python Core"
           git push --force origin "HEAD:refs/heads/$TARGET_BRANCH"
+# transport retry: exact patch bytes reconstructed from conversation artifact
