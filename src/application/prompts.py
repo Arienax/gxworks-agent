@@ -41,7 +41,7 @@ turn, reflect that change and do not restore older cached values.
 - 仅更换软元件编号、定时器编号、梯级顺序、触点排布，或增加一个只复制同一条件的中间继电器，不算新的架构方案。
 - 不得为了凑足数量制造重复方案；设计空间很窄时允许只给 1 个。
 - 不要因为 system prompt 中出现过某个实现方式就强制采用它；具体架构的适用条件、优缺点和实现事实以当前需求与检索知识为依据。
-- 每个实际候选必须包含 `generation_guide` 和可机器校验的 `generation_contract`，不同候选的 contract 应能体现其架构级差异。
+- 每个实际候选必须包含 `generation_guide` 和结构化 `generation_contract`；用方案说明保留架构差异，不能为了区分候选而制造硬约束。
 
 # 输出要求
 control_type 从 启停、顺序、定位、计数、模拟量、通讯、PID 中选择 1–3 个字符串。
@@ -71,17 +71,17 @@ control_type 从 启停、顺序、定位、计数、模拟量、通讯、PID �
 - 不确定的地址不得写入 suggested_io。把不确定性写入 assumptions；不要因此生成硬件必填项。
 
 # generation_guide 编写要求
-- generation_guide 写简要的生成要点（如"使用BLOCK_INPUT状态机"、"每个通道独立梯级"）
-- 一两句话即可，不需要语气强调
+- generation_guide 保留当前方案的数据表示、事件/持续触发、索引/位置映射、初始化、停止与复位行为，以及有依据的实现选择。
+- 按工程含义简洁表述，不能为压缩成一两句话而丢失用户明确要求；不需要语气强调或思考过程。
 
 # generation_contract 硬约束
-- 每个方案必须包含非空且可机器校验的 generation_contract；它会在用户选择后成为硬校验条件，不是建议。
+- 每个方案必须包含 generation_contract 对象；只把有依据的确定条件写入其中。约束列表可以全部为空，方案仍有工程语义。硬约束用于现有检查/修复流程，不得为了通过检查而补造约束。
 - 每个方案只能描述一种明确实现，不得在同一方案中写“SET/RST 或 MOV”“PLSY 或 DRVI”等替代选项；替代实现必须拆成不同方案。
-- required_opcodes/forbidden_opcodes 填最终程序必须出现/不得出现的真实降级指令名；required_devices/forbidden_devices 只填该方案固定要求的软元件。契约中的 OUT 由生成 JSON 的 COIL/TIMER/COUNTER 满足，绝不能要求生成 APP_INSTR OUT。
+- required_opcodes/forbidden_opcodes 只填用户明确要求必须出现/不得出现的真实降级指令名；required_devices/forbidden_devices 只填用户明确固定要求的软元件。模型提出的具体实现选择写在 generation_guide，不冒充用户要求。契约中的 OUT 由生成 JSON 的 COIL/TIMER/COUNTER 满足，绝不能要求生成 APP_INSTR OUT。
 - 结构名只允许：direct_logic、register_state_machine、bit_state_machine、state_initialization、state_comparison、state_transition、self_hold、set_reset_latch、hardware_counter、data_register_counter、edge_trigger、pulse_positioning、analog_control、serial_communication、pid_control、vfd_multi_speed。
-- required_structures/forbidden_structures 必须体现方案之间的本质差异。例如硬件计数器法要求 hardware_counter，INC 数据计数法要求 data_register_counter，寄存器步进法要求 register_state_machine。
+- required_structures/forbidden_structures 仅表达该候选明确承诺的架构条件；用户选择后成为方案约束。例如明确的硬件计数器法可要求 hardware_counter，寄存器计数法可要求 data_register_counter。缺乏依据时留空，不硬套结构标签。
 - any_of_opcode_groups/any_of_structure_groups 仅用于同一方法内部真正等价的兼容指令，不得用来合并本应独立展示的不同方案。
-- 所有方案的 contract 必须互相可区分；不要只更换名称而给出相同约束。
+- 候选的工程实现应真正不同，不能只换名称；区别可以体现在 generation_guide，不要求 contract 列表必须不同。
 
 # execution_semantics 规则
 - 仅使用 LEVEL、RISING_EDGE、FALLING_EDGE、FIRST_SCAN、CYCLIC、INTERRUPT。
@@ -440,3 +440,13 @@ deterministic recovery or a bounded local syntax patch. Never return a complete
 ladder from a format-repair model call.
 """
 
+
+
+# Source identity is attached by application code, not self-reported by the model.
+ANALYSIS_SYSTEM_PROMPT += """
+\n# 来源与方案边界
+明确保留用户指定的数据表示、触发方式、索引/位置对应关系和重置/停止行为；不能仅用功能摘要代替这些工程意图。
+区分用户要求与自己提出的实现选择；generation_guide 写清方案的工程语义，不输出思考过程。不要把检索示例自动视为用户要求。
+generation_contract 只填写确有依据的硬约束；空 required_opcodes 合法，非空与否不代表方案有无语义。不要为说明文字中的每个指令名添加必用约束。
+引用资料时保留检索 source ID；没有检索证据的技术推断不得写成已验证事实。来源元数据由应用记录，不要生成 engineering_context 字段。
+"""

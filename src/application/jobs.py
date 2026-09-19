@@ -241,6 +241,24 @@ class JobManager:
             diagnostics.exception_record(salvage_error)
             return None
 
+        handoff_path = contained(staging / "generation_handoff.json", staging)
+        generation_handoff = None
+        if handoff_path.is_file():
+            try:
+                saved_handoff = json.loads(handoff_path.read_text(encoding="utf-8"))
+                if isinstance(saved_handoff, dict):
+                    generation_handoff = saved_handoff
+            except (OSError, ValueError):
+                pass  # Missing diagnostic metadata must not discard the candidate.
+        if generation_handoff is None:
+            from application.confirmed_generation_context import project_confirmed_specification
+            from plc.specification.provenance import handoff_snapshot
+            generation_handoff = handoff_snapshot(
+                project_confirmed_specification(confirmed_spec), stage="generate",
+                evidence={"stage": "generate", "status": "not_recorded", "records": []},
+            )
+        generation_handoff["confirmed_spec_sha256"] = (
+            canonical_hash(confirmed_spec) if confirmed_spec is not None else None)
         validation = metadata.setdefault("validation", {})
         validation["violations"] = copy.deepcopy(error.diagnostics.get("violations", []))
         validation["diagnostic_id"] = error.diagnostics.get("diagnostic_id")
@@ -299,6 +317,7 @@ class JobManager:
                     lifecycle_status="diagnostic",
                     parent_version_id=base_version_id,
                     confirmed_spec_snapshot=copy.deepcopy(confirmed_spec),
+                    generation_handoff=copy.deepcopy(generation_handoff),
                     confirmed_spec_hash=(canonical_hash(confirmed_spec) if confirmed_spec is not None else None),
                     generation_metadata={
                         "diagnostic_only": True,

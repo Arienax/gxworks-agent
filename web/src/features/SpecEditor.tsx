@@ -89,11 +89,21 @@ export function SpecEditor({
                 onChange={() => patch({ ...draft, selected_approach: a })} />
               <span><strong>{String(a.name || a.title || approachId(a) || i + 1)}</strong>
                 {!!a.description && <small>{String(a.description)}</small>}
+                {!!a.generation_guide && <small>{t("方案实现说明（不是额外硬约束）")}：{String(a.generation_guide)}</small>}
               </span>
             </label>
           ))}
         </fieldset>
       )}
+      {!!draft.selected_approach?.implementation_preferences && <details>
+        <summary>{t("所选方案的实现建议（不作为硬约束）")}</summary>
+        <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify(draft.selected_approach.implementation_preferences, null, 2)}</pre>
+      </details>}
+      {!!draft.engineering_context && <details>
+        <summary>{t("原始需求与检索来源记录")}</summary>
+        <p>{t("记录用于核对来源，不代表方案已验证；原始需求、方案建议和硬契约分别保留。")}</p>
+        <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify(draft.engineering_context, null, 2)}</pre>
+      </details>}
       {parameters.length > 0 && <div className="section-label">{t("确认问题")}</div>}
       {parameters.map((p, i) => (
         <ChoiceInput key={String(p.id || i)} t={t}

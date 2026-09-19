@@ -61,7 +61,7 @@ class InProcessToolRuntime:
                 public,
                 ensure_ascii=False,
                 separators=(",", ":"),
-            )[:18000],
+            ),
             data=envelope,
             is_error=not bool(envelope.get("ok")),
         )

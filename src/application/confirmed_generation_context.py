@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Mapping
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 
 from application.generation_support import (
     public_generation_ladder, public_generation_specification, public_generation_value,
@@ -43,10 +43,9 @@ def project_confirmed_specification(confirmed_spec):
     for row in projected.get("io_bindings", []):
         if "address" in row:
             row["address"] = canonical_device(row["address"])
-    selected = projected.get("selected_approach")
-    if isinstance(selected, dict):
-        for key in ("name", "description", "generation_guide"):
-            selected.pop(key, None)
+    from plc.specification.provenance import selected_context
+    if "engineering_context" in projected:
+        projected["engineering_context"] = selected_context(projected)
     return projected
 
 
@@ -60,6 +59,7 @@ class ConfirmedGenerationContext:
     knowledge_context: str
     current_program: dict | None
     generation_request: str
+    handoff: dict = field(default_factory=dict)
 
     def __post_init__(self):
         for item in fields(self):
@@ -94,11 +94,14 @@ def build_confirmed_generation_context(
         request, plc_model=model, task_type=task_type,
         confirmed_context=projected, evidence=public_generation_value(evidence),
     )
+    from plc.specification.provenance import handoff_snapshot
+    from knowledge.evidence import context_manifest
     selected = projected.get("selected_approach") or {}
+    handoff = handoff_snapshot(projected, evidence=context_manifest(knowledge, stage=task_type), stage=task_type)
     return ConfirmedGenerationContext(
         plc_model=model, confirmed_spec=projected,
         io_bindings=projected.get("io_bindings") or [],
         generation_contract=selected.get("generation_contract") or {},
         knowledge_context=public_generation_value(knowledge or ""),
-        current_program=current, generation_request=request,
+        current_program=current, generation_request=request, handoff=public_generation_value(handoff),
     )

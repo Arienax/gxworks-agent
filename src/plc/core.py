@@ -339,6 +339,7 @@ def accept_candidate_patch(store: Any, action: Mapping[str, Any]) -> Mapping[str
                 "artifacts": dict(compiled["artifacts"]),
                 "validation_profile": validation_profile,
                 "normalization": copy.deepcopy(action.get("normalization")),
+                "generation_handoff": copy.deepcopy(action.get("_generation_handoff")),
                 "validation": {
                     "status": "candidate_ready" if structural else "passed",
                     "messages": (["候选结构可解析；需求一致性未在生成后重复判定"]

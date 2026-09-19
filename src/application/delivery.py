@@ -56,6 +56,7 @@ def delivery_summary(workbench, project_id, version_id):
         "confirmed_spec": version.get("confirmed_spec_snapshot"), "confirmed_spec_hash": version.get("confirmed_spec_hash"),
         "ir_sha256": version.get("ir_sha256"), "artifacts": artifacts, "changes": diff,
         "validation_profile": version.get("validation_profile", "strict"),
+        "generation_handoff": version.get("generation_handoff"),
         "static_validation": version.get("validation"), "simulation_runs": runs,
         "requirements": requirements, "native_validation": native,
         "reports": [r for r in projects.reports(project_id) if r.get("base_version_id") == version_id],
@@ -137,6 +138,32 @@ def render_delivery(value):
             lines += ["", "### 工程备注", "", text(readable(spec["user_notes"]))]
     else:
         lines.append("此版本未保存已确认规格快照。")
+    lines += ["", "## 需求、方案与证据来源", ""]
+    lineage = (spec or {}).get("engineering_context", {}) if isinstance(spec, dict) else {}
+    lineage = lineage if isinstance(lineage, dict) else {}
+    requests = lineage.get("requests") or []
+    for row in requests:
+        if isinstance(row, dict):
+            lines.append(f"- 用户请求 {cell(row.get('id'))}：{cell(row.get('text'))}")
+    confirmation = lineage.get("confirmation") or {}
+    lines.append(f"确认来源：{cell(confirmation.get('source', '历史记录未提供来源'))}；所选方案来源：{cell(confirmation.get('selected_origin', '未记录'))}。")
+    receipt = value.get("generation_handoff") or {}
+    receipt = receipt if isinstance(receipt, dict) else {}
+    stages = [("需求分析", lineage.get("analysis_evidence") or {})]
+    stages.extend(("选中候选方案", row.get("evidence") or {}) for row in receipt.get("selected_proposals", []) if isinstance(row, dict))
+    stages.append(("本次生成", receipt.get("generation_evidence") or {}))
+    for label, manifest in stages:
+        manifest = manifest if isinstance(manifest, dict) else {}
+        lines.append(f"- {label}检索状态：{cell(manifest.get('status', '未记录'))}。")
+        for record in (manifest.get("records") or []):
+            if not isinstance(record, dict):
+                continue
+            lines.append(f"  - 来源 {cell(record.get('id'))} · {cell(record.get('source'))} · 页 {cell(record.get('page'))} · {cell(record.get('role'))}；内容 SHA256：{cell(record.get('content_sha256'))}")
+        if manifest.get("query_truncated") or manifest.get("omitted_ids"):
+            lines.append("  - 检索预算造成省略；未命中或未注入不代表禁止该实现。")
+    if not requests:
+        lines.append("此版本未保存原始请求来源；未从方案说明或聊天推理补造用户意图。")
+    lines.append("以上仅记录信息来源与传递，不证明每条需求已实现；方案说明和检索证据不会自动升级为硬生成契约。")
     lines += ["", "## 结构与静态检查", ""]
     validation = value.get("static_validation") or {}
     if value.get("validation_profile") == "generation_structural":

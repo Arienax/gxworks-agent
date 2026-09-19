@@ -364,6 +364,9 @@ def analyze_requirement(
         raw = raw.strip()
 
         result = _parse_analysis_response(raw, model, user_requirement, confirmed_context)
+        from application.analysis_results import attach_analysis_evidence
+        result = attach_analysis_evidence(result, knowledge_ctx, plc_model=model,
+                                          knowledge_builder=_build_knowledge_context)
         print(f"阶段1 分析完成: {result.get('summary', '')[:80]}...")
         return result
 
@@ -445,6 +448,9 @@ def analyze_requirement_streaming(
         raw = raw.strip()
 
         result = _parse_analysis_response(raw, model, user_requirement, confirmed_context)
+        from application.analysis_results import attach_analysis_evidence
+        result = attach_analysis_evidence(result, knowledge_ctx, plc_model=model,
+                                          knowledge_builder=_build_knowledge_context)
         print(f"阶段1 分析完成: {result.get('summary', '')[:80]}...")
         return result
 
@@ -528,6 +534,7 @@ def _prepare_api_call(
     current_version_json=None,
     plc_model=None,
     image_attachments=None,
+    on_generation_context=None,
 ):
     """
     共用准备逻辑：加载历史、追加用户消息、保存、选取系统提示词、
@@ -547,6 +554,9 @@ def _prepare_api_call(
             and isinstance(confirmed_context, dict) and confirmed_context):
         from application.confirmed_generation_context import CONFIRMED_GENERATION_REQUEST
         user_requirement = CONFIRMED_GENERATION_REQUEST
+        # The full-wire adapter must have the same isolation as compact Agent B.
+        # Recorded user intent is already part of the confirmed source envelope.
+        conversation_history = []
     conversation_history.append({"role": "user", "content": user_requirement})
     if persist_history:
         _save_history(conversation_history)
@@ -570,6 +580,7 @@ def _prepare_api_call(
         knowledge_builder=_build_knowledge_context,
         profile_builder=_build_model_context,
         confirmed_builder=_with_confirmed_context,
+        on_context=on_generation_context,
     )
     messages_to_send = _build_clean_messages(conversation_history, system_prompt)
     if image_attachments:
@@ -1326,7 +1337,7 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
                              confirmed_spec=None,
                              current_version_json=None,
                              plc_model=None,
-                             image_attachments=None, on_fallback=None):
+                             image_attachments=None, on_fallback=None, on_generation_context=None):
     """
     通过当前 ModelProvider 流式调用模型，实时返回工程推理摘要。
 
@@ -1351,6 +1362,7 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
         current_version_json=current_version_json,
         plc_model=plc_model,
         image_attachments=image_attachments,
+        on_generation_context=on_generation_context,
     )
 
     native_options = (

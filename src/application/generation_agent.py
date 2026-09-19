@@ -184,15 +184,16 @@ def _decode_generated_ladder(value, projected, plc_model):
     raise CompactProtocolError("unknown or ambiguous ladder representation")
 
 
-def _build_agent_b_prompt(projected, plc_model):
-    context = build_confirmed_generation_context(
+def _build_agent_b_prompt(projected, plc_model, *, context=None):
+    context = context or build_confirmed_generation_context(
         projected, plc_model, knowledge_builder=_build_knowledge_context,
     )
     model = context.plc_model
     evidence = context.knowledge_context
     confirmed = json.dumps(context.confirmed_spec, ensure_ascii=False, separators=(",", ":"))
+    from plc.specification.provenance import SOURCE_PRECEDENCE
     prompt = (
-        _COMPACT_PROTOCOL
+        _COMPACT_PROTOCOL + SOURCE_PRECEDENCE
         + f"\n# Selected PLC\n{model}\n"
         + "\n# Confirmed project specification\n"
         + confirmed
@@ -209,6 +210,7 @@ def generate_confirmed_ladder(
     model_name=None,
     effort=None,
     on_stage=None,
+    on_context=None,
 ):
     """Make one streaming model call, then locally expand the compact plan."""
     import application.model_api as api
@@ -218,7 +220,10 @@ def generate_confirmed_ladder(
     if not projected:
         raise ValueError("confirmed generation specification is empty")
 
-    system_prompt = _build_agent_b_prompt(projected, model)
+    context = build_confirmed_generation_context(projected, model, knowledge_builder=_build_knowledge_context)
+    if on_context:
+        on_context(context.to_dict()["handoff"])
+    system_prompt = _build_agent_b_prompt(projected, model, context=context)
     if on_stage:
         on_stage("confirmed_spec_generation", "正在根据已确认规格生成梯形图")
 
@@ -257,4 +262,4 @@ def generate_confirmed_ladder(
     from plc.specification.checks import check_direct_self_hold
     behavior = check_direct_self_hold(ladder, projected)
     diagnostics.emit("confirmed_primitive_check", stage="generation_validation", **behavior)
-    return {"ladder": ladder, "model_calls": 1}
+    return {"ladder": ladder, "model_calls": 1, "generation_handoff": context.to_dict()["handoff"]}
