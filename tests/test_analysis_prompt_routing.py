@@ -266,10 +266,23 @@ def test_modes_change_exploration_not_the_fact_route(text, selected):
     assert "Analysis mode: direct" not in design.system_prompt
 
 
-def test_direct_is_not_a_lossy_engineering_spec_contract():
+def test_direct_is_compact_without_losing_structured_engineering_facts():
     from application.prompts import ANALYSIS_DIRECT_PROMPT, ANALYSIS_PINNED_PROMPT
     assert "exactly one approach" in ANALYSIS_DIRECT_PROMPT
-    assert "pros/cons 默认 []" in ANALYSIS_DIRECT_PROMPT
-    assert "generation_guide 必须完整保留" in ANALYSIS_DIRECT_PROMPT
+    assert "pros 和 cons 用空字符串" in ANALYSIS_DIRECT_PROMPT
+    assert "generation_guide 只补结构化字段表达不了" in ANALYSIS_DIRECT_PROMPT
+    assert "通常应为空字符串" in ANALYSIS_DIRECT_PROMPT
+    assert "required_structures" in ANALYSIS_DIRECT_PROMPT
+    assert "扫描周期" in ANALYSIS_DIRECT_PROMPT
     assert "不编造已确认答案" in ANALYSIS_DIRECT_PROMPT
-    assert "本轮明确修订" in ANALYSIS_PINNED_PROMPT
+    assert "原来为空就不要" in ANALYSIS_PINNED_PROMPT
+
+
+def test_direct_core_does_not_duplicate_unknown_io_or_generic_plc_explanations():
+    assert "未知地址不填 suggested_io" in ANALYSIS_SYSTEM_PROMPT
+    assert "不同时预分配一个“建议地址”" in ANALYSIS_SYSTEM_PROMPT
+    assert "原始用户请求由应用另行保留" in ANALYSIS_SYSTEM_PROMPT
+    assert "没有这种差异就用空字符串" in ANALYSIS_SYSTEM_PROMPT
+    assert "PLC 常识、常规扫描行为" in ANALYSIS_SYSTEM_PROMPT
+    example = ANALYSIS_SYSTEM_PROMPT.split("返回纯JSON（不要```json包裹），格式：\n", 1)[1].split("\n# suggested_io", 1)[0]
+    assert json.loads(example)["flowchart_steps"] == []

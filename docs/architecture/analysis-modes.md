@@ -21,7 +21,10 @@ Direct contract, relevant PLC facts and targeted fact evidence. It requests one
 concrete implementation. An existing `selected_approach` adds the internal
 pinned/extract delta, preserving unchanged implementation semantics and explicit
 constraints. No selected approach is needed to use Direct. Brief description
-and empty pros/cons are allowed; the generation guide remains complete.
+and empty pros/cons are expected. The raw request and structured specification
+remain complete; `generation_guide` is only a delta for non-obvious
+approach-specific semantics that cannot be reconstructed from those fields.
+For ordinary direct/self-hold logic it should normally be empty.
 
 Design adds the Design contract and explicitly enables the design evidence lane,
 while preserving fact evidence. It offers 1–3 genuinely distinct candidates.
@@ -39,7 +42,10 @@ lane. Candidate-specific fact collection is retained and adds no model call.
 
 The existing Core review-draft builder already preselects the sole approach.
 Real required parameter questions stay unanswered until confirmed; suggested
-defaults are not answers. No approach-count/description-length rejection gate,
+defaults are not answers. An unresolved address is not duplicated into
+`suggested_io`, and tightly coupled address/polarity facts may share one
+question. Direct single-state controls do not need a generated flowchart or
+generic PLC-behavior assumptions. No approach-count/description-length rejection gate,
 automatic regeneration or additional approval step is introduced. Counts and
 brevity are prompt requirements, not a promise of perfect model compliance.
 
