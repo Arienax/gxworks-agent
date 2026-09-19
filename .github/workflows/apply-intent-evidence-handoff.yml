@@ -1,0 +1,27 @@
+name: Verify call-chain repair transport
+on:
+  push:
+    branches: [fix/intent-evidence-handoff-20260919]
+    paths: [.github/workflows/apply-intent-evidence-handoff.yml]
+permissions:
+  contents: read
+jobs:
+  verify-transport:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read patch transport objects
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/patch-transport
+          for item in 0:950676a8319b267e522a8e5f97409ea2509611af 1:8c69d8d886448a655c557302222d589598709480 2:72ca4bad676bfc3f607fb2420f041432cac362d5 3:70fcccde586f281d4df90f4c8ce0bff42df50a6e 4:2d4d18b8228238c621cb33b5c0a39e7b997f477e 5:ad0f9558fddfbaffe45652016e139ec675a404a8; do
+            gh api "repos/$REPOSITORY/git/blobs/${item#*:}" > "/tmp/patch-transport/${item%%:*}.json"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: call-chain-patch-transport
+          path: /tmp/patch-transport
+          retention-days: 3
