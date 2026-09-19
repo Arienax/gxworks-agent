@@ -165,7 +165,7 @@ def test_test_boundary_registry_is_complete_and_current():
     registry = document.split(start_marker, 1)[1].split(end_marker, 1)[0]
 
     listed = re.findall(
-        r"\\|\\s*`((?:tests/test_[^`]+\\.py|web/tests/[^`]+\\.test\\.mjs))`\\s*\\|",
+        r"\|\s*`((?:tests/test_[^`]+\.py|web/tests/[^`]+\.test\.mjs))`\s*\|",
         registry,
     )
     assert len(listed) == len(set(listed)), "duplicate test-file entries in tests/README.md"
@@ -185,5 +185,5 @@ def test_test_boundary_registry_is_complete_and_current():
     )
     assert not [
         path for path in actual
-        if re.search(r"(?:_20\\d{6}|_(?:pr|issue)_?\\d+)\\.py$", path, re.I)
+        if re.search(r"(?:_20\d{6}|_(?:pr|issue)_?\d+)\.py$", path, re.I)
     ], "test files must be named after stable behavior, not dates/issues"
