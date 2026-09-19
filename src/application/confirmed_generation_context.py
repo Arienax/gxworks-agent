@@ -71,7 +71,7 @@ class ConfirmedGenerationContext:
 
 def build_confirmed_generation_context(
     confirmed_spec, plc_model, *, user_requirement="", current_program=None,
-    task_type="generate", evidence=None, knowledge_builder=None,
+    task_type="generate", evidence=None, knowledge_builder=None, model_profile=None,
 ):
     """Project before routing/retrieval; first generation cannot replay Agent A.
 
@@ -90,23 +90,52 @@ def build_confirmed_generation_context(
     if knowledge_builder is None:
         from application.generation_context import _build_knowledge_context
         knowledge_builder = _build_knowledge_context
+    from application.context_compiler import ContextCompiler, ContextCompilerInput
+    from knowledge.evidence import KnowledgeQuery
+    compiler = ContextCompiler()
+    compiler_input = ContextCompilerInput(
+        confirmed_spec=projected,
+        engineering_context=projected.get("engineering_context") or {},
+        selected_approach=projected.get("selected_approach") or {},
+        evidence=public_generation_value(evidence),
+        plc_model=model,
+        model_profile=copy.deepcopy(model_profile or {}),
+        task_type=task_type,
+        generation_request=request,
+        current_program=current,
+    )
+    precompiled = compiler.compile(compiler_input)
+    retrieval_query = KnowledgeQuery(
+        precompiled.retrieval_packet["query"],
+        precompiled= True,
+        metadata={
+            "context_plan": precompiled.provenance_receipt,
+            "rag_evidence_token_budget": precompiled.budget_report.get("rag_evidence_token_budget"),
+        },
+    )
     knowledge = knowledge_builder(
-        request, plc_model=model, task_type=task_type,
-        confirmed_context=projected, evidence=public_generation_value(evidence),
+        retrieval_query, plc_model=model, task_type=task_type,
+        confirmed_context=precompiled.generation_packet["confirmed_spec"],
+        evidence=public_generation_value(evidence),
     )
     from plc.specification.provenance import handoff_snapshot
     from knowledge.evidence import context_manifest, text_sha256
-    selected = projected.get("selected_approach") or {}
     knowledge_text = public_generation_value(knowledge or "")
+    compiled = compiler.compile(compiler_input, evidence_text=knowledge_text)
+    knowledge_text = compiled.generation_packet["evidence"]
+    runtime_spec = compiled.generation_packet["confirmed_spec"]
+    selected = runtime_spec.get("selected_approach") or {}
     manifest = context_manifest(knowledge, stage=task_type)
     # A custom builder may return unsanitized text. The source hashes still
     # identify retrieved blocks; the context hash must identify the actual
     # privacy-cleaned text delivered to either generation adapter.
     manifest["context_sha256"] = text_sha256(knowledge_text)
     handoff = handoff_snapshot(projected, evidence=manifest, stage=task_type)
+    handoff.update(copy.deepcopy(compiled.provenance_receipt))
+    handoff["budget_report"] = copy.deepcopy(compiled.budget_report)
     return ConfirmedGenerationContext(
-        plc_model=model, confirmed_spec=projected,
-        io_bindings=projected.get("io_bindings") or [],
+        plc_model=model, confirmed_spec=runtime_spec,
+        io_bindings=runtime_spec.get("io_bindings") or [],
         generation_contract=selected.get("generation_contract") or {},
         knowledge_context=knowledge_text,
         current_program=current, generation_request=request, handoff=public_generation_value(handoff),

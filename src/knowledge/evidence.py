@@ -3,6 +3,19 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import math
+import re
+
+_CJK = re.compile(r"[\u3400-\u9fff]")
+
+def estimate_tokens(value):
+    """Tokenizer-free deterministic estimate for context budgeting telemetry."""
+    text = str(value or "")
+    if not text:
+        return 0
+    cjk = len(_CJK.findall(text))
+    return cjk + math.ceil(max(0, len(text) - cjk) / 4)
+
 
 
 def text_sha256(text):
@@ -42,7 +55,9 @@ def evidence_record(result):
 
 
 class KnowledgeQuery(str):
-    def __new__(cls, text="", truncated=False):
+    def __new__(cls, text="", truncated=False, *, precompiled=False, metadata=None):
         result = super().__new__(cls, text)
         result.truncated = bool(truncated)
+        result.precompiled = bool(precompiled)
+        result.metadata = copy.deepcopy(metadata or {})
         return result

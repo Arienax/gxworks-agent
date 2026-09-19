@@ -1,11 +1,13 @@
 """Portable handoff summaries built from the selected version and stored evidence."""
 from __future__ import annotations
 
+import copy
 import hashlib
 import re
 from datetime import datetime, timezone
 
 from application.projects import public
+from application.generation_support import public_generation_value
 
 
 def delivery_summary(workbench, project_id, version_id):
@@ -66,6 +68,11 @@ def delivery_summary(workbench, project_id, version_id):
         "limitations": ["生成及保存本地版本不能证明原生编译或运行正确。",
                          "需求与测试的关联由设计者确认，不能据此推导全部需求已验证。",
                          "内存测试后端只验证软件流程；真实设备运行结果需单独核对。"]})
+    # generation_handoff is an application-authored bounded receipt. Generic
+    # metadata filtering treats every key containing "token" as a credential,
+    # but ContextCompiler telemetry uses token counts. Re-project this one known
+    # envelope with the generation privacy scrubber so counts survive delivery.
+    result["generation_handoff"] = public_generation_value(copy.deepcopy(version.get("generation_handoff")))
     result["markdown"] = render_delivery(result)
     return result
 

@@ -187,8 +187,11 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
         return absent("excluded", "repair_scope_only")
     top_k, char_budget = _KNOWLEDGE_TASK_SETTINGS.get(normalized_task, _KNOWLEDGE_TASK_SETTINGS["generate"])
     engineering = retrieval_projection(confirmed_context)
-    query = (_build_knowledge_query(engineering, primary_query, evidence) if normalized_task == "generate"
-             else _build_knowledge_query(primary_query, engineering, evidence))
+    if getattr(primary_query, "precompiled", False):
+        query = primary_query
+    else:
+        query = (_build_knowledge_query(engineering, primary_query, evidence) if normalized_task == "generate"
+                 else _build_knowledge_query(primary_query, engineering, evidence))
     should_lookup, lookup_reason = manual_lookup_decision(query)
     if (not should_lookup and normalized_task == "analysis" and
             resolve_context_policy().manuals == "adaptive" and query.strip()):
@@ -197,8 +200,12 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
         return absent("excluded", lookup_reason)
     try:
         from knowledge.retriever import build_knowledge_context as retrieve_context
+        query_meta = getattr(query, "metadata", {}) if getattr(query, "precompiled", False) else {}
+        token_budget = query_meta.get("rag_evidence_token_budget") if isinstance(query_meta, dict) else None
+        retrieval_char_budget = sys.maxsize if token_budget is not None else char_budget
         context = retrieve_context(query, plc_model=plc_model, task_type=normalized_task,
-                                   top_k=top_k, char_budget=char_budget)
+                                   top_k=top_k, char_budget=retrieval_char_budget,
+                                   token_budget=token_budget)
     except Exception:
         print("PLC knowledge retrieval unavailable", file=sys.stderr)
         return absent("unavailable", "retrieval_failed")
@@ -372,7 +379,8 @@ def _current_version_context(user_requirement, current_version_json, *, target_m
 def build_generation_instructions(user_requirement, *, plc_model, target_mode="ladder", is_edit_mode=False,
                                   task_type=None, review_mode=None, confirmed_context=None,
                                   current_version_json=None, prompt_builder=None, knowledge_builder=None,
-                                  profile_builder=None, confirmed_builder=None, on_context=None):
+                                  profile_builder=None, confirmed_builder=None, on_context=None,
+                                  model_profile=None):
     normalized_task = str(task_type or review_mode or ("edit" if is_edit_mode else "generate")).strip().casefold()
     if _is_format_repair(normalized_task, user_requirement):
         audit_section("model_profile", status="excluded", reason="format_repair", source="model_registry")
@@ -411,6 +419,7 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
             confirmed_context, plc_model, user_requirement=user_requirement,
             current_program=current_version_json, task_type=normalized_task,
             evidence=retrieval_evidence, knowledge_builder=knowledge_builder,
+            model_profile=model_profile,
         )
         confirmed_context = context.confirmed_spec
         user_requirement = context.generation_request

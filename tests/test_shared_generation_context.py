@@ -68,8 +68,11 @@ def test_api_and_external_context_have_identical_generation_instructions(monkeyp
     assert data["generation_request"] == (model_request if editing else CONFIRMED_GENERATION_REQUEST)
     assert calls == api_calls
     for _query, options in calls:
-        assert options == {"plc_model": "FX3U", "task_type": "edit" if editing else "generate",
-                           "top_k": 5, "char_budget": 7000}
+        assert options["plc_model"] == "FX3U"
+        assert options["task_type"] == ("edit" if editing else "generate")
+        assert options["top_k"] == 5
+        assert options["token_budget"] == 12000
+        assert options["char_budget"] == sys.maxsize
     assert data["current_version_id"] == ("v0001" if editing else None)
     assert "Private old conversation" not in json.dumps(data)
     assert persist is False and len(history) == (2 if editing else 1)

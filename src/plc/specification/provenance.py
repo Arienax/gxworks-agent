@@ -49,7 +49,17 @@ def analysis_context(user_text, approaches, previous_spec=None):
     text = str(user_text or "").strip()
     if text:
         request_id = "request-" + fingerprint({"text": text, "after": requests[-1].get("id") if requests else None})[:20]
-        requests.append({"id": request_id, "source": "user_request", "text": text})
+        text_sha256 = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        duplicate_of = next(
+            (row.get("id") for row in reversed(requests)
+             if isinstance(row, Mapping) and row.get("text") == text and row.get("id")),
+            None,
+        )
+        request = {"id": request_id, "source": "user_request", "text": text,
+                   "text_sha256": text_sha256}
+        if duplicate_of:
+            request["duplicate_of"] = duplicate_of
+        requests.append(request)
     request_ids = [row["id"] for row in requests if row.get("id")]
     proposals = [{"approach_id": item.get("approach_id", ""),
                   "proposal_sha256": fingerprint(proposal_snapshot(item)),
@@ -60,6 +70,37 @@ def analysis_context(user_text, approaches, previous_spec=None):
             "proposals": proposals or context.get("proposals", []),
             "analysis_evidence": {"stage": "analysis", "status": "not_recorded", "records": []},
             "confirmation": {"status": "draft"}}
+
+
+def mark_request_absorbed(spec, request_id, field_paths, *, superseded_by=None):
+    """Record only an explicit application-known mapping from request text to confirmed fields.
+
+    This helper never infers absorption from natural language. Callers may use it
+    only when they already know which structured fields fully carry that request.
+    """
+    result = copy.deepcopy(spec)
+    raw = result.get("engineering_context")
+    if not isinstance(raw, Mapping):
+        return result
+    context = _project(raw, ENGINEERING_CONTEXT_FIELDS)
+    paths = []
+    for value in field_paths or ():
+        text = str(value or "").strip()
+        if text and text not in paths:
+            paths.append(text)
+    if not paths:
+        return result
+    for row in context.get("requests", []):
+        if not isinstance(row, dict) or row.get("id") != request_id:
+            continue
+        row["absorbed_by_confirmed_fields"] = paths
+        if superseded_by:
+            row["superseded_by"] = str(superseded_by)
+        if row.get("text") and not row.get("text_sha256"):
+            row["text_sha256"] = hashlib.sha256(str(row["text"]).encode("utf-8")).hexdigest()
+        break
+    result["engineering_context"] = context
+    return result
 
 
 def selected_context(spec):

@@ -225,13 +225,18 @@ EVIDENCE_RECORD_FIELDS = dict.fromkeys((
 ))
 EVIDENCE_FIELDS = {
     **dict.fromkeys(("stage", "status", "query_sha256", "context_sha256", "plc_model",
-                    "char_budget", "used_chars", "query_truncated", "reason")),
+                    "char_budget", "used_chars", "token_budget", "used_tokens",
+                    "query_truncated", "reason")),
     "records": [EVIDENCE_RECORD_FIELDS],
     "omitted_ids": [None],
 }
 ENGINEERING_CONTEXT_FIELDS = {
     "schema_version": None,
-    "requests": [dict.fromkeys(("id", "text", "source"))],
+    "requests": [{
+        **dict.fromkeys(("id", "text", "source", "superseded_by", "text_sha256",
+                        "runtime_text_status", "duplicate_of")),
+        "absorbed_by_confirmed_fields": [None],
+    }],
     "proposals": [{
         **dict.fromkeys(("approach_id", "proposal_sha256", "source")),
         "request_ids": [None], "evidence": EVIDENCE_FIELDS,

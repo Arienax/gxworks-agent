@@ -220,14 +220,17 @@ def generate_confirmed_ladder(
     if not projected:
         raise ValueError("confirmed generation specification is empty")
 
-    context = build_confirmed_generation_context(projected, model, knowledge_builder=_build_knowledge_context)
+    base_provider = api.current_provider()
+    context = build_confirmed_generation_context(
+        projected, model, knowledge_builder=_build_knowledge_context,
+        model_profile=getattr(base_provider, "profile", {}),
+    )
     if on_context:
         on_context(context.to_dict()["handoff"])
     system_prompt = _build_agent_b_prompt(projected, model, context=context)
     if on_stage:
         on_stage("confirmed_spec_generation", "正在根据已确认规格生成梯形图")
 
-    base_provider = api.current_provider()
     provider = _FirstJSONObjectProvider(base_provider)
     from model_runtime.response_format import response_plan
     options, streaming = response_plan(

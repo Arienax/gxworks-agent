@@ -1,3 +1,4 @@
+import copy
 import os
 import json
 import re
@@ -172,6 +173,14 @@ def _request_model(
 def current_provider():
     """Return the provider frozen for this workflow; never switch profiles mid-call."""
     return _workflow_provider()
+
+
+def bound_provider_profile():
+    """Return an already-bound profile without initializing credentials/providers."""
+    session = _provider_session.get()
+    provider = session[0] if session and session[0] is not None else None
+    profile = getattr(provider, "profile", None)
+    return copy.deepcopy(profile) if isinstance(profile, dict) else {}
 
 
 def request_model(
@@ -581,6 +590,7 @@ def _prepare_api_call(
         profile_builder=_build_model_context,
         confirmed_builder=_with_confirmed_context,
         on_context=on_generation_context,
+        model_profile=bound_provider_profile(),
     )
     messages_to_send = _build_clean_messages(conversation_history, system_prompt)
     if image_attachments:
