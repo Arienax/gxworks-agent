@@ -49,6 +49,13 @@ jobs:
         run: >-
           python -m pytest -q
           tests/test_generation_agent_boundary.py
+          tests/test_intent_evidence_handoff.py
+          tests/test_analysis_design_rag.py
+          tests/test_contract_repair_planner.py
+          tests/test_delivery_summary.py
+          tests/test_prompt_context_policy.py
+          tests/test_architecture_boundaries.py
+          tests/test_source_layout.py
           tests/test_spec_choice_metadata.py
           tests/test_confirmed_compatibility.py
           tests/test_confirmed_reconfirmation.py
