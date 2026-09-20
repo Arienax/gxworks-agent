@@ -5,11 +5,14 @@ import re
 from plc.device_identity import canonical_device
 from plc.specification.bindings import (
     bind_answers,
+    bind_known_question_rows,
     binding_hint,
     single_address,
     restore_bound_choices,
     resolve_parameter_address,
     parameter_uses_bound_address,
+    bound_parameter_is_removed,
+    confirmed_input_levels,
 )
 
 from plc.specification.approach import (
@@ -567,6 +570,8 @@ def validate_spec_draft(spec, plc_model=None):
             continue
         hint = binding_hint(parameter)
         if hint is None or parameter.get("id") in QUESTION_IDS:
+            continue
+        if bound_parameter_is_removed(parameter, binding_rows, binding_history):
             continue
         if not parameter_uses_bound_address(parameter):
             # A question may be associated with D/M/T/etc. without selecting
@@ -1228,6 +1233,8 @@ def build_review_draft(analysis, previous_spec=None):
         ),
     )
 
+    io_table, parameters = bind_known_question_rows(io_table, parameters)
+
     approaches = [
         normalize_approach(item)
         for item in (analysis.get("approaches") or [])
@@ -1311,7 +1318,7 @@ def _asks_contact_type(question):
 
 
 def _has_contact_type(value):
-    return bool(re.search(r"常[开闭閉]|normally\s+(?:open|closed)|\b(?:NO|NC)\b", str(value), re.IGNORECASE))
+    return bool(confirmed_input_levels(value))
 
 
 def _restore_io_parameter_choices(parameter, io_rows):

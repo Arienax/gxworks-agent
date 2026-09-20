@@ -11,7 +11,6 @@ from knowledge.analysis_router import AnalysisRoute, route_analysis_request
 from application.prompts import (
     ANALYSIS_SYSTEM_PROMPT, ANALYSIS_DIRECT_PROMPT, ANALYSIS_PINNED_PROMPT, ANALYSIS_DESIGN_PROMPT,
     ANALYSIS_VFD_PROMPT, ANALYSIS_MOTION_PROMPT, ANALYSIS_MOTION_FAMILY_PROMPTS,
-    ANALYSIS_PUMP_PROMPT,
 )
 
 _DEVICE = re.compile(r"(?<![A-Za-z0-9_])(?:SM|SD|[XYMDTCSVZ])\d+(?![A-Za-z0-9_])", re.I)
@@ -19,8 +18,8 @@ _PRIVATE = {"reasoning_content", "raw_response", "raw_attempts", "_provider_reas
 
 # Transport metadata for the shared Core binding, not an inferred PLC rule.
 _IO_BINDING_PROMPT = """# I/O purpose metadata
-每个地址确认问题另带 io_binding，例如 {"binding_id":"device.start","kind":"X","label":"启动按钮"}；binding_id 稳定且区分不同控制对象，沿用已有绑定。kind 是地址类别，不在此预填未知地址。
-label 是独立的简短用途名称，不是 question：不含提问、选项、触点极性推导或实现解释；用途未知可省略或留空，不为注释新增确认问题。question 保留完整确认问题，实际地址/极性仍由用户回答。已有 I/O 用途以用户编辑的值为准；suggested_io 中的说明也只写用途名称。"""
+地址或输入极性确认问题用 io_binding 标识同一物理点：binding_id 为稳定标识，kind 为地址类别，label 为独立用途名称；已有 row_id 时沿用。已知地址只确认极性时，答案不必重复地址；仅涉及寄存器数值含义的参数不当作地址选择。
+label 是独立的简短用途名称，不是 question：不含提问、选项、触点极性推导或实现解释；用途未知可省略或留空，不为注释新增确认问题。question 保留完整确认问题，只询问尚未提供的地址或极性。已有 I/O 用途以用户编辑的值为准；suggested_io 中的说明也只写用途名称。"""
 
 
 def _address_notes(value, requested, result):
@@ -72,7 +71,7 @@ def _baseline_for_analysis(value):
     if not isinstance(value, Mapping):
         return str(value or "").strip()
     baseline = {key: copy.deepcopy(child) for key, child in value.items()
-                if key not in _PRIVATE | {"approaches"} and not str(key).startswith("_")}
+                if key not in _PRIVATE | {"approaches", "control_type", "flowchart_steps", "format_diagnostics"} and not str(key).startswith("_")}
     context = baseline.get("engineering_context")
     if isinstance(context, dict):
         context.pop("proposals", None)
@@ -126,8 +125,6 @@ def assemble_analysis_prompt(user_request, *, plc_model, confirmed_context=None,
         deltas.append(ANALYSIS_MOTION_PROMPT)
         deltas.extend(ANALYSIS_MOTION_FAMILY_PROMPTS[name] for name in route.motion_families
                       if name in ANALYSIS_MOTION_FAMILY_PROMPTS)
-    if "pump" in route.topics:
-        deltas.append(ANALYSIS_PUMP_PROMPT)
     mode_prompt = ANALYSIS_DESIGN_PROMPT if route.include_design else ANALYSIS_DIRECT_PROMPT
     if route.mode == "pinned":
         mode_prompt += "\n\n" + ANALYSIS_PINNED_PROMPT

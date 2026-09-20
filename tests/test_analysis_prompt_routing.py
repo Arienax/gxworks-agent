@@ -223,8 +223,9 @@ def test_core_shape_and_required_parameter_instructions_remain():
     assert "必要输入仍为 required" in ANALYSIS_SYSTEM_PROMPT
     assert "default 不是已确认答案" in ANALYSIS_SYSTEM_PROMPT
     assert "完整操作数" in ANALYSIS_SYSTEM_PROMPT
-    flow = ANALYSIS_SYSTEM_PROMPT.split("- 示例：", 1)[1].split("\n", 1)[0]
-    assert all("type" in step and "label" in step for step in json.loads(flow))
+    assert set(json.loads(example)) == {
+        "summary", "approaches", "missing_info", "suggested_io", "hardware_config", "assumptions",
+    }
 
 
 def test_partly_fixed_request_can_delegate_the_remaining_design():
@@ -285,4 +286,52 @@ def test_direct_core_does_not_duplicate_unknown_io_or_generic_plc_explanations()
     assert "没有这种差异就用空字符串" in ANALYSIS_SYSTEM_PROMPT
     assert "PLC 常识、常规扫描行为" in ANALYSIS_SYSTEM_PROMPT
     example = ANALYSIS_SYSTEM_PROMPT.split("返回纯JSON（不要```json包裹），格式：\n", 1)[1].split("\n# suggested_io", 1)[0]
-    assert json.loads(example)["flowchart_steps"] == []
+    assert not {"control_type", "flowchart_steps", "format_diagnostics", "execution_semantics"} & set(json.loads(example))
+
+
+@pytest.mark.parametrize("analysis_mode", ["direct", "design"])
+def test_old_display_metadata_is_not_reintroduced_by_confirmed_baseline(analysis_mode):
+    spec = {
+        "selected_approach": {"name": "保留的实现", "generation_guide": "保留专有语义"},
+        "control_type": ["old_type"], "flowchart_steps": [{"type": "step", "label": "old_display"}],
+        "format_diagnostics": [{"message": "old_diagnostic"}],
+        "execution_semantics": [{"semantic": "RISING_EDGE", "devices": ["X1"], "evidence": "X1上升沿"}],
+        "engineering_context": {"requests": [{"text": "原始请求"}]},
+    }
+    before = copy.deepcopy(spec)
+    result, _, _ = build("保留原有行为", spec, analysis_mode=analysis_mode)
+    snapshot = json.loads(result.system_prompt.split("# Confirmed project specification\n", 1)[1])
+    assert not {"control_type", "flowchart_steps", "format_diagnostics"} & snapshot.keys()
+    assert snapshot["execution_semantics"] == spec["execution_semantics"]
+    assert snapshot["selected_approach"] == spec["selected_approach"]
+    assert snapshot["engineering_context"]["requests"] == spec["engineering_context"]["requests"]
+    assert spec == before
+
+
+def test_design_structure_vocabulary_comes_from_core_contract():
+    from application.prompts import ANALYSIS_DESIGN_PROMPT
+    from plc.specification.approach import SUPPORTED_STRUCTURES
+    vocabulary = ANALYSIS_DESIGN_PROMPT.split("结构名：", 1)[1].split("。", 1)[0]
+    assert vocabulary.split("、") == sorted(SUPPORTED_STRUCTURES)
+
+
+@pytest.mark.parametrize("text,rotation", [
+    ("三泵分别由三个液位开关控制", False),
+    ("三泵按累计运行时间交替工作", True),
+    ("交替启动两台泵", True),
+    ("pump rotation", True),
+])
+def test_pump_count_never_injects_a_rotation_implementation(text, rotation):
+    result, _, _ = build(text)
+    assert ("pump" in result.route.topics) is rotation
+    assert "Relevant questions: pump" not in result.system_prompt
+    assert "位移链/指针" not in result.system_prompt
+
+
+def test_generic_debug_prompt_does_not_force_a_model_specific_checklist():
+    from application.prompts import DEBUG_REPORT_SYSTEM_PROMPT, SIMULATOR_TEST_SUITE_SYSTEM_PROMPT
+    assert "M8029 placement" not in DEBUG_REPORT_SYSTEM_PROMPT
+    assert "FX3U 32-bit" not in DEBUG_REPORT_SYSTEM_PROMPT
+    # The native simulator's real capability/scope restrictions are unchanged.
+    assert "FX3U GX Simulator2" in SIMULATOR_TEST_SUITE_SYSTEM_PROMPT
+    assert "Never write Y/T/C/S or M8xxx/D8xxx" in SIMULATOR_TEST_SUITE_SYSTEM_PROMPT

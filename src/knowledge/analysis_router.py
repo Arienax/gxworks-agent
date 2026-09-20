@@ -109,7 +109,7 @@ def route_analysis_request(user_request, confirmed_context=None, *, analysis_mod
         topics.append("analog")
     if re.search(r"高速计数|\bHSC\b|\bDHS(?:CS|CR|Z)\b", text, re.I):
         topics.append("hsc")
-    if re.search(r"(?:多|三|两|二|四|\d+)泵|泵[^。\n]{0,12}轮换|\bpump\s+(?:rotation|alternation)\b", text, re.I):
+    if re.search(r"泵[^。\n]{0,12}(?:轮换|交替)|(?:轮换|交替)[^。\n]{0,12}泵|\bpump\s+(?:rotation|alternation)\b", text, re.I):
         topics.append("pump")
     return AnalysisRoute(
         mode, reason, tuple(topics), families, tuple(opcodes),

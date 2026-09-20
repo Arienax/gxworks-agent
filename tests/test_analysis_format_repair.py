@@ -45,6 +45,7 @@ def test_real_analysis_path_corrects_syntax_once_before_publishing(stream, monke
     with api.provider_scope(provider, model_name="captured-profile"):
         result = function("起保停", **options)
     assert result["summary"] == "起保停控制"
+    assert "flowchart_steps" not in result  # Old replies remain parseable, not new model work.
     assert len(provider.requests) == 2
     first, second = provider.requests
     assert first.stream is second.stream is stream
@@ -116,5 +117,6 @@ def test_analysis_prompt_contains_valid_json_examples():
     example = api.ANALYSIS_SYSTEM_PROMPT.split("返回纯JSON（不要```json包裹），格式：\n", 1)[1]
     example = example.split("\n# suggested_io", 1)[0]
     assert isinstance(json.loads(example), dict)
-    flowchart = api.ANALYSIS_SYSTEM_PROMPT.split("- 示例：", 1)[1].split("\n", 1)[0]
-    assert all("type" in step and "label" in step for step in json.loads(flowchart))
+    assert set(json.loads(example)) == {
+        "summary", "approaches", "missing_info", "suggested_io", "hardware_config", "assumptions",
+    }

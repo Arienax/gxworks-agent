@@ -84,7 +84,7 @@ MCP 则是 `外部客户端 → MCP → ToolRuntime → PLC Core`，没有模型
 | --- | --- | --- |
 | 普通正文 | 模型新写的 prose；不合格则拒绝整轮正文与工具调用 | 机器 token、路径；明确标记且在请求中逐字出现的引述 |
 | 推理 | 独立检查；不合格则隐藏整个推理通道，不独立阻断合格正文和工具参数 | 合格推理保留原文；不改写或翻译不合格推理 |
-| 需求分析 | summary、方案说明、问题、I/O 说明、假设、流程标签 | control_type 旧中文枚举、options/default/required_when 比较值、hardware_config 参数、execution_semantics.evidence |
+| 需求分析 | summary、方案说明、问题、I/O 说明、假设 | options/default/required_when 比较值、hardware_config 参数；格式诊断与 execution_semantics 由 Core 产生，不由模型撰写 |
 | ladder / patch / candidate tool arguments | device_comments、label、debug_note/comment | 地址、指令、表达式、rung/network/branch ID、版本绑定、枚举；输入中明确存在的旧注释可原样保留 |
 | ST | `st_code` 内 `//` 与 `(* ... *)` 注释，识别嵌套注释和字符串转义 | 可执行代码、标识符、字面量，包括字面量里的中文或类似注释的字符 |
 | 调试、检查、specialist | 摘要、建议、根因、检查说明及既有 parser 支持的别名/单条记录/字符串列表 | 证据、引用、绑定、路径、状态枚举 |

@@ -28,7 +28,7 @@ _IO_ATTRIBUTE_RE = re.compile(
 
 
 def _is_io_attribute_answer(value):
-    return bool(_IO_ATTRIBUTE_RE.search(str(value or "")))
+    return bool(_IO_ATTRIBUTE_RE.search(str(value or "")) or confirmed_input_levels(value))
 
 
 def _is_plain_address_answer(value, kind=None):
@@ -59,7 +59,7 @@ def parameter_uses_bound_address(parameter):
     value = parameter.get("value", "")
     return (
         _question_is_address(name)
-        or _is_io_attribute_answer(value)
+        or (hint["kind"] in {"X", "M", "S", "SM"} and _is_io_attribute_answer(value))
         or _is_plain_address_answer(value, hint["kind"])
     )
 
@@ -101,6 +101,17 @@ def binding_hint(parameter):
     if identifier in _QUESTION_ALIASES:
         role, kind = _QUESTION_ALIASES[identifier]
         return {"binding_id": "question_" + identifier, "role": role, "kind": kind}
+    # Read old polarity-only questions that predate typed bindings. A single
+    # explicit input reference identifies the point the user is qualifying;
+    # no purpose or input polarity is guessed from the question's wording.
+    name = str(parameter.get("name") or parameter.get("question") or "")
+    if re.search(r"极性|polarity|常[开開闭閉]|normally[ _-]+(?:open|closed)", name, re.I):
+        address = single_address(name, "X")
+        if address is not None:
+            identity = identifier or hashlib.sha256(name.encode("utf-8")).hexdigest()[:16]
+            if len(identity) > 110:
+                identity = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
+            return {"binding_id": "question_" + identity, "kind": "X"}
     return None
 
 
@@ -195,46 +206,108 @@ def _bound_row(rows, identity, binding):
     return matches[0] if len(matches) == 1 else None
 
 
+def _saved_parameter_binding(parameter, bindings):
+    """An explicit binding identity wins over a legacy question-id fallback."""
+    hint = binding_hint(parameter)
+    if hint is None:
+        return None
+    saved = [item for item in (bindings or ()) if isinstance(item, dict)]
+    matches = [item for item in saved if item.get("binding_id") == hint["binding_id"]]
+    if not matches:
+        identifier = str(parameter.get("id") or "").strip()
+        matches = [item for item in saved if identifier and item.get("source_parameter_id") == identifier]
+    return matches[0] if len(matches) == 1 else None
+
+
+def bound_parameter_is_removed(parameter, rows, bindings=()):
+    """Ignore retained answers for an explicitly removed, previously owned row.
+
+    A new explicit address is an edit, not a stale answer. This is shared by
+    validation and binding so deleting a row cannot either resurrect it or
+    leave a polarity-only answer blocking confirmation.
+    """
+    hint = binding_hint(parameter)
+    prior = _saved_parameter_binding(parameter, bindings)
+    if hint is None or prior is None or _bound_row(rows, hint["binding_id"], prior) is not None:
+        return False
+    value = str(parameter.get("value") or "")
+    if not _DEVICE.search(value):
+        return _is_io_attribute_answer(value)
+    address = single_address(value, hint["kind"])
+    old_address = single_address(prior.get("value", ""), hint["kind"]) or single_address(prior.get("address", ""), hint["kind"])
+    return address is not None and address == old_address
+
+
 def resolve_parameter_address(parameter, rows, bindings=()):
-    """Resolve an address only for true address or electrical-attribute answers."""
+    """Resolve an answer against its existing owner, not a model's default.
+
+    Address+polarity answers may allocate/edit an address. Polarity-only
+    answers reuse their current row or the one point named in the question.
+    Ambiguous/wrong-kind explicit addresses
+    cannot silently fall back to question wording or another row's label.
+    """
     hint = binding_hint(parameter)
     if hint is None or not parameter_uses_bound_address(parameter):
         return None
-    explicit = single_address(parameter.get("value", ""), hint["kind"])
-    if explicit is not None:
-        return explicit
-    if not _is_io_attribute_answer(parameter.get("value", "")):
+    value = str(parameter.get("value") or "")
+    if _DEVICE.search(value):
+        return single_address(value, hint["kind"])
+    if not _is_io_attribute_answer(value):
         return None
+    rows = [row for row in (rows or ()) if isinstance(row, dict)]
+    saved = _saved_parameter_binding(parameter, bindings)
+    if saved is not None:
+        row = _bound_row(rows, hint["binding_id"], saved)
+        return single_address(canonical_device(row.get("address")), hint["kind"]) if row else None
 
-    identifier = str(parameter.get("id") or "").strip()
-    saved = [item for item in (bindings or ()) if isinstance(item, dict) and (
-        item.get("binding_id") == hint["binding_id"]
-        or identifier and item.get("source_parameter_id") == identifier
-    )]
-    if len(saved) == 1:
-        row = _bound_row(rows, hint["binding_id"], saved[0])
-        if row is None:
-            # A previously owned row was explicitly deleted; never resurrect it
-            # from stale question wording or historical provenance.
-            return None
-        return single_address(canonical_device(row.get("address")), hint["kind"])
+    owner = hint.get("row_id") or hint["binding_id"]
+    owned = [row for row in rows if row.get("binding_id") == owner or row.get("row_id") == owner]
+    if owned or hint.get("row_id"):
+        return single_address(canonical_device(owned[0].get("address")), hint["kind"]) if len(owned) == 1 else None
 
-    name = str(parameter.get("name") or "").strip()
-    matches = [row for row in (rows or ()) if isinstance(row, dict)
-               and str(row.get("kind") or re.sub(r"\d+$", "", str(row.get("address") or ""))).upper() in {hint["kind"], "特殊"}
-               and _row_matches(row, hint, name)]
-    addresses = {
-        single_address(canonical_device(row.get("address")), hint["kind"])
-        for row in matches
-    }
-    addresses.discard(None)
-    if len(addresses) == 1:
-        return next(iter(addresses))
+    name = str(parameter.get("name") or parameter.get("question") or "")
+    if _DEVICE.search(name):
+        address = single_address(name, hint["kind"])
+        # This is a displayed, single-point confirmation question, not a
+        # suggestion from options/defaults. A saved owner above always wins.
+        return address
+    else:
+        matches = [row for row in rows
+                   if str(row.get("kind") or re.sub(r"\d+$", "", str(row.get("address") or ""))).upper() in {hint["kind"], "特殊"}
+                   and _row_matches(row, hint, name)]
+    if len(matches) != 1:
+        return None
+    return single_address(canonical_device(matches[0].get("address")), hint["kind"])
 
-    # The analysis question may already state an address that came verbatim
-    # from the user request, e.g. "X001 常开还是常闭？". Reuse exactly one such
-    # address; never infer one from a role or from another row of the same kind.
-    return single_address(name, hint["kind"])
+
+
+def bind_known_question_rows(rows, parameters):
+    """Anchor a displayed one-point polarity question before the first answer.
+
+    This records identity only: no value/default is accepted, no I/O is added,
+    and no label or address is changed. A subsequent edit of the review table
+    can therefore keep its owner even before the first specification save.
+    """
+    rows, parameters = copy.deepcopy(rows), copy.deepcopy(parameters)
+    for parameter in parameters:
+        hint = binding_hint(parameter)
+        if hint is None or hint["kind"] != "X" or hint.get("row_id"):
+            continue
+        name = str(parameter.get("name") or "")
+        if not re.search(r"极性|polarity|常[开開闭閉]|normally[ _-]+(?:open|closed)", name, re.I):
+            continue
+        address = single_address(name, hint["kind"])
+        matches = [row for row in rows if isinstance(row, dict)
+                   and address is not None and canonical_device(row.get("address")) == address]
+        if len(matches) != 1:
+            continue
+        row = matches[0]
+        owner = row.get("binding_id") or hint["binding_id"]
+        row.setdefault("binding_id", owner)
+        if owner != hint["binding_id"]:
+            hint["row_id"] = owner
+        parameter["io_binding"] = hint
+    return rows, parameters
 
 
 def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
@@ -268,6 +341,15 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
         name = str(item.get("name") or "").strip()
         identifier = str(item.get("id") or "").strip()
         hint = binding_hint(item)
+        if not isinstance(item.get("io_binding"), dict):
+            # A generation projection drops parameter metadata but retains
+            # binding provenance. Recover that identity before using the
+            # legacy question fallback; never create a second binding for it.
+            saved = _saved_parameter_binding(item, previous.values())
+            restored_hint = binding_hint({"io_binding": saved}) if saved else None
+            if restored_hint is not None:
+                item["io_binding"] = restored_hint
+                hint = restored_hint
         if identifier in protected_ids or not name or (hint is None and not _question_is_address(name)):
             remaining.append(item)
             continue
@@ -275,6 +357,8 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
             # Device-associated semantic choices stay as confirmed parameters;
             # they are not I/O-address edits and must never be consumed here.
             remaining.append(item)
+            continue
+        if hint is not None and bound_parameter_is_removed(item, original_rows, previous.values()):
             continue
         address = resolve_parameter_address(item, original_rows, previous.values()) if hint else single_address(item.get("value", ""))
         if address is None:
@@ -306,6 +390,9 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
                 continue
         pending.append((hint, item, address))
         if _is_io_attribute_answer(item.get("value")):
+            # Preserve an exact recovered identity through reanalysis even if
+            # the next question's display wording no longer contains an address.
+            item.setdefault("io_binding", copy.deepcopy(hint))
             remaining.append(item)
 
     claimed = set()

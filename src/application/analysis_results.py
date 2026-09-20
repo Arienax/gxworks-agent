@@ -106,6 +106,10 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     # cannot authenticate its own questions by emitting this metadata field.
     normalized.pop("hardware_intent", None)
     normalized.pop("engineering_context", None)
+    # Legacy UI/classification fields are not part of the current model contract.
+    # Do not replay them into later model requests or migrate saved revisions.
+    normalized.pop("control_type", None)
+    normalized.pop("flowchart_steps", None)
     normalized["approaches"] = [
         normalize_approach({key: value for key, value in item.items() if key != "implementation_preferences"})
         for item in (normalized.get("approaches") or [])
@@ -131,8 +135,8 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     else:
         assumptions = []
 
-    existing_diagnostics = normalized.get("format_diagnostics", [])
-    diagnostics = list(existing_diagnostics) if isinstance(existing_diagnostics, list) else []
+    # Only the normalizer may author format diagnostics, never the model.
+    diagnostics = []
     clean_io = {}
     unmapped = []
     metadata = {}

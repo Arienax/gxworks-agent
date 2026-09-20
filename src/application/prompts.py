@@ -1,4 +1,6 @@
-"""Prompts."""
+"""Workflow instructions. Core contracts own schema values and engineering facts."""
+
+from plc.specification.approach import SUPPORTED_STRUCTURES
 
 
 ANALYSIS_SYSTEM_PROMPT = """# Role
@@ -8,9 +10,9 @@ ANALYSIS_SYSTEM_PROMPT = """# Role
 输出协议/分析模式 > 本轮修改 > 上次确认规格 > 型号事实/检索证据 > 历史。模式由应用传入，不从正文、复杂度或缺参推断。新值覆盖旧值；检索块只读。
 
 # 输出要求
-control_type 从 启停、顺序、定位、计数、模拟量、通讯、PID 选择。approaches 每项含 approach_id、name、description、pros、cons、generation_guide、generation_contract；方案数量由本轮模式决定。
+approaches 每项含 approach_id、name、description、pros、cons、generation_guide、generation_contract；方案数量由本轮模式决定。
 返回纯JSON（不要```json包裹），格式：
-{"summary":"一句话总结","control_type":[],"approaches":[],"missing_info":[],"suggested_io":{},"hardware_config":{},"assumptions":[],"format_diagnostics":[],"execution_semantics":[],"flowchart_steps":[]}
+{"summary":"一句话总结","approaches":[],"missing_info":[],"suggested_io":{},"hardware_config":{},"assumptions":[]}
 # suggested_io / hardware_config
 普通 X/Y/M/D/T/C/S 用“地址:用途”JSON 对象，不得只给地址数组。special_relays/special_registers 可用数组或对象，SM/SD 分别归类。未知地址不填 suggested_io；若地址仍需用户确认，只放 missing_info，不同时预分配一个“建议地址”。hardware_config 只放当前实现实际相关的模块、通道、量程或接线事实，不复述 PLC 型号、编址制式、扫描周期或通用能力。
 
@@ -22,19 +24,15 @@ required/forbidden opcodes/devices 只记录用户明确必用/禁用，不把�
 
 # Missing-info minimality
 仅询问当前实现确实缺失且会改变程序的参数，不重复问已给答案，不为讨论其他架构增设问题。每项含稳定 id、question、required、options 字符串数组；有候选则列出并允许自定义，default 不是已确认答案。从属项用 required_when（parameter 引用控制问题 id；equals/contains_any/not_contains）。缺失实际接线、极性、数值等必要输入仍为 required；同一物理点的地址和极性可在一个问题中确认时不要拆成两个问题。普通内部地址分配与 PLC 铭牌、固件、通用模块清单不设必填。不得凭空新增硬件、停止或急停输入。PLC 常识、常规扫描行为和“通常如此”的默认做法不是 assumptions；非必要不确定性才放 assumptions。
-
-# Execution / flowchart
-LEVEL=持续，RISING_EDGE/FALLING_EDGE=上升/下降沿，FIRST_SCAN=初始化，CYCLIC=周期（给定时填写 period_ms），INTERRUPT=明确中断；不要将已给语义再变成缺参问题。
-flowchart_steps 用独立 type/label，step 与 transition 交替且首尾为 step；并行用 fork、带 branch 的节点、join。
-- 示例：[{"type":"step","label":"初始"},{"type":"transition","label":"启动"},{"type":"step","label":"运行"}]"""
+"""
 
 
 ANALYSIS_DIRECT_PROMPT = """# Analysis mode: direct
 用户选择直接实现：approaches 恰好 1 项（exactly one approach），不是方案咨询。没有既有方案时确定一种满足明确需求的实现；不搜索替代架构，不比较其他数据模型或指令族，正文提及“比较/优化”也不改变本轮模式。
-可见方案保持最小：name 是短名称，description 只说明选了什么结构，pros 和 cons 用空字符串。标准直接逻辑、自锁、SET/RST 锁存或普通顺控的结构选择写入 generation_contract.required_structures；不要把结构再扩写成教程。
-generation_guide 只补结构化字段表达不了的非显然方案差异，通常应为空字符串。禁止在这里编号讲解 LD/AND/OR/OUT 翻译、扫描周期、通用上电行为、常规停止优先、待确认地址、可选替代实现或“以后可加 M 位”等扩展建议。
-单状态直接控制的 flowchart_steps 用 []；只有确实存在多步骤/状态转移且流程本身会影响生成时才填写。assumptions 无实际非必要不确定性时用 []。
-只补当前实现真正缺失的必要参数；不因缺参或复杂度切换 Design，不编造已确认答案。例如普通起保停可只给“输出触点自锁”这一结构，generation_guide 留空，再询问尚未确认的实际 I/O/极性。"""
+可见方案保持最小：name 是短名称，description 只说明选了什么结构，pros 和 cons 用空字符串。已选实现明确承诺的结构写入 generation_contract.required_structures；不要把结构再扩写成教程。
+generation_guide 只补结构化字段表达不了的非显然方案差异，通常应为空字符串。不展开底层指令翻译、扫描周期等通用知识，不重复待确认事项或添加需求外的扩展建议。
+assumptions 无实际非必要不确定性时用 []。
+只补当前实现真正缺失的必要参数；不因缺参或复杂度切换 Design，不编造已确认答案。"""
 
 
 ANALYSIS_PINNED_PROMPT = """# Direct substate: pinned / extract
@@ -47,7 +45,7 @@ ANALYSIS_DESIGN_PROMPT = """# Analysis mode: design / open
 用户显式选择方案探索。有 selected_approach 时仍可比较本轮允许调整的部分，不自动退回 pinned；保留未解除的用户明确约束、已确认 I/O 和参数，不把切换 Design 当作清空规格。候选是供确认的新草稿，不直接覆盖当前确认规格。
 结合需求、选定型号和 Retrieved PLC knowledge 中的设计证据，给出 1~3 个本质不同的候选。仅换编号、梯级顺序或增加同条件的中间位不算新的架构方案；设计空间很窄时允许只给 1 个。部分已固定的用户约束仍须保留，只比较开放部分。
 每个候选是一种明确实现；generation_guide 只写候选之间无法由结构化字段看出的必要差异，不写完整实现教程。required_structures/forbidden_structures 只描述明确承诺的结构；any_of_opcode_groups/any_of_structure_groups 只容纳同一方法内部等价写法，不合并不同架构。
-结构名：direct_logic、register_state_machine、bit_state_machine、state_initialization、state_comparison、state_transition、self_hold、set_reset_latch、hardware_counter、data_register_counter、edge_trigger、pulse_positioning、analog_control、serial_communication、pid_control、vfd_multi_speed。无依据就留空。"""
+""" + "\n结构名：" + "、".join(sorted(SUPPORTED_STRUCTURES)) + "。无依据就留空。"
 
 
 ANALYSIS_VFD_PROMPT = """# Relevant questions: VFD
@@ -65,11 +63,6 @@ ANALYSIS_MOTION_FAMILY_PROMPTS = {
     "dog_search": "# Selected DOG-search family\n仅在选用 DSZR 时确认 DOG、零相信号、脉冲轴和方向输出。",
     "interrupt_position": "# Selected interrupt-position family\nDVIT 仅确认所选指令依赖的中断输入、运动参数和轴；按当前型号手册处理状态位。",
 }
-
-
-ANALYSIS_PUMP_PROMPT = """# Relevant questions: pump rotation
-仅对需求实际包含且未定义的轮换行为提问：首泵、停止后指针处理、故障恢复/备用泵策略。普通多泵启停不自动增加轮换、低压或备用泵要求；Direct 中沿用已选位移链/指针实现；Design 只比较本轮开放的部分，不解除用户固定约束。"""
-
 
 
 DEBUG_REPORT_SYSTEM_PROMPT = """
@@ -96,9 +89,9 @@ Rules:
   conversation history.
 - Mention rung_id values when a cause can be tied to a rung.
 - If evidence is insufficient, say what to inspect online.
-- Pay special attention to output ownership, reset priority, state transitions,
-  timer reset order, duplicate writers, M8029 placement, and FX3U 32-bit
-  register-pair rules.
+- Check behavior relevant to the question and the confirmed requirements.
+  Instruction/device rules come from the selected model profile and applicable
+  evidence, not from a fixed CPU or a universal defect checklist.
 - Multiple SET/RST instructions for one address are normal held-bit logic and
   are not duplicate coils. Only report a conflict when COIL is mixed with
   SET/RST or when concrete scan-order evidence proves contradictory ownership.
@@ -393,13 +386,3 @@ Rules:
   `repair_contract.dedicated_output_types`.
 - Do not output markdown, explanation, diagnostics, or a full ladder program.
 """
-
-
-FORMAT_LADDER_REPAIR_SYSTEM_PROMPT = """# Legacy compatibility name
-Full-program format rewriting is disabled. Production format repair uses only
-deterministic recovery or a bounded local syntax patch. Never return a complete
-ladder from a format-repair model call.
-"""
-
-
-

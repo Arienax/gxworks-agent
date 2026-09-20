@@ -44,8 +44,7 @@ The existing Core review-draft builder already preselects the sole approach.
 Real required parameter questions stay unanswered until confirmed; suggested
 defaults are not answers. An unresolved address is not duplicated into
 `suggested_io`, and tightly coupled address/polarity facts may share one
-question. Direct single-state controls do not need a generated flowchart or
-generic PLC-behavior assumptions. No approach-count/description-length rejection gate,
+question. Generic PLC-behavior assumptions are not required. No approach-count/description-length rejection gate,
 automatic regeneration or additional approval step is introduced. Counts and
 brevity are prompt requirements, not a promise of perfect model compliance.
 
@@ -72,3 +71,46 @@ streaming APIs, no design retriever calls or design-as-fact leakage in Direct,
 separate queries and retained facts in Design, snapshot/retry identity, and
 required-parameter confirmation. No paid model or actual PLC operation is
 needed for the mocked cases; the bundled-RAG tests use the local knowledge DB.
+
+
+## Model output versus Core metadata
+
+Agent A authors only `summary`, `approaches`, `missing_info`, `suggested_io`,
+`hardware_config`, and `assumptions`. `control_type` is retired.
+`format_diagnostics` is produced by normalization, and `execution_semantics`
+is extracted by Core from user evidence; neither is requested from the model.
+Confirmed execution semantics, original requests and selected-plan meaning
+remain in generation context. The Design structure vocabulary is rendered from
+`plc.specification.approach.SUPPORTED_STRUCTURES`, not maintained twice.
+
+`flowchart_steps` was a legacy Qt display field, not the current program IR.
+New analyses do not generate it. Old stored snapshots are not rewritten, and
+old responses containing it still parse; it is not fed back into the normal
+analysis baseline. No new SFC derivation or Qt feature is implied.
+The generic debug prompt uses the selected model's evidence rather than an
+unconditional FX3U special-device checklist. FX3U-only native simulation and
+bounded repair/authorization restrictions remain unchanged.
+
+## Known-address polarity questions
+
+An `io_binding` identifies the physical point; it does not require every answer
+to repeat its address. A question such as `X003 停止按钮的触点极性是？` accepts
+`常闭（按下为 OFF）`. Core resolves its current owning row, preserves the answer,
+and derives the active/inactive input levels. Those levels are not ladder
+NO/NC instructions. Edited addresses and independent purpose labels follow the
+same identity; stale answers cannot restore a deleted owner. A generation
+projection that omits parameter metadata recovers the existing identity from
+binding provenance rather than allocating a duplicate binding.
+
+Legacy untyped polarity questions can reuse their single explicit X address;
+Core does not infer an address from options, model defaults or an unrelated row.
+Wrong-kind/multiple explicit addresses remain errors. Device-associated register
+semantics (such as the meaning of `D0=0`) stay ordinary parameters, not address
+selection. Real unanswered necessary parameters still require confirmation.
+No additional model call, retry, user approval or reasoning-effort override is
+introduced by this compatibility path.
+
+The regression owners are `test_spec_choice_metadata.py` for identity/alias/
+polarity matrices and `test_confirmed_reconfirmation.py` for one screenshot-
+shaped HTTP analysis/save/edit/generate sentinel through IR, SVG and CSV. These
+are offline provider fixtures, not Windows/GX Simulator2 or physical PLC proof.

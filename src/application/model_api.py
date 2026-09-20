@@ -53,7 +53,7 @@ from knowledge.patterns import (
     build_workflow_prompt,
     classify_request,
 )
-from application.prompts import ANALYSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_DIAGNOSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_PATCH_SYSTEM_PROMPT, DEBUG_REPORT_SYSTEM_PROMPT, FIELD_PATCH_REPAIR_SYSTEM_PROMPT, FORMAT_LADDER_REPAIR_SYSTEM_PROMPT, INSPECTION_SYSTEM_PROMPT, MULTI_AGENT_SPECIALIST_PROMPTS, PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT, SIMULATOR_TEST_SUITE_SYSTEM_PROMPT
+from application.prompts import ANALYSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_DIAGNOSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_PATCH_SYSTEM_PROMPT, DEBUG_REPORT_SYSTEM_PROMPT, FIELD_PATCH_REPAIR_SYSTEM_PROMPT, INSPECTION_SYSTEM_PROMPT, MULTI_AGENT_SPECIALIST_PROMPTS, PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT, SIMULATOR_TEST_SUITE_SYSTEM_PROMPT
 from application.analysis_results import _ANALYSIS_IO_KINDS, _ASSUMPTION_MARKERS, _iter_analysis_text, _normalize_analysis_result
 
 
@@ -295,8 +295,7 @@ def _request_analysis_response(messages, *, on_format_repair=None, **kwargs):
                 "Return the complete corrected JSON object only, using the analysis schema above. "
                 "Correct JSON syntax and missing schema keys only; preserve the requirement, "
                 "devices, alternatives and questions. Do not invent confirmed answers or generate PLC code. "
-                "Each flowchart_steps item has separate type and label keys, for example "
-                '{"type":"transition","label":"X0"}. No markdown or explanations.'
+                "Use separate property names and values. No markdown or explanations."
             )
             repair_messages = [*messages, rejected.raw_response.message,
                                UserMessage(correction)]
@@ -1258,11 +1257,6 @@ def repair_ladder_response(repair_payload, model_name, effort, *, mode,
         system_prompt = PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT
         response_contract = LADDER_RESPONSE
         audit_reason = "explicit_local_repair"
-    else:
-        native_response_format = None
-        system_prompt = FORMAT_LADDER_REPAIR_SYSTEM_PROMPT
-        response_contract = LADDER_RESPONSE
-        audit_reason = "explicit_format_repair"
     audit_section("repair_system_prompt", system_prompt, reason=audit_reason, source="api")
     messages = [
         {"role": "system", "content": system_prompt},

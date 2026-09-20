@@ -356,3 +356,109 @@ def test_plain_regenerate_commands_reuse_locked_spec(text):
 )
 def test_requirement_changes_are_not_treated_as_plain_regenerate_commands(text):
     assert not _is_regenerate_locked_spec_request(text)
+
+
+def test_http_known_address_polarity_survives_save_edit_and_generation(tmp_path):
+    """Screenshot-shaped answers reach real HTTP storage/artifact paths, not a live PLC."""
+    from fastapi.testclient import TestClient
+    from integrations.web.app import create_app
+    from application.workbench import WorkbenchService
+    from model_runtime.provider import TextDelta, SystemMessage
+    from test_web_api import ORIGIN, OPERATOR, _login, _complete
+    from plc.ir import ir_to_ladder
+
+    declarations = """FX3U。这里只验证启停输入与保持输出的绑定，其他行是已声明接口。
+X001：启动按钮
+X003：停止按钮
+D0：Vision Sensor 分类结果
+Y000：Entry conveyor
+Y002：Exit conveyor
+Y003：Sorter 1 turn
+Y004：Sorter 1 belt
+Y005：Sorter 2 turn
+Y006：Sorter 2 belt
+Y007：Sorter 3 turn
+Y010：Sorter 3 belt
+启动时保持Y000，停止时释放。"""
+    answers = {
+        "start_polarity": "常开（按下为 ON）", "stop_polarity": "常闭（按下为 OFF）",
+        "classification_zero": "D0=0 表示无料，1~9表示分类结果",
+    }
+
+    class Provider:
+        profile = {}
+
+        def __init__(self):
+            self.requests = []
+
+        def stream(self, request):
+            self.requests.append(request)
+            if request.response_contract.name == "analysis":
+                assert len(self.requests) == 1
+                payload = {
+                    "summary": "确认输入极性，启动保持输出，停止释放输出。", "approaches": [],
+                    "missing_info": [
+                        {"id": key, "question": f"{address} {label}的触点极性是？", "required": True,
+                         "options": ["常开（按下为 ON）", "常闭（按下为 OFF）"],
+                         "io_binding": {"binding_id": f"operator.{role}", "kind": "X", "role": role, "label": label}}
+                        for key, address, role, label in (
+                            ("start_polarity", "X001", "start", "启动按钮"),
+                            ("stop_polarity", "X003", "stop", "停止按钮"),
+                        )
+                    ] + [{"id": "classification_zero", "question": "D0=0 时的含义？", "required": True,
+                          "io_binding": {"binding_id": "vision.classification", "kind": "D", "label": "Vision Sensor 分类结果"}}],
+                    "suggested_io": {},  # Core must preserve the user's declared rows even when the model omits them.
+                }
+            else:
+                assert len(self.requests) == 2
+                prompt = next(m.content for m in request.messages if isinstance(m, SystemMessage))
+                projected, _ = json.JSONDecoder().raw_decode(prompt.split("# Confirmed project specification\n", 1)[1])
+                rows = {r["address"]: r["label"] for r in projected["io_table"]}
+                assert len(rows) == 11
+                assert {"X1", "X5", "Y10", "D0"} <= rows.keys() and "X3" not in rows
+                assert rows["X5"] == "停机输入" and rows["Y10"] == "Sorter 3 belt"
+                bindings = {b["role"]: b for b in projected["io_bindings"]}
+                assert bindings["start"]["address"] == "X1" and bindings["start"]["active_level"] == 1
+                assert bindings["stop"]["address"] == "X5" and bindings["stop"]["active_level"] == 0
+                assert {p["id"]: p["value"] for p in projected["parameters"]} == answers
+                assert "NO X5" in prompt.split("# Settled input predicates", 1)[1]
+                payload = {"r": [{"b": [{"i": [{"or": [["NO X1"], ["NO Y0"]]}, "NO X5"], "o": ["COIL Y0"]}]}]}
+            yield TextDelta(json.dumps(payload, ensure_ascii=False))
+
+    provider = Provider()
+    service = WorkbenchService(tmp_path / "workspace", tmp_path / "state",
+                               model_factory=lambda: (provider, {"model": "offline-binding-fixture"}))
+    app = create_app(service.store.base_dir, state_dir=service.state_dir, service=service,
+                     origin=ORIGIN, operator_token=OPERATOR)
+    with TestClient(app, base_url=ORIGIN) as client:
+        headers = _login(client)
+        pid = client.post("/api/projects", headers=headers, json={"name": "极性绑定回归"}).json()["id"]
+        _, analysis = _complete(client, service, client.post("/api/jobs", headers=headers, json={
+            "kind": "analysis", "project_id": pid, "request_id": "analyze-polarities",
+            "text": declarations, "response_language": "zh-CN"}))
+        draft = analysis["spec_draft"]
+        assert len(draft["io_table"]) == 11
+        assert all(p["value"] == "" for p in draft["parameters"])
+        for p in draft["parameters"]:
+            p.update(value=answers[p["id"]], source="user")
+        first = client.put(f"/api/projects/{pid}/spec", headers=headers,
+                           json={"spec": draft, "expected_hash": None}).json()
+        assert first["valid"] and len(provider.requests) == 1
+        next(r for r in first["spec"]["io_table"] if r["address"] == "X3").update(address="X005", label="停机输入")
+        second = client.put(f"/api/projects/{pid}/spec", headers=headers,
+                            json={"spec": first["spec"], "expected_hash": first["hash"]}).json()
+        assert second["valid"] and len(provider.requests) == 1
+        _, output = _complete(client, service, client.post("/api/jobs", headers=headers, json={
+            "kind": "generation", "project_id": pid, "request_id": "generate-polarities",
+            "text": "按确认规格生成", "response_language": "zh-CN"}))
+        assert output["status"] == "saved" and len(provider.requests) == 2
+        vid = output["version_id"]
+        ladder = ir_to_ladder(service.projects.program(pid, vid))
+        _truth_table(ladder, "NC", addresses=("X1", "X5", "Y0"))
+        assert ladder["device_comments"]["X1"] == "启动按钮"
+        assert ladder["device_comments"]["X5"] == "停机输入"
+        assert not {"X001", "X003", "X005", "X3"} & ladder["device_comments"].keys()
+        svg = service.projects.artifact(pid, vid, "svg").read_text(encoding="utf-8")
+        comments = service.projects.artifact(pid, vid, "comment_csv").read_text(encoding="utf-16")
+        assert "停机输入" in svg and "停机输入" in comments
+        assert "触点极性是" not in comments and "按下为" not in comments

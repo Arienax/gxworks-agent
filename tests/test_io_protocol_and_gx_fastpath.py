@@ -222,3 +222,23 @@ def test_web_gx_send_skips_redundant_post_import_roundtrip(tmp_path):
     assert result["status"] == "imported"
     assert calls and calls[0]["verify_roundtrip"] is False
     assert calls[0]["synchronize_comments"] is True
+
+
+
+def test_analysis_model_metadata_does_not_impersonate_core_diagnostics_or_semantics():
+    raw = {
+        "summary": "输入控制", "approaches": [], "missing_info": [],
+        "control_type": ["旧分类"], "flowchart_steps": [{"type": "step", "label": "旧显示"}],
+        "format_diagnostics": [{"code": "forged", "message": "模型编造的格式错误"}],
+        "execution_semantics": [{"semantic": "LEVEL", "devices": ["X7"], "evidence": "模型编造"}],
+        "suggested_io": {"X": {"X8": "非法八进制输入"}},
+    }
+    from copy import deepcopy
+    before = deepcopy(raw)
+    result = api._normalize_analysis_result(raw, "FX3U", "X1上升沿触发Y0。")
+    assert not {"control_type", "flowchart_steps"} & result.keys()
+    assert any(d["code"] == "invalid_io_address" for d in result["format_diagnostics"])
+    assert all(d["code"] != "forged" for d in result["format_diagnostics"])
+    assert any(s["semantic"] == "RISING_EDGE" for s in result["execution_semantics"])
+    assert all(s.get("evidence") != "模型编造" for s in result["execution_semantics"])
+    assert raw == before

@@ -16,11 +16,10 @@ ST_RESPONSE = ResponseContract("st", "json", st_paths=("st_code",))
 ANALYSIS_RESPONSE = ResponseContract("analysis", "json", (
     "summary", "approaches.*.name", "approaches.*.description", "approaches.*.pros",
     "approaches.*.cons", "approaches.*.generation_guide", "missing_info.*.question",
-    "assumptions", "format_diagnostics.*", "format_diagnostics.*.message",
-    "flowchart_steps.*.label",
+    "assumptions",
     *(f"suggested_io.{kind}.*" for kind in ("X", "Y", "M", "D", "T", "C", "S", "SM", "SD", "special_relays", "special_registers")),
-), structured_paths=("format_diagnostics.*",))
-# control_type is a legacy Chinese enum. options/default/required_when are
+))
+# options/default/required_when are
 # interdependent comparison values. execution_semantics.evidence is user text.
 # None may be translated or treated as a newly authored prose field.
 # io_binding.label is optional purpose metadata, not response prose. Core
