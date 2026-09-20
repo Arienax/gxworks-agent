@@ -12,7 +12,7 @@ _ANALYSIS_IO_KINDS = {"X", "Y", "M", "D", "T", "C", "S", "SM", "SD"}
 
 _ASSUMPTION_MARKERS = ("假设", "暂定", "待确认", "需确认", "unknown", "assume")
 _DECLARED_IO_LINE_RE = re.compile(
-    r"^\\s*(?:[-*•]\\s*|\\d+[.)、]\\s*)?((?:SM|SD|[XYMTCSDVZ])\\s*\\d+)\\s*[：:]\\s*(.+?)\\s*$",
+    r"^\s*(?:[-*•]\s*|\d+[.)、]\s*)?((?:SM|SD|[XYMTCSDVZ])\s*\d+)\s*[：:]\s*(.+?)\s*$",
     re.IGNORECASE,
 )
 
@@ -29,7 +29,7 @@ def _extract_user_declared_io(user_text, plc_model):
         match = _DECLARED_IO_LINE_RE.match(raw_line)
         if match is None:
             continue
-        address = canonical_device(re.sub(r"\\s+", "", match.group(1)).upper())
+        address = canonical_device(re.sub(r"\s+", "", match.group(1)).upper())
         label = str(match.group(2) or "").strip()
         if not label:
             continue

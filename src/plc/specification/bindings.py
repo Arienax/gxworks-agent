@@ -22,7 +22,7 @@ _QUESTION_ALIASES = {
     "output_device": ("output", "Y"),
 }
 _IO_ATTRIBUTE_RE = re.compile(
-    r"常[开闭閉]|normally\\s+(?:open|closed)|\\b(?:NO|NC)\\b|上升沿|下降沿|rising|falling|edge",
+    r"常[开闭閉]|normally\s+(?:open|closed)|\b(?:NO|NC)\b|上升沿|下降沿|rising|falling|edge",
     re.IGNORECASE,
 )
 
@@ -194,7 +194,7 @@ def resolve_parameter_address(parameter, rows, bindings=()):
 
     name = str(parameter.get("name") or "").strip()
     matches = [row for row in (rows or ()) if isinstance(row, dict)
-               and str(row.get("kind") or re.sub(r"\\d+$", "", str(row.get("address") or ""))).upper() in {hint["kind"], "特殊"}
+               and str(row.get("kind") or re.sub(r"\d+$", "", str(row.get("address") or ""))).upper() in {hint["kind"], "特殊"}
                and _row_matches(row, hint, name)]
     addresses = {
         single_address(canonical_device(row.get("address")), hint["kind"])
