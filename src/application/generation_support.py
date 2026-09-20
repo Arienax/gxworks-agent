@@ -14,7 +14,7 @@ import re
 import sys
 
 
-from plc.specification.approach import normalize_approach
+from plc.specification.approach import normalize_approach, normalize_generation_contract
 
 
 from shared.paths import resource_path
@@ -295,7 +295,10 @@ def public_generation_specification(specification):
 
     normalized = copy.deepcopy(specification)
     if isinstance(normalized, dict) and isinstance(normalized.get("selected_approach"), dict):
-        normalized["selected_approach"] = normalize_approach(normalized["selected_approach"])
+        selected = normalized["selected_approach"]
+        contract = normalize_generation_contract(selected.get("generation_contract"), approach=selected)
+        if contract.get("unverified_constraints"):
+            selected["generation_contract"] = contract
 
     def source_order(source, projected):
         if isinstance(source, dict) and isinstance(projected, dict):
