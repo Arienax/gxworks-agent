@@ -117,6 +117,16 @@ class StepWidthCatalog:
         self.rule_opcodes = frozenset(op for rule in self.rules for op in rule["opcodes"])
         self.variable = frozenset(rules.get("variable_opcodes", ()))
         self.aliases = dict(rules.get("aliases", {}))
+        exact = {}
+        for row in rules.get("exact_forms", ()):
+            opcode = self.aliases.get(str(row["opcode"]).upper(), str(row["opcode"]).upper())
+            operands = tuple(_operand_text(value) for value in row.get("operands", ()))
+            key = (opcode, operands)
+            value = (int(row["steps"]), str(row.get("evidence") or ""))
+            if key in exact and exact[key] != value:
+                raise ValueError("Conflicting exact step-width form: " + " ".join((opcode, *operands)))
+            exact[key] = value
+        self.exact_forms = MappingProxyType(exact)
         widths = {}
         for header, (opcode, arity) in encodings.items():
             raw = bytes.fromhex(header)
@@ -134,6 +144,10 @@ class StepWidthCatalog:
         op = self.aliases.get(op, op)
         args = tuple(_operand_text(value) for value in operands)
         joined = " ".join(args)
+        exact = self.exact_forms.get((op, args))
+        if exact is not None:
+            steps, evidence = exact
+            return StepWidth(steps, "exact_native_form", evidence=(evidence,) if evidence else ())
         if op in self.rule_opcodes:
             matches = [rule for rule in self.rules
                        if op in rule["opcodes"]
