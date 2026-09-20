@@ -1,0 +1,60 @@
+     assert result["summary"] == "起保停控制"
++    assert "flowchart_steps" not in result  # Old replies remain parseable, not new model work.
+     assert len(provider.requests) == 2
+     first, second = provider.requests
+     assert first.stream is second.stream is stream
+@@ -116,5 +117,6 @@ def test_analysis_prompt_contains_valid_json_examples():
+     example = api.ANALYSIS_SYSTEM_PROMPT.split("返回纯JSON（不要```json包裹），格式：\n", 1)[1]
+     example = example.split("\n# suggested_io", 1)[0]
+     assert isinstance(json.loads(example), dict)
+-    flowchart = api.ANALYSIS_SYSTEM_PROMPT.split("- 示例：", 1)[1].split("\n", 1)[0]
+-    assert all("type" in step and "label" in step for step in json.loads(flowchart))
++    assert set(json.loads(example)) == {
++        "summary", "approaches", "missing_info", "suggested_io", "hardware_config", "assumptions",
++    }
+diff --git a/tests/test_analysis_prompt_routing.py b/tests/test_analysis_prompt_routing.py
+index ba2c713..a2cd83a 100644
+--- a/tests/test_analysis_prompt_routing.py
++++ b/tests/test_analysis_prompt_routing.py
+@@ -223,8 +223,9 @@ def test_core_shape_and_required_parameter_instructions_remain():
+     assert "必要输入仍为 required" in ANALYSIS_SYSTEM_PROMPT
+     assert "default 不是已确认答案" in ANALYSIS_SYSTEM_PROMPT
+     assert "完整操作数" in ANALYSIS_SYSTEM_PROMPT
+-    flow = ANALYSIS_SYSTEM_PROMPT.split("- 示例：", 1)[1].split("\n", 1)[0]
+-    assert all("type" in step and "label" in step for step in json.loads(flow))
++    assert set(json.loads(example)) == {
++        "summary", "approaches", "missing_info", "suggested_io", "hardware_config", "assumptions",
++    }
+ 
+ 
+ def test_partly_fixed_request_can_delegate_the_remaining_design():
+@@ -285,4 +286,52 @@ def test_direct_core_does_not_duplicate_unknown_io_or_generic_plc_explanations()
+     assert "没有这种差异就用空字符串" in ANALYSIS_SYSTEM_PROMPT
+     assert "PLC 常识、常规扫描行为" in ANALYSIS_SYSTEM_PROMPT
+     example = ANALYSIS_SYSTEM_PROMPT.split("返回纯JSON（不要```json包裹），格式：\n", 1)[1].split("\n# suggested_io", 1)[0]
+-    assert json.loads(example)["flowchart_steps"] == []
++    assert not {"control_type", "flowchart_steps", "format_diagnostics", "execution_semantics"} & set(json.loads(example))
++
++
++@pytest.mark.parametrize("analysis_mode", ["direct", "design"])
++def test_old_display_metadata_is_not_reintroduced_by_confirmed_baseline(analysis_mode):
++    spec = {
++        "selected_approach": {"name": "保留的实现", "generation_guide": "保留专有语义"},
++        "control_type": ["old_type"], "flowchart_steps": [{"type": "step", "label": "old_display"}],
++        "format_diagnostics": [{"message": "old_diagnostic"}],
++        "execution_semantics": [{"semantic": "RISING_EDGE", "devices": ["X1"], "evidence": "X1上升沿"}],
++        "engineering_context": {"requests": [{"text": "原始请求"}]},
++    }
++    before = copy.deepcopy(spec)
++    result, _, _ = build("保留原有行为", spec, analysis_mode=analysis_mode)
++    snapshot = json.loads(result.system_prompt.split("# Confirmed project specification\n", 1)[1])
++    assert not {"control_type", "flowchart_steps", "format_diagnostics"} & snapshot.keys()
++    assert snapshot["execution_semantics"] == spec["execution_semantics"]
++    assert snapshot["selected_approach"] == spec["selected_approach"]
++    assert snapshot["engineering_context"]["requests"] == spec["engineering_context"]["requests"]
++    assert spec == before
++
++
++def test_design_structure_vocabulary_comes_from_core_contract():
++    from application.prompts import ANALYSIS_DESIGN_PROMPT
++    from plc.specification.approach import SUPPORTED_STRUCTURES
