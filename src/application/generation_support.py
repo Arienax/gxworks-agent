@@ -306,7 +306,10 @@ def public_generation_specification(specification):
             keys.extend(key for key in projected if key not in source)
             return {key: source_order(source.get(key), projected[key]) for key in keys}
         if isinstance(source, (list, tuple)) and isinstance(projected, list):
-            return [source_order(original, public) for original, public in zip(source, projected)]
+            shared = min(len(source), len(projected))
+            ordered = [source_order(source[index], projected[index]) for index in range(shared)]
+            ordered.extend(copy.deepcopy(projected[shared:]))
+            return ordered
         return projected
 
     return public_generation_value(source_order(specification, generation_specification(normalized)))
