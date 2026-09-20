@@ -46,7 +46,7 @@ CASES = [
     ("RST", "M8123", 2), ("SET", "M8161", 2), ("SET", "M10", 1),
     ("OUT", "T0 K1", 3), ("OUT", "C10 K3", 3), ("OUT", "Y0", 1),
     ("OUT", "T10Z0 K10", 4), ("LD", "M10Z0", 3), ("RST", "D10.F", 3),
-    ("LD", "M8000", 1), ("LDP", "M8002", 2), ("END", "", 1),
+    ("LD", "M8000", 1), ("LDP", "M8002", 2), ("ANI", "M8340", 2), ("END", "", 1),
 ]
 
 
@@ -67,6 +67,14 @@ def test_catalogue_every_fixed_native_form_and_every_variant_is_resolved():
         result = catalogue.resolve(opcode, [f"D{2 * i}" for i in range(arity)])
         assert result.steps == width, (opcode, result)
         assert result.source == "native_observation"
+
+
+def test_catalogue_exact_native_basic_header_variant_precedes_broad_contact_rule():
+    result = instruction_step_width("ANI", ["M8340"])
+    assert result.steps == 2
+    assert result.source == "exact_native_form"
+    assert result.evidence and "040d0204" in result.evidence[0]
+    assert instruction_step_width("ANI", ["X1"]).steps == 1
 
 
 def test_catalogue_aliases_and_device_zero_padding():
