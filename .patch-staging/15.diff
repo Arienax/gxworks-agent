@@ -1,0 +1,52 @@
++                "io_table": [{"kind": "X", "address": "X003", "label": "停止按钮"}]}
++    spec = canonicalize_confirmed_spec(original)
++    spec["io_table"][0].update(address="X005", label="停机输入")
++    spec["parameters"][0]["value"] = "常开（按下为 ON）"
++    assert validate_spec_draft(spec)["errors"] == []
++    spec = canonicalize_confirmed_spec(spec)
++    assert spec["io_bindings"][0]["address"] == "X5"
++    assert spec["io_bindings"][0]["active_level"] == 1
++    assert spec["io_bindings"][0]["label"] == "停机输入"
++    spec["io_table"] = []
++    assert validate_spec_draft(spec)["errors"] == []
++    spec = canonicalize_confirmed_spec(spec)
++    assert spec["io_table"] == [] and spec["parameters"] == []
++    assert not spec.get("io_bindings")
++    assert canonicalize_confirmed_spec(spec) == spec
++    assert original["io_table"][0]["address"] == "X003"
++
++
++@pytest.mark.parametrize("value", ["", "常开 / 常闭"])
++def test_unanswered_or_ambiguous_polarity_is_not_implicitly_confirmed(value):
++    spec = {"plc_model": "FX3U", "parameters": [{"id": "start_input", "name": "X1 常开还是常闭？",
++             "required": True, "value": value, "options": ["常开", "常闭"], "suggested_default": "常开"}],
++            "io_table": [{"kind": "X", "address": "X1", "label": "启动按钮"}]}
++    assert {i["code"] for i in validate_spec_draft(spec)["errors"]} & {"required_parameter_missing", "contact_type_missing"}
++
++
++def test_polarity_metadata_does_not_turn_register_edge_semantics_into_an_address_edit():
++    from plc.specification.bindings import bind_answers
++    parameter = {"id": "vision", "name": "D0 的有料判定", "value": "D0 由0变为非0，rising edge 表示新物料",
++                 "io_binding": {"binding_id": "vision", "kind": "D", "label": "分类结果"}}
++    rows = [{"kind": "D", "address": "D0", "label": "分类结果"}]
++    result, remaining, bindings, _ = bind_answers(rows, [parameter])
++    assert result == rows and remaining == [parameter] and bindings == []
++
++
++
++def test_polarity_question_owns_its_row_before_first_confirmation():
++    analysis = {
++        "summary": "输入确认", "approaches": [],
++        "suggested_io": {"X": {"X003": "停止按钮"}},
++        "missing_info": [{"id": "input_contact", "question": "X003 停止按钮的触点极性是？", "required": True}],
++    }
++    draft = build_review_draft(analysis)
++    assert draft["parameters"][0]["value"] == ""
++    draft["io_table"][0].update(address="X005", label="重命名后的输入")
++    draft["parameters"][0].update(value="常闭（按下为 OFF）", source="user")
++    assert not validate_spec_draft(draft)["errors"]
++    confirmed = canonicalize_confirmed_spec(draft)
++    assert [r["address"] for r in confirmed["io_table"]] == ["X5"]
++    assert confirmed["io_bindings"][0]["address"] == "X5"
++    assert confirmed["io_bindings"][0]["label"] == "重命名后的输入"
++    assert confirmed["io_bindings"][0]["active_level"] == 0
