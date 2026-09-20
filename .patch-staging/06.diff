@@ -1,0 +1,71 @@
+     *(f"suggested_io.{kind}.*" for kind in ("X", "Y", "M", "D", "T", "C", "S", "SM", "SD", "special_relays", "special_registers")),
+-), structured_paths=("format_diagnostics.*",))
+-# control_type is a legacy Chinese enum. options/default/required_when are
++))
++# options/default/required_when are
+ # interdependent comparison values. execution_semantics.evidence is user text.
+ # None may be translated or treated as a newly authored prose field.
+ # io_binding.label is optional purpose metadata, not response prose. Core
+diff --git a/src/knowledge/analysis_router.py b/src/knowledge/analysis_router.py
+index 6cdd2ba..337031e 100644
+--- a/src/knowledge/analysis_router.py
++++ b/src/knowledge/analysis_router.py
+@@ -109,7 +109,7 @@ def route_analysis_request(user_request, confirmed_context=None, *, analysis_mod
+         topics.append("analog")
+     if re.search(r"高速计数|\bHSC\b|\bDHS(?:CS|CR|Z)\b", text, re.I):
+         topics.append("hsc")
+-    if re.search(r"(?:多|三|两|二|四|\d+)泵|泵[^。\n]{0,12}轮换|\bpump\s+(?:rotation|alternation)\b", text, re.I):
++    if re.search(r"泵[^。\n]{0,12}(?:轮换|交替)|(?:轮换|交替)[^。\n]{0,12}泵|\bpump\s+(?:rotation|alternation)\b", text, re.I):
+         topics.append("pump")
+     return AnalysisRoute(
+         mode, reason, tuple(topics), families, tuple(opcodes),
+diff --git a/src/plc/specification/bindings.py b/src/plc/specification/bindings.py
+index c1af4e1..c23628a 100644
+--- a/src/plc/specification/bindings.py
++++ b/src/plc/specification/bindings.py
+@@ -28,7 +28,7 @@ _IO_ATTRIBUTE_RE = re.compile(
+ 
+ 
+ def _is_io_attribute_answer(value):
+-    return bool(_IO_ATTRIBUTE_RE.search(str(value or "")))
++    return bool(_IO_ATTRIBUTE_RE.search(str(value or "")) or confirmed_input_levels(value))
+ 
+ 
+ def _is_plain_address_answer(value, kind=None):
+@@ -59,7 +59,7 @@ def parameter_uses_bound_address(parameter):
+     value = parameter.get("value", "")
+     return (
+         _question_is_address(name)
+-        or _is_io_attribute_answer(value)
++        or (hint["kind"] in {"X", "M", "S", "SM"} and _is_io_attribute_answer(value))
+         or _is_plain_address_answer(value, hint["kind"])
+     )
+ 
+@@ -101,6 +101,17 @@ def binding_hint(parameter):
+     if identifier in _QUESTION_ALIASES:
+         role, kind = _QUESTION_ALIASES[identifier]
+         return {"binding_id": "question_" + identifier, "role": role, "kind": kind}
++    # Read old polarity-only questions that predate typed bindings. A single
++    # explicit input reference identifies the point the user is qualifying;
++    # no purpose or input polarity is guessed from the question's wording.
++    name = str(parameter.get("name") or parameter.get("question") or "")
++    if re.search(r"极性|polarity|常[开開闭閉]|normally[ _-]+(?:open|closed)", name, re.I):
++        address = single_address(name, "X")
++        if address is not None:
++            identity = identifier or hashlib.sha256(name.encode("utf-8")).hexdigest()[:16]
++            if len(identity) > 110:
++                identity = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
++            return {"binding_id": "question_" + identity, "kind": "X"}
+     return None
+ 
+ 
+@@ -195,46 +206,108 @@ def _bound_row(rows, identity, binding):
+     return matches[0] if len(matches) == 1 else None
+ 
+ 
++def _saved_parameter_binding(parameter, bindings):
++    """An explicit binding identity wins over a legacy question-id fallback."""
++    hint = binding_hint(parameter)
++    if hint is None:
++        return None
++    saved = [item for item in (bindings or ()) if isinstance(item, dict)]
