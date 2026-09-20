@@ -4,12 +4,78 @@ import re
 from shared.i18n import tr
 from plc.specification.approach import normalize_approach
 from plc.validation import PLCJsonValidationError, parse_device_address
+from plc.device_identity import canonical_device
 from plc.hardware_profiles import ensure_hardware_questions
 
 _ANALYSIS_IO_KINDS = {"X", "Y", "M", "D", "T", "C", "S", "SM", "SD"}
 
 
 _ASSUMPTION_MARKERS = ("假设", "暂定", "待确认", "需确认", "unknown", "assume")
+_DECLARED_IO_LINE_RE = re.compile(
+    r"^\s*(?:[-*•]\s*|\d+[.)、]\s*)?((?:SM|SD|[XYMTCSDVZ])\s*\d+)\s*[：:]\s*(.+?)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _extract_user_declared_io(user_text, plc_model):
+    """Recover explicit address-to-purpose declarations from the user request.
+
+    This is a non-blocking preservation path, not a validator. Only standalone
+    device: purpose lines are accepted so comparisons such as D0 = 1~3 and
+    instruction operands cannot accidentally become I/O allocations.
+    """
+    declared = {}
+    for raw_line in str(user_text or "").splitlines():
+        match = _DECLARED_IO_LINE_RE.match(raw_line)
+        if match is None:
+            continue
+        address = canonical_device(re.sub(r"\s+", "", match.group(1)).upper())
+        label = str(match.group(2) or "").strip()
+        if not label:
+            continue
+        try:
+            parsed = parse_device_address(address, plc_model)
+        except (PLCJsonValidationError, ValueError, TypeError):
+            continue
+        if parsed is None:
+            continue
+        actual_kind, _number = parsed
+        declared.setdefault(actual_kind, {})[address] = label
+    return declared
+
+
+def _historical_declared_io(confirmed_spec, plc_model):
+    """Return explicit I/O declarations already seen before this analysis turn."""
+    historical = {}
+    context = (confirmed_spec or {}).get("engineering_context") if isinstance(confirmed_spec, dict) else None
+    requests = context.get("requests", []) if isinstance(context, dict) else []
+    for item in requests or []:
+        text = item.get("text", "") if isinstance(item, dict) else ""
+        for category, values in _extract_user_declared_io(text, plc_model).items():
+            target = historical.setdefault(category, {})
+            for address, label in values.items():
+                target[(canonical_device(address), str(label).strip().casefold())] = True
+    return historical
+
+
+def _confirmed_io_addresses(confirmed_spec):
+    addresses = set()
+    rows = (confirmed_spec or {}).get("io_table", []) if isinstance(confirmed_spec, dict) else []
+    for row in rows or []:
+        if isinstance(row, dict) and row.get("address"):
+            addresses.add(canonical_device(str(row["address"]).strip().upper()))
+    return addresses
+
+
+def _removed_confirmed_io_addresses(confirmed_spec):
+    overrides = (confirmed_spec or {}).get("io_user_overrides") if isinstance(confirmed_spec, dict) else None
+    if not isinstance(overrides, dict):
+        return set()
+    return {
+        canonical_device(str(address).strip().upper())
+        for address in overrides.get("removed_addresses", []) or []
+        if str(address).strip()
+    }
 
 
 def _iter_analysis_text(value):
@@ -205,6 +271,48 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
             current_unmapped = [] if current_unmapped in (None, "", {}) else [current_unmapped]
             hardware["unmapped_suggested_io"] = current_unmapped
         current_unmapped.extend(unmapped)
+
+    # User-declared wiring seeds the first draft deterministically, but once a
+    # specification has been confirmed its edited I/O table is authoritative.
+    # Old declarations from earlier requests must not resurrect a row that the
+    # operator changed or deleted in the specification editor.
+    declared_io = _extract_user_declared_io(user_text, plc_model)
+    historical = _historical_declared_io(confirmed_spec, plc_model)
+    confirmed_addresses = _confirmed_io_addresses(confirmed_spec)
+    removed_addresses = _removed_confirmed_io_addresses(confirmed_spec)
+    historical_addresses = {
+        address for values in historical.values() for address, _label in values
+    }
+    if confirmed_spec:
+        for category, values in list(clean_io.items()):
+            if not isinstance(values, dict):
+                continue
+            for address in list(values):
+                identity = canonical_device(address)
+                if identity in removed_addresses or (
+                    identity in historical_addresses and identity not in confirmed_addresses
+                ):
+                    values.pop(address, None)
+            if not values:
+                clean_io.pop(category, None)
+
+    for category, values in declared_io.items():
+        target = clean_io.setdefault(category, {})
+        seen = historical.get(category, {})
+        for address, label in values.items():
+            identity = canonical_device(address)
+            # On a later analysis turn, only a genuinely new explicit
+            # declaration may seed a new suggestion. Replaying the original
+            # request cannot undo direct edits made in the confirmed spec.
+            if confirmed_spec and (
+                identity in removed_addresses
+                or (identity, str(label).strip().casefold()) in seen
+            ):
+                continue
+            for existing in list(target):
+                if canonical_device(existing) == identity:
+                    target.pop(existing, None)
+            target[identity] = label
 
     normalized["suggested_io"] = clean_io
     if hardware:

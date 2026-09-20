@@ -2,7 +2,15 @@ import copy
 import difflib
 import re
 
-from plc.specification.bindings import bind_answers, binding_hint, single_address, restore_bound_choices
+from plc.device_identity import canonical_device
+from plc.specification.bindings import (
+    bind_answers,
+    binding_hint,
+    single_address,
+    restore_bound_choices,
+    resolve_parameter_address,
+    parameter_uses_bound_address,
+)
 
 from plc.specification.approach import (
     contract_definition_issues,
@@ -548,6 +556,11 @@ def validate_spec_draft(spec, plc_model=None):
                 )
             )
 
+    binding_rows = spec.get("io_table")
+    if not isinstance(binding_rows, list):
+        binding_rows = raw_to_io_table(spec.get("io_allocation_raw", ""))
+    binding_history = spec.get("io_bindings", [])
+
     seen_bindings = {}
     for index, parameter in enumerate(parameters):
         if not isinstance(parameter, dict) or not str(parameter.get("value") or "").strip():
@@ -555,7 +568,12 @@ def validate_spec_draft(spec, plc_model=None):
         hint = binding_hint(parameter)
         if hint is None or parameter.get("id") in QUESTION_IDS:
             continue
-        address = single_address(parameter["value"], hint["kind"])
+        if not parameter_uses_bound_address(parameter):
+            # A question may be associated with D/M/T/etc. without selecting
+            # that address. Semantic answers are ordinary parameters, not an
+            # invalid I/O answer and therefore create no confirmation gate.
+            continue
+        address = resolve_parameter_address(parameter, binding_rows, binding_history)
         if address is None:
             errors.append(_validation_issue("invalid_io_answer", "请为该输入/输出选择一个明确的软元件地址",
                                             f"$.parameters[{index}].value", row=index))
@@ -1018,6 +1036,15 @@ def _merge_io_rows(base_rows, incoming_rows):
     merged = []
     by_address = {}
     base_count = len(base_rows or [])
+    base_labels = []
+    for row in base_rows or []:
+        if not isinstance(row, dict):
+            continue
+        address = str(row.get("address", "")).strip().upper()
+        if not address:
+            continue
+        kind = str(row.get("kind") or _device_kind(address)).strip() or _device_kind(address)
+        base_labels.append((kind, str(row.get("label", "")).strip().casefold()))
     for position, row in enumerate(list(base_rows or []) + list(incoming_rows or [])):
         if not isinstance(row, dict):
             continue
@@ -1034,19 +1061,18 @@ def _merge_io_rows(base_rows, incoming_rows):
             if isinstance(row.get(field), str):
                 clean[field] = row[field]
         if position >= base_count and not clean.get("binding_id"):
-            previous = merged[by_address[address]] if address in by_address else None
-            if previous and previous.get("binding_id"):
-                # A new analysis is a suggestion, not a user edit to the row
-                # already confirmed at this address (including its purpose).
+            if address in by_address:
+                # Once a row exists in a confirmed specification, a later model
+                # suggestion must never overwrite its address-adjacent metadata
+                # such as a user-edited purpose label.
                 continue
-            exact_bound_labels = [r for r in merged if r.get("binding_id")
-                                  and r["kind"] == clean["kind"] and r["label"]
-                                  and r["label"].casefold() == clean["label"].casefold()]
-            if address not in by_address and len(exact_bound_labels) == 1:
-                # Reanalysis often repeats its original suggested address after
-                # the operator has changed it. Do not add a second row for the
-                # same exact, already-bound purpose. New typed answers are still
-                # independently bound when the user confirms them.
+            exact_previous_labels = [item for item in base_labels
+                                     if item[0] == clean["kind"] and clean["label"]
+                                     and item[1] == clean["label"].casefold()]
+            if len(exact_previous_labels) == 1:
+                # Reanalysis may repeat the old suggested address after the
+                # operator moved the device. Preserve the confirmed row instead
+                # of adding a duplicate suggestion for the same unique purpose.
                 continue
         if address in by_address:
             previous = merged[by_address[address]]
@@ -1344,6 +1370,52 @@ def restore_review_choices(draft, analysis):
     return restored
 
 
+def preserve_io_user_edits(previous_spec, draft):
+    """Carry direct specification-editor I/O removals as non-generation provenance.
+
+    The metadata is used only to stop later analysis suggestions from reviving
+    addresses the operator explicitly removed or moved. It never blocks saving,
+    never reaches Agent B, and adding the address again clears its tombstone.
+    """
+    result = copy.deepcopy(draft or {})
+    if not isinstance(previous_spec, dict):
+        return result
+
+    def addresses(value):
+        rows = value.get("io_table", []) if isinstance(value, dict) else []
+        return {
+            canonical_device(str(row.get("address") or "").strip().upper())
+            for row in rows or [] if isinstance(row, dict) and row.get("address")
+        }
+
+    previous_addresses = addresses(previous_spec)
+    current_addresses = addresses(result)
+    previous_overrides = previous_spec.get("io_user_overrides")
+    removed = set()
+    if isinstance(previous_overrides, dict):
+        removed.update(
+            canonical_device(str(address).strip().upper())
+            for address in previous_overrides.get("removed_addresses", []) or []
+            if str(address).strip()
+        )
+    removed.update(previous_addresses - current_addresses)
+    removed.difference_update(current_addresses)
+
+    overrides = copy.deepcopy(result.get("io_user_overrides"))
+    if not isinstance(overrides, dict):
+        overrides = {}
+    if removed:
+        overrides["removed_addresses"] = sorted(removed)
+        result["io_user_overrides"] = overrides
+    else:
+        overrides.pop("removed_addresses", None)
+        if overrides:
+            result["io_user_overrides"] = overrides
+        else:
+            result.pop("io_user_overrides", None)
+    return result
+
+
 def canonicalize_confirmed_spec(spec):
     """Return one conflict-free specification for storage and API injection."""
     canonical = copy.deepcopy(spec or {})
@@ -1406,6 +1478,27 @@ def canonicalize_confirmed_spec(spec):
     canonical["execution_semantics"] = normalize_semantic_requirements(
         canonical.get("execution_semantics") or []
     )
+    overrides = canonical.get("io_user_overrides")
+    if isinstance(overrides, dict):
+        removed = {
+            canonical_device(str(address).strip().upper())
+            for address in overrides.get("removed_addresses", []) or []
+            if str(address).strip()
+        }
+        active_addresses = {
+            canonical_device(str(row.get("address") or "").strip().upper())
+            for row in canonical.get("io_table", []) or []
+            if isinstance(row, dict) and row.get("address")
+        }
+        removed.difference_update(active_addresses)
+        if removed:
+            overrides = copy.deepcopy(overrides)
+            overrides["removed_addresses"] = sorted(removed)
+            canonical["io_user_overrides"] = overrides
+        else:
+            canonical.pop("io_user_overrides", None)
+    elif "io_user_overrides" in canonical:
+        canonical.pop("io_user_overrides", None)
     canonical["schema_version"] = 3
     return canonical
 

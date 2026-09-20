@@ -21,6 +21,49 @@ _QUESTION_ALIASES = {
     "stop_signal": ("stop", "X"), "stop_address": ("stop", "X"),
     "output_device": ("output", "Y"),
 }
+_IO_ATTRIBUTE_RE = re.compile(
+    r"常[开闭閉]|normally\s+(?:open|closed)|\b(?:NO|NC)\b|上升沿|下降沿|rising|falling|edge",
+    re.IGNORECASE,
+)
+
+
+def _is_io_attribute_answer(value):
+    return bool(_IO_ATTRIBUTE_RE.search(str(value or "")))
+
+
+def _is_plain_address_answer(value, kind=None):
+    """Accept a bare address/default label, not arbitrary device-related prose."""
+    text = str(value or "").strip()
+    address = single_address(text, kind)
+    if address is None:
+        return False
+    remainder = _DEVICE.sub("", text, count=1)
+    remainder = re.sub(
+        r"[\s，,。；;：:（）()［］\[\]【】<>《》_-]+|建议|推薦|recommended|default",
+        "", remainder, flags=re.IGNORECASE,
+    )
+    return not remainder
+
+
+def parameter_uses_bound_address(parameter):
+    """Whether this answer is actually selecting or qualifying one device address.
+
+    io_binding identifies which device a question is about; it does not mean
+    every answer must itself be an address. Register semantics such as
+    "D0=0 means no material" remain ordinary confirmed parameters.
+    """
+    hint = binding_hint(parameter)
+    if hint is None:
+        return False
+    name = str(parameter.get("name") or parameter.get("question") or "")
+    value = parameter.get("value", "")
+    return (
+        _question_is_address(name)
+        or _is_io_attribute_answer(value)
+        or _is_plain_address_answer(value, hint["kind"])
+    )
+
+
 _ROLE_LABELS = {
     "start": {"启动", "启动按钮", "启动信号", "起动", "起动按钮", "start", "startbutton", "startsignal", "起動", "起動ボタン"},
     "stop": {"停止", "停止按钮", "停止信号", "stop", "stopbutton", "stopsignal", "停止ボタン"},
@@ -152,6 +195,48 @@ def _bound_row(rows, identity, binding):
     return matches[0] if len(matches) == 1 else None
 
 
+def resolve_parameter_address(parameter, rows, bindings=()):
+    """Resolve an address only for true address or electrical-attribute answers."""
+    hint = binding_hint(parameter)
+    if hint is None or not parameter_uses_bound_address(parameter):
+        return None
+    explicit = single_address(parameter.get("value", ""), hint["kind"])
+    if explicit is not None:
+        return explicit
+    if not _is_io_attribute_answer(parameter.get("value", "")):
+        return None
+
+    identifier = str(parameter.get("id") or "").strip()
+    saved = [item for item in (bindings or ()) if isinstance(item, dict) and (
+        item.get("binding_id") == hint["binding_id"]
+        or identifier and item.get("source_parameter_id") == identifier
+    )]
+    if len(saved) == 1:
+        row = _bound_row(rows, hint["binding_id"], saved[0])
+        if row is None:
+            # A previously owned row was explicitly deleted; never resurrect it
+            # from stale question wording or historical provenance.
+            return None
+        return single_address(canonical_device(row.get("address")), hint["kind"])
+
+    name = str(parameter.get("name") or "").strip()
+    matches = [row for row in (rows or ()) if isinstance(row, dict)
+               and str(row.get("kind") or re.sub(r"\d+$", "", str(row.get("address") or ""))).upper() in {hint["kind"], "特殊"}
+               and _row_matches(row, hint, name)]
+    addresses = {
+        single_address(canonical_device(row.get("address")), hint["kind"])
+        for row in matches
+    }
+    addresses.discard(None)
+    if len(addresses) == 1:
+        return next(iter(addresses))
+
+    # The analysis question may already state an address that came verbatim
+    # from the user request, e.g. "X001 常开还是常闭？". Reuse exactly one such
+    # address; never infer one from a role or from another row of the same kind.
+    return single_address(name, hint["kind"])
+
+
 def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
     """Bind confirmed answers on a copy; return rows, remaining params, provenance.
 
@@ -186,7 +271,12 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
         if identifier in protected_ids or not name or (hint is None and not _question_is_address(name)):
             remaining.append(item)
             continue
-        address = single_address(item.get("value", ""), hint.get("kind") if hint else None)
+        if hint is not None and not parameter_uses_bound_address(item):
+            # Device-associated semantic choices stay as confirmed parameters;
+            # they are not I/O-address edits and must never be consumed here.
+            remaining.append(item)
+            continue
+        address = resolve_parameter_address(item, original_rows, previous.values()) if hint else single_address(item.get("value", ""))
         if address is None:
             remaining.append(item)
             continue
@@ -198,7 +288,8 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
         item["value"] = _DEVICE.sub(lambda _m: address, str(item["value"]), count=1)
         prior = previous.get(hint["binding_id"])
         if prior:
-            prior_address = single_address(prior.get("value", ""), hint["kind"])
+            prior_address = (single_address(prior.get("value", ""), hint["kind"])
+                             or single_address(prior.get("address", ""), hint["kind"]))
             linked_row = _bound_row(original_rows, hint["binding_id"], prior)
             if address == prior_address and linked_row is not None:
                 # A combined answer such as "X1，常闭" remains editable for its
@@ -214,7 +305,7 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
                 # operator audit, not in the active generation specification.
                 continue
         pending.append((hint, item, address))
-        if re.search(r"常[开闭閉]|normally\s+(?:open|closed)|\b(?:NO|NC)\b|上升沿|下降沿|rising|falling|edge", str(item.get("value")), re.I):
+        if _is_io_attribute_answer(item.get("value")):
             remaining.append(item)
 
     claimed = set()
@@ -317,9 +408,14 @@ def restore_bound_choices(questions, rows, bindings):
             continue
         value = str(binding.get("value") or "")
         address = str(row.get("address") or "").strip().upper()
-        if not single_address(value) or not single_address(address):
+        if not single_address(address):
             continue
-        question["value"] = _DEVICE.sub(lambda _m: address, value, count=1)
+        if single_address(value):
+            question["value"] = _DEVICE.sub(lambda _m: address, value, count=1)
+        elif _is_io_attribute_answer(value):
+            question["value"] = value
+        else:
+            continue
         question["source"] = binding.get("source") or "previous"
         if isinstance(question.get("io_binding"), dict):
             question["io_binding"]["label"] = str(row.get("label") or "").strip()

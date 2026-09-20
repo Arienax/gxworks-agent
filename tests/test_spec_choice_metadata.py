@@ -78,6 +78,97 @@ def test_missing_model_choices_offer_only_allocated_addresses_without_assuming_p
     assert restored["parameters"][1]["options"] == ["X1，常开", "X1，常闭", "X0，常开", "X0，常闭"]
 
 
+def test_polarity_only_answers_bind_to_predeclared_io_without_reasking_address():
+    analysis = {
+        "plc_model": "FX3U",
+        "summary": "sorting station",
+        "suggested_io": {"X": {"X001": "启动按钮", "X003": "停止按钮"}},
+        "missing_info": [
+            {
+                "id": "start_input",
+                "question": "启动按钮 X001 使用常开还是常闭触点？",
+                "required": True,
+                "options": ["常开（按下为 ON）", "常闭（按下为 OFF）"],
+            },
+            {
+                "id": "stop_input",
+                "question": "停止按钮 X003 使用常开还是常闭触点？",
+                "required": True,
+                "options": ["常开（按下为 ON）", "常闭（按下为 OFF）"],
+            },
+        ],
+    }
+    draft = build_review_draft(analysis)
+    draft["parameters"][0].update(value="常开（按下为 ON）", source="user")
+    draft["parameters"][1].update(value="常闭（按下为 OFF）", source="user")
+    assert validate_spec_draft(draft)["errors"] == []
+
+    canonical = canonicalize_confirmed_spec(draft)
+    assert {row["address"] for row in canonical["io_table"]} == {"X1", "X3"}
+    by_role = {item["role"]: item for item in canonical["io_bindings"]}
+    assert by_role["start"]["address"] == "X1"
+    assert by_role["start"]["active_level"] == 1
+    assert by_role["stop"]["address"] == "X3"
+    assert by_role["stop"]["active_level"] == 0
+    assert [(p["id"], p["value"]) for p in canonical["parameters"]] == [
+        ("start_input", "常开（按下为 ON）"),
+        ("stop_input", "常闭（按下为 OFF）"),
+    ]
+
+
+def test_register_semantic_choice_is_not_misclassified_as_io_address_answer():
+    analysis = {
+        "plc_model": "FX3U",
+        "summary": "vision classification",
+        "suggested_io": {"D": {"D0": "Vision Sensor 分类结果"}},
+        "missing_info": [{
+            "id": "vision_material_presence",
+            "question": "视觉传感器如何表示“有料 / 无料”，程序据此判定新物料并把颜色写入跟踪寄存器？",
+            "required": True,
+            "options": [
+                "有料时 D0 输出 1~9，无料时 D0=0（D0 由 0 变非 0 即为新料）",
+                "有料时 D0 输出 1~9，无料时 D0 保持上次分类值，另有到位信号",
+            ],
+            "io_binding": {
+                "binding_id": "vision.classification", "kind": "D",
+                "label": "Vision Sensor 分类结果",
+            },
+        }],
+    }
+    draft = build_review_draft(analysis)
+    draft["parameters"][0].update(
+        value="有料时 D0 输出 1~9，无料时 D0=0（D0 由 0 变非 0 即为新料）",
+        source="user",
+    )
+    assert validate_spec_draft(draft)["errors"] == []
+
+    canonical = canonicalize_confirmed_spec(draft)
+    assert {row["address"] for row in canonical["io_table"]} == {"D0"}
+    assert [(p["id"], p["value"]) for p in canonical["parameters"]] == [
+        (
+            "vision_material_presence",
+            "有料时 D0 输出 1~9，无料时 D0=0（D0 由 0 变非 0 即为新料）",
+        )
+    ]
+    assert not canonical.get("io_bindings")
+
+
+def test_bare_non_xy_address_answer_still_binds_normally():
+    from plc.specification.bindings import bind_answers
+    parameter = {
+        "id": "tracking_register", "name": "tracking_register", "value": "D10",
+        "source": "user",
+        "io_binding": {"binding_id": "tracking.register", "kind": "D", "label": "跟踪寄存器"},
+    }
+    rows, remaining, bindings, _ = bind_answers([], [parameter])
+    assert remaining == []
+    assert rows == [{
+        "kind": "D", "address": "D10", "label": "跟踪寄存器", "source": "user",
+        "binding_id": "tracking.register", "source_parameter_id": "tracking_register",
+    }]
+    assert bindings[0]["address"] == "D10"
+
+
 def test_address_and_contact_answer_remains_explicit_across_canonicalization():
     draft = build_review_draft(_analysis())
     for parameter, value in zip(draft["parameters"], ["X2", "X1，常闭", "Y0"]):
