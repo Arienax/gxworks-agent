@@ -27,7 +27,7 @@ from model_runtime.responses import ResponseContract
 
 from application.confirmed_generation_context import (
     CONFIRMED_GENERATION_REQUEST as _GENERATION_REQUEST,
-    build_confirmed_generation_context,
+    build_confirmed_generation_context, generation_execution_prompt,
     project_confirmed_specification as _strict_generation_projection,
 )
 
@@ -37,8 +37,9 @@ _COMPACT_PROTOCOL = """# Agent B compact ladder protocol
 你只负责把已确认规格翻译成紧凑梯级计划；不要重新设计需求。
 
 语义规则：
-- 用户已确认的 X/Y 地址、触点极性、参数和 selected_approach.generation_contract 必须原样遵守。
-- 不得擅自新增 X/Y、停止/急停、硬件、模块寄存器或特殊软元件；内部状态优先使用普通 M/D/T/C 低位地址。
+- 用户当前确认的地址、触点极性和参数必须保持；遵守 selected_approach.generation_contract 的结构化约束，不把 unverified_constraints 升级为额外硬约束。
+- 不得擅自新增 X/Y、停止/急停、硬件或模块寄存器；内部状态优先使用普通 M/D/T/C 低位地址。
+- 实现已确认语义所需的内部特殊软元件，可按当前型号资料/手册证据选用；这不等于新增外部 I/O。已有显式禁用仍须遵守，不得拿其他型号或猜测替代证据。
 - 同一普通 Y/M 只保留一个 COIL owner；多个触发条件必须合并到该输出的同一个条件结构。
 - 输入 OR 使用 `{"or":[[...],[...]]}` 放在同一 branch 的 `i` 中，不得用多个输出 branch 表达同一输出的 OR。
 - OR 的每个分支只能包含简单输入，不允许 OR 嵌套。
@@ -201,6 +202,7 @@ def _build_agent_b_prompt(projected, plc_model, *, context=None):
         + "\n# Confirmed project specification\n"
         + confirmed
         + evidence
+        + generation_execution_prompt(context.confirmed_spec, evidence_text=evidence)
     )
     audit_section("system_prompt", prompt, reason="confirmed_spec_compact_generation", source="application")
     return prompt

@@ -2005,5 +2005,273 @@
   "evidence_files": [
     "research/results/token-20260919/native-conversion-ladder-mode.json",
     "research/results/token-20260919/native-operand-corpus-20260920.json"
-  ]
+  ],
+  "supplemental_encodings": {
+    "0202": [
+      "NOP",
+      0
+    ],
+    "033303": [
+      "FEND",
+      0
+    ],
+    "056a010705": [
+      "SRET",
+      0
+    ],
+    "0569010105": [
+      "EI",
+      0
+    ],
+    "0569010305": [
+      "IRET",
+      0
+    ],
+    "031803": [
+      "ORB",
+      0
+    ],
+    "031903": [
+      "ANB",
+      0
+    ],
+    "032403": [
+      "RST",
+      1
+    ],
+    "033403": [
+      "END",
+      0
+    ],
+    "04210304": [
+      "OUT_T_C",
+      2
+    ],
+    "040d0204": [
+      "ANDI",
+      1
+    ],
+    "04230204": [
+      "SET",
+      1
+    ],
+    "04240204": [
+      "RST",
+      1
+    ],
+    "031a03": [
+      "MPS",
+      0
+    ],
+    "031b03": [
+      "MRD",
+      0
+    ],
+    "031c03": [
+      "MPP",
+      0
+    ],
+    "0563092005": [
+      "DSZR",
+      4
+    ]
+  },
+  "supplemental_evidence": {
+    "path": "src/gxw/token_pou.py:_OPCODES",
+    "commit": "0e7c711cbb671ed157143ad48e89af3d86921da9",
+    "scope": "Existing exact native project/CSV/control-flow observations, migrated without inferring new instruction encodings."
+  },
+  "step_width_profile": {
+    "schema_version": 1,
+    "models": [
+      "FX3U",
+      "FX3UC"
+    ],
+    "description": "Expected program-width rules supplement the shared native encoding observations. They are not CPU/operand validity checks. No implicit one-step fallback.",
+    "aliases": {
+      "ANDI": "ANI",
+      "OUT_T_C": "OUT"
+    },
+    "variable_opcodes": [
+      "$MOV",
+      "$MOVP"
+    ],
+    "rules": [
+      {
+        "opcodes": [
+          "LD",
+          "LDI",
+          "AND",
+          "ANI",
+          "OR",
+          "ORI"
+        ],
+        "arity": 1,
+        "operands": "(?:[XY][0-7]+|[MSTC][0-9]+)",
+        "steps": 1,
+        "evidence": "native-conversion-ladder-mode.json cases 0,1,4,5,8,9; native CSV alignment t/f/s"
+      },
+      {
+        "opcodes": [
+          "LDP",
+          "LDF",
+          "ANDP",
+          "ANDF",
+          "ORP",
+          "ORF",
+          "PLS",
+          "PLF"
+        ],
+        "arity": 1,
+        "operands": "(?:[XY][0-7]+|[MSTC][0-9]+)",
+        "steps": 2,
+        "evidence": "native-conversion-ladder-mode.json cases 2,3,6,7,10,11,15,16; native CSV alignment t/f/s"
+      },
+      {
+        "opcodes": [
+          "LD",
+          "LDI",
+          "AND",
+          "ANI",
+          "OR",
+          "ORI",
+          "LDP",
+          "LDF",
+          "ANDP",
+          "ANDF",
+          "ORP",
+          "ORF",
+          "OUT",
+          "SET",
+          "RST",
+          "PLS",
+          "PLF"
+        ],
+        "arity": 1,
+        "operands": "(?:[XY][0-7]+|[MS][0-9]+)[VZ][0-7]|D[0-9]+\\.[0-9A-F]",
+        "steps": 3,
+        "evidence": "native-operand-corpus-20260920.json: simple index/bit-selection controls. Compound modifiers are not covered."
+      },
+      {
+        "opcodes": [
+          "OUT",
+          "SET",
+          "RST"
+        ],
+        "arity": 1,
+        "operands": "Y[0-7]+|S[0-9]+|M(?:[0-9]{1,3}|[0-7][0-9]{3})",
+        "steps": 1,
+        "evidence": "native-conversion-ladder-mode.json cases 12,13; native CSV alignment RST M2/SET M10/OUT Y5"
+      },
+      {
+        "opcodes": [
+          "SET"
+        ],
+        "arity": 1,
+        "operands": "M8161",
+        "steps": 2,
+        "evidence": "tests/fixtures/gxw_token_native_20260919.json: SET M8161, raw header 04230204. Other special targets require evidence."
+      },
+      {
+        "opcodes": [
+          "RST"
+        ],
+        "arity": 1,
+        "operands": "M8123|T[0-9]+|C(?:[0-9]{1,2}|1[0-9]{2})",
+        "steps": 2,
+        "evidence": "native CSV alignment t/f/s: RST T16/M8123; legacy FX timer/16-bit-counter reset rule"
+      },
+      {
+        "opcodes": [
+          "RST"
+        ],
+        "arity": 1,
+        "operands": "D[0-9]+",
+        "steps": 3,
+        "evidence": "native-conversion-ladder-mode.json case 14: RST D10 -> 04240304"
+      },
+      {
+        "opcodes": [
+          "OUT"
+        ],
+        "arity": 2,
+        "operands": "(?:T[0-9]+|C(?:[0-9]{1,2}|1[0-9]{2})) (?:K[+-]?[0-9]+|H[0-9A-F]+|D[0-9]+)",
+        "steps": 3,
+        "evidence": "native OUT-T/C header 04210304 and complete native CSV alignment; does not generalize to 32-bit counters"
+      },
+      {
+        "opcodes": [
+          "OUT"
+        ],
+        "arity": 2,
+        "operands": "T10Z0 K10",
+        "steps": 4,
+        "evidence": "research/results/token-20260919/step-width-manifest.json native_validation.g: 6 total steps including LD and END"
+      }
+    ],
+    "exact_forms": [
+      {
+        "opcode": "ANI",
+        "operands": [
+          "M8340"
+        ],
+        "steps": 2,
+        "evidence": "tests/fixtures/gxw_token_native_20260919.json: t @ POU 2057, raw 040d02040590942005; native CSV step width 2"
+      }
+    ]
+  },
+  "original_native_catalog_git_blob": "1676279321f4d50219e0f5e55056154ec1c5d011",
+  "lexical_overrides": {
+    "0202": "NOP",
+    "033303": "FEND",
+    "056a010705": "SRET",
+    "0569010105": "EI",
+    "0569010305": "IRET",
+    "030003": "LD",
+    "030103": "LDI",
+    "030603": "OR",
+    "030703": "ORI",
+    "030c03": "AND",
+    "030d03": "ANDI",
+    "031803": "ORB",
+    "031903": "ANB",
+    "032003": "OUT",
+    "032303": "SET",
+    "032403": "RST",
+    "033403": "END",
+    "04210304": "OUT_T_C",
+    "0549072805": "ADD",
+    "0549072a05": "SUB",
+    "0549072c05": "MUL",
+    "0549072e05": "DIV",
+    "05490d2905": "DADD",
+    "05490d2b05": "DSUB",
+    "054a030005": "INC",
+    "054a030205": "DEC",
+    "054c050005": "MOV",
+    "054c090105": "DMOV",
+    "054c070605": "BMOV",
+    "04020204": "LDP",
+    "04030204": "LDF",
+    "040d0204": "ANDI",
+    "04230204": "SET",
+    "04240204": "RST",
+    "04260204": "PLF",
+    "031a03": "MPS",
+    "031b03": "MRD",
+    "031c03": "MPP",
+    "064005001006": "LD=",
+    "064005011006": "LD<>",
+    "064005031006": "LD>=",
+    "064005021106": "AND>",
+    "064005031106": "AND>=",
+    "064005041106": "AND<",
+    "064005051106": "AND<=",
+    "05490d2f05": "DDIV",
+    "055f090a05": "RS",
+    "0563092005": "DSZR",
+    "0563091a05": "DRVI",
+    "040e0204": "ANDP",
+    "0551090705": "SFTL"
+  }
 }

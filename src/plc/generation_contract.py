@@ -300,12 +300,6 @@ def generation_specification(confirmed_spec: Any) -> dict | None:
     if not isinstance(confirmed_spec, Mapping):
         return None
     result = _project(confirmed_spec, _SPEC_FIELDS)
-    selected = result.get("selected_approach")
-    if isinstance(selected, Mapping):
-        from plc.specification.approach import normalize_generation_contract
-        contract = normalize_generation_contract(selected.get("generation_contract"), approach=selected)
-        if contract.get("unverified_constraints"):
-            selected["generation_contract"] = _project(contract, _CONTRACT_FIELDS)
     # Review questions with no confirmed value are provenance/UI state, not
     # engineering facts. They may remain in the persisted specification, but
     # must not consume generation context or invite Agent B to invent an answer.

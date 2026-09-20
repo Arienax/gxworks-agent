@@ -14,7 +14,7 @@ import re
 import sys
 
 
-from plc.specification.approach import normalize_approach
+from plc.specification.approach import normalize_approach, normalize_generation_contract
 
 
 from shared.paths import resource_path
@@ -285,8 +285,20 @@ def public_generation_ladder(ladder):
 
 
 def public_generation_specification(specification):
-    """Keep the established engineering allowlist and the API's source order."""
+    """Normalize legacy selected-plan metadata, then apply the Core allowlist.
+
+    The caller-owned specification is never mutated. Legacy compatibility lives
+    at this application boundary so plc.generation_contract remains a pure,
+    model-free projection used by API and external-tool contracts.
+    """
     from plc.generation_contract import generation_specification
+
+    normalized = copy.deepcopy(specification)
+    if isinstance(normalized, dict) and isinstance(normalized.get("selected_approach"), dict):
+        selected = normalized["selected_approach"]
+        contract = normalize_generation_contract(selected.get("generation_contract"), approach=selected)
+        if contract.get("unverified_constraints"):
+            selected["generation_contract"] = contract
 
     def source_order(source, projected):
         if isinstance(source, dict) and isinstance(projected, dict):
@@ -294,8 +306,11 @@ def public_generation_specification(specification):
             keys.extend(key for key in projected if key not in source)
             return {key: source_order(source.get(key), projected[key]) for key in keys}
         if isinstance(source, (list, tuple)) and isinstance(projected, list):
-            return [source_order(original, public) for original, public in zip(source, projected)]
+            shared = min(len(source), len(projected))
+            ordered = [source_order(source[index], projected[index]) for index in range(shared)]
+            ordered.extend(copy.deepcopy(projected[shared:]))
+            return ordered
         return projected
 
-    return public_generation_value(source_order(specification, generation_specification(specification)))
+    return public_generation_value(source_order(specification, generation_specification(normalized)))
 
