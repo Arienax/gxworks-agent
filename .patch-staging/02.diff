@@ -1,0 +1,51 @@
++The regression owners are `test_spec_choice_metadata.py` for identity/alias/
++polarity matrices and `test_confirmed_reconfirmation.py` for one screenshot-
++shaped HTTP analysis/save/edit/generate sentinel through IR, SVG and CSV. These
++are offline provider fixtures, not Windows/GX Simulator2 or physical PLC proof.
+diff --git a/docs/architecture/response-language.md b/docs/architecture/response-language.md
+index 4d7ce63..5f56ac2 100644
+--- a/docs/architecture/response-language.md
++++ b/docs/architecture/response-language.md
+@@ -84,7 +84,7 @@ MCP 则是 `外部客户端 → MCP → ToolRuntime → PLC Core`，没有模型
+ | --- | --- | --- |
+ | 普通正文 | 模型新写的 prose；不合格则拒绝整轮正文与工具调用 | 机器 token、路径；明确标记且在请求中逐字出现的引述 |
+ | 推理 | 独立检查；不合格则隐藏整个推理通道，不独立阻断合格正文和工具参数 | 合格推理保留原文；不改写或翻译不合格推理 |
+-| 需求分析 | summary、方案说明、问题、I/O 说明、假设、流程标签 | control_type 旧中文枚举、options/default/required_when 比较值、hardware_config 参数、execution_semantics.evidence |
++| 需求分析 | summary、方案说明、问题、I/O 说明、假设 | options/default/required_when 比较值、hardware_config 参数；格式诊断与 execution_semantics 由 Core 产生，不由模型撰写 |
+ | ladder / patch / candidate tool arguments | device_comments、label、debug_note/comment | 地址、指令、表达式、rung/network/branch ID、版本绑定、枚举；输入中明确存在的旧注释可原样保留 |
+ | ST | `st_code` 内 `//` 与 `(* ... *)` 注释，识别嵌套注释和字符串转义 | 可执行代码、标识符、字面量，包括字面量里的中文或类似注释的字符 |
+ | 调试、检查、specialist | 摘要、建议、根因、检查说明及既有 parser 支持的别名/单条记录/字符串列表 | 证据、引用、绑定、路径、状态枚举 |
+diff --git a/src/application/analysis_context.py b/src/application/analysis_context.py
+index 208afb9..f5b054b 100644
+--- a/src/application/analysis_context.py
++++ b/src/application/analysis_context.py
+@@ -11,7 +11,6 @@ from knowledge.analysis_router import AnalysisRoute, route_analysis_request
+ from application.prompts import (
+     ANALYSIS_SYSTEM_PROMPT, ANALYSIS_DIRECT_PROMPT, ANALYSIS_PINNED_PROMPT, ANALYSIS_DESIGN_PROMPT,
+     ANALYSIS_VFD_PROMPT, ANALYSIS_MOTION_PROMPT, ANALYSIS_MOTION_FAMILY_PROMPTS,
+-    ANALYSIS_PUMP_PROMPT,
+ )
+ 
+ _DEVICE = re.compile(r"(?<![A-Za-z0-9_])(?:SM|SD|[XYMDTCSVZ])\d+(?![A-Za-z0-9_])", re.I)
+@@ -19,8 +18,8 @@ _PRIVATE = {"reasoning_content", "raw_response", "raw_attempts", "_provider_reas
+ 
+ # Transport metadata for the shared Core binding, not an inferred PLC rule.
+ _IO_BINDING_PROMPT = """# I/O purpose metadata
+-每个地址确认问题另带 io_binding，例如 {"binding_id":"device.start","kind":"X","label":"启动按钮"}；binding_id 稳定且区分不同控制对象，沿用已有绑定。kind 是地址类别，不在此预填未知地址。
+-label 是独立的简短用途名称，不是 question：不含提问、选项、触点极性推导或实现解释；用途未知可省略或留空，不为注释新增确认问题。question 保留完整确认问题，实际地址/极性仍由用户回答。已有 I/O 用途以用户编辑的值为准；suggested_io 中的说明也只写用途名称。"""
++地址或输入极性确认问题用 io_binding 标识同一物理点：binding_id 为稳定标识，kind 为地址类别，label 为独立用途名称；已有 row_id 时沿用。已知地址只确认极性时，答案不必重复地址；仅涉及寄存器数值含义的参数不当作地址选择。
++label 是独立的简短用途名称，不是 question：不含提问、选项、触点极性推导或实现解释；用途未知可省略或留空，不为注释新增确认问题。question 保留完整确认问题，只询问尚未提供的地址或极性。已有 I/O 用途以用户编辑的值为准；suggested_io 中的说明也只写用途名称。"""
+ 
+ 
+ def _address_notes(value, requested, result):
+@@ -72,7 +71,7 @@ def _baseline_for_analysis(value):
+     if not isinstance(value, Mapping):
+         return str(value or "").strip()
+     baseline = {key: copy.deepcopy(child) for key, child in value.items()
+-                if key not in _PRIVATE | {"approaches"} and not str(key).startswith("_")}
++                if key not in _PRIVATE | {"approaches", "control_type", "flowchart_steps", "format_diagnostics"} and not str(key).startswith("_")}
+     context = baseline.get("engineering_context")
+     if isinstance(context, dict):
+         context.pop("proposals", None)
+@@ -126,8 +125,6 @@ def assemble_analysis_prompt(user_request, *, plc_model, confirmed_context=None,
+         deltas.append(ANALYSIS_MOTION_PROMPT)
