@@ -46,8 +46,10 @@ The profile is explicitly scoped to FX3U/FX3UC. An explicit CPU survives
 IR-to-ladder conversion; a legacy payload without a CPU defaults to FX3U.
 Another CPU yields an unknown result, not an FX3U width silently relabeled.
 
-Exact native spellings supply ordinary applied-instruction widths. D/P forms
-are looked up as themselves; there is no universal prefix/suffix stripping or
+Exact native spellings supply ordinary applied-instruction widths. When a native
+CSV/POU fixture proves a narrower basic-header variant for one concrete operand
+form, `exact_forms` records that observation in the same metadata resource and it
+wins over broader operand-class rules. D/P forms are looked up as themselves; there is no universal prefix/suffix stripping or
 operand-count formula. Conflicting observations stay unknown. Basic OUT/RST,
 special devices and indexed/bit-selected forms use explicit operand rules with
 evidence. String moves and unobserved addressing forms remain unknown.
