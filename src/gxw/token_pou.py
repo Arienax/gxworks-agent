@@ -9,18 +9,16 @@ source and compiled .res can duplicate this body.
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
 import math
-from pathlib import Path
 import struct
 
 from .models import GXWFormatError
+from plc.instruction_steps import native_lexical_overrides, native_token_encodings
 
 
 # Exact observations from the native converter. A subset also has full native
 # project/CSV checks. This is binary grammar, not PLC execution support.
-_NATIVE_ENCODINGS = json.loads((Path(__file__).with_name("templates") /
-                               "token_opcodes_native.json").read_text(encoding="utf-8"))["opcodes"]
+_NATIVE_ENCODINGS = native_token_encodings()
 
 
 def _opcode_family_key(raw: bytes) -> tuple[int, ...] | None:
@@ -69,30 +67,7 @@ def observed_native_arity(raw: bytes) -> int | None:
 
 # Exact observed spellings only. In particular do not infer application opcodes
 # from FNC arithmetic, or the unobserved pulse/width variants of basic opcodes.
-_OPCODES = {
-    "0202": "NOP", "033303": "FEND", "056a010705": "SRET",
-    # Offline FX converter control-flow probe, 2026-09-20.
-    "0569010105": "EI", "0569010305": "IRET",
-    "030003": "LD", "030103": "LDI", "030603": "OR", "030703": "ORI",
-    "030c03": "AND", "030d03": "ANDI", "031803": "ORB", "031903": "ANB",
-    "032003": "OUT", "032303": "SET", "032403": "RST", "033403": "END",
-    "04210304": "OUT_T_C", "0549072805": "ADD", "0549072a05": "SUB",
-    "0549072c05": "MUL", "0549072e05": "DIV", "05490d2905": "DADD",
-    "05490d2b05": "DSUB", "054a030005": "INC", "054a030205": "DEC",
-    "054c050005": "MOV", "054c090105": "DMOV", "054c070605": "BMOV",
-    # Complete native CSV alignments: t=234, f=115, s=36 operations.
-    # In a four-byte basic header, byte 2 is the encoded step width, not a
-    # pulse modifier. E.g. SET M8161 and RST T16 use two steps.
-    "04020204": "LDP", "04030204": "LDF", "040d0204": "ANDI",
-    "04230204": "SET", "04240204": "RST", "04260204": "PLF",
-    "031a03": "MPS", "031b03": "MRD", "031c03": "MPP",
-    "064005001006": "LD=", "064005011006": "LD<>", "064005031006": "LD>=",
-    "064005021106": "AND>", "064005031106": "AND>=",
-    "064005041106": "AND<", "064005051106": "AND<=",
-    "05490d2f05": "DDIV", "055f090a05": "RS",
-    "0563092005": "DSZR", "0563091a05": "DRVI",
-    "040e0204": "ANDP", "0551090705": "SFTL",
-}
+_OPCODES = native_lexical_overrides()
 _DEVICES = {0x90: "M", 0x98: "S", 0x9C: "X", 0x9D: "Y", 0xA8: "D", 0xC2: "T", 0xC5: "C",
             0xCC: "Z", 0xCD: "V", 0xD0: "P", 0xD1: "I"}
 
