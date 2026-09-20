@@ -49,6 +49,9 @@ jobs:
           PYTHONPATH: src
         run: >-
           python -m pytest -q
+          tests/test_instruction_fact_context.py
+          tests/test_agent_b_measurement.py
+          tests/test_confirmed_input_protocol.py
           tests/test_generation_agent_boundary.py
           tests/test_intent_evidence_handoff.py
           tests/test_analysis_design_rag.py

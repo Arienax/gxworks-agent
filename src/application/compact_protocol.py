@@ -275,3 +275,50 @@ def expand_compact_ladder(compact, projected=None):
 
     return {"device_comments": _confirmed_comments(projected or {}), "rungs": rungs}
 
+
+def canonical_compact_example():
+    """One valid wire example; these example devices are not project allocations."""
+    return {"r": [{"h": None, "s": [], "b": [{"i": ["NO M0"], "o": ["COIL M1"]}]}]}
+
+
+def compact_protocol_prompt():
+    """Render required fields from the actual schema, not a second field list."""
+    schema = compact_response_schema()
+    rung = schema["properties"]["r"]["items"]
+    branch = rung["properties"]["b"]["items"]
+    required = {"root": schema["required"], "rung": rung["required"], "branch": branch["required"]}
+    return (
+        "\n# Compact wire representation " + PROTOCOL_VERSION + "\n"
+        + "必填字段（来自实际 schema）：" + json.dumps(required, separators=(",", ":")) + "\n"
+        + "统一表示：h 无首触点时为 null；s 无公共串联输入时为 []；i 无分支输入时为 []。这些字段不省略。\n"
+        + "r 是梯级数组，b 是输出分支数组，i 本身是一维串联列表，o 是非空输出字符串数组。\n"
+        + "结构示例（不是本项目地址分配）：" + json.dumps(canonical_compact_example(), separators=(",", ":")) + "\n"
+        + "简单输入写 NO/NC/P/F 加地址；比较写前缀表达式，例如 >= D0 K1。\n"
+        + 'OR 只在 i 内用 {"or":[[简单输入,...],[简单输入,...]]}；子数组是串联支路，不嵌套 OR。\n'
+        + "标准输出：" + ", ".join(sorted(_TYPED_OUTPUTS)) + "；COIL/PLS/PLF 后接地址，TIMER/COUNTER 后接地址和设定值。\n"
+        + "其他输出直接写 opcode 与空格分隔的 operands，例如 MOV K1 D0。\n"
+        + "编号、布局和 device_comments 由本地补齐；仅输出协议 JSON。\n"
+    )
+
+
+def compact_capability_prompt(plc_model, confirmed_spec):
+    """Describe selected catalogue contracts, not simulated/hardware correctness."""
+    from knowledge.instruction_facts import instruction_fact_targets
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, generation_app_instr_mnemonics
+    targets = instruction_fact_targets("", confirmed_spec)
+    if not targets:
+        return ""
+    allowed = set(generation_app_instr_mnemonics(plc_model))
+    rows = []
+    for target in targets:
+        opcode = target["opcode"]
+        form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(opcode)
+        row = {"opcode": opcode, "generation_catalogued": opcode in allowed}
+        if form is not None:
+            row.update(contract_level=form.spec.contract_level,
+                       min_operands=form.spec.min_operands, max_operands=form.spec.max_operands)
+        rows.append(row)
+    value = {"source": "current_python_catalogue", "plc_model": plc_model,
+             "instructions": rows, "runtime_semantics": "retrieved_manual_evidence",
+             "simulation_verification": "not_claimed"}
+    return "\n# Selected instruction capability snapshot\n" + json.dumps(value, ensure_ascii=False, separators=(",", ":"))

@@ -246,9 +246,24 @@ def build_knowledge_context(
     fact_results = [item for item in fact_results
                     if item.get("chunk_type") != "design_pattern"
                     and item.get("manual_id") != "curated_control_design"]
+    fact_report = None
+    query_meta = getattr(query, "metadata", {})
+    if task in {"generate", "edit"} and isinstance(query_meta, dict) and query_meta.get("instruction_fact_mode") == "targeted":
+        from knowledge.instruction_facts import retrieve_instruction_facts, delivered_fact_report
+        targeted, fact_report = retrieve_instruction_facts(
+            query, plc_model=plc_model, task_type=task, char_budget=available - design_used,
+            candidates=fact_results, targets=query_meta.get("instruction_fact_targets"),
+        )
+        replaced = {item["original_id"] for item in targeted}
+        target_names = {name for target in fact_report["targets"] for name in (target["opcode"], target["base_opcode"])}
+        fact_results = targeted + [item for item in fact_results if item.get("id") not in replaced
+                                   and (not target_names or not item.get("instruction_opcode")
+                                        or str(item["instruction_opcode"]).upper() in target_names)]
     fact_token_budget = (available_tokens - design_used_tokens) if available_tokens is not None else None
     fact_blocks, fact_records, _, fact_used_tokens = select(
         fact_results, fact_slots, available - design_used, fact_token_budget)
+    if fact_report is not None:
+        manifest["instruction_facts"] = delivered_fact_report(fact_report, [record["id"] for record in fact_records])
     # Facts appear first; unused design budget is available to facts.
     parts = [header, *fact_blocks, *design_blocks]
     manifest["records"] = [*fact_records, *design_records]

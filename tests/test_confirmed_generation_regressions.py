@@ -10,7 +10,7 @@ from application.generation_agent import (
     _strict_generation_projection,
 )
 from plc.specification.confirmed import build_review_draft
-from model_runtime.provider import ModelRequest, TextDelta, UserMessage
+from model_runtime.provider import ModelRequest, TextDelta, Usage, UserMessage
 from plc.validation import validate_ladder_candidate_structure
 
 
@@ -25,7 +25,8 @@ class _DuplicateJsonProvider:
             yield TextDelta(' {"first":{"text":"a } brace"},"items":[1,')
             yield TextDelta('2]} {"second":"full rewrite"}')
             self.reached_tail = True
-            yield TextDelta('{"third":"must never be consumed"}')
+            yield TextDelta('{"third":"must never become the candidate"}')
+            yield Usage(10, 20, 30, 12)
         finally:
             self.closed = True
 
@@ -64,7 +65,7 @@ def _bad_analysis():
     }
 
 
-def test_agent_b_stream_stops_after_first_complete_json_object():
+def test_agent_b_frames_first_json_but_consumes_trailing_usage():
     base = _DuplicateJsonProvider()
     provider = _FirstJSONObjectProvider(base)
     request = ModelRequest.from_messages([UserMessage("json")], stream=True)
@@ -75,7 +76,9 @@ def test_agent_b_stream_stops_after_first_complete_json_object():
     assert json.loads(content) == {"first": {"text": "a } brace"}, "items": [1, 2]}
     assert "second" not in content
     assert base.closed is True
-    assert base.reached_tail is False
+    assert base.reached_tail is True
+    assert "third" not in content
+    assert [event.reasoning_tokens for event in events if isinstance(event, Usage)] == [12]
 
 
 def test_agent_b_prompt_makes_input_or_and_single_json_rules_explicit():

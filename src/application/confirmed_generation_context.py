@@ -131,6 +131,7 @@ def build_confirmed_generation_context(
         knowledge_builder = _build_knowledge_context
     from application.context_compiler import ContextCompiler, ContextCompilerInput
     from knowledge.evidence import KnowledgeQuery
+    from knowledge.instruction_facts import instruction_fact_targets, delivered_fact_report, included_knowledge_ids
     compiler = ContextCompiler()
     compiler_input = ContextCompilerInput(
         confirmed_spec=projected,
@@ -150,6 +151,8 @@ def build_confirmed_generation_context(
         metadata={
             "context_plan": precompiled.provenance_receipt,
             "rag_evidence_token_budget": precompiled.budget_report.get("rag_evidence_token_budget"),
+            "instruction_fact_mode": "targeted",
+            "instruction_fact_targets": instruction_fact_targets(precompiled.retrieval_packet["query"], projected),
         },
     )
     knowledge = knowledge_builder(
@@ -165,11 +168,19 @@ def build_confirmed_generation_context(
     runtime_spec = compiled.generation_packet["confirmed_spec"]
     selected = runtime_spec.get("selected_approach") or {}
     manifest = context_manifest(knowledge, stage=task_type)
+    # Reconcile after final budget compilation, not merely after retrieval.
+    if isinstance(manifest.get("instruction_facts"), dict):
+        manifest["instruction_facts"] = delivered_fact_report(
+            manifest["instruction_facts"], included_knowledge_ids(knowledge_text, manifest["instruction_facts"].get("records", [])))
     # A custom builder may return unsanitized text. The source hashes still
     # identify retrieved blocks; the context hash must identify the actual
     # privacy-cleaned text delivered to either generation adapter.
     manifest["context_sha256"] = text_sha256(knowledge_text)
     handoff = handoff_snapshot(projected, evidence=manifest, stage=task_type)
+    # The generic provenance allowlist predates instruction-fact receipts. Keep
+    # this application-owned audit intact without changing stored PLC specs.
+    if isinstance(manifest.get("instruction_facts"), dict):
+        handoff["instruction_facts"] = copy.deepcopy(manifest["instruction_facts"])
     handoff.update(copy.deepcopy(compiled.provenance_receipt))
     handoff["budget_report"] = copy.deepcopy(compiled.budget_report)
     # This receipt identifies the policy, not a claimed reduction in model tokens.

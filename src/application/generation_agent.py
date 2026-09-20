@@ -16,6 +16,7 @@ from application.compact_protocol import (
     PROTOCOL_VERSION, CompactProtocolError, compact_response_schema as _compact_response_schema,
     decode_compact as _json_object, expand_compact_ladder as _expand_compact_ladder,
     normalize_compact, _simple_input, _branch_input, _output, _confirmed_comments,
+    compact_protocol_prompt, compact_capability_prompt,
 )
 
 from plc.device_identity import canonical_ladder_devices
@@ -34,40 +35,20 @@ from application.confirmed_generation_context import (
 _COMPACT_RESPONSE = ResponseContract("compact_ladder", "json")
 
 _COMPACT_PROTOCOL = """# Agent B compact ladder protocol
-你只负责把已确认规格翻译成紧凑梯级计划；不要重新设计需求。
+把当前已确认规格实现为一个紧凑梯级计划。
 
-语义规则：
-- 用户当前确认的地址、触点极性和参数必须保持；遵守 selected_approach.generation_contract 的结构化约束，不把 unverified_constraints 升级为额外硬约束。
-- 不得擅自新增 X/Y、停止/急停、硬件或模块寄存器；内部状态优先使用普通 M/D/T/C 低位地址。
-- 实现已确认语义所需的内部特殊软元件，可按当前型号资料/手册证据选用；这不等于新增外部 I/O。已有显式禁用仍须遵守，不得拿其他型号或猜测替代证据。
-- 同一普通 Y/M 只保留一个 COIL owner；多个触发条件必须合并到该输出的同一个条件结构。
-- 输入 OR 使用 `{"or":[[...],[...]]}` 放在同一 branch 的 `i` 中，不得用多个输出 branch 表达同一输出的 OR。
-- OR 的每个分支只能包含简单输入，不允许 OR 嵌套。
-- 比较输入直接写前缀表达式，例如 `">= D0 K1"`、`"< D0 K4"`；算术先用应用指令写入寄存器，再比较。
-- TIMER 只能写 T，COUNTER 只能写 C；普通定时器必须有可变为 FALSE 的使能/复位路径。
-- “每次/按下时只执行一次”使用 P/F/RISING/FALLING 边沿，不用持续电平重复触发。
-
-返回形状只有：`{"r":[rung,...]}`。
-- rung: `{"h":可选简单输入或null,"s":可选简单输入数组,"b":[branch,...]}`；通常只需要 `b`。
-- branch: `{"i":可选输入数组,"o":[输出字符串,...]}`；无条件时可省略 `i`。
-- 未使用的 s/i 数组请写 []，不要写 null；h 没有首触点时可以写 null。
-- io_bindings 是已确认的用途、地址和输入有效电平绑定；active_level=0 表示输入位为0时该信号动作，active_level=1 表示输入位为1时动作，不是程序触点的类型。
-- 物理常闭不等于程序 NC：程序 NO 检查位=1，NC 检查位=0。停止信号动作时必须切断输出；若停止 active_level=0，则运行允许条件检查位=1（NO），反之检查位=0（NC）。
-- 不得把启动和停止合并为一个输入。已确认的停止/联锁必须在输出控制路径中实际起作用，而不是只出现在注释中。
-- 简单输入：`"NO X0"`、`"NC M1"`、`"P X2"` 或比较 `"> D0 K3"`。
-- i 本身是一维串联列表，例如 `"i":[{"or":[["NO X0"],["NO Y0"]]},"NO X1"]`；不得再包成 `"i":[[...]]`。
-- 只有 OR 对象的 or 属性是二维数组；每个 or 子数组是一条串联支路，例如 `{"or":[["NO M20","NC M30"],["NO M21"]]}`。
-- 标准输出：`"COIL Y0"`、`"PLS M0"`、`"PLF M0"`、`"TIMER T0 K10"`、`"COUNTER C0 K9"`。
-- 其他输出字符串首 token 直接作为 APP_INSTR opcode，例如 `"MOV K1 D0"`、`"INC D0"`；后续 token 是 operands。
-- 不要输出 branch_id、y_offset_level、rung_id、label、debug_note、device_comments；这些由本地代码确定性补齐。
-- 不输出 Markdown、解释、第二份 JSON 或未定义字段。
-"""
-
-
+- 当前确认的 I/O、参数、输入有效电平和 selected_approach.generation_contract 是实现依据；unverified_constraints 不升级为额外硬约束。
+- io_bindings.active_level=0 表示位为0时信号动作，不是程序触点类型。程序 NO 检查位=1，NC 检查位=0；具体 active_when 与 run_permit_when 使用下方由绑定派生的谓词。停止/联锁须在输出路径实际生效。
+- 不新增未确认的 X/Y、停止/急停、硬件或模块寄存器。内部状态使用普通 M/D/T/C；已确认语义需要的内部特殊软元件以当前型号资料/手册证据为准，已有显式禁用仍须遵守。
+- 同一普通 Y/M 只有一个 COIL owner，多条件并入该输出的输入结构；不把输入 OR 拆成多个输出 branch。
+- 比较输入只比较；算术先用应用指令写入寄存器。
+- TIMER 使用 T，COUNTER 使用 C；普通定时器须有可变为 FALSE 的使能/复位路径。
+- 一次事件使用 P/F 边沿，持续条件使用电平；两者不互换。
+""" + compact_protocol_prompt()
 
 
 class _FirstJSONObjectStream:
-    """Cut a streamed response after its first complete top-level JSON object."""
+    """Frame the first complete top-level JSON object without cutting transport."""
 
     def __init__(self):
         self.started = False
@@ -127,7 +108,7 @@ class _FirstJSONObjectStream:
 
 
 class _FirstJSONObjectProvider:
-    """Streaming facade that prevents a second complete Agent-B JSON copy."""
+    """One candidate, but preserve usage/finish events after the JSON closes."""
 
     def __init__(self, provider):
         self._provider = provider
@@ -143,12 +124,16 @@ class _FirstJSONObjectProvider:
         try:
             for event in iterator:
                 if isinstance(event, TextDelta) and not scanner.passthrough:
+                    was_complete = scanner.finished
                     text, complete = scanner.feed(event.text)
                     if text:
                         yield TextDelta(text)
-                    if complete:
+                    if complete and not was_complete:
                         diagnostics.emit("local_json_complete", stage="response_framing", protocol=PROTOCOL_VERSION)
-                        return
+                    # Do not close the HTTP iterator here: trailing usage and
+                    # provider finish diagnostics still belong to this call.
+                    # Only duplicate output text is excluded from the candidate;
+                    # reasoning and non-text transport events remain observable.
                 else:
                     yield event
         finally:
@@ -164,7 +149,6 @@ def _response_options(provider, *, model_name=None, effort=None):
         model=model_name, api_key=getattr(provider, "api_key", None),
         hints={"reasoning_effort": effort} if effort is not None else {},
     )[0]
-
 
 
 def _decode_generated_ladder(value, projected, plc_model):
@@ -201,6 +185,7 @@ def _build_agent_b_prompt(projected, plc_model, *, context=None):
         + f"\n# Selected PLC\n{model}\n"
         + "\n# Confirmed project specification\n"
         + confirmed
+        + compact_capability_prompt(model, context.confirmed_spec)
         + evidence
         + generation_execution_prompt(context.confirmed_spec, evidence_text=evidence)
     )

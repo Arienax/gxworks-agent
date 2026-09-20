@@ -16,7 +16,7 @@ _LOCK = threading.RLock()
 _SENSITIVE_FIELDS = {
     "api_key", "apikey", "password", "secret", "access_token", "refresh_token",
     "authorization", "credential", "credentials", "provider_configuration",
-    "operator_token", "agent_token",
+    "operator_token", "agent_token", "token", "cookie", "set_cookie", "proxy_authorization",
 }
 _BLOB_FIELDS = {"data_base64", "fbd_baseline", "image_base64"}
 _KEY_PATTERN = re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9._-]{8,}", re.I)
@@ -43,7 +43,7 @@ def _redact_text(value):
 
 def sanitize(value, *, key=None, depth=0):
     """Keep engineering/user text while excluding credentials and large binaries."""
-    name = str(key or "").strip().lower().lstrip("_")
+    name = str(key or "").strip().lower().lstrip("_").replace("-", "_")
     if name in _SENSITIVE_FIELDS or name.endswith("_api_key") or name.endswith("_password"):
         return "<redacted>"
     if depth > 24:
@@ -189,6 +189,8 @@ def record_model_response(state_dir, job_id, request_index, attempt_index, raw, 
             "input_tokens": getattr(usage, "input_tokens", None),
             "output_tokens": getattr(usage, "output_tokens", None),
             "total_tokens": getattr(usage, "total_tokens", None),
+            "reasoning_tokens": getattr(usage, "reasoning_tokens", None),
+            "raw_usage": sanitize(getattr(usage, "raw_usage", None)),
         } if usage is not None else None,
     })
 

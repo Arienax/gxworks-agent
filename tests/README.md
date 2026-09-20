@@ -2,7 +2,7 @@
 
 This file is the ownership registry for repository test files. The purpose is not to minimize the raw number of test cases; it is to stop the suite from growing by creating a new file for every bug, PR or historical incident.
 
-After the consolidation in this change, the registry contains **167 Python test files** and **3 Web test files**. Data fixtures under `tests/fixtures/` are not independent test owners and are intentionally excluded.
+After the consolidation in this change, the registry contains **170 Python test files** and **3 Web test files**. Data fixtures under `tests/fixtures/` are not independent test owners and are intentionally excluded.
 
 ## Rules for adding tests
 
@@ -69,6 +69,7 @@ Owns prompt assembly, token/context budgeting, RAG query construction, retrieval
 | `tests/test_gxw2_skill_import.py` | focused coverage for gxw2 skill import |
 | `tests/test_gxw2_skill_ranking.py` | focused coverage for gxw2 skill ranking |
 | `tests/test_gxw2_skill_reranker.py` | focused coverage for gxw2 skill reranker |
+| `tests/test_instruction_fact_context.py` | task-directed instruction evidence assembly, source integrity and final-budget receipts; no behavioral certification |
 | `tests/test_instruction_applicability_rag.py` | focused coverage for instruction applicability rag |
 | `tests/test_prompt_context_budget.py` | focused coverage for prompt context budget |
 | `tests/test_prompt_context_policy.py` | focused coverage for prompt context policy |
@@ -267,6 +268,7 @@ Owns diagnostics capture/export, error privacy, response-language/presentation t
 
 | Test file | File-level focus |
 | --- | --- |
+| `tests/test_agent_b_measurement.py` | paired real-generation experiment harness and complete metering/transport observation; offline providers only |
 | `tests/test_diagnostics_workflow_regressions.py` | focused coverage for diagnostics workflow regressions |
 | `tests/test_multimodal_inputs.py` | focused coverage for multimodal inputs |
 | `tests/test_provider_error_privacy.py` | focused coverage for provider error privacy |
