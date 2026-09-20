@@ -39,7 +39,7 @@ def _is_plain_address_answer(value, kind=None):
         return False
     remainder = _DEVICE.sub("", text, count=1)
     remainder = re.sub(
-        r"[\\s，,。；;：:（）()［］\\[\\]【】<>《》_-]+|建议|推薦|recommended|default",
+        r"[\s，,。；;：:（）()［］\[\]【】<>《》_-]+|建议|推薦|recommended|default",
         "", remainder, flags=re.IGNORECASE,
     )
     return not remainder
