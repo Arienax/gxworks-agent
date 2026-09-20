@@ -52,6 +52,7 @@ import type { AnalysisMode } from "./features/AnalysisModePicker";
 import { JobFailure } from "./features/JobFailure";
 import { GenerationResult, useGenerationResult } from "./features/GenerationResult";
 import { JobProgress } from "./features/JobProgress";
+import { InteractionTraceExport } from "./features/InteractionTraceExport";
 import { Settings } from "./features/Settings";
 import { ApprovalSettingsPanel, approvalLabels } from "./features/ApprovalSettings";
 import type { ApprovalSettings } from "./features/ApprovalSettings";
@@ -1499,6 +1500,10 @@ export default function App() {
                     onSpec={() => setPanel("spec")} t={t} />
                   <JobFailure job={currentJob} busy={!canWrite}
                     onRepair={() => void guarded(() => repairFailedGeneration(currentJob))} t={t} />
+                  {!["execution", "gx_read", "gx_inspect"].includes(currentJob.kind) &&
+                    ["completed", "failed", "cancelled", "interrupted"].includes(currentJob.status) && (
+                      <InteractionTraceExport jobId={currentJob.id} t={t} />
+                    )}
                   {!!analysisOutput?.spec_draft && (
                     <div>
                       <Button

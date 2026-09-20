@@ -1,6 +1,5 @@
 import type { Job } from "../api/client";
 import { Button } from "../components/ui";
-import { InteractionTraceExport } from "./InteractionTraceExport";
 
 const reasons: Record<string, string> = {
   latin_prose: "回复含有不符合所选语言的英文说明",
@@ -79,6 +78,5 @@ export function JobFailure({ job, busy, onRepair, t }: {
   return <section>
     <FailureMessage job={job} t={t} />
     {repairable && <Button disabled={busy} onClick={onRepair}>{t("让 AI 修复")}</Button>}
-    <InteractionTraceExport jobId={job.id} t={t} />
   </section>;
 }

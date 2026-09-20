@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import type { Job, Json } from "../api/client";
 import { api, freshGxCsvUrl } from "../api/client";
 import { Button } from "../components/ui";
-import { InteractionTraceExport } from "./InteractionTraceExport";
 
 type Output = Record<string, Json>;
 
@@ -89,6 +88,5 @@ export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSp
       <p>{t("请重试读取结果；不要重复调用模型或重新建立工程。")}</p>
     </>}
     <Button disabled={busy} onClick={onRetry}>{t("重新读取结果")}</Button>
-    <InteractionTraceExport jobId={result.id} t={t} />
   </section>;
 }
