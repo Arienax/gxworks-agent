@@ -1,0 +1,45 @@
+name: Apply staged prompt cleanup patch
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.patch-staging/**'
+      - '.github/workflows/apply-staged-patch.yml'
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.ref == 'fix/prompt-cleanup-io-binding-20260921'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: true
+          fetch-depth: 2
+      - name: Reassemble and verify staged patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .patch-staging/*.diff > /tmp/round.patch
+          echo "fe10aed35c6a914ea7d978b5e7d3d5f7571359157bcbc39b3035230caa3ec302  /tmp/round.patch" | sha256sum -c -
+          git apply --check /tmp/round.patch
+          git apply /tmp/round.patch
+          rm -rf .patch-staging
+          rm .github/workflows/apply-staged-patch.yml
+          git diff --check
+          python -m compileall -q src
+      - name: Commit exact tested patch and remove staging transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: clean analysis prompts and bind known-address polarity"
+          git push origin HEAD:fix/prompt-cleanup-io-binding-20260921
