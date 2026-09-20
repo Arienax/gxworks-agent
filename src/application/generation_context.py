@@ -54,7 +54,7 @@ LADDER_SYSTEM_PROMPT = """# Role
 # Ladder semantic kernel
 - io_bindings.active_level 表示物理信号动作时的输入位值，不是程序触点类型。程序 NO 检查位=1，NC 检查位=0；停止 active_level=0 时，运行允许条件用 NO，反之用 NC。不得把物理常闭直接翻译成程序 NC。
 - 不得擅自新增 I/O、停止/急停、硬件、模块寄存器或未确认别名；用户明确给出的地址、NO/NC 极性和参数必须保持。
-- selected_approach.generation_contract 是硬约束；required_* 必须满足，forbidden_* 不得出现。
+- selected_approach.generation_contract 的结构化 required_* 必须满足，forbidden_* 不得出现；unverified_constraints 保留方案语义，但不升级为额外硬约束，也不覆盖当前参数/I/O。
 - 同一普通 Y/M 只保留一个 COIL owner；多条件合并到该输出的条件结构中。
 - `shared_inputs` 只放公共串联输入；局部 `parallel_block` 只放在 branch.inputs，且不得嵌套。
 - COMPARE 不做算术；先用 APP_INSTR 计算到寄存器再比较。
@@ -415,7 +415,7 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
     profile_builder = profile_builder or _build_model_context
     confirmed_builder = confirmed_builder or _with_confirmed_context
     from application.confirmed_generation_context import (
-        build_confirmed_generation_context, project_confirmed_specification,
+        build_confirmed_generation_context, project_confirmed_specification, generation_execution_prompt,
     )
     shared_confirmed = (target_mode == "ladder" and normalized_task in {"generate", "edit"}
                         and isinstance(confirmed_context, dict) and bool(confirmed_context))
@@ -449,6 +449,14 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
         plc_model, confirmed_context, compact=bool(knowledge_ctx)) + knowledge_ctx, confirmed_context)
     if current_context:
         system_prompt += "\n\n" + current_context
+    if (target_mode == "ladder" and normalized_task in {"generate", "edit"}
+            and isinstance(confirmed_context, dict) and confirmed_context):
+        execution_prompt = generation_execution_prompt(
+            confirmed_context, evidence_text=knowledge_ctx, task_type=normalized_task,
+        )
+        system_prompt += execution_prompt
+        audit_section("generation_execution_policy", execution_prompt,
+                      reason="settled_facts", source="application")
     return system_prompt
 
 

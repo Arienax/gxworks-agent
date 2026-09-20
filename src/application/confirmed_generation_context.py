@@ -6,6 +6,7 @@ receive detached snapshots; private analysis prose is not an engineering fact.
 from __future__ import annotations
 
 import copy
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
 
@@ -24,6 +25,34 @@ CONFIRMED_GENERATION_REQUEST = (
     "不得在同一次 completion 中自检后再重写或追加第二份完整 JSON。"
 )
 
+
+
+# Prompt policy only: no reasoning-token limit, truncation, retry or acceptance gate.
+GENERATION_EXECUTION_POLICY_VERSION = "settled-facts-v1"
+GENERATION_EXECUTION_POLICY = """# Generation execution policy
+当前是实现阶段：确认规格 → 只核对未定技术事实 → 固定一个实现 → 输出。即使前阶段选择了 Design，此处也只实现已选方案，不重新列方案或比较等价写法。
+已确认 I/O、参数和本轮明确修改是已定输入。参数/绑定优先于方案说明和 unverified_constraints 中过时的表述；保留其他未冲突的方案语义，不把参考文字升级成额外硬约束。已有结构化硬约束仍须遵守。
+形成决定后不反复重开；只有新的用户修订、技术证据或具体正确性矛盾才重审受影响部分。不要因冗余触点、等价布局或猜测评测器偏好重做整个方案。
+技术事实只作必要的定向核对（操作数/方向/触发/范围）；反复回忆不增加证据。检索文本存在不代表覆盖全部事实，缺证据也不等于禁止；不得编造已查证、测试通过或工具调用。不为缩短推理而跳过实际发现的错误。
+下面的输入谓词由当前绑定确定性推导，只表示电平测试，不替代边沿语义或完整控制逻辑；edit 时本轮明确修改优先于这些 baseline 谓词。未定电平不从名称或物理常闭字样猜测。
+完成一次必要的一致性检查后按既有协议输出一份程序；不输出中间计划，不在同次 completion 反复重写。"""
+
+
+def generation_execution_prompt(confirmed_spec, *, evidence_text="", task_type="generate"):
+    """Render one shared materialization policy from the current public snapshot.
+
+    No persisted spec fields are removed or reconciled by parsing natural language.
+    Evidence availability is explicitly NOT an evidence-coverage assertion.
+    """
+    if task_type not in {"generate", "edit"}:
+        return ""
+    from plc.specification.conditions import generation_input_conditions
+    spec = confirmed_spec if isinstance(confirmed_spec, Mapping) else {}
+    facts = generation_input_conditions(spec.get("io_bindings"))
+    facts["basis"] = "edit_baseline" if task_type == "edit" else "current_confirmed_bindings"
+    facts["retrieved_text_present"] = bool(str(evidence_text or "").strip())
+    return ("\n\n" + GENERATION_EXECUTION_POLICY + "\n# Settled input predicates (not a new requirement)\n"
+            + json.dumps(public_generation_value(facts), ensure_ascii=False, separators=(",", ":")))
 
 
 def project_confirmed_specification(confirmed_spec):
@@ -143,6 +172,8 @@ def build_confirmed_generation_context(
     handoff = handoff_snapshot(projected, evidence=manifest, stage=task_type)
     handoff.update(copy.deepcopy(compiled.provenance_receipt))
     handoff["budget_report"] = copy.deepcopy(compiled.budget_report)
+    # This receipt identifies the policy, not a claimed reduction in model tokens.
+    handoff["generation_execution_policy"] = GENERATION_EXECUTION_POLICY_VERSION
     return ConfirmedGenerationContext(
         plc_model=model, confirmed_spec=runtime_spec,
         io_bindings=runtime_spec.get("io_bindings") or [],
