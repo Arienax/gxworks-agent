@@ -1,5 +1,6 @@
 import type { Job } from "../api/client";
 import { Button } from "../components/ui";
+import { InteractionTraceExport } from "./InteractionTraceExport";
 
 const reasons: Record<string, string> = {
   latin_prose: "回复含有不符合所选语言的英文说明",
@@ -78,12 +79,6 @@ export function JobFailure({ job, busy, onRepair, t }: {
   return <section>
     <FailureMessage job={job} t={t} />
     {repairable && <Button disabled={busy} onClick={onRepair}>{t("让 AI 修复")}</Button>}
-    <div className="job-diagnostic-export">
-      <a className="button secondary" href={`/api/jobs/${encodeURIComponent(job.id)}/diagnostics`} download>
-        {t("下载错误诊断日志")}
-      </a>
-      <p className="muted">{t("任务编号")}：<code>{job.id}</code></p>
-      <p className="muted">{t("仅导出诊断元数据，不含 API Key、提示词、回复正文或工程文件；不会自动上传。")}</p>
-    </div>
+    <InteractionTraceExport jobId={job.id} t={t} />
   </section>;
 }

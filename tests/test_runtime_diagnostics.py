@@ -279,6 +279,39 @@ def test_export_includes_operator_details_but_redacts_sensitive_fields(tmp_path)
         assert summary['content_included'] is True
         assert 'model_request' in summary['failure_analysis']
 
+def test_successful_job_export_includes_interaction_transcript(tmp_path):
+    reply = {
+        'model': 'fixture-model',
+        'choices': [{
+            'message': {
+                'content': '{"ok":true}',
+                'reasoning_content': 'SUCCESS_REASONING',
+            },
+            'finish_reason': 'stop',
+        }],
+        'usage': {'prompt_tokens': 8, 'completion_tokens': 5, 'total_tokens': 13},
+    }
+    p, _ = provider(reply)
+    with d.diagnostic_scope(tmp_path, 'job_success'):
+        result = collect_response(p, request())
+        assert result.message.content == '{"ok":true}'
+        d.emit('job_finished', stage='workflow', status='completed', elapsed_ms=1)
+
+    job = {'id': 'job_success', 'status': 'completed', 'kind': 'generation'}
+    with zipfile.ZipFile(io.BytesIO(d.export_diagnostics(tmp_path, job))) as z:
+        summary = json.loads(z.read('summary.json'))
+        transcript = [json.loads(line) for line in z.read('transcript.jsonl').decode().splitlines()]
+        guide = z.read('README.txt').decode()
+
+    assert summary['job']['status'] == 'completed'
+    assert summary['transcript_count'] == 2
+    assert any(row['event'] == 'model_request' and row['messages'][-1]['content'] == 'PRIVATE_PROMPT'
+               for row in transcript)
+    assert any(row['event'] == 'model_response' and row['reasoning'] == 'SUCCESS_REASONING'
+               and row['content'] == '{"ok":true}' for row in transcript)
+    assert 'successful or failed runs' in guide
+
+
 def test_old_job_export_does_not_fabricate_evidence(tmp_path):
     with zipfile.ZipFile(io.BytesIO(d.export_diagnostics(tmp_path,{'id':'job_old'}))) as z:
         assert json.loads(z.read('summary.json'))['capture_status']=='not_captured'

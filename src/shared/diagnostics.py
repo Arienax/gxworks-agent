@@ -568,9 +568,9 @@ def export_diagnostics(state_dir, job):
             except (ValueError, OSError):
                 pass
     text = json.dumps(meta, ensure_ascii=False, indent=2) + '\n'
-    guide = ('GXWorks task diagnostics\n\n'
-             'This operator-only archive contains the job timeline and model I/O needed to reproduce failures.\n'
-             'summary.json: compact failure summary and capture status.\n'
+    guide = ('GXWorks task interaction trace\n\n'
+             'This operator-only archive contains the job timeline and model I/O needed to inspect successful or failed runs.\n'
+             'summary.json: compact job summary and capture status.\n'
              'diagnostics.jsonl: sanitized structured metadata in chronological order.\n'
              'job.json: persisted job snapshot, status, result and event timeline, with credentials/binaries redacted.\n'
              'transcript.jsonl: actual model messages, reasoning, final content, tool calls, request options and usage.\n'

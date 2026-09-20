@@ -102,6 +102,8 @@ const words: Record<string, [string, string]> = {
   "该错误涉及指令、地址或参数语义，系统不会猜测修复；请重新生成候选或手动修改。": ["This error involves instruction, address, or parameter semantics. The system will not guess a repair; regenerate the candidate or edit it manually.", "このエラーは命令、アドレス、またはパラメータの意味に関係します。推測による修復は行わないため、候補を再生成するか手動で修正してください。"],
   "让 AI 修复": ["Repair with AI", "AIで修復"],
   "下载错误诊断日志": ["Download error diagnostics", "エラー診断ログをダウンロード"],
+  "导出交互记录": ["Export interaction trace", "対話トレースをエクスポート"],
+  "导出内容包含本任务实际发送给模型的消息、模型思考与回复、工具调用、token 使用和任务事件；API Key、Authorization 与图片/二进制正文不会导出，也不会自动上传。": ["Exports the actual messages sent to the model for this task, model reasoning and replies, tool calls, token usage, and job events. API keys, Authorization values, and image/binary bodies are excluded, and nothing is uploaded automatically.", "このタスクで実際にモデルへ送信したメッセージ、モデルの推論と応答、ツール呼び出し、トークン使用量、ジョブイベントを出力します。APIキー、Authorization値、画像・バイナリ本文は含まれず、自動アップロードも行いません。"],
   "任务编号": ["Task ID", "タスクID"],
   "仅导出诊断元数据，不含 API Key、提示词、回复正文或工程文件；不会自动上传。": ["Exports diagnostic metadata only, excluding API keys, prompts, response text and project files. Nothing is uploaded automatically.", "診断メタデータのみを書き出します。APIキー、プロンプト、応答本文、プロジェクトファイルは含まれず、自動アップロードも行いません。"],
   "确认删除当前项目？项目文件和全部版本将被永久删除。": ["Delete the current project? Its files and all versions will be permanently deleted.", "現在のプロジェクトを削除しますか？プロジェクトファイルとすべてのバージョンが完全に削除されます。"],
