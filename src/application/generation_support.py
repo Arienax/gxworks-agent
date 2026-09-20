@@ -285,8 +285,17 @@ def public_generation_ladder(ladder):
 
 
 def public_generation_specification(specification):
-    """Keep the established engineering allowlist and the API's source order."""
+    """Normalize legacy selected-plan metadata, then apply the Core allowlist.
+
+    The caller-owned specification is never mutated. Legacy compatibility lives
+    at this application boundary so plc.generation_contract remains a pure,
+    model-free projection used by API and external-tool contracts.
+    """
     from plc.generation_contract import generation_specification
+
+    normalized = copy.deepcopy(specification)
+    if isinstance(normalized, dict) and isinstance(normalized.get("selected_approach"), dict):
+        normalized["selected_approach"] = normalize_approach(normalized["selected_approach"])
 
     def source_order(source, projected):
         if isinstance(source, dict) and isinstance(projected, dict):
@@ -297,5 +306,5 @@ def public_generation_specification(specification):
             return [source_order(original, public) for original, public in zip(source, projected)]
         return projected
 
-    return public_generation_value(source_order(specification, generation_specification(specification)))
+    return public_generation_value(source_order(specification, generation_specification(normalized)))
 

@@ -2,7 +2,7 @@
 
 This file is the ownership registry for repository test files. The purpose is not to minimize the raw number of test cases; it is to stop the suite from growing by creating a new file for every bug, PR or historical incident.
 
-After the consolidation in this change, the registry contains **165 Python test files** and **3 Web test files**. Data fixtures under `tests/fixtures/` are not independent test owners and are intentionally excluded.
+After the consolidation in this change, the registry contains **167 Python test files** and **3 Web test files**. Data fixtures under `tests/fixtures/` are not independent test owners and are intentionally excluded.
 
 ## Rules for adding tests
 
@@ -150,6 +150,8 @@ Owns GXW container/object/ABI/declaration/network parsing, preservation and roun
 | --- | --- |
 | `tests/test_gxw_cfb_allocator.py` | focused coverage for gxw cfb allocator |
 | `tests/test_gxw_connectivity.py` | focused coverage for gxw connectivity |
+| `tests/test_gxw_compiler.py` | stored compiler artifacts, native component/table observations and source-to-cache bindings |
+| `tests/test_gxw_compiler_call_tree.py` | native CallTree framing, reference maps and replay/preservation boundaries |
 | `tests/test_gxw_container_appended_growth.py` | focused coverage for gxw container appended growth |
 | `tests/test_gxw_container_writer.py` | focused coverage for gxw container writer |
 | `tests/test_gxw_declarations.py` | focused coverage for gxw declarations |

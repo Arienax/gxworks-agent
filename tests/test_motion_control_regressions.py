@@ -1,6 +1,5 @@
 import copy
 import json
-from pathlib import Path
 
 import pytest
 
@@ -369,9 +368,10 @@ def test_vfd_and_servo_parameters_do_not_overwrite_each_other():
 
 
 def test_analysis_prompt_documents_instruction_aware_motion_questions():
-    prompt = (Path(__file__).resolve().parents[1] / "src" / 'application/prompts.py').read_text(
-        encoding="utf-8"
-    )
+    from application.prompts import ANALYSIS_MOTION_PROMPT, ANALYSIS_MOTION_FAMILY_PROMPTS
 
-    assert "PLSY/DPLSY：仅询问脉冲输出轴、频率、脉冲数或连续输出" in prompt
-    assert "不得把所有运动参数列为统一必填项" in prompt
+    pulse = ANALYSIS_MOTION_FAMILY_PROMPTS["pulse"]
+    assert "PLSY/DPLSY/PLSV/DPLSV" in pulse
+    assert "输出轴、频率、脉冲数或连续模式" in pulse
+    assert "不追加相对/绝对、回零问题" in pulse
+    assert "不套用所有定位/回零问题" in ANALYSIS_MOTION_PROMPT

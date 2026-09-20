@@ -129,6 +129,7 @@ from plc.specification.confirmed import (
 )
 from plc.specification.repair import structured_contract_violations, build_contract_repair_plan
 from plc.generation_contract import generation_specification
+from application.generation_support import public_generation_specification
 from plc.hardware_profiles import ensure_hardware_questions, validate_hardware_spec
 
 _OPAQUE = "输出触点与启动触点并联自锁，停止触点串联断开输出"
@@ -233,7 +234,7 @@ def test_opaque_only_contract_does_not_request_repair_or_claim_full_verification
 def test_direct_generation_of_old_snapshot_projects_unknown_semantics_without_mutation():
     spec = _gate_spec({"required_structures": [_OPAQUE]})
     original = copy.deepcopy(spec)
-    projected = generation_specification(spec)
+    projected = public_generation_specification(spec)
     contract = projected["selected_approach"]["generation_contract"]
     assert contract["required_structures"] == []
     assert contract["unverified_constraints"]["required_structures"] == [_OPAQUE]
@@ -243,7 +244,7 @@ def test_direct_generation_of_old_snapshot_projects_unknown_semantics_without_mu
 def test_unknown_metadata_does_not_open_the_generation_projection_allowlist():
     spec = _gate_spec({"required_structures": [_OPAQUE], "unverified_constraints": {
         "required_structures": ["AnotherOpaqueDetail"], "api_key": "DO_NOT_FORWARD"}})
-    projected = generation_specification(spec)
+    projected = public_generation_specification(spec)
     assert "DO_NOT_FORWARD" not in str(projected)
     assert projected["selected_approach"]["generation_contract"]["unverified_constraints"]["required_structures"] == ["AnotherOpaqueDetail", _OPAQUE]
 

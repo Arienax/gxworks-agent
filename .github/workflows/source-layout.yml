@@ -2,16 +2,24 @@ name: Source Layout Validation
 
 on:
   push:
-    branches: [refactor/src-layout-complete-20260918]
+    branches: [main]
   pull_request:
+    branches: [main]
     paths:
       - 'src/**'
       - 'tests/**'
       - 'scripts/**'
       - 'tools/**'
       - 'packaging/**'
+      - 'resources/**'
+      - 'research/**'
       - '.github/workflows/source-layout.yml'
   workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: 'Baseline ref for a manual regression comparison'
+        required: false
+        default: main
 
 permissions:
   contents: read
@@ -23,6 +31,7 @@ jobs:
     timeout-minutes: 20
     env:
       QT_QPA_PLATFORM: offscreen
+      BASELINE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'push' && github.event.before || inputs.baseline_ref || 'main' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,9 +41,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: baseline
-          ref: 295378d6ac5d24949c03a1c799906f4afe0fd4c9
+          ref: ${{ env.BASELINE_REF }}
           persist-credentials: false
           lfs: true
+      - name: Record comparison refs
+        run: |
+          echo "Baseline ref: $BASELINE_REF"
+          echo "Candidate SHA: $GITHUB_SHA"
+          echo "baseline_ref=$BASELINE_REF" >> "$GITHUB_STEP_SUMMARY"
+          echo "candidate_sha=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
