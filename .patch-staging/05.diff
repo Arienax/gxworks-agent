@@ -1,0 +1,66 @@
++可见方案保持最小：name 是短名称，description 只说明选了什么结构，pros 和 cons 用空字符串。已选实现明确承诺的结构写入 generation_contract.required_structures；不要把结构再扩写成教程。
++generation_guide 只补结构化字段表达不了的非显然方案差异，通常应为空字符串。不展开底层指令翻译、扫描周期等通用知识，不重复待确认事项或添加需求外的扩展建议。
++assumptions 无实际非必要不确定性时用 []。
++只补当前实现真正缺失的必要参数；不因缺参或复杂度切换 Design，不编造已确认答案。"""
+ 
+ 
+ ANALYSIS_PINNED_PROMPT = """# Direct substate: pinned / extract
+@@ -47,7 +45,7 @@ ANALYSIS_DESIGN_PROMPT = """# Analysis mode: design / open
+ 用户显式选择方案探索。有 selected_approach 时仍可比较本轮允许调整的部分，不自动退回 pinned；保留未解除的用户明确约束、已确认 I/O 和参数，不把切换 Design 当作清空规格。候选是供确认的新草稿，不直接覆盖当前确认规格。
+ 结合需求、选定型号和 Retrieved PLC knowledge 中的设计证据，给出 1~3 个本质不同的候选。仅换编号、梯级顺序或增加同条件的中间位不算新的架构方案；设计空间很窄时允许只给 1 个。部分已固定的用户约束仍须保留，只比较开放部分。
+ 每个候选是一种明确实现；generation_guide 只写候选之间无法由结构化字段看出的必要差异，不写完整实现教程。required_structures/forbidden_structures 只描述明确承诺的结构；any_of_opcode_groups/any_of_structure_groups 只容纳同一方法内部等价写法，不合并不同架构。
+-结构名：direct_logic、register_state_machine、bit_state_machine、state_initialization、state_comparison、state_transition、self_hold、set_reset_latch、hardware_counter、data_register_counter、edge_trigger、pulse_positioning、analog_control、serial_communication、pid_control、vfd_multi_speed。无依据就留空。"""
++""" + "\n结构名：" + "、".join(sorted(SUPPORTED_STRUCTURES)) + "。无依据就留空。"
+ 
+ 
+ ANALYSIS_VFD_PROMPT = """# Relevant questions: VFD
+@@ -67,11 +65,6 @@ ANALYSIS_MOTION_FAMILY_PROMPTS = {
+ }
+ 
+ 
+-ANALYSIS_PUMP_PROMPT = """# Relevant questions: pump rotation
+-仅对需求实际包含且未定义的轮换行为提问：首泵、停止后指针处理、故障恢复/备用泵策略。普通多泵启停不自动增加轮换、低压或备用泵要求；Direct 中沿用已选位移链/指针实现；Design 只比较本轮开放的部分，不解除用户固定约束。"""
+-
+-
+-
+ DEBUG_REPORT_SYSTEM_PROMPT = """
+ # PLC Debug Report Mode
+ You are debugging an existing Mitsubishi ladder JSON program. Follow the
+@@ -96,9 +89,9 @@ Rules:
+   conversation history.
+ - Mention rung_id values when a cause can be tied to a rung.
+ - If evidence is insufficient, say what to inspect online.
+-- Pay special attention to output ownership, reset priority, state transitions,
+-  timer reset order, duplicate writers, M8029 placement, and FX3U 32-bit
+-  register-pair rules.
++- Check behavior relevant to the question and the confirmed requirements.
++  Instruction/device rules come from the selected model profile and applicable
++  evidence, not from a fixed CPU or a universal defect checklist.
+ - Multiple SET/RST instructions for one address are normal held-bit logic and
+   are not duplicate coils. Only report a conflict when COIL is mixed with
+   SET/RST or when concrete scan-order evidence proves contradictory ownership.
+@@ -393,13 +386,3 @@ Rules:
+   `repair_contract.dedicated_output_types`.
+ - Do not output markdown, explanation, diagnostics, or a full ladder program.
+ """
+-
+-
+-FORMAT_LADDER_REPAIR_SYSTEM_PROMPT = """# Legacy compatibility name
+-Full-program format rewriting is disabled. Production format repair uses only
+-deterministic recovery or a bounded local syntax patch. Never return a complete
+-ladder from a format-repair model call.
+-"""
+-
+-
+-
+diff --git a/src/application/response_contracts.py b/src/application/response_contracts.py
+index 17be269..b8efed5 100644
+--- a/src/application/response_contracts.py
++++ b/src/application/response_contracts.py
+@@ -16,11 +16,10 @@ ST_RESPONSE = ResponseContract("st", "json", st_paths=("st_code",))
+ ANALYSIS_RESPONSE = ResponseContract("analysis", "json", (
+     "summary", "approaches.*.name", "approaches.*.description", "approaches.*.pros",
+     "approaches.*.cons", "approaches.*.generation_guide", "missing_info.*.question",
+-    "assumptions", "format_diagnostics.*", "format_diagnostics.*.message",
+-    "flowchart_steps.*.label",
++    "assumptions",
