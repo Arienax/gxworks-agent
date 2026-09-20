@@ -9,6 +9,7 @@ from plc.specification.bindings import (
     single_address,
     restore_bound_choices,
     resolve_parameter_address,
+    parameter_uses_bound_address,
 )
 
 from plc.specification.approach import (
@@ -566,6 +567,11 @@ def validate_spec_draft(spec, plc_model=None):
             continue
         hint = binding_hint(parameter)
         if hint is None or parameter.get("id") in QUESTION_IDS:
+            continue
+        if not parameter_uses_bound_address(parameter):
+            # A question may be associated with D/M/T/etc. without selecting
+            # that address. Semantic answers are ordinary parameters, not an
+            # invalid I/O answer and therefore create no confirmation gate.
             continue
         address = resolve_parameter_address(parameter, binding_rows, binding_history)
         if address is None:

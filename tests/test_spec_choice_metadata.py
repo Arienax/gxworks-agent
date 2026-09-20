@@ -116,6 +116,59 @@ def test_polarity_only_answers_bind_to_predeclared_io_without_reasking_address()
     ]
 
 
+def test_register_semantic_choice_is_not_misclassified_as_io_address_answer():
+    analysis = {
+        "plc_model": "FX3U",
+        "summary": "vision classification",
+        "suggested_io": {"D": {"D0": "Vision Sensor 分类结果"}},
+        "missing_info": [{
+            "id": "vision_material_presence",
+            "question": "视觉传感器如何表示“有料 / 无料”，程序据此判定新物料并把颜色写入跟踪寄存器？",
+            "required": True,
+            "options": [
+                "有料时 D0 输出 1~9，无料时 D0=0（D0 由 0 变非 0 即为新料）",
+                "有料时 D0 输出 1~9，无料时 D0 保持上次分类值，另有到位信号",
+            ],
+            "io_binding": {
+                "binding_id": "vision.classification", "kind": "D",
+                "label": "Vision Sensor 分类结果",
+            },
+        }],
+    }
+    draft = build_review_draft(analysis)
+    draft["parameters"][0].update(
+        value="有料时 D0 输出 1~9，无料时 D0=0（D0 由 0 变非 0 即为新料）",
+        source="user",
+    )
+    assert validate_spec_draft(draft)["errors"] == []
+
+    canonical = canonicalize_confirmed_spec(draft)
+    assert {row["address"] for row in canonical["io_table"]} == {"D0"}
+    assert [(p["id"], p["value"]) for p in canonical["parameters"]] == [
+        (
+            "vision_material_presence",
+            "有料时 D0 输出 1~9，无料时 D0=0（D0 由 0 变非 0 即为新料）",
+        )
+    ]
+    assert not canonical.get("io_bindings")
+
+
+def test_bare_non_xy_address_answer_still_binds_normally():
+    from plc.specification.bindings import bind_answers
+    parameter = {
+        "id": "tracking_register", "name": "tracking_register", "value": "D10",
+        "source": "user",
+        "io_binding": {"binding_id": "tracking.register", "kind": "D", "label": "跟踪寄存器"},
+    }
+    rows, remaining, bindings, _ = bind_answers([], [parameter])
+    assert remaining == []
+    assert rows == [{
+        "kind": "D", "address": "D10", "label": "跟踪寄存器", "source": "user",
+        "binding_id": "tracking.register", "source_parameter_id": "tracking_register",
+    }]
+    assert bindings[0]["address"] == "D10"
+
+
 def test_address_and_contact_answer_remains_explicit_across_canonicalization():
     draft = build_review_draft(_analysis())
     for parameter, value in zip(draft["parameters"], ["X2", "X1，常闭", "Y0"]):

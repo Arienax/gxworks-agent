@@ -31,6 +31,39 @@ def _is_io_attribute_answer(value):
     return bool(_IO_ATTRIBUTE_RE.search(str(value or "")))
 
 
+def _is_plain_address_answer(value, kind=None):
+    """Accept a bare address/default label, not arbitrary device-related prose."""
+    text = str(value or "").strip()
+    address = single_address(text, kind)
+    if address is None:
+        return False
+    remainder = _DEVICE.sub("", text, count=1)
+    remainder = re.sub(
+        r"[\\s，,。；;：:（）()［］\\[\\]【】<>《》_-]+|建议|推薦|recommended|default",
+        "", remainder, flags=re.IGNORECASE,
+    )
+    return not remainder
+
+
+def parameter_uses_bound_address(parameter):
+    """Whether this answer is actually selecting or qualifying one device address.
+
+    io_binding identifies which device a question is about; it does not mean
+    every answer must itself be an address. Register semantics such as
+    "D0=0 means no material" remain ordinary confirmed parameters.
+    """
+    hint = binding_hint(parameter)
+    if hint is None:
+        return False
+    name = str(parameter.get("name") or parameter.get("question") or "")
+    value = parameter.get("value", "")
+    return (
+        _question_is_address(name)
+        or _is_io_attribute_answer(value)
+        or _is_plain_address_answer(value, hint["kind"])
+    )
+
+
 _ROLE_LABELS = {
     "start": {"启动", "启动按钮", "启动信号", "起动", "起动按钮", "start", "startbutton", "startsignal", "起動", "起動ボタン"},
     "stop": {"停止", "停止按钮", "停止信号", "stop", "stopbutton", "stopsignal", "停止ボタン"},
@@ -163,15 +196,9 @@ def _bound_row(rows, identity, binding):
 
 
 def resolve_parameter_address(parameter, rows, bindings=()):
-    """Resolve an I/O address without requiring the answer to repeat it.
-
-    Address-changing answers still win. For polarity/edge-only answers, reuse
-    the existing bound row first, then a unique purpose match, then the single
-    address explicitly present in the visible question. Ambiguity is left
-    unresolved rather than guessed.
-    """
+    """Resolve an address only for true address or electrical-attribute answers."""
     hint = binding_hint(parameter)
-    if hint is None:
+    if hint is None or not parameter_uses_bound_address(parameter):
         return None
     explicit = single_address(parameter.get("value", ""), hint["kind"])
     if explicit is not None:
@@ -242,6 +269,11 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
         identifier = str(item.get("id") or "").strip()
         hint = binding_hint(item)
         if identifier in protected_ids or not name or (hint is None and not _question_is_address(name)):
+            remaining.append(item)
+            continue
+        if hint is not None and not parameter_uses_bound_address(item):
+            # Device-associated semantic choices stay as confirmed parameters;
+            # they are not I/O-address edits and must never be consumed here.
             remaining.append(item)
             continue
         address = resolve_parameter_address(item, original_rows, previous.values()) if hint else single_address(item.get("value", ""))
