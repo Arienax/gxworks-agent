@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "evidence_level": "observed",
+  "handling": "opaque-preserved",
+  "baseline_sha256": "df5c8c7e194a792804d8cd478a5618c7cca787fa398dd3c2dbecaeb55e5eeec3",
+  "output_sha256": "4e49661ee9f2f88e53e0277466115eb0ea79c2197d34105e0e82e0044ab70bfe",
+  "object": "1.Program.pou",
+  "node_offset": 95,
+  "old_symbol": "X1",
+  "new_symbol": "X2",
+  "writer_touch": {
+    "offset_space": "outer GXW file bytes",
+    "changed_bytes": 22,
+    "allowed_ranges": [
+      {
+        "offset": 486191,
+        "length": 6
+      },
+      {
+        "offset": 65322,
+        "length": 24
+      }
+    ],
+    "changes": [
+      {
+        "old_offset": 65322,
+        "new_offset": 65322,
+        "old_length": 20,
+        "new_length": 20,
+        "before_hex": "694a624569685a30634c503862474e48694e356b",
+        "after_hex": "7a564768443732677974563276704c6639314b38"
+      },
+      {
+        "old_offset": 65343,
+        "new_offset": 65343,
+        "old_length": 1,
+        "new_length": 1,
+        "before_hex": "67",
+        "after_hex": "51"
+      },
+      {
+        "old_offset": 486193,
+        "new_offset": 486193,
+        "old_length": 1,
+        "new_length": 1,
+        "before_hex": "31",
+        "after_hex": "32"
+      }
+    ],
+    "outside_ranges": "byte-identical"
+  },
+  "metadata_changes": [
+    {
+      "object": "1.Program.pou",
+      "stream": "16",
+      "field": "szMD5val",
+      "before": "iJbEihZ0cLP8bGNHiN5kTg==",
+      "after": "zVGhD72gytV2vpLf91K8TQ==",
+      "old_offset": 9514,
+      "old_length": 24,
+      "new_length": 24,
+      "offset_space": "history.xml bytes",
+      "status": "confirmed",
+      "new_offset": 9514
+    }
+  ],
+  "preserved_metadata": [],
+  "validation": {
+    "opaque_preserved": true,
+    "all_stream_payloads": "passed",
+    "native_compile": "not_run",
+    "native_reopen": "not_run",
+    "semantic_equivalence": "not_claimed: intentional source edit"
+  },
+  "limitations": [
+    "Experimental equal-size source patch; compiler state is preserved, not regenerated",
+    "Byte preservation does not establish meaning or native acceptance of opaque records"
+  ]
+}

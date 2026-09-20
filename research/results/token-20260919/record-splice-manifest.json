@@ -1,0 +1,369 @@
+{
+  "schema_version": 1,
+  "archive": "research/evidence/gxw-record-splice-20260920.zip",
+  "archive_sha256": "61f8283779b61c63937856d9c554ed181aaecc5e20ff57b06d68831c4cb9497f",
+  "source_commit": "6ccde5f793afa50d5aaf2426696905f0028c5b4b",
+  "files": {
+    "splice/c-alignment.json": {
+      "size": 3982,
+      "sha256": "dd624f7e41c25c4abc95beac4928308fb5b1b0f0d13ff70371f57efa6f8b32c5"
+    },
+    "splice/c-base.gxw": {
+      "size": 921600,
+      "sha256": "ea4bae5e88febfc895db3f2e3a9f13218aaab4eb1aa97f87f161176a994e8ea5"
+    },
+    "splice/c-closed.png": {
+      "size": 94911,
+      "sha256": "346f8c86bd4e64148e9a4a88653befe0c3a10143e4179b1280db420a9e2e9b2f"
+    },
+    "splice/c-exported.png": {
+      "size": 149845,
+      "sha256": "e71c65c92dc31be80145e086a787065c0423c77dc4c39ee0dd348f68f1005e6e"
+    },
+    "splice/c-input.gxw": {
+      "size": 921600,
+      "sha256": "93ca54ab853d3ebf945cb5775ca9205d1116a881ae3cd4250ecf93f9b5cf00f2"
+    },
+    "splice/c-opened.png": {
+      "size": 149853,
+      "sha256": "5f579335980eaa55956eae0126116052e173db6ce9f303dc55ba01b580462271"
+    },
+    "splice/c-plan.json": {
+      "size": 613,
+      "sha256": "95e194356d595a96053512521397a078c3db714f35a40bb59b5bf8c173223d9c"
+    },
+    "splice/c-reopened.csv": {
+      "size": 1546,
+      "sha256": "8b59bb753f9f76f93c9344ddfcb0dbbb41159ef7959bdb15ade878dd246b4356"
+    },
+    "splice/c-reopened.png": {
+      "size": 149700,
+      "sha256": "a3899a03fbea03b050950d9bc972a3d3ef740d81a058ebd65a7c2550e5e7ca3a"
+    },
+    "splice/c-saved.png": {
+      "size": 149422,
+      "sha256": "60493348e3cd2e455a5e1ebe64376515d8450febbc9faed8a88b813973dc0eff"
+    },
+    "splice/c-verification.json": {
+      "size": 9884,
+      "sha256": "f11835b082b0a6e05da464a4cb14c44ccff299a1500f3e035cf762473573545b"
+    },
+    "splice/c.gxw": {
+      "size": 921600,
+      "sha256": "aa106584fd3ee43743c890b67aa4cbff9ee3df87ef826d59e55a6257cc6a9904"
+    },
+    "splice/native/decode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "splice/native/decode/native-stdout.jsonl": {
+      "size": 446,
+      "sha256": "45679188b060ba236efb2f0851aa08eed273a3e1d5ab38c8528e06d9f5687cf8"
+    },
+    "splice/native/decode/process.json": {
+      "size": 248,
+      "sha256": "026d66f93c13e8a4552218bcd43b056f330526ef7449a64f604e77be22590b60"
+    },
+    "splice/native/decode/requests.json": {
+      "size": 588,
+      "sha256": "647f6510ee3eda993c00b4e55e7c29b26cc43a82b02d42c6d54be4611ff43535"
+    },
+    "splice/native/encode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "splice/native/encode/native-stdout.jsonl": {
+      "size": 394,
+      "sha256": "6ed5d2ad55dfc7cca5b77942c65f567ab7902c3f7cace58218b1c472834f15cc"
+    },
+    "splice/native/encode/process.json": {
+      "size": 248,
+      "sha256": "a99fc5a48a7b041ac6fe35969166ae60fb46977fd6d7751e9f2c2490977b2faf"
+    },
+    "splice/native/encode/requests.json": {
+      "size": 697,
+      "sha256": "4d91837a6721d50d701c96c1b0e9d4e8403388e88db3e54b6d714123a0e2aecb"
+    },
+    "splice/native/patch.json": {
+      "size": 7901,
+      "sha256": "be1f65cd052eb91c1820cb40b838084298f5c71e8e8266813115924e41632373"
+    },
+    "splice/native/plan.json": {
+      "size": 613,
+      "sha256": "95e194356d595a96053512521397a078c3db714f35a40bb59b5bf8c173223d9c"
+    },
+    "splice/u-alignment.json": {
+      "size": 3602,
+      "sha256": "14649e29101f170b63596f0a818ba530d5b5a14ff241055887e70b5b3c1015b1"
+    },
+    "splice/u-base.gxw": {
+      "size": 921600,
+      "sha256": "9bfaf6d3443475d6c15667598eeb3ea7e08ea5c8db56db178c4470b05719ed80"
+    },
+    "splice/u-closed.png": {
+      "size": 95190,
+      "sha256": "0aee828f788ec5607c0ae48d283727d94f0779ece7e5a53f0c4b885a5f0a2fde"
+    },
+    "splice/u-exported.png": {
+      "size": 150466,
+      "sha256": "31f18f7d83ea4313fd30608a404665c5ff95ac9446eb76a289995937b57806f7"
+    },
+    "splice/u-input.gxw": {
+      "size": 921600,
+      "sha256": "046ffbf9d1e8144b72288ac4d7456491ed50f0f0bceb368e86bc75e0a7ff27d5"
+    },
+    "splice/u-native/decode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "splice/u-native/decode/native-stdout.jsonl": {
+      "size": 274,
+      "sha256": "08bfd708a1d586081fbfae91ad1c7f34958946259ca6664727178b6eac7d127d"
+    },
+    "splice/u-native/decode/process.json": {
+      "size": 248,
+      "sha256": "fcc10910ae91a9d8a3f202ddd17731b686999111a24230e1eb601b6b2f8b36a8"
+    },
+    "splice/u-native/decode/requests.json": {
+      "size": 454,
+      "sha256": "db81d552cae85ef218476a64819b5221ef42a6c4992d7243de706a8192ffb41f"
+    },
+    "splice/u-native/encode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "splice/u-native/encode/native-stdout.jsonl": {
+      "size": 242,
+      "sha256": "d887e29143f15f881a5be21347e5fdedad28de1575b5ccdcac1f28880b4ece79"
+    },
+    "splice/u-native/encode/process.json": {
+      "size": 248,
+      "sha256": "b13afe42f17f11d9a486dbeb073f2af3246155325695f8567798410e74ac62c7"
+    },
+    "splice/u-native/encode/requests.json": {
+      "size": 488,
+      "sha256": "3c60a820e2934eba06596ac6812dd38133cb2eeb1ad4c278d92e9b39ef16955b"
+    },
+    "splice/u-native/patch.json": {
+      "size": 6620,
+      "sha256": "61c2bc5d0d2c8fa8f5b4da54d9a3afb2653cbdcbdc53dfa09acd4e55841d1210"
+    },
+    "splice/u-native/plan.json": {
+      "size": 445,
+      "sha256": "73eb2d9b934f844c167042b4d033a9eece0c18db194fce346998697305c77308"
+    },
+    "splice/u-opened.png": {
+      "size": 149147,
+      "sha256": "482638dce8bea6f374b69bceecd469811da509e62bd60d5aee69233a4fd82988"
+    },
+    "splice/u-plan.json": {
+      "size": 445,
+      "sha256": "73eb2d9b934f844c167042b4d033a9eece0c18db194fce346998697305c77308"
+    },
+    "splice/u-reopened.csv": {
+      "size": 1884,
+      "sha256": "64984a232f3066bcf5777bad76de839f7e16d52b160880e83601c97d7926b376"
+    },
+    "splice/u-reopened.png": {
+      "size": 150383,
+      "sha256": "a01d988513ced26d87111826f83f1e426f74b40f2a5477d11d01d12bf0d0e94b"
+    },
+    "splice/u-saved.png": {
+      "size": 150318,
+      "sha256": "bd557d80e15285f56ac9a0eb46a6b6abd35328b6cc0fea53797f69000d3f0038"
+    },
+    "splice/u-seed-preparation.json": {
+      "size": 1767,
+      "sha256": "7d63fa4c3cf6880c0127f6fa3b23a9f77161e8e24f6fa209d2709a41d9c202f9"
+    },
+    "splice/u-verification.json": {
+      "size": 9581,
+      "sha256": "44f27fe10a07d51ffe526f23325776c683f27e4580fac11ea01fadb2c59824d1"
+    },
+    "splice/u.gxw": {
+      "size": 921600,
+      "sha256": "eea889946c41a365e3765f1f663b2035de3a35b60cba5b2c496e6539205346d3"
+    },
+    "splice/unknown-decode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "splice/unknown-decode/native-stdout.jsonl": {
+      "size": 164,
+      "sha256": "a6beba972b80c3f08bbc7ae782426f53409d05aa80a9cfa969092671162b8be6"
+    },
+    "splice/unknown-decode/process.json": {
+      "size": 248,
+      "sha256": "0e1185f7c6ad26ff474fd1047335d35ae8943b215522ff1b0b1a90838560345e"
+    },
+    "splice/unknown-decode/requests.json": {
+      "size": 348,
+      "sha256": "b112b0db1b42154bf898682a88ff755abe7615d2eb9c3c8a915a3d96782c09b7"
+    },
+    "splice/unknown-encode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "splice/unknown-encode/native-stdout.jsonl": {
+      "size": 148,
+      "sha256": "0e5c7e52f05478890d8c57509cda510f1631c0f64b3fab86b2f2a09992f7b626"
+    },
+    "splice/unknown-encode/process.json": {
+      "size": 248,
+      "sha256": "bdcef82ddfc9ebe1aa0d76edcad2b73077bfa331de0ea301e1edb6d26434e197"
+    },
+    "splice/unknown-encode/requests.json": {
+      "size": 398,
+      "sha256": "bf69fe825e80a5a9726ed33eef8f32f07ce4bf035cd926158642b9ca215108a7"
+    },
+    "splice/verify.py": {
+      "size": 3531,
+      "sha256": "63924362deb0d4d23f0b4a29bd6300140cd3e65daf6ab9dfb1eb4d697fbd6b6b"
+    },
+    "splice/whole-native-decode/cross-check.json": {
+      "size": 1247,
+      "sha256": "08ca71e3a4a892e3eddcb7f1edd5d9b105c3687a068dc6eec6f41c2a769621fb"
+    },
+    "splice/whole-native-decode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "splice/whole-native-decode/native-stdout.jsonl": {
+      "size": 1048,
+      "sha256": "1437de6a4b3eb70374330bc1fc9d4143acd54453193d2eff467bc92425a1d2da"
+    },
+    "splice/whole-native-decode/process.json": {
+      "size": 248,
+      "sha256": "7174431a21c68b26a0565e91fe3a8b53b5eb74ebeff3048407b22436c7b0d36e"
+    },
+    "splice/whole-native-decode/requests.json": {
+      "size": 1424,
+      "sha256": "c4524546fdd93a5672a3e7a5da718f24548a2581985924cd4e45403da748aa11"
+    },
+    "header-grammar/family-checks.json": {
+      "size": 17081,
+      "sha256": "5bac9da196f53d0b5e93a3f8fed39e4747dec87fea5af9b7c06dbe3ead350802"
+    },
+    "header-grammar/instructions.txt": {
+      "size": 2816,
+      "sha256": "bf830bc299a72a9eb926a584c2d34b8ad224dffb1dc42babfc188c9603426fbc"
+    },
+    "header-grammar/native-decoder-disassembly.txt": {
+      "size": 8056,
+      "sha256": "918a63697f72fc877648e65067116ed1331818e4ebb2dd05c8108f00c1f23b21"
+    },
+    "header-grammar/strings/decode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "header-grammar/strings/decode/native-stdout.jsonl": {
+      "size": 15046,
+      "sha256": "b5a3037f5042151df596e14869574f8c4e4b3e67732b3b3838246b949c477959"
+    },
+    "header-grammar/strings/decode/process.json": {
+      "size": 250,
+      "sha256": "5d30e112985dd9a788c2e0252b63bac1a428d7769358e23765daae7c673db52d"
+    },
+    "header-grammar/strings/decode/requests.json": {
+      "size": 12500,
+      "sha256": "08495470bf3905bd293b3524dbd3f78453bd7fbfbb5371279561ab102e4a952e"
+    },
+    "header-grammar/strings/encode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "header-grammar/strings/encode/native-stdout.jsonl": {
+      "size": 13722,
+      "sha256": "5b096d61a320a20e9fa20336ed8484b5d25383e1ed84213c47d94888c7155eff"
+    },
+    "header-grammar/strings/encode/process.json": {
+      "size": 250,
+      "sha256": "38647fb02ce77433b59e6421b13c8565b6187d7e751121a7c48104029d9d9b58"
+    },
+    "header-grammar/strings/encode/requests.json": {
+      "size": 14882,
+      "sha256": "d147e50882993c0766505de5a3f35f9ecd7da45ba5be95066e42ea645ff39ebf"
+    },
+    "header-grammar/strings/probes.json": {
+      "size": 127897,
+      "sha256": "aa2f3460f0c52716c3b9cd528da69ba2cce3e96ea498c0257ef134bba5a945f0"
+    },
+    "header-grammar/width-mutations/checks.json": {
+      "size": 4866,
+      "sha256": "93188a8049d06f4bfef0cc2c187e430d5726d4491a29272853f11ef6a3a55a11"
+    },
+    "header-grammar/width-mutations/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "header-grammar/width-mutations/native-stdout.jsonl": {
+      "size": 5125,
+      "sha256": "0dc79b6de713ff06e2e5b7a524dfc2c801f409ba1696117d53da845542844e16"
+    },
+    "header-grammar/width-mutations/process.json": {
+      "size": 250,
+      "sha256": "c5bcc72cf50bf94a470526b020f54a6c8c87939a0eb0fd6f7435015a7d6c824c"
+    },
+    "header-grammar/width-mutations/requests.json": {
+      "size": 17378,
+      "sha256": "95db06b6c92e5aac2952e9fb209d98ea5e2c1e09e1d42f009446e1ba1e94329d"
+    },
+    "native/TokenOracle.cs": {
+      "size": 4189,
+      "sha256": "92585003a2b3adbcb10d4923f4d74884a99dd4de4a1ab07d2f527c6736dadd7e"
+    }
+  },
+  "native_validation": {
+    "observer": "Actual GX Works2 UI through computer-use, 2026-09-20 Asia/Shanghai",
+    "GX_Works2_file_version": "1.635.0.1",
+    "CPU": "FX3U/FX3UC",
+    "mode": "offline",
+    "cases": {
+      "c": {
+        "open": true,
+        "convert_all_returned_to_editor_without_error_dialog": true,
+        "explicit_error_counter": "not displayed for this simple-project conversion",
+        "save": true,
+        "closed_to_empty_workspace": true,
+        "reopen": true,
+        "csv_export": true,
+        "verification_member": "splice/c-verification.json"
+      },
+      "u": {
+        "open": true,
+        "convert_all_returned_to_editor_without_error_dialog": true,
+        "explicit_error_counter": "not displayed for this simple-project conversion",
+        "save": true,
+        "closed_to_empty_workspace": true,
+        "reopen": true,
+        "csv_export": true,
+        "verification_member": "splice/u-verification.json"
+      }
+    }
+  },
+  "header_grammar": {
+    "dll_sha256": "a700da129ede89869a00a5614d08b43dc64e94c240494fc753fe09104c5b9399",
+    "cpu_code": 520,
+    "native_decoder_rva": "0x3D9D5",
+    "identity_lookup_rva": "0x3C387",
+    "dispatch": "Byte 1 opcode; byte 3 subcode for length >=5; byte 4 modifier for length >=6. Width byte 2 is not consulted for mnemonic selection. Basic length 3/4 headers share identity. Python only projects observed families in length 3..6; unsupported modifiers remain opaque.",
+    "native_string_probes": 88,
+    "new_exact_headers_without_catalog_expansion": 30,
+    "native_and_python_records_agree": 88,
+    "width_mutation_probes": 35,
+    "width_mutations_native_records_unchanged": 35,
+    "width_mutation_caveat": "Includes deliberately incorrect 0/255 widths; native decode acceptance does not validate stored steps. Python leaves unobserved zero-width headers opaque.",
+    "historical_opaque_preservation": "u was spliced and validated in GX Works2 while its 13-byte $MOV fragment appeared as three opaque records. The subsequently implemented family decoder now reads that exact unchanged fragment; the original patch report is retained.",
+    "binding_followup": "step-width-manifest.json: mnemonic identity alone does not fix operand arity. Current decoder keeps basic length 3/4 shapes separate and leaves zero or negative signed widths opaque."
+  },
+  "method_reference": {
+    "repository": "purinzan/gx3-cli-mcp",
+    "commit": "5c5262cf55436ec0f817b014b5f3a954ced300c8",
+    "files": [
+      "gx3cli/gx3_intermediate_tool.py",
+      "gx3cli/gx3_roundtrip.py"
+    ],
+    "adopted": "Local record edits plus independent roundtrip comparison; preserve untouched bytes. Full native ordered records and steps are compared, not only the reference tool device-access occurrence set. No GX3 format assumptions imported."
+  },
+  "scope": "Source-bound local program splicing and lexical header identity. Original END, unedited raw records, other streams and stale .res retained by Python. Native conversion updates .res. No PLC/simulator execution, no claim that the offline converter validates control flow or stored widths."
+}

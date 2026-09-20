@@ -1,0 +1,357 @@
+{
+  "schema_version": 1,
+  "archive": "research/evidence/gxw-step-width-20260920.zip",
+  "archive_sha256": "05f4747e3aa05442857fd14ed47341deeb111fdb72043900fc3a4e288fced900",
+  "source_commit": "6ccde5f793afa50d5aaf2426696905f0028c5b4b",
+  "files": {
+    "b-alignment.json": {
+      "size": 1065,
+      "sha256": "1ad4e6c7dc2bc5d3a161972d69743141b4757c8f2880521eef77e0518b492891"
+    },
+    "b-check-no-errors.png": {
+      "size": 145249,
+      "sha256": "264f7dd8a55d4656708c537442e4d26d44b84cdfaee3c0190c8449bee1036292"
+    },
+    "b-closed.png": {
+      "size": 94537,
+      "sha256": "823e7bcd5767000734ca89841ccec9f16668dc46e3d39e07111ba841459e1fe8"
+    },
+    "b-converted.png": {
+      "size": 130812,
+      "sha256": "fff1b3b120a7200a407611493fee25f975f133713fd0f1c7e33752f960277f1a"
+    },
+    "b-encode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "b-encode/native-stdout.jsonl": {
+      "size": 157,
+      "sha256": "01a5023d3cf621a1f9067de87eecb95be140a65cccfd884ff6fbd34a62a2bd65"
+    },
+    "b-encode/patch.json": {
+      "size": 1371,
+      "sha256": "f1d8338bb0365d3e8d2f0f40dbd1eeac20810e8f4e2b76285b60a58bfb57165f"
+    },
+    "b-encode/process.json": {
+      "size": 248,
+      "sha256": "6e8a30a611bcc0712a886648c8ba68df5da530e23b4bd28cd36c251c7ad5e8e6"
+    },
+    "b-encode/requests.json": {
+      "size": 561,
+      "sha256": "b3459fc901a47efd8206b7483e3a2caba3925b10e05d4717c580dbaab40263c5"
+    },
+    "b-input.gxw": {
+      "size": 921088,
+      "sha256": "03d8860e5718defaba8cf9b948d0a6ce6c0eeb0241cee7a8384afb80cf6211a9"
+    },
+    "b-opened.png": {
+      "size": 131132,
+      "sha256": "540c4d952891c7cdfe8999f49cf7c3ee0aab018c23ba718545415862e1bc990b"
+    },
+    "b-reopened.png": {
+      "size": 131371,
+      "sha256": "941b65bc2d27513653633062cdaa49b731ca134b8fe3ba1e96d4da4e17c189bb"
+    },
+    "b-saved.csv": {
+      "size": 338,
+      "sha256": "7d54bf417dd57ea12091254f03f92026f0598e6a0ee4e594d3ea6d709469a608"
+    },
+    "b-saved.png": {
+      "size": 132634,
+      "sha256": "e2c98696dd444d0b900a8f6fe3c4374bdee063d7f2b7f615ec05a6bb7efa5aed"
+    },
+    "b.gxw": {
+      "size": 921088,
+      "sha256": "8507cfddbcf6eec0472c63eb932e486b56afc8aead2f75e405a27806cbc6df80"
+    },
+    "corpus/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "corpus/native-stdout.jsonl": {
+      "size": 257335,
+      "sha256": "69a7bb9c099d134f8ec0d82cda00c83f44566ad1f5148c7ea4477ec51032dab4"
+    },
+    "corpus/process.json": {
+      "size": 254,
+      "sha256": "9a2997acc0a026f5f78a6ad5a28e974b1b1b148ee82f5eeb8433cfaa1e9f7f3c"
+    },
+    "corpus/requests.json": {
+      "size": 922324,
+      "sha256": "6dfdd1196286c1438a8434490ed7d1c4d6dd8681c336ba2b75e021a940ae27d1"
+    },
+    "corpus-checks.json": {
+      "size": 416094,
+      "sha256": "72a76d7ac4db104178e6995eba306701dea34608813741693d6069667fcbef2b"
+    },
+    "empty.gxw": {
+      "size": 921088,
+      "sha256": "002a780afd116666eb5455fca4ca8b64033ba9636b4a12a2ba658a269380c7f4"
+    },
+    "g-check-no-errors.png": {
+      "size": 145667,
+      "sha256": "19aeec6da97159dc1e6a372d3f6ba9d65c94558d276b88672f33fe2863b6990c"
+    },
+    "g-closed.png": {
+      "size": 94537,
+      "sha256": "823e7bcd5767000734ca89841ccec9f16668dc46e3d39e07111ba841459e1fe8"
+    },
+    "g-encode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "g-encode/native-stdout.jsonl": {
+      "size": 161,
+      "sha256": "a4da9f78771047e7dc4e2ccfc909c9456c5034ba7a4e0ddf7e0fd49162fe2e69"
+    },
+    "g-encode/process.json": {
+      "size": 248,
+      "sha256": "3df6dbc2e3e36147a7b426df21dd6ac103b14d56f1162b01532551b844ec88e8"
+    },
+    "g-encode/requests.json": {
+      "size": 573,
+      "sha256": "6b3b7edf08fc0d7e470e800c8ff50cf4391267422bcaa43eca639ca8fdd4f266"
+    },
+    "g-encode-fixed/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "g-encode-fixed/native-stdout.jsonl": {
+      "size": 161,
+      "sha256": "a4da9f78771047e7dc4e2ccfc909c9456c5034ba7a4e0ddf7e0fd49162fe2e69"
+    },
+    "g-encode-fixed/process.json": {
+      "size": 248,
+      "sha256": "a0149d2c8566985a60ebc194455e6f5c97e3ee31cdd29fa86ad6a167c16ca86b"
+    },
+    "g-encode-fixed/requests.json": {
+      "size": 573,
+      "sha256": "6b3b7edf08fc0d7e470e800c8ff50cf4391267422bcaa43eca639ca8fdd4f266"
+    },
+    "g-input.gxw": {
+      "size": 921088,
+      "sha256": "63701d1d5ad0d1d9d249d514f61a84ed3bd02b229f088b52a2ae52719fac5d0b"
+    },
+    "g-opened.png": {
+      "size": 131392,
+      "sha256": "b52379016d2f5aec44552912d6d04157e581f57b2913fede0eeeb0deff0a544b"
+    },
+    "g-reopened.csv": {
+      "size": 388,
+      "sha256": "e21aed368f3464c1feef704f3aeef77a192471407596f984bbe2960a2b554763"
+    },
+    "g-reopened.png": {
+      "size": 131326,
+      "sha256": "c988d55c3a374d035954b432338148d5b7fb577342445f15d16b37a88b6a477c"
+    },
+    "g-replay-patch.json": {
+      "size": 1431,
+      "sha256": "b0eb62c64e1176698282b7e51bae17b4d400fb13457bb7a1e2bb10c2635768d6"
+    },
+    "g-saved.png": {
+      "size": 132698,
+      "sha256": "59e47bb6088fef434e4825b8dc4b2b398974b3ade0f18e8b7d1a9616b23223c3"
+    },
+    "g.gxw": {
+      "size": 921088,
+      "sha256": "c9f4bb89dc31fe8c86d68f2e4fb438142263a06cf3d9e6d4390bd684a9e0a54b"
+    },
+    "initial/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "initial/native-stdout.jsonl": {
+      "size": 800,
+      "sha256": "7f8bf340e0c7317d5e1f792702fb2ebbb413464c5e030e9c58b6f9fee8eb1f2e"
+    },
+    "initial/process.json": {
+      "size": 248,
+      "sha256": "531a82e4536704fba086b3ba2eb1ef33b728fdecc4062e2c767d4c34089a9207"
+    },
+    "initial/requests.json": {
+      "size": 1061,
+      "sha256": "1bdb661abb92c3db6313dde62c56c491339ee0aa8112b3529cbb9b260e6f2a59"
+    },
+    "native-step-functions-disassembly.txt": {
+      "size": 8228,
+      "sha256": "388cd967cc6aefee1b8527bf5e63666bc2c5289761950fc49c804c7a5019f17f"
+    },
+    "parser-failures.json": {
+      "size": 586,
+      "sha256": "a3cf33481309d38c956aeb4d95f058b77db27aa6b24cc704129c96dfe5e25475"
+    },
+    "timer-controls/decode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "timer-controls/decode/native-stdout.jsonl": {
+      "size": 2388,
+      "sha256": "ac6f7a1342a36c6f4581139b05589b38fb209b6781fb18f3e14172c8bce87bbc"
+    },
+    "timer-controls/decode/process.json": {
+      "size": 250,
+      "sha256": "788491b27404a9fbdff689343398fe7f602dc7f3ee3ea3154637e2b159658a30"
+    },
+    "timer-controls/decode/requests.json": {
+      "size": 1941,
+      "sha256": "1ab46788cc1bccbad8a6566d4f4e0295042978f86f1343d4855f25feae4052cd"
+    },
+    "timer-controls/encode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "timer-controls/encode/native-stdout.jsonl": {
+      "size": 2335,
+      "sha256": "1130d90c4bb4df8391f634ebbb70dfeeedb6c5868dbdf7c84f2a35215a54cba6"
+    },
+    "timer-controls/encode/process.json": {
+      "size": 250,
+      "sha256": "cbead7ec1d7bb0613d5780808c2879ff9096ea3e1b18f91ed7e60a233eadb67d"
+    },
+    "timer-controls/encode/requests.json": {
+      "size": 2121,
+      "sha256": "2d62e547f01a41ae0a92221121ef33daa8e8ac8018a74dab6824a24079984643"
+    },
+    "timer-controls/probes.json": {
+      "size": 19584,
+      "sha256": "97de327e58d478000905b068c4efb4c86d0cfb9b413ab13e3d0a6718e7273d63"
+    },
+    "timer-recompute/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "timer-recompute/native-stdout.jsonl": {
+      "size": 4186,
+      "sha256": "dba607342e9b66d92f4e6207d0efd914270da7c186751f8c6f53a1625f425128"
+    },
+    "timer-recompute/process.json": {
+      "size": 250,
+      "sha256": "a107a3c4c552c2182de6012cf310a43a35cbc25a598991d6696eefb5df348d40"
+    },
+    "timer-recompute/requests.json": {
+      "size": 4715,
+      "sha256": "1c12e8cf4ec9750be5a5eba3a48780b3b02fb80ac760c443b03eb177f3fa8692"
+    },
+    "verification.json": {
+      "size": 14102,
+      "sha256": "a65434d3cb415a22aae7d2e7d3fce731601af36a1e16055f66b6d2bac0d75f5f"
+    },
+    "whole-native-decode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "whole-native-decode/native-stdout.jsonl": {
+      "size": 354,
+      "sha256": "9120f9aa39967346f502ed4bb3eced8585682dcfa9ccf7e7b3efc20e40227cd9"
+    },
+    "whole-native-decode/process.json": {
+      "size": 248,
+      "sha256": "c87dfce09e233ef9ff3040aa202aa06363d3f3690df49d4c20fe0ff28db214b2"
+    },
+    "whole-native-decode/requests.json": {
+      "size": 486,
+      "sha256": "f22aea52f84199ccbf26309ff9ac680f698bdb41ab4be1a173c7d779c38d41a6"
+    },
+    "width-control-checks.json": {
+      "size": 19561,
+      "sha256": "cd2cb6fcc0fe0e9eac6401148549af653761aabde30da4945532c312167d3981"
+    },
+    "width-controls/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "width-controls/native-stdout.jsonl": {
+      "size": 9484,
+      "sha256": "dc2a1b09a78c3ba1e94ba71953d3e761be0fd1af3fa1f648a545f216ab7b82f3"
+    },
+    "width-controls/process.json": {
+      "size": 250,
+      "sha256": "53c561bbf9a1a50f12efa1d07a32cfb0e2589c825449261c0a448e2efaf93ead"
+    },
+    "width-controls/requests.json": {
+      "size": 13939,
+      "sha256": "09211d219d76214cc2f169a302e507fcb2cceebcced8ec2cb4bffca4739e80a0"
+    },
+    "TokenOracle.cs": {
+      "size": 6211,
+      "sha256": "c930a6d281254cb807b8e3f61fd4f4f592ed76283699afcfe398412d31f997b0"
+    }
+  },
+  "native_internal_observations": {
+    "dll_sha256": "a700da129ede89869a00a5614d08b43dc64e94c240494fc753fe09104c5b9399",
+    "cpu_code": 520,
+    "recompute_width_rva": "0x3E534",
+    "method": "Decode END through the open object to select CPU context, then invoke a Cdecl short-returning private function with an isolated mutable instruction buffer and length. Raw outputs and negative results retained. No text roundtrip of source operands.",
+    "accepted_fragment_corpus": 1685,
+    "byte_identical_results": 1681,
+    "negative_results": 4,
+    "negative_result": "0xFFFFFFF3 (-13)",
+    "negative_cases": [
+      "OUT T10Z0",
+      "OUT T10V1",
+      "OUT C10Z0",
+      "OUT C10V1"
+    ],
+    "mutated_width_controls": 35,
+    "restored_exact_canonical_fragments": 35,
+    "stored_steps_is_not_independent": "GetStepSize just sums stored headers; byte 255 reports -1 through signed extension at RVA 0x18D08.",
+    "private_function_scope": "This is not a supported vendor export, project compiler, execution-safety gate, or automatic repair path. Its rejection of preset-less T/C fragments conflicts with actual native program-check acceptance and remains unexplained."
+  },
+  "native_validation": {
+    "observer": "Actual GX Works2 UI through computer-use, 2026-09-20 Asia/Shanghai",
+    "GX_Works2_file_version": "1.635.0.1",
+    "CPU": "FX3U/FX3UC",
+    "mode": "offline",
+    "cases": {
+      "b": {
+        "instructions": [
+          "LD M8000",
+          "OUT T10Z0",
+          "END"
+        ],
+        "steps": 3,
+        "open": true,
+        "convert_all_returned_to_editor_without_error_dialog": true,
+        "program_check_errors": 0,
+        "program_check_options": [
+          "instruction",
+          "ladder",
+          "matching",
+          "double-coil",
+          "device"
+        ],
+        "save": true,
+        "closed_to_empty_workspace": true,
+        "reopen": true,
+        "csv": "b-saved.csv",
+        "csv_stage": "after save, before close/reopen",
+        "contradiction": "No preset in source, saved POU or native CSV. Internal recompute-width returns -13; UI check reports no errors."
+      },
+      "g": {
+        "instructions": [
+          "LD M8000",
+          "OUT T10Z0 K10",
+          "END"
+        ],
+        "steps": 6,
+        "open": true,
+        "convert_all_returned_to_editor_without_error_dialog": true,
+        "program_check_errors": 0,
+        "save": true,
+        "closed_to_empty_workspace": true,
+        "reopen": true,
+        "csv": "g-reopened.csv",
+        "csv_stage": "after reopen",
+        "internal_recompute_width": "accepted, original bytes retained"
+      }
+    }
+  },
+  "parser_failure": {
+    "artifact": "parser-failures.json",
+    "status": "repaired",
+    "rule": "Keep 3-byte and 4-byte basic header shapes separate for operand arity, although native mnemonic dispatch shares identity. Four-byte OUT-T/C carries two operands (existing native CSV + descriptor RVA 0x82E84)."
+  },
+  "verification": "verification.json: original/saved POU equality, full CSV cell comparison, refreshed .res body equality, independent outer/inner CFB readers for both cases.",
+  "scope": "Contradictory native oracles retained; no claim that native GUI acceptance or the private routine establishes execution validity. No PLC or simulator access.",
+  "followup": "machinecode-manifest.json: the public ChangePToMcode export also rejects the no-preset control, whereas six other native projects and 35 mutated-width controls convert successfully."
+}

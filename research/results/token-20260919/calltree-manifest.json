@@ -1,0 +1,1515 @@
+{
+  "schema_version": 1,
+  "archive": "research/evidence/gxw-calltree-20260920.zip",
+  "archive_sha256": "03fa91110e672d15597bbc991df4862db1b0795319947a7b3512b6f4465e6642",
+  "files": {
+    "calltree-artifact-scan/compiler-storage.json": {
+      "size": 3518746,
+      "sha256": "69e5d49fcd96bdb39e17a242e36e5449c012e1d95e6c199b1cf50ea8aeff89d0"
+    },
+    "calltree-entry-disassembly.txt": {
+      "size": 19638,
+      "sha256": "ecdfe4cf104720034a39fbd2f3491bed88cbc5ea1ad0425eaea020f24023018b"
+    },
+    "calltree-map-selection.txt": {
+      "size": 11123,
+      "sha256": "7688aca6dcddedc2548d9d076c57d1228eb61fff327a8847b213a53647f03c05"
+    },
+    "calltree-native-proof.txt": {
+      "size": 25566,
+      "sha256": "4053f9b64077484162ffbc0e3f5171421247f0f76d878c70f834d5fe3dfa9ae1"
+    },
+    "calltree-scan/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5.bin": {
+      "size": 502,
+      "sha256": "006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5"
+    },
+    "calltree-scan/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472.bin": {
+      "size": 1632,
+      "sha256": "0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472"
+    },
+    "calltree-scan/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7.bin": {
+      "size": 1140,
+      "sha256": "1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7"
+    },
+    "calltree-scan/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6.bin": {
+      "size": 1140,
+      "sha256": "2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6"
+    },
+    "calltree-scan/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96.bin": {
+      "size": 1588,
+      "sha256": "3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96"
+    },
+    "calltree-scan/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0.bin": {
+      "size": 502,
+      "sha256": "3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0"
+    },
+    "calltree-scan/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98.bin": {
+      "size": 1632,
+      "sha256": "4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98"
+    },
+    "calltree-scan/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7.bin": {
+      "size": 1714,
+      "sha256": "5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7"
+    },
+    "calltree-scan/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257.bin": {
+      "size": 1588,
+      "sha256": "7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257"
+    },
+    "calltree-scan/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb.bin": {
+      "size": 838,
+      "sha256": "a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb"
+    },
+    "calltree-scan/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30.bin": {
+      "size": 1707,
+      "sha256": "ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30"
+    },
+    "calltree-scan/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea.bin": {
+      "size": 3291,
+      "sha256": "af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea"
+    },
+    "calltree-scan/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7.bin": {
+      "size": 1654,
+      "sha256": "cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7"
+    },
+    "calltree-scan/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111.bin": {
+      "size": 838,
+      "sha256": "fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111"
+    },
+    "calltree-scan/framing-probe.json": {
+      "size": 142681,
+      "sha256": "84f1821af1d71338949ef7f48c226044ffbe9a858ba1fd7ee75c2e5f36af46a9"
+    },
+    "calltree-scan/manifest.json": {
+      "size": 28633,
+      "sha256": "dd695209ab7179482aecf75d20c40429caa399cae58e66ce1f0bc4675d1398b8"
+    },
+    "implementation/research/inspect_gxw_compiler.py": {
+      "size": 21398,
+      "sha256": "3eab616779ea065ec5d028574935943130d58c3372d8ef47cd298e80a053bfb8"
+    },
+    "implementation/research/native/ArchiveReadOracle.cs": {
+      "size": 6034,
+      "sha256": "af6094890197e7904a7201e50fa5b1aee62805834987493c444b6fa0f93e4f8e"
+    },
+    "implementation/research/native/CallTreeReplayOracle.cs": {
+      "size": 3947,
+      "sha256": "67a98f03a16b597b8c02314e602f045bee1bff4c25c4a5a8c502a7a0454545f8"
+    },
+    "implementation/research/native_gxw_archive.py": {
+      "size": 9532,
+      "sha256": "287e9f71fd07128cdc012ed382ab34c62f130a5ad3faebf8a436baf9e5ad9ec9"
+    },
+    "implementation/src/gxw/compiler_call_tree.py": {
+      "size": 5734,
+      "sha256": "fef9ae3155ebeb5fd04092f96df363d7a5b59c878dd1ea3ef1c1eede7ac10536"
+    },
+    "implementation/tests/test_gxw_compiler_call_tree.py": {
+      "size": 5362,
+      "sha256": "dbd88942710d0d8a08c4b47a0a11d89e2186579fd438f51aeeb3625ecc32c76d"
+    },
+    "native-archive-string-controls/ArchiveReadOracle.cs": {
+      "size": 6034,
+      "sha256": "af6094890197e7904a7201e50fa5b1aee62805834987493c444b6fa0f93e4f8e"
+    },
+    "native-archive-string-controls/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-archive-string-controls/comparison.json": {
+      "size": 765,
+      "sha256": "872a53019696c0cc2ccce6f83f71982e2879e85d483c31a49778cc74dd53e923"
+    },
+    "native-archive-string-controls/controls.json": {
+      "size": 1188,
+      "sha256": "4403f749780648ff456ef270ca18e20d150238f3cd63072e199b15809c220abb"
+    },
+    "native-archive-string-controls/expected-reads.json": {
+      "size": 2337,
+      "sha256": "9b1d0d0941034c2dc857ab77965424a8b07d669da487f6d77f3794ff828b8287"
+    },
+    "native-archive-string-controls/input.bin": {
+      "size": 383,
+      "sha256": "c919c964e9b2a20744f0e856e8843ca256bba5b2d60860bc92cb46ff7d177d40"
+    },
+    "native-archive-string-controls/native-reads.jsonl": {
+      "size": 1669,
+      "sha256": "7e4be810313b7ec9a540782e8449fdd8b933733a0de78b25e9187cf2360df0a3"
+    },
+    "native-archive-string-controls/operations.txt": {
+      "size": 126,
+      "sha256": "bc3fef5cbab9af1fd090c8a7926f91d347a1b01cca5668a1204c90ebd306db1d"
+    },
+    "native-archive-string-controls/process.json": {
+      "size": 696,
+      "sha256": "365d358124f1b97632d4e906bdf52320a4ad9e80739194a2c16385f416cac117"
+    },
+    "native-archive-string-controls/request.json": {
+      "size": 559,
+      "sha256": "866fafb1c5476eacae4d20de010ae059f1cab07e13aac349ff30b945bd9d9e50"
+    },
+    "native-archive-string-controls/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-archive-string-controls/stdout.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/ArchiveReadOracle.cs": {
+      "size": 6034,
+      "sha256": "af6094890197e7904a7201e50fa5b1aee62805834987493c444b6fa0f93e4f8e"
+    },
+    "native-calltree-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/comparison.json": {
+      "size": 765,
+      "sha256": "c8c575a84adfef13cd29180092058adbffd95a4985b8b4b7e31eb4440bed4acd"
+    },
+    "native-calltree-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/expected-reads.json": {
+      "size": 9344,
+      "sha256": "d3a16f75b5356e3e46b0b9bbc54b2e70b554d1c5f07d460f79fc3d08becdc338"
+    },
+    "native-calltree-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/input.bin": {
+      "size": 502,
+      "sha256": "006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5"
+    },
+    "native-calltree-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/native-reads.jsonl": {
+      "size": 6322,
+      "sha256": "2c6b94645b988808d8afc86419664d0c384782e3ab75919374a1ae0298c90414"
+    },
+    "native-calltree-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/operations.txt": {
+      "size": 557,
+      "sha256": "32908cc3d7f1f12b6728f824411d22ce343cb8acbd3c865369622be40ac7c48c"
+    },
+    "native-calltree-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/process.json": {
+      "size": 696,
+      "sha256": "e0ce44a6786b35696132471997435340abb03e5ac4d34e9c9200de6f749e18db"
+    },
+    "native-calltree-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/request.json": {
+      "size": 559,
+      "sha256": "0fad02b681d2398161bc30ed6385ca228a041774a981acd8ccddd69dcfa89274"
+    },
+    "native-calltree-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/stdout.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/ArchiveReadOracle.cs": {
+      "size": 6034,
+      "sha256": "af6094890197e7904a7201e50fa5b1aee62805834987493c444b6fa0f93e4f8e"
+    },
+    "native-calltree-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/comparison.json": {
+      "size": 766,
+      "sha256": "4558197e24f2919d8a038c5893fdc33688b3a0ec4685088550ca9ab65946175d"
+    },
+    "native-calltree-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/expected-reads.json": {
+      "size": 40873,
+      "sha256": "98b8c49121cedc9a5c0562b92ca5722e54da4e257e7b77a656b00557c09417b8"
+    },
+    "native-calltree-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/input.bin": {
+      "size": 1632,
+      "sha256": "0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472"
+    },
+    "native-calltree-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/native-reads.jsonl": {
+      "size": 27617,
+      "sha256": "b3fe94064f9af84616ebe49a954ab8c9bfc0bb2d8058ce9b4149960d0a961b96"
+    },
+    "native-calltree-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/operations.txt": {
+      "size": 2464,
+      "sha256": "2209bb368664dabf68fd57d4e6e11eafb7316db26d0cddb59574b8864e36cb1f"
+    },
+    "native-calltree-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/process.json": {
+      "size": 696,
+      "sha256": "1dd5efb6e0ae43682ab2355170eced427a55a755bd6a9e1e5107a8a724e2706b"
+    },
+    "native-calltree-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/request.json": {
+      "size": 559,
+      "sha256": "249d991f69d44f4d3ba23e043a551e0d084c64c99f1863203530669458e9cfba"
+    },
+    "native-calltree-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/stdout.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/ArchiveReadOracle.cs": {
+      "size": 6034,
+      "sha256": "af6094890197e7904a7201e50fa5b1aee62805834987493c444b6fa0f93e4f8e"
+    },
+    "native-calltree-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/comparison.json": {
+      "size": 766,
+      "sha256": "bd12772c7c01dc7bb8fc89a8904a3d3dd5e10201b3582e8ef5b3167d7ac69531"
+    },
+    "native-calltree-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/expected-reads.json": {
+      "size": 26975,
+      "sha256": "adc0052533102d137a83ed36b7e24e473213ab5e22fa40160fb46052e47cbcc6"
+    },
+    "native-calltree-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/input.bin": {
+      "size": 1140,
+      "sha256": "1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7"
+    },
+    "native-calltree-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/native-reads.jsonl": {
+      "size": 18247,
+      "sha256": "11c2a081c2055b0f3beb30c2f2f52067e91706ce8624324e0599001a982a1566"
+    },
+    "native-calltree-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/operations.txt": {
+      "size": 1632,
+      "sha256": "f9a507a4ceb9cee8324e055e8623c6210544ed0df0ab2141740e1f69cd87f18a"
+    },
+    "native-calltree-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/process.json": {
+      "size": 696,
+      "sha256": "2db9c36b46b5f2071435b72eec60eaddca73579bd4203534d40d8f7a8519f770"
+    },
+    "native-calltree-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/request.json": {
+      "size": 559,
+      "sha256": "c217a52274021e416b7cf0d3b32392016dffc67371f290ba1e1363932163dfc5"
+    },
+    "native-calltree-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/stdout.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/ArchiveReadOracle.cs": {
+      "size": 6034,
+      "sha256": "af6094890197e7904a7201e50fa5b1aee62805834987493c444b6fa0f93e4f8e"
+    },
+    "native-calltree-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/comparison.json": {
+      "size": 766,
+      "sha256": "b97f20114e71162d1741748f75d8af8d161da1c6776d92cfedd9f9464129f3e1"
+    },
+    "native-calltree-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/expected-reads.json": {
+      "size": 26973,
+      "sha256": "e4c2adadff892a91b3db9a1058da04d93b86d13b306dc92bd9fef5080efbd4ef"
+    },
+    "native-calltree-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/input.bin": {
+      "size": 1140,
+      "sha256": "2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6"
+    },
+    "native-calltree-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/native-reads.jsonl": {
+      "size": 18246,
+      "sha256": "a63cc3e818935f3df7ae71d73fdf44610dd74eb78a5e5b8c19e5c9ab3ddf3eeb"
+    },
+    "native-calltree-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/operations.txt": {
+      "size": 1632,
+      "sha256": "b71c015061ad37aac5856610d95324ddd674d25214b4e7a8a954fc692ae825ae"
+    },
+    "native-calltree-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/process.json": {
+      "size": 696,
+      "sha256": "dc565ae0e13df5d5f862e5b8cff6802c79b93d3b0fe1c36e08e65ae1c79d85ce"
+    },
+    "native-calltree-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/request.json": {
+      "size": 559,
+      "sha256": "1f3051a7755ecc673336eee01491778234015f898ef63621498d4d592cc34d65"
+    },
+    "native-calltree-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/stdout.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/ArchiveReadOracle.cs": {
+      "size": 6034,
+      "sha256": "af6094890197e7904a7201e50fa5b1aee62805834987493c444b6fa0f93e4f8e"
+    },
+    "native-calltree-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/comparison.json": {
+      "size": 766,
+      "sha256": "d4595c03297f15d1a1398ab70ee8509d961237f7c82e0b27fb3dfdead6b41547"
+    },
+    "native-calltree-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/expected-reads.json": {
+      "size": 39293,
+      "sha256": "a9288d232e5ef5d9401be252c97bf70af74b4a7b6618e95a2efb22095f4a3ca2"
+    },
+    "native-calltree-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/input.bin": {
+      "size": 1588,
+      "sha256": "3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96"
+    },
+    "native-calltree-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/native-reads.jsonl": {
+      "size": 26555,
+      "sha256": "586e35dd38e54875ad61cc729034473b2ea9e090e0f92148523f7a2e2334c314"
+    },
+    "native-calltree-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/operations.txt": {
+      "size": 2370,
+      "sha256": "e9386277141e68fd41d3e834303eee56ed8975a0247843a27aa2fe8f9f12b1c4"
+    },
+    "native-calltree-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/process.json": {
+      "size": 696,
+      "sha256": "58cd52ef2e5b977f389b436a2688eeef6b1f06ba00bc03f925c0a559613a331b"
+    },
+    "native-calltree-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/request.json": {
+      "size": 559,
+      "sha256": "06e575748f80a6d668758ea6d88972ef66bdaab37b6d69270a31364960bd6940"
+    },
+    "native-calltree-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/stdout.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/ArchiveReadOracle.cs": {
+      "size": 6034,
+      "sha256": "af6094890197e7904a7201e50fa5b1aee62805834987493c444b6fa0f93e4f8e"
+    },
+    "native-calltree-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/comparison.json": {
+      "size": 765,
+      "sha256": "18e28d9dac95dcd69ebceb928ec4e2ac76d29d28b441becf675138e5c088fe60"
+    },
+    "native-calltree-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/expected-reads.json": {
+      "size": 9344,
+      "sha256": "764cf618010855006889d5f66b63226fc54303dbdb8d71a12fbb7d13364606d9"
+    },
+    "native-calltree-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/input.bin": {
+      "size": 502,
+      "sha256": "3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0"
+    },
+    "native-calltree-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/native-reads.jsonl": {
+      "size": 6322,
+      "sha256": "b2f885ca91fd041d9c8d347ac07b4e8a2d9c5863ed97d33323434238294eb945"
+    },
+    "native-calltree-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/operations.txt": {
+      "size": 557,
+      "sha256": "32908cc3d7f1f12b6728f824411d22ce343cb8acbd3c865369622be40ac7c48c"
+    },
+    "native-calltree-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/process.json": {
+      "size": 696,
+      "sha256": "de5987c234245b94f82c05df495697e6d618a3dbc9565e26d436bf88a61a4824"
+    },
+    "native-calltree-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/request.json": {
+      "size": 559,
+      "sha256": "e894a2ec43881cb28d59f327cd2519ed3ab087b0da7efec0191dd2e73f6284bc"
+    },
+    "native-calltree-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/stdout.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/ArchiveReadOracle.cs": {
+      "size": 6034,
+      "sha256": "af6094890197e7904a7201e50fa5b1aee62805834987493c444b6fa0f93e4f8e"
+    },
+    "native-calltree-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/comparison.json": {
+      "size": 766,
+      "sha256": "2943a48738e2d5a85be8b4abfcbac6f2f2855ef033969dbc348fcfe4a659867c"
+    },
+    "native-calltree-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/expected-reads.json": {
+      "size": 40875,
+      "sha256": "a5f257104686eb91ed0928459e67588d12689f0dcb252616de04cf2f97c221fa"
+    },
+    "native-calltree-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/input.bin": {
+      "size": 1632,
+      "sha256": "4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98"
+    },
+    "native-calltree-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/native-reads.jsonl": {
+      "size": 27618,
+      "sha256": "c98dc2b824256b6273d17963acd1a8a35eeb4f27aec937c16c7b0e44cfbccdfe"
+    },
+    "native-calltree-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/operations.txt": {
+      "size": 2464,
+      "sha256": "89c04fe8244c1401c1a422d8f003fd971ada5f000011812d472e8a3480011710"
+    },
+    "native-calltree-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/process.json": {
+      "size": 696,
+      "sha256": "1272c154dcb3fb00003a999ad1e4aa1a54209a511e3419b819ec6e34d242563d"
+    },
+    "native-calltree-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/request.json": {
+      "size": 559,
+      "sha256": "3870409a275f7b42ac84421612fbc3be88ee7d76d96f0125a2c6e7d4e6628344"
+    },
+    "native-calltree-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/stdout.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/ArchiveReadOracle.cs": {
+      "size": 6034,
+      "sha256": "af6094890197e7904a7201e50fa5b1aee62805834987493c444b6fa0f93e4f8e"
+    },
+    "native-calltree-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/comparison.json": {
+      "size": 766,
+      "sha256": "0c33f62c6c8e0e31f6309e30466d330f86105d312b8e59485101b2a453b1fabc"
+    },
+    "native-calltree-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/expected-reads.json": {
+      "size": 39517,
+      "sha256": "0745f79d0e937c652ed06b3c4338cab740fcbd0b67336d6fd04b43676e7cab0b"
+    },
+    "native-calltree-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/input.bin": {
+      "size": 1714,
+      "sha256": "5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7"
+    },
+    "native-calltree-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/native-reads.jsonl": {
+      "size": 26754,
+      "sha256": "017c17caec21ecb86476b3ce949321d149984d3b49978151426ef082a56df73d"
+    },
+    "native-calltree-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/operations.txt": {
+      "size": 2388,
+      "sha256": "3680f484f7606368cf5ee48e30c72a03341cc80c23f6f98e2ef65a83a7fadf86"
+    },
+    "native-calltree-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/process.json": {
+      "size": 696,
+      "sha256": "9e239a7ea2632378996ae633d4f9e44f8ec9e53a4199b43798c72af98fee3f0a"
+    },
+    "native-calltree-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/request.json": {
+      "size": 559,
+      "sha256": "3a3610158969d9f0a73d49dd72dd12bc26fdc46296a6260b63bbc927cdd6d123"
+    },
+    "native-calltree-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/stdout.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/ArchiveReadOracle.cs": {
+      "size": 6034,
+      "sha256": "af6094890197e7904a7201e50fa5b1aee62805834987493c444b6fa0f93e4f8e"
+    },
+    "native-calltree-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/comparison.json": {
+      "size": 766,
+      "sha256": "a7a6b024b3177aa83f6bbf0b9a614e0045eeeb862ec86090ab07d2c09d705ae7"
+    },
+    "native-calltree-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/expected-reads.json": {
+      "size": 39299,
+      "sha256": "5fe4f2a1abcc831f30151e631e9a29340c6ae2b8c41e9931e2b7309831fc0a7c"
+    },
+    "native-calltree-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/input.bin": {
+      "size": 1588,
+      "sha256": "7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257"
+    },
+    "native-calltree-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/native-reads.jsonl": {
+      "size": 26558,
+      "sha256": "ded3bca3472ce48e1cb502cc93ef408ef85fb49e2590774aa456791a932de1b2"
+    },
+    "native-calltree-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/operations.txt": {
+      "size": 2370,
+      "sha256": "daef2eee11bec83b2d3e7cf0e451e16ee66cd11066304c448bb5c8d5ea3298ae"
+    },
+    "native-calltree-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/process.json": {
+      "size": 696,
+      "sha256": "326b237220ed717afe60bfa965f19cb3838d938ecfc60be0ef399eeb52de402c"
+    },
+    "native-calltree-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/request.json": {
+      "size": 559,
+      "sha256": "a6218e2cb96599ab3d7827607562247705611a03d26c659f9ee27f02983951f5"
+    },
+    "native-calltree-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/stdout.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/ArchiveReadOracle.cs": {
+      "size": 6034,
+      "sha256": "af6094890197e7904a7201e50fa5b1aee62805834987493c444b6fa0f93e4f8e"
+    },
+    "native-calltree-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/comparison.json": {
+      "size": 766,
+      "sha256": "3c81dfaa076328e80633d646b1053f395a8cac8c567d64f983b86809210e748a"
+    },
+    "native-calltree-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/expected-reads.json": {
+      "size": 19799,
+      "sha256": "bbcd08385df6aaec765b51f33b3e2b2ecefa20f9673d17b7a67e2443251f7d49"
+    },
+    "native-calltree-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/input.bin": {
+      "size": 838,
+      "sha256": "a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb"
+    },
+    "native-calltree-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/native-reads.jsonl": {
+      "size": 13374,
+      "sha256": "294af3706a1524b27bda073218ebbb42b9b7fc206baaa6e00b7a64a1572e800b"
+    },
+    "native-calltree-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/operations.txt": {
+      "size": 1200,
+      "sha256": "6048841e9ceb7252175c241dcce46dcb0f89e6ce9772c5eab397963d87c7e121"
+    },
+    "native-calltree-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/process.json": {
+      "size": 696,
+      "sha256": "f2b1ad14beb8b2767d96ece2049fd7453b7cd539074b4d098263cd14e307a934"
+    },
+    "native-calltree-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/request.json": {
+      "size": 559,
+      "sha256": "006a8e514d105b812e560c51e8a1ea0b8fc6ce624238f7eaa3b593f63553a67e"
+    },
+    "native-calltree-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/stdout.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/ArchiveReadOracle.cs": {
+      "size": 6034,
+      "sha256": "af6094890197e7904a7201e50fa5b1aee62805834987493c444b6fa0f93e4f8e"
+    },
+    "native-calltree-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/comparison.json": {
+      "size": 766,
+      "sha256": "8e16d83d5a460f5e77d61318f139f9b9031a6a18ec43db34fd5b5c0ef406ae85"
+    },
+    "native-calltree-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/expected-reads.json": {
+      "size": 42822,
+      "sha256": "5894c3a3d9ed6a062c9317a5a6e0aad6ad6bae98cd43ca72d8ece4884465b915"
+    },
+    "native-calltree-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/input.bin": {
+      "size": 1707,
+      "sha256": "ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30"
+    },
+    "native-calltree-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/native-reads.jsonl": {
+      "size": 28932,
+      "sha256": "5863443b589bb383a14dae72647892a757703faf2cde02464886747852c07fe6"
+    },
+    "native-calltree-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/operations.txt": {
+      "size": 2582,
+      "sha256": "8c61d8eda4981e9a9dbc38af554ae8fe61f2fe68a484c70e0abf7c359b8b0367"
+    },
+    "native-calltree-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/process.json": {
+      "size": 696,
+      "sha256": "f616a93263d2ae73d3479b4209456b1029506a706b89a894b955bc5aba6e267e"
+    },
+    "native-calltree-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/request.json": {
+      "size": 559,
+      "sha256": "1d311ea5fa4c03f31e7f3f2c12dd026cbcc6fdbacf558ec329f3c8c95e53c9a1"
+    },
+    "native-calltree-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/stdout.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/ArchiveReadOracle.cs": {
+      "size": 6034,
+      "sha256": "af6094890197e7904a7201e50fa5b1aee62805834987493c444b6fa0f93e4f8e"
+    },
+    "native-calltree-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/comparison.json": {
+      "size": 766,
+      "sha256": "71cf633b74d18a2d0f7fc0b87c8729ffbbc9485ec73ff4aa215e9ce1ed276837"
+    },
+    "native-calltree-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/expected-reads.json": {
+      "size": 69198,
+      "sha256": "055b9c5523f9e2fa1fb1944003f2a359c34708dd98ba91fd29914b141d412b80"
+    },
+    "native-calltree-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/input.bin": {
+      "size": 3291,
+      "sha256": "af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea"
+    },
+    "native-calltree-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/native-reads.jsonl": {
+      "size": 47028,
+      "sha256": "5e975ae2dab7662dccf2f3c7883d3e41bd83f21bbfd01df3cc25d610bcd372ce"
+    },
+    "native-calltree-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/operations.txt": {
+      "size": 4122,
+      "sha256": "a0afc932e79c24f11a69e128ac6d94c58466671c447c375b677b28244c85b442"
+    },
+    "native-calltree-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/process.json": {
+      "size": 696,
+      "sha256": "76a7f6bceb6f1d80354faf56812f07df93d1a5f78ea1f7533bcd43d7cdd89214"
+    },
+    "native-calltree-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/request.json": {
+      "size": 559,
+      "sha256": "00f0711411951b1f0d853660bd18604d4715e1894f34fba1800e93fbed6d4743"
+    },
+    "native-calltree-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/stdout.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/ArchiveReadOracle.cs": {
+      "size": 6034,
+      "sha256": "af6094890197e7904a7201e50fa5b1aee62805834987493c444b6fa0f93e4f8e"
+    },
+    "native-calltree-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/comparison.json": {
+      "size": 766,
+      "sha256": "4bea7817fc40795000b53e12e088448c93d886185962c18874d6ed0b089a3914"
+    },
+    "native-calltree-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/expected-reads.json": {
+      "size": 38789,
+      "sha256": "b2bc7800a31b86d8ebe29e1e2cc9757b8b7209ec27c16bbd55ba5345f7c608cb"
+    },
+    "native-calltree-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/input.bin": {
+      "size": 1654,
+      "sha256": "cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7"
+    },
+    "native-calltree-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/native-reads.jsonl": {
+      "size": 26249,
+      "sha256": "86617daadb168115a2001f140704091190c290f1900bcdeae9fe21232f86045b"
+    },
+    "native-calltree-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/operations.txt": {
+      "size": 2340,
+      "sha256": "f153e5f19bc2b5d6996c415d08b3f0e6755b14ed0166f4e4345338410453315e"
+    },
+    "native-calltree-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/process.json": {
+      "size": 696,
+      "sha256": "f296e37b5d1ad81aa780e00fc3ffeab4a01671ec990a305f4b8b4fea0b78b1df"
+    },
+    "native-calltree-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/request.json": {
+      "size": 559,
+      "sha256": "bd11709cb189955b48f8a32a2065661699d6daa5b082e24c0aa281dca3b89b6d"
+    },
+    "native-calltree-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/stdout.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/ArchiveReadOracle.cs": {
+      "size": 6034,
+      "sha256": "af6094890197e7904a7201e50fa5b1aee62805834987493c444b6fa0f93e4f8e"
+    },
+    "native-calltree-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/comparison.json": {
+      "size": 766,
+      "sha256": "0d295d3b9a1cd67c12d34e6e4c19e6ccee26c1ef5e2b8ade4b6a520df4b36689"
+    },
+    "native-calltree-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/expected-reads.json": {
+      "size": 19801,
+      "sha256": "45183dcc1e1e06588e2349ef81f2ce975db2665d06c594635101bd00a34cbda0"
+    },
+    "native-calltree-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/input.bin": {
+      "size": 838,
+      "sha256": "fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111"
+    },
+    "native-calltree-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/native-reads.jsonl": {
+      "size": 13375,
+      "sha256": "b9c1a8e21a98d48d4d121880bd2fe5024236b5dd33e29ae7d9e001f194d5b139"
+    },
+    "native-calltree-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/operations.txt": {
+      "size": 1200,
+      "sha256": "83368875040b02a219120f8dc1815b844ec4335e877d7e773718429f04f594b0"
+    },
+    "native-calltree-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/process.json": {
+      "size": 696,
+      "sha256": "bea94525a0f983d567f21a76f4799319ac388ddca70d4481fa31015755cf2840"
+    },
+    "native-calltree-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/request.json": {
+      "size": 559,
+      "sha256": "c0052af646e7e30e73ceed3062d5caed6de20939eb74fe99309b8733d3741d10"
+    },
+    "native-calltree-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/stdout.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-corpus/report.json": {
+      "size": 11133,
+      "sha256": "613ee0a49b439f4144c2cdb3e4995ebd956835fefba134393b6768309b9e16e7"
+    },
+    "native-calltree-opaque-control/CallTree.dat": {
+      "size": 1632,
+      "sha256": "0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472"
+    },
+    "native-calltree-opaque-control/CallTreeReplayOracle.cs": {
+      "size": 3947,
+      "sha256": "67a98f03a16b597b8c02314e602f045bee1bff4c25c4a5a8c502a7a0454545f8"
+    },
+    "native-calltree-opaque-control/ResourceCallTree.dat": {
+      "size": 10,
+      "sha256": "1ef0a05428f33c8db4dd9c0addbfa8c5998b155421b8838c75d8f834c272c371"
+    },
+    "native-calltree-opaque-control/after-load.dat": {
+      "size": 1660,
+      "sha256": "0849b0f1a410c13273de031dbb3069173352ec6e8f6971e362ac6bbe537889d6"
+    },
+    "native-calltree-opaque-control/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-opaque-control/comparison.json": {
+      "size": 851,
+      "sha256": "c0a5f717b60fc170f398d6565b273d7845585a49cee99504ce9898a2e264c08e"
+    },
+    "native-calltree-opaque-control/input.bin": {
+      "size": 1660,
+      "sha256": "0849b0f1a410c13273de031dbb3069173352ec6e8f6971e362ac6bbe537889d6"
+    },
+    "native-calltree-opaque-control/native-save.dat": {
+      "size": 1632,
+      "sha256": "0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472"
+    },
+    "native-calltree-opaque-control/process.json": {
+      "size": 631,
+      "sha256": "f18c97ddb19fba114fb3949039f75d39caffc2c0f8c27ee4d6c59217e2645f1b"
+    },
+    "native-calltree-opaque-control/request.json": {
+      "size": 489,
+      "sha256": "d49b6f8665c679c08237cf0649329ce2c153ef39ce853506f90fae9310b539e7"
+    },
+    "native-calltree-opaque-control/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-opaque-control/stdout.txt": {
+      "size": 16,
+      "sha256": "b803efde3081839491ea8c7080b11280af11eeadbc4c050b977f310ebca00d9d"
+    },
+    "native-calltree-replay-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/CallTree.dat": {
+      "size": 502,
+      "sha256": "3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0"
+    },
+    "native-calltree-replay-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/CallTreeReplayOracle.cs": {
+      "size": 3947,
+      "sha256": "67a98f03a16b597b8c02314e602f045bee1bff4c25c4a5a8c502a7a0454545f8"
+    },
+    "native-calltree-replay-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/after-load.dat": {
+      "size": 502,
+      "sha256": "006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5"
+    },
+    "native-calltree-replay-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/comparison.json": {
+      "size": 849,
+      "sha256": "3574ec09111160af6d76d638a47b33191044be4510f6a0c86b7a0bae207e001e"
+    },
+    "native-calltree-replay-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/input.bin": {
+      "size": 502,
+      "sha256": "006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5"
+    },
+    "native-calltree-replay-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/native-save.dat": {
+      "size": 502,
+      "sha256": "3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0"
+    },
+    "native-calltree-replay-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/process.json": {
+      "size": 631,
+      "sha256": "f56702e177ea3c00fbc99bf5b1638d1e384c29776892418f636dfa9bdd052def"
+    },
+    "native-calltree-replay-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/request.json": {
+      "size": 489,
+      "sha256": "585634f879776f1ad17b3502464e464c3c8f073214aea427e2768eaac4e9accb"
+    },
+    "native-calltree-replay-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5/stdout.txt": {
+      "size": 16,
+      "sha256": "b803efde3081839491ea8c7080b11280af11eeadbc4c050b977f310ebca00d9d"
+    },
+    "native-calltree-replay-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/CallTree.dat": {
+      "size": 1632,
+      "sha256": "4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98"
+    },
+    "native-calltree-replay-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/CallTreeReplayOracle.cs": {
+      "size": 3947,
+      "sha256": "67a98f03a16b597b8c02314e602f045bee1bff4c25c4a5a8c502a7a0454545f8"
+    },
+    "native-calltree-replay-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/ResourceCallTree.dat": {
+      "size": 10,
+      "sha256": "1ef0a05428f33c8db4dd9c0addbfa8c5998b155421b8838c75d8f834c272c371"
+    },
+    "native-calltree-replay-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/after-load.dat": {
+      "size": 1632,
+      "sha256": "0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472"
+    },
+    "native-calltree-replay-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/comparison.json": {
+      "size": 849,
+      "sha256": "82d05b2df47a4b8eeb034c7130b2e46bf884d908bfc80408c63e8eb11dd0b9d7"
+    },
+    "native-calltree-replay-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/input.bin": {
+      "size": 1632,
+      "sha256": "0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472"
+    },
+    "native-calltree-replay-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/native-save.dat": {
+      "size": 1632,
+      "sha256": "4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98"
+    },
+    "native-calltree-replay-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/process.json": {
+      "size": 631,
+      "sha256": "d4cdf26278628bd697a117966aabb1626ca693907385d3834b2095f6ba9d78ac"
+    },
+    "native-calltree-replay-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/request.json": {
+      "size": 489,
+      "sha256": "1a534fbddce8f10655100f2c32c2ffbf31dc7eb30ee3238808998cda6c3f2ff4"
+    },
+    "native-calltree-replay-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472/stdout.txt": {
+      "size": 16,
+      "sha256": "b803efde3081839491ea8c7080b11280af11eeadbc4c050b977f310ebca00d9d"
+    },
+    "native-calltree-replay-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/CallTree.dat": {
+      "size": 1140,
+      "sha256": "2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6"
+    },
+    "native-calltree-replay-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/CallTreeReplayOracle.cs": {
+      "size": 3947,
+      "sha256": "67a98f03a16b597b8c02314e602f045bee1bff4c25c4a5a8c502a7a0454545f8"
+    },
+    "native-calltree-replay-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/ResourceCallTree.dat": {
+      "size": 10,
+      "sha256": "1ef0a05428f33c8db4dd9c0addbfa8c5998b155421b8838c75d8f834c272c371"
+    },
+    "native-calltree-replay-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/after-load.dat": {
+      "size": 1140,
+      "sha256": "1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7"
+    },
+    "native-calltree-replay-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/comparison.json": {
+      "size": 849,
+      "sha256": "cf88cf7bffb01fef1edb8814e3d66b38eade10c57ac383859a28161b9aebcc10"
+    },
+    "native-calltree-replay-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/input.bin": {
+      "size": 1140,
+      "sha256": "1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7"
+    },
+    "native-calltree-replay-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/native-save.dat": {
+      "size": 1140,
+      "sha256": "2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6"
+    },
+    "native-calltree-replay-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/process.json": {
+      "size": 631,
+      "sha256": "2aa15d46c0eb17c29761639d01372135a2185938dcb49b634e37c3e020338e39"
+    },
+    "native-calltree-replay-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/request.json": {
+      "size": 489,
+      "sha256": "159a2745bc41478113adc6058506412838e7814329504fb4d1608378465ae15b"
+    },
+    "native-calltree-replay-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7/stdout.txt": {
+      "size": 16,
+      "sha256": "b803efde3081839491ea8c7080b11280af11eeadbc4c050b977f310ebca00d9d"
+    },
+    "native-calltree-replay-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/CallTree.dat": {
+      "size": 1140,
+      "sha256": "1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7"
+    },
+    "native-calltree-replay-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/CallTreeReplayOracle.cs": {
+      "size": 3947,
+      "sha256": "67a98f03a16b597b8c02314e602f045bee1bff4c25c4a5a8c502a7a0454545f8"
+    },
+    "native-calltree-replay-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/ResourceCallTree.dat": {
+      "size": 10,
+      "sha256": "1ef0a05428f33c8db4dd9c0addbfa8c5998b155421b8838c75d8f834c272c371"
+    },
+    "native-calltree-replay-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/after-load.dat": {
+      "size": 1140,
+      "sha256": "2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6"
+    },
+    "native-calltree-replay-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/comparison.json": {
+      "size": 849,
+      "sha256": "aa8cd0bb023f5ab47895463bdf9458a51604da281a9830ca67cfb8347bd9d272"
+    },
+    "native-calltree-replay-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/input.bin": {
+      "size": 1140,
+      "sha256": "2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6"
+    },
+    "native-calltree-replay-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/native-save.dat": {
+      "size": 1140,
+      "sha256": "1f993d52048b6510cd1c40e98762bd35fad9c528312916100ee4093a2d88bba7"
+    },
+    "native-calltree-replay-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/process.json": {
+      "size": 631,
+      "sha256": "f250298583f15b1e179dad9a4ad5627fc4cfdb84263628fa0616fdbdba2ad6e7"
+    },
+    "native-calltree-replay-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/request.json": {
+      "size": 489,
+      "sha256": "e9d2317994454988059a4e2d9f83cbb346fc3dbc7e9dc57c20e42baa492fd009"
+    },
+    "native-calltree-replay-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/2e0be743d46b307f811b482bc513fbce6ccecc213fdbd4aafb6fd23c66df1ff6/stdout.txt": {
+      "size": 16,
+      "sha256": "b803efde3081839491ea8c7080b11280af11eeadbc4c050b977f310ebca00d9d"
+    },
+    "native-calltree-replay-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/CallTree.dat": {
+      "size": 1588,
+      "sha256": "7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257"
+    },
+    "native-calltree-replay-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/CallTreeReplayOracle.cs": {
+      "size": 3947,
+      "sha256": "67a98f03a16b597b8c02314e602f045bee1bff4c25c4a5a8c502a7a0454545f8"
+    },
+    "native-calltree-replay-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/ResourceCallTree.dat": {
+      "size": 10,
+      "sha256": "1ef0a05428f33c8db4dd9c0addbfa8c5998b155421b8838c75d8f834c272c371"
+    },
+    "native-calltree-replay-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/after-load.dat": {
+      "size": 1588,
+      "sha256": "3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96"
+    },
+    "native-calltree-replay-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/comparison.json": {
+      "size": 849,
+      "sha256": "1da3d4b295f19277839a5fd8e5169ef6377829d76d62dc83f79f32bfbda4c1b6"
+    },
+    "native-calltree-replay-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/input.bin": {
+      "size": 1588,
+      "sha256": "3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96"
+    },
+    "native-calltree-replay-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/native-save.dat": {
+      "size": 1588,
+      "sha256": "7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257"
+    },
+    "native-calltree-replay-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/process.json": {
+      "size": 631,
+      "sha256": "b77afdce4809f5785b36fe55175512e71289153322a1fc148173e4668b612474"
+    },
+    "native-calltree-replay-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/request.json": {
+      "size": 489,
+      "sha256": "0b7c95b523095f006eb70d967cf917a9220a6732fbbb134b63164449cbca06a7"
+    },
+    "native-calltree-replay-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96/stdout.txt": {
+      "size": 16,
+      "sha256": "b803efde3081839491ea8c7080b11280af11eeadbc4c050b977f310ebca00d9d"
+    },
+    "native-calltree-replay-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/CallTree.dat": {
+      "size": 502,
+      "sha256": "006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5"
+    },
+    "native-calltree-replay-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/CallTreeReplayOracle.cs": {
+      "size": 3947,
+      "sha256": "67a98f03a16b597b8c02314e602f045bee1bff4c25c4a5a8c502a7a0454545f8"
+    },
+    "native-calltree-replay-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/after-load.dat": {
+      "size": 502,
+      "sha256": "3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0"
+    },
+    "native-calltree-replay-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/comparison.json": {
+      "size": 849,
+      "sha256": "d832ca82890b527b0b07439c304c66781b96d1e7aa4815f662e046c477d07e02"
+    },
+    "native-calltree-replay-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/input.bin": {
+      "size": 502,
+      "sha256": "3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0"
+    },
+    "native-calltree-replay-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/native-save.dat": {
+      "size": 502,
+      "sha256": "006346f3d76f7889a43419557f668c875e773eb40233f1e4907828c32ea8f9a5"
+    },
+    "native-calltree-replay-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/process.json": {
+      "size": 631,
+      "sha256": "e1a04bc06a892e391f13128cb44495bf90d5ce1c76d0616d264ccfb45309e118"
+    },
+    "native-calltree-replay-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/request.json": {
+      "size": 489,
+      "sha256": "3f5f31556917924bc0cc9d536fdb58ebc5af4e77514f1659ded24625823b2796"
+    },
+    "native-calltree-replay-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/3de3cd7921e19b0e9165a028c3415fd3e3dacd555b9603868952ba1ae4c07bc0/stdout.txt": {
+      "size": 16,
+      "sha256": "b803efde3081839491ea8c7080b11280af11eeadbc4c050b977f310ebca00d9d"
+    },
+    "native-calltree-replay-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/CallTree.dat": {
+      "size": 1632,
+      "sha256": "0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472"
+    },
+    "native-calltree-replay-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/CallTreeReplayOracle.cs": {
+      "size": 3947,
+      "sha256": "67a98f03a16b597b8c02314e602f045bee1bff4c25c4a5a8c502a7a0454545f8"
+    },
+    "native-calltree-replay-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/ResourceCallTree.dat": {
+      "size": 10,
+      "sha256": "1ef0a05428f33c8db4dd9c0addbfa8c5998b155421b8838c75d8f834c272c371"
+    },
+    "native-calltree-replay-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/after-load.dat": {
+      "size": 1632,
+      "sha256": "4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98"
+    },
+    "native-calltree-replay-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/comparison.json": {
+      "size": 849,
+      "sha256": "43868394ae9107e5d107d7ca89c4307bef4702bc3e21846f39be28fa629ea406"
+    },
+    "native-calltree-replay-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/input.bin": {
+      "size": 1632,
+      "sha256": "4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98"
+    },
+    "native-calltree-replay-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/native-save.dat": {
+      "size": 1632,
+      "sha256": "0ccae88f09b417d6f5dc9457e37e9ef352260b102c085a87f231317a3176b472"
+    },
+    "native-calltree-replay-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/process.json": {
+      "size": 631,
+      "sha256": "987c63838ce90004162f53c175d4a34619f968b0afba247dbe187d703ea43b5c"
+    },
+    "native-calltree-replay-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/request.json": {
+      "size": 489,
+      "sha256": "d16af2ca7b6ac6387c587ca268357fb66947b89d65550fc37f4358925e026369"
+    },
+    "native-calltree-replay-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98/stdout.txt": {
+      "size": 16,
+      "sha256": "b803efde3081839491ea8c7080b11280af11eeadbc4c050b977f310ebca00d9d"
+    },
+    "native-calltree-replay-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/CallTree.dat": {
+      "size": 1714,
+      "sha256": "a23eeabad64889c431d60fbd4639a6adc9af161151d968e4acf2fe0b9af8bfb9"
+    },
+    "native-calltree-replay-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/CallTreeReplayOracle.cs": {
+      "size": 3947,
+      "sha256": "67a98f03a16b597b8c02314e602f045bee1bff4c25c4a5a8c502a7a0454545f8"
+    },
+    "native-calltree-replay-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/ResourceCallTree.dat": {
+      "size": 10,
+      "sha256": "1ef0a05428f33c8db4dd9c0addbfa8c5998b155421b8838c75d8f834c272c371"
+    },
+    "native-calltree-replay-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/after-load.dat": {
+      "size": 1714,
+      "sha256": "5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7"
+    },
+    "native-calltree-replay-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/comparison.json": {
+      "size": 849,
+      "sha256": "820e9f4ceea174845e2b5b999261e6c149ebd466ad8be7b2e7f9db454ca12938"
+    },
+    "native-calltree-replay-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/input.bin": {
+      "size": 1714,
+      "sha256": "5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7"
+    },
+    "native-calltree-replay-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/native-save.dat": {
+      "size": 1714,
+      "sha256": "a23eeabad64889c431d60fbd4639a6adc9af161151d968e4acf2fe0b9af8bfb9"
+    },
+    "native-calltree-replay-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/process.json": {
+      "size": 631,
+      "sha256": "4f697be8d5cae6948bcb15e9961d3820c42b85dcfc1cf06cbf531060032ed916"
+    },
+    "native-calltree-replay-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/request.json": {
+      "size": 489,
+      "sha256": "fda9edf680b6f1ea379fd5d9b253237266488d7fca1a23f77fd3c7c88b318a30"
+    },
+    "native-calltree-replay-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/5ec37ab24e1df9340cbeada73ecce3f1aebf561ea4b194c858668883d73343f7/stdout.txt": {
+      "size": 16,
+      "sha256": "b803efde3081839491ea8c7080b11280af11eeadbc4c050b977f310ebca00d9d"
+    },
+    "native-calltree-replay-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/CallTree.dat": {
+      "size": 1588,
+      "sha256": "3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96"
+    },
+    "native-calltree-replay-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/CallTreeReplayOracle.cs": {
+      "size": 3947,
+      "sha256": "67a98f03a16b597b8c02314e602f045bee1bff4c25c4a5a8c502a7a0454545f8"
+    },
+    "native-calltree-replay-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/ResourceCallTree.dat": {
+      "size": 10,
+      "sha256": "1ef0a05428f33c8db4dd9c0addbfa8c5998b155421b8838c75d8f834c272c371"
+    },
+    "native-calltree-replay-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/after-load.dat": {
+      "size": 1588,
+      "sha256": "7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257"
+    },
+    "native-calltree-replay-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/comparison.json": {
+      "size": 849,
+      "sha256": "4795ac25552c258942d87e257d76d080d17a99119e26a2580b89ca81de376dda"
+    },
+    "native-calltree-replay-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/input.bin": {
+      "size": 1588,
+      "sha256": "7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257"
+    },
+    "native-calltree-replay-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/native-save.dat": {
+      "size": 1588,
+      "sha256": "3c91b837651a76d21364864ad32126b91f898e2687c7f23f4f750c7113131e96"
+    },
+    "native-calltree-replay-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/process.json": {
+      "size": 631,
+      "sha256": "d86d9096765c81523ad7f8e18b78977c8b78631f19723728131fddd656ce5e4f"
+    },
+    "native-calltree-replay-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/request.json": {
+      "size": 489,
+      "sha256": "c6a6c5f66e10b059d0784e3106a0643448e0f6dd2760f8269f9c85d53864b21b"
+    },
+    "native-calltree-replay-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/7e0a7162b245457791d02a5289cf94e0aba5656b0b45a8b6b70b090c3d5bd257/stdout.txt": {
+      "size": 16,
+      "sha256": "b803efde3081839491ea8c7080b11280af11eeadbc4c050b977f310ebca00d9d"
+    },
+    "native-calltree-replay-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/CallTree.dat": {
+      "size": 838,
+      "sha256": "fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111"
+    },
+    "native-calltree-replay-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/CallTreeReplayOracle.cs": {
+      "size": 3947,
+      "sha256": "67a98f03a16b597b8c02314e602f045bee1bff4c25c4a5a8c502a7a0454545f8"
+    },
+    "native-calltree-replay-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/ResourceCallTree.dat": {
+      "size": 10,
+      "sha256": "1ef0a05428f33c8db4dd9c0addbfa8c5998b155421b8838c75d8f834c272c371"
+    },
+    "native-calltree-replay-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/after-load.dat": {
+      "size": 838,
+      "sha256": "a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb"
+    },
+    "native-calltree-replay-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/comparison.json": {
+      "size": 849,
+      "sha256": "43f448cf24cb6bb82069442091e82651d58f938e6591ed770db3e6392a0def95"
+    },
+    "native-calltree-replay-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/input.bin": {
+      "size": 838,
+      "sha256": "a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb"
+    },
+    "native-calltree-replay-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/native-save.dat": {
+      "size": 838,
+      "sha256": "fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111"
+    },
+    "native-calltree-replay-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/process.json": {
+      "size": 631,
+      "sha256": "b81e1f6dfe0a0b2368872145ff1fed022a5450db1382daf9eabb5133942c2ebc"
+    },
+    "native-calltree-replay-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/request.json": {
+      "size": 489,
+      "sha256": "0f77526d0f1c78a9078731826856f5ae3593238b2b3878822780b8a8051a7154"
+    },
+    "native-calltree-replay-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb/stdout.txt": {
+      "size": 16,
+      "sha256": "b803efde3081839491ea8c7080b11280af11eeadbc4c050b977f310ebca00d9d"
+    },
+    "native-calltree-replay-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/CallTree.dat": {
+      "size": 1707,
+      "sha256": "b901e6fda9afc4fa315e728ed3d4517dcd34d83e6b9d09d3cd57e007d5cbb6a0"
+    },
+    "native-calltree-replay-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/CallTreeReplayOracle.cs": {
+      "size": 3947,
+      "sha256": "67a98f03a16b597b8c02314e602f045bee1bff4c25c4a5a8c502a7a0454545f8"
+    },
+    "native-calltree-replay-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/ResourceCallTree.dat": {
+      "size": 10,
+      "sha256": "1ef0a05428f33c8db4dd9c0addbfa8c5998b155421b8838c75d8f834c272c371"
+    },
+    "native-calltree-replay-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/after-load.dat": {
+      "size": 1707,
+      "sha256": "ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30"
+    },
+    "native-calltree-replay-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/comparison.json": {
+      "size": 849,
+      "sha256": "07232b50cd72873d14ff6ac801d1d0a7b35adf69a28c3467633aadb883d75775"
+    },
+    "native-calltree-replay-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/input.bin": {
+      "size": 1707,
+      "sha256": "ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30"
+    },
+    "native-calltree-replay-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/native-save.dat": {
+      "size": 1707,
+      "sha256": "b901e6fda9afc4fa315e728ed3d4517dcd34d83e6b9d09d3cd57e007d5cbb6a0"
+    },
+    "native-calltree-replay-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/process.json": {
+      "size": 631,
+      "sha256": "2f3d98d8946c4dbc8a6af99a9a56b5a1b4169c235f7c07e31dee1e41ac5cc22f"
+    },
+    "native-calltree-replay-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/request.json": {
+      "size": 489,
+      "sha256": "0808f5b2ac7e2b6ce92d94017ae51df1727a3aa5cd84e6037b611398545e09cb"
+    },
+    "native-calltree-replay-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/ab15ffde7ad1f12dbf59436b9abe5fddf2a744dac8ac6fbc6914155cf3ef1a30/stdout.txt": {
+      "size": 16,
+      "sha256": "b803efde3081839491ea8c7080b11280af11eeadbc4c050b977f310ebca00d9d"
+    },
+    "native-calltree-replay-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/CallTree.dat": {
+      "size": 3291,
+      "sha256": "da5253740fbc0f5cc71adc3c204ebb404ac14ae176d857f2cedf4f7a6404a129"
+    },
+    "native-calltree-replay-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/CallTreeReplayOracle.cs": {
+      "size": 3947,
+      "sha256": "67a98f03a16b597b8c02314e602f045bee1bff4c25c4a5a8c502a7a0454545f8"
+    },
+    "native-calltree-replay-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/ResourceCallTree.dat": {
+      "size": 10,
+      "sha256": "1ef0a05428f33c8db4dd9c0addbfa8c5998b155421b8838c75d8f834c272c371"
+    },
+    "native-calltree-replay-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/after-load.dat": {
+      "size": 3291,
+      "sha256": "af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea"
+    },
+    "native-calltree-replay-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/comparison.json": {
+      "size": 849,
+      "sha256": "00eb371c14909e0a7fcca747618784502651b606a26a6a33b4b7b8385524be35"
+    },
+    "native-calltree-replay-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/input.bin": {
+      "size": 3291,
+      "sha256": "af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea"
+    },
+    "native-calltree-replay-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/native-save.dat": {
+      "size": 3291,
+      "sha256": "da5253740fbc0f5cc71adc3c204ebb404ac14ae176d857f2cedf4f7a6404a129"
+    },
+    "native-calltree-replay-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/process.json": {
+      "size": 631,
+      "sha256": "4d7f236fbcc44a433cfedbf8127d97dc10f1dd5a5a6c34ff7929cb813b5c504d"
+    },
+    "native-calltree-replay-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/request.json": {
+      "size": 489,
+      "sha256": "043219fe21c3cdc61b447bd6f8b31dad949a8e33e73affb3cadb5175f9abead4"
+    },
+    "native-calltree-replay-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/af52931b9dbff61119d9376962c3b0d53c825b0d32fee545b0fc6fbf2cd505ea/stdout.txt": {
+      "size": 16,
+      "sha256": "b803efde3081839491ea8c7080b11280af11eeadbc4c050b977f310ebca00d9d"
+    },
+    "native-calltree-replay-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/CallTree.dat": {
+      "size": 1654,
+      "sha256": "c5edc2d72043350de55f26c37117a14cbc1a8120cc2295e28bab098be3b589ad"
+    },
+    "native-calltree-replay-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/CallTreeReplayOracle.cs": {
+      "size": 3947,
+      "sha256": "67a98f03a16b597b8c02314e602f045bee1bff4c25c4a5a8c502a7a0454545f8"
+    },
+    "native-calltree-replay-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/ResourceCallTree.dat": {
+      "size": 10,
+      "sha256": "1ef0a05428f33c8db4dd9c0addbfa8c5998b155421b8838c75d8f834c272c371"
+    },
+    "native-calltree-replay-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/after-load.dat": {
+      "size": 1654,
+      "sha256": "cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7"
+    },
+    "native-calltree-replay-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/comparison.json": {
+      "size": 849,
+      "sha256": "3e6b89fb693836d199b117bd40a48a734fe72e50724ea99d7777258f51602b63"
+    },
+    "native-calltree-replay-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/input.bin": {
+      "size": 1654,
+      "sha256": "cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7"
+    },
+    "native-calltree-replay-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/native-save.dat": {
+      "size": 1654,
+      "sha256": "c5edc2d72043350de55f26c37117a14cbc1a8120cc2295e28bab098be3b589ad"
+    },
+    "native-calltree-replay-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/process.json": {
+      "size": 631,
+      "sha256": "f3a2f7743101e4cbe47cd87a7ed13627a17c106ca2fa3f5347298fed0cd668d2"
+    },
+    "native-calltree-replay-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/request.json": {
+      "size": 489,
+      "sha256": "36e096cb599b58196a522fee7de4ffc348a2b194db7edccf3e933e7a826450fd"
+    },
+    "native-calltree-replay-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/cb39815c6e8e9d87cc365839edd18a130cd65b26052e5ec77a1c09e2c1d255e7/stdout.txt": {
+      "size": 16,
+      "sha256": "b803efde3081839491ea8c7080b11280af11eeadbc4c050b977f310ebca00d9d"
+    },
+    "native-calltree-replay-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/CallTree.dat": {
+      "size": 838,
+      "sha256": "a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb"
+    },
+    "native-calltree-replay-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/CallTreeReplayOracle.cs": {
+      "size": 3947,
+      "sha256": "67a98f03a16b597b8c02314e602f045bee1bff4c25c4a5a8c502a7a0454545f8"
+    },
+    "native-calltree-replay-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/ResourceCallTree.dat": {
+      "size": 10,
+      "sha256": "1ef0a05428f33c8db4dd9c0addbfa8c5998b155421b8838c75d8f834c272c371"
+    },
+    "native-calltree-replay-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/after-load.dat": {
+      "size": 838,
+      "sha256": "fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111"
+    },
+    "native-calltree-replay-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/comparison.json": {
+      "size": 849,
+      "sha256": "048e30da55719bff1f9fd327cf29cb5894fa5915d11bfee559f1d78fd843f784"
+    },
+    "native-calltree-replay-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/input.bin": {
+      "size": 838,
+      "sha256": "fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111"
+    },
+    "native-calltree-replay-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/native-save.dat": {
+      "size": 838,
+      "sha256": "a8003c8ebcc099f30018673018d3d63386097b09f3deeae243218c6cd42b7bdb"
+    },
+    "native-calltree-replay-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/process.json": {
+      "size": 631,
+      "sha256": "64153480d4316f9aa83d4082b6323dbe31097c351aa5ccd946db5ede5fa6da06"
+    },
+    "native-calltree-replay-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/request.json": {
+      "size": 489,
+      "sha256": "5495c65c67a54ce643165c5a65b21641b165cd91ea6ede91cf546ab1dceab80b"
+    },
+    "native-calltree-replay-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-calltree-replay-corpus/fd6bc533ac55397a7137c3231f98cff407f14fe1fac7d7ff96033f5aa3611111/stdout.txt": {
+      "size": 16,
+      "sha256": "b803efde3081839491ea8c7080b11280af11eeadbc4c050b977f310ebca00d9d"
+    },
+    "native-calltree-replay-corpus/report.json": {
+      "size": 12437,
+      "sha256": "37b389e7bc4737b3771eb98ff19df191ac6474af0843d0819a3f352acd4fa15d"
+    }
+  },
+  "summary": {
+    "calltree_versions": 14,
+    "public_project_references": 61,
+    "native_primitive_reads": 4078,
+    "primitive_mismatches": 0,
+    "native_component_replays": 14,
+    "native_byte_identical_replays": 0,
+    "native_structurally_identical_replays": 14,
+    "versions_with_directional_index_differences": 4,
+    "string_encoding_controls": 8
+  },
+  "scope": "Native CallTree component Load/Save using a hash-pinned minimal path context, plus native CArchive primitive reads. No GX project compile/reopen or PLC execution claim. Python framing plan and native primitive read are not independent high-level tree parsers; inspected native component Load/Save provides the additional independent path.",
+  "normalization": "Only CMap node iteration and per-node reference-map iteration order are ignored. Raw string encodings, all scalar fields, multiplicities, resource bytes, absent resource distinction and opaque suffix must remain equal.",
+  "counterexamples": [
+    "Two valid saved samples have no ResourceCallTree footer.",
+    "Four stored tree versions have nonreciprocal forward/used-by indexes; original conflicting names are retained.",
+    "Native component Save retains the existing TON_A versus timer_a discrepancy.",
+    "A synthetic opaque suffix survives Core replay but is dropped by native component Save despite successful return codes."
+  ],
+  "provenance": "All project inputs come from the existing public research/corpus/gxw.json archives. No private local project bytes are included."
+}

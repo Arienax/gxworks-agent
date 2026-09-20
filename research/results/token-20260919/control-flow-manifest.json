@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "archive": "research/evidence/gxw-control-flow-20260920.zip",
+  "archive_sha256": "30b7c5b642ee9e6d5866089f02aa6b55a4159532a3d029c6b667d9f371786855",
+  "source_commit": "6ccde5f793afa50d5aaf2426696905f0028c5b4b",
+  "files": {
+    "samples/empty.gxw": {
+      "size": 921088,
+      "sha256": "002a780afd116666eb5455fca4ca8b64033ba9636b4a12a2ba658a269380c7f4"
+    },
+    "samples/generated.gxw": {
+      "size": 921088,
+      "sha256": "91f5813f625068399859ba68793cffeec162cf39d225c8bc18ca6c1fd9caf792"
+    },
+    "samples/native-saved.gxw": {
+      "size": 921600,
+      "sha256": "ea4bae5e88febfc895db3f2e3a9f13218aaab4eb1aa97f87f161176a994e8ea5"
+    },
+    "native/reopened.csv": {
+      "size": 1316,
+      "sha256": "eb7a2b059f0da89d83a21c1ae4e2c0feac0374c0f491746531743f525492268b"
+    },
+    "checks/alignment.json": {
+      "size": 3468,
+      "sha256": "9544835df85a546edad789f97130dc5b7bc9b1ee7962d03d5b9c32b835b609bb"
+    },
+    "input/instructions.txt": {
+      "size": 138,
+      "sha256": "76a60431101440ca080efd6b17dfd2a1901778482b647c65b8ca34d2dd679002"
+    },
+    "checks/verification.json": {
+      "size": 8517,
+      "sha256": "d138434ab06326f18275079134eecb339341a85ce60184aea8639dc3eb15fb39"
+    },
+    "controls/probe.json": {
+      "size": 14826,
+      "sha256": "852c18d9f9150ce9eba82c1b37bc338696f6c10207a31f5ece579469a56feb39"
+    },
+    "checks/patch.json": {
+      "size": 1371,
+      "sha256": "52bf5fc764a7d441b2ec28dd752d6fe743b0ca6e4807688d60a187c51f7a2f20"
+    },
+    "screenshots/opened.png": {
+      "size": 147058,
+      "sha256": "94e7a0de2662ff03e84db1d859ed51811124a72733e48b5a45ab2ecd5048cf13"
+    },
+    "screenshots/saved.png": {
+      "size": 146561,
+      "sha256": "81b2df79e1c20475bfea6e85c33489f6d9054d2fc547f08494d95f80c06a423a"
+    },
+    "screenshots/closed.png": {
+      "size": 94491,
+      "sha256": "a7075fa6dc41b338a40ff1a4f129d99f0e3336c817ed80197af94365d3f4cf93"
+    },
+    "screenshots/reopened.png": {
+      "size": 146999,
+      "sha256": "cb2bb3179c7aac9781678c1fcb361965c71e86165e8be0aea2beb616ea069649"
+    },
+    "screenshots/exported.png": {
+      "size": 146995,
+      "sha256": "ca8f9175f3a3cde0c215dfde51ed5431ef06b9e390fe129f47d87d3c67a0f731"
+    },
+    "native/encode/requests.json": {
+      "size": 1641,
+      "sha256": "e7da950f1a99a96632cd363d30bcd0040e8edafa522b8406292002317f5b816d"
+    },
+    "native/encode/native-stdout.jsonl": {
+      "size": 832,
+      "sha256": "7bfb2dae09b9d2886642050590c52b015872fbac7f67722401fa3cf4e983b47c"
+    },
+    "native/encode/process.json": {
+      "size": 248,
+      "sha256": "807feec0ab433daa6ef51808b1ad463fab5013568b735b9e39e1531e06180880"
+    },
+    "native/encode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native/decode/requests.json": {
+      "size": 876,
+      "sha256": "88d492784b1c09328b23042975ac3fbbe7ce1a8a244312771847e29f2684419b"
+    },
+    "native/decode/native-stdout.jsonl": {
+      "size": 1044,
+      "sha256": "4f0da825020c2126f35492ba10ef013446a9a31573ec962648ebf2dd526c222a"
+    },
+    "native/decode/process.json": {
+      "size": 248,
+      "sha256": "9c2d23fe2c733aaadda3995eb22eace1904d9c1d55474bf1b06c7366034d0387"
+    },
+    "native/decode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native/whole-program-encode/requests.json": {
+      "size": 988,
+      "sha256": "07ea0f45ccb1a596cf5a63e527e47d427d7078656eb2ba7072fe776be95af4bb"
+    },
+    "native/whole-program-encode/native-stdout.jsonl": {
+      "size": 290,
+      "sha256": "5e715fc74c8cf380f76ad2db87ac455e8e0ff4038ffa5c697c4a124fdce87bd3"
+    },
+    "native/whole-program-encode/process.json": {
+      "size": 248,
+      "sha256": "ad315f26f59d241be850d97a59bfac7e956084f0cbdaeb2dfdda592d432a3ee1"
+    },
+    "native/whole-program-encode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "native_validation": {
+    "observer": "Actual GX Works2 UI through computer-use, 2026-09-20 Asia/Shanghai",
+    "GX_Works2_file_version": "1.635.0.1",
+    "CPU": "FX3U/FX3UC",
+    "mode": "offline",
+    "open": true,
+    "convert_all": {
+      "completed_to_editor_without_error_dialog": true,
+      "explicit_error_counter": "not displayed for this simple-project conversion"
+    },
+    "save": true,
+    "closed_to_empty_workspace": true,
+    "reopen": true,
+    "instructions": 17,
+    "labels": 3,
+    "steps": 25,
+    "csv_full_alignment": "agrees; all rows/cells after X/Y padding canonicalization"
+  },
+  "source_and_resource_check": {
+    "input_sha256": "91f5813f625068399859ba68793cffeec162cf39d225c8bc18ca6c1fd9caf792",
+    "saved_sha256": "ea4bae5e88febfc895db3f2e3a9f13218aaab4eb1aa97f87f161176a994e8ea5",
+    "pou_identical": true,
+    "res_body_equals_source": true,
+    "csv_all_cells_agree_except_XY_padding": true
+  },
+  "scope": "Control flow format and native editor acceptance. No execution on a PLC or simulator. Flat PLC IR still refuses labels rather than discard them.",
+  "writer_allocations": {
+    "program": "extend_mini_in_root",
+    "outer": "existing_allocation",
+    "history": "existing_allocation"
+  }
+}

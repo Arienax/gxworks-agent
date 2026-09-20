@@ -157,6 +157,7 @@ Owns GXW container/object/ABI/declaration/network parsing, preservation and roun
 | `tests/test_gxw_function_abi_67_71.py` | focused coverage for gxw function abi 67 71 |
 | `tests/test_gxw_function_blocks.py` | focused coverage for gxw function blocks |
 | `tests/test_gxw_generation_roundtrip.py` | focused coverage for gxw generation roundtrip |
+| `tests/test_gxw_lossless.py` | native source/compiled token corpora, operand groups and labels, opaque preservation, bounded patches and failure replay |
 | `tests/test_gxw_network_blocks.py` | focused coverage for gxw network blocks |
 | `tests/test_gxw_object_model.py` | focused coverage for gxw object model |
 | `tests/test_gxw_project_import.py` | focused coverage for gxw project import |

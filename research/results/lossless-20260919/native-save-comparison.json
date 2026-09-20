@@ -1,0 +1,171 @@
+{
+  "bytes": "differs",
+  "structure": "differs",
+  "structure_scope": "stream inventory/mapping/lengths; allocation order ignored",
+  "semantics": "not-checkable: whole-project meaning includes opaque streams",
+  "known_structured_projections": {
+    "1.Program.pou": {
+      "checks": {
+        "blocks": true,
+        "devices": true,
+        "topology": true,
+        "wires": true,
+        "semantic_graph": true,
+        "unknown_records": true
+      },
+      "verdict": "not-checkable",
+      "scope": "existing known structured graph projection, not whole-program semantics"
+    }
+  },
+  "opaque": "not-checkable",
+  "changed_streams": [
+    [
+      "nested",
+      "1"
+    ],
+    [
+      "nested",
+      "12"
+    ],
+    [
+      "nested",
+      "31"
+    ],
+    [
+      "nested",
+      "32"
+    ],
+    [
+      "nested",
+      "33"
+    ],
+    [
+      "nested",
+      "34"
+    ],
+    [
+      "nested",
+      "37"
+    ],
+    [
+      "nested",
+      "39"
+    ],
+    [
+      "outer",
+      "_hdb"
+    ],
+    [
+      "outer",
+      "dataprotection.xml"
+    ],
+    [
+      "outer",
+      "history.xml"
+    ],
+    [
+      "outer",
+      "projectdatalist.xml"
+    ],
+    [
+      "outer",
+      "projectlist.xml"
+    ],
+    [
+      "outer",
+      "user.xml"
+    ]
+  ],
+  "independent_cfb": {
+    "before": {
+      "status": "agrees",
+      "scope": "reachable stream names, sizes and payloads (multiset)",
+      "reader": "olefile 0.47",
+      "stream_count": 12,
+      "directory_paths": [
+        [
+          "Project.gd2"
+        ],
+        [
+          "_hdb"
+        ],
+        [
+          "checkout.xml"
+        ],
+        [
+          "dataprotection.xml"
+        ],
+        [
+          "history.xml"
+        ],
+        [
+          "label.xml"
+        ],
+        [
+          "labellink.xml"
+        ],
+        [
+          "projectdatalist.xml"
+        ],
+        [
+          "projectlist.xml"
+        ],
+        [
+          "securitylevel.xml"
+        ],
+        [
+          "storedhistory.xml"
+        ],
+        [
+          "user.xml"
+        ]
+      ],
+      "parsing_issue_count": 0
+    },
+    "after": {
+      "status": "agrees",
+      "scope": "reachable stream names, sizes and payloads (multiset)",
+      "reader": "olefile 0.47",
+      "stream_count": 12,
+      "directory_paths": [
+        [
+          "Project.gd2"
+        ],
+        [
+          "_hdb"
+        ],
+        [
+          "checkout.xml"
+        ],
+        [
+          "dataprotection.xml"
+        ],
+        [
+          "history.xml"
+        ],
+        [
+          "label.xml"
+        ],
+        [
+          "labellink.xml"
+        ],
+        [
+          "projectdatalist.xml"
+        ],
+        [
+          "projectlist.xml"
+        ],
+        [
+          "securitylevel.xml"
+        ],
+        [
+          "storedhistory.xml"
+        ],
+        [
+          "user.xml"
+        ]
+      ],
+      "parsing_issue_count": 0
+    }
+  }
+}

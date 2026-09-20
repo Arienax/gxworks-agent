@@ -1,0 +1,970 @@
+{
+  "schema_version": 1,
+  "archive": "research/evidence/gxw-compiler-symbols-20260920.zip",
+  "archive_sha256": "b4180b1de90fcc30774ce8092f8132ed70e820cca126e449f3baee7161e3835b",
+  "files": {
+    "address-internals.txt": {
+      "size": 34052,
+      "sha256": "a6ee7e2ed059b7c1be633735de618820149eaf0c8e300ea71ad7535f51389ba0"
+    },
+    "address-text-format.txt": {
+      "size": 10992,
+      "sha256": "eef5cdbef3e5285bd04ca394dfb42727e930617f57981db1a104c816f0d83b97"
+    },
+    "array-bound-read.txt": {
+      "size": 12111,
+      "sha256": "7f394c6f9bcbb31f31b9f2f189d8abee6edc531da59838fe776493b56aa5d591"
+    },
+    "assignment-address-disassembly.txt": {
+      "size": 100415,
+      "sha256": "c10954885006d8480be91d141cf8b8590983dc051b2d237b951c09b7e9206012"
+    },
+    "implementation/research/inspect_gxw_compiler.py": {
+      "size": 19649,
+      "sha256": "7a01e41c06d263d021d78208257a5c3ec5eaee0bf9cc19f1422a15cf7c2cfcb9"
+    },
+    "implementation/research/native/CompilerAssignmentOracle.cs": {
+      "size": 3491,
+      "sha256": "8310faf45d9f8d03530fa6dde4f3f3e2e4f1b60b18c68fe41dd48a4eb580eba8"
+    },
+    "implementation/research/native/CompilerTableOracle.cs": {
+      "size": 11978,
+      "sha256": "18ecdfab81805839552456c446f212b835047f120fad784e28676e15d5b8a9f8"
+    },
+    "implementation/research/native_gxw_compiler.py": {
+      "size": 15269,
+      "sha256": "01b739f937f6218ddb67b85d68a408c1ce9666620bcddb7df9fd5c8778aa60a8"
+    },
+    "implementation/research/probe_compiler_arrays.py": {
+      "size": 3472,
+      "sha256": "3ef1d78bc121fafd230303d84775fbd46ac84f5f189d76100d44a3c848605952"
+    },
+    "implementation/src/gxw/compiler_assignment.py": {
+      "size": 1978,
+      "sha256": "b9f01f5a7a498a4eb3aeb7b9379f139ee1047e7fec9e607d255735936780c72a"
+    },
+    "implementation/src/gxw/compiler_symbols.py": {
+      "size": 4246,
+      "sha256": "061fc63dffc08f7504d10a1c6221bce019f7f069caf7f8f8783f2255d2f2f5f6"
+    },
+    "implementation/src/gxw/compiler_tables.py": {
+      "size": 12122,
+      "sha256": "80acfc7135b146c755c0febb555de370d6c8e781ae2c46428640c3a3797978ee"
+    },
+    "implementation/tests/test_gxw_compiler.py": {
+      "size": 16697,
+      "sha256": "69d3a84623886b9887ffb179313e693982725ddbb08a6369e09da226e1889a54"
+    },
+    "native-array-controls/CGTable.dat": {
+      "size": 4814,
+      "sha256": "b1e2ceabf562733a6157e39602dda3fbd3fd513716849f25c36ed8e0fa99908b"
+    },
+    "native-array-controls/CompilerTableOracle.cs": {
+      "size": 11978,
+      "sha256": "18ecdfab81805839552456c446f212b835047f120fad784e28676e15d5b8a9f8"
+    },
+    "native-array-controls/address-offsets.txt": {
+      "size": 11,
+      "sha256": "3eef5f68486eaf9229b99c9fb3c3a5e0fdc331778013a141b1357b92dadb5cb3"
+    },
+    "native-array-controls/array-offsets.txt": {
+      "size": 68,
+      "sha256": "9636ce0a7a885e5d0e54c1c9f0c117df4266785c24bc51e5f06d9463c14c35d6"
+    },
+    "native-array-controls/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-controls/comparison.json": {
+      "size": 1700,
+      "sha256": "73352d499098cc4f8507ed6b29b9229e4efd7fcc161e5b6658ada04978caab58"
+    },
+    "native-array-controls/component-offsets.txt": {
+      "size": 268,
+      "sha256": "c3d22fc6480d513c17d57ab690ca1a29a2e813110932077b75bdf21fe170d696"
+    },
+    "native-array-controls/controls.json": {
+      "size": 5423,
+      "sha256": "a05a1f65a68edd3f6fb81525827f24f925575e7913806426a7071db7948eeb6c"
+    },
+    "native-array-controls/native-addresses.jsonl": {
+      "size": 388,
+      "sha256": "09a85290e5d44f4330081d5f64dc13f2bbe01f4a9aed0d0f4d43f68753a43d24"
+    },
+    "native-array-controls/native-arrays.jsonl": {
+      "size": 2884,
+      "sha256": "5e88af9809cd837f4bf4ad90846e98fa23492a1dcc350131fc37698d2abe8c13"
+    },
+    "native-array-controls/native-components.jsonl": {
+      "size": 25643,
+      "sha256": "5e988599eca82fde6f54e16f01a7e78e018ad1623b7627a65ddc07a1eea0fac7"
+    },
+    "native-array-controls/native-replay.bin": {
+      "size": 4814,
+      "sha256": "b1e2ceabf562733a6157e39602dda3fbd3fd513716849f25c36ed8e0fa99908b"
+    },
+    "native-array-controls/native-table-dump.txt": {
+      "size": 36714,
+      "sha256": "6a0f972c270a1d06f2ba16b8256da4f90a9984a141dc07d3da2a12651f27824a"
+    },
+    "native-array-controls/process.json": {
+      "size": 1280,
+      "sha256": "d29a6cfacf1f6813aa07a25ca8e3f397da1a199a63103ca19a74e7ea0fa79f35"
+    },
+    "native-array-controls/request.json": {
+      "size": 1146,
+      "sha256": "86c789a54a5006d7f2290b9f3c3057b0edeb44c77240fb73b995f0261da15136"
+    },
+    "native-array-controls/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-controls/stdout.txt": {
+      "size": 132,
+      "sha256": "40aff16502a5199d8a5fc4cdb517416c1289d8c297c59da4e5516f33f8872a3e"
+    },
+    "native-array-corpus/0/CGTable.dat": {
+      "size": 771,
+      "sha256": "cc5b2af5d3b4809bff765da25ce7755fda524d96f6f69ce87eef5bd0d8dd1919"
+    },
+    "native-array-corpus/0/CompilerTableOracle.cs": {
+      "size": 11978,
+      "sha256": "18ecdfab81805839552456c446f212b835047f120fad784e28676e15d5b8a9f8"
+    },
+    "native-array-corpus/0/address-offsets.txt": {
+      "size": 7,
+      "sha256": "103bbaf269dca6aaafc102de75f5835ee8917fd4711504eedd780ef5a99d5d95"
+    },
+    "native-array-corpus/0/array-offsets.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/0/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/0/comparison.json": {
+      "size": 1050,
+      "sha256": "3c88890a83e3942c660ee15de949cd5715cf061fd1eb5944414266fa6575fbda"
+    },
+    "native-array-corpus/0/component-offsets.txt": {
+      "size": 7,
+      "sha256": "ea64f4bef0484dccc4cef4aa7f9bb8a7af042d19a2bb7f58f432a50d6fbbd81b"
+    },
+    "native-array-corpus/0/native-addresses.jsonl": {
+      "size": 261,
+      "sha256": "c47cc09153df60886af225af150acbffc40e73a6b9d58a1e343eef1648e82dcc"
+    },
+    "native-array-corpus/0/native-arrays.jsonl": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/0/native-components.jsonl": {
+      "size": 1062,
+      "sha256": "aaa8fd4389f21ab9cbea38a6d0f492f35a83641b4ce4ae52512efb08ddee05f2"
+    },
+    "native-array-corpus/0/native-replay.bin": {
+      "size": 771,
+      "sha256": "cc5b2af5d3b4809bff765da25ce7755fda524d96f6f69ce87eef5bd0d8dd1919"
+    },
+    "native-array-corpus/0/native-table-dump.txt": {
+      "size": 3425,
+      "sha256": "eafe196ab80b88c1981a36b5b7b9b23739e313105b523061a1b1ac92b97ee17b"
+    },
+    "native-array-corpus/0/process.json": {
+      "size": 634,
+      "sha256": "72abf9d4b665acb3100fc0300a1f98bad518f19dcdc14d318da7093bf3d8e1fd"
+    },
+    "native-array-corpus/0/request.json": {
+      "size": 500,
+      "sha256": "ccb59051556655d9d562abcd9684a8847ee35481e56592096e1d3aec28438084"
+    },
+    "native-array-corpus/0/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/0/stdout.txt": {
+      "size": 129,
+      "sha256": "cd00e0236bc739dec3653f648621ae5de63746f7c2ce135533bfad8f9dc74bd5"
+    },
+    "native-array-corpus/1/CGTable.dat": {
+      "size": 4533,
+      "sha256": "7e32cae3b6c8621a9fc9ecee69324e18eb900aa38aa0beca62e397355fb4debd"
+    },
+    "native-array-corpus/1/CompilerTableOracle.cs": {
+      "size": 11978,
+      "sha256": "18ecdfab81805839552456c446f212b835047f120fad784e28676e15d5b8a9f8"
+    },
+    "native-array-corpus/1/address-offsets.txt": {
+      "size": 11,
+      "sha256": "3eef5f68486eaf9229b99c9fb3c3a5e0fdc331778013a141b1357b92dadb5cb3"
+    },
+    "native-array-corpus/1/array-offsets.txt": {
+      "size": 7,
+      "sha256": "ffef298bb1f0191dbf98f64fd328767ef2bfc981880f6c5b407706fcab7480e6"
+    },
+    "native-array-corpus/1/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/1/comparison.json": {
+      "size": 1573,
+      "sha256": "b4b02b071be263e2032ddc07800122b7caa70e7bedd2987b79a32a66ca1992f5"
+    },
+    "native-array-corpus/1/component-offsets.txt": {
+      "size": 268,
+      "sha256": "c3d22fc6480d513c17d57ab690ca1a29a2e813110932077b75bdf21fe170d696"
+    },
+    "native-array-corpus/1/native-addresses.jsonl": {
+      "size": 388,
+      "sha256": "09a85290e5d44f4330081d5f64dc13f2bbe01f4a9aed0d0f4d43f68753a43d24"
+    },
+    "native-array-corpus/1/native-arrays.jsonl": {
+      "size": 381,
+      "sha256": "26b2af76ed83e7ed03cd6f95dd271e94731faba46f83d02020b95862ea8d812a"
+    },
+    "native-array-corpus/1/native-components.jsonl": {
+      "size": 25643,
+      "sha256": "4ed29e40b3fc973060c0a458e6bc06f5ad074f3680b81a64e1cd6445fc2dc044"
+    },
+    "native-array-corpus/1/native-replay.bin": {
+      "size": 4533,
+      "sha256": "7e32cae3b6c8621a9fc9ecee69324e18eb900aa38aa0beca62e397355fb4debd"
+    },
+    "native-array-corpus/1/native-table-dump.txt": {
+      "size": 36714,
+      "sha256": "6a0f972c270a1d06f2ba16b8256da4f90a9984a141dc07d3da2a12651f27824a"
+    },
+    "native-array-corpus/1/process.json": {
+      "size": 1154,
+      "sha256": "6ac5dfa7e678ea005c3e239703b815199cb17b84de14c9cf539f381b271ed65c"
+    },
+    "native-array-corpus/1/request.json": {
+      "size": 1020,
+      "sha256": "37b49995fbed76ecdb40c9adc9a906e6a4b9448e6212528c4ba4745c54daf735"
+    },
+    "native-array-corpus/1/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/1/stdout.txt": {
+      "size": 132,
+      "sha256": "d8ed25160a84c90818e482ed3cc3e5c7bf020c4ed36955378f5e6b4a1ff004e2"
+    },
+    "native-array-corpus/10/CGTable.dat": {
+      "size": 2570,
+      "sha256": "19a81aca2fb5bcdef62dd1c6a566c530d77e1eaa41308fd17ea754ae5daec412"
+    },
+    "native-array-corpus/10/CompilerTableOracle.cs": {
+      "size": 11978,
+      "sha256": "18ecdfab81805839552456c446f212b835047f120fad784e28676e15d5b8a9f8"
+    },
+    "native-array-corpus/10/address-offsets.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/10/array-offsets.txt": {
+      "size": 7,
+      "sha256": "ffef298bb1f0191dbf98f64fd328767ef2bfc981880f6c5b407706fcab7480e6"
+    },
+    "native-array-corpus/10/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/10/comparison.json": {
+      "size": 1280,
+      "sha256": "300b23d3b3c09a260abc9226e990eda760c243311f48bc5d935dc8cf00459bb6"
+    },
+    "native-array-corpus/10/component-offsets.txt": {
+      "size": 125,
+      "sha256": "4f66e584ad4a9fdb7d6021741fd010717fe096239d4904966ff590e6060eb837"
+    },
+    "native-array-corpus/10/native-addresses.jsonl": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/10/native-arrays.jsonl": {
+      "size": 381,
+      "sha256": "685a0268ab92246b2ba0dd1e5eb518a4ff5838869581ee70fb57aa3a3035d387"
+    },
+    "native-array-corpus/10/native-components.jsonl": {
+      "size": 12805,
+      "sha256": "32cebf315ce0a900ad82cd998c5efd1e1b3ae151b006dbfa8c7454f6d1f45f30"
+    },
+    "native-array-corpus/10/native-replay.bin": {
+      "size": 2570,
+      "sha256": "19a81aca2fb5bcdef62dd1c6a566c530d77e1eaa41308fd17ea754ae5daec412"
+    },
+    "native-array-corpus/10/native-table-dump.txt": {
+      "size": 18926,
+      "sha256": "44dfd67ba77dab4d3109b4bde34bf481974248cbf0a41d3a59aab8e53243e373"
+    },
+    "native-array-corpus/10/process.json": {
+      "size": 862,
+      "sha256": "08a5d905cd7fb0b2f7b2096e8d3f82ab71b2bc5e7d76a2ba01b303bed14471ca"
+    },
+    "native-array-corpus/10/request.json": {
+      "size": 728,
+      "sha256": "00a98c8794d0edd0c020d730569ca6b986429ac0c398e4b5ac612ae4e9284230"
+    },
+    "native-array-corpus/10/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/10/stdout.txt": {
+      "size": 132,
+      "sha256": "5c0048bb8b2a08d62593fa902e0c6ac65c2f5ff0714e54ea72f4c37fa4a69a8e"
+    },
+    "native-array-corpus/11/CGTable.dat": {
+      "size": 56,
+      "sha256": "d4817aa5497628e7c77e6b606107042bbba3130888c5f47a375e6179be789fbb"
+    },
+    "native-array-corpus/11/CompilerTableOracle.cs": {
+      "size": 11978,
+      "sha256": "18ecdfab81805839552456c446f212b835047f120fad784e28676e15d5b8a9f8"
+    },
+    "native-array-corpus/11/address-offsets.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/11/array-offsets.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/11/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/11/comparison.json": {
+      "size": 1010,
+      "sha256": "29da6141793de67abdbdc9b7c9ab01cd7ede89671bfec010307ed7538e8a2c1c"
+    },
+    "native-array-corpus/11/component-offsets.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/11/native-addresses.jsonl": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/11/native-arrays.jsonl": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/11/native-components.jsonl": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/11/native-replay.bin": {
+      "size": 56,
+      "sha256": "d4817aa5497628e7c77e6b606107042bbba3130888c5f47a375e6179be789fbb"
+    },
+    "native-array-corpus/11/native-table-dump.txt": {
+      "size": 412,
+      "sha256": "ae039d9a50831c982fe2ddb0eb6611b201ef01360421380b83e6d3f405bed980"
+    },
+    "native-array-corpus/11/process.json": {
+      "size": 594,
+      "sha256": "bdc265afbf782fc2b18baa64eb006805419a10c7d8e94c95297d4e1c7c7c7c23"
+    },
+    "native-array-corpus/11/request.json": {
+      "size": 460,
+      "sha256": "680c7f2f24efd67b4a145864b944473200b5d9bc3d2844c302513afd3d7a1f8f"
+    },
+    "native-array-corpus/11/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/11/stdout.txt": {
+      "size": 126,
+      "sha256": "f2ef5ea0bfd492578f2c25f7a89a0540f0ab9195424375f226659274f06b3f9a"
+    },
+    "native-array-corpus/2/CGTable.dat": {
+      "size": 4529,
+      "sha256": "7824d288fb7846ccb31ff0e21298aaaa0a805833b92d11f3dfe8a137effb654c"
+    },
+    "native-array-corpus/2/CompilerTableOracle.cs": {
+      "size": 11978,
+      "sha256": "18ecdfab81805839552456c446f212b835047f120fad784e28676e15d5b8a9f8"
+    },
+    "native-array-corpus/2/address-offsets.txt": {
+      "size": 11,
+      "sha256": "3eef5f68486eaf9229b99c9fb3c3a5e0fdc331778013a141b1357b92dadb5cb3"
+    },
+    "native-array-corpus/2/array-offsets.txt": {
+      "size": 7,
+      "sha256": "ffef298bb1f0191dbf98f64fd328767ef2bfc981880f6c5b407706fcab7480e6"
+    },
+    "native-array-corpus/2/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/2/comparison.json": {
+      "size": 1573,
+      "sha256": "408d117fb136dfd39b572382061899fbd32ad77cf66497be83d81be951856c43"
+    },
+    "native-array-corpus/2/component-offsets.txt": {
+      "size": 268,
+      "sha256": "d3dbc873d9b5d80e0407e5ce32478a6226b2a173d5310c9c518e07867312330b"
+    },
+    "native-array-corpus/2/native-addresses.jsonl": {
+      "size": 388,
+      "sha256": "09a85290e5d44f4330081d5f64dc13f2bbe01f4a9aed0d0f4d43f68753a43d24"
+    },
+    "native-array-corpus/2/native-arrays.jsonl": {
+      "size": 381,
+      "sha256": "cca95d40af7dcec0c887d0c7f674bfd05165e73deb70ce0c10a96c1792711e54"
+    },
+    "native-array-corpus/2/native-components.jsonl": {
+      "size": 25643,
+      "sha256": "ec9b62fc00aac221fd6d0fe72dbf7843fdb69c4450f89a618d612c1b597b1107"
+    },
+    "native-array-corpus/2/native-replay.bin": {
+      "size": 4529,
+      "sha256": "7824d288fb7846ccb31ff0e21298aaaa0a805833b92d11f3dfe8a137effb654c"
+    },
+    "native-array-corpus/2/native-table-dump.txt": {
+      "size": 36710,
+      "sha256": "6d5847eaf6882f0dd1fc66f2f0197128a16b6ac7f3632ac09c6ee8f2a83c2955"
+    },
+    "native-array-corpus/2/process.json": {
+      "size": 1154,
+      "sha256": "1efd0058ff2d7555d249a5070742df7ffaa6aa97299f7431cc1e9a7ce766f787"
+    },
+    "native-array-corpus/2/request.json": {
+      "size": 1020,
+      "sha256": "b878968286920678cab5dead9e5e9732e309200d31515829024e8d92072470bf"
+    },
+    "native-array-corpus/2/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/2/stdout.txt": {
+      "size": 132,
+      "sha256": "ab6a368c86d44307bc874828a2bb307731e4a444b7c71865c0e9fd79d745b637"
+    },
+    "native-array-corpus/3/CGTable.dat": {
+      "size": 4529,
+      "sha256": "b6c6ce0cea94bcdcaee6e4087cc391475f90a047f73a9115b68092cfd5e1375d"
+    },
+    "native-array-corpus/3/CompilerTableOracle.cs": {
+      "size": 11978,
+      "sha256": "18ecdfab81805839552456c446f212b835047f120fad784e28676e15d5b8a9f8"
+    },
+    "native-array-corpus/3/address-offsets.txt": {
+      "size": 11,
+      "sha256": "3eef5f68486eaf9229b99c9fb3c3a5e0fdc331778013a141b1357b92dadb5cb3"
+    },
+    "native-array-corpus/3/array-offsets.txt": {
+      "size": 7,
+      "sha256": "ffef298bb1f0191dbf98f64fd328767ef2bfc981880f6c5b407706fcab7480e6"
+    },
+    "native-array-corpus/3/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/3/comparison.json": {
+      "size": 1573,
+      "sha256": "8058547fb5d6573ca94df3fd73042aba000d6c46e3bf515a5ea11c7f5181f24b"
+    },
+    "native-array-corpus/3/component-offsets.txt": {
+      "size": 268,
+      "sha256": "d3dbc873d9b5d80e0407e5ce32478a6226b2a173d5310c9c518e07867312330b"
+    },
+    "native-array-corpus/3/native-addresses.jsonl": {
+      "size": 388,
+      "sha256": "09a85290e5d44f4330081d5f64dc13f2bbe01f4a9aed0d0f4d43f68753a43d24"
+    },
+    "native-array-corpus/3/native-arrays.jsonl": {
+      "size": 381,
+      "sha256": "a8dcf93df055bdaa774e023d8c7933b99d7df6fb691c0a4fb367c003842f6d39"
+    },
+    "native-array-corpus/3/native-components.jsonl": {
+      "size": 25643,
+      "sha256": "cf68c145d143f25129ed350c3c462ba35b7ad8e3406ea141e632098b7154f44a"
+    },
+    "native-array-corpus/3/native-replay.bin": {
+      "size": 4529,
+      "sha256": "b6c6ce0cea94bcdcaee6e4087cc391475f90a047f73a9115b68092cfd5e1375d"
+    },
+    "native-array-corpus/3/native-table-dump.txt": {
+      "size": 36710,
+      "sha256": "6d5847eaf6882f0dd1fc66f2f0197128a16b6ac7f3632ac09c6ee8f2a83c2955"
+    },
+    "native-array-corpus/3/process.json": {
+      "size": 1154,
+      "sha256": "67e279eb23f248fd322d1adf6172f6b2da41d36f435af2adaed743bd4f01e937"
+    },
+    "native-array-corpus/3/request.json": {
+      "size": 1020,
+      "sha256": "7cc08b8ec7b1b4c73ef12e59545cceac1d5ff20a25b945591c705f04070d19a7"
+    },
+    "native-array-corpus/3/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/3/stdout.txt": {
+      "size": 132,
+      "sha256": "ab6a368c86d44307bc874828a2bb307731e4a444b7c71865c0e9fd79d745b637"
+    },
+    "native-array-corpus/4/CGTable.dat": {
+      "size": 1216,
+      "sha256": "9b756a3d736999b04f5e6d8d04cb512fd004fe533d8405587960609e84504f2e"
+    },
+    "native-array-corpus/4/CompilerTableOracle.cs": {
+      "size": 11978,
+      "sha256": "18ecdfab81805839552456c446f212b835047f120fad784e28676e15d5b8a9f8"
+    },
+    "native-array-corpus/4/address-offsets.txt": {
+      "size": 11,
+      "sha256": "3eef5f68486eaf9229b99c9fb3c3a5e0fdc331778013a141b1357b92dadb5cb3"
+    },
+    "native-array-corpus/4/array-offsets.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/4/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/4/comparison.json": {
+      "size": 1109,
+      "sha256": "117f53e1f40a1145294e92c3b0aae242c7edf5e8b62446c41461b6cc741e166e"
+    },
+    "native-array-corpus/4/component-offsets.txt": {
+      "size": 32,
+      "sha256": "6b14010254b244d24c2740fa1970179e6e7241cb33ba30c2195389ac9d9bef44"
+    },
+    "native-array-corpus/4/native-addresses.jsonl": {
+      "size": 388,
+      "sha256": "09a85290e5d44f4330081d5f64dc13f2bbe01f4a9aed0d0f4d43f68753a43d24"
+    },
+    "native-array-corpus/4/native-arrays.jsonl": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/4/native-components.jsonl": {
+      "size": 3727,
+      "sha256": "53f7dfa118b6e4cf274e690229f2a305cb4e45a5570874ab72f0f263fba8e5ef"
+    },
+    "native-array-corpus/4/native-replay.bin": {
+      "size": 1216,
+      "sha256": "9b756a3d736999b04f5e6d8d04cb512fd004fe533d8405587960609e84504f2e"
+    },
+    "native-array-corpus/4/native-table-dump.txt": {
+      "size": 7336,
+      "sha256": "5a24fd87db7ac52232885ab546ef032d9cc4502924e9ce5ccbdab046cceefd58"
+    },
+    "native-array-corpus/4/process.json": {
+      "size": 693,
+      "sha256": "c6755b18aaa0f3b2c365ed66ba96b477471e9c562f319d4b2a1e31c797512e5e"
+    },
+    "native-array-corpus/4/request.json": {
+      "size": 559,
+      "sha256": "40182709b65ba112ffc5658086b7c4d0e4818e3e6335ff5673dd65228f9ae8d5"
+    },
+    "native-array-corpus/4/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/4/stdout.txt": {
+      "size": 132,
+      "sha256": "145d2f74a74ed11dcf66b7820b4fc0ce0d27b284380e12059e8d03711bbe520a"
+    },
+    "native-array-corpus/5/CGTable.dat": {
+      "size": 531,
+      "sha256": "65a751d140359cdedbaa3c769c5aa896002f876c805732888e0518ed2899f509"
+    },
+    "native-array-corpus/5/CompilerTableOracle.cs": {
+      "size": 11978,
+      "sha256": "18ecdfab81805839552456c446f212b835047f120fad784e28676e15d5b8a9f8"
+    },
+    "native-array-corpus/5/address-offsets.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/5/array-offsets.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/5/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/5/comparison.json": {
+      "size": 1010,
+      "sha256": "af738b193ef775ef14395923ea3e9184fd451b0fd1b800aa3172d66d13aa6bfd"
+    },
+    "native-array-corpus/5/component-offsets.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/5/native-addresses.jsonl": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/5/native-arrays.jsonl": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/5/native-components.jsonl": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/5/native-replay.bin": {
+      "size": 531,
+      "sha256": "65a751d140359cdedbaa3c769c5aa896002f876c805732888e0518ed2899f509"
+    },
+    "native-array-corpus/5/native-table-dump.txt": {
+      "size": 1439,
+      "sha256": "d8d73098e28832dcb2296418a1cad9dc5d5a0e3473d58a1fbfac8586591f85a7"
+    },
+    "native-array-corpus/5/process.json": {
+      "size": 594,
+      "sha256": "7cf6f32f36ad47703b8db7428c9164e0250e15727f419291bb09b8432628a672"
+    },
+    "native-array-corpus/5/request.json": {
+      "size": 460,
+      "sha256": "97f6ba65a85cb77246ec327197d77d3b4ae0a4ea7bdda7898b1d31f973ce94d4"
+    },
+    "native-array-corpus/5/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/5/stdout.txt": {
+      "size": 129,
+      "sha256": "ed895310a95c2b0c6125c3aa1f5d47f95a14069681dbcdb86ad8cf300b22fa09"
+    },
+    "native-array-corpus/6/CGTable.dat": {
+      "size": 531,
+      "sha256": "6df18bb458e8844ad0d59dad36bb0aed25011c2720fe5ec2f67194525f656ad7"
+    },
+    "native-array-corpus/6/CompilerTableOracle.cs": {
+      "size": 11978,
+      "sha256": "18ecdfab81805839552456c446f212b835047f120fad784e28676e15d5b8a9f8"
+    },
+    "native-array-corpus/6/address-offsets.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/6/array-offsets.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/6/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/6/comparison.json": {
+      "size": 1010,
+      "sha256": "0d0a9b1d3ea1784849c3a5f0050f6f00f7de221ed2ec25b7468147f1d211a97e"
+    },
+    "native-array-corpus/6/component-offsets.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/6/native-addresses.jsonl": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/6/native-arrays.jsonl": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/6/native-components.jsonl": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/6/native-replay.bin": {
+      "size": 531,
+      "sha256": "6df18bb458e8844ad0d59dad36bb0aed25011c2720fe5ec2f67194525f656ad7"
+    },
+    "native-array-corpus/6/native-table-dump.txt": {
+      "size": 1439,
+      "sha256": "d8d73098e28832dcb2296418a1cad9dc5d5a0e3473d58a1fbfac8586591f85a7"
+    },
+    "native-array-corpus/6/process.json": {
+      "size": 594,
+      "sha256": "1aaf1bbb1a3bbf96a86447ffcf0ffd03cde52a854973e7fbed62cb6f133e80b9"
+    },
+    "native-array-corpus/6/request.json": {
+      "size": 460,
+      "sha256": "6ada6ef3222c0ccc8dc1c99f059405e0a4583981710a3539ab4cf0ce7c6a915c"
+    },
+    "native-array-corpus/6/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/6/stdout.txt": {
+      "size": 129,
+      "sha256": "ed895310a95c2b0c6125c3aa1f5d47f95a14069681dbcdb86ad8cf300b22fa09"
+    },
+    "native-array-corpus/7/CGTable.dat": {
+      "size": 4475,
+      "sha256": "ddf216f62f4c9f31595fa2672ccc419dbb4c990d18cd3a53fc1f8522dbf4b949"
+    },
+    "native-array-corpus/7/CompilerTableOracle.cs": {
+      "size": 11978,
+      "sha256": "18ecdfab81805839552456c446f212b835047f120fad784e28676e15d5b8a9f8"
+    },
+    "native-array-corpus/7/address-offsets.txt": {
+      "size": 11,
+      "sha256": "3eef5f68486eaf9229b99c9fb3c3a5e0fdc331778013a141b1357b92dadb5cb3"
+    },
+    "native-array-corpus/7/array-offsets.txt": {
+      "size": 7,
+      "sha256": "ffef298bb1f0191dbf98f64fd328767ef2bfc981880f6c5b407706fcab7480e6"
+    },
+    "native-array-corpus/7/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/7/comparison.json": {
+      "size": 1573,
+      "sha256": "4ead6d517b6002b70c34150c92e28430966a7005584dee513840ed2631cd0a9b"
+    },
+    "native-array-corpus/7/component-offsets.txt": {
+      "size": 268,
+      "sha256": "d3dbc873d9b5d80e0407e5ce32478a6226b2a173d5310c9c518e07867312330b"
+    },
+    "native-array-corpus/7/native-addresses.jsonl": {
+      "size": 388,
+      "sha256": "09a85290e5d44f4330081d5f64dc13f2bbe01f4a9aed0d0f4d43f68753a43d24"
+    },
+    "native-array-corpus/7/native-arrays.jsonl": {
+      "size": 381,
+      "sha256": "c447e45445a69d5be15a85e34a3705105cf52aecddedce30ce1b0068a713cd13"
+    },
+    "native-array-corpus/7/native-components.jsonl": {
+      "size": 25643,
+      "sha256": "c27619c56a40c5f9b5a7169b11fc41a88d1224fc0af2158d7f5fa6c2d4c592ed"
+    },
+    "native-array-corpus/7/native-replay.bin": {
+      "size": 4475,
+      "sha256": "ddf216f62f4c9f31595fa2672ccc419dbb4c990d18cd3a53fc1f8522dbf4b949"
+    },
+    "native-array-corpus/7/native-table-dump.txt": {
+      "size": 36620,
+      "sha256": "429bdbcbbdd5865dd0e483107e05512fbccd26222f257170e9012e76aedea066"
+    },
+    "native-array-corpus/7/process.json": {
+      "size": 1154,
+      "sha256": "786757594dd416b3ec78bf316f34b1e5499e472c20503792a39a6b931406075c"
+    },
+    "native-array-corpus/7/request.json": {
+      "size": 1020,
+      "sha256": "d26a87d47e410513d77c1b2a4852084cbda5065c56410c21647f5f4ab206d6d0"
+    },
+    "native-array-corpus/7/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/7/stdout.txt": {
+      "size": 132,
+      "sha256": "5f5a033bb7b2930ce10b610a7e773fe1fb22676ed19f36a36419d570272b7643"
+    },
+    "native-array-corpus/8/CGTable.dat": {
+      "size": 4529,
+      "sha256": "60a71f30eeca0f5b65f4b0eb319615bb5129d5080982f9c1c90e7cd78a2b8896"
+    },
+    "native-array-corpus/8/CompilerTableOracle.cs": {
+      "size": 11978,
+      "sha256": "18ecdfab81805839552456c446f212b835047f120fad784e28676e15d5b8a9f8"
+    },
+    "native-array-corpus/8/address-offsets.txt": {
+      "size": 11,
+      "sha256": "3eef5f68486eaf9229b99c9fb3c3a5e0fdc331778013a141b1357b92dadb5cb3"
+    },
+    "native-array-corpus/8/array-offsets.txt": {
+      "size": 7,
+      "sha256": "ffef298bb1f0191dbf98f64fd328767ef2bfc981880f6c5b407706fcab7480e6"
+    },
+    "native-array-corpus/8/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/8/comparison.json": {
+      "size": 1573,
+      "sha256": "f6b00c5f8d26d841fe242302f7a36d05ef214b3367c7537e28dc2e8970c7411a"
+    },
+    "native-array-corpus/8/component-offsets.txt": {
+      "size": 268,
+      "sha256": "d3dbc873d9b5d80e0407e5ce32478a6226b2a173d5310c9c518e07867312330b"
+    },
+    "native-array-corpus/8/native-addresses.jsonl": {
+      "size": 388,
+      "sha256": "09a85290e5d44f4330081d5f64dc13f2bbe01f4a9aed0d0f4d43f68753a43d24"
+    },
+    "native-array-corpus/8/native-arrays.jsonl": {
+      "size": 381,
+      "sha256": "3bef74b6f84848dbd350b88cd4b635ea5c1620c8ee4a57cd70780eee2dab9074"
+    },
+    "native-array-corpus/8/native-components.jsonl": {
+      "size": 25643,
+      "sha256": "b1bc50d4d46cab652ff18f8bcfd15ebbee630c8e7b0191ab32112f702186b830"
+    },
+    "native-array-corpus/8/native-replay.bin": {
+      "size": 4529,
+      "sha256": "60a71f30eeca0f5b65f4b0eb319615bb5129d5080982f9c1c90e7cd78a2b8896"
+    },
+    "native-array-corpus/8/native-table-dump.txt": {
+      "size": 36710,
+      "sha256": "2fc5fa6b1c014531f3db6f2a7542f09ada5d38b851a0f7878fd7365ff9adc922"
+    },
+    "native-array-corpus/8/process.json": {
+      "size": 1154,
+      "sha256": "21bf50040d6dc035f210a65714a962db50a38a13f4dee5647668d639689488a7"
+    },
+    "native-array-corpus/8/request.json": {
+      "size": 1020,
+      "sha256": "aaaed3abd05242b3f8c69bc302e9376cb7d468fe785a3467deeeef2fd81c5511"
+    },
+    "native-array-corpus/8/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/8/stdout.txt": {
+      "size": 132,
+      "sha256": "ab6a368c86d44307bc874828a2bb307731e4a444b7c71865c0e9fd79d745b637"
+    },
+    "native-array-corpus/9/CGTable.dat": {
+      "size": 78289,
+      "sha256": "4ee32e8fcac2888543da0127d3a4acce1580b1e31c055c34fe317b319078fb99"
+    },
+    "native-array-corpus/9/CompilerTableOracle.cs": {
+      "size": 11978,
+      "sha256": "18ecdfab81805839552456c446f212b835047f120fad784e28676e15d5b8a9f8"
+    },
+    "native-array-corpus/9/address-offsets.txt": {
+      "size": 11,
+      "sha256": "3eef5f68486eaf9229b99c9fb3c3a5e0fdc331778013a141b1357b92dadb5cb3"
+    },
+    "native-array-corpus/9/array-offsets.txt": {
+      "size": 15,
+      "sha256": "de72c86d331bf8124c2502791fc317c9b771bd71d6a7d29c43f575e96b0e26f5"
+    },
+    "native-array-corpus/9/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/9/comparison.json": {
+      "size": 13783,
+      "sha256": "9d0c0a2a8252af1725400cd3fa034c39513ed4fd409aaa0949d0d911e2736fc0"
+    },
+    "native-array-corpus/9/component-offsets.txt": {
+      "size": 7336,
+      "sha256": "769f100125c99b4170924d3773c824fba51648405c63ed3340c2c75a39276e26"
+    },
+    "native-array-corpus/9/native-addresses.jsonl": {
+      "size": 388,
+      "sha256": "09a85290e5d44f4330081d5f64dc13f2bbe01f4a9aed0d0f4d43f68753a43d24"
+    },
+    "native-array-corpus/9/native-arrays.jsonl": {
+      "size": 763,
+      "sha256": "5a2685c706f77033ab1dbed6e7d4d2a253e766184871938f4bade0027b0ae3c6"
+    },
+    "native-array-corpus/9/native-components.jsonl": {
+      "size": 575332,
+      "sha256": "2526122f3e72c33176cb19fd41398d4363301cfb62344a867d4842b3ef32f4c1"
+    },
+    "native-array-corpus/9/native-replay.bin": {
+      "size": 78289,
+      "sha256": "4ee32e8fcac2888543da0127d3a4acce1580b1e31c055c34fe317b319078fb99"
+    },
+    "native-array-corpus/9/native-table-dump.txt": {
+      "size": 714740,
+      "sha256": "0a619e796d0b4d0115724b84781b97dea688ecbc7e909496bfaf6d51113c2a4a"
+    },
+    "native-array-corpus/9/process.json": {
+      "size": 13360,
+      "sha256": "3c6c536bc91cebe5254c11f6222c6611ba08154f10f263a199b555f5054365a5"
+    },
+    "native-array-corpus/9/request.json": {
+      "size": 13226,
+      "sha256": "68a9417f25fe73099a2b96036c49a1fbaaac457b2036cf8cba4ecd4599327dd6"
+    },
+    "native-array-corpus/9/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-array-corpus/9/stdout.txt": {
+      "size": 135,
+      "sha256": "6ae1e3552ae282ea9dd6b67895f51e190ee8425fc65a32fd145de064ee55ce6c"
+    },
+    "native-array-corpus/report.json": {
+      "size": 31792,
+      "sha256": "21612873553eef3c18c922102b4c561715ce657cb60819e5bd31a3e3e6a978d8"
+    },
+    "native-assignment-corpus/CompilerAssignmentOracle.cs": {
+      "size": 3491,
+      "sha256": "8310faf45d9f8d03530fa6dde4f3f3e2e4f1b60b18c68fe41dd48a4eb580eba8"
+    },
+    "native-assignment-corpus/build-output.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-assignment-corpus/comparison.json": {
+      "size": 371142,
+      "sha256": "56c8a4e941961a8ed418b8907c935c61a4f15f403871202243b85b50f682ba7b"
+    },
+    "native-assignment-corpus/inputs.txt": {
+      "size": 51110,
+      "sha256": "25e4b995efcf9b8b6f65f48a9f94a1d07f701161825cb0eb76143fcfa28d8f64"
+    },
+    "native-assignment-corpus/outputs.jsonl": {
+      "size": 190430,
+      "sha256": "67177b6d7d4c616ab9ac4fde15ac421551bf094edf26c994c8cdc6dcd6cc884b"
+    },
+    "native-assignment-corpus/process.json": {
+      "size": 475,
+      "sha256": "c0128465508e4acabf817c419988590311b1e39f419158be63d79b504db128bb"
+    },
+    "native-assignment-corpus/request.json": {
+      "size": 366,
+      "sha256": "5fe36fd472cde2364bc532e6c495ce812cd6d5e9929b6656fcb1c9a33e521e8c"
+    },
+    "native-assignment-corpus/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-assignment-corpus/stdout.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "symbol-array-scan/compiler-storage.json": {
+      "size": 3239672,
+      "sha256": "4ebbb0b3927daec0e24a4f39e051bf4789b6886636e5ec6ea8b78fa08ad51152"
+    },
+    "type-union-read.txt": {
+      "size": 9517,
+      "sha256": "5f08c6cfecc90a6b2f66c8b8819a20d7e7955efc7d9dbcd04df67b1bc6bf7585"
+    }
+  },
+  "summary": {
+    "cgtable_versions": 12,
+    "component_address_references": 1345,
+    "declared_addresses": 23,
+    "assignment_records": 1345,
+    "assignments_matching_native_text": 1205,
+    "unassigned_native_fallbacks": 140,
+    "array_records_from_projects": 16,
+    "synthetic_array_controls": 13,
+    "native_array_field_mismatches": 0,
+    "symbol_xref_maps": 33,
+    "operand_occurrences": 305,
+    "exact_operand_matches": 141
+  },
+  "counterexamples": [
+    "All-zero UserInfo formats as %IX0 in native code; it is not an X0 allocation.",
+    "T199 matches four distinct timer role declarations; an exact spelling does not select the access role.",
+    "Native Restore/array Read/Save accepts total_count=99 with one extent=4; read acceptance is not type validity.",
+    "Array type padding bytes are skipped by native reader and must remain raw."
+  ],
+  "native_scope": "Offline ECCompiler.dll 15.22 scalar and borrowed-object reads, assignment formatting and byte-identical Save; no compiler-source freshness, GX project compile/reopen, device write or execution claim.",
+  "provenance": "Twelve CGTable inputs are hash-identical to gxw-compiler-components-20260920.zip native-component-corpus. Public corpus scan only; private local survey is excluded. Token native agreement remains in the earlier structured-compiler archive and was not rerun.",
+  "array_static_evidence": {
+    "reader": "RVA 141C0; A550 widths; A3F0 signed-magnitude conversion",
+    "bounds": "RVA 130C0 source parser computes upper+1-lower before A990; A990 multiplies extent using A7B0",
+    "padding": "Only first byte of four-byte type slot is read. Remaining three bytes are preserved."
+  }
+}

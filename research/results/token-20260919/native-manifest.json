@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "archive": "research/evidence/gxw-token-native-20260919.zip",
+  "archive_sha256": "33ab9eba491fa9514f9f414916d66eff0c075d096d2a043f6461d45e661ec1c9",
+  "source_commit": "6ccde5f793afa50d5aaf2426696905f0028c5b4b",
+  "files": {
+    "samples/empty.gxw": {
+      "size": 921088,
+      "sha256": "002a780afd116666eb5455fca4ca8b64033ba9636b4a12a2ba658a269380c7f4"
+    },
+    "samples/generated.gxw": {
+      "size": 921600,
+      "sha256": "e8a3d645b700e4a1a0b0d6a317c9ff3c90b360b8cf9adb67b3c950e5649f3a41"
+    },
+    "samples/native-saved.gxw": {
+      "size": 921600,
+      "sha256": "474da6da50eb6c5689254d32718b77995818a94a77da23752ca90eed3a6fca98"
+    },
+    "native/reopened.csv": {
+      "size": 2534,
+      "sha256": "d152c188cc6b8f198ceb866c002e06cdc600b401486d4a3d64bbcb8379a2d249"
+    },
+    "input/instructions.txt": {
+      "size": 276,
+      "sha256": "898710bdda6b11209a512fb9dccd65205a6b883b896eba61462d141a89f82a01"
+    },
+    "input/native-requests.json": {
+      "size": 1350,
+      "sha256": "77a321f1e7c0be6a594f65282eaf4d57c8f48d1704ffb5856745c0c40fef8e2f"
+    },
+    "native/encoder-reply.jsonl": {
+      "size": 486,
+      "sha256": "a54084fc703a734b40a7e69c0c6592f84a04f56cb4d1cd909b769026ef0982d7"
+    },
+    "checks/patch.json": {
+      "size": 1352,
+      "sha256": "aa52412dd9731af80841382721043bbda78f0d39bdf569fbb6f3ee4c26750a40"
+    },
+    "checks/native-csv-alignment.json": {
+      "size": 5026,
+      "sha256": "17aa6f6f57c960c7728aa3cf8022aaba1e4f0b387ff201c28ec762fd17f402ec"
+    },
+    "screenshots/w-opened.png": {
+      "size": 118007,
+      "sha256": "35f6c09b6462b570e660d4c96a6a8bff97237ef092edb6c6189f56cfa32e6c6a",
+      "evidence_status": "invalid-observation: stale screenshot payload; hash retained only for provenance"
+    },
+    "screenshots/w-saved.png": {
+      "size": 118007,
+      "sha256": "35f6c09b6462b570e660d4c96a6a8bff97237ef092edb6c6189f56cfa32e6c6a",
+      "evidence_status": "invalid-observation: stale screenshot payload; hash retained only for provenance"
+    },
+    "screenshots/w-closed.png": {
+      "size": 118007,
+      "sha256": "35f6c09b6462b570e660d4c96a6a8bff97237ef092edb6c6189f56cfa32e6c6a",
+      "evidence_status": "invalid-observation: stale screenshot payload; hash retained only for provenance"
+    },
+    "screenshots/w-reopened.png": {
+      "size": 118007,
+      "sha256": "35f6c09b6462b570e660d4c96a6a8bff97237ef092edb6c6189f56cfa32e6c6a",
+      "evidence_status": "invalid-observation: stale screenshot payload; hash retained only for provenance"
+    },
+    "screenshots/w-exported.png": {
+      "size": 118007,
+      "sha256": "35f6c09b6462b570e660d4c96a6a8bff97237ef092edb6c6189f56cfa32e6c6a",
+      "evidence_status": "invalid-observation: stale screenshot payload; hash retained only for provenance"
+    }
+  },
+  "native_validation": {
+    "observer": "Actual GX Works2 UI through computer-use, 2026-09-19 to 2026-09-20 Asia/Shanghai",
+    "GX_Works2_file_version": "1.635.0.1",
+    "CPU": "FX3U/FX3UC",
+    "mode": "offline",
+    "open": true,
+    "convert_all": {
+      "completed_to_editor_without_error_dialog": true,
+      "explicit_error_counter": "not displayed for this simple-project conversion"
+    },
+    "save": true,
+    "closed_to_empty_workspace": true,
+    "reopen": true,
+    "native_csv_instructions": 24,
+    "native_csv_steps": 112,
+    "native_csv_full_alignment": "agrees",
+    "before": "samples/generated.gxw",
+    "after": "samples/native-saved.gxw"
+  },
+  "writer": {
+    "pou_sizes": [
+      106,
+      384
+    ],
+    "allocation_modes": {
+      "program": "grow_root_and_tables",
+      "outer": "append_regular",
+      "history": "existing_allocation"
+    },
+    "all_other_source_stream_payloads": "byte-identical before native conversion",
+    "native_kept_generated_pou_bytes": true,
+    "native_refreshed_res": true,
+    "reproducer": "research/generate_native_token_project.py",
+    "cli_reproduction_sha256": "e8a3d645b700e4a1a0b0d6a317c9ff3c90b360b8cf9adb67b3c950e5649f3a41"
+  },
+  "independent_cfb": {
+    "samples/empty.gxw": {
+      "outer": "agrees",
+      "nested": "agrees"
+    },
+    "samples/generated.gxw": {
+      "outer": "agrees",
+      "nested": "agrees"
+    },
+    "samples/native-saved.gxw": {
+      "outer": "agrees",
+      "nested": "agrees"
+    }
+  },
+  "handling": "native-validated on this case",
+  "confidence": "verified",
+  "production_safe": false,
+  "artifact_errata": {
+    "date": "2026-09-20",
+    "invalid_sha256": "35f6c09b6462b570e660d4c96a6a8bff97237ef092edb6c6189f56cfa32e6c6a",
+    "reason": "A lexical state binding shadowed globalThis.state during screenshot saving. The displayed computer-use observations were current, but these saved PNGs all contain an older frame. They cannot attest their named stages.",
+    "handling": "Retain original hashes/archives and invalidate screenshot observation claims; project and native CSV hashes remain valid.",
+    "supplemental_manifest": "research/results/token-20260919/operand-native-manifest.json"
+  }
+}

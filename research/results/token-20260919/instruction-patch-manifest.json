@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "archive": "research/evidence/gxw-instruction-patch-20260920.zip",
+  "archive_sha256": "7faa5bf92b0ba5890438e3d028391eb7acf70811cf30dd1c45bf63bb8a955de0",
+  "source_commit": "6ccde5f793afa50d5aaf2426696905f0028c5b4b",
+  "files": {
+    "a/base.gxw": {
+      "size": 921600,
+      "sha256": "e41ea61153f26ed1d09053796fe62620e5cc343d1c4ab94e6691544c496c97e2"
+    },
+    "a/patched.gxw": {
+      "size": 921600,
+      "sha256": "3b181b8e5eaa488758b6810bc9f32ddba7e92607c22a738398a09125232295ee"
+    },
+    "a/native-saved.gxw": {
+      "size": 921600,
+      "sha256": "d5ba6546d40f44554ef118aee3398b382b1fce5cec03ec2170be766575e4ed14"
+    },
+    "a/native-reopened.csv": {
+      "size": 1872,
+      "sha256": "cb12a57a31689a2dc5d750bdc10c9561bad74c774f7077afe8cb035750d19d30"
+    },
+    "a/plan.json": {
+      "size": 456,
+      "sha256": "fd814612306f9f353a7ccfc846d70f9ab15288ffa5af3ad79ad8d937da5aba26"
+    },
+    "a/alignment.json": {
+      "size": 3475,
+      "sha256": "af956d630b9a2cc2a1b6334702beae7f8e339b83b1ed5fd29f0c7a7c69273eb3"
+    },
+    "a/verification.json": {
+      "size": 9890,
+      "sha256": "c715ee1e66e023432286d0688ff158367d1323ffba8376c0d92841f87caecca9"
+    },
+    "a/screenshots/opened.png": {
+      "size": 150279,
+      "sha256": "80ba887636971871d5660528a4402468458c4f9d3037ae7184d4476f5364b5a5"
+    },
+    "a/screenshots/saved.png": {
+      "size": 150009,
+      "sha256": "c0e8fec6f3675e62617152a5fe3aa70770e97b063928f55b42d329f422f51068"
+    },
+    "a/screenshots/closed.png": {
+      "size": 94983,
+      "sha256": "0c757a65411e4d615c118e663f1f9cf6867af5f2383b2e51871aab7376876834"
+    },
+    "a/screenshots/reopened.png": {
+      "size": 150007,
+      "sha256": "45250cdfee99c44fb4bfe7966ba3ebb601e7a4ca5fec324fae177d7aa0dcc9ed"
+    },
+    "a/screenshots/exported.png": {
+      "size": 149780,
+      "sha256": "005eae4e744611a7ecdba1a9e7ec761b76e130b3459d2de8468b972c9e6d78a7"
+    },
+    "a/native/encode/requests.json": {
+      "size": 533,
+      "sha256": "bff024fe81e97346febd02306db568293cae5f136f9c86356f083cd0e4c04e49"
+    },
+    "a/native/encode/native-stdout.jsonl": {
+      "size": 292,
+      "sha256": "34bd6c442299074241066e00787afb0bda0f17c5e3b0801254b8d1d20427bcf7"
+    },
+    "a/native/encode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "a/native/encode/process.json": {
+      "size": 248,
+      "sha256": "f1a5180073c6379595f2f70103c8e367aeaf959149e2ecebce0250b682df0032"
+    },
+    "a/native/decode/requests.json": {
+      "size": 498,
+      "sha256": "d2fbfda6fa04ca73594f768bce328823fb81d5cf10ba49a8661558d82b313f5b"
+    },
+    "a/native/decode/native-stdout.jsonl": {
+      "size": 312,
+      "sha256": "5be86c39f460c6fbc907b7f0b3469019cb286942d39035238b48542a31c1924f"
+    },
+    "a/native/decode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "a/native/decode/process.json": {
+      "size": 248,
+      "sha256": "1e698cd92f15c83ca65381dbf9eb183b8e615b807875cec8bee3b3e5fde8918c"
+    },
+    "a/patch.json": {
+      "size": 3576,
+      "sha256": "2bbbe5f721ee6d0a403ac16f61b9d9cf63d9468f727c193a104a51377f8f83b8"
+    }
+  },
+  "native_validation": {
+    "observer": "Actual GX Works2 UI through computer-use, 2026-09-20 Asia/Shanghai",
+    "GX_Works2_file_version": "1.635.0.1",
+    "CPU": "FX3U/FX3UC",
+    "mode": "offline",
+    "open": true,
+    "convert_all": {
+      "completed_to_editor_without_error_dialog": true,
+      "explicit_error_counter": "not displayed for this simple-project conversion"
+    },
+    "save": true,
+    "closed_to_empty_workspace": true,
+    "reopen": true,
+    "cases": {
+      "a": {
+        "instructions": 16,
+        "steps": 94,
+        "texts": 0
+      },
+      "t": {
+        "instructions": 234,
+        "steps": 563,
+        "texts": 142
+      }
+    },
+    "native_csv_full_alignment": "agrees; opcodes, operands, steps, text placement",
+    "native_source_bytes": "identical to patched POU",
+    "native_resource_bodies": "identical to current source token body in both cases"
+  },
+  "scope": "Two source-bound instruction replacements per program. Other records and all unrelated payloads preserved by local patch. Native save updates its own metadata and compiled resources. No PLC execution claim.",
+  "screenshot_capture": "Saved from globalThis.state immediately after visually checking the matching current window; prior lexical-state defect does not apply.",
+  "local_full_project_evidence": {
+    "directory": "research/experiments/instruction-patch-20260920",
+    "archive": "all-local-evidence.zip",
+    "archive_sha256": "5522313eae54d7818a71e2458db14328c6b715a299836d59bb9cc923429812ab",
+    "files": {
+      "t-base.gxw": {
+        "sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+        "size": 930304
+      },
+      "t-input.gxw": {
+        "sha256": "d2f7c7ace103436f533b2da4958f7b05d90a88b8f3709c6090ba95cc1a84e9ca",
+        "size": 930304
+      },
+      "t.gxw": {
+        "sha256": "bad61fb5e8ad89bb77898eecccb684384457f4f1e60616a7f8c93b9d27874c7e",
+        "size": 934400
+      },
+      "t-reopened.csv": {
+        "sha256": "af46730274f5773a900e36113113e497ba17d5712e233afca3d337ddf9271a5b",
+        "size": 27500
+      },
+      "t-verification.json": {
+        "sha256": "69bccb16ba342c85df913b57ea91d7c16bc8b95a5857128259d1d9bf6f2109f1",
+        "size": 9912
+      }
+    },
+    "distribution": "Local ignored directory only; public archive contains the synthetic a case."
+  }
+}

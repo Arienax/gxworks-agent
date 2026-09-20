@@ -1,0 +1,456 @@
+{
+  "schema_version": 1,
+  "dll_sha256": "a700da129ede89869a00a5614d08b43dc64e94c240494fc753fe09104c5b9399",
+  "cpu_code": 520,
+  "scope": "native memory conversion only; generated snippets are not compiled GXW projects",
+  "method": "Vendor metadata selects candidate strings. Native encoder bytes are decoded separately and compared with input expectations. Python decoder then checks against native output. GUI evidence is separate.",
+  "metadata_hashes": {
+    "InstructionFX_E.mdb": "4aa15be3edc1fd99d338f9dea0a0d9b4a5cae3aaf44356dc46c072e076cb8ec3",
+    "CpuFX3UC_E.mdb": "afb86de07183cf4d088da45318f0e37bf2b4d38c7cd38b9cea9f58b417fb7271"
+  },
+  "cases": [
+    {
+      "id": 216,
+      "text": "PRUN M10 M20",
+      "encode_result": "0x04020006"
+    },
+    {
+      "id": 217,
+      "text": "PRUNP M10 M20",
+      "encode_result": "0x04020006"
+    },
+    {
+      "id": 265,
+      "text": "LD= D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 266,
+      "text": "LD= K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 267,
+      "text": "LD> D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 268,
+      "text": "LD> K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 269,
+      "text": "LD< D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 270,
+      "text": "LD< K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 271,
+      "text": "LD<> D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 272,
+      "text": "LD<> K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 273,
+      "text": "LD<= D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 274,
+      "text": "LD<= K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 275,
+      "text": "LD>= D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 276,
+      "text": "LD>= K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 277,
+      "text": "AND= D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 278,
+      "text": "AND= K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 279,
+      "text": "AND> D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 280,
+      "text": "AND> K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 281,
+      "text": "AND< D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 282,
+      "text": "AND< K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 283,
+      "text": "AND<> D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 284,
+      "text": "AND<> K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 285,
+      "text": "AND<= D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 286,
+      "text": "AND<= K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 287,
+      "text": "AND>= D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 288,
+      "text": "AND>= K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 289,
+      "text": "OR= D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 290,
+      "text": "OR= K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 291,
+      "text": "OR< D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 292,
+      "text": "OR< K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 293,
+      "text": "OR> D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 294,
+      "text": "OR> K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 295,
+      "text": "OR<> D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 296,
+      "text": "OR<> K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 297,
+      "text": "OR<= D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 298,
+      "text": "OR<= K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 299,
+      "text": "OR>= D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 300,
+      "text": "OR>= K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 408,
+      "text": "DPRUN M10 M20",
+      "encode_result": "0x04020006"
+    },
+    {
+      "id": 409,
+      "text": "DPRUNP M10 M20",
+      "encode_result": "0x04020006"
+    },
+    {
+      "id": 460,
+      "text": "LDD= D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 461,
+      "text": "LDD= K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 462,
+      "text": "LDD> D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 463,
+      "text": "LDD> K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 464,
+      "text": "LDD< D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 465,
+      "text": "LDD< K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 466,
+      "text": "LDD<> D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 467,
+      "text": "LDD<> K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 468,
+      "text": "LDD<= D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 469,
+      "text": "LDD<= K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 470,
+      "text": "LDD>= D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 471,
+      "text": "LDD>= K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 472,
+      "text": "ANDD= D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 473,
+      "text": "ANDD= K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 474,
+      "text": "ANDD> D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 475,
+      "text": "ANDD> K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 476,
+      "text": "ANDD< D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 477,
+      "text": "ANDD< K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 478,
+      "text": "ANDD<> D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 479,
+      "text": "ANDD<> K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 480,
+      "text": "ANDD<= D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 481,
+      "text": "ANDD<= K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 482,
+      "text": "ANDD>= D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 483,
+      "text": "ANDD>= K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 484,
+      "text": "ORD= D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 485,
+      "text": "ORD= K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 486,
+      "text": "ORD< D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 487,
+      "text": "ORD< K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 488,
+      "text": "ORD> D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 489,
+      "text": "ORD> K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 490,
+      "text": "ORD<> D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 491,
+      "text": "ORD<> K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 492,
+      "text": "ORD<= D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 493,
+      "text": "ORD<= K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 494,
+      "text": "ORD>= D10 D20",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 495,
+      "text": "ORD>= K1 K1",
+      "encode_result": "0x04020003"
+    },
+    {
+      "id": 553,
+      "text": "DSZR D10 X0 D30 D40",
+      "encode_result": "0x04020006"
+    },
+    {
+      "id": 554,
+      "text": "DVIT D10 D20 Y0 D40",
+      "encode_result": "0x04020006"
+    },
+    {
+      "id": 555,
+      "text": "DVIT K1 K1 Y0 D40",
+      "encode_result": "0x04020006"
+    },
+    {
+      "id": 556,
+      "text": "DDVIT D10 D20 Y0 D40",
+      "encode_result": "0x04020006"
+    },
+    {
+      "id": 557,
+      "text": "DDVIT K1 K1 Y0 D40",
+      "encode_result": "0x04020006"
+    }
+  ],
+  "summary": {
+    "requests": 791,
+    "encode_return_codes": {
+      "0x00000000": 710,
+      "0x04020006": 9,
+      "0x04020003": 72
+    },
+    "native_text_agrees": 710,
+    "python_complete": 40,
+    "framing_gaps": 0,
+    "python_complete_after_catalog": 710,
+    "exact_catalog_headers": 438
+  },
+  "run_artifact_hashes": {
+    "harvest.json": "8f01e6a614143741494b8c2d074cc53535a86e3c796176fcef35d2cee2212841",
+    "metadata.json": "d99cc57c4821983025b52a573685619044aba0c82cb1adb46cc15de168921590",
+    "decode\\native-stdout.jsonl": "5d778a0f23d386c02f2618268bf4841d847348c4c6382803af078cb65dd522f2",
+    "decode\\process.json": "e00ca96116a412fc65355a94675aac5e76c4cd6341d7fba8f6c09c0187d22dc5",
+    "decode\\requests.json": "e2c5dc81fb2994ab8726b0d8793b7d1cfe604528947b2565d9688689f932a8be",
+    "encode\\native-stdout.jsonl": "a5074cb7a03e9f2b784efcb9e3f5c0855c6a53b8ebf4be3b787e3f07f20b17b1",
+    "encode\\process.json": "a0ff857c787a4fc819bfa54f69fed3bb764650ecf370e4c40c9e5fcd6cd875f5",
+    "encode\\requests.json": "26e4b76e82dcfa9f27ebe9d5bdaafb85577bea368d8679083464ee4ab11ae16c"
+  },
+  "known_rejections": {
+    "comparison_spelling": 72,
+    "operand_candidates": 9
+  },
+  "abi_failure": {
+    "initial_error": "ChangeILToPcode parameter 7 was incorrectly declared an integer value; null caused isolated helper process failure",
+    "correction": "Disassembly shows a writable output pointer (last instruction kind). Pass ref int; no native project or GUI process was touched.",
+    "replay_input_base64": "TEQgWDAAT1VUIFkwAEVORAAA",
+    "correct_native_body_hex": "030003049c0004032003049d0004033403"
+  },
+  "case_selection": "All 81 rejected inputs retained here. The 710 successful byte encodings are identical in native-conversion-ladder-mode.json; original full run is hash-indexed under run_artifact_hashes and retained locally.",
+  "encode_options": [
+    0,
+    0
+  ]
+}

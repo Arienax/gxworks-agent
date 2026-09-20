@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "archive": "research/evidence/gxw-lossless-20260919.zip",
+  "archive_sha256": "885aa2354e9bc24fed5c5292e035c57e17754410520c91614f610af650331427",
+  "source_commit": "6ccde5f793afa50d5aaf2426696905f0028c5b4b",
+  "files": {
+    "samples/base.gxw": {
+      "size": 934912,
+      "sha256": "df5c8c7e194a792804d8cd478a5618c7cca787fa398dd3c2dbecaeb55e5eeec3"
+    },
+    "samples/p.gxw": {
+      "size": 934912,
+      "sha256": "4e49661ee9f2f88e53e0277466115eb0ea79c2197d34105e0e82e0044ab70bfe"
+    },
+    "samples/p_compile.gxw": {
+      "size": 934912,
+      "sha256": "f7a8530c2835c9e02e33c824dbfa544229d591de8402dec063a3377192896095"
+    },
+    "screenshots/p-open.png": {
+      "size": 137296,
+      "sha256": "f117bd62b3e77888b38a32a309fa0bc8a5cb4d8393b8dcd7ef815abccbac61e1"
+    },
+    "screenshots/p-compile.png": {
+      "size": 158050,
+      "sha256": "195fa6d5ec049069d44755414e6a611b164833d53e449e3d22c6fb1f86ee666e"
+    },
+    "screenshots/p-closed.png": {
+      "size": 94321,
+      "sha256": "671edad7279953527ef1cb7ddd2336e8c6dfe38c5bf89a492d3ab2ab8fdf3bd4"
+    },
+    "screenshots/p-reopen.png": {
+      "size": 137512,
+      "sha256": "99d9b25ae5a2db50acd92fa54c2519d4a29fc9a4b02f2ffd4291ac6a09410f26"
+    }
+  },
+  "native_validation": {
+    "observer": "Codex computer-use, actual GX Works2 UI on 2026-09-19",
+    "GX_Works2_file_version": "1.635.0.1",
+    "CPU": "FX3U/FX3UC",
+    "mode": "offline",
+    "before": "samples/p.gxw",
+    "after": "samples/p_compile.gxw",
+    "open": true,
+    "compile_all": {
+      "errors": 0,
+      "warnings": 0,
+      "check_warnings": 0
+    },
+    "save": true,
+    "close": true,
+    "reopen": true,
+    "visible_program": "X2 contact drives Y1 SET coil",
+    "scope": "Equal-length contact patch adjacent to preserved unregistered kind7; does not validate unknown malformed record layouts, all SET operations, other CPUs or versions"
+  },
+  "confidence": "verified",
+  "handling": "native-validated",
+  "production_safe": false
+}

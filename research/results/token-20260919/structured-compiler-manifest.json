@@ -1,0 +1,388 @@
+{
+  "schema_version": 1,
+  "archive": "research/evidence/gxw-structured-compiler-20260920.zip",
+  "archive_sha256": "7f4cd30fa3dc466b2a43d2a442f7ea884eed48526c108a0fe2ad04bdd4528f61",
+  "files": {
+    "CGTable.dat": {
+      "size": 4529,
+      "sha256": "b6c6ce0cea94bcdcaee6e4087cc391475f90a047f73a9115b68092cfd5e1375d"
+    },
+    "DebugInformation2.dat": {
+      "size": 1153,
+      "sha256": "986c50ea6ced752cc7504b96bd0718b9e098c741162f33a0637e39326fdc3844"
+    },
+    "ESCompiler.stg": {
+      "size": 16896,
+      "sha256": "73912bb8b92bf6fea01c3ee00d3cde8bac7d436a06384a91cd66d5951b45ce81"
+    },
+    "artifact-link-comparison.json": {
+      "size": 75282,
+      "sha256": "75ef6ebbc47514bf531f28d471ac3fe5a354c098227df3942b8d21b0390e2519"
+    },
+    "artifact-scan/compiler-storage.json": {
+      "size": 2219888,
+      "sha256": "118c7802a710aaf5450e32f5e77cf6686633c90629cc52f03341e32f28105cf2"
+    },
+    "compiler-databases.json": {
+      "size": 8739,
+      "sha256": "59863b58d4bc6cfb414bed1af7b526585bca316c0cafccc30aaadf25ad452ab3"
+    },
+    "database-attempts.json": {
+      "size": 833,
+      "sha256": "daa2d59e04d4f51d1186738f126b4de7ae7be296951a2af5f7c68dd104d57300"
+    },
+    "debug2-sections-disassembly.txt": {
+      "size": 26209,
+      "sha256": "f186d91eb66e207128260170be8eec58e6412c2644bbc8235f0d2f06f79d3df8"
+    },
+    "implementation/research/inspect_gxw_compiler.py": {
+      "size": 13851,
+      "sha256": "37089ea506544ae6f1ca2456f662fa93a7066fa01eb5eb2e5627a0ac06328bdc"
+    },
+    "implementation/research/native/CompilerTableOracle.cs": {
+      "size": 5384,
+      "sha256": "2d584e236fb701fa1733ce99bda72133d4801076588d6300135ffaeece785cae"
+    },
+    "implementation/research/native_gxw_compiler.py": {
+      "size": 4873,
+      "sha256": "b7e65b99677e83aefed77a656ca1f202742088ba92be8fc18dadb793796eb656"
+    },
+    "implementation/src/gxw/compiler_debug.py": {
+      "size": 4265,
+      "sha256": "4b6408f0f30a87d0d6325089da180f47c098bd536dc4e1aae0f121767944c9ef"
+    },
+    "implementation/src/gxw/compiler_storage.py": {
+      "size": 4391,
+      "sha256": "2abe95aae2daec24f92465b56448af4de0610b374269249b2ca4b8cdcb94c5cf"
+    },
+    "implementation/src/gxw/compiler_tables.py": {
+      "size": 5229,
+      "sha256": "3b0bcdd3c38af0f27771a2e72cf2ffcfce18f4bcb5c9f1570b9d248d0691a1b0"
+    },
+    "implementation/src/gxw/token_pou.py": {
+      "size": 9935,
+      "sha256": "1d257442c2deeea54e1b4de51958fd3b7466d5a1cc0c8930dbb09d9566fb527a"
+    },
+    "link-participation-disassembly.txt": {
+      "size": 1899,
+      "sha256": "4b5dfb05e184ea90014072a841b66917d3f839a71349f88192804de7134a9371"
+    },
+    "native-components.json": {
+      "size": 473,
+      "sha256": "cae0387e587f13c30d3a058b26222d6147bb814d586de49b05893d43dc598df3"
+    },
+    "native-table-corpus/0/CGTable.dat": {
+      "size": 771,
+      "sha256": "cc5b2af5d3b4809bff765da25ce7755fda524d96f6f69ce87eef5bd0d8dd1919"
+    },
+    "native-table-corpus/0/native-replay.bin": {
+      "size": 771,
+      "sha256": "cc5b2af5d3b4809bff765da25ce7755fda524d96f6f69ce87eef5bd0d8dd1919"
+    },
+    "native-table-corpus/0/native-table-dump.txt": {
+      "size": 3425,
+      "sha256": "eafe196ab80b88c1981a36b5b7b9b23739e313105b523061a1b1ac92b97ee17b"
+    },
+    "native-table-corpus/0/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-table-corpus/0/stdout.txt": {
+      "size": 87,
+      "sha256": "f579aae85fd2007786836a698643eaa37544af3aa6ef09f1f58f16324d0111f0"
+    },
+    "native-table-corpus/1/CGTable.dat": {
+      "size": 4533,
+      "sha256": "7e32cae3b6c8621a9fc9ecee69324e18eb900aa38aa0beca62e397355fb4debd"
+    },
+    "native-table-corpus/1/native-replay.bin": {
+      "size": 4533,
+      "sha256": "7e32cae3b6c8621a9fc9ecee69324e18eb900aa38aa0beca62e397355fb4debd"
+    },
+    "native-table-corpus/1/native-table-dump.txt": {
+      "size": 36714,
+      "sha256": "6a0f972c270a1d06f2ba16b8256da4f90a9984a141dc07d3da2a12651f27824a"
+    },
+    "native-table-corpus/1/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-table-corpus/1/stdout.txt": {
+      "size": 90,
+      "sha256": "7bd83d0d65f34f7237e87ad4ca064a00a914974c772b6ec7fbe5141eb7488a8a"
+    },
+    "native-table-corpus/10/CGTable.dat": {
+      "size": 2570,
+      "sha256": "19a81aca2fb5bcdef62dd1c6a566c530d77e1eaa41308fd17ea754ae5daec412"
+    },
+    "native-table-corpus/10/native-replay.bin": {
+      "size": 2570,
+      "sha256": "19a81aca2fb5bcdef62dd1c6a566c530d77e1eaa41308fd17ea754ae5daec412"
+    },
+    "native-table-corpus/10/native-table-dump.txt": {
+      "size": 18926,
+      "sha256": "44dfd67ba77dab4d3109b4bde34bf481974248cbf0a41d3a59aab8e53243e373"
+    },
+    "native-table-corpus/10/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-table-corpus/10/stdout.txt": {
+      "size": 90,
+      "sha256": "362bfc12e9094e85109d2402608957434321a9f220cd7dbb4b0790c47d65a106"
+    },
+    "native-table-corpus/11/CGTable.dat": {
+      "size": 56,
+      "sha256": "d4817aa5497628e7c77e6b606107042bbba3130888c5f47a375e6179be789fbb"
+    },
+    "native-table-corpus/11/native-replay.bin": {
+      "size": 56,
+      "sha256": "d4817aa5497628e7c77e6b606107042bbba3130888c5f47a375e6179be789fbb"
+    },
+    "native-table-corpus/11/native-table-dump.txt": {
+      "size": 412,
+      "sha256": "ae039d9a50831c982fe2ddb0eb6611b201ef01360421380b83e6d3f405bed980"
+    },
+    "native-table-corpus/11/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-table-corpus/11/stdout.txt": {
+      "size": 84,
+      "sha256": "5fca30fc17ceced66220fb40ff1b5357d775623ba06191d1dea8b4cea4b54703"
+    },
+    "native-table-corpus/2/CGTable.dat": {
+      "size": 4529,
+      "sha256": "7824d288fb7846ccb31ff0e21298aaaa0a805833b92d11f3dfe8a137effb654c"
+    },
+    "native-table-corpus/2/native-replay.bin": {
+      "size": 4529,
+      "sha256": "7824d288fb7846ccb31ff0e21298aaaa0a805833b92d11f3dfe8a137effb654c"
+    },
+    "native-table-corpus/2/native-table-dump.txt": {
+      "size": 36710,
+      "sha256": "6d5847eaf6882f0dd1fc66f2f0197128a16b6ac7f3632ac09c6ee8f2a83c2955"
+    },
+    "native-table-corpus/2/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-table-corpus/2/stdout.txt": {
+      "size": 90,
+      "sha256": "ffbeb934ef1f651921369a25b94e3773c2262c51712135659a8cf933116aaebb"
+    },
+    "native-table-corpus/3/CGTable.dat": {
+      "size": 4529,
+      "sha256": "b6c6ce0cea94bcdcaee6e4087cc391475f90a047f73a9115b68092cfd5e1375d"
+    },
+    "native-table-corpus/3/native-replay.bin": {
+      "size": 4529,
+      "sha256": "b6c6ce0cea94bcdcaee6e4087cc391475f90a047f73a9115b68092cfd5e1375d"
+    },
+    "native-table-corpus/3/native-table-dump.txt": {
+      "size": 36710,
+      "sha256": "6d5847eaf6882f0dd1fc66f2f0197128a16b6ac7f3632ac09c6ee8f2a83c2955"
+    },
+    "native-table-corpus/3/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-table-corpus/3/stdout.txt": {
+      "size": 90,
+      "sha256": "ffbeb934ef1f651921369a25b94e3773c2262c51712135659a8cf933116aaebb"
+    },
+    "native-table-corpus/4/CGTable.dat": {
+      "size": 1216,
+      "sha256": "9b756a3d736999b04f5e6d8d04cb512fd004fe533d8405587960609e84504f2e"
+    },
+    "native-table-corpus/4/native-replay.bin": {
+      "size": 1216,
+      "sha256": "9b756a3d736999b04f5e6d8d04cb512fd004fe533d8405587960609e84504f2e"
+    },
+    "native-table-corpus/4/native-table-dump.txt": {
+      "size": 7336,
+      "sha256": "5a24fd87db7ac52232885ab546ef032d9cc4502924e9ce5ccbdab046cceefd58"
+    },
+    "native-table-corpus/4/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-table-corpus/4/stdout.txt": {
+      "size": 90,
+      "sha256": "d536d0aaf7154894f9c0b2255de0a3da15c3d98e5298158357db7faedeea7346"
+    },
+    "native-table-corpus/5/CGTable.dat": {
+      "size": 531,
+      "sha256": "65a751d140359cdedbaa3c769c5aa896002f876c805732888e0518ed2899f509"
+    },
+    "native-table-corpus/5/native-replay.bin": {
+      "size": 531,
+      "sha256": "65a751d140359cdedbaa3c769c5aa896002f876c805732888e0518ed2899f509"
+    },
+    "native-table-corpus/5/native-table-dump.txt": {
+      "size": 1439,
+      "sha256": "d8d73098e28832dcb2296418a1cad9dc5d5a0e3473d58a1fbfac8586591f85a7"
+    },
+    "native-table-corpus/5/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-table-corpus/5/stdout.txt": {
+      "size": 87,
+      "sha256": "ed45a72e899344fa6b62a948d44006c100c7606d88ff0a838a4df2f041123fdd"
+    },
+    "native-table-corpus/6/CGTable.dat": {
+      "size": 531,
+      "sha256": "6df18bb458e8844ad0d59dad36bb0aed25011c2720fe5ec2f67194525f656ad7"
+    },
+    "native-table-corpus/6/native-replay.bin": {
+      "size": 531,
+      "sha256": "6df18bb458e8844ad0d59dad36bb0aed25011c2720fe5ec2f67194525f656ad7"
+    },
+    "native-table-corpus/6/native-table-dump.txt": {
+      "size": 1439,
+      "sha256": "d8d73098e28832dcb2296418a1cad9dc5d5a0e3473d58a1fbfac8586591f85a7"
+    },
+    "native-table-corpus/6/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-table-corpus/6/stdout.txt": {
+      "size": 87,
+      "sha256": "ed45a72e899344fa6b62a948d44006c100c7606d88ff0a838a4df2f041123fdd"
+    },
+    "native-table-corpus/7/CGTable.dat": {
+      "size": 4475,
+      "sha256": "ddf216f62f4c9f31595fa2672ccc419dbb4c990d18cd3a53fc1f8522dbf4b949"
+    },
+    "native-table-corpus/7/native-replay.bin": {
+      "size": 4475,
+      "sha256": "ddf216f62f4c9f31595fa2672ccc419dbb4c990d18cd3a53fc1f8522dbf4b949"
+    },
+    "native-table-corpus/7/native-table-dump.txt": {
+      "size": 36620,
+      "sha256": "429bdbcbbdd5865dd0e483107e05512fbccd26222f257170e9012e76aedea066"
+    },
+    "native-table-corpus/7/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-table-corpus/7/stdout.txt": {
+      "size": 90,
+      "sha256": "520f58b1010e38f34d392a8b7ea659c2a2238cbee777385c9507e7e3cf212a37"
+    },
+    "native-table-corpus/8/CGTable.dat": {
+      "size": 4529,
+      "sha256": "60a71f30eeca0f5b65f4b0eb319615bb5129d5080982f9c1c90e7cd78a2b8896"
+    },
+    "native-table-corpus/8/native-replay.bin": {
+      "size": 4529,
+      "sha256": "60a71f30eeca0f5b65f4b0eb319615bb5129d5080982f9c1c90e7cd78a2b8896"
+    },
+    "native-table-corpus/8/native-table-dump.txt": {
+      "size": 36710,
+      "sha256": "2fc5fa6b1c014531f3db6f2a7542f09ada5d38b851a0f7878fd7365ff9adc922"
+    },
+    "native-table-corpus/8/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-table-corpus/8/stdout.txt": {
+      "size": 90,
+      "sha256": "ffbeb934ef1f651921369a25b94e3773c2262c51712135659a8cf933116aaebb"
+    },
+    "native-table-corpus/9/CGTable.dat": {
+      "size": 78289,
+      "sha256": "4ee32e8fcac2888543da0127d3a4acce1580b1e31c055c34fe317b319078fb99"
+    },
+    "native-table-corpus/9/native-replay.bin": {
+      "size": 78289,
+      "sha256": "4ee32e8fcac2888543da0127d3a4acce1580b1e31c055c34fe317b319078fb99"
+    },
+    "native-table-corpus/9/native-table-dump.txt": {
+      "size": 714740,
+      "sha256": "0a619e796d0b4d0115724b84781b97dea688ecbc7e909496bfaf6d51113c2a4a"
+    },
+    "native-table-corpus/9/stderr.txt": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-table-corpus/9/stdout.txt": {
+      "size": 93,
+      "sha256": "d2812bd3e0331e3bbf95a0a62fdc66ffe278a588e734477a37b1017597682b4c"
+    },
+    "native-table-corpus/CompilerTableOracle.cs": {
+      "size": 5384,
+      "sha256": "2d584e236fb701fa1733ce99bda72133d4801076588d6300135ffaeece785cae"
+    },
+    "native-table-corpus/comparison.json": {
+      "size": 32539,
+      "sha256": "9ada77a934b84712bf6a4317634f3e9e20784ff5479218f0f2acd535ea2f7f8e"
+    },
+    "native-table-corpus/report.json": {
+      "size": 29103,
+      "sha256": "aef6c37eff9503a5936199c6e2823e817610956a75af61f654da7d3f9a7d34a6"
+    },
+    "public-scan/compiler-storage.json": {
+      "size": 1577515,
+      "sha256": "76e84eb1ec827819118a9c500ddf64c66c3fad86f19c9f51573d39b5109c5487"
+    },
+    "public-scan/native-decode/TokenOracle.cs": {
+      "size": 10999,
+      "sha256": "b4cf9b63141a7402718932e15d0e648df2b54cc343756ed3579638cb47360b50"
+    },
+    "public-scan/native-decode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "public-scan/native-decode/native-stdout.jsonl": {
+      "size": 13427,
+      "sha256": "e469d5ac6376415a6504ec86c5f54a2a01f3a13ac20da0eff813de70d212824f"
+    },
+    "public-scan/native-decode/process.json": {
+      "size": 250,
+      "sha256": "486282aaa7ab5ff004ddf8d697d7e665eb676f72b8c2d05289033ce57a38c70d"
+    },
+    "public-scan/native-decode/requests.json": {
+      "size": 10906,
+      "sha256": "28f04ac4ec833ea02c8298ba5a582ef1a89a919ab261b55c5cd889083fa65a19"
+    },
+    "public-scan/native-machinecode/TokenOracle.cs": {
+      "size": 10999,
+      "sha256": "b4cf9b63141a7402718932e15d0e648df2b54cc343756ed3579638cb47360b50"
+    },
+    "public-scan/native-machinecode/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "public-scan/native-machinecode/native-stdout.jsonl": {
+      "size": 8504,
+      "sha256": "39cfa2e579d6b8f201b210752eb8a31c84f87a7f986380497b96887a629737f0"
+    },
+    "public-scan/native-machinecode/process.json": {
+      "size": 250,
+      "sha256": "67a3e7d54769d96580b294dca15c4c762097f13c919315eb1fdd6e511a04790f"
+    },
+    "public-scan/native-machinecode/requests.json": {
+      "size": 11053,
+      "sha256": "683cde26f2367f97e083ba8eb1ced134398e17f8d2534e2c78ff2bab13f40729"
+    }
+  },
+  "native_scope": "offline compiler artifacts and token conversion; no GUI project compile/reopen in this experiment",
+  "summary": {
+    "compiler_storage_versions": 41,
+    "references": 61,
+    "maps": 33,
+    "complete_link_partitions": 33,
+    "unique_fragments_native_read_agreement": 35,
+    "active_fragment_step_agreement": 109,
+    "cgtable_native_replay": 12,
+    "component_name_and_offset_agreement": 1345,
+    "instance_reference_agreement": 38,
+    "debug2_stored_versions": 15
+  },
+  "retained_counterexamples": [
+    "Renamed TON cache rows have identical byte ranges to linked AUTO_TON rows but are flagged unlinked. Pre-fix report retained.",
+    "Two stored debug endpoints extend into the following FEND position. No freshness inferred."
+  ]
+}

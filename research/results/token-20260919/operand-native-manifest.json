@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "archive": "research/evidence/gxw-token-operands-20260920.zip",
+  "archive_sha256": "7b8fc37c4c185aacf6680790a76e5fa617016bd54c769ce5226881c7ca3c8edd",
+  "source_commit": "6ccde5f793afa50d5aaf2426696905f0028c5b4b",
+  "files": {
+    "samples/empty.gxw": {
+      "size": 921088,
+      "sha256": "002a780afd116666eb5455fca4ca8b64033ba9636b4a12a2ba658a269380c7f4"
+    },
+    "samples/generated.gxw": {
+      "size": 921600,
+      "sha256": "61ca9781034b7b8cc4edc3f84cea856ede16f4f5701a65c72449761cd73d17ef"
+    },
+    "samples/native-saved.gxw": {
+      "size": 921600,
+      "sha256": "e41ea61153f26ed1d09053796fe62620e5cc343d1c4ab94e6691544c496c97e2"
+    },
+    "native/reopened.csv": {
+      "size": 1866,
+      "sha256": "ed179728a00eb2f309b31c2fea6065c45c3b6371fe13fe8a0479a1c960882df2"
+    },
+    "input/instructions.txt": {
+      "size": 246,
+      "sha256": "320322a19d722eb39a2b98952a2c222f0f3a8fe8363e182a61b0a312aab6efcb"
+    },
+    "input/native-requests.json": {
+      "size": 1241,
+      "sha256": "ace3b0ee90f6caaec9f9dbd2a134500d068af2d7e0fde702e281ccc63262fa77"
+    },
+    "native/encoder-reply.jsonl": {
+      "size": 438,
+      "sha256": "749ac65ef6a25c74eeda7b59ce2241ab5b59eb7927dd4a7d5e6697b30fae657e"
+    },
+    "checks/patch.json": {
+      "size": 1352,
+      "sha256": "0612d189bcb31871e65a7c0c3ec0fb23ac13ab918250861144a68ddb53145b55"
+    },
+    "checks/native-csv-alignment.json": {
+      "size": 3433,
+      "sha256": "0e8e588dd0308e1e5408d4d5c604c24bb0aa71e7bc3f613b9a0fdc630517e5c0"
+    },
+    "checks/native-streams.json": {
+      "size": 707,
+      "sha256": "218929344ea8e29f81f51c5efe6e75aa7ab54b763fe719c442b4f37a3458818a"
+    },
+    "checks/native-text-roundtrip.json": {
+      "size": 3846,
+      "sha256": "aefe86c229ab187fc2729ea232d06256d9ebcf32be403f7ea07b76d4251527ff"
+    },
+    "screenshots/a-rechecked-reopened.png": {
+      "size": 149588,
+      "sha256": "78057499af86833e862fee038d7a90a3e144e8ab0c2372c2f0acc41814aa5126"
+    },
+    "screenshots/a-rechecked-closed.png": {
+      "size": 100867,
+      "sha256": "cedd689fa2f821663c9fa70bf11c1220c5e1ea3b4297f4c18a9c2942a2302ac1"
+    },
+    "screenshots/w-rechecked-reopened.png": {
+      "size": 148817,
+      "sha256": "4f57322f3b3ff0e2078d72a121fa27942fb0a6b306ecfdb2e05f036ed5f51acb"
+    },
+    "screenshots/w-rechecked-closed.png": {
+      "size": 94838,
+      "sha256": "6b975fcf445de2a7f7f31a5b08306debce1841bb20fd91781b4f6dd0f45f64d7"
+    }
+  },
+  "native_validation": {
+    "observer": "Actual GX Works2 UI through computer-use, 2026-09-20 Asia/Shanghai",
+    "GX_Works2_file_version": "1.635.0.1",
+    "CPU": "FX3U/FX3UC",
+    "mode": "offline",
+    "open": true,
+    "convert_all": {
+      "completed_to_editor_without_error_dialog": true,
+      "explicit_error_counter": "not displayed for this simple-project conversion"
+    },
+    "save": true,
+    "closed_to_empty_workspace": true,
+    "reopen": true,
+    "native_csv_instructions": 16,
+    "native_csv_steps": 90,
+    "native_csv_full_alignment": "agrees",
+    "before": "samples/generated.gxw",
+    "after": "samples/native-saved.gxw"
+  },
+  "writer": {
+    "pou_sizes": [
+      106,
+      348,
+      348
+    ],
+    "native_kept_generated_pou_bytes": true,
+    "res_unchanged_before_native_conversion": true,
+    "native_refreshed_res": true,
+    "native_res_contains_source_body": true,
+    "independent_cfb": [
+      {
+        "outer": "agrees",
+        "nested": "agrees"
+      },
+      {
+        "outer": "agrees",
+        "nested": "agrees"
+      },
+      {
+        "outer": "agrees",
+        "nested": "agrees"
+      }
+    ],
+    "project_hashes": [
+      "002a780afd116666eb5455fca4ca8b64033ba9636b4a12a2ba658a269380c7f4",
+      "61ca9781034b7b8cc4edc3f84cea856ede16f4f5701a65c72449761cd73d17ef",
+      "e41ea61153f26ed1d09053796fe62620e5cc343d1c4ab94e6691544c496c97e2"
+    ]
+  },
+  "operand_scope": [
+    "digit groups K1..K8",
+    "Z/V indexes",
+    "D bit selectors",
+    "32-bit H constants",
+    "decimal/scientific binary32",
+    "CP936 strings"
+  ],
+  "limits": [
+    "Offline native conversion is not proof of physical PLC execution or general model coverage",
+    "Float display is lossy; original tokens remain the authoritative source",
+    "Only newly captured reopened/closed screenshots are admitted; initial captures used a stale lexical state variable and are excluded"
+  ],
+  "prior_project_recheck": {
+    "project": "research/evidence/gxw-token-native-20260919.zip!samples/native-saved.gxw",
+    "sha256": "474da6da50eb6c5689254d32718b77995818a94a77da23752ca90eed3a6fca98",
+    "observed": "Opened 112-step MAIN, then closed to empty workspace; screenshots captured from explicit globalThis.state",
+    "screenshot": "screenshots/w-rechecked-reopened.png"
+  }
+}

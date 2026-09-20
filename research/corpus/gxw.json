@@ -1,0 +1,755 @@
+{
+  "schema": "gxw-corpus-v1",
+  "base": "../..",
+  "scope": "Controlled native and generated snapshots; byte duplicates retained as separate provenance entries. Native outcome pointers include failures; no compile/reopen run is implied by scanning.",
+  "cases": [
+    {
+      "id": "gxw-20260910/b0.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "b0.gxw",
+        "sha256": "e7fd76d81d8ab07ea0cb73f340a361d223ec22c4d8811b40d1264eaf0500ddd5"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-20260910/b1.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "b1.gxw",
+        "sha256": "768bcacda95bc5e065f7b08a3d2544b067288bb06f4f43da3737db300016d7bf"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/undeclared",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ],
+      "expected_native": {
+        "compile_errors": 3,
+        "warnings": 1,
+        "diagnostic_codes": [
+          "C2015",
+          "C2010",
+          "C2020",
+          "C2034"
+        ],
+        "case": "undeclared",
+        "status": "historical failure; parser acceptance cannot resolve it"
+      }
+    },
+    {
+      "id": "gxw-20260910/b2.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "b2.gxw",
+        "sha256": "814f16e7ba73798cc9c6ca1188b42f783f42d58f7064fd417890dbd3add7a075"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/declared",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ]
+    },
+    {
+      "id": "gxw-20260910/b2c.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "b2c.gxw",
+        "sha256": "4f8a7e0a2456205dd6e1431c5c0328a32d842a164c98818719dc03a576cccaec"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/declared",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ]
+    },
+    {
+      "id": "gxw-20260910/bu.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "bu.gxw",
+        "sha256": "b1315d07d12256157ea0cad1103b1f002f6270afc9e7f796f45f012ac7c28908"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/undeclared",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ]
+    },
+    {
+      "id": "gxw-20260910/f1.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "f1.gxw",
+        "sha256": "7e3763bea0c931fcb2446c184e1d6398169b6abe072d836d5f99c21c52c5a371"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/mixed_rejected",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ],
+      "expected_native": {
+        "compile_errors": 1,
+        "warnings": 1,
+        "diagnostic_codes": [
+          "C2028",
+          "C2009"
+        ],
+        "case": "mixed_rejected",
+        "status": "historical failure; parser acceptance cannot resolve it"
+      }
+    },
+    {
+      "id": "gxw-20260910/f1c.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "f1c.gxw",
+        "sha256": "d000fc74b52214847f9018012785caa18b769e23b19782a773ba700af344e8e7"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/mixed_rejected",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ]
+    },
+    {
+      "id": "gxw-20260910/f2.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "f2.gxw",
+        "sha256": "df912495c7820f7b0d73477cfc1de3714178e0eb6c49c4ea8030b107b2f9fd6a"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/fb_explicit",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ]
+    },
+    {
+      "id": "gxw-20260910/f2c.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "f2c.gxw",
+        "sha256": "eced96d5caeca5f031a101d656ee1552b1802073dfa73fe30b03f188b40317f7"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/fb_explicit",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ]
+    },
+    {
+      "id": "gxw-20260910/fn.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "fn.gxw",
+        "sha256": "b6834a1c1dc534c1837867d2ecdf4268523aa5ce3d308a8964569319c64d3d8e"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/function_mov",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ]
+    },
+    {
+      "id": "gxw-20260910/fnc.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "fnc.gxw",
+        "sha256": "6f84d9c17780ca9681db1ab712a386a57956635d8a09a85b04f7dc979d8b9f3e"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/function_mov",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ]
+    },
+    {
+      "id": "gxw-20260910/regression/A.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "regression/A.gxw",
+        "sha256": "4d0b35230dd37eba1329988e74738922033d851e1f0d4e707473a5721b05093c"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-20260910/regression/B.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "regression/B.gxw",
+        "sha256": "082b6a5420c93f668168593fc7d632f34a501d62b1157aaf6aa42e9ce63df7a3"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-20260910/regression/C.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "regression/C.gxw",
+        "sha256": "7a1a5f35c8151b7fe755b77bb22e0ad215913c51bb18f856d43dea5bd66b323f"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-20260910/regression/D.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "regression/D.gxw",
+        "sha256": "c01d862578a6c18cdeddbb9dfc77379881c6766027697b61c6448f98a503c188"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-20260910/regression/E.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "regression/E.gxw",
+        "sha256": "0eb6e8d0651aaf16637293f01c6326f6699f35f77ccbd8197dd44f86ad772410"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-20260910/regression/F.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "regression/F.gxw",
+        "sha256": "5ea24b6256a82345f284669fba8b6aef7dcb8e3195df9a43ee2f0105183f1ee3"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-20260910/s.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "s.gxw",
+        "sha256": "4fb7e36a560f5c59009a40f55e776aca23a8803bbc9b78500cd60904463139c6"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/series",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ]
+    },
+    {
+      "id": "gxw-20260910/sc.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "sc.gxw",
+        "sha256": "bc9915e36785747ddc872fe6dd63c27025f323a7222bf951582d3699bb69303f"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/series",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ]
+    },
+    {
+      "id": "gxw-20260910/t1.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "t1.gxw",
+        "sha256": "6597699803f189a07ef081499bbc25e1058a2a975c27a65a36383060ee6b481d"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/type_mismatch",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ],
+      "expected_native": {
+        "compile_errors": 1,
+        "warnings": 0,
+        "diagnostic_codes": [
+          "C2015"
+        ],
+        "case": "type_mismatch",
+        "status": "historical failure; parser acceptance cannot resolve it"
+      }
+    },
+    {
+      "id": "gxw-20260910/t2.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "t2.gxw",
+        "sha256": "ff7ed97c1275913beca2764e0429d33cb25013283bf34cd81da34ce9b9cd8e24"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/type_fixed",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ]
+    },
+    {
+      "id": "gxw-20260910/t2c.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "t2c.gxw",
+        "sha256": "2b3c0b6bb2565be28aa2cf1826ff251dc1ed0105d227dc84a5606952b106afc9"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/type_fixed",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ]
+    },
+    {
+      "id": "gxw-20260910/tu.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "tu.gxw",
+        "sha256": "59aaac2c451f15072fd17b31b98b79c160b51888dd69ab76a68acc740ff9a897"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/type_mismatch",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ]
+    },
+    {
+      "id": "gxw-abi-checkpoint-20260919/frozen/base_spaced.gxw",
+      "source": {
+        "path": "research/evidence/gxw-abi-checkpoint-20260919.zip",
+        "member": "frozen/base_spaced.gxw",
+        "sha256": "26b28bfacd5c3024d605a033191c0650384ad3da244ea0006b5cb123f0fb88e5"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-abi-checkpoint-20260919/frozen/set_direct.gxw",
+      "source": {
+        "path": "research/evidence/gxw-abi-checkpoint-20260919.zip",
+        "member": "frozen/set_direct.gxw",
+        "sha256": "4d4fad62f22c54ac0a80da6428c80af7eef5d08a09d1ca4b95e4da9d1afae443"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-abi-checkpoint-20260919/frozen/set_direct_compile.gxw",
+      "source": {
+        "path": "research/evidence/gxw-abi-checkpoint-20260919.zip",
+        "member": "frozen/set_direct_compile.gxw",
+        "sha256": "c5ea7ee3a1e9c2130f734cc8dd5f2a9fbf314252cb510e1f23814e8371621ca8"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-abi-checkpoint-20260919/frozen/set_spaced.gxw",
+      "source": {
+        "path": "research/evidence/gxw-abi-checkpoint-20260919.zip",
+        "member": "frozen/set_spaced.gxw",
+        "sha256": "08c69238832527bd5601dc596e0bfbdcdf5535be6411b057e5283e3e3ea8d547"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-abi-checkpoint-20260919/frozen/set_spaced_compile.gxw",
+      "source": {
+        "path": "research/evidence/gxw-abi-checkpoint-20260919.zip",
+        "member": "frozen/set_spaced_compile.gxw",
+        "sha256": "df5c8c7e194a792804d8cd478a5618c7cca787fa398dd3c2dbecaeb55e5eeec3"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-abi-checkpoint-20260919/pending/rst_direct_recovered.gxw",
+      "source": {
+        "path": "research/evidence/gxw-abi-checkpoint-20260919.zip",
+        "member": "pending/rst_direct_recovered.gxw",
+        "sha256": "9d78ba3794472028b4ddd39532cdf64a2cc70cedb2b80581632fed7e5c206e07"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-block-boundary-20260913/samples/A.gxw",
+      "source": {
+        "path": "research/evidence/gxw-block-boundary-20260913.zip",
+        "member": "samples/A.gxw",
+        "sha256": "9e5d9419ebba0c856ccb4677fc69cba2be00d59f19076b84f6bad098af75b7e8"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-block-boundary-20260913/samples/B.gxw",
+      "source": {
+        "path": "research/evidence/gxw-block-boundary-20260913.zip",
+        "member": "samples/B.gxw",
+        "sha256": "34ee375e148be6db2f27cf11f18ae412ef2e6525b23845d72361208706e2f64e"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-block-boundary-20260913/samples/B_edit.gxw",
+      "source": {
+        "path": "research/evidence/gxw-block-boundary-20260913.zip",
+        "member": "samples/B_edit.gxw",
+        "sha256": "1485458edd1ec8422d9a21a7133c836972e8199688afa44663e83dca4a1baae0"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-block-boundary-20260913/samples/C.gxw",
+      "source": {
+        "path": "research/evidence/gxw-block-boundary-20260913.zip",
+        "member": "samples/C.gxw",
+        "sha256": "1af0c540f1cc86993e17732c5163e147ddfc21d23c7fc318fed72758ace6dc53"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-block-boundary-20260913/samples/C_edit.gxw",
+      "source": {
+        "path": "research/evidence/gxw-block-boundary-20260913.zip",
+        "member": "samples/C_edit.gxw",
+        "sha256": "4c9f6cf4c427d546a0208435a0cb2cda668bafcbee22b9a380c2b54e7358edbe"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-block-boundary-20260913/samples/D.gxw",
+      "source": {
+        "path": "research/evidence/gxw-block-boundary-20260913.zip",
+        "member": "samples/D.gxw",
+        "sha256": "a35cab98b65bb893e891b6223d012305d2bcf7eb9f8fd03fc977c6bb0a303bad"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-block-boundary-20260913/samples/D_edit.gxw",
+      "source": {
+        "path": "research/evidence/gxw-block-boundary-20260913.zip",
+        "member": "samples/D_edit.gxw",
+        "sha256": "0437b8288ef620a70a771c75335f9c1d7f744b7447261d960eef05701898e2b1"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-block-boundary-20260913/samples/D_noedit.gxw",
+      "source": {
+        "path": "research/evidence/gxw-block-boundary-20260913.zip",
+        "member": "samples/D_noedit.gxw",
+        "sha256": "3fb7f9c0bac65a0a5e342ca967d63a101bf302c466327f75cc2ab27cb226cf87"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-block-boundary-20260913/samples/E.gxw",
+      "source": {
+        "path": "research/evidence/gxw-block-boundary-20260913.zip",
+        "member": "samples/E.gxw",
+        "sha256": "e38d8263f926fc3b02f62710f7bd36e2bbf80bdadb98ff0b36fb1d6d768be701"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-block-boundary-20260913/samples/E_edit.gxw",
+      "source": {
+        "path": "research/evidence/gxw-block-boundary-20260913.zip",
+        "member": "samples/E_edit.gxw",
+        "sha256": "ccbd6f2e08e65a9d987e9c6573a9f9221873eb95330d9ba85791c0c2ffe9d5aa"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-block-boundary-20260913/samples/M1.gxw",
+      "source": {
+        "path": "research/evidence/gxw-block-boundary-20260913.zip",
+        "member": "samples/M1.gxw",
+        "sha256": "2c08a8a818e69ba10d26543d3547fdbf5b5248c645cf5764087864e54e40cc9f"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-block-boundary-20260913/samples/M1_compile.gxw",
+      "source": {
+        "path": "research/evidence/gxw-block-boundary-20260913.zip",
+        "member": "samples/M1_compile.gxw",
+        "sha256": "b10dfff51031ef46028021ec4595fea220c0970205d887d701fd0268cc2abbb7"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-block-generation-20260913/samples/R.gxw",
+      "source": {
+        "path": "research/evidence/gxw-block-generation-20260913.zip",
+        "member": "samples/R.gxw",
+        "sha256": "56e78a3475831781c559533bc7af1a162881bd52ca95be515e6386a240e85f05"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-block-generation-20260913/samples/R_compile.gxw",
+      "source": {
+        "path": "research/evidence/gxw-block-generation-20260913.zip",
+        "member": "samples/R_compile.gxw",
+        "sha256": "082f66dd2e5f7dea4e665cbb79054a631eabed6e3fca16f5970037068e70933b"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-generation-20260910/auto_decl.gxw",
+      "source": {
+        "path": "research/evidence/gxw-generation-20260910.zip",
+        "member": "auto_decl.gxw",
+        "sha256": "707f6898cfd088d4addb171419ce12724b4d01d71399d9e4cf153d6713b515d3"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-generation-20260910/auto_decl_compile.gxw",
+      "source": {
+        "path": "research/evidence/gxw-generation-20260910.zip",
+        "member": "auto_decl_compile.gxw",
+        "sha256": "2aad1ef9b10563be31e17c12569234fef27c3a25fc69d35b44468ef2e9d030dc"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-generation-20260910/d0.gxw",
+      "source": {
+        "path": "research/evidence/gxw-generation-20260910.zip",
+        "member": "d0.gxw",
+        "sha256": "b6834a1c1dc534c1837867d2ecdf4268523aa5ce3d308a8964569319c64d3d8e"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/function_mov",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ]
+    },
+    {
+      "id": "gxw-generation-20260910/dconst.gxw",
+      "source": {
+        "path": "research/evidence/gxw-generation-20260910.zip",
+        "member": "dconst.gxw",
+        "sha256": "b9d52706f7c2184d1b54d5940152d11b7947fe45ed4bb4e2ad0bd4e738364525"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-generation-20260910/dglobal.gxw",
+      "source": {
+        "path": "research/evidence/gxw-generation-20260910.zip",
+        "member": "dglobal.gxw",
+        "sha256": "7c350c0d470025e24a1649834ea0fd202e04304c4146e2b981a88123cdbbabcd"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-generation-20260910/dtypes.gxw",
+      "source": {
+        "path": "research/evidence/gxw-generation-20260910.zip",
+        "member": "dtypes.gxw",
+        "sha256": "36b6efc99481e79d11cbf5857feb2fcd37b9841657598b14e6338626d05e6aca"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-generation-20260910/fresh_fbd.gxw",
+      "source": {
+        "path": "research/evidence/gxw-generation-20260910.zip",
+        "member": "fresh_fbd.gxw",
+        "sha256": "5780018d400c1218da12e103185ab734d8195d4d2056118062f16f349c9cfc71"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-generation-20260910/fresh_fbd_compile.gxw",
+      "source": {
+        "path": "research/evidence/gxw-generation-20260910.zip",
+        "member": "fresh_fbd_compile.gxw",
+        "sha256": "1dc01bda32c74bd86417412ea675cda3d06a66ab1abc2bddbe2c2c9bc35b0814"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-generation-20260910/relay_parallel.gxw",
+      "source": {
+        "path": "research/evidence/gxw-generation-20260910.zip",
+        "member": "relay_parallel.gxw",
+        "sha256": "f8b1ac4d43daffd9dd0a8c79dc89a1dab9f77ca98b3349c71af375fdc1aceef3"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-generation-20260910/relay_parallel_compile.gxw",
+      "source": {
+        "path": "research/evidence/gxw-generation-20260910.zip",
+        "member": "relay_parallel_compile.gxw",
+        "sha256": "0f3d08d17e9f58af9a965e432672d2c1aca365da723da60552fe4485576fa480"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-lossless-20260919/samples/base.gxw",
+      "source": {
+        "path": "research/evidence/gxw-lossless-20260919.zip",
+        "member": "samples/base.gxw",
+        "sha256": "df5c8c7e194a792804d8cd478a5618c7cca787fa398dd3c2dbecaeb55e5eeec3"
+      },
+      "recorded_observations": []
+    },
+    {
+      "id": "gxw-lossless-20260919/samples/p.gxw",
+      "source": {
+        "path": "research/evidence/gxw-lossless-20260919.zip",
+        "member": "samples/p.gxw",
+        "sha256": "4e49661ee9f2f88e53e0277466115eb0ea79c2197d34105e0e82e0044ab70bfe"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/lossless-20260919/native-manifest.json",
+          "sha256": "a7a82030a2d7e96ec5fec8fc66f97cc6c6e137dfc4c2d1b16b1e4fa5df6932ed",
+          "json_pointer": "/native_validation",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ]
+    },
+    {
+      "id": "gxw-lossless-20260919/samples/p_compile.gxw",
+      "source": {
+        "path": "research/evidence/gxw-lossless-20260919.zip",
+        "member": "samples/p_compile.gxw",
+        "sha256": "f7a8530c2835c9e02e33c824dbfa544229d591de8402dec063a3377192896095"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/lossless-20260919/native-manifest.json",
+          "sha256": "a7a82030a2d7e96ec5fec8fc66f97cc6c6e137dfc4c2d1b16b1e4fa5df6932ed",
+          "json_pointer": "/native_validation",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ]
+    },
+    {
+      "id": "token-native-20260919/samples/empty.gxw",
+      "source": {
+        "path": "research/evidence/gxw-token-native-20260919.zip",
+        "member": "samples/empty.gxw",
+        "sha256": "002a780afd116666eb5455fca4ca8b64033ba9636b4a12a2ba658a269380c7f4"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/token-20260919/native-manifest.json",
+          "sha256": "1d889fdc734d2dea55314db7831a8fc215f9b7ab5da6ed081ef5c3ac1a2ec4bd",
+          "json_pointer": "/native_validation",
+          "status": "recorded GUI conversion/reopen for generated/native-saved pair only; empty is baseline"
+        }
+      ]
+    },
+    {
+      "id": "token-native-20260919/samples/generated.gxw",
+      "source": {
+        "path": "research/evidence/gxw-token-native-20260919.zip",
+        "member": "samples/generated.gxw",
+        "sha256": "e8a3d645b700e4a1a0b0d6a317c9ff3c90b360b8cf9adb67b3c950e5649f3a41"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/token-20260919/native-manifest.json",
+          "sha256": "1d889fdc734d2dea55314db7831a8fc215f9b7ab5da6ed081ef5c3ac1a2ec4bd",
+          "json_pointer": "/native_validation",
+          "status": "recorded GUI conversion/reopen for generated/native-saved pair only; empty is baseline"
+        }
+      ]
+    },
+    {
+      "id": "token-native-20260919/samples/native-saved.gxw",
+      "source": {
+        "path": "research/evidence/gxw-token-native-20260919.zip",
+        "member": "samples/native-saved.gxw",
+        "sha256": "474da6da50eb6c5689254d32718b77995818a94a77da23752ca90eed3a6fca98"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/token-20260919/native-manifest.json",
+          "sha256": "1d889fdc734d2dea55314db7831a8fc215f9b7ab5da6ed081ef5c3ac1a2ec4bd",
+          "json_pointer": "/native_validation",
+          "status": "recorded GUI conversion/reopen for generated/native-saved pair only; empty is baseline"
+        }
+      ]
+    },
+    {
+      "id": "token-operands-20260920/samples/generated.gxw",
+      "source": {
+        "path": "research/evidence/gxw-token-operands-20260920.zip",
+        "member": "samples/generated.gxw",
+        "sha256": "61ca9781034b7b8cc4edc3f84cea856ede16f4f5701a65c72449761cd73d17ef"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/token-20260919/operand-native-manifest.json",
+          "sha256": "d58e3a49d348b10143ad01e19053dc2b886cbc081d6dd5fa7d75e3532100e393",
+          "json_pointer": "/native_validation",
+          "status": "recorded native open/offline conversion/save/reopen/CSV; not replayed by scanner"
+        }
+      ]
+    },
+    {
+      "id": "token-operands-20260920/samples/native-saved.gxw",
+      "source": {
+        "path": "research/evidence/gxw-token-operands-20260920.zip",
+        "member": "samples/native-saved.gxw",
+        "sha256": "e41ea61153f26ed1d09053796fe62620e5cc343d1c4ab94e6691544c496c97e2"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/token-20260919/operand-native-manifest.json",
+          "sha256": "d58e3a49d348b10143ad01e19053dc2b886cbc081d6dd5fa7d75e3532100e393",
+          "json_pointer": "/native_validation",
+          "status": "recorded native open/offline conversion/save/reopen/CSV; not replayed by scanner"
+        }
+      ]
+    }
+  ]
+}

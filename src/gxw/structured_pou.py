@@ -168,11 +168,15 @@ def parse_structured_pou(
     *,
     logical_name: str = "<Program.pou>",
     source_path: Optional[Path] = None,
+    preserve_unsupported_records: bool = False,
 ) -> StructuredProgram:
     """Parse the observed GX Works2 Structured Ladder/FBD Program.pou format.
 
     The parser is deliberately strict about the controlled-sample invariants so
     unsupported layouts fail closed instead of being silently mis-decoded.
+    The explicit inspection option preserves an undecodable *bounded record* as
+    opaque. It never relaxes block boundaries or trailer checks. Writers retain
+    the strict default; this option is not permission to regenerate that record.
     """
 
     if len(data) < STRUCTURED_RECORDS_OFFSET + OBSERVED_TRAILER_SIZE:
@@ -209,11 +213,16 @@ def parse_structured_pou(
                 raise GXWFormatError(f"record crosses block boundary at 0x{cursor:X}")
             record = data[cursor:cursor + record_length]
             record_class = _u32(record, 4)
-            if record_class == 1:
-                nodes.append(_parse_node(record, cursor))
-            elif record_class == 2:
-                wires.append(_parse_wire(record, cursor))
-            else:
+            try:
+                if record_class == 1:
+                    nodes.append(_parse_node(record, cursor))
+                elif record_class == 2:
+                    wires.append(_parse_wire(record, cursor))
+                else:
+                    unknown.append(UnknownRecord(cursor, record_length, record_class, record))
+            except GXWFormatError:
+                if not preserve_unsupported_records:
+                    raise
                 unknown.append(UnknownRecord(cursor, record_length, record_class, record))
             offsets.append(cursor)
             cursor += record_length

@@ -1,0 +1,86 @@
+{
+  "schema": "gxw-corpus-v1",
+  "base": "../..",
+  "scope": "Historical native failures retained even though structural parsers accept the files. No GUI replay in automated tests.",
+  "cases": [
+    {
+      "id": "gxw-20260910/b1.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "b1.gxw",
+        "sha256": "768bcacda95bc5e065f7b08a3d2544b067288bb06f4f43da3737db300016d7bf"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/undeclared",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ],
+      "expected_native": {
+        "compile_errors": 3,
+        "warnings": 1,
+        "diagnostic_codes": [
+          "C2015",
+          "C2010",
+          "C2020",
+          "C2034"
+        ],
+        "case": "undeclared",
+        "status": "historical failure; parser acceptance cannot resolve it"
+      }
+    },
+    {
+      "id": "gxw-20260910/f1.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "f1.gxw",
+        "sha256": "7e3763bea0c931fcb2446c184e1d6398169b6abe072d836d5f99c21c52c5a371"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/mixed_rejected",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ],
+      "expected_native": {
+        "compile_errors": 1,
+        "warnings": 1,
+        "diagnostic_codes": [
+          "C2028",
+          "C2009"
+        ],
+        "case": "mixed_rejected",
+        "status": "historical failure; parser acceptance cannot resolve it"
+      }
+    },
+    {
+      "id": "gxw-20260910/t1.gxw",
+      "source": {
+        "path": "research/evidence/gxw-20260910.zip",
+        "member": "t1.gxw",
+        "sha256": "6597699803f189a07ef081499bbc25e1058a2a975c27a65a36383060ee6b481d"
+      },
+      "recorded_observations": [
+        {
+          "path": "research/results/gxworks_validation.json",
+          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "json_pointer": "/cases/type_mismatch",
+          "status": "recorded-native-observation; not replayed by scanner"
+        }
+      ],
+      "expected_native": {
+        "compile_errors": 1,
+        "warnings": 0,
+        "diagnostic_codes": [
+          "C2015"
+        ],
+        "case": "type_mismatch",
+        "status": "historical failure; parser acceptance cannot resolve it"
+      }
+    }
+  ]
+}

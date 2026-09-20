@@ -1,0 +1,52 @@
+{
+  "evidence_verification": [
+    {
+      "manifest": "research/results/abi-checkpoint-20260919/evidence-manifest.json",
+      "manifest_sha256": "199e4c832148bc235e850762ec7350cc88b72b83742b269c31066e37173d04a4",
+      "archive": "research/evidence/gxw-abi-checkpoint-20260919.zip",
+      "archive_sha256": "902f38e79f0478cf414acacf70495eb362d5ff552f319eeb10deb5df1f3fda8a",
+      "verified_members": 17,
+      "verified_external_screenshots": 0
+    },
+    {
+      "manifest": "research/results/block-boundary-20260913/evidence-manifest.json",
+      "manifest_sha256": "1bc82f6eddcd6976331b624e23a0e8babc59487977228e50dc2032c1f99d300a",
+      "archive": "research/evidence/gxw-block-boundary-20260913.zip",
+      "archive_sha256": "c2ef4158cb2bf84165f35b235b6262f44b802cdf3210e5b1f0fc421872b1a334",
+      "verified_members": 29,
+      "verified_external_screenshots": 0
+    },
+    {
+      "manifest": "research/results/block-boundary-20260913/generation-evidence-manifest.json",
+      "manifest_sha256": "06e5ee64b8be2dc87c5d75dd0c5006b2f0e8f0d161bf0730e19e85f539d17a00",
+      "archive": "research/evidence/gxw-block-generation-20260913.zip",
+      "archive_sha256": "48c00d37fec1a9a1ed53ab8c14ec7c5fb618268d4beb0f93a9efd23e31113e9c",
+      "verified_members": 5,
+      "verified_external_screenshots": 0
+    },
+    {
+      "manifest": "research/results/evidence_manifest.json",
+      "manifest_sha256": "c8587445d044a491999facd1bd05ffcf40692cd84fded73c206e7331995be896",
+      "archive": "research/evidence/gxw-20260910.zip",
+      "archive_sha256": "4c53c1faf75e03cb676a0b317d53f724082734a4875e3f0eead53b0310c9d9cf",
+      "verified_members": 23,
+      "verified_external_screenshots": 11
+    },
+    {
+      "manifest": "research/results/generation-evidence-manifest.json",
+      "manifest_sha256": "a02fb39b43b4f03f0bd2f34f23552a1d2f74b445f3d7b46e9fab5f85c13aab67",
+      "archive": "research/evidence/gxw-generation-20260910.zip",
+      "archive_sha256": "ba16824d02d131835ebb462bfbf8e527e3e58cdf2d50c94b5ef77d85be25c8d0",
+      "verified_members": 14,
+      "verified_external_screenshots": 6
+    },
+    {
+      "manifest": "research/results/lossless-20260919/native-manifest.json",
+      "manifest_sha256": "a7a82030a2d7e96ec5fec8fc66f97cc6c6e137dfc4c2d1b16b1e4fa5df6932ed",
+      "archive": "research/evidence/gxw-lossless-20260919.zip",
+      "archive_sha256": "885aa2354e9bc24fed5c5292e035c57e17754410520c91614f610af650331427",
+      "verified_members": 7,
+      "verified_external_screenshots": 0
+    }
+  ]
+}

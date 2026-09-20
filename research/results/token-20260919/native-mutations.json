@@ -1,0 +1,195 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-19",
+  "scope": "local offline FX3U simple Ladder; GUI conversion, no device connection",
+  "base_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+  "token_offset": 213,
+  "old_value": 100000,
+  "cases": [
+    {
+      "input": "u-patched.gxw",
+      "native_saved": "u.gxw",
+      "csv": "u-before.csv",
+      "new_value": 100001,
+      "input_sha256": "5e2575f252157f04d64a24da76d8cef6980e4556c497329309d41f8a732241d3",
+      "saved_sha256": "14341be596229cd48456ee991d87a7f1f2164a5c88f027ea6df4c2ad62b90dbe",
+      "csv_sha256": "0d1f45036818cdda526eeb36dbc638748fa253bf752b7462c4a90864e1023e18",
+      "pou_lengths": [
+        4697,
+        4697
+      ],
+      "pou_identical_after_native_save": true,
+      "input_res_unchanged": true,
+      "native_res_changed": true,
+      "native_res_contains_new_source_body": true,
+      "native_alignment": {
+        "status": "agrees",
+        "instructions": 234,
+        "texts": 142,
+        "encoded_steps": 561,
+        "conflicts": []
+      },
+      "native_csv_changed_instructions": [
+        3
+      ],
+      "native_csv_texts_identical": true,
+      "gui_observations": {
+        "opened": true,
+        "convert_all_returned_to_editor_without_error_dialog": true,
+        "explicit_error_counter": "not displayed by this simple-project conversion",
+        "saved": true,
+        "closed_to_empty_workspace": true,
+        "reopened": false,
+        "csv_timing": "before conversion"
+      }
+    },
+    {
+      "input": "v-input.gxw",
+      "native_saved": "v.gxw",
+      "csv": "v-reopened.csv",
+      "new_value": 20000000,
+      "input_sha256": "9e1a97c002ebfad92162e4f7a842022bd4dc2b963aa2576753ca38f7b3ec2c58",
+      "saved_sha256": "b7d5c2a38263378636b62ef0c28816d798017d94b58c8b1892c0730137e7a633",
+      "csv_sha256": "987d121db3691680fd491154f4bee12209a420df6a9c81eb37aacb1d984cd036",
+      "pou_lengths": [
+        4697,
+        4698
+      ],
+      "pou_identical_after_native_save": true,
+      "input_res_unchanged": true,
+      "native_res_changed": true,
+      "native_res_contains_new_source_body": true,
+      "native_alignment": {
+        "status": "agrees",
+        "instructions": 234,
+        "texts": 142,
+        "encoded_steps": 561,
+        "conflicts": []
+      },
+      "native_csv_changed_instructions": [
+        3
+      ],
+      "native_csv_texts_identical": true,
+      "gui_observations": {
+        "opened": true,
+        "convert_all_returned_to_editor_without_error_dialog": true,
+        "explicit_error_counter": "not displayed by this simple-project conversion",
+        "saved": true,
+        "closed_to_empty_workspace": true,
+        "reopened": true,
+        "csv_timing": "after reopen"
+      }
+    }
+  ],
+  "artifacts": {
+    "local_directory": "D:\\gxworks-agent\\research\\experiments\\token-20260919",
+    "files": {
+      "empty-comments.csv": {
+        "sha256": "e4fabd35db25786206f0e63bab55b8fba6c87d12c600a9df3b7c2365033c5135",
+        "size": 50
+      },
+      "f-decoded.csv": {
+        "sha256": "6750eb1d65adb02ee35e814ff77b7892a91600d60a719733ccef7eac9b9e293c",
+        "size": 10230
+      },
+      "f-export.png": {
+        "sha256": "35f6c09b6462b570e660d4c96a6a8bff97237ef092edb6c6189f56cfa32e6c6a",
+        "size": 118007,
+        "evidence_status": "invalid-observation: stale screenshot payload; hash retained only for provenance"
+      },
+      "f.csv": {
+        "sha256": "b6afa2267a44796adbeeb8e23d5c3af9cc6ff6f6a6717e80c4f412809fc56cf7",
+        "size": 10266
+      },
+      "f.gxw": {
+        "sha256": "7a6c3522aa49708415b5adfba4da0a7b9f3c459c6863fe48c335cf61321b44eb",
+        "size": 924160
+      },
+      "MAIN.csv": {
+        "sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+        "size": 27438
+      },
+      "s-decoded.csv": {
+        "sha256": "fe4af9236facf2d1b22f003ca77219e65a6372006913a2d69c0c2a6d272fa451",
+        "size": 3040
+      },
+      "s-export.png": {
+        "sha256": "35f6c09b6462b570e660d4c96a6a8bff97237ef092edb6c6189f56cfa32e6c6a",
+        "size": 118007,
+        "evidence_status": "invalid-observation: stale screenshot payload; hash retained only for provenance"
+      },
+      "s.csv": {
+        "sha256": "5324d3b68f6cdbbb010e770dd7b91a5b27d405c432c1dbb428f39961ef2d8014",
+        "size": 3072
+      },
+      "s.gxw": {
+        "sha256": "3e5c7ef5ecc6e49798960ca650ff64cb61e44c486b0f3f4fc63227516d47d05b",
+        "size": 917504
+      },
+      "t-cli.csv": {
+        "sha256": "4aa59e70e7d9e97c9de26a0371c9df39bf4a6653451365591c342cd61d813e26",
+        "size": 27320
+      },
+      "t-decoded.csv": {
+        "sha256": "4aa59e70e7d9e97c9de26a0371c9df39bf4a6653451365591c342cd61d813e26",
+        "size": 27320
+      },
+      "t-export.png": {
+        "sha256": "35f6c09b6462b570e660d4c96a6a8bff97237ef092edb6c6189f56cfa32e6c6a",
+        "size": 118007,
+        "evidence_status": "invalid-observation: stale screenshot payload; hash retained only for provenance"
+      },
+      "t.gxw": {
+        "sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+        "size": 930304
+      },
+      "u-before.csv": {
+        "sha256": "0d1f45036818cdda526eeb36dbc638748fa253bf752b7462c4a90864e1023e18",
+        "size": 27438
+      },
+      "u-converted.png": {
+        "sha256": "35f6c09b6462b570e660d4c96a6a8bff97237ef092edb6c6189f56cfa32e6c6a",
+        "size": 118007,
+        "evidence_status": "invalid-observation: stale screenshot payload; hash retained only for provenance"
+      },
+      "u-patched.gxw": {
+        "sha256": "5e2575f252157f04d64a24da76d8cef6980e4556c497329309d41f8a732241d3",
+        "size": 930304
+      },
+      "u.gxw": {
+        "sha256": "14341be596229cd48456ee991d87a7f1f2164a5c88f027ea6df4c2ad62b90dbe",
+        "size": 934400
+      },
+      "v-converted.png": {
+        "sha256": "35f6c09b6462b570e660d4c96a6a8bff97237ef092edb6c6189f56cfa32e6c6a",
+        "size": 118007,
+        "evidence_status": "invalid-observation: stale screenshot payload; hash retained only for provenance"
+      },
+      "v-input.gxw": {
+        "sha256": "9e1a97c002ebfad92162e4f7a842022bd4dc2b963aa2576753ca38f7b3ec2c58",
+        "size": 930304
+      },
+      "v-reopened.csv": {
+        "sha256": "987d121db3691680fd491154f4bee12209a420df6a9c81eb37aacb1d984cd036",
+        "size": 27442
+      },
+      "v-reopened.png": {
+        "sha256": "35f6c09b6462b570e660d4c96a6a8bff97237ef092edb6c6189f56cfa32e6c6a",
+        "size": 118007,
+        "evidence_status": "invalid-observation: stale screenshot payload; hash retained only for provenance"
+      },
+      "v.gxw": {
+        "sha256": "b7d5c2a38263378636b62ef0c28816d798017d94b58c8b1892c0730137e7a633",
+        "size": 934400
+      }
+    }
+  },
+  "allocation_scope": "both inputs remain within existing allocations; no native cross-allocation claim",
+  "artifact_errata": {
+    "date": "2026-09-20",
+    "invalid_sha256": "35f6c09b6462b570e660d4c96a6a8bff97237ef092edb6c6189f56cfa32e6c6a",
+    "reason": "A lexical state binding shadowed globalThis.state during screenshot saving. The displayed computer-use observations were current, but these saved PNGs all contain an older frame. They cannot attest their named stages.",
+    "handling": "Retain original hashes/archives and invalidate screenshot observation claims; project and native CSV hashes remain valid.",
+    "supplemental_manifest": "research/results/token-20260919/operand-native-manifest.json"
+  }
+}

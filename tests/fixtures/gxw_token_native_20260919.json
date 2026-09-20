@@ -1,0 +1,672 @@
+{
+  "scope": "Minimized native instruction byte slices and separately exported CSV expectations; each slice is not a standalone native program",
+  "method": "research/align_gxw_tokens.py; complete source alignments checked before minimizing",
+  "cases": [
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 145,
+      "native_step": 0,
+      "opcode": "LDP",
+      "operands": [
+        "M8002"
+      ],
+      "raw_hex": "040202040590421f05",
+      "step_width": 2
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 1177,
+      "native_step": 140,
+      "opcode": "LDP",
+      "operands": [
+        "X1"
+      ],
+      "raw_hex": "04020204049c0104",
+      "step_width": 2
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 154,
+      "native_step": 2,
+      "opcode": "MOV",
+      "operands": [
+        "K1",
+        "D0"
+      ],
+      "raw_hex": "054c05000504e8010404a80004",
+      "step_width": 5
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 182,
+      "native_step": 7,
+      "opcode": "MOV",
+      "operands": [
+        "K0",
+        "D8342"
+      ],
+      "raw_hex": "054c05000504e8000405a8962005",
+      "step_width": 5
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 269,
+      "native_step": 30,
+      "opcode": "MOV",
+      "operands": [
+        "K1000",
+        "D8345"
+      ],
+      "raw_hex": "054c05000505e8e8030505a8992005",
+      "step_width": 5
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 208,
+      "native_step": 12,
+      "opcode": "DMOV",
+      "operands": [
+        "K100000",
+        "D8343"
+      ],
+      "raw_hex": "054c09010506e9a086010605a8972005",
+      "step_width": 9
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 242,
+      "native_step": 21,
+      "opcode": "DMOV",
+      "operands": [
+        "K50000",
+        "D8346"
+      ],
+      "raw_hex": "054c09010505e950c30505a89a2005",
+      "step_width": 9
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 539,
+      "native_step": 77,
+      "opcode": "RST",
+      "operands": [
+        "M2"
+      ],
+      "raw_hex": "03240304900204",
+      "step_width": 1
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 802,
+      "native_step": 92,
+      "opcode": "SET",
+      "operands": [
+        "M8161"
+      ],
+      "raw_hex": "042302040590e11f05",
+      "step_width": 2
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 1084,
+      "native_step": 136,
+      "opcode": "LD",
+      "operands": [
+        "M8000"
+      ],
+      "raw_hex": "0300030590401f05",
+      "step_width": 1
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 3440,
+      "native_step": 407,
+      "opcode": "LD",
+      "operands": [
+        "M2"
+      ],
+      "raw_hex": "03000304900204",
+      "step_width": 1
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 1092,
+      "native_step": 137,
+      "opcode": "ANI",
+      "operands": [
+        "X1"
+      ],
+      "raw_hex": "030d03049c0104",
+      "step_width": 1
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 1099,
+      "native_step": 138,
+      "opcode": "AND",
+      "operands": [
+        "X2"
+      ],
+      "raw_hex": "030c03049c0204",
+      "step_width": 1
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 1900,
+      "native_step": 218,
+      "opcode": "AND",
+      "operands": [
+        "M8029"
+      ],
+      "raw_hex": "030c0305905d1f05",
+      "step_width": 1
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 1106,
+      "native_step": 139,
+      "opcode": "OUT",
+      "operands": [
+        "Y5"
+      ],
+      "raw_hex": "032003049d0504",
+      "step_width": 1
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 1185,
+      "native_step": 142,
+      "opcode": "SET",
+      "operands": [
+        "M10"
+      ],
+      "raw_hex": "03230304900a04",
+      "step_width": 1
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 1236,
+      "native_step": 143,
+      "opcode": "LDI",
+      "operands": [
+        "X1"
+      ],
+      "raw_hex": "030103049c0104",
+      "step_width": 1
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 1320,
+      "native_step": 147,
+      "opcode": "RS",
+      "operands": [
+        "D151",
+        "K8",
+        "D161",
+        "K16"
+      ],
+      "raw_hex": "055f090a0504a8970404e8080404a8a10404e81004",
+      "step_width": 9
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 1497,
+      "native_step": 162,
+      "opcode": "MUL",
+      "operands": [
+        "D164",
+        "K256",
+        "D140"
+      ],
+      "raw_hex": "0549072c0504a8a40405e800010504a88c04",
+      "step_width": 7
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 4544,
+      "native_step": 543,
+      "opcode": "MUL",
+      "operands": [
+        "D103",
+        "K100",
+        "D120"
+      ],
+      "raw_hex": "0549072c0504a8670404e8640404a87804",
+      "step_width": 7
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 1529,
+      "native_step": 169,
+      "opcode": "ADD",
+      "operands": [
+        "D140",
+        "D165",
+        "D106"
+      ],
+      "raw_hex": "054907280504a88c0404a8a50404a86a04",
+      "step_width": 7
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 1619,
+      "native_step": 190,
+      "opcode": "RST",
+      "operands": [
+        "M8123"
+      ],
+      "raw_hex": "042402040590bb1f05",
+      "step_width": 2
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 3760,
+      "native_step": 438,
+      "opcode": "RST",
+      "operands": [
+        "T16"
+      ],
+      "raw_hex": "0424020404c21004",
+      "step_width": 2
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 1818,
+      "native_step": 198,
+      "opcode": "LD=",
+      "operands": [
+        "D0",
+        "K1"
+      ],
+      "raw_hex": "06400500100604a8000404e80104",
+      "step_width": 5
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 1860,
+      "native_step": 207,
+      "opcode": "MPS",
+      "operands": [],
+      "raw_hex": "031a03",
+      "step_width": 1
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 1863,
+      "native_step": 208,
+      "opcode": "DSZR",
+      "operands": [
+        "X0",
+        "X0",
+        "Y0",
+        "Y4"
+      ],
+      "raw_hex": "0563092005049c0004049c0004049d0004049d0404",
+      "step_width": 9
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 1897,
+      "native_step": 217,
+      "opcode": "MPP",
+      "operands": [],
+      "raw_hex": "031c03",
+      "step_width": 1
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 2057,
+      "native_step": 235,
+      "opcode": "ANI",
+      "operands": [
+        "M8340"
+      ],
+      "raw_hex": "040d02040590942005",
+      "step_width": 2
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 2208,
+      "native_step": 253,
+      "opcode": "DRVI",
+      "operands": [
+        "D101",
+        "D100",
+        "Y0",
+        "Y4"
+      ],
+      "raw_hex": "0563091a0504a8650404a86404049d0004049d0404",
+      "step_width": 9
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 2443,
+      "native_step": 289,
+      "opcode": "OUT",
+      "operands": [
+        "T10",
+        "K20"
+      ],
+      "raw_hex": "0421030404c20a0404e81404",
+      "step_width": 3
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 4382,
+      "native_step": 515,
+      "opcode": "OUT",
+      "operands": [
+        "T16",
+        "K3000"
+      ],
+      "raw_hex": "0421030404c2100405e8b80b05",
+      "step_width": 3
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 2723,
+      "native_step": 323,
+      "opcode": "MRD",
+      "operands": [],
+      "raw_hex": "031b03",
+      "step_width": 1
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 2838,
+      "native_step": 337,
+      "opcode": "AND>=",
+      "operands": [
+        "D106",
+        "D105"
+      ],
+      "raw_hex": "06400503110604a86a0404a86904",
+      "step_width": 5
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 2915,
+      "native_step": 347,
+      "opcode": "AND<",
+      "operands": [
+        "D106",
+        "D105"
+      ],
+      "raw_hex": "06400504110604a86a0404a86904",
+      "step_width": 5
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 3447,
+      "native_step": 408,
+      "opcode": "OR",
+      "operands": [
+        "M4"
+      ],
+      "raw_hex": "03060304900404",
+      "step_width": 1
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 3454,
+      "native_step": 409,
+      "opcode": "ANB",
+      "operands": [],
+      "raw_hex": "031903",
+      "step_width": 1
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 3500,
+      "native_step": 413,
+      "opcode": "INC",
+      "operands": [
+        "D104"
+      ],
+      "raw_hex": "054a03000504a86804",
+      "step_width": 3
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 4368,
+      "native_step": 510,
+      "opcode": "AND<=",
+      "operands": [
+        "D0",
+        "K10"
+      ],
+      "raw_hex": "06400505110604a8000404e80a04",
+      "step_width": 5
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 4452,
+      "native_step": 519,
+      "opcode": "AND>",
+      "operands": [
+        "D110",
+        "K0"
+      ],
+      "raw_hex": "06400502110604a86e0404e80004",
+      "step_width": 5
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 4466,
+      "native_step": 524,
+      "opcode": "DDIV",
+      "operands": [
+        "K36000",
+        "D110",
+        "D112"
+      ],
+      "raw_hex": "05490d2f0505e9a08c0504a86e0404a87004",
+      "step_width": 13
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 4571,
+      "native_step": 550,
+      "opcode": "DIV",
+      "operands": [
+        "D120",
+        "D102",
+        "D114"
+      ],
+      "raw_hex": "0549072e0504a8780404a8660404a87204",
+      "step_width": 7
+    },
+    {
+      "case": "t",
+      "source_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "pou_offset": 4670,
+      "native_step": 560,
+      "opcode": "END",
+      "operands": [],
+      "raw_hex": "033403",
+      "step_width": 1
+    },
+    {
+      "case": "f",
+      "source_sha256": "7a6c3522aa49708415b5adfba4da0a7b9f3c459c6863fe48c335cf61321b44eb",
+      "csv_sha256": "b6afa2267a44796adbeeb8e23d5c3af9cc6ff6f6a6717e80c4f412809fc56cf7",
+      "pou_offset": 197,
+      "native_step": 13,
+      "opcode": "LDF",
+      "operands": [
+        "X3"
+      ],
+      "raw_hex": "04030204049c0304",
+      "step_width": 2
+    },
+    {
+      "case": "f",
+      "source_sha256": "7a6c3522aa49708415b5adfba4da0a7b9f3c459c6863fe48c335cf61321b44eb",
+      "csv_sha256": "b6afa2267a44796adbeeb8e23d5c3af9cc6ff6f6a6717e80c4f412809fc56cf7",
+      "pou_offset": 383,
+      "native_step": 28,
+      "opcode": "LD<>",
+      "operands": [
+        "D0",
+        "K0"
+      ],
+      "raw_hex": "06400501100604a8000404e80004",
+      "step_width": 5
+    },
+    {
+      "case": "f",
+      "source_sha256": "7a6c3522aa49708415b5adfba4da0a7b9f3c459c6863fe48c335cf61321b44eb",
+      "csv_sha256": "b6afa2267a44796adbeeb8e23d5c3af9cc6ff6f6a6717e80c4f412809fc56cf7",
+      "pou_offset": 448,
+      "native_step": 40,
+      "opcode": "PLF",
+      "operands": [
+        "M1"
+      ],
+      "raw_hex": "0426020404900104",
+      "step_width": 2
+    },
+    {
+      "case": "f",
+      "source_sha256": "7a6c3522aa49708415b5adfba4da0a7b9f3c459c6863fe48c335cf61321b44eb",
+      "csv_sha256": "b6afa2267a44796adbeeb8e23d5c3af9cc6ff6f6a6717e80c4f412809fc56cf7",
+      "pou_offset": 914,
+      "native_step": 116,
+      "opcode": "LD>=",
+      "operands": [
+        "D0",
+        "K1"
+      ],
+      "raw_hex": "06400503100604a8000404e80104",
+      "step_width": 5
+    },
+    {
+      "case": "s",
+      "source_sha256": "3e5c7ef5ecc6e49798960ca650ff64cb61e44c486b0f3f4fc63227516d47d05b",
+      "csv_sha256": "5324d3b68f6cdbbb010e770dd7b91a5b27d405c432c1dbb428f39961ef2d8014",
+      "pou_offset": 257,
+      "native_step": 45,
+      "opcode": "ANDP",
+      "operands": [
+        "M8012"
+      ],
+      "raw_hex": "040e020405904c1f05",
+      "step_width": 2
+    },
+    {
+      "case": "s",
+      "source_sha256": "3e5c7ef5ecc6e49798960ca650ff64cb61e44c486b0f3f4fc63227516d47d05b",
+      "csv_sha256": "5324d3b68f6cdbbb010e770dd7b91a5b27d405c432c1dbb428f39961ef2d8014",
+      "pou_offset": 266,
+      "native_step": 47,
+      "opcode": "SFTL",
+      "operands": [
+        "M10",
+        "M100",
+        "K128",
+        "K1"
+      ],
+      "raw_hex": "055109070504900a040490640404e8800404e80104",
+      "step_width": 9
+    },
+    {
+      "case": "s",
+      "source_sha256": "3e5c7ef5ecc6e49798960ca650ff64cb61e44c486b0f3f4fc63227516d47d05b",
+      "csv_sha256": "5324d3b68f6cdbbb010e770dd7b91a5b27d405c432c1dbb428f39961ef2d8014",
+      "pou_offset": 287,
+      "native_step": 56,
+      "opcode": "SFTL",
+      "operands": [
+        "M11",
+        "M300",
+        "K128",
+        "K1"
+      ],
+      "raw_hex": "055109070504900b0405902c010504e8800404e80104",
+      "step_width": 9
+    }
+  ]
+}

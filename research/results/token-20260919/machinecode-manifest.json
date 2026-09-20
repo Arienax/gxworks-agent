@@ -1,0 +1,179 @@
+{
+  "schema_version": 1,
+  "archive": "research/evidence/gxw-machinecode-20260920.zip",
+  "archive_sha256": "5d4546da357d109f031d3ae5fc02c9df9b27263a0867bf6cfc89d6dd6efcbf5f",
+  "files": {
+    "bounded-without-sentinel/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bounded-without-sentinel/native-stdout.jsonl": {
+      "size": 264,
+      "sha256": "27dc56d2edb2dfd27b88105c29c27898ee6bfd1d079427272f482634358513c9"
+    },
+    "bounded-without-sentinel/process.json": {
+      "size": 248,
+      "sha256": "ad073d4f03b8e6a8897a061a1c317281b22c995c0a80a119516be5f55e8ffafe"
+    },
+    "bounded-without-sentinel/requests.json": {
+      "size": 492,
+      "sha256": "1ef4f55ba3a4f81b67d3d95c182721721177c2edcfa48776a3d45e07207c5191"
+    },
+    "bounded-without-sentinel/TokenOracle.cs": {
+      "size": 8335,
+      "sha256": "0f18383a9cb013370630b15e05bb234776437210da5cece0f0ce1a70b3a55ada"
+    },
+    "export-disassembly.txt": {
+      "size": 8648,
+      "sha256": "71ef4814dd8738a1353de2a721a3ed8b43c098f947a79345acf44c69041751eb"
+    },
+    "initial/native-stderr.bin": {
+      "size": 145,
+      "sha256": "0adc1fd58334f4def0bb6a0dd394ba19f4e666a39aad8849e8375219f2600016"
+    },
+    "initial/native-stdout.jsonl": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "initial/process.json": {
+      "size": 257,
+      "sha256": "f8282e7b141df8d06fe80c5652aea750acdbf41ce828d9a205d9912ab67cd360"
+    },
+    "initial/requests.json": {
+      "size": 496,
+      "sha256": "2340111d4f79776bedbf8a40fb636244ffee5e42c34075621f63ab42c76fb690"
+    },
+    "initial/TokenOracle.cs": {
+      "size": 8013,
+      "sha256": "68b484e1f1ae6fbd1d8d46fe68a8d2b91195ea7b05a83cc080ff34bde2f2e47e"
+    },
+    "mutated-widths/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "mutated-widths/native-stdout.jsonl": {
+      "size": 4845,
+      "sha256": "cd1e909776cd3b45648a3bfc751ee80f3a60f927e657de4b4b3529c012391668"
+    },
+    "mutated-widths/process.json": {
+      "size": 250,
+      "sha256": "f3b909063577fe40984410139cc72a9fd4374746fb9befdaaa4bcb9d0a1b2a7d"
+    },
+    "mutated-widths/requests.json": {
+      "size": 7003,
+      "sha256": "0a5ec5eab3acb931fec9456bceece1c8829c810b553162080c76bece239e047f"
+    },
+    "mutated-widths/TokenOracle.cs": {
+      "size": 8335,
+      "sha256": "0f18383a9cb013370630b15e05bb234776437210da5cece0f0ce1a70b3a55ada"
+    },
+    "native-project-controls/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native-project-controls/native-stdout.jsonl": {
+      "size": 1843,
+      "sha256": "31e9f0cde3e7988549a150647f1726c6525a9806992a3fa626b39b50ea9bccaa"
+    },
+    "native-project-controls/process.json": {
+      "size": 248,
+      "sha256": "281937f0d2484568139df28eb35a96690e9ede246480137a36ecc57a133f6b71"
+    },
+    "native-project-controls/requests.json": {
+      "size": 3857,
+      "sha256": "90447ad3831845edd5f8bdd7cabb0dc807bed9feb42581ab7e43f690c5f54fa5"
+    },
+    "native-project-controls/TokenOracle.cs": {
+      "size": 8335,
+      "sha256": "0f18383a9cb013370630b15e05bb234776437210da5cece0f0ce1a70b3a55ada"
+    },
+    "width-checks.json": {
+      "size": 5626,
+      "sha256": "5de37f65c9842a66f68a4767f2f4cae86aeeef7e0ade8a9d6809d27708a26d98"
+    },
+    "with-offset-buffer/native-stderr.bin": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "with-offset-buffer/native-stdout.jsonl": {
+      "size": 246,
+      "sha256": "faf401a1cb09396570ccc08319f829b75389311fc101e60a80d4b7919f965194"
+    },
+    "with-offset-buffer/process.json": {
+      "size": 248,
+      "sha256": "999be6b273a57d6cccef06521c71b30a718d3aa3cb45147d352fa425a935f2b3"
+    },
+    "with-offset-buffer/requests.json": {
+      "size": 496,
+      "sha256": "2340111d4f79776bedbf8a40fb636244ffee5e42c34075621f63ab42c76fb690"
+    },
+    "with-offset-buffer/TokenOracle.cs": {
+      "size": 8335,
+      "sha256": "0f18383a9cb013370630b15e05bb234776437210da5cece0f0ce1a70b3a55ada"
+    }
+  },
+  "dll_sha256": "a700da129ede89869a00a5614d08b43dc64e94c240494fc753fe09104c5b9399",
+  "cpu_code": 520,
+  "export": "ChangePToMcode",
+  "export_rva": "0x3674",
+  "handler_rva": "0x8947",
+  "abi": {
+    "calling_convention": "x86 cdecl",
+    "arguments": [
+      "object handle",
+      "reference to 24-byte buffer structure",
+      "optional device context (null here)",
+      "reference to word capacity/result",
+      "option1=0",
+      "option2=0"
+    ],
+    "buffer_fields": {
+      "0": "output machine-code pointer",
+      "4": "remaining token input bytes",
+      "8": "token input pointer",
+      "12": "pointer to 128-byte workspace initialized by native RVA 0x400AD",
+      "16": "opaque field initialized to zero",
+      "20": "opaque field initialized to zero"
+    },
+    "input_terminator": "bounded token body; do not append the ChangePToILcode zero sentinel",
+    "result_bytes": "output pointer delta after success, not an assumed word-size multiplier"
+  },
+  "controls": {
+    "native_project_controls": 7,
+    "successes": 6,
+    "successful_case_steps": {
+      "w": 112,
+      "a": 90,
+      "c-original": 25,
+      "c-spliced": 31,
+      "u-spliced": 93,
+      "g": 6
+    },
+    "all_successes_consume_complete_body": true,
+    "all_successful_FX_machine_byte_lengths": "2 * reported native word count in these six controls",
+    "rejection": {
+      "case": "b",
+      "return_code": "0x04010004",
+      "source": "LD M8000 / OUT T10Z0 / END",
+      "contradictory_GUI_result": "step-width-manifest.json: opened, converted, program check Error 0, saved and reopened; no preset added."
+    },
+    "mutated_width_cases": 35,
+    "all_mutated_widths_accepted": true,
+    "machine_bytes_unchanged_within_each_instruction": true
+  },
+  "failures_retained": [
+    {
+      "directory": "initial",
+      "result": "0xC0000005 isolated adapter access violation before any result",
+      "cause": "Initial ABI structure omitted the +12 workspace pointer; native RVA 0x40197 clears 0x80 bytes through it.",
+      "recovery": "with-offset-buffer preserves the corrected ABI attempt"
+    },
+    {
+      "directory": "with-offset-buffer",
+      "result": "both b and g return 0x04010004",
+      "cause": "Requests incorrectly appended the IL decoder zero sentinel; removing it makes g succeed. b remains rejected.",
+      "recovery": "bounded-without-sentinel"
+    }
+  ],
+  "scope": "Offline memory conversion; no device connection or execution. Machinecode conversion independently computes code size but is not complete control-flow, project or execution-safety validation. Native GUI vs machinecode rejection remains unexplained. Failed-call zero pointer deltas must not be interpreted as an exact error location."
+}

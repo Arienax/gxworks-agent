@@ -1,0 +1,876 @@
+{
+  "observed_with": "GX Works2 1.635.0.1, offline native Edit -> Write to CSV, 2026-09-19",
+  "sources_local": "research/experiments/token-20260919",
+  "cases": {
+    "t": {
+      "project_sha256": "b51d481fd201183a40eda8ea1c1892579256dc622e8a93525b6e9741e17c8bb7",
+      "csv_sha256": "08546f091ec6d992c7d8dff94475950e74edc643f05fbbb5031dc1e76590f16f",
+      "program_sha256": "c2e1677884e724048130962e90082b89b7f27b1d49190f8be364ea798409a385",
+      "program": "MAIN.Program.pou",
+      "instructions": 234,
+      "texts": 142,
+      "encoded_steps": 561,
+      "all_native_steps_agree": true,
+      "status": "agrees",
+      "conflicts": [],
+      "method": "full sequence/operand/step/text alignment against separately supplied GX Works2 CSV",
+      "mapping_summary": {
+        "04020204": {
+          "opcode": "LDP",
+          "occurrences": 5,
+          "example": {
+            "opcode": "LDP",
+            "offset": 145,
+            "native_step": 0,
+            "operands": [
+              "M8002"
+            ]
+          }
+        },
+        "054c050005": {
+          "opcode": "MOV",
+          "occurrences": 35,
+          "example": {
+            "opcode": "MOV",
+            "offset": 154,
+            "native_step": 2,
+            "operands": [
+              "K1",
+              "D0"
+            ]
+          }
+        },
+        "054c090105": {
+          "opcode": "DMOV",
+          "occurrences": 2,
+          "example": {
+            "opcode": "DMOV",
+            "offset": 208,
+            "native_step": 12,
+            "operands": [
+              "K100000",
+              "D8343"
+            ]
+          }
+        },
+        "032403": {
+          "opcode": "RST",
+          "occurrences": 34,
+          "example": {
+            "opcode": "RST",
+            "offset": 539,
+            "native_step": 77,
+            "operands": [
+              "M2"
+            ]
+          }
+        },
+        "04230204": {
+          "opcode": "SET",
+          "occurrences": 3,
+          "example": {
+            "opcode": "SET",
+            "offset": 802,
+            "native_step": 92,
+            "operands": [
+              "M8161"
+            ]
+          }
+        },
+        "030003": {
+          "opcode": "LD",
+          "occurrences": 9,
+          "example": {
+            "opcode": "LD",
+            "offset": 1084,
+            "native_step": 136,
+            "operands": [
+              "M8000"
+            ]
+          }
+        },
+        "030d03": {
+          "opcode": "ANI",
+          "occurrences": 18,
+          "example": {
+            "opcode": "ANI",
+            "offset": 1092,
+            "native_step": 137,
+            "operands": [
+              "X1"
+            ]
+          }
+        },
+        "030c03": {
+          "opcode": "AND",
+          "occurrences": 37,
+          "example": {
+            "opcode": "AND",
+            "offset": 1099,
+            "native_step": 138,
+            "operands": [
+              "X2"
+            ]
+          }
+        },
+        "032003": {
+          "opcode": "OUT",
+          "occurrences": 2,
+          "example": {
+            "opcode": "OUT",
+            "offset": 1106,
+            "native_step": 139,
+            "operands": [
+              "Y5"
+            ]
+          }
+        },
+        "032303": {
+          "opcode": "SET",
+          "occurrences": 17,
+          "example": {
+            "opcode": "SET",
+            "offset": 1185,
+            "native_step": 142,
+            "operands": [
+              "M10"
+            ]
+          }
+        },
+        "030103": {
+          "opcode": "LDI",
+          "occurrences": 1,
+          "example": {
+            "opcode": "LDI",
+            "offset": 1236,
+            "native_step": 143,
+            "operands": [
+              "X1"
+            ]
+          }
+        },
+        "055f090a05": {
+          "opcode": "RS",
+          "occurrences": 1,
+          "example": {
+            "opcode": "RS",
+            "offset": 1320,
+            "native_step": 147,
+            "operands": [
+              "D151",
+              "K8",
+              "D161",
+              "K16"
+            ]
+          }
+        },
+        "0549072c05": {
+          "opcode": "MUL",
+          "occurrences": 3,
+          "example": {
+            "opcode": "MUL",
+            "offset": 1497,
+            "native_step": 162,
+            "operands": [
+              "D164",
+              "K256",
+              "D140"
+            ]
+          }
+        },
+        "0549072805": {
+          "opcode": "ADD",
+          "occurrences": 2,
+          "example": {
+            "opcode": "ADD",
+            "offset": 1529,
+            "native_step": 169,
+            "operands": [
+              "D140",
+              "D165",
+              "D106"
+            ]
+          }
+        },
+        "04240204": {
+          "opcode": "RST",
+          "occurrences": 4,
+          "example": {
+            "opcode": "RST",
+            "offset": 1619,
+            "native_step": 190,
+            "operands": [
+              "M8123"
+            ]
+          }
+        },
+        "064005001006": {
+          "opcode": "LD=",
+          "occurrences": 10,
+          "example": {
+            "opcode": "LD=",
+            "offset": 1818,
+            "native_step": 198,
+            "operands": [
+              "D0",
+              "K1"
+            ]
+          }
+        },
+        "031a03": {
+          "opcode": "MPS",
+          "occurrences": 8,
+          "example": {
+            "opcode": "MPS",
+            "offset": 1860,
+            "native_step": 207,
+            "operands": []
+          }
+        },
+        "0563092005": {
+          "opcode": "DSZR",
+          "occurrences": 1,
+          "example": {
+            "opcode": "DSZR",
+            "offset": 1863,
+            "native_step": 208,
+            "operands": [
+              "X0",
+              "X0",
+              "Y0",
+              "Y4"
+            ]
+          }
+        },
+        "031c03": {
+          "opcode": "MPP",
+          "occurrences": 8,
+          "example": {
+            "opcode": "MPP",
+            "offset": 1897,
+            "native_step": 217,
+            "operands": []
+          }
+        },
+        "040d0204": {
+          "opcode": "ANI",
+          "occurrences": 1,
+          "example": {
+            "opcode": "ANI",
+            "offset": 2057,
+            "native_step": 235,
+            "operands": [
+              "M8340"
+            ]
+          }
+        },
+        "0563091a05": {
+          "opcode": "DRVI",
+          "occurrences": 1,
+          "example": {
+            "opcode": "DRVI",
+            "offset": 2208,
+            "native_step": 253,
+            "operands": [
+              "D101",
+              "D100",
+              "Y0",
+              "Y4"
+            ]
+          }
+        },
+        "04210304": {
+          "opcode": "OUT",
+          "occurrences": 7,
+          "example": {
+            "opcode": "OUT",
+            "offset": 2443,
+            "native_step": 289,
+            "operands": [
+              "T10",
+              "K20"
+            ]
+          }
+        },
+        "031b03": {
+          "opcode": "MRD",
+          "occurrences": 10,
+          "example": {
+            "opcode": "MRD",
+            "offset": 2723,
+            "native_step": 323,
+            "operands": []
+          }
+        },
+        "064005031106": {
+          "opcode": "AND>=",
+          "occurrences": 2,
+          "example": {
+            "opcode": "AND>=",
+            "offset": 2838,
+            "native_step": 337,
+            "operands": [
+              "D106",
+              "D105"
+            ]
+          }
+        },
+        "064005041106": {
+          "opcode": "AND<",
+          "occurrences": 1,
+          "example": {
+            "opcode": "AND<",
+            "offset": 2915,
+            "native_step": 347,
+            "operands": [
+              "D106",
+              "D105"
+            ]
+          }
+        },
+        "030603": {
+          "opcode": "OR",
+          "occurrences": 1,
+          "example": {
+            "opcode": "OR",
+            "offset": 3447,
+            "native_step": 408,
+            "operands": [
+              "M4"
+            ]
+          }
+        },
+        "031903": {
+          "opcode": "ANB",
+          "occurrences": 1,
+          "example": {
+            "opcode": "ANB",
+            "offset": 3454,
+            "native_step": 409,
+            "operands": []
+          }
+        },
+        "054a030005": {
+          "opcode": "INC",
+          "occurrences": 4,
+          "example": {
+            "opcode": "INC",
+            "offset": 3500,
+            "native_step": 413,
+            "operands": [
+              "D104"
+            ]
+          }
+        },
+        "064005051106": {
+          "opcode": "AND<=",
+          "occurrences": 1,
+          "example": {
+            "opcode": "AND<=",
+            "offset": 4368,
+            "native_step": 510,
+            "operands": [
+              "D0",
+              "K10"
+            ]
+          }
+        },
+        "064005021106": {
+          "opcode": "AND>",
+          "occurrences": 2,
+          "example": {
+            "opcode": "AND>",
+            "offset": 4452,
+            "native_step": 519,
+            "operands": [
+              "D110",
+              "K0"
+            ]
+          }
+        },
+        "05490d2f05": {
+          "opcode": "DDIV",
+          "occurrences": 1,
+          "example": {
+            "opcode": "DDIV",
+            "offset": 4466,
+            "native_step": 524,
+            "operands": [
+              "K36000",
+              "D110",
+              "D112"
+            ]
+          }
+        },
+        "0549072e05": {
+          "opcode": "DIV",
+          "occurrences": 1,
+          "example": {
+            "opcode": "DIV",
+            "offset": 4571,
+            "native_step": 550,
+            "operands": [
+              "D120",
+              "D102",
+              "D114"
+            ]
+          }
+        },
+        "033403": {
+          "opcode": "END",
+          "occurrences": 1,
+          "example": {
+            "opcode": "END",
+            "offset": 4670,
+            "native_step": 560,
+            "operands": []
+          }
+        }
+      }
+    },
+    "f": {
+      "project_sha256": "7a6c3522aa49708415b5adfba4da0a7b9f3c459c6863fe48c335cf61321b44eb",
+      "csv_sha256": "b6afa2267a44796adbeeb8e23d5c3af9cc6ff6f6a6717e80c4f412809fc56cf7",
+      "program_sha256": "455324f3039e7e9355ecdeb309d507dbe8905231889414eba392ce3010f26b7f",
+      "program": "MAIN.Program.pou",
+      "instructions": 115,
+      "texts": 43,
+      "encoded_steps": 192,
+      "all_native_steps_agree": true,
+      "status": "agrees",
+      "conflicts": [],
+      "method": "full sequence/operand/step/text alignment against separately supplied GX Works2 CSV",
+      "mapping_summary": {
+        "030003": {
+          "opcode": "LD",
+          "occurrences": 19,
+          "example": {
+            "opcode": "LD",
+            "offset": 79,
+            "native_step": 0,
+            "operands": [
+              "M8002"
+            ]
+          }
+        },
+        "032403": {
+          "opcode": "RST",
+          "occurrences": 28,
+          "example": {
+            "opcode": "RST",
+            "offset": 87,
+            "native_step": 1,
+            "operands": [
+              "M0"
+            ]
+          }
+        },
+        "04020204": {
+          "opcode": "LDP",
+          "occurrences": 1,
+          "example": {
+            "opcode": "LDP",
+            "offset": 159,
+            "native_step": 9,
+            "operands": [
+              "X1"
+            ]
+          }
+        },
+        "030c03": {
+          "opcode": "AND",
+          "occurrences": 7,
+          "example": {
+            "opcode": "AND",
+            "offset": 167,
+            "native_step": 11,
+            "operands": [
+              "X3"
+            ]
+          }
+        },
+        "032303": {
+          "opcode": "SET",
+          "occurrences": 9,
+          "example": {
+            "opcode": "SET",
+            "offset": 174,
+            "native_step": 12,
+            "operands": [
+              "M0"
+            ]
+          }
+        },
+        "04030204": {
+          "opcode": "LDF",
+          "occurrences": 1,
+          "example": {
+            "opcode": "LDF",
+            "offset": 197,
+            "native_step": 13,
+            "operands": [
+              "X3"
+            ]
+          }
+        },
+        "032003": {
+          "opcode": "OUT",
+          "occurrences": 12,
+          "example": {
+            "opcode": "OUT",
+            "offset": 333,
+            "native_step": 24,
+            "operands": [
+              "Y2"
+            ]
+          }
+        },
+        "030d03": {
+          "opcode": "ANI",
+          "occurrences": 1,
+          "example": {
+            "opcode": "ANI",
+            "offset": 357,
+            "native_step": 26,
+            "operands": [
+              "M5"
+            ]
+          }
+        },
+        "064005011006": {
+          "opcode": "LD<>",
+          "occurrences": 1,
+          "example": {
+            "opcode": "LD<>",
+            "offset": 383,
+            "native_step": 28,
+            "operands": [
+              "D0",
+              "K0"
+            ]
+          }
+        },
+        "054c050005": {
+          "opcode": "MOV",
+          "occurrences": 1,
+          "example": {
+            "opcode": "MOV",
+            "offset": 414,
+            "native_step": 34,
+            "operands": [
+              "D0",
+              "D20"
+            ]
+          }
+        },
+        "04260204": {
+          "opcode": "PLF",
+          "occurrences": 1,
+          "example": {
+            "opcode": "PLF",
+            "offset": 448,
+            "native_step": 40,
+            "operands": [
+              "M1"
+            ]
+          }
+        },
+        "031a03": {
+          "opcode": "MPS",
+          "occurrences": 1,
+          "example": {
+            "opcode": "MPS",
+            "offset": 477,
+            "native_step": 43,
+            "operands": []
+          }
+        },
+        "064005031106": {
+          "opcode": "AND>=",
+          "occurrences": 2,
+          "example": {
+            "opcode": "AND>=",
+            "offset": 480,
+            "native_step": 44,
+            "operands": [
+              "D20",
+              "K1"
+            ]
+          }
+        },
+        "064005051106": {
+          "opcode": "AND<=",
+          "occurrences": 5,
+          "example": {
+            "opcode": "AND<=",
+            "offset": 494,
+            "native_step": 49,
+            "operands": [
+              "D20",
+              "K3"
+            ]
+          }
+        },
+        "031b03": {
+          "opcode": "MRD",
+          "occurrences": 2,
+          "example": {
+            "opcode": "MRD",
+            "offset": 538,
+            "native_step": 57,
+            "operands": []
+          }
+        },
+        "064005021106": {
+          "opcode": "AND>",
+          "occurrences": 1,
+          "example": {
+            "opcode": "AND>",
+            "offset": 602,
+            "native_step": 72,
+            "operands": [
+              "D20",
+              "K6"
+            ]
+          }
+        },
+        "031c03": {
+          "opcode": "MPP",
+          "occurrences": 1,
+          "example": {
+            "opcode": "MPP",
+            "offset": 646,
+            "native_step": 80,
+            "operands": []
+          }
+        },
+        "064005041106": {
+          "opcode": "AND<",
+          "occurrences": 1,
+          "example": {
+            "opcode": "AND<",
+            "offset": 649,
+            "native_step": 81,
+            "operands": [
+              "D20",
+              "K1"
+            ]
+          }
+        },
+        "04240204": {
+          "opcode": "RST",
+          "occurrences": 6,
+          "example": {
+            "opcode": "RST",
+            "offset": 723,
+            "native_step": 91,
+            "operands": [
+              "T10"
+            ]
+          }
+        },
+        "04210304": {
+          "opcode": "OUT",
+          "occurrences": 6,
+          "example": {
+            "opcode": "OUT",
+            "offset": 777,
+            "native_step": 99,
+            "operands": [
+              "T10",
+              "K30"
+            ]
+          }
+        },
+        "030603": {
+          "opcode": "OR",
+          "occurrences": 2,
+          "example": {
+            "opcode": "OR",
+            "offset": 881,
+            "native_step": 113,
+            "operands": [
+              "T11"
+            ]
+          }
+        },
+        "064005031006": {
+          "opcode": "LD>=",
+          "occurrences": 3,
+          "example": {
+            "opcode": "LD>=",
+            "offset": 914,
+            "native_step": 116,
+            "operands": [
+              "D0",
+              "K1"
+            ]
+          }
+        },
+        "030103": {
+          "opcode": "LDI",
+          "occurrences": 3,
+          "example": {
+            "opcode": "LDI",
+            "offset": 1005,
+            "native_step": 131,
+            "operands": [
+              "M11"
+            ]
+          }
+        },
+        "033403": {
+          "opcode": "END",
+          "occurrences": 1,
+          "example": {
+            "opcode": "END",
+            "offset": 1532,
+            "native_step": 191,
+            "operands": []
+          }
+        }
+      }
+    },
+    "s": {
+      "project_sha256": "3e5c7ef5ecc6e49798960ca650ff64cb61e44c486b0f3f4fc63227516d47d05b",
+      "csv_sha256": "5324d3b68f6cdbbb010e770dd7b91a5b27d405c432c1dbb428f39961ef2d8014",
+      "program_sha256": "57dbad4c6e4ed6fa76e60bec83dec9ab661e99a901c5ff6de5aeb029f4fd42a6",
+      "program": "MAIN.Program.pou",
+      "instructions": 36,
+      "texts": 0,
+      "encoded_steps": 87,
+      "all_native_steps_agree": true,
+      "status": "agrees",
+      "conflicts": [],
+      "method": "full sequence/operand/step/text alignment against separately supplied GX Works2 CSV",
+      "mapping_summary": {
+        "030003": {
+          "opcode": "LD",
+          "occurrences": 6,
+          "example": {
+            "opcode": "LD",
+            "offset": 79,
+            "native_step": 0,
+            "operands": [
+              "M8002"
+            ]
+          }
+        },
+        "032403": {
+          "opcode": "RST",
+          "occurrences": 5,
+          "example": {
+            "opcode": "RST",
+            "offset": 87,
+            "native_step": 1,
+            "operands": [
+              "M0"
+            ]
+          }
+        },
+        "04020204": {
+          "opcode": "LDP",
+          "occurrences": 2,
+          "example": {
+            "opcode": "LDP",
+            "offset": 115,
+            "native_step": 5,
+            "operands": [
+              "X1"
+            ]
+          }
+        },
+        "032303": {
+          "opcode": "SET",
+          "occurrences": 1,
+          "example": {
+            "opcode": "SET",
+            "offset": 123,
+            "native_step": 7,
+            "operands": [
+              "M0"
+            ]
+          }
+        },
+        "064005031006": {
+          "opcode": "LD>=",
+          "occurrences": 3,
+          "example": {
+            "opcode": "LD>=",
+            "offset": 145,
+            "native_step": 11,
+            "operands": [
+              "D0",
+              "K1"
+            ]
+          }
+        },
+        "064005051106": {
+          "opcode": "AND<=",
+          "occurrences": 3,
+          "example": {
+            "opcode": "AND<=",
+            "offset": 159,
+            "native_step": 16,
+            "operands": [
+              "D0",
+              "K3"
+            ]
+          }
+        },
+        "032003": {
+          "opcode": "OUT",
+          "occurrences": 11,
+          "example": {
+            "opcode": "OUT",
+            "offset": 173,
+            "native_step": 21,
+            "operands": [
+              "M10"
+            ]
+          }
+        },
+        "040e0204": {
+          "opcode": "ANDP",
+          "occurrences": 1,
+          "example": {
+            "opcode": "ANDP",
+            "offset": 257,
+            "native_step": 45,
+            "operands": [
+              "M8012"
+            ]
+          }
+        },
+        "0551090705": {
+          "opcode": "SFTL",
+          "occurrences": 3,
+          "example": {
+            "opcode": "SFTL",
+            "offset": 266,
+            "native_step": 47,
+            "operands": [
+              "M10",
+              "M100",
+              "K128",
+              "K1"
+            ]
+          }
+        },
+        "033403": {
+          "opcode": "END",
+          "occurrences": 1,
+          "example": {
+            "opcode": "END",
+            "offset": 417,
+            "native_step": 86,
+            "operands": []
+          }
+        }
+      }
+    }
+  },
+  "native_instruction_total": 385,
+  "native_text_total": 185,
+  "native_encoded_step_total": 840
+}
