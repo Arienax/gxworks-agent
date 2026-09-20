@@ -2,6 +2,7 @@ import copy
 import difflib
 import re
 
+from plc.device_identity import canonical_device
 from plc.specification.bindings import (
     bind_answers,
     binding_hint,
@@ -1363,6 +1364,52 @@ def restore_review_choices(draft, analysis):
     return restored
 
 
+def preserve_io_user_edits(previous_spec, draft):
+    """Carry direct specification-editor I/O removals as non-generation provenance.
+
+    The metadata is used only to stop later analysis suggestions from reviving
+    addresses the operator explicitly removed or moved. It never blocks saving,
+    never reaches Agent B, and adding the address again clears its tombstone.
+    """
+    result = copy.deepcopy(draft or {})
+    if not isinstance(previous_spec, dict):
+        return result
+
+    def addresses(value):
+        rows = value.get("io_table", []) if isinstance(value, dict) else []
+        return {
+            canonical_device(str(row.get("address") or "").strip().upper())
+            for row in rows or [] if isinstance(row, dict) and row.get("address")
+        }
+
+    previous_addresses = addresses(previous_spec)
+    current_addresses = addresses(result)
+    previous_overrides = previous_spec.get("io_user_overrides")
+    removed = set()
+    if isinstance(previous_overrides, dict):
+        removed.update(
+            canonical_device(str(address).strip().upper())
+            for address in previous_overrides.get("removed_addresses", []) or []
+            if str(address).strip()
+        )
+    removed.update(previous_addresses - current_addresses)
+    removed.difference_update(current_addresses)
+
+    overrides = copy.deepcopy(result.get("io_user_overrides"))
+    if not isinstance(overrides, dict):
+        overrides = {}
+    if removed:
+        overrides["removed_addresses"] = sorted(removed)
+        result["io_user_overrides"] = overrides
+    else:
+        overrides.pop("removed_addresses", None)
+        if overrides:
+            result["io_user_overrides"] = overrides
+        else:
+            result.pop("io_user_overrides", None)
+    return result
+
+
 def canonicalize_confirmed_spec(spec):
     """Return one conflict-free specification for storage and API injection."""
     canonical = copy.deepcopy(spec or {})
@@ -1425,6 +1472,21 @@ def canonicalize_confirmed_spec(spec):
     canonical["execution_semantics"] = normalize_semantic_requirements(
         canonical.get("execution_semantics") or []
     )
+    overrides = canonical.get("io_user_overrides")
+    if isinstance(overrides, dict):
+        removed = sorted({
+            canonical_device(str(address).strip().upper())
+            for address in overrides.get("removed_addresses", []) or []
+            if str(address).strip()
+        })
+        if removed:
+            overrides = copy.deepcopy(overrides)
+            overrides["removed_addresses"] = removed
+            canonical["io_user_overrides"] = overrides
+        else:
+            canonical.pop("io_user_overrides", None)
+    elif "io_user_overrides" in canonical:
+        canonical.pop("io_user_overrides", None)
     canonical["schema_version"] = 3
     return canonical
 

@@ -67,6 +67,17 @@ def _confirmed_io_addresses(confirmed_spec):
     return addresses
 
 
+def _removed_confirmed_io_addresses(confirmed_spec):
+    overrides = (confirmed_spec or {}).get("io_user_overrides") if isinstance(confirmed_spec, dict) else None
+    if not isinstance(overrides, dict):
+        return set()
+    return {
+        canonical_device(str(address).strip().upper())
+        for address in overrides.get("removed_addresses", []) or []
+        if str(address).strip()
+    }
+
+
 def _iter_analysis_text(value):
     if isinstance(value, dict):
         for nested in value.values():
@@ -268,6 +279,7 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     declared_io = _extract_user_declared_io(user_text, plc_model)
     historical = _historical_declared_io(confirmed_spec, plc_model)
     confirmed_addresses = _confirmed_io_addresses(confirmed_spec)
+    removed_addresses = _removed_confirmed_io_addresses(confirmed_spec)
     historical_addresses = {
         address for values in historical.values() for address, _label in values
     }
@@ -277,7 +289,9 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
                 continue
             for address in list(values):
                 identity = canonical_device(address)
-                if identity in historical_addresses and identity not in confirmed_addresses:
+                if identity in removed_addresses or (
+                    identity in historical_addresses and identity not in confirmed_addresses
+                ):
                     values.pop(address, None)
             if not values:
                 clean_io.pop(category, None)
@@ -290,7 +304,10 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
             # On a later analysis turn, only a genuinely new explicit
             # declaration may seed a new suggestion. Replaying the original
             # request cannot undo direct edits made in the confirmed spec.
-            if confirmed_spec and (identity, str(label).strip().casefold()) in seen:
+            if confirmed_spec and (
+                identity in removed_addresses
+                or (identity, str(label).strip().casefold()) in seen
+            ):
                 continue
             for existing in list(target):
                 if canonical_device(existing) == identity:

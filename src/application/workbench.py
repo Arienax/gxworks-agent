@@ -144,7 +144,11 @@ class WorkbenchService:
             return self.projects.project(project_id)
 
     def set_spec(self, project_id, spec, expected_hash):
-        from plc.specification.confirmed import canonicalize_confirmed_spec, validate_spec_draft
+        from plc.specification.confirmed import (
+            canonicalize_confirmed_spec,
+            preserve_io_user_edits,
+            validate_spec_draft,
+        )
         from plc.ir import canonical_sha256
         self.writable()
 
@@ -160,10 +164,11 @@ class WorkbenchService:
             current = project.get("confirmed_spec")
             if (canonical_sha256(current) if current is not None else None) != expected_hash:
                 raise ConflictError("确认规格已变化，请重新加载。")
-            issues = validate_spec_draft(spec, project.get("plc_model"))
+            candidate_spec = preserve_io_user_edits(current, spec)
+            issues = validate_spec_draft(candidate_spec, project.get("plc_model"))
             if issues.get("errors"):
                 return audited({"valid": False, "issues": public(issues)})
-            normalized = canonicalize_confirmed_spec(spec)
+            normalized = canonicalize_confirmed_spec(candidate_spec)
             issues = validate_spec_draft(normalized, project.get("plc_model"))
             if issues.get("errors"):
                 return audited({"valid": False, "issues": public(issues)})

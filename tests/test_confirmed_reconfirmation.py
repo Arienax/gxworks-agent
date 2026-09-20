@@ -169,31 +169,77 @@ def _reanalyze_explicit_io(request, previous):
 
 
 def test_reanalysis_does_not_undo_direct_io_address_edit():
+    from plc.specification.confirmed import preserve_io_user_edits
     request, spec = _explicit_io_reanalysis_fixture()
+    before = copy.deepcopy(spec)
     next(r for r in spec["io_table"] if r["address"] == "X1")["address"] = "X20"
-    spec = canonicalize_confirmed_spec(spec)
+    spec = canonicalize_confirmed_spec(preserve_io_user_edits(before, spec))
+    assert "X1" in spec["io_user_overrides"]["removed_addresses"]
     result = _reanalyze_explicit_io(request, spec)
     assert "X20" in {r["address"] for r in result["io_table"]}
     assert "X1" not in {r["address"] for r in result["io_table"]}
 
 
 def test_reanalysis_does_not_undo_direct_io_address_and_label_edit():
+    from plc.specification.confirmed import preserve_io_user_edits
     request, spec = _explicit_io_reanalysis_fixture()
+    before = copy.deepcopy(spec)
     row = next(r for r in spec["io_table"] if r["address"] == "X1")
     row.update(address="X20", label="操作台启动")
-    spec = canonicalize_confirmed_spec(spec)
+    spec = canonicalize_confirmed_spec(preserve_io_user_edits(before, spec))
     result = _reanalyze_explicit_io(request, spec)
     assert {r["address"]: r["label"] for r in result["io_table"]}["X20"] == "操作台启动"
     assert "X1" not in {r["address"] for r in result["io_table"]}
 
 
 def test_reanalysis_does_not_resurrect_deleted_confirmed_io_row():
+    from plc.specification.confirmed import preserve_io_user_edits
     request, spec = _explicit_io_reanalysis_fixture()
+    before = copy.deepcopy(spec)
     spec["io_table"] = [r for r in spec["io_table"] if r["address"] != "X1"]
-    spec = canonicalize_confirmed_spec(spec)
+    spec = canonicalize_confirmed_spec(preserve_io_user_edits(before, spec))
+    assert "X1" in spec["io_user_overrides"]["removed_addresses"]
     result = _reanalyze_explicit_io(request, spec)
     assert "X1" not in {r["address"] for r in result["io_table"]}
     assert {"X3", "Y0"}.issubset({r["address"] for r in result["io_table"]})
+
+
+def test_deleted_model_suggested_io_row_stays_deleted_on_reanalysis():
+    from application.analysis_results import _normalize_analysis_result
+    from plc.specification.confirmed import preserve_io_user_edits
+    first = _normalize_analysis_result(
+        {
+            "summary": "fixture", "approaches": [], "missing_info": [],
+            "suggested_io": {"M": {"M10": "模型内部状态"}},
+        },
+        "FX3U", "运行控制",
+    )
+    spec = canonicalize_confirmed_spec(build_review_draft(first))
+    before = copy.deepcopy(spec)
+    spec["io_table"] = [r for r in spec["io_table"] if r["address"] != "M10"]
+    spec = canonicalize_confirmed_spec(preserve_io_user_edits(before, spec))
+    second = _normalize_analysis_result(
+        {
+            "summary": "fixture", "approaches": [], "missing_info": [],
+            "suggested_io": {"M": {"M10": "模型内部状态"}},
+        },
+        "FX3U", "继续分析", spec,
+    )
+    result = canonicalize_confirmed_spec(build_review_draft(second, spec))
+    assert "M10" not in {r["address"] for r in result["io_table"]}
+
+
+def test_user_readding_removed_address_clears_tombstone():
+    from plc.specification.confirmed import preserve_io_user_edits
+    _request, spec = _explicit_io_reanalysis_fixture()
+    before = copy.deepcopy(spec)
+    spec["io_table"] = [r for r in spec["io_table"] if r["address"] != "X1"]
+    spec = canonicalize_confirmed_spec(preserve_io_user_edits(before, spec))
+    assert "X1" in spec["io_user_overrides"]["removed_addresses"]
+    before = copy.deepcopy(spec)
+    spec["io_table"].append({"kind": "X", "address": "X1", "label": "重新启用", "source": "user"})
+    spec = canonicalize_confirmed_spec(preserve_io_user_edits(before, spec))
+    assert "io_user_overrides" not in spec or "X1" not in spec["io_user_overrides"].get("removed_addresses", [])
 
 
 def test_reanalysis_does_not_overwrite_user_edited_label_at_same_address():
