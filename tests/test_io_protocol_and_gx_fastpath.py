@@ -51,6 +51,46 @@ def test_blank_normal_io_label_is_dropped_instead_of_rendering_empty_input():
     assert any(item.get("code") == "missing_io_label" for item in result["format_diagnostics"])
 
 
+def test_user_declared_io_survives_empty_or_conflicting_agent_suggestions():
+    user_text = """I/O 约定：
+X001：启动按钮
+X003：停止按钮
+D0：Vision Sensor 分类结果
+Y000：Entry conveyor
+Y002：Exit conveyor
+Y003：Sorter 1 turn
+Y004：Sorter 1 belt
+Y005：Sorter 2 turn
+Y006：Sorter 2 belt
+Y007：Sorter 3 turn
+Y010：Sorter 3 belt
+
+D0 = 1~3：蓝色
+D0 = 4~6：绿色
+D0 = 7~9：灰色
+"""
+    result = api._normalize_analysis_result(
+        {
+            "summary": "sorting",
+            "approaches": [],
+            "missing_info": [],
+            # The model may omit most rows or even disagree on a label. Explicit
+            # user declarations must still reach the review I/O table.
+            "suggested_io": {"X": {"X001": "模型错误标签"}},
+        },
+        "FX3U",
+        user_text,
+    )
+    assert result["suggested_io"]["X"] == {"X1": "启动按钮", "X3": "停止按钮"}
+    assert result["suggested_io"]["D"] == {"D0": "Vision Sensor 分类结果"}
+    assert result["suggested_io"]["Y"] == {
+        "Y0": "Entry conveyor", "Y2": "Exit conveyor", "Y3": "Sorter 1 turn",
+        "Y4": "Sorter 1 belt", "Y5": "Sorter 2 turn", "Y6": "Sorter 2 belt",
+        "Y7": "Sorter 3 turn", "Y10": "Sorter 3 belt",
+    }
+    assert result["suggested_io"]["D"]["D0"] != "1~3：蓝色"
+
+
 class _Edit:
     def __init__(self):
         self.value = ""

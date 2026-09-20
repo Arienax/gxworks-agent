@@ -2,7 +2,13 @@ import copy
 import difflib
 import re
 
-from plc.specification.bindings import bind_answers, binding_hint, single_address, restore_bound_choices
+from plc.specification.bindings import (
+    bind_answers,
+    binding_hint,
+    single_address,
+    restore_bound_choices,
+    resolve_parameter_address,
+)
 
 from plc.specification.approach import (
     contract_definition_issues,
@@ -548,6 +554,11 @@ def validate_spec_draft(spec, plc_model=None):
                 )
             )
 
+    binding_rows = spec.get("io_table")
+    if not isinstance(binding_rows, list):
+        binding_rows = raw_to_io_table(spec.get("io_allocation_raw", ""))
+    binding_history = spec.get("io_bindings", [])
+
     seen_bindings = {}
     for index, parameter in enumerate(parameters):
         if not isinstance(parameter, dict) or not str(parameter.get("value") or "").strip():
@@ -555,7 +566,7 @@ def validate_spec_draft(spec, plc_model=None):
         hint = binding_hint(parameter)
         if hint is None or parameter.get("id") in QUESTION_IDS:
             continue
-        address = single_address(parameter["value"], hint["kind"])
+        address = resolve_parameter_address(parameter, binding_rows, binding_history)
         if address is None:
             errors.append(_validation_issue("invalid_io_answer", "请为该输入/输出选择一个明确的软元件地址",
                                             f"$.parameters[{index}].value", row=index))

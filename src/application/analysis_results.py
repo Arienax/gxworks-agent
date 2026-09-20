@@ -4,12 +4,44 @@ import re
 from shared.i18n import tr
 from plc.specification.approach import normalize_approach
 from plc.validation import PLCJsonValidationError, parse_device_address
+from plc.device_identity import canonical_device
 from plc.hardware_profiles import ensure_hardware_questions
 
 _ANALYSIS_IO_KINDS = {"X", "Y", "M", "D", "T", "C", "S", "SM", "SD"}
 
 
 _ASSUMPTION_MARKERS = ("假设", "暂定", "待确认", "需确认", "unknown", "assume")
+_DECLARED_IO_LINE_RE = re.compile(
+    r"^\\s*(?:[-*•]\\s*|\\d+[.)、]\\s*)?((?:SM|SD|[XYMTCSDVZ])\\s*\\d+)\\s*[：:]\\s*(.+?)\\s*$",
+    re.IGNORECASE,
+)
+
+
+def _extract_user_declared_io(user_text, plc_model):
+    """Recover explicit address-to-purpose declarations from the user request.
+
+    This is a non-blocking preservation path, not a validator. Only standalone
+    device: purpose lines are accepted so comparisons such as D0 = 1~3 and
+    instruction operands cannot accidentally become I/O allocations.
+    """
+    declared = {}
+    for raw_line in str(user_text or "").splitlines():
+        match = _DECLARED_IO_LINE_RE.match(raw_line)
+        if match is None:
+            continue
+        address = canonical_device(re.sub(r"\\s+", "", match.group(1)).upper())
+        label = str(match.group(2) or "").strip()
+        if not label:
+            continue
+        try:
+            parsed = parse_device_address(address, plc_model)
+        except (PLCJsonValidationError, ValueError, TypeError):
+            continue
+        if parsed is None:
+            continue
+        actual_kind, _number = parsed
+        declared.setdefault(actual_kind, {})[address] = label
+    return declared
 
 
 def _iter_analysis_text(value):
@@ -205,6 +237,19 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
             current_unmapped = [] if current_unmapped in (None, "", {}) else [current_unmapped]
             hardware["unmapped_suggested_io"] = current_unmapped
         current_unmapped.extend(unmapped)
+
+    # User-declared wiring is authoritative even when Agent A omits it from
+    # its structured suggested_io. Merge by canonical device identity so an
+    # X001/X1 spelling difference cannot create duplicate physical rows.
+    declared_io = _extract_user_declared_io(user_text, plc_model)
+    for category, values in declared_io.items():
+        target = clean_io.setdefault(category, {})
+        for address, label in values.items():
+            identity = canonical_device(address)
+            for existing in list(target):
+                if canonical_device(existing) == identity:
+                    target.pop(existing, None)
+            target[identity] = label
 
     normalized["suggested_io"] = clean_io
     if hardware:
