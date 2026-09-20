@@ -546,17 +546,23 @@ def export_diagnostics(state_dir, job):
     from application.job_errors import public_error_details
     meta['error_details'] = public_error_details(job.get('error_details'))
     meta['error_code'] = _identifier(job.get('error_code') or 'none')
-    failure_analysis = {}
+    interaction_summary = {}
     for event_name in ('model_request', 'context_audit', 'provider_result', 'model_response',
                        'response_rejected', 'workflow_exception'):
         matched = next((item for item in reversed(records) if item.get('event') == event_name), None)
         if matched is not None:
-            failure_analysis[event_name] = {
+            interaction_summary[event_name] = {
                 key: value for key, value in matched.items()
                 if key not in {'schema_version', 'event', 'timestamp', 'job_id'}
             }
-    if failure_analysis:
-        meta['failure_analysis'] = failure_analysis
+    if interaction_summary:
+        meta['interaction_summary'] = interaction_summary
+        failed_trace = job.get('status') == 'failed' or any(
+            item.get('event') in {'response_rejected', 'workflow_exception'} for item in records
+        )
+        if failed_trace:
+            # Backward-compatible field for consumers of the original failure export.
+            meta['failure_analysis'] = interaction_summary
     roots = [Path(sys.executable).parent] if getattr(sys, 'frozen', False) else [_ROOT.parent]
     for root in roots:
         info = root / 'build-info.json'

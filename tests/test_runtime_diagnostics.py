@@ -305,6 +305,9 @@ def test_successful_job_export_includes_interaction_transcript(tmp_path):
 
     assert summary['job']['status'] == 'completed'
     assert summary['transcript_count'] == 2
+    assert 'model_request' in summary['interaction_summary']
+    assert 'model_response' in summary['interaction_summary']
+    assert 'failure_analysis' not in summary
     assert any(row['event'] == 'model_request' and row['messages'][-1]['content'] == 'PRIVATE_PROMPT'
                for row in transcript)
     assert any(row['event'] == 'model_response' and row['reasoning'] == 'SUCCESS_REASONING'
