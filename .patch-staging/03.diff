@@ -1,0 +1,54 @@
+         deltas.extend(ANALYSIS_MOTION_FAMILY_PROMPTS[name] for name in route.motion_families
+                       if name in ANALYSIS_MOTION_FAMILY_PROMPTS)
+-    if "pump" in route.topics:
+-        deltas.append(ANALYSIS_PUMP_PROMPT)
+     mode_prompt = ANALYSIS_DESIGN_PROMPT if route.include_design else ANALYSIS_DIRECT_PROMPT
+     if route.mode == "pinned":
+         mode_prompt += "\n\n" + ANALYSIS_PINNED_PROMPT
+diff --git a/src/application/analysis_results.py b/src/application/analysis_results.py
+index e91c8ce..920db1c 100644
+--- a/src/application/analysis_results.py
++++ b/src/application/analysis_results.py
+@@ -106,6 +106,10 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
+     # cannot authenticate its own questions by emitting this metadata field.
+     normalized.pop("hardware_intent", None)
+     normalized.pop("engineering_context", None)
++    # Legacy UI/classification fields are not part of the current model contract.
++    # Do not replay them into later model requests or migrate saved revisions.
++    normalized.pop("control_type", None)
++    normalized.pop("flowchart_steps", None)
+     normalized["approaches"] = [
+         normalize_approach({key: value for key, value in item.items() if key != "implementation_preferences"})
+         for item in (normalized.get("approaches") or [])
+@@ -131,8 +135,8 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
+     else:
+         assumptions = []
+ 
+-    existing_diagnostics = normalized.get("format_diagnostics", [])
+-    diagnostics = list(existing_diagnostics) if isinstance(existing_diagnostics, list) else []
++    # Only the normalizer may author format diagnostics, never the model.
++    diagnostics = []
+     clean_io = {}
+     unmapped = []
+     metadata = {}
+diff --git a/src/application/model_api.py b/src/application/model_api.py
+index 9377946..782f1be 100644
+--- a/src/application/model_api.py
++++ b/src/application/model_api.py
+@@ -53,7 +53,7 @@ from knowledge.patterns import (
+     build_workflow_prompt,
+     classify_request,
+ )
+-from application.prompts import ANALYSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_DIAGNOSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_PATCH_SYSTEM_PROMPT, DEBUG_REPORT_SYSTEM_PROMPT, FIELD_PATCH_REPAIR_SYSTEM_PROMPT, FORMAT_LADDER_REPAIR_SYSTEM_PROMPT, INSPECTION_SYSTEM_PROMPT, MULTI_AGENT_SPECIALIST_PROMPTS, PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT, SIMULATOR_TEST_SUITE_SYSTEM_PROMPT
++from application.prompts import ANALYSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_DIAGNOSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_PATCH_SYSTEM_PROMPT, DEBUG_REPORT_SYSTEM_PROMPT, FIELD_PATCH_REPAIR_SYSTEM_PROMPT, INSPECTION_SYSTEM_PROMPT, MULTI_AGENT_SPECIALIST_PROMPTS, PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT, SIMULATOR_TEST_SUITE_SYSTEM_PROMPT
+ from application.analysis_results import _ANALYSIS_IO_KINDS, _ASSUMPTION_MARKERS, _iter_analysis_text, _normalize_analysis_result
+ 
+ 
+@@ -295,8 +295,7 @@ def _request_analysis_response(messages, *, on_format_repair=None, **kwargs):
+                 "Return the complete corrected JSON object only, using the analysis schema above. "
+                 "Correct JSON syntax and missing schema keys only; preserve the requirement, "
+                 "devices, alternatives and questions. Do not invent confirmed answers or generate PLC code. "
+-                "Each flowchart_steps item has separate type and label keys, for example "
+-                '{"type":"transition","label":"X0"}. No markdown or explanations.'
++                "Use separate property names and values. No markdown or explanations."
+             )
