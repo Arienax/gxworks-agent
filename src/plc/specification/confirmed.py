@@ -1029,6 +1029,15 @@ def _merge_io_rows(base_rows, incoming_rows):
     merged = []
     by_address = {}
     base_count = len(base_rows or [])
+    base_labels = []
+    for row in base_rows or []:
+        if not isinstance(row, dict):
+            continue
+        address = str(row.get("address", "")).strip().upper()
+        if not address:
+            continue
+        kind = str(row.get("kind") or _device_kind(address)).strip() or _device_kind(address)
+        base_labels.append((kind, str(row.get("label", "")).strip().casefold()))
     for position, row in enumerate(list(base_rows or []) + list(incoming_rows or [])):
         if not isinstance(row, dict):
             continue
@@ -1045,19 +1054,18 @@ def _merge_io_rows(base_rows, incoming_rows):
             if isinstance(row.get(field), str):
                 clean[field] = row[field]
         if position >= base_count and not clean.get("binding_id"):
-            previous = merged[by_address[address]] if address in by_address else None
-            if previous and previous.get("binding_id"):
-                # A new analysis is a suggestion, not a user edit to the row
-                # already confirmed at this address (including its purpose).
+            if address in by_address:
+                # Once a row exists in a confirmed specification, a later model
+                # suggestion must never overwrite its address-adjacent metadata
+                # such as a user-edited purpose label.
                 continue
-            exact_bound_labels = [r for r in merged if r.get("binding_id")
-                                  and r["kind"] == clean["kind"] and r["label"]
-                                  and r["label"].casefold() == clean["label"].casefold()]
-            if address not in by_address and len(exact_bound_labels) == 1:
-                # Reanalysis often repeats its original suggested address after
-                # the operator has changed it. Do not add a second row for the
-                # same exact, already-bound purpose. New typed answers are still
-                # independently bound when the user confirms them.
+            exact_previous_labels = [item for item in base_labels
+                                     if item[0] == clean["kind"] and clean["label"]
+                                     and item[1] == clean["label"].casefold()]
+            if len(exact_previous_labels) == 1:
+                # Reanalysis may repeat the old suggested address after the
+                # operator moved the device. Preserve the confirmed row instead
+                # of adding a duplicate suggestion for the same unique purpose.
                 continue
         if address in by_address:
             previous = merged[by_address[address]]

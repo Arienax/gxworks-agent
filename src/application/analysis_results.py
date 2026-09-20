@@ -44,6 +44,29 @@ def _extract_user_declared_io(user_text, plc_model):
     return declared
 
 
+def _historical_declared_io(confirmed_spec, plc_model):
+    """Return explicit I/O declarations already seen before this analysis turn."""
+    historical = {}
+    context = (confirmed_spec or {}).get("engineering_context") if isinstance(confirmed_spec, dict) else None
+    requests = context.get("requests", []) if isinstance(context, dict) else []
+    for item in requests or []:
+        text = item.get("text", "") if isinstance(item, dict) else ""
+        for category, values in _extract_user_declared_io(text, plc_model).items():
+            target = historical.setdefault(category, {})
+            for address, label in values.items():
+                target[(canonical_device(address), str(label).strip().casefold())] = True
+    return historical
+
+
+def _confirmed_io_addresses(confirmed_spec):
+    addresses = set()
+    rows = (confirmed_spec or {}).get("io_table", []) if isinstance(confirmed_spec, dict) else []
+    for row in rows or []:
+        if isinstance(row, dict) and row.get("address"):
+            addresses.add(canonical_device(str(row["address"]).strip().upper()))
+    return addresses
+
+
 def _iter_analysis_text(value):
     if isinstance(value, dict):
         for nested in value.values():
@@ -238,14 +261,37 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
             hardware["unmapped_suggested_io"] = current_unmapped
         current_unmapped.extend(unmapped)
 
-    # User-declared wiring is authoritative even when Agent A omits it from
-    # its structured suggested_io. Merge by canonical device identity so an
-    # X001/X1 spelling difference cannot create duplicate physical rows.
+    # User-declared wiring seeds the first draft deterministically, but once a
+    # specification has been confirmed its edited I/O table is authoritative.
+    # Old declarations from earlier requests must not resurrect a row that the
+    # operator changed or deleted in the specification editor.
     declared_io = _extract_user_declared_io(user_text, plc_model)
+    historical = _historical_declared_io(confirmed_spec, plc_model)
+    confirmed_addresses = _confirmed_io_addresses(confirmed_spec)
+    historical_addresses = {
+        address for values in historical.values() for address, _label in values
+    }
+    if confirmed_spec:
+        for category, values in list(clean_io.items()):
+            if not isinstance(values, dict):
+                continue
+            for address in list(values):
+                identity = canonical_device(address)
+                if identity in historical_addresses and identity not in confirmed_addresses:
+                    values.pop(address, None)
+            if not values:
+                clean_io.pop(category, None)
+
     for category, values in declared_io.items():
         target = clean_io.setdefault(category, {})
+        seen = historical.get(category, {})
         for address, label in values.items():
             identity = canonical_device(address)
+            # On a later analysis turn, only a genuinely new explicit
+            # declaration may seed a new suggestion. Replaying the original
+            # request cannot undo direct edits made in the confirmed spec.
+            if confirmed_spec and (identity, str(label).strip().casefold()) in seen:
+                continue
             for existing in list(target):
                 if canonical_device(existing) == identity:
                     target.pop(existing, None)
