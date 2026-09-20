@@ -1474,14 +1474,20 @@ def canonicalize_confirmed_spec(spec):
     )
     overrides = canonical.get("io_user_overrides")
     if isinstance(overrides, dict):
-        removed = sorted({
+        removed = {
             canonical_device(str(address).strip().upper())
             for address in overrides.get("removed_addresses", []) or []
             if str(address).strip()
-        })
+        }
+        active_addresses = {
+            canonical_device(str(row.get("address") or "").strip().upper())
+            for row in canonical.get("io_table", []) or []
+            if isinstance(row, dict) and row.get("address")
+        }
+        removed.difference_update(active_addresses)
         if removed:
             overrides = copy.deepcopy(overrides)
-            overrides["removed_addresses"] = removed
+            overrides["removed_addresses"] = sorted(removed)
             canonical["io_user_overrides"] = overrides
         else:
             canonical.pop("io_user_overrides", None)
