@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 2
+          fetch-depth: 0
           persist-credentials: false
           lfs: true
       - uses: actions/setup-python@v5
@@ -39,7 +39,7 @@ jobs:
           assert hashlib.sha256(raw).hexdigest() == '18cf975ccea3947bbe871eabb18df44ca90a0c409876e5071bb8103c318b454c'
           data = json.loads(raw)
           assert data['base_commit'] == '728086895be6f7995706593194c7fdadc87be7da'
-          assert subprocess.check_output(['git','rev-parse','HEAD^'],text=True).strip() == data['base_commit']
+          subprocess.run(['git','merge-base','--is-ancestor',data['base_commit'],'HEAD'],check=True)
           for row in data['files']:
               name = row['path']
               path = PurePosixPath(name)
@@ -48,13 +48,13 @@ jobs:
                   assert not Path(name).exists(), name
               else:
                   assert hashlib.sha256(Path(name).read_bytes()).hexdigest() == row['before'], name
-          patch = data['patch'].encode('utf-8')
-          subprocess.run(['git','apply','--check','-'],input=patch,check=True)
-          subprocess.run(['git','apply','-'],input=patch,check=True)
+          def apply(patch):
+              subprocess.run(['git','apply','--check','-'],input=patch,check=True)
+              subprocess.run(['git','apply','-'],input=patch,check=True)
+          apply(data['patch'].encode('utf-8'))
           subprocess.run([sys.executable,'tools/audit_fx3u_contracts.py','--promote'],check=True)
           for row in data['files']:
               assert hashlib.sha256(Path(row['path']).read_bytes()).hexdigest() == row['after'], row['path']
-          # Same two explicit UTF-8 reads as the final locally checked auditor.
           auditor = Path('tools/audit_fx3u_contracts.py')
           content = auditor.read_text(encoding='utf-8')
           assert content.count('.read_text()') == 2
@@ -62,6 +62,18 @@ jobs:
           final_hash = '03a352e9f6222282a516f6479214a6cb24c604d72b55e0c9012c2309fe900bd5'
           assert hashlib.sha256(auditor.read_bytes()).hexdigest() == final_hash
           next(row for row in data['files'] if row['path'] == auditor.as_posix())['after'] = final_hash
+          corrections = {
+              'src/plc/instructions.py': ('c65ba7e1fa261a3954d7a063ea0ae3dc5cd1a5c5e99825d09c038c8c04f46221','56b8ee384940974cb28ec57f7a5c41016662d62bcff2db86b559c35bf255e255'),
+              'tools/audit_fx3u_contracts.py': ('03a352e9f6222282a516f6479214a6cb24c604d72b55e0c9012c2309fe900bd5','12620022940f07e17eb0712a1c316eb5dc1a5894ad060f66c67cdbca2668ae86'),
+              'tests/test_instruction_contract_alignment.py': ('77b3456b2b37ff8a7b153e939d2945d27d456b3ded3f91726882bb31552d25d5','33a9d0fe103af987fe8a5475144a50cd8eac7fa887ba7b020a252120fcb517dc'),
+              'docs/architecture/instruction-contract-coverage.md': ('a7f7af6c44c279f7494de0a47ec6088aa648d5a6144af8addc34343d52f71ad1','866f01e847d27184210aa91d321e5ee3f16b98f56f007b3c2f907d83ef17e9c7'),
+          }
+          for name, (before, after) in corrections.items():
+              assert hashlib.sha256(Path(name).read_bytes()).hexdigest() == before, name
+          apply(Path('.contract-source/followup.patch').read_bytes())
+          for name, (before, after) in corrections.items():
+              assert hashlib.sha256(Path(name).read_bytes()).hexdigest() == after, name
+              next(row for row in data['files'] if row['path'] == name)['after'] = after
           subprocess.run(['git','rm','-r','--','.contract-source','.github/workflows/contract-source-verify.yml'],check=True)
           Path(os.environ['RUNNER_TEMP'],'contract-candidate.json').write_text(json.dumps(data),encoding='utf-8')
           PY

@@ -1,0 +1,94 @@
+--- a/src/plc/instructions.py
++++ b/src/plc/instructions.py
+@@ -108,7 +108,8 @@
+             "operand_roles": bool(self.operands),
+             "operand_types": bool(self.operands) and all(o.data_type != "any" for o in self.operands),
+             "device_classes": bool(self.operands) and all(o.device_prefixes for o in self.operands),
+-            "form_identity": bool(self.cpu_support),
++            "form_identity": bool(self.mnemonic),
++            "cpu_applicability": bool(self.cpu_support), "hardware_applicability": False,
+             "execution_form": bool(self.execution_form), "instruction_width": self.instruction_width is not None,
+             "execution_conditions": False, "completion_ownership": False,
+             "numeric_and_memory_boundaries": False,
+--- a/tools/audit_fx3u_contracts.py
++++ b/tools/audit_fx3u_contracts.py
+@@ -211,7 +211,7 @@
+             reason = "existing_contract_conflict"
+         baseline = spec.contract_coverage() if hasattr(spec, "contract_coverage") else {}
+         row = {"opcode": opcode, "base_opcode": form.base_mnemonic,
+-               "legacy_level": spec.contract_level, "before_arity": [spec.min_operands, spec.max_operands],
++               "cpu_support": sorted(spec.cpu_support), "legacy_level": spec.contract_level, "before_arity": [spec.min_operands, spec.max_operands],
+                "decision": reason, "coverage": baseline}
+         if reason == "corroborated":
+             native, corroborating = min(pairs, key=lambda pair: (pair[0]["page"], pair[1]["page"], pair[1]["form"]))
+@@ -252,7 +252,7 @@
+               "verified_dimension_counts": dict(sorted(Counter(field for row in audited for field in row["verified_fields"]).items())),
+               "manual_forms_outside_generation_catalogue": sorted({op for rows in natives.values() for n in rows for op in n["forms"]} - set(allowed)),
+               "fully_verified_semantics": 0,
+-              "not_promoted": ["operand_roles", "operand_types", "device_classes", "execution_conditions", "completion_ownership", "numeric_and_memory_boundaries"],
++              "not_promoted": ["cpu_applicability", "hardware_applicability", "operand_roles", "operand_types", "device_classes", "execution_conditions", "completion_ownership", "numeric_and_memory_boundaries"],
+               "rows": audited, "quarantine": quarantine,
+               "plc_compilation": "not_performed", "live_model_calls": 0}
+     return ledger, report
+@@ -274,6 +274,10 @@
+     mode.add_argument("--promote", action="store_true", help="Write only corroborated signature data; never edit the source DB")
+     mode.add_argument("--check", action="store_true", help="Verify the committed signature ledger is reproducible")
+     args = parser.parse_args(argv)
++    for target in (args.output if args.promote else None, args.report):
++        if target is not None and (target.resolve() == args.database.resolve() or
++                target.exists() and args.database.exists() and target.samefile(args.database)):
++            parser.error("Audit output must not overwrite the source database")
+     ledger, report = build(args.database)
+     text = ledger_text(ledger)
+     if args.promote:
+--- a/tests/test_instruction_contract_alignment.py
++++ b/tests/test_instruction_contract_alignment.py
+@@ -201,6 +201,7 @@
+     assert report["decisions"]["corroborated"] > 200
+     assert report["after_exact_arity"] > report["before_exact_arity"]
+     assert report["fully_verified_semantics"] == 0
++    assert {"cpu_applicability", "hardware_applicability"} <= set(report["not_promoted"])
+     assert report["not_promoted"]  # no blanket `full` based on an arity match
+     assert report["quarantine"]
+     for row in report["rows"]:
+@@ -381,3 +382,18 @@
+     words = json.loads(page["word_geometry_json"])
+     page["word_geometry_json"] = json.dumps([word for word in words if word["text"] != "n2"])
+     assert native_definition(page, tables) is None
++
++
++@pytest.mark.parametrize("flag", ["--output", "--report"])
++def test_contract_audit_cannot_overwrite_its_source_database(tmp_path, monkeypatch, flag):
++    import tools.audit_fx3u_contracts as audit
++    database = tmp_path / "evidence.sqlite"
++    database.write_bytes(b"source evidence")
++    monkeypatch.setattr(audit, "build", lambda *a: pytest.fail("No source scan or promotion after path conflict"))
++    args = ["--database", str(database), flag, str(database)]
++    if flag == "--output":
++        args.append("--promote")
++    with pytest.raises(SystemExit) as error:
++        audit.main(args)
++    assert error.value.code == 2
++    assert database.read_bytes() == b"source evidence"
+--- a/docs/architecture/instruction-contract-coverage.md
++++ b/docs/architecture/instruction-contract-coverage.md
+@@ -11,7 +11,7 @@
+ 
+ The legacy `contract_level=full` field was a metadata classification, not proof
+ that every constraint had been verified. Core now reports independent dimensions:
+-arity, native operand order, operand roles/types/device classes, literal form
++CPU/hardware applicability, arity, native operand order, operand roles/types/device classes, literal form
+ identity, execution form, operation width, execution conditions, completion
+ ownership, and numeric/memory boundaries. Legacy annotations are labelled
+ `declared_unverified`; missing facts remain `unresolved`. A corroborated
+@@ -81,8 +81,8 @@
+ `InstructionRegistry.resolve(opcode, cpu="FX3U")` selects a CPU-scoped,
+ literal-form override. `cpu=None` retains the model-neutral import/IR view;
+ FX5U does not inherit FX3U-only evidence. Existing read/write annotations and
+-admitted opcodes are unchanged. Unknown vendor instructions can still be
+-preserved by import paths; they are not promoted or interpreted speculatively.
++admitted opcodes are unchanged. Signature corroboration does not verify conditional CPU/hardware availability.
++Unknown vendor instructions can still be preserved by import paths; they are not promoted or interpreted speculatively.
+ 
+ The existing generic APP_INSTR validator consumes the CPU-scoped arity. Field
+ repair candidate filtering consumes the same view; no semantic rewrite/retry
