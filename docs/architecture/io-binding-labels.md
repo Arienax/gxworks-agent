@@ -64,3 +64,38 @@ suggestions, malformed optional labels, public projection, and both prompt modes
 An offline HTTP-to-artifact regression saves and edits the specification without
 a model call, then uses one synthetic generation response containing logic only.
 It checks the saved ladder/IR, SVG and comment CSV for the independent names.
+
+
+## Already-declared addresses and model shape normalization
+
+Known addresses do not need an address-confirmation question just to acquire a
+purpose label. `analysis_results` accepts both grouped `suggested_io` mappings
+(`{"X":{"X0":"启动按钮"}}`) and flat address-to-string mappings
+(`{"X0":"启动按钮"}`), normalizes aliases, and applies the same CPU/address checks.
+A complete device key is not classified as a hardware category. Arbitrary
+module/channel dictionaries are not recursively flattened into I/O.
+
+Explicit user declarations also seed the review I/O table when the model omits
+it. The preservation grammar accepts `address: purpose`, `address 为/是 purpose`,
+and `address is purpose` at line/semicolon/Chinese-sentence boundaries. For
+example, `X0 为启动按钮，按下时 ON；X1 为停止按钮，按下时 ON；Y0 为运行输出。`
+creates the three declared rows. The physical-level suffix remains in original
+`intent_context.requests`, not in the short comment. This is a bounded input
+adapter, not arbitrary natural-language interpretation or address-based guessing;
+questions, state conditions, numeric classification rules and instruction operands
+are not used as names. Existing user-edited/cleared labels, moved rows and explicit
+deletions still take precedence on reanalysis.
+
+The confirmation-to-export sentinel starts from that paragraph and a synthetic
+flat analysis response, with no prefilled I/O table. It checks the review draft,
+ConfirmedSpec v4, actual Agent B request, saved ladder/IR, explorer response, SVG
+and UTF-16 comment CSV. The captured report contains a generation transcript,
+not Agent A's original completion; the flat fixture reproduces the observed
+empty table plus `hardware_context.x0/x1/y0`, rather than claiming to be its raw
+response. No annotation-only model call is added.
+
+Saved versions are immutable. Updating the application does not rewrite the
+previously empty I/O table or silently change its old artifacts. For a clean
+regression, start a new project with the same declaration paragraph. An existing
+confirmed empty allocation can be explicitly corrected in the I/O editor before
+generation; reanalysis must not silently resurrect removed allocations.

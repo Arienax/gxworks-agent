@@ -7,30 +7,45 @@ from plc.validation import PLCJsonValidationError, parse_device_address
 from plc.device_identity import canonical_device
 from plc.hardware_profiles import ensure_hardware_questions
 
-_ANALYSIS_IO_KINDS = {"X", "Y", "M", "D", "T", "C", "S", "SM", "SD"}
+_ANALYSIS_IO_KINDS = {"X", "Y", "M", "D", "T", "C", "S", "V", "Z", "SM", "SD"}
+_FLAT_IO_ADDRESS_RE = re.compile(r"(SM|SD|[XYMDTCSVZ])\d+", re.IGNORECASE)
 
 
 _ASSUMPTION_MARKERS = ("假设", "暂定", "待确认", "需确认", "unknown", "assume")
 _DECLARED_IO_LINE_RE = re.compile(
-    r"^\s*(?:[-*•]\s*|\d+[.)、]\s*)?((?:SM|SD|[XYMTCSDVZ])\s*\d+)\s*[：:]\s*(.+?)\s*$",
+    r"^\s*(?:[-*•]\s*|\d+[.)、]\s*)?((?:SM|SD|[XYMTCSDVZ])\s*\d+)"
+    r"\s*(?:[：:]|为|是|is\s+)\s*(.+?)\s*$",
+    re.IGNORECASE,
+)
+_INPUT_QUALIFIER_RE = re.compile(
+    r"[,，(（]\s*(?:按下|未按下|松开|释放|动作|未动作|常开|常闭|常開|常閉|normally\b|active\b)",
+    re.IGNORECASE,
+)
+_STATE_NOT_PURPOSE_RE = re.compile(
+    r"^(?:(?:ON|OFF|TRUE|FALSE)(?=$|[^A-Za-z0-9_])|[+-]?\d+(?:[.,]\d+)?(?=$|[\s~～<>=+\-]|时|時))",
     re.IGNORECASE,
 )
 
 
 def _extract_user_declared_io(user_text, plc_model):
-    """Recover explicit address-to-purpose declarations from the user request.
+    """Preserve explicit device-purpose declarations, including inline clauses.
 
-    This is a non-blocking preservation path, not a validator. Only standalone
-    device: purpose lines are accepted so comparisons such as D0 = 1~3 and
-    instruction operands cannot accidentally become I/O allocations.
+    This bounded grammar is not intent inference: device: purpose, device 为/是
+    purpose, or device is purpose at a statement boundary. It never assigns a
+    purpose from an address number or parses instruction operands/conditions.
+    Electrical qualifiers stay in original intent, separate from the short label.
     """
     declared = {}
-    for raw_line in str(user_text or "").splitlines():
-        match = _DECLARED_IO_LINE_RE.match(raw_line)
+    for statement in re.split(r"[\n;；。]+", str(user_text or "")):
+        match = _DECLARED_IO_LINE_RE.fullmatch(statement)
         if match is None:
             continue
         address = canonical_device(re.sub(r"\s+", "", match.group(1)).upper())
-        label = str(match.group(2) or "").strip()
+        raw_label = match.group(2).strip()
+        # A question or state comparison is not an explicit purpose declaration.
+        if "?" in raw_label or "？" in raw_label or _STATE_NOT_PURPOSE_RE.match(raw_label):
+            continue
+        label = _INPUT_QUALIFIER_RE.split(raw_label, maxsplit=1)[0].strip()
         if not label:
             continue
         try:
@@ -164,7 +179,8 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
         category_upper = category_text.upper()
         special_relays = category_lower == "special_relays"
         special_registers = category_lower == "special_registers"
-        is_device_category = category_upper in _ANALYSIS_IO_KINDS
+        flat_address = _FLAT_IO_ADDRESS_RE.fullmatch(category_upper) if isinstance(values, str) else None
+        is_device_category = category_upper in _ANALYSIS_IO_KINDS or flat_address is not None
 
         if not (is_device_category or special_relays or special_registers):
             key = re.sub(r"[^a-z0-9_]+", "_", category_lower).strip("_") or "metadata"
@@ -181,7 +197,12 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
             )
             continue
 
-        if isinstance(values, dict):
+        # Both {"X": {"X0": "name"}} and {"X0": "name"} carry an exact
+        # device-purpose pair. A full device key is not a hardware category.
+        # Do not recursively flatten arbitrary module/channel objects.
+        if flat_address is not None:
+            entries = [(category_text, values)]
+        elif isinstance(values, dict):
             entries = list(values.items())
         elif isinstance(values, list):
             if is_device_category:
@@ -204,8 +225,9 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
             continue
 
         for raw_address, raw_label in entries:
-            address = str(raw_address).strip().upper()
-            path = "suggested_io.%s.%s" % (category_text, address or "<empty>")
+            address = canonical_device(str(raw_address).strip().upper())
+            path = ("suggested_io.%s" % category_text if flat_address is not None
+                    else "suggested_io.%s.%s" % (category_text, address or "<empty>"))
             try:
                 parsed_address = parse_device_address(address, plc_model)
                 if parsed_address is None:
@@ -230,7 +252,7 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
             elif special_registers:
                 allowed_kinds = {"D", "SD"}
             elif is_device_category:
-                allowed_kinds = {category_upper}
+                allowed_kinds = {flat_address.group(1) if flat_address is not None else category_upper}
 
             if actual_kind not in allowed_kinds:
                 add_diagnostic(

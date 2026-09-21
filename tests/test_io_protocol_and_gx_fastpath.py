@@ -1,4 +1,7 @@
 import types
+from copy import deepcopy
+
+import pytest
 from pathlib import Path
 
 import application.model_api as api
@@ -242,3 +245,69 @@ def test_analysis_model_metadata_does_not_impersonate_core_diagnostics_or_semant
     assert any(s["semantic"] == "RISING_EDGE" for s in result["execution_semantics"])
     assert all(s.get("evidence") != "模型编造" for s in result["execution_semantics"])
     assert raw == before
+
+
+@pytest.mark.parametrize("layout", ["flat", "grouped", "mixed"])
+def test_device_keyed_suggestions_are_io_not_hardware_metadata(layout):
+    from plc.specification.confirmed import build_review_draft, canonicalize_confirmed_spec
+    maps = {
+        "flat": {"x001": "检测输入", "Y010": "送料输出", "D100": "计数值", "SM400": "运行许可"},
+        "grouped": {"X": {"X001": "检测输入"}, "Y": {"Y010": "送料输出"},
+                    "D": {"D100": "计数值"}, "special_relays": {"SM400": "运行许可"}},
+        "mixed": {"X": {"X001": "检测输入"}, "Y010": "送料输出", "D100": "计数值",
+                  "special_relays": {"SM400": "运行许可"}},
+    }
+    raw = {"summary": "地址到用途", "approaches": [], "missing_info": [],
+           "suggested_io": maps[layout]}
+    before = deepcopy(raw)
+    result = api._normalize_analysis_result(raw, "FX5U", "")
+    spec = canonicalize_confirmed_spec(build_review_draft(result))
+    assert {r["address"]: r["label"] for r in spec["io_table"]} == {
+        "X1": "检测输入", "Y10": "送料输出", "D100": "计数值", "SM400": "运行许可"}
+    assert not {"x001", "y010", "d100", "sm400"} & set(result.get("hardware_config", {}))
+    assert raw == before
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("X0 为启动按钮，按下时 ON；X1 为停止按钮，按下时 ON；Y0 为运行输出。\n实现停止优先的普通起保停自锁控制。",
+     {"X0": "启动按钮", "X1": "停止按钮", "Y0": "运行输出"}),
+    ("X005是进料检测；Y012 是排料阀；D100为累计数量。", {"X5": "进料检测", "Y12": "排料阀", "D100": "累计数量"}),
+    ("X003: 检测输入（常闭，按下时 OFF）; Y010: 送料输出（工位2）", {"X3": "检测输入", "Y10": "送料输出（工位2）"}),
+    ("X005 is Infeed sensor; Y012 is Reject valve", {"X5": "Infeed sensor", "Y12": "Reject valve"}),
+    ("X005为3号泵运行反馈", {"X5": "3号泵运行反馈"}),
+])
+def test_explicit_inline_io_survives_omitted_model_allocation(text, expected):
+    from plc.specification.confirmed import build_review_draft
+    raw = {"summary": "设备用途", "approaches": [], "missing_info": [], "suggested_io": {}}
+    normalized = api._normalize_analysis_result(raw, "FX3U", text)
+    draft = build_review_draft(normalized)
+    assert {r["address"]: r["label"] for r in draft["io_table"]} == expected
+    # Electrical/behavioral text is kept as original intent, not turned into a comment.
+    assert draft["intent_context"]["requests"][0]["text"] == text
+    assert draft["parameters"] == []
+
+
+@pytest.mark.parametrize("text", [
+    "D0 = 1~3：蓝色；D0 = 4~6：绿色", "MOV K1 D0", "如果 X0 为 ON，则 Y0 输出。",
+    "X0 为 ON 时启动 Y0", "X0为ON时启动Y0", "D0 是 7 时输出 Y0", "X0 是哪个输入？", "不要使用 X0 作为启动输入",
+    "X0、X1 为两个启动输入", "X0,X1为两个启动输入", "X008：非法 FX3U 地址",
+])
+def test_inline_io_recovery_does_not_invent_names_from_conditions_or_instructions(text):
+    from application.analysis_results import _extract_user_declared_io
+    assert _extract_user_declared_io(text, "FX3U") == {}
+
+
+def test_flat_io_still_validates_cpu_and_does_not_flatten_hardware_objects():
+    raw = {"suggested_io": {"X008": "非法八进制", "Y002": "送料阀",
+                           "analog_output": {"channel": "CH1", "address": "D100", "note": "量程设置"}}}
+    result = api._normalize_analysis_result(raw, "FX3U", "")
+    assert result["suggested_io"] == {"Y": {"Y2": "送料阀"}}
+    assert any(i["code"] == "invalid_io_address" for i in result["format_diagnostics"])
+    assert result["hardware_config"]["analog_output"] == raw["suggested_io"]["analog_output"]
+    assert not any("CHANNEL" in str(v) for v in result["suggested_io"].values())
+
+
+@pytest.mark.parametrize("value", [{"thought": "不要作为注释"}, ["NO X0"], 7, None])
+def test_flat_io_adapter_does_not_turn_structured_values_into_device_names(value):
+    result = api._normalize_analysis_result({"suggested_io": {"X0": value}}, "FX3U", "")
+    assert result["suggested_io"] == {}

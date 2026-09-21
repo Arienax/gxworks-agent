@@ -522,3 +522,97 @@ def test_polarity_question_owns_its_row_before_first_confirmation():
     assert confirmed["io_bindings"][0]["address"] == "X5"
     assert confirmed["io_bindings"][0]["label"] == "重命名后的输入"
     assert confirmed["io_bindings"][0]["active_level"] == 0
+
+
+
+def test_inline_user_io_and_flat_analysis_reach_http_explorer_and_all_artifacts(tmp_path, monkeypatch):
+    """Reported paragraph + model-shaped flat I/O, never a prefilled spec fixture.
+
+    The upload captures generation, not A's raw completion. This flat response
+    reproduces the observed hardware_context.x0/x1/y0 and empty-table defect.
+    """
+    import csv
+    import json
+    from fastapi.testclient import TestClient
+    from application.workbench import WorkbenchService
+    from model_runtime.provider import TextDelta, SystemMessage
+    from plc.ir import ir_to_ladder
+    from test_web_api import ORIGIN, _app, _login, _complete
+
+    text = ("X0 为启动按钮，按下时 ON；X1 为停止按钮，按下时 ON；Y0 为运行输出。\n"
+            "实现停止优先的普通起保停自锁控制。")
+    expected = {"X0": "启动按钮", "X1": "停止按钮", "Y0": "运行输出"}
+    class Provider:
+        profile = {}
+        def __init__(self):
+            self.requests = []
+        def stream(self, request):
+            self.requests.append(request)
+            if request.response_contract.name == "analysis":
+                payload = {"summary": "停止优先起保停", "missing_info": [], "assumptions": [],
+                    "suggested_io": {"X0": "启动按钮输入（按下为ON）", "X1": "停止按钮输入（按下为ON）", "Y0": "运行输出"},
+                    "approaches": [{"approach_id": "direct", "name": "自保持", "description": "停止优先", "pros": "", "cons": "",
+                                    "generation_guide": "", "generation_contract": {"required_opcodes": []}}]}
+            else:
+                prompt = next(m.content for m in request.messages if isinstance(m, SystemMessage))
+                spec, _ = json.JSONDecoder().raw_decode(prompt.split("# Confirmed project specification\n", 1)[1])
+                assert {r["address"]: r["label"] for r in spec["io_table"]} == expected
+                assert not {"approaches", "engineering_context", "decision_receipt"} & set(spec)
+                payload = {"r": [{"h": None, "s": [], "b": [{
+                    "i": [{"or": [["NO X000"], ["NO Y000"]]}, "NC X001"], "o": ["COIL Y000"]}]}]}
+            yield TextDelta(json.dumps(payload, ensure_ascii=False))
+
+    provider = Provider()
+    monkeypatch.setattr("application.model_api._build_knowledge_context", lambda *a, **k: "")
+    monkeypatch.setattr("application.generation_agent._build_knowledge_context", lambda *a, **k: "")
+    service = WorkbenchService(tmp_path/"workspace", tmp_path/"state",
+                               model_factory=lambda: (provider, {"model": "offline-io-labels"}))
+    with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
+        headers = _login(client)
+        pid = client.post("/api/projects", headers=headers, json={"name": "I/O names"}).json()["id"]
+        _, analysis = _complete(client, service, client.post("/api/jobs", headers=headers, json={
+            "kind": "analysis", "analysis_mode": "direct", "project_id": pid, "request_id": "analyze-labels",
+            "text": text, "response_language": "zh-CN"}))
+        draft = analysis["spec_draft"]
+        assert {r["address"]: r["label"] for r in draft["io_table"]} == expected
+        assert not draft["parameters"]
+        saved = client.put(f"/api/projects/{pid}/spec", headers=headers, json={
+            "spec": draft, "expected_hash": analysis["spec_base_hash"]}).json()
+        assert saved["valid"] and saved["spec"]["schema_version"] == 4
+        assert {r["address"]: r["label"] for r in saved["spec"]["io_table"]} == expected
+        _, output = _complete(client, service, client.post("/api/jobs", headers=headers, json={
+            "kind": "generation", "project_id": pid, "request_id": "generate-labels",
+            "text": "请严格按照已确认规格生成候选程序。", "response_language": "zh-CN"}))
+        assert output["status"] == "saved" and len(provider.requests) == 2
+        vid = output["version_id"]
+        program = service.projects.program(pid, vid)
+        assert ir_to_ladder(program)["device_comments"] == expected
+        view = client.get(f"/api/projects/{pid}/versions/{vid}/explorer").json()
+        assert {a: d["comment"] for a, d in view["devices"].items()} == expected
+        assert all(label in view["svg"] for label in expected.values())
+        stored = json.loads(service.projects.artifact(pid, vid, "json").read_text(encoding="utf-8"))
+        assert stored["device_comments"] == expected
+        svg = service.projects.artifact(pid, vid, "svg").read_text(encoding="utf-8")
+        assert all(label in svg for label in expected.values())
+        with service.projects.artifact(pid, vid, "comment_csv").open(encoding="utf-16", newline="") as stream:
+            rows = list(csv.reader(stream, delimiter="\t"))[2:]
+        assert {r[0]: r[1] for r in rows} == {"X000": "启动按钮", "X001": "停止按钮", "Y000": "运行输出"}
+
+
+def test_inline_declarations_reanalysis_preserves_user_clear_move_and_delete():
+    from application.analysis_results import _normalize_analysis_result
+    from plc.specification.provenance import build_confirmed_spec
+    from plc.specification.confirmed import preserve_io_user_edits
+    text = "X0 为启动按钮；X1 为停止按钮；Y0 为运行输出。"
+    raw = {"summary": "起保停", "approaches": [], "missing_info": [], "suggested_io": {}}
+    first = canonicalize_confirmed_spec(build_review_draft(_normalize_analysis_result(raw, "FX3U", text)))
+    edited = copy.deepcopy(first)
+    edited["io_table"][0].update(address="X002", label="操作台启动")
+    edited["io_table"] = [r for r in edited["io_table"] if r["address"] != "X1"]
+    next(r for r in edited["io_table"] if r["address"] == "Y0")["label"] = ""
+    edited = canonicalize_confirmed_spec(preserve_io_user_edits(first, edited))
+    spec = build_confirmed_spec(edited)
+    # Same original text and repeated flat suggestions are not a new user edit.
+    raw["suggested_io"] = {"X000": "启动按钮", "X001": "停止按钮", "Y000": "运行输出"}
+    result = canonicalize_confirmed_spec(build_review_draft(_normalize_analysis_result(raw, "FX3U", text, spec), spec))
+    assert {r["address"]: r["label"] for r in result["io_table"]} == {"X2": "操作台启动", "Y0": ""}
