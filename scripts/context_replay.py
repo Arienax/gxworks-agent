@@ -160,6 +160,9 @@ def run_case(case, *, include_content=False):
     checks = report["checks"]
     attempts = []
     captured = {}
+    analysis_provider = provider = None
+    evidence = []
+    stage = "runtime_setup"
     try:
         # Suppress application's ordinary progress prints; optional content is
         # returned only in the sanitized report, never leaked via CLI stdout.
@@ -176,13 +179,14 @@ def run_case(case, *, include_content=False):
             # error is not evidence of passing a retrieval-scope test.
             plan = retrieval_plan(case.get("request", "FX3U"), "analysis", case.get("mode") == "design")
             checks["real_haystack_router"] = plan["engine"] == "haystack.MetadataRouter"
-            analysis_provider = None
             if "analysis" in case:
+                stage = "analysis"
                 analysis_provider = RecordedProvider(case["analysis"])
                 with api.provider_scope(analysis_provider, model_name="offline-replay"):
                     analysis = api.analyze_requirement(case["request"], analysis_mode=case.get("mode", "direct"))
                 if not isinstance(analysis, dict):
                     raise ValueError("Recorded analysis was not accepted")
+                stage = "confirmation"
                 if "review_draft" in case:
                     historical = case["review_draft"]
                     draft = restore_review_choices(historical, analysis)
@@ -216,7 +220,8 @@ def run_case(case, *, include_content=False):
                 # or reinterpret already-corrupt historical question identities.
                 spec = copy.deepcopy(case["confirmed_spec"])
                 receipt = {}
-            evidence = []
+            stage = "generation"
+            captured.update(confirmed_spec=spec, decision_receipt=receipt, generation_evidence=evidence)
             original = agent._build_knowledge_context
             def observe(query, **kwargs):
                 value = original(query, **kwargs)
@@ -225,7 +230,6 @@ def run_case(case, *, include_content=False):
             provider = RecordedProvider(case["completion"])
             with patch.object(agent, "_build_knowledge_context", observe), api.provider_scope(provider, model_name="offline-replay"):
                 result = agent.generate_confirmed_ladder(spec, case.get("plc_model", "FX3U"), model_name="offline-replay", effort="high")
-            validate_ladder_candidate_structure(result["ladder"], plc_model=case.get("plc_model", "FX3U"))
             projected, prompt = _request_spec(provider.requests[0])
             checks["one_recorded_generation"] = len(provider.requests) == 1
             checks["effort_preserved"] = provider.requests[0].options.get("reasoning_effort") == "high"
@@ -248,18 +252,25 @@ def run_case(case, *, include_content=False):
             if case.get("check_debug_lane"):
                 debug = build_knowledge_context("FX3U M8336 zero return flag not positioning completion", task_type="debug", top_k=8, char_budget=20000)
                 checks["debug_lane_available"] = "debug" in debug.manifest["retrieval_scope"]["source_lanes"]
-            report["provider_fixture_calls"] = len(provider.requests) + (len(analysis_provider.requests) if analysis_provider else 0)
-            report["generation_evidence_count"] = sum(len(m.get("records", [])) for m in evidence)
             report["generation_prompt_chars"] = len(prompt)
             captured.update(confirmed_spec=spec, generation_spec=projected, generation_evidence=evidence,
                             generation_prompt=prompt, decision_receipt=receipt)
+            stage = "candidate_validation"
+            validate_ladder_candidate_structure(result["ladder"], plc_model=case.get("plc_model", "FX3U"))
     except Exception as error:
         checks["completed_replay"] = False
         report["error_type"] = type(error).__name__
+        report["failure_stage"] = stage
+        if include_content:
+            captured["error_message"] = str(error)
         report["error_frames"] = [{"file": Path(frame.filename).name, "line": frame.lineno, "function": frame.name}
                                   for frame in traceback.extract_tb(error.__traceback__)[-5:]]
     else:
         checks["completed_replay"] = True
+    # A failed acceptance still consumed a recorded response and built context.
+    # Do not present those observed stages as zero merely because a later stage failed.
+    report["provider_fixture_calls"] = sum(len(p.requests) for p in (analysis_provider, provider) if p is not None)
+    report["generation_evidence_count"] = sum(len(m.get("records", [])) for m in evidence)
     checks["no_network_attempts"] = not attempts
     checks["input_unchanged"] = digest(case) == before
     report["passed"] = all(checks.values())

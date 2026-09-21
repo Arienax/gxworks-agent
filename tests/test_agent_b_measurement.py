@@ -252,3 +252,41 @@ def test_offline_replay_blocks_dns_and_datagram_paths_and_restores_patches(opera
                     getattr(socket, operation)("provider.invalid")
         assert attempts == ["blocked_network_or_provider_access"]
     assert getattr(owner, operation) is original
+
+
+@pytest.mark.parametrize("include_content", [False, True])
+def test_failed_candidate_replay_keeps_consumed_response_and_evidence_counts(include_content):
+    from scripts.context_replay import load_cases, run_case as replay_case
+    case = copy.deepcopy(next(row for row in load_cases() if row["case_id"] == "legacy-generation-view"))
+    # Synthetic malformed instruction, never a deployable motion program.
+    case["completion"] = {"r": [{"h": None, "s": [], "b": [
+        {"i": ["NO M0"], "o": ["ZRN X0 X0 Y0 K2000 K500"]}
+    ]}]}
+    before = copy.deepcopy(case)
+    report = replay_case(case, include_content=include_content)
+    assert not report["passed"]
+    assert report["failure_stage"] == "candidate_validation"
+    assert report["error_type"] == "PLCJsonValidationError"
+    assert report["provider_fixture_calls"] == 1 and report["real_model_calls"] == 0
+    assert report["generation_evidence_count"] > 0
+    assert report["generation_prompt_chars"] > 0
+    assert report["checks"]["no_network_attempts"] and report["checks"]["input_unchanged"]
+    assert case == before
+    if include_content:
+        assert "ZRN" in report["content"]["error_message"]
+        assert "4 operand" in report["content"]["error_message"]
+        assert report["content"]["generation_evidence"]
+    else:
+        assert "content" not in report and "error_message" not in report
+
+
+def test_replay_failure_before_provider_creation_has_zero_consumptions(monkeypatch):
+    from scripts.context_replay import run_case as replay_case
+    import knowledge.scope as scope
+    def unavailable(*args, **kwargs):
+        raise RuntimeError("Bearer private-test-secret-123456")
+    monkeypatch.setattr(scope, "retrieval_plan", unavailable)
+    report = replay_case({"case_id": "setup-failure"})
+    assert not report["passed"] and report["failure_stage"] == "runtime_setup"
+    assert report["provider_fixture_calls"] == report["generation_evidence_count"] == 0
+    assert "private-test-secret" not in json.dumps(report)
