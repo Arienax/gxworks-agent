@@ -1,4 +1,4 @@
-# Optional local web runtime (Python 3.10+). Keep separate from Win7/Qt.
+# Local Web runtime (Python 3.10+); no GUI framework.
 fastapi==0.141.1
 uvicorn==0.52.4
 numpy==2.3.2

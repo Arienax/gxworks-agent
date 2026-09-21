@@ -21,7 +21,7 @@ The project follows one rule: **LLM output is a candidate, not an engineering re
 
 ## Architecture and maintenance policy
 
-PLC domain semantics have one owner: the headless Python Core. TypeScript is presentation only; C# is a vendor/native adapter only. Qt is **legacy/frozen**: no new feature parity work, only critical bug fixes. The Qt entry points remain until Web covers the required frozen workflows and Windows/GX migration is verified, then Qt will be removed. See [language boundaries](docs/architecture/language-boundaries.md).
+PLC domain semantics have one owner: the headless Python Core. TypeScript is presentation only; C# is a vendor/native adapter only. Web is the sole maintained UI. The Qt/Win7 client, its dependencies and packaging have been retired; reusable engineering services and historical data remain. This is an intentional retirement, not a claim of complete GUI parity or native Windows/GX acceptance. See the [retirement audit](docs/architecture/qt-retirement-audit.md) and [language boundaries](docs/architecture/language-boundaries.md).
 
 ## What is distinctive
 

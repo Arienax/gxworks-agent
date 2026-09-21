@@ -16,7 +16,7 @@
 flowchart TD
   UI[设置页保存 language / 工作台加载设置] --> Scope[工作流入口捕获语言]
   CLI[非 UI 调用方显式 response_language 或 language_context] --> Scope
-  Scope --> Worker[Qt worker 在构造时捕获语言]
+  Scope --> Worker[应用工作流在提交时捕获语言]
   Scope --> API[api 分析 / 生成 / 检查 / 诊断 / 仿真方案]
   Worker --> API
   Worker --> Agent[plc_agent 多轮工具任务]
@@ -120,7 +120,7 @@ MCP 则是 `外部客户端 → MCP → ToolRuntime → PLC Core`，没有模型
 
 接入 Gemini、Codex Harness 等**应用内 provider**时，新增 adapter 将其响应转为现有 `ModelEvent`，请求经 `ModelRequest → collect_response`，无需复制语言规则。厂商原生 JSON schema、tool calling、stream 支持由 adapter/profile 使用；不支持的能力不应被伪装成已经验证。直接调用 adapter 的 `stream` 得到的是 raw events，不能作为业务接受入口。
 
-新增 workflow 时声明其 human/code/annotation 字段及兼容 parser 形态，使用 `language_scoped` 包住多阶段任务，再调用共享入口。新的可生成注释的工具应补充同一声明文件中的参数契约，而非另建工具注册表。新 Qt worker 继承 `LanguageScopedThread`。CLI/API 调用方可显式传 `response_language="en"`，或先建立 `language_context`；没有 UI/显式上下文时默认是 `get_language()`，不会偷偷初始化桌面配置。
+新增 workflow 时声明其 human/code/annotation 字段及兼容 parser 形态，使用 `language_scoped` 包住多阶段任务，再调用共享入口。新的可生成注释的工具应补充同一声明文件中的参数契约，而非另建工具注册表。Qt worker 已退役；新应用工作流通过请求快照传递语言。CLI/API 调用方可显式传 `response_language="en"`，或先建立 `language_context`；没有 UI/显式上下文时默认是 `get_language()`，不会偷偷初始化桌面配置。
 
 这样，5 个 provider、10 个 workflow、多种应用自有入口仍共享**一份 request 语言快照、一处字段声明集合、一处接受执行点**。新工作流的字段含义仍必须由其作者声明，无法从任意 JSON key 自动推断证据与自然语言。独立 MCP 的外部模型所有权边界保持明确，不能靠本工具服务器替外部应用作出承诺。
 
@@ -146,14 +146,14 @@ MCP 则是 `外部客户端 → MCP → ToolRuntime → PLC Core`，没有模型
 | `src/plc_agent.py` | 冻结整个工具任务，候选/补丁参数先验收再执行 |
 | `src/plc_multi_agent.py` | 固定多阶段 Supervisor 的语言作用域 |
 | `src/plc_debug_loop.py` | 固定诊断到补丁准备任务的语言作用域 |
-| `src/main.py` | 七类模型 worker 捕获构造语言；拒绝不触发生成 fallback；日志与 Agent 持久化保留原文 |
+| `src/application/generation.py`、`planning.py`、`review.py` | 无界面工作流捕获请求语言；拒绝不触发生成 fallback；日志与 Agent 持久化保留原文 |
 | `src/workbench_widgets.py` | 聊天原文和已接受回答保留 token 与引述，明确纯文本展示 |
 | `src/hardware_profiles.py` | 本地恢复的控制方式问题使用工作流语言，稳定 ID/比较值保留 |
 | `src/inspection_models.py` | 在线检查说明拼接使用 i18n |
 | `resources/locales/en.json` | 新错误与本地派生说明的 English 翻译 |
 | `resources/locales/ja.json` | 对应 Japanese 翻译 |
 | `tests/test_response_language.py` | 新增接受/拒绝、切块、RAG、机器值、ST、工具、fallback、嵌套并发等行为回归 |
-| `tests/test_language_workflows.py` | 新增三语公共 workflow、真实 QThread、编译器 fallback、解析器、显示与持久化回归 |
+| `tests/test_language_workflows.py` | 三语公共 workflow、无界面生成 fallback、解析器、流式及持久化回归；旧 QThread 控件测试已退役 |
 | `tests/test_model_provider.py` | 真实 adapter 的假 HTTP 参数验证，stream/non-stream 与原生 schema 不丢失 |
 | `tests/test_i18n.py` | 旧“隐藏/原样接受错语”断言改为接受边界与原文显示行为 |
 | `tests/test_streaming_workflows.py` | 验证 JSON contract 与 transport 独立，保留现有流事件转发 |

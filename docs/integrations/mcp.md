@@ -24,8 +24,8 @@ flowchart LR
 
 Use a separate Python 3.10+ environment. The optional requirements pin the
 [official Python MCP SDK](https://github.com/modelcontextprotocol/python-sdk)
-to 2.1.1. The desktop requirements and Windows 7 dependency set are unchanged;
-the MCP process is not a Windows 7 build. No PyQt, OpenAI SDK, model API key,
+to 2.1.1. Qt and Windows 7 product packaging are retired;
+the MCP process uses a headless runtime. No PyQt, OpenAI SDK, model API key,
 GX Works2, GX Simulator2 or MX Component is needed for this interface.
 
 From the checkout root in Windows PowerShell:

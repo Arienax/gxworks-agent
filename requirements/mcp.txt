@@ -1,3 +1,3 @@
-# Optional standalone MCP environment: Python 3.10+, separate from Win7 desktop.
+# Optional standalone MCP environment: Python 3.10+, independent of the Web UI.
 # Official SDK; keep major upgrades explicit because the server API can change.
 mcp==2.1.1

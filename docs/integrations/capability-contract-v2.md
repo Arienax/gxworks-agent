@@ -68,7 +68,7 @@ Wire mappings support `body` / `extra_body` and bounded nested paths. Canonical 
 
 ## Compatibility and limits
 
-The transport remains Chat Completions-compatible. Declaring audio/video/context size is descriptive data, not implementation of new upload protocols or native provider SDKs. Vision consumes its scoped contract and final conditions; native audio/video inputs are not added. Legacy Qt UI is unchanged. JSON-schema and parallel-tool capability facts need endpoint metadata/manual evidence until dedicated strategies are registered.
+The transport remains Chat Completions-compatible. Declaring audio/video/context size is descriptive data, not implementation of new upload protocols or native provider SDKs. Vision consumes its scoped contract and final conditions; native audio/video inputs are not added. Qt UI has been retired; the capability contract remains owned by Python. JSON-schema and parallel-tool capability facts need endpoint metadata/manual evidence until dedicated strategies are registered.
 
 Probes use fixed synthetic prompts with the existing 90-second scheduling budget and per-request 15-second maximum, no retries, and bounded output. Discovery may cost API tokens. It never sends project files or conversation history. No real provider credentials are included in tests.
 

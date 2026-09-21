@@ -54,7 +54,6 @@ Owns Agent A analysis mode, candidate/choice handling, confirmation/re-confirmat
 | `tests/test_optional_hardware_parameters.py` | focused coverage for optional hardware parameters |
 | `tests/test_program_exploration.py` | focused coverage for program exploration |
 | `tests/test_spec_choice_metadata.py` | focused coverage for spec choice metadata |
-| `tests/test_spec_review_workbench.py` | focused coverage for spec review workbench |
 | `tests/test_workbench_planning.py` | focused coverage for workbench planning |
 
 ### Context, prompt and retrieval
@@ -135,9 +134,9 @@ Owns deterministic PLC IR, semantic checks, instruction/device registry, timing 
 | `tests/test_plc_condition_normalizer.py` | focused coverage for plc condition normalizer |
 | `tests/test_plc_core_boundary.py` | Python-Core ownership of PLC semantics versus TS presentation/C# native adapters |
 | `tests/test_plc_debug_loop.py` | focused coverage for plc debug loop |
-| `tests/test_plc_ir.py` | focused coverage for plc ir |
+| `tests/test_plc_ir.py` | IR/artifact integrity, headless generation and edits, historical workspace identity |
 | `tests/test_plc_multi_agent.py` | focused coverage for plc multi agent |
-| `tests/test_plc_semantics.py` | focused coverage for plc semantics |
+| `tests/test_plc_semantics.py` | PLC semantic interpretation and saved SFC document projection without GUI |
 | `tests/test_plc_static_analysis.py` | focused coverage for plc static analysis |
 | `tests/test_plc_timing.py` | focused coverage for plc timing |
 | `tests/test_timer_semantics_regressions.py` | focused coverage for timer semantics regressions |
@@ -167,7 +166,7 @@ Owns GXW container/object/ABI/declaration/network parsing, preservation and roun
 | `tests/test_gxw_project_roundtrip.py` | focused coverage for gxw project roundtrip |
 | `tests/test_gxw_project_writer.py` | focused coverage for gxw project writer |
 | `tests/test_gxw_semantic_model.py` | focused coverage for gxw semantic model |
-| `tests/test_gxw_structured_reader.py` | focused coverage for gxw structured reader |
+| `tests/test_gxw_structured_reader.py` | Structured GXW parsing, unknown records and read-only POU CLI selection |
 | `tests/test_gxw_structured_writer.py` | focused coverage for gxw structured writer |
 
 ### GX Works2 native, CSV and synchronization
@@ -185,7 +184,6 @@ Owns GX Works2 import/export, native bridge, comment CSV, live/read-only boundar
 | `tests/test_gxworks2_import.py` | GX Works2 import semantics and compatibility edge cases |
 | `tests/test_gxworks2_live_boundaries.py` | focused coverage for gxworks2 live boundaries |
 | `tests/test_gxworks2_sftl_native_steps.py` | focused coverage for gxworks2 sftl native steps |
-| `tests/test_gxworks2_simple_bridge_ui.py` | focused coverage for gxworks2 simple bridge ui |
 | `tests/test_gxworks2_simulation.py` | focused coverage for gxworks2 simulation |
 | `tests/test_gxworks2_sync.py` | GX Works2 synchronization state, scope and preservation |
 | `tests/test_io_protocol_and_gx_fastpath.py` | focused coverage for io protocol and gx fastpath |
@@ -198,7 +196,7 @@ Owns simulator/workbench execution, verification, reporting and GX Works2 simula
 | --- | --- |
 | `tests/test_simulation_workbench.py` | focused coverage for simulation workbench |
 | `tests/test_simulator.py` | focused coverage for simulator |
-| `tests/test_simulator_reporting.py` | focused coverage for simulator reporting |
+| `tests/test_simulator_reporting.py` | Version-bound simulation report data and evidence, not dialog layout |
 | `tests/test_simulator_verification.py` | focused coverage for simulator verification |
 | `tests/test_simulator_workflow.py` | focused coverage for simulator workflow |
 
@@ -242,12 +240,9 @@ Owns HTTP/Web contracts, presentation state, startup, FBD UI, workbench/applicat
 | `tests/test_application_job_errors.py` | focused coverage for application job errors |
 | `tests/test_application_persistence.py` | focused coverage for application persistence |
 | `tests/test_application_settings.py` | focused coverage for application settings |
-| `tests/test_combo_option_cards.py` | focused coverage for combo option cards |
-| `tests/test_config_dialog_profiles.py` | focused coverage for config dialog profiles |
-| `tests/test_display_names.py` | focused coverage for display names |
-| `tests/test_i18n.py` | focused coverage for i18n |
-| `tests/test_language_workflows.py` | focused coverage for language workflows |
-| `tests/test_legacy_qt_smoke.py` | focused coverage for legacy qt smoke |
+| `tests/test_display_names.py` | Stable model/device identifiers and their presentation names |
+| `tests/test_i18n.py` | Headless locale keys, placeholders, request language and raw payload preservation |
+| `tests/test_language_workflows.py` | Request-scoped language, generation fallback, parsing and persistence without Qt |
 | `tests/test_web_api.py` | HTTP auth, projects, jobs, confirmation and generation API behavior |
 | `tests/test_web_architecture.py` | focused coverage for web architecture |
 | `tests/test_web_contract.py` | focused coverage for web contract |
@@ -270,12 +265,12 @@ Owns diagnostics capture/export, error privacy, response-language/presentation t
 | --- | --- |
 | `tests/test_agent_b_measurement.py` | paired real-generation experiment harness and complete metering/transport observation; offline providers only |
 | `tests/test_diagnostics_workflow_regressions.py` | focused coverage for diagnostics workflow regressions |
-| `tests/test_multimodal_inputs.py` | focused coverage for multimodal inputs |
+| `tests/test_multimodal_inputs.py` | Image payload/media handling and persisted attachments, not widget state |
 | `tests/test_provider_error_privacy.py` | focused coverage for provider error privacy |
 | `tests/test_response_language.py` | focused coverage for response language |
 | `tests/test_runtime_diagnostics.py` | bounded diagnostics observation/privacy without changing runtime behavior |
 | `tests/test_runtime_diagnostics_web.py` | focused coverage for runtime diagnostics web |
-| `tests/test_streaming_workflows.py` | focused coverage for streaming workflows |
+| `tests/test_streaming_workflows.py` | Headless generation/planning streams and original model payload preservation |
 
 ### Architecture, repository and platform boundaries
 
@@ -284,7 +279,6 @@ Owns source/import ownership, architecture constraints, issue-to-test linkage, W
 | Test file | File-level focus |
 | --- | --- |
 | `tests/test_architecture_boundaries.py` | focused coverage for architecture boundaries |
-| `tests/test_codicon_safety.py` | focused coverage for codicon safety |
 | `tests/test_issue_test_links.py` | focused coverage for issue test links |
 | `tests/test_source_layout.py` | source/import ownership plus completeness of this test-boundary registry |
 | `tests/test_source_layout_regression_gate.py` | focused coverage for source layout regression gate |

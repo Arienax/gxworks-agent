@@ -59,3 +59,16 @@ def test_parse_structured_mov_sample_53():
         function.bbox.right,
         function.bbox.bottom,
     ) == (22, 0, 29, 4)
+
+
+def test_decoder_cli_retains_program_selection_without_qt_or_writes(tmp_path, capsys):
+    from gxw.decoder import main
+    from gxw.object_model import default_baseline
+    source = tmp_path / "sample.gxw"
+    source.write_bytes(default_baseline())
+    before = source.read_bytes()
+    assert main([str(source), "--list-programs"]) == 0
+    assert "1.Program.pou" in capsys.readouterr().out
+    assert main([str(source), "--program", "1.Program.pou"]) == 0
+    assert "Program 1.Program.pou:" in capsys.readouterr().out
+    assert source.read_bytes() == before and list(tmp_path.iterdir()) == [source]

@@ -2,13 +2,13 @@
 
 Web 工作台通过本机 FastAPI 应用服务复用 `ToolRuntime`、PLC Core、生成/评审工作流和 SessionStore。浏览器显示后端生成的 SVG、ST、诊断和工程记录；它不实现 PLC 语义，不创建 Qt 窗口，也不通过 MCP 操作自身后端。
 
-源码入口为 `python -m integrations.web`，仅监听 `127.0.0.1`，固定一个 Web worker。当前保留 Qt 主入口与桌面依赖。代码和离线回归可在没有 GX/MX 软件的环境检查；Windows 真实导入、仿真、桌面锁屏恢复与发布包验收仍须按[迁移核对表](../architecture/web-migration-checklist.md)单独执行。
+源码入口为 `python -m integrations.web`，仅监听 `127.0.0.1`，固定一个 Web worker。Qt 客户端已退役，Web 不依赖 Qt。代码和离线回归可在没有 GX/MX 软件的环境检查；Windows 真实导入、仿真、桌面锁屏恢复与发布包验收仍须按[迁移核对表](../architecture/web-migration-checklist.md)单独执行。
 
 ## Windows 发布包：双击启动
 
 1. 把整个 `GXWorks-Agent-Web` 目录解压到本机可读取的位置，不要只移动其中的 `.exe`。发布包无需另装 Python、Node.js 或 Qt。
 2. 双击目录内的 `start-web.cmd`，选择工作区文件夹。已有工作区应选择包含 `index.json` 和 `projects` 的外层目录；新工程可以选择一个空文件夹。取消选择不会启动服务。
-3. 不再选择只读／操作员角色，默认打开可编辑工作区。已有 Qt 正在编辑同一工作区时，先正常关闭 Qt。审批模式在网页设置中调整。
+3. 不再选择只读／操作员角色，默认打开可编辑工作区。已有其他服务正在编辑同一工作区时，先正常关闭该服务。审批模式在网页设置中调整。
 4. 服务准备好后，浏览器自动打开本地工作台。若未自动打开，复制启动窗口中的 `Workbench link` 本地链接到浏览器。使用期间保持启动窗口打开；结束时按 `Ctrl+C` 停止服务。
 
 关闭浏览器不会停止服务。登录链接只供本机操作员使用，请勿分享。启动器默认使用端口 `8765`；已被占用时自动选择空闲的本机端口，并显示实际登录链接。启动或浏览项目不会自动运行 GX Works2、Simulator Gateway 或操作 PLC；GX 导入、仿真和调试按网页设置中的审批模式执行；启动本身不会执行旧的待审批操作。
@@ -61,15 +61,15 @@ python -m integrations.web --workspace "D:\PLCWorkspaces\my-workspace" --read-on
 
 Web 顶部通过 CSV“发送到 GX”时，每次先显示手动备份提醒、本地项目与待发送版本。“取消”不创建提案；“继续发送”同时确认本次发送，无需再进入预览页审批，完全访问模式下也保留此提醒。确认后使用原有提案/批准接口和桌面队列，依次校验 CSV 与 GX 目标、导入 MAIN、导入软元件注释、保存工程。发送前不再自动导出 MAIN 或注释，也不读取旧基线或因 GX 内容存在外部修改而阻止发送；请先自行备份目标 GX 工程。
 
-执行提案请求中的 `manual_backup_acknowledged` 默认 `false`，只有上述普通 CSV `gx_import` 接受 `true`；该字段固定在提案载荷中，本身不替代执行审批。共享导入 API 的 `pre_import_policy` 默认为 `protected`，此路径显式使用 `manual_backup`。Agent/MCP、旧提案、旧 Qt、高级同步、仿真、调试和 FBD 保持原流程。CSV 校验、版本/产物绑定、跨域检查和桌面资源锁仍有效。
+执行提案请求中的 `manual_backup_acknowledged` 默认 `false`，只有上述普通 CSV `gx_import` 接受 `true`；该字段固定在提案载荷中，本身不替代执行审批。共享导入 API 的 `pre_import_policy` 默认为 `protected`，此路径显式使用 `manual_backup`。Agent/MCP、旧提案、高级同步、仿真、调试和 FBD 保持原流程。CSV 校验、版本/产物绑定、跨域检查和桌面资源锁仍有效。
 
 快速发送的原始返回值中备份路径为空、`backup_performed=false`，`details.timings_ms` 记录实际执行阶段与总耗时。Web 任务和提案结果通过 `gx_import_summary` 保留策略、是否自动备份和阶段耗时，过滤文件路径等私有信息。两项导入成功后按目标内容摘要记录同步基线，不额外回读；记录失败仅警告，导入成功仍不表示已核验编译或仿真。注释失败明确报告程序已导入，保存失败提示手动保存，均不自动重试。
 
-GX 导入、仿真和调试统一进入 `GXExecutionCoordinator` 固定单线程队列，COM 的初始化和释放发生在同一线程，桌面资源另有跨进程锁。旧 Qt 的导入、同步检查、拉取、仿真和调试入口使用同一资源锁。打开网页及环境查询只观察环境，不启动 Simulator Gateway。真实执行仍需要已登录且可交互的 Windows 桌面、GX Works2、GX Simulator2 和 MX Component。
+GX 导入、仿真和调试统一进入 `GXExecutionCoordinator` 固定单线程队列，COM 的初始化和释放发生在同一线程，桌面资源另有跨进程锁。删除 Qt 不删除 GX 桌面资源锁、COM 生命周期或其他跨进程互斥。打开网页及环境查询只观察环境，不启动 Simulator Gateway。真实执行仍需要已登录且可交互的 Windows 桌面、GX Works2、GX Simulator2 和 MX Component。
 
 显式的 GX 读取和同步检查也进入同一队列。同步检查返回已有基线与两侧程序的比较报告；读取沿用原生 CSV 解码和无损往返验证，通过原有校验后自动保存新的本地快照。Web 的只读调用关闭旧 GX 服务中默认的工程保存与基线写入，因此不会因为“检查”而保存 GX 工程或覆盖活动版本。空项目也可读取 GX 初始程序并保存。
 
-原生程序如果含有本地语义目录尚未覆盖的 vendor 指令，Web 读取返回明确的 `unsupported`，不创建候选、不放宽 Agent/提案校验。原 Qt 的原生保真回读路径继续保留；这种程序不能据此视为已完成 Web 编辑/审批迁移。
+原生程序如果含有本地语义目录尚未覆盖的 vendor 指令，Web 读取返回明确的 `unsupported`，不创建候选、不放宽 Agent/提案校验。独立的 `gxworks2.csv_importer` 原生保真解析/材料化接口保留；Qt 界面已移除，这种程序不能据此视为已完成 Web 编辑/审批迁移。
 
 ## 结构化梯形图 / FBD
 
@@ -146,7 +146,7 @@ MCP 环境另需 `python -m pip install -r requirements/mcp.txt`。服务连接�
 
 ## 发布包
 
-`packaging/pyinstaller/web.spec` 打包独立 Web 入口，收录双击启动器、中英文 README、Web 指南、`web/dist`、默认安全配置、模型与指令资料、语言包、知识库及第三方声明，不收录用户 `config.json`、工作区、密钥或 Qt。保留的桌面打包描述位于同目录的 `desktop.spec` 和 `desktop-win7.spec`。
+`packaging/pyinstaller/web.spec` 打包独立 Web 入口，收录双击启动器、中英文 README、Web 指南、`web/dist`、默认安全配置、模型与指令资料、语言包、知识库及第三方声明，不收录用户 `config.json`、工作区、密钥或 Qt。Qt/Win7 打包入口已移除；MCP 启动器使用同目录的 `mcp.spec`。
 
 已有网关二进制时：
 
@@ -181,3 +181,9 @@ python scripts/web_package_smoke.py `
 加 `-ValidateOnly` 可只校验依赖、资源和目标路径，不构建、不启动，也不创建暂存目录。更新包验证完成后，再等待原服务任务停止并正常关闭服务，备份原发布目录后替换程序文件。原程序目录中的 `config.json` 是用户模型设置，应单独保留；Windows 凭据存储、工作区和原私有状态目录也必须保留，重启时继续使用相同工作区和 `--state-dir`（原来没有指定时仍不指定）。不要用清空目录或镜像删除方式更新正在使用的包。
 
 构建机可运行 `python scripts/web_package_smoke.py`：该脚本校验发布资源与 Qt 排除项，只启动 Web 可执行文件，对临时空工作区执行只读登录/静态页面烟测，再关闭自己启动的进程。它不启动网关，也不调用 GX/MX。输出中的 `native_gx_not_tested=true` 必须保留为实际验收边界。
+
+## Qt 退役后的旧数据
+
+已有工程直接在启动器选择原工作区目录，不需要转换或重新生成。旧默认 Windows 路径通常为 `%APPDATA%/PLC AI Studio/PLC AI Workbench/workspace`；显式工作区和 `PLC_AI_WORKSPACE_DIR` 仍优先，不自动搬迁数据。
+
+旧 `.sfc` 图文件可用 `python -m plc.sfc example.sfc` 只读转换为需求文本后在 Web 使用；这不是原生 SFC 编译器。GXW 多 POU 检查可用 `python -m gxw.decoder example.gxw --list-programs`，再通过 `--program 1.Program.pou` 选择程序。源码命令需要 `PYTHONPATH=src`。旧图形画布没有回填到 Web；其他保留与退役范围见[审查记录](../architecture/qt-retirement-audit.md)。

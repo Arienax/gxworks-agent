@@ -1,4 +1,4 @@
-"""Synchronous generation orchestration shared by desktop and local services.
+"""Synchronous headless generation orchestration shared by application clients.
 
 No GUI, workspace activation, GX automation or simulator operations belong here.
 Model response acceptance remains inside api/collect_response before callbacks,

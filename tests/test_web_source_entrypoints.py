@@ -37,3 +37,13 @@ def test_start_web_resolves_source_or_locally_built_package():
     assert '$backendKind = "source"' in text
     assert '$backendKind = "built-package"' in text
     assert '请先运行根目录 build-web.bat' in text
+
+
+def test_packaged_sdk_diagnostic_never_starts_web_or_gx(monkeypatch):
+    from scripts import web_entry
+    import model_runtime.provider as provider
+    monkeypatch.setattr(web_entry.sys, "argv", ["GXWorks-Agent-Web.exe", "--self-test-openai-sdk"])
+    calls = []
+    monkeypatch.setattr(provider, "sdk_runtime_self_test", lambda: calls.append("sdk") or True)
+    assert web_entry.run() == 0
+    assert calls == ["sdk"]

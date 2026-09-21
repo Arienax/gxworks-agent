@@ -21,7 +21,7 @@
 
 ## 架构与维护策略
 
-PLC 领域语义只由无 GUI 的 Python Core 持有；TypeScript 仅负责 presentation，C# 仅负责 vendor/native adapter。Qt 已定义为 **legacy/frozen**：不再追求新功能 parity，只修严重 bug。Web 覆盖冻结时的必要工作流并完成 Windows/GX 迁移验收后，再删除 Qt；本轮保留旧入口。详见[语言边界](docs/architecture/language-boundaries.md)。
+PLC 领域语义只由无 GUI 的 Python Core 持有；TypeScript 仅负责 presentation，C# 仅负责 vendor/native adapter。Web 是唯一继续维护的界面；Qt/Win7 客户端、专用依赖和打包已退役，可复用的工程服务与历史数据保留。这是主动退役，不代表旧图形界面完全对等或 Windows/GX 实机验收完成。详见[退役审查](docs/architecture/qt-retirement-audit.md)和[语言边界](docs/architecture/language-boundaries.md)。
 
 ## 项目目前最核心的设计
 

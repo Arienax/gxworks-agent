@@ -3,7 +3,7 @@
 The language model never receives filesystem, mouse, keyboard, PLC write, or
 device-force primitives.  Every tool operates on an immutable snapshot of the
 currently selected project/version.  Candidate patches and GX synchronization
-only create confirmation requests; the Qt main thread owns every commit point.
+only create confirmation requests; application services own commit points.
 """
 
 from __future__ import annotations

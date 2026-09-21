@@ -760,7 +760,7 @@ class WorkbenchService:
 
     def _plan_or_review(self, ctx, snapshot, provider):
         # Pure workflow services are imported only when requested. Their signatures
-        # are kept here, outside HTTP routes, to share them with the Qt adapters.
+        # are kept here, outside HTTP routes, for reuse by application clients.
         from application.review import InspectionWorkflow
         from application.planning import SimulatorTestPlanWorkflow, EvidenceDebugPlanWorkflow
         from plc.ir import ir_to_ladder

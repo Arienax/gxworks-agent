@@ -389,7 +389,7 @@ def validate_spec_draft(spec, plc_model=None):
 
     The function deliberately validates the draft *before* canonicalization so
     duplicate rows and incomplete required values are not silently discarded.
-    It returns structured issues that can be rendered by either Qt5 or Qt6 UI.
+    It returns structured issues that can be rendered by application clients.
     """
     errors = []
     warnings = []

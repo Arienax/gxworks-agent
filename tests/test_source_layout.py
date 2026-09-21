@@ -31,8 +31,8 @@ def _imports(path):
 
 
 def test_only_stable_entrypoints_live_at_source_root():
-    assert {p.name for p in SRC.glob("*.py")} == {"api.py", "main.py"}
-    assert LAYOUT["allowed_root_modules"] == ["api.py", "main.py"]
+    assert {p.name for p in SRC.glob("*.py")} == {"api.py"}
+    assert LAYOUT["allowed_root_modules"] == ["api.py"]
     assert not LAYOUT["temporary_aliases"]
 
 
@@ -57,7 +57,7 @@ def test_production_and_tests_use_canonical_imports():
 
 
 def test_foundation_package_initializers_are_inert():
-    for name in ("model_runtime", "knowledge", "plc", "agent_runtime", "inspection", "storage", "shared", "rendering", "ui"):
+    for name in ("model_runtime", "knowledge", "plc", "agent_runtime", "inspection", "storage", "shared", "rendering"):
         tree = ast.parse((SRC / name / "__init__.py").read_text(encoding="utf-8"))
         assert all(isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant)
                    and isinstance(n.value.value, str) for n in tree.body), name
@@ -114,16 +114,6 @@ def test_frozen_catalog_root_is_not_the_python_package_directory(monkeypatch, tm
     assert catalog_directory() == tmp_path / "resources/model_catalog"
 
 
-def test_workbench_has_no_dynamic_source_loader():
-    path = SRC / "ui/desktop/workbench"
-    assert (path / "editor.py").is_file()
-    assert (path / "review.py").is_file()
-    assert (path / "messages.py").is_file()
-    for file in path.glob("*.py"):
-        text = file.read_text(encoding="utf-8")
-        assert "spec_from_file_location" not in text
-        assert "exec_module" not in text
-    assert len((path / "__init__.py").read_text().splitlines()) < 20
 
 
 def test_public_api_facade_preserves_callable_identity():
@@ -132,12 +122,11 @@ def test_public_api_facade_preserves_callable_identity():
     for name in api.__all__:
         assert getattr(api, name) is getattr(model_api, name), name
     assert len((SRC / "api.py").read_text().splitlines()) < 80
-    assert len((SRC / "main.py").read_text().splitlines()) < 20
 
 
 @pytest.mark.parametrize("module", [
     "model_runtime.contract", "plc.ir", "knowledge.retriever",
-    "rendering.ladder_svg", "application.model_api", "ui.desktop.application",
+    "rendering.ladder_svg", "application.model_api", "integrations.web.__main__",
 ])
 def test_core_and_entrypoint_imports_do_not_load_qt_or_create_state(module, tmp_path):
     code = """

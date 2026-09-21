@@ -1,5 +1,7 @@
 # 界面与输出语言
 
+> 本文保留旧 Qt 界面时期的说明，不是当前 UI/模型语言规则。Qt 已退役；当前入口见 [Web 指南](integrations/web.md)，模型接受策略见 [响应语言](architecture/response-language.md)。
+
 右上角统一的「设置」按钮包含 API 设置、API 高级设置和语言。
 支持简体中文（默认）、English、日本語；保存后刷新当前界面并持久化到配置文件。
 只修改语言不要求提供 API Key，也不会改写或删除已保存的凭据。

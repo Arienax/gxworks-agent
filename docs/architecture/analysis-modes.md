@@ -14,7 +14,7 @@ resolves the default before hashing it, and the job snapshot freezes the value.
 Both analysis API functions pass it to the same prompt assembler. The output
 records the application-selected mode; model-authored mode metadata is ignored.
 Changing the picker affects the next submission, not a running job. A new
-project/page starts in Direct. Qt stays frozen; shared old callers get Direct.
+project/page starts in Direct. Qt is retired; shared callers still default to Direct.
 
 Direct assembles the common JSON/intent/missing-parameter contract, the compact
 Direct contract, relevant PLC facts and targeted fact evidence. It requests one

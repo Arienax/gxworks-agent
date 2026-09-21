@@ -26,7 +26,7 @@ Local compact/PLC errors retain their category rather than being relabelled as a
 
 `tests/test_confirmed_compatibility.py` and `tests/test_confirmed_reconfirmation.py` contain 113 parameterized cases, including 58 real HTTP confirmation-to-autosaved-artifact paths. Those paths use the actual service, provider serializer, decoder, converter, IR and renderer with a synthetic SDK-shaped endpoint. They span three response modes, three documented response representations, omitted/empty/null shared inputs and both explicitly specified physical stop polarities. Every successful path checks the control truth table, non-empty saved artifacts and exactly one model request. The original 54 HTTP cases also verify idempotent submission replay; the additional four exercise explicit re-confirmation after an I/O-table edit.
 
-Run the read-only `Confirmed Generation Compatibility` workflow for the expanded shared-boundary regression selection. Its artifacts contain the exact tested source and JUnit results. Qt-only tests are not part of this Web-dependency job. Synthetic endpoint coverage is not live verification of every commercial model; no private engineering transcript, credential, GX operation or physical PLC write is used by these tests.
+Run the read-only `Confirmed Generation Compatibility` workflow for the expanded shared-boundary regression selection. Its artifacts contain the exact tested source and JUnit results. Qt has been retired; the three former worker/IR tests now call headless generation services and are included without Qt exclusions. Synthetic endpoint coverage is not live verification of every commercial model; no private engineering transcript, credential, GX operation or physical PLC write is used by these tests.
 
 ## Resumed PR #13: confirmation edits and re-confirmation
 
@@ -99,9 +99,11 @@ JSON/IR/SVG/program-CSV/comment-CSV artifacts. Model services are offline fixtur
 not live paid endpoints. Additional regressions cover aliases in typed semantics,
 read-only historical projections and unchanged scoped neighbors.
 
-Local headless selected run: 627 passed, 5 SDK-dependent skips, 3 explicitly
+Historical pre-retirement local headless selected run: 627 passed, 5 SDK-dependent skips, 3 explicitly
 excluded Qt-worker integration cases. The read-only CI job includes the two new
 files plus the related hardware/motion, comment export, native read, core IR,
 semantic/static-analysis and existing Web/model tests. The Qt exclusions are
 named in the workflow; they are not counted as passing. Final published CI
 results are recorded in PR #13 after the branch is updated.
+
+Qt retirement (2026-09-21): the historical three-worker exclusion above no longer applies. Those IR integration tests now run against `GenerationWorkflow`; the workflow contains no Qt-specific deselection. Earlier CI numbers are historical evidence, not results for the retired client.

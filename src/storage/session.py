@@ -3,6 +3,7 @@ import json
 import os
 import re
 import shutil
+import sys
 import uuid
 from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
@@ -98,26 +99,34 @@ def detect_image_media_type(data):
     return ""
 
 
+def default_workspace_dir():
+    """Resolve the former Qt app-data workspace; never create or move files."""
+    override = os.environ.get("PLC_AI_WORKSPACE_DIR", "").strip()
+    if override:
+        return Path(override)
+    if sys.platform == "win32":
+        roaming = os.environ.get("APPDATA", "").strip()
+        root = Path(roaming) if roaming else Path.home() / "AppData" / "Roaming"
+    elif sys.platform == "darwin":
+        root = Path.home() / "Library" / "Application Support"
+    else:
+        data_home = os.environ.get("XDG_DATA_HOME", "").strip()
+        root = Path(data_home) if data_home and Path(data_home).is_absolute() else Path.home() / ".local" / "share"
+    return root / "PLC AI Studio" / "PLC AI Workbench" / "workspace"
+
+
 class SessionStore:
     """Persistent project, conversation, and generated-version storage."""
 
     def __init__(self, base_dir=None, legacy_dir=None, *, create=True):
-        """Open the existing format; ``create=False`` skips workspace creation.
+        """Open the existing format without importing a GUI or migrating paths.
 
-        Headless callers supply a base directory (or PLC_AI_WORKSPACE_DIR), so
-        only the desktop's default-location lookup needs Qt.
+        An explicit directory wins over PLC_AI_WORKSPACE_DIR. The default keeps
+        the former desktop application's organization/application path so that
+        retiring the UI does not silently create a different workspace.
         """
         if base_dir is None:
-            override = os.environ.get("PLC_AI_WORKSPACE_DIR", "").strip()
-            if override:
-                base_dir = Path(override)
-            else:
-                from ui.desktop.qt import QStandardPaths
-
-                app_data = QStandardPaths.writableLocation(
-                    QStandardPaths.StandardLocation.AppDataLocation
-                )
-                base_dir = Path(app_data) / "workspace"
+            base_dir = default_workspace_dir()
         self.base_dir = Path(base_dir)
         self.projects_dir = self.base_dir / "projects"
         self.index_path = self.base_dir / "index.json"

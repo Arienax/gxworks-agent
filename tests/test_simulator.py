@@ -630,7 +630,7 @@ def test_gateway_source_has_simulator_route_and_build_stays_outside_repo():
     build_script = (root / "tools" / "build_simulator_gateway.ps1").read_text(
         encoding="utf-8"
     )
-    release_script = (root / "tools" / "build_release.ps1").read_text(
+    release_script = (root / "scripts" / "build_web_package.ps1").read_text(
         encoding="utf-8"
     )
     assert "UnitSimulator2 = 0x30" in source
@@ -645,6 +645,7 @@ def test_gateway_source_has_simulator_route_and_build_stays_outside_repo():
     ) < source.index('CpuStatus(3, "MX_CPU_RESET_FAILED")')
     assert 'request.Path == "/cpu/reset"' in source
     assert "must be built outside the project directory" in build_script
-    assert 'Join-Path $bundleRoot "simulator-gateway"' in release_script
-    assert "build_simulator_gateway.ps1" in release_script
-    assert "simulator-gateway\\PlcAi.GxSimulator2Gateway.exe" in release_script
+    assert '"PlcAi.GxSimulator2Gateway.exe"' in release_script
+    assert 'GX_WEB_PACKAGE_GATEWAY_DIR' in release_script
+    spec = (root / "packaging/pyinstaller/web.spec").read_text(encoding="utf-8")
+    assert 'datas.append((str(gateway_dir), "simulator-gateway"))' in spec

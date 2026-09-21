@@ -114,7 +114,7 @@ validation state, rather than replacing it with current retrieval results.
 
 The Web editor only displays caller text, selected method, advisory choices and
 source records. No PLC semantics were added to TypeScript or C#. Qt remains
-legacy/frozen; shared storage/workflow updates do not add Qt feature parity.
+retired; shared storage/workflow services remain headless and do not depend on Qt.
 
 ## Regression corpus and validation
 

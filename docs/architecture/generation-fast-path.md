@@ -2,7 +2,7 @@
 
 ## Decision
 
-The existing Web/Qt API generation flow is the acceptance authority for both
+The existing Web/application API generation flow is the acceptance authority for both
 internal generation and external MCP candidates. Once the operator has confirmed
 the specification, the application does **not** reinterpret the request with a
 second set of heuristic semantic gates. MCP does not add stricter generation

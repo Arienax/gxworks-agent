@@ -2,7 +2,7 @@
 
 The module does not touch SQLite or import the optional dense runtime until the
 first retrieval call.  A connection and its schema snapshot are kept per
-calling thread so Qt worker threads never share SQLite objects.
+calling thread so concurrent workers never share SQLite objects.
 
 Expected index tables are ``meta``, ``chunks``, ``entity_index`` and
 ``chunks_fts``.  Column names are discovered at runtime to keep the reader

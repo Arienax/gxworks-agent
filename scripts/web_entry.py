@@ -4,6 +4,9 @@ import sys
 
 
 def run():
+    if sys.argv[1:] == ["--self-test-openai-sdk"]:
+        from model_runtime.provider import sdk_runtime_self_test
+        return 0 if sdk_runtime_self_test() else 1
     if sys.argv[1:] == ["--context-policy-info"]:
         from shared.context_policy import resolve_context_policy
         policy = resolve_context_policy()

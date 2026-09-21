@@ -1,10 +1,10 @@
 # Source layout
 
-> 维护策略更新（2026-09-19）：Qt 为 `legacy/frozen`，不再追求新功能 parity，只修严重 bug。以下历史迁移对照仍用于确认 Web 覆盖冻结时的必要工作流，不要求把新能力回填 Qt。语言职责与删除条件以 [language-boundaries.md](language-boundaries.md) 为准。
+> 2026-09-21: Qt/Win7 has been retired after the [retirement audit](qt-retirement-audit.md). Web/MCP and headless engineering utilities are the supported entry points.
 
 This layout is based on `fix/confirmed-generation-compatibility-20260918` at
-`295378d6ac5d24949c03a1c799906f4afe0fd4c9`. It preserves the existing launch
-commands and persisted engineering formats. It is a package organization change,
+`295378d6ac5d24949c03a1c799906f4afe0fd4c9`. The Qt retirement supersedes the desktop launch command while preserving
+persisted engineering formats. It is a package organization change,
 not a new PLC implementation, a new capability catalogue, or a UI redesign.
 
 ## Ownership
@@ -20,11 +20,10 @@ not a new PLC implementation, a new capability catalogue, or a UI redesign.
 | `rendering` | Headless SVG and rung numbering | CSV export, Qt |
 | `storage` | Configuration, credentials, project/session persistence | UI |
 | `shared` | Paths, language, diagnostics, tracing, context policy | UI and application service ownership |
-| `ui/desktop` | Windows, workers, dialogs, editor widgets, styles | A separate generation or validation implementation |
 | `gxw`, `gxworks2`, `simulator` | Existing native-format, vendor integration and simulation capabilities | Model transport |
 | `integrations` | Web and MCP protocols | Direct GUI/PLC execution instead of shared services |
 
-`src` contains only `main.py` and `api.py` plus packages. New modules must go
+`src` contains only the `api.py` public facade plus packages. New modules must go
 straight into their owning package; no new compatibility module, dated patch
 module, `old`/`new` copy, or parallel implementation should be placed at the root.
 `__init__.py` files expose explicit small public surfaces. In particular importing
@@ -38,10 +37,12 @@ intentionally does not combine repository organization with a packaging migratio
 ```powershell
 $env:PYTHONPATH = (Resolve-Path .\src).Path
 python -m integrations.web --workspace "D:\PLCWorkspaces\my-workspace"
-python src/main.py
+python -m integrations.mcp
+python -m gxw.decoder "example.gxw" --list-programs
+python -m plc.sfc "example.sfc"
 ```
 
-`main.py` delegates to `ui.desktop.application.run`. `api.py` explicitly exports
+`api.py` explicitly exports
 the established public service functions; application internals use
 `application.model_api`, not the root compatibility surface. The old model/PLC/
 knowledge/Qt root modules are removed. `tools/source_layout.json` is the complete
@@ -60,15 +61,9 @@ No new `sys.modules` aliases or wildcard facade are used to conceal old imports.
 importing the application debug loop. The original strict/structural acceptance
 choice is unchanged.
 
-`ui/desktop/workbench` separates the specification editor, summary/review dialog,
-and message bubble. It uses ordinary imports, not a sibling source file loaded
-with `spec_from_file_location`. PyInstaller no longer ships Python source as a
-workbench data-file workaround.
-
-The desktop controller is separated from styles, thread workers, classic window,
-activity widget, workflow dialogs, window frame and SFC dialog. Application model
-prompts and analysis-result normalization have their own modules. This does not
-rewrite the controller's behavior or change any model prompt content.
+The Qt widgets and signal/thread wrappers have been deleted. Generation, planning,
+review, import/sync and simulation are owned by their existing headless services;
+workflow tests call those services rather than constructing windows.
 
 Required context helpers live in `application/generation_support.py`. The old
 full prompt implementation is retained only under `research/baselines` for
@@ -78,8 +73,8 @@ can be deleted safely.
 
 ## Resources and persistent data
 
-Keep source `src/config.json`, source-era historical session lookup, packaged
-executable-adjacent configuration, and frozen `_MEIPASS` resource behavior.
+Keep configuration resolution, explicit overrides, user-data-directory defaults,
+legacy configuration/session lookup, and frozen `_MEIPASS` resource behavior.
 Moving Python code is not authorization to migrate, clear or regenerate user data.
 Model observations stay attached to their existing configuration/state path.
 The resource catalogue, SQLite/LSA files, original GXW evidence and snapshots are
@@ -103,7 +98,7 @@ behavior, and headless imports. Existing architecture tests inspect implementati
 not deprecated wrappers. The instruction schema remains derived from the authoritative
 CPU registry; a obsolete stdlib-only assertion must not force duplication of opcodes.
 
-Real Windows GX Works2 / MX Component / Win7 certification is separate from
+Real Windows GX Works2 / MX Component certification is separate from
 Linux unit tests and Linux PyInstaller smoke. Do not equate the two. Existing
 baseline failures must be reported separately from migration regressions; do not
 silently deselect them or mark an incomplete suite as passing.
