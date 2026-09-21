@@ -31,6 +31,15 @@ jobs:
         with:
           persist-credentials: false
           lfs: true
+      - name: Capture tracked migration baseline
+        run: |
+          mkdir -p validation-source
+          git archive --format=zip --output=validation-source/source-baseline.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: specification-migration-baseline-source
+          path: validation-source/source-baseline.zip
+          retention-days: 1
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
