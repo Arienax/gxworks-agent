@@ -455,6 +455,8 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
         system_prompt += "\n\n" + current_context
     if (target_mode == "ladder" and normalized_task in {"generate", "edit"}
             and isinstance(confirmed_context, dict) and confirmed_context):
+        from application.confirmed_generation_context import selected_instruction_capability_prompt
+        system_prompt += selected_instruction_capability_prompt(plc_model, confirmed_context)
         execution_prompt = generation_execution_prompt(
             confirmed_context, evidence_text=knowledge_ctx, task_type=normalized_task,
         )

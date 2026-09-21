@@ -1,4 +1,6 @@
 import json
+
+import pytest
 import subprocess
 import sys
 from pathlib import Path
@@ -187,3 +189,211 @@ def test_normal_generation_prompt_exposes_only_catalogued_fx3u_opcodes():
     assert "NOT_A_REAL_OPCODE" not in prompt
     assert "OUT" not in rule["enum"]
     assert len(rule["enum"]) >= 10
+
+
+# The source corpus and the generation allowlist are different populations.
+# Audit every admitted literal form, including pre-existing D/P variants.
+def test_fx3u_batch_promotion_is_reproducible_and_does_not_promote_partial_rows():
+    from tools.audit_fx3u_contracts import build, ledger_text, OUTPUT
+    ledger, report = build()
+    assert OUTPUT.read_text(encoding="utf-8") == ledger_text(ledger)
+    assert {row["opcode"] for row in report["rows"]} == set(generation_app_instr_mnemonics("FX3U"))
+    assert report["decisions"]["corroborated"] > 200
+    assert report["after_exact_arity"] > report["before_exact_arity"]
+    assert report["fully_verified_semantics"] == 0
+    assert {"cpu_applicability", "hardware_applicability"} <= set(report["not_promoted"])
+    assert report["not_promoted"]  # no blanket `full` based on an arity match
+    assert report["quarantine"]
+    for row in report["rows"]:
+        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(row["opcode"], cpu="FX3U")
+        if row["decision"] == "corroborated":
+            assert list(spec.native_operand_order) == row["native_order"]
+            assert spec.min_operands == spec.max_operands == len(row["native_order"])
+            assert spec.contract_sources
+        else:
+            assert not spec.verified_fields
+
+
+def _promoted_fx3u_forms():
+    return [op for op in generation_app_instr_mnemonics("FX3U")
+            if "arity" in DEFAULT_INSTRUCTION_REGISTRY.resolve(op, cpu="FX3U").verified_fields]
+
+
+@pytest.mark.parametrize("opcode", _promoted_fx3u_forms())
+def test_every_promoted_form_uses_the_generic_validator_for_wrong_arity(opcode):
+    from plc.validation import PLCJsonValidationError, validate_ladder_candidate_structure
+    spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu="FX3U")
+    assert spec.accepts_arity(spec.min_operands)
+    assert not spec.accepts_arity(spec.min_operands + 1)
+    # Failure must come from generic arity, not device/type or behavioral checks.
+    with pytest.raises(PLCJsonValidationError, match="requires exactly"):
+        validate_ladder_candidate_structure(_app_ladder(opcode, ["K0"] * (spec.min_operands + 1)), plc_model="FX3U")
+
+
+def test_native_order_is_not_replaced_by_structured_st_argument_order():
+    from tools.audit_fx3u_contracts import OUTPUT
+    ledger = json.loads(OUTPUT.read_text())
+    row = next(r for r in ledger["entries"] if "WSFL" in r["forms"])
+    assert row["native_order"] == ["S", "D", "N1", "N2"]
+    spec = DEFAULT_INSTRUCTION_REGISTRY.resolve("WSFL", cpu="FX3U")
+    assert spec.native_operand_order == ("S", "D", "N1", "N2")
+    assert "operand_types" not in spec.verified_fields
+    assert "completion_ownership" not in spec.verified_fields
+    # An invalid ledger is rejected before adding any partial override state.
+    from plc.instructions import InstructionRegistry
+    registry = InstructionRegistry.from_files([CATALOG / name for name in
+        ("common.json", "fx3u.json", "fx5u.json", "fx3u_verified_opcodes.json", "modifier_rules.json")])
+    assert registry.resolve("MOV", cpu="FX3U").min_operands is None
+
+
+@pytest.mark.parametrize("opcode", ["MOV", "DMOVP", "WSFL", "PID", "DRVA", "DDRVA", "ANR"])
+def test_fx3u_promotions_do_not_leak_into_fx5u_or_model_neutral_import(opcode):
+    neutral = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode)
+    fx3 = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu="FX3U")
+    fx5 = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu="FX5U")
+    assert fx3.verified_fields and not neutral.verified_fields and not fx5.verified_fields
+    assert fx5 is neutral
+    assert fx3.operands == neutral.operands  # no guessed read/write semantics
+    assert fx3.cpu_support == neutral.cpu_support
+
+
+def test_selected_model_context_exposes_verified_native_syntax_and_real_gaps():
+    from application.compact_protocol import compact_capability_prompt
+    spec = {"selected_approach": {"generation_contract": {"required_opcodes": ["DRVA", "WSFL", "MOV"]}}}
+    snapshot = compact_capability_prompt("FX3U", spec)
+    payload = json.loads(snapshot.split("# Selected instruction capability snapshot\n", 1)[1])
+    rows = {r["opcode"]: r for r in payload["instructions"]}
+    assert rows["DRVA"]["native_operand_order"] == ["S1", "S2", "D1", "D2"]
+    assert rows["WSFL"]["native_operand_order"] == ["S", "D", "N1", "N2"]
+    assert rows["MOV"]["min_operands"] == 2
+    assert all(row["contract_level"] == "signature_verified" for row in rows.values())
+    assert all("completion_ownership" in row["unverified_fields"] for row in rows.values())
+
+
+def test_instruction_template_icon_is_not_an_executable_mnemonic():
+    # EADD in the template icon is not evidence for native 16-bit EADD.
+    from tools.audit_fx3u_contracts import source_scan, DB
+    _, native, _ = source_scan(DB)
+    definition = native["EADD"][0]
+    assert "EADD" in definition["format"]
+    assert "EADD" not in definition["forms"] and "DEADD" in definition["forms"]
+    assert not DEFAULT_INSTRUCTION_REGISTRY.resolve("EADD", cpu="FX3U").verified_fields
+
+
+@pytest.mark.parametrize("mutation", ["arity", "duplicate", "missing_proof", "foreign_cpu", "bad_symbol", "bad_metadata"])
+def test_promotion_ledger_is_validated_before_registry_mutation(tmp_path, mutation):
+    from plc.instructions import InstructionRegistry
+    from tools.audit_fx3u_contracts import OUTPUT
+    registry = InstructionRegistry.from_files([CATALOG / name for name in
+        ("common.json", "fx3u.json", "fx5u.json", "fx3u_verified_opcodes.json", "modifier_rules.json")])
+    payload = json.loads(OUTPUT.read_text())
+    if mutation == "arity":
+        payload["entries"][-1]["arity"] += 1
+    elif mutation == "duplicate":
+        payload["entries"].append(payload["entries"][0])
+    elif mutation == "missing_proof":
+        payload["entries"][-1]["native_proof"] = ""
+    elif mutation == "foreign_cpu":
+        payload["cpu"] = "FX5U"
+    elif mutation == "bad_symbol":
+        payload["entries"][-1]["native_order"][0] = {}
+    else:
+        payload["entries"][-1]["execution_forms"] = []
+    file = tmp_path / "invalid.json"
+    file.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError):
+        registry.load_contract_promotions(file)
+    assert not registry.resolve("MOV", cpu="FX3U").verified_fields
+
+
+def test_mcp_and_compact_use_the_same_selected_contract_view(monkeypatch):
+    from application.compact_protocol import compact_capability_prompt
+    from agent_runtime.plc_tools import build_tool_context, build_default_tool_registry
+    import knowledge.retriever as retriever
+    monkeypatch.setattr(retriever, "build_knowledge_context", lambda *a, **k: "")
+    spec = {"summary": "MOV WSFL", "selected_approach": {"name": "selected",
+            "generation_contract": {"required_opcodes": ["MOV", "WSFL"]}}}
+    context = build_tool_context({"id": "contract-test", "plc_model": "FX3U", "confirmed_spec": spec})
+    result = build_default_tool_registry().call("get_generation_context", {}, context)
+    assert result["ok"], result
+    full = result["data"]["generation_instructions"]
+    marker = "# Selected instruction capability snapshot\n"
+    decode = lambda text: json.JSONDecoder().raw_decode(text.split(marker, 1)[1])[0]
+    assert decode(full) == decode(compact_capability_prompt("FX3U", spec))
+    assert "signature_verified" in full
+    assert full.count(marker) == 1
+    assert set(row["opcode"] for row in decode(full)["instructions"]) == {"MOV", "WSFL"}
+
+
+@pytest.mark.parametrize("opcode,operands", [
+    ("MOV", ["K1", "D0"]), ("DMOVP", ["K100000", "D10"]),
+    ("BMOV", ["D0", "D10", "K2"]), ("FMOV", ["K0", "D10", "K2"]),
+    ("ADD", ["D0", "K1", "D1"]), ("CMP", ["D0", "K1", "M10"]),
+    ("SFTL", ["M100", "M200", "K8", "K1"]),
+    ("WSFL", ["D100", "D200", "K8", "K1"]),
+    ("FROM", ["K0", "K1", "D0", "K1"]), ("TO", ["K0", "K1", "D0", "K1"]),
+    ("DRVI", ["K1000", "K2000", "Y0", "Y4"]),
+    ("DRVA", ["K1000", "K2000", "Y0", "Y4"]),
+    ("PLSY", ["K1000", "K500", "Y0"]), ("ZRN", ["K2000", "K500", "X0", "Y0"]),
+])
+def test_batch_promoted_signatures_keep_valid_native_ladder_shapes(opcode, operands):
+    from plc.validation import validate_ladder_candidate_structure
+    ladder = _app_ladder(opcode, operands)
+    assert validate_ladder_candidate_structure(ladder, plc_model="FX3U") is ladder
+
+
+@pytest.mark.parametrize("damage", ["missing_independent", "conflicting_count", "missing_native_form", "conflicting_native"])
+def test_auditor_does_not_promote_ambiguous_or_partial_source_evidence(monkeypatch, damage):
+    import copy
+    import tools.audit_fx3u_contracts as audit
+    locks, natives, signatures = audit.source_scan(audit.DB)
+    # Isolated source-shaped copies; the bundled database remains read-only.
+    native = copy.deepcopy(natives["WSFL"][0])
+    candidates = {op: copy.deepcopy(rows) for op, rows in signatures.items() if op in native["forms"]}
+    native_rows = {"WSFL": [native]}
+    if damage == "missing_independent":
+        candidates = {}
+    elif damage == "conflicting_count":
+        for rows in candidates.values():
+            for row in rows: row["symbols"] = row["symbols"][:-1]
+    elif damage == "missing_native_form":
+        native["forms"].pop("WSFL")
+    else:
+        other = copy.deepcopy(native)
+        other["symbols"] = other["symbols"][:-1]
+        native_rows["WSFL"].append(other)
+    monkeypatch.setattr(audit, "source_scan", lambda db: (locks, native_rows, candidates))
+    ledger, report = audit.build()
+    row = next(row for row in report["rows"] if row["opcode"] == "WSFL")
+    assert row["decision"] != "corroborated" and not row["verified_fields"]
+    assert not any("WSFL" in row["forms"] for row in ledger["entries"])
+
+
+def test_complete_native_symbols_are_required_not_partial_structured_operands():
+    import sqlite3
+    from tools.audit_fx3u_contracts import DB, NATIVE, native_definition, source_scan
+    _, native, _ = source_scan(DB)
+    page_number = native["WSFL"][0]["page"]
+    with sqlite3.connect(DB.resolve().as_uri() + "?mode=ro", uri=True) as db:
+        db.row_factory = sqlite3.Row
+        page = dict(db.execute("SELECT * FROM page_artifacts WHERE manual_id=? AND pdf_page=?", (NATIVE,page_number)).fetchone())
+        tables = [dict(row) for row in db.execute("SELECT * FROM tables WHERE manual_id=? AND pdf_page=?", (NATIVE,page_number))]
+    assert native_definition(page, tables)["symbols"] == ["S", "D", "N1", "N2"]
+    words = json.loads(page["word_geometry_json"])
+    page["word_geometry_json"] = json.dumps([word for word in words if word["text"] != "n2"])
+    assert native_definition(page, tables) is None
+
+
+@pytest.mark.parametrize("flag", ["--output", "--report"])
+def test_contract_audit_cannot_overwrite_its_source_database(tmp_path, monkeypatch, flag):
+    import tools.audit_fx3u_contracts as audit
+    database = tmp_path / "evidence.sqlite"
+    database.write_bytes(b"source evidence")
+    monkeypatch.setattr(audit, "build", lambda *a: pytest.fail("No source scan or promotion after path conflict"))
+    args = ["--database", str(database), flag, str(database)]
+    if flag == "--output":
+        args.append("--promote")
+    with pytest.raises(SystemExit) as error:
+        audit.main(args)
+    assert error.value.code == 2
+    assert database.read_bytes() == b"source evidence"

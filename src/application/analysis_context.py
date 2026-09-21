@@ -96,6 +96,7 @@ def assemble_analysis_prompt(user_request, *, plc_model, confirmed_context=None,
             spec = getattr(resolution, "spec", None)
             if spec is None:
                 continue
+            from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, InstructionResolution
             instruction_facts[opcode] = {
                 "base_mnemonic": getattr(resolution, "base_mnemonic", opcode),
                 "min_operands": spec.min_operands,
@@ -104,6 +105,8 @@ def assemble_analysis_prompt(user_request, *, plc_model, confirmed_context=None,
                 "cpu_support": sorted(spec.cpu_support),
                 "notes": spec.notes,
             }
+            if isinstance(resolution, InstructionResolution) and DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode) is spec:
+                instruction_facts[opcode].update(DEFAULT_INSTRUCTION_REGISTRY.describe_contract(opcode, cpu=plc_model))
     if instruction_facts:
         profile["instruction_facts"] = instruction_facts
     targets = [*route.opcodes, *profile.get("special_devices", {})]
