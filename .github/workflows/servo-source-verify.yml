@@ -1,0 +1,128 @@
+name: Verify servo source candidate
+
+on:
+  pull_request:
+    paths:
+      - '.servo-source/**'
+      - '.github/workflows/servo-source-verify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/prompt-cleanup-io-binding-20260921'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      HAYSTACK_TELEMETRY_ENABLED: 'false'
+      PROMPTFOO_DISABLE_TELEMETRY: '1'
+      PROMPTFOO_DISABLE_UPDATE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reconstruct hash-pinned source and remove temporary transport
+        run: |
+          python - <<'PY'
+          import base64, gzip, hashlib, json, os, subprocess
+          from pathlib import Path, PurePosixPath
+          expected = ['5635a71995e03e62b0e3eb9e666028578a800242', '3c1b4c690ef36c376f969de13ddebbf155a7449c', '5cee8f6cb19e04525a87af09d097d9ceb7673405', 'd4209222fb6c2c1254b92e9944828adaa27f016d', '7444acfcfe7c23c76071193cf606dd0f0a64e0f9', 'ea7399fcb6470e46060937e0f3f0cf8b836268cc']
+          def blob_hash(value):
+              return hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
+          parts = []
+          for index, wanted in enumerate(expected):
+              value = Path(f'.servo-source/{index:02d}.b64').read_bytes().strip()
+              # The text-only transport can duplicate one character. Accept
+              # recovery only when the entire part equals its original Git hash.
+              if blob_hash(value) != wanted and len(value) <= 6001:
+                  for offset in range(len(value)):
+                      candidate = value[:offset] + value[offset + 1:]
+                      if blob_hash(candidate) == wanted:
+                          value = candidate
+                          break
+              assert blob_hash(value) == wanted, index
+              parts.append(value)
+          raw = gzip.decompress(base64.b64decode(b''.join(parts), validate=True))
+          assert hashlib.sha256(raw).hexdigest() == '3e730b48dbafbb0930ee7bab98a0b1d2194c13bf6cb882e407e181f2697fa9a0'
+          data = json.loads(raw)
+          assert data['base_commit'] == '10389df66f1a5bda6c888b843931bfe5b9836cb2'
+          subprocess.run(['git', 'merge-base', '--is-ancestor', data['base_commit'], 'HEAD'], check=True)
+          for row in data['files']:
+              path = PurePosixPath(row['path'])
+              assert not path.is_absolute() and '..' not in path.parts and '.git' not in path.parts
+              assert hashlib.sha256(Path(row['path']).read_bytes()).hexdigest() == row['before'], row['path']
+          patch = data['patch'].encode('utf-8')
+          subprocess.run(['git', 'apply', '--check', '-'], input=patch, check=True)
+          subprocess.run(['git', 'apply', '-'], input=patch, check=True)
+          for row in data['files']:
+              assert hashlib.sha256(Path(row['path']).read_bytes()).hexdigest() == row['after'], row['path']
+          subprocess.run(['git', 'rm', '-r', '--', '.servo-source', '.github/workflows/servo-source-verify.yml'], check=True)
+          Path(os.environ['RUNNER_TEMP'], 'servo-source.json').write_text(json.dumps(data), encoding='utf-8')
+          PY
+      - name: Install actual runtime and offline evaluation dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          npm install --prefix "$RUNNER_TEMP/context-eval" --no-audit --no-fund promptfoo@0.123.1
+          python -m pip download --no-deps -d validation-servo/wheels haystack-ai==2.31.0 haystack-experimental docstring-parser lazy-imports posthog filetype
+      - name: Test confirmation, instruction contracts and real scoped retrieval
+        run: >-
+          python -m pytest -q
+          tests/test_confirmed_reconfirmation.py
+          tests/test_optional_hardware_parameters.py
+          tests/test_spec_choice_metadata.py
+          tests/test_confirmed_input_protocol.py
+          tests/test_motion_control_regressions.py
+          tests/test_analysis_design_rag.py
+          tests/test_instruction_fact_context.py
+          tests/test_intent_evidence_handoff.py
+          tests/test_agent_b_measurement.py
+          tests/test_runtime_diagnostics.py
+          tests/test_web_source_entrypoints.py
+          tests/test_architecture_boundaries.py
+          tests/test_source_layout.py
+          --junitxml=validation-servo/targeted.xml
+      - name: Run dependency self-check and offline application replay
+        run: |
+          PYTHONPATH=src python scripts/web_entry.py --self-test-knowledge
+          python scripts/context_replay.py --output validation-servo/replay.json
+          "$RUNNER_TEMP/context-eval/node_modules/.bin/promptfoo" eval -c evals/context-replay/promptfooconfig.yaml --no-cache -o validation-servo/promptfoo.json
+      - name: Publish verified Git blobs only without moving refs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import base64, hashlib, json, os, subprocess, urllib.request
+          from pathlib import Path
+          data = json.loads(Path(os.environ['RUNNER_TEMP'], 'servo-source.json').read_text())
+          elements = []
+          for row in data['files']:
+              name = row['path']
+              content = Path(name).read_bytes()
+              assert hashlib.sha256(content).hexdigest() == row['after'], name
+              expected = hashlib.sha1(b'blob ' + str(len(content)).encode() + b'\0' + content).hexdigest()
+              request = urllib.request.Request('https://api.github.com/repos/' + os.environ['GITHUB_REPOSITORY'] + '/git/blobs', method='POST', data=json.dumps({'encoding': 'base64', 'content': base64.b64encode(content).decode()}).encode(), headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json'})
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  actual = json.load(response)['sha']
+              assert actual == expected, name
+              elements.append({'path': name, 'mode': '100644', 'type': 'blob', 'sha': actual})
+          result = {'base_commit': data['base_commit'], 'verification_head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(), 'files': data['files'], 'tree_elements': elements}
+          Path('validation-servo/verified-blobs.json').write_text(json.dumps(result, indent=2) + '\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: servo-source-verification
+          path: validation-servo
+          retention-days: 7
