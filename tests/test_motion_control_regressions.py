@@ -375,3 +375,22 @@ def test_analysis_prompt_documents_instruction_aware_motion_questions():
     assert "输出轴、频率、脉冲数或连续模式" in pulse
     assert "不追加相对/绝对、回零问题" in pulse
     assert "不套用所有定位/回零问题" in ANALYSIS_MOTION_PROMPT
+
+
+
+def test_known_operand_count_is_checked_by_existing_registry_validation():
+    from application.compact_protocol import expand_compact_ladder, compact_capability_prompt
+    from plc.validation import validate_ladder_candidate_structure
+    good = {"r":[{"b":[{"i":["NO M0"], "o":["ZRN K1000 K200 X0 Y0"]}]}]}
+    ladder = expand_compact_ladder(good, {"plc_model": "FX3U"})
+    validate_ladder_candidate_structure(ladder, plc_model="FX3U")
+    bad = copy.deepcopy(ladder)
+    bad["rungs"][0]["branches"][0]["outputs"][0]["operands"] = ["X0", "X0", "Y0", "K1000", "K200"]
+    with pytest.raises(PLCJsonValidationError, match="exactly 4 operands"):
+        validate_ladder_candidate_structure(bad, plc_model="FX3U")
+    snapshot = compact_capability_prompt("FX3U", {"selected_approach":{"description":"ZRN"}})
+    payload = json.loads(snapshot.split("# Selected instruction capability snapshot\n", 1)[1])
+    instruction = payload["instructions"][0]
+    assert instruction["min_operands"] == instruction["max_operands"] == 4
+    assert [r["name"] for r in instruction["operands"]] == ["return_speed", "creep_speed", "zero_signal", "pulse_output"]
+    assert "M8029" in instruction["notes"] and payload["source"] == "current_python_catalogue"

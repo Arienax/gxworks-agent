@@ -130,3 +130,24 @@ def source_subquery(connection, schema, lanes, *, rowid=False):
     identifier = _quote_identifier(identifier) if identifier else "rowid"
     predicate, values = source_sql(connection, schema, lanes)
     return f"SELECT {identifier} FROM {_quote_identifier(table['name'])} WHERE {predicate}", values
+
+
+def runtime_status():
+    """Probe the installed router and bundled index in THIS interpreter, offline."""
+    from importlib.metadata import version
+    from knowledge.evidence import retrieval_failure
+    try:
+        from knowledge.core import _index_path
+        import sqlite3
+        plan = retrieval_plan("", "format_repair")
+        path = _index_path()
+        if not path.is_file():
+            return {"status": "unavailable", "failure": {"code": "index_missing", "error_type": "FileNotFoundError"}}
+        connection = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True, timeout=0.2)
+        try:
+            connection.execute("SELECT 1 FROM chunks LIMIT 1").fetchone()
+        finally:
+            connection.close()
+        return {"status": "available", "engine": plan["engine"], "haystack_version": version("haystack-ai")}
+    except Exception as error:
+        return {"status": "unavailable", "failure": retrieval_failure(error)}

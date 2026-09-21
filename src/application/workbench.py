@@ -177,7 +177,8 @@ class WorkbenchService:
                 return audited({"valid": False, "issues": public(issues)})
             self.store.set_confirmed_spec(project_id, normalized)
             persisted = self.projects.raw_project(project_id)["confirmed_spec"]
-            return audited({"valid": True, "spec": public(persisted), "hash": canonical_sha256(persisted)})
+            return audited({"valid": True, "spec": public(persisted), "hash": canonical_sha256(persisted),
+                            **({"issues": public(issues)} if issues.get("warnings") else {})})
 
     def upload_attachment(self, project_id, filename, data_base64):
         from storage.session import detect_image_media_type

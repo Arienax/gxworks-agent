@@ -260,6 +260,7 @@ def build_knowledge_context(
         targeted, fact_report = retrieve_instruction_facts(
             query, plc_model=plc_model, task_type=task, char_budget=available - design_used,
             candidates=fact_results, targets=query_meta.get("instruction_fact_targets"),
+            retrieve=lambda text, **kwargs: retrieve_knowledge(text, source_lanes=tuple(plan["source_lanes"]), **kwargs),
         )
         replaced = {item["original_id"] for item in targeted}
         target_names = {name for target in fact_report["targets"] for name in (target["opcode"], target["base_opcode"])}

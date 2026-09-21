@@ -365,9 +365,15 @@ def compact_capability_prompt(plc_model, confirmed_spec):
         row = {"opcode": opcode, "generation_catalogued": opcode in allowed}
         if form is not None:
             row.update(contract_level=form.spec.contract_level,
-                       min_operands=form.spec.min_operands, max_operands=form.spec.max_operands)
+                       min_operands=form.spec.min_operands, max_operands=form.spec.max_operands,
+                       operands=[{"name": item.name, "role": item.role.value,
+                                  "data_type": item.data_type,
+                                  **({"device_prefixes": list(item.device_prefixes)} if item.device_prefixes else {})}
+                                 for item in form.spec.operands])
+            if form.spec.notes:
+                row["notes"] = form.spec.notes
         rows.append(row)
     value = {"source": "current_python_catalogue", "plc_model": plc_model,
-             "instructions": rows, "runtime_semantics": "retrieved_manual_evidence",
+             "instructions": rows, "runtime_semantics": "requires_manual_evidence",
              "simulation_verification": "not_claimed"}
     return "\n# Selected instruction capability snapshot\n" + json.dumps(value, ensure_ascii=False, separators=(",", ":"))

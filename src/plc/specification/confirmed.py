@@ -3,7 +3,8 @@ import difflib
 import re
 
 from plc.device_identity import canonical_device
-from plc.specification.parameters import parameter_metadata, parameter_value, text_origin
+from plc.specification.parameters import (parameter_metadata, parameter_value, text_origin,
+    parameter_selections, dependency_state, parameter_is_applicable)
 from plc.specification.bindings import (
     bind_answers,
     bind_known_question_rows,
@@ -262,49 +263,8 @@ def _condition_values(condition, key):
 
 
 def _required_when_matches(required_when, parameter_values):
-    """Evaluate one declarative dependency against confirmed parameter values."""
-    if not isinstance(required_when, dict):
-        return False
-    all_conditions = required_when.get("all")
-    if isinstance(all_conditions, list):
-        return bool(all_conditions) and all(
-            _required_when_matches(condition, parameter_values)
-            for condition in all_conditions
-        )
-    any_conditions = required_when.get("any")
-    if isinstance(any_conditions, list):
-        return any(
-            _required_when_matches(condition, parameter_values)
-            for condition in any_conditions
-        )
-    controller = str(required_when.get("parameter", "")).strip()
-    selected_value = str(parameter_values.get(controller, "") or "").strip()
-    if not controller or not selected_value:
-        return False
-    selected_folded = selected_value.casefold()
-
-    equals = _condition_values(required_when, "equals") or _condition_values(
-        required_when, "in"
-    )
-    contains = _condition_values(required_when, "contains_any") or _condition_values(
-        required_when, "contains"
-    )
-    not_equals = _condition_values(required_when, "not_equals")
-    not_contains = _condition_values(required_when, "not_contains")
-
-    if equals:
-        positive = any(selected_folded == value.casefold() for value in equals)
-    elif contains:
-        positive = any(value.casefold() in selected_folded for value in contains)
-    else:
-        positive = False
-    if not positive:
-        return False
-    if any(selected_folded == value.casefold() for value in not_equals):
-        return False
-    if any(value.casefold() in selected_folded for value in not_contains):
-        return False
-    return True
+    """The same exact dependency semantics used by the generation view."""
+    return dependency_state(required_when, parameter_values) is True
 
 
 def _validate_device_address(address, plc_model):
@@ -474,20 +434,7 @@ def validate_spec_draft(spec, plc_model=None):
             )
         )
         parameters = []
-    parameter_values = {}
-    for parameter in parameters:
-        if not isinstance(parameter, dict):
-            continue
-        parameter_name = str(parameter.get("name", "")).strip()
-        if parameter_name:
-            parameter_values.setdefault(
-                parameter_name, str(parameter.get("value", "")).strip()
-            )
-        parameter_id = str(parameter.get("id", "")).strip()
-        if parameter_id:
-            parameter_values.setdefault(
-                parameter_id, str(parameter.get("value", "")).strip()
-            )
+    parameter_values = parameter_selections(parameters)
 
     for index, parameter in enumerate(parameters):
         path = f"$.parameters[{index}]"
@@ -550,6 +497,15 @@ def validate_spec_draft(spec, plc_model=None):
                     row=index,
                 )
             )
+        if not parameter_is_applicable(parameter, parameters):
+            continue
+        # A form option asking for an inline value is not that value. Check at
+        # confirmation, before a model call; do not invent missing reset I/O.
+        if required and value and isinstance(parameter.get("options"), list) and value in parameter["options"] and re.search(
+            r"请(?:一并|同时)?(?:填写|给出|说明|补充)|please\s+(?:enter|provide|specify)", value, re.I
+        ):
+            errors.append(_validation_issue(
+                "parameter_details_missing", f"参数“{name}”的所选项仍需补充实际值或地址与极性", f"{path}.value", row=index))
         if value and _asks_contact_type(name) and _io_parameter_kind(parameter) and not _has_contact_type(value):
             errors.append(
                 _validation_issue(
@@ -566,8 +522,11 @@ def validate_spec_draft(spec, plc_model=None):
     binding_history = spec.get("io_bindings", [])
 
     seen_bindings = {}
+    address_owners = {}
     for index, parameter in enumerate(parameters):
         if not isinstance(parameter, dict) or not str(parameter.get("value") or "").strip():
+            continue
+        if not parameter_is_applicable(parameter, parameters):
             continue
         hint = binding_hint(parameter)
         if hint is None or parameter.get("id") in QUESTION_IDS:
@@ -593,6 +552,29 @@ def validate_spec_draft(spec, plc_model=None):
             errors.append(_validation_issue("conflicting_io_binding", "同一输入/输出绑定选择了不同地址，请统一选择",
                                             f"$.parameters[{index}].value", row=index))
         seen_bindings[identity] = address
+        owner = hint.get("row_id") or identity
+        previous = address_owners.get(address)
+        if previous and previous[0] != owner and hint["kind"] in {"X", "Y"}:
+            errors.append(_validation_issue(
+                "conflicting_io_owners", f"{address} 被不同输入/输出用途重复选择：{previous[1]}、{hint.get('label') or parameter.get('name') or identity}；请更换地址；有意共用时应显式关联同一 I/O 行",
+                f"$.parameters[{index}].value", row=index, address=address, first_row=previous[2]))
+        else:
+            address_owners[address] = (owner, hint.get("label") or str(parameter.get("name") or identity), index)
+        # When the question explicitly asks for a bit level, an address alone
+        # does not answer it. Apply to every typed input, not only start/stop.
+        question = str(parameter.get("name") or "")
+        if (hint["kind"] == "X" and re.search(r"有效电平|ON.{0,12}OFF|OFF.{0,12}ON", question, re.I)
+                and not confirmed_input_levels(parameter["value"])):
+            errors.append(_validation_issue("input_level_missing", "请明确该信号动作时输入位为 ON 还是 OFF", f"$.parameters[{index}].value", row=index))
+
+    # A degenerate trajectory is not a global ban on equal numeric parameters.
+    # Warn only for explicit, same-unit A/B absolute-position identities.
+    positions = {p.get("semantic_key"): p for p in parameters if isinstance(p, dict)}
+    first, second = positions.get("positioning.position_a"), positions.get("positioning.position_b")
+    if first and second and first.get("unit") == second.get("unit"):
+        av, bv = parameter_value(first), parameter_value(second)
+        if type(av) in (int, float) and type(bv) in (int, float) and av == bv:
+            warnings.append(_validation_issue("coincident_position_targets", "位置 A 与 B 相同；按这些值不会产生两位置之间的往复位移", "$.parameters", blocking=False))
 
     io_table = spec.get("io_table")
     if io_table is None:
@@ -635,7 +617,8 @@ def validate_spec_draft(spec, plc_model=None):
                 )
             continue
 
-        first_row = seen_addresses.get(address)
+        identity_address = canonical_device(address)
+        first_row = seen_addresses.get(identity_address)
         if first_row is not None:
             errors.append(
                 _validation_issue(
@@ -648,7 +631,7 @@ def validate_spec_draft(spec, plc_model=None):
                 )
             )
         else:
-            seen_addresses[address] = index
+            seen_addresses[identity_address] = index
 
         error_message, warning_message, prefix, number = _validate_device_address(
             address, model

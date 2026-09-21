@@ -606,5 +606,116 @@
         "source": "user_confirmed_spec"
       }
     }
+  },
+  {
+    "case_id": "servo-typed-handoff",
+    "mode": "direct",
+    "plc_model": "FX3U",
+    "request": "FX3U 已选择 ZRN 回零与单轴定位。DOG 为 X0，启动为 X1，报警为 X4，均为动作时 ON，脉冲输出 Y0。",
+    "analysis": {
+      "summary": "单轴边界测试",
+      "assumptions": [],
+      "missing_info": [
+        {
+          "id": "origin",
+          "question": "原点输入地址及有效电平",
+          "required": true,
+          "io_binding": {
+            "binding_id": "origin",
+            "kind": "X",
+            "label": "原点信号"
+          }
+        },
+        {
+          "id": "start",
+          "question": "启动输入地址及有效电平",
+          "required": true,
+          "io_binding": {
+            "binding_id": "start",
+            "kind": "X",
+            "label": "启动按钮"
+          }
+        },
+        {
+          "id": "alarm",
+          "question": "报警输入地址及有效电平",
+          "required": true,
+          "io_binding": {
+            "binding_id": "alarm",
+            "kind": "X",
+            "label": "伺服报警"
+          }
+        },
+        {
+          "id": "implementation",
+          "question": "定位接口",
+          "required": true,
+          "semantic_key": "positioning.interface",
+          "options": [
+            "内置高速脉冲输出",
+            "定位模块"
+          ]
+        },
+        {
+          "id": "module",
+          "question": "模块单元号",
+          "required": true,
+          "required_when": {
+            "parameter": "implementation",
+            "equals": "定位模块"
+          }
+        }
+      ],
+      "suggested_io": {
+        "X0": "原点信号",
+        "X1": "启动按钮",
+        "X4": "伺服报警",
+        "Y0": "脉冲输出"
+      },
+      "approaches": [
+        {
+          "approach_id": "fixture_homing",
+          "name": "已选回零",
+          "description": "ZRN 回零边界",
+          "generation_guide": "使用已确认速度与 DOG。",
+          "pros": "",
+          "cons": "",
+          "generation_contract": {}
+        }
+      ]
+    },
+    "answers": {
+      "origin": "X0，到达原点时为 ON",
+      "start": "X1，按下为 ON",
+      "alarm": "X4，报警时为 ON",
+      "implementation": "内置高速脉冲输出"
+    },
+    "selected_approach_id": "fixture_homing",
+    "no_drive_model": true,
+    "requires_facts": true,
+    "expected_labels": {
+      "X0": "原点信号",
+      "X1": "启动按钮",
+      "X4": "伺服报警",
+      "Y0": "脉冲输出"
+    },
+    "completion": {
+      "r": [
+        {
+          "h": null,
+          "s": [],
+          "b": [
+            {
+              "i": [
+                "NO M0"
+              ],
+              "o": [
+                "ZRN K1200 K200 X0 Y0"
+              ]
+            }
+          ]
+        }
+      ]
+    }
   }
 ]

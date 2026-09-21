@@ -182,10 +182,10 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
 
     normalized_task = str(task_type or "generate").strip().casefold()
     # Retrieval executes the caller's choice. Omitted/None never means "infer".
-    def absent(status, reason):
+    def absent(status, reason, **metadata):
         audit_section("manual_context", status=status, reason=reason, source="manual_retriever")
         return KnowledgeContext("", {"stage": normalized_task, "status": status,
-                                     "reason": reason, "records": [], "plc_model": plc_model})
+                                     "reason": reason, "records": [], "plc_model": plc_model, **metadata})
     if normalized_task in {"contract_repair", "format_repair"}:
         return absent("excluded", "repair_scope_only")
     top_k, char_budget = _KNOWLEDGE_TASK_SETTINGS.get(normalized_task, _KNOWLEDGE_TASK_SETTINGS["generate"])
@@ -218,9 +218,13 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
         context = retrieve_context(query, plc_model=plc_model, task_type=normalized_task,
                                    top_k=top_k, char_budget=retrieval_char_budget,
                                    token_budget=token_budget, **analysis_options)
-    except Exception:
-        print("PLC knowledge retrieval unavailable", file=sys.stderr)
-        return absent("unavailable", "retrieval_failed")
+    except Exception as error:
+        from knowledge.evidence import retrieval_failure
+        from shared.diagnostics import emit
+        failure = retrieval_failure(error)
+        emit("retrieval_failed", stage="model_request", **failure)
+        print("PLC knowledge retrieval unavailable: " + json.dumps(failure, ensure_ascii=True), file=sys.stderr)
+        return absent("unavailable", "retrieval_failed", failure=failure)
     manifest = context_manifest(context, stage=normalized_task)
     manifest.update(query_truncated=bool(getattr(query, "truncated", False)),
                     query_sha256=text_sha256(query), plc_model=plc_model)

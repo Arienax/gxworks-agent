@@ -462,3 +462,113 @@ Y010：Sorter 3 belt
         comments = service.projects.artifact(pid, vid, "comment_csv").read_text(encoding="utf-16")
         assert "停机输入" in svg and "停机输入" in comments
         assert "触点极性是" not in comments and "按下为" not in comments
+
+
+# Synthetic owner/level boundary, not a runnable servo program or private trace.
+def _sensor_identity_spec():
+    rows = [("origin", "原点信号", "X0，到达原点时为 ON"),
+            ("start", "启动按钮", "X000，按下为 ON"),
+            ("alarm", "伺服报警", "X4，报警时为 ON")]
+    return {"plc_model": "FX3U", "summary": "输入身份测试", "io_table": [],
+            "parameters": [{"id": "io."+key, "semantic_key": "io."+key,
+                "name": label+"地址及有效电平 ON 还是 OFF？", "value": value,
+                "source": "user", "required": True,
+                "io_binding": {"binding_id": key, "kind": "X", "label": label}}
+                for key, label, value in rows]}
+
+
+def test_distinct_sensor_owners_keep_names_before_conflict_is_reported():
+    from application.confirmed_generation_context import project_confirmed_specification
+    from plc.specification.bindings import restore_bound_choices
+    draft = _sensor_identity_spec()
+    before = copy.deepcopy(draft)
+    issues = validate_spec_draft(draft)
+    assert [i["code"] for i in issues["errors"]] == ["conflicting_io_owners"]
+    assert draft == before
+    # Compatibility readers must not corrupt history even when the old save
+    # predated collision validation. Never fix a physical address automatically.
+    stored = canonicalize_confirmed_spec(draft)
+    bindings = {b["binding_id"]: b for b in stored["io_bindings"]}
+    assert bindings["origin"]["label"] == "原点信号"
+    assert bindings["start"]["label"] == "启动按钮"
+    assert bindings["origin"]["address"] == bindings["start"]["address"] == "X0"
+    questions = copy.deepcopy(draft["parameters"])
+    for q in questions:
+        q["value"] = ""
+    restored = restore_bound_choices(questions, stored["io_table"], stored["io_bindings"])
+    assert [q["io_binding"]["label"] for q in restored] == ["原点信号", "启动按钮", "伺服报警"]
+    first = project_confirmed_specification(stored)
+    second = project_confirmed_specification(first)
+    assert first == second
+    assert len(first["io_bindings"]) == 3
+    assert {b["binding_id"] for b in first["io_bindings"]} == {"origin", "start", "alarm"}
+    assert all(b["active_level"] == 1 for b in first["io_bindings"])
+
+
+def test_explicit_physical_row_sharing_is_not_a_blanket_address_ban():
+    draft = _sensor_identity_spec()
+    for p in draft["parameters"][:2]:
+        p["io_binding"]["row_id"] = "physical_x0"
+    draft["io_table"] = [{"row_id": "physical_x0", "kind": "X", "address": "X0", "label": "共用输入"}]
+    assert not validate_spec_draft(draft)["errors"]
+    canonical = canonicalize_confirmed_spec(draft)
+    assert len([r for r in canonical["io_table"] if r["address"] == "X0"]) == 1
+    assert canonicalize_confirmed_spec(canonical) == canonical
+
+
+@pytest.mark.parametrize("text,active", [
+    ("X0，到达原点时为 ON", 1), ("X0，未到达原点时为 ON", 0),
+    ("X4，报警时为 ON", 1), ("X4，没有报警时为 ON", 0),
+    ("X4，报警解除时为 OFF", 1), ("X4，解除报警时为 ON", 0),
+    ("X5，检测到工件时为 OFF", 0), ("X5，没有检测到工件时为 OFF", 1),
+    ("X3，复位时为 ON", 1), ("X3，松开时为 OFF", 1),
+    ("X3, inactive=ON", 0), ("X3, active low", 0),
+    ("常闭，未按下时接通，按下时断开", 0),
+])
+def test_input_level_normalization_is_not_limited_to_start_stop(text, active):
+    from plc.specification.bindings import confirmed_input_levels
+    assert confirmed_input_levels(text) == {"active_level": active, "inactive_level": 1-active}
+
+
+def test_contradictory_levels_do_not_fall_back_to_contact_or_guess():
+    from plc.specification.bindings import confirmed_input_levels
+    assert confirmed_input_levels("常闭，报警时ON，报警时OFF") == {}
+    draft = _sensor_identity_spec()
+    draft["parameters"][1]["value"] = "X1，按下为ON"
+    draft["parameters"][2]["value"] = "X4"
+    assert [i["code"] for i in validate_spec_draft(draft)["errors"]] == ["input_level_missing"]
+
+
+def test_confirmation_rejects_unfinished_choice_before_saving_or_calling_model(tmp_path):
+    from fastapi.testclient import TestClient
+    from application.workbench import WorkbenchService
+    from integrations.web.app import create_app
+    from test_web_api import ORIGIN, OPERATOR, _login
+    def no_models():
+        pytest.fail("confirmation must not resolve a provider")
+    service = WorkbenchService(tmp_path/"workspace", tmp_path/"state", model_factory=no_models)
+    app = create_app(service.store.base_dir, state_dir=service.state_dir, service=service,
+                     origin=ORIGIN, operator_token=OPERATOR)
+    draft = _sensor_identity_spec()
+    choice = "由独立复位按钮输入 X 复位（请一并给出地址与极性）"
+    draft["parameters"].append({"id": "servo.alarm_reset", "name": "报警复位方式",
+        "required": True, "value": choice, "options": [choice, "驱动器面板复位"], "source": "user"})
+    with TestClient(app, base_url=ORIGIN) as client:
+        headers = _login(client)
+        pid = client.post("/api/projects", headers=headers, json={"name":"synthetic servo identity"}).json()["id"]
+        before = service.projects.raw_project(pid)
+        response = client.put(f"/api/projects/{pid}/spec", headers=headers,
+                              json={"spec": draft, "expected_hash": None}).json()
+        assert not response["valid"]
+        assert {i["code"] for i in response["issues"]["errors"]} == {"conflicting_io_owners", "parameter_details_missing"}
+        assert service.projects.raw_project(pid) == before
+        draft["parameters"][1]["value"] = "X1，按下为 ON"
+        draft["parameters"][-1]["value"] = "X3，按下复位时为 ON"
+        draft["parameters"].extend({"id":key, "semantic_key": key, "name":key,
+            "value": "0", "value_kind": "number", "unit":"pulse"}
+            for key in ("positioning.position_a", "positioning.position_b"))
+        response = client.put(f"/api/projects/{pid}/spec", headers=headers,
+                              json={"spec": draft, "expected_hash": None}).json()
+        assert response["valid"], response
+        assert "coincident_position_targets" in {i["code"] for i in response["issues"]["warnings"]}
+        assert service.projects.raw_project(pid).get("versions", []) == []

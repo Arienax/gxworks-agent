@@ -47,3 +47,20 @@ def test_packaged_sdk_diagnostic_never_starts_web_or_gx(monkeypatch):
     monkeypatch.setattr(provider, "sdk_runtime_self_test", lambda: calls.append("sdk") or True)
     assert web_entry.run() == 0
     assert calls == ["sdk"]
+
+
+
+def test_source_build_checks_knowledge_in_the_venv_not_global_python():
+    text = (ROOT/"scripts/build_web_source.ps1").read_text(encoding="utf-8-sig")
+    assert '& $venvPython (Join-Path $root "scripts\\web_entry.py") --self-test-knowledge' in text
+
+
+def test_knowledge_self_test_is_not_a_server_or_model_call(monkeypatch, capsys):
+    from scripts import web_entry
+    import knowledge.scope as scope
+    import model_runtime.provider as provider
+    monkeypatch.setattr(web_entry.sys, "argv", ["web", "--self-test-knowledge"])
+    monkeypatch.setattr(scope, "runtime_status", lambda:{"status":"available", "engine":"fixture"})
+    monkeypatch.setattr(provider, "get_active_provider", lambda: (_ for _ in ()).throw(AssertionError("no provider")))
+    assert web_entry.run() == 0
+    assert '"available"' in capsys.readouterr().out

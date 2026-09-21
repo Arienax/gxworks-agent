@@ -103,3 +103,36 @@ https://docs.haystack.deepset.ai/docs/metadata-filtering
 promptfoo Python provider/telemetry
 https://www.promptfoo.dev/docs/integrations/python/
 https://www.promptfoo.dev/docs/configuration/telemetry/
+
+## Servo identity and retrieval follow-up
+
+The sixth fixture (`servo-typed-handoff`) is a small synthetic boundary sentinel,
+not a servo control program: independent signal owners/levels, a conditionally
+inactive module question, actual ZRN evidence and one recorded completion. The
+live operator ZIP is never checked into this corpus. Confirmation rejects two
+unlinked X/Y owners at the same address and unfinished choices requesting actual
+details; explicit row sharing remains supported. Coincident A/B position targets
+produce an advisory warning, not a global ban on equal numeric parameters.
+
+The source launcher uses `.venv` when present. Installing with a different global
+`python` does not repair that environment. From the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements/web.txt
+$env:PYTHONPATH = 'src'
+.\.venv\Scripts\python.exe scripts/web_entry.py --self-test-knowledge
+```
+
+`build-web.bat` performs this dependency check in its actual Web interpreter.
+Restart the Web service after updating. Frozen builds have the same
+`--self-test-knowledge` diagnostic. A failure remains nonblocking at service
+startup and is now captured with a safe exception/dependency code in receipts
+and the original interaction export. The original `retrieval_failed` trace
+contained no exception detail; it cannot establish the historical cause.
+
+Instruction facts follow completion-flag links present in the read-only index,
+within the same manual/revision and existing budget. They do not inject a
+selected opcode, add a prompt recipe, or declare behavior verified. The ZRN
+arity and operand order use Mitsubishi JY997D16801K §6.3.1 (B-110); completion
+ownership cautions are in §4.7.4 (B-81..83). Catalogue metadata is not described as
+successfully retrieved evidence when the runtime is missing a dependency.

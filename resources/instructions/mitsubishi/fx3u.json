@@ -5,6 +5,7 @@
   "instructions": [
     {
       "mnemonic": "ZRN",
+      "arity": {"min": 4, "max": 4},
       "canonical_op": "HOME_RETURN",
       "category": "action",
       "semantic_kind": "vendor",
@@ -15,7 +16,7 @@
         {"name": "zero_signal", "role": "read"},
         {"name": "pulse_output", "role": "write"}
       ],
-      "notes": "FX5U projects should use the model-appropriate homing instruction such as DSZR."
+      "notes": "Mitsubishi JY997D16801K, 6.3.1 (B-110): ZRN S1 S2 S3 D = return speed, creep speed, DOG signal, pulse output. Section 4.7.4 (B-81..83): M8029 is shared by applicable instructions; associate completion with its instruction. FX5U projects should use a model-appropriate homing instruction such as DSZR."
     },
     {
       "mnemonic": "ZRST",

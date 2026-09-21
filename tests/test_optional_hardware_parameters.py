@@ -623,3 +623,66 @@ def test_registered_hardware_identity_wins_over_conflicting_legacy_display_label
     row = {"id": "motion_drive_model", "question": "高速输出适配器数量？"}
     normalized = ensure_hardware_questions({"missing_info": [row]}, "FX3U", "伺服定位")
     assert normalized["missing_info"][0]["id"] == "motion_drive_model"
+
+
+@pytest.mark.parametrize("condition,values,expected", [
+    ({"parameter":"home", "not_contains":["internal"]}, {"home":"ZRN"}, True),
+    ({"parameter":"home", "not_contains":["internal"]}, {"home":"internal home"}, False),
+    ({"parameter":"home", "not_contains":["internal"]}, {}, None),
+    ({"parameter":"n", "equals":0}, {"n":0}, True),
+    ({"parameter":"enabled", "equals":False}, {"enabled":False}, True),
+    ({"any":[{"parameter":"n", "equals":1}, {"parameter":"absent", "equals":2}]}, {"n":0}, None),
+])
+def test_conditional_parameter_semantics_keep_negative_only_and_zero(condition, values, expected):
+    from plc.specification.parameters import dependency_state
+    assert dependency_state(condition, values) is expected
+
+
+def test_conditional_generation_view_and_hardware_projection_do_not_invent_facts():
+    from plc.specification.parameters import generation_parameter_view
+    from plc.hardware_profiles import build_hardware_profile
+    from application.confirmed_generation_context import project_confirmed_specification
+    spec = {"summary":"fixture", "io_table": [], "parameters": [
+        {"id":"method", "semantic_key":"positioning.interface", "name":"定位接口", "value":"内置高速脉冲输出"},
+        {"id":"output", "semantic_key":"hardware.base_unit_output_type", "name":"基本单元输出", "value":"晶体管漏型"},
+        {"id":"module", "name":"仅模块接口所需单元号", "value":"0", "required": True,
+         "required_when":{"parameter":"positioning.interface", "contains":["定位模块"]}},
+        {"id":"home", "semantic_key":"positioning.homing_signal_type", "name":"回零方式", "value":"ZRN"},
+        {"id":"speeds", "name":"回零速度", "value":"", "required":True,
+         "required_when":{"parameter":"positioning.homing_signal_type", "not_contains":["驱动器内部"]}},
+    ]}
+    before = copy.deepcopy(spec)
+    assert any(
+        e["code"] == "required_parameter_missing" and e.get("row") == 4 for e in validate_spec_draft(spec)["errors"])
+    spec["parameters"][-1]["value"] = "1000,200"
+    before = copy.deepcopy(spec)
+    view = generation_parameter_view(spec)
+    assert "module" not in {p["id"] for p in view["parameters"]}
+    profile = build_hardware_profile(spec, "FX3U")
+    assert profile["output_type"] == "晶体管漏型"
+    assert profile["positioning_implementation"] == "内置高速脉冲输出"
+    assert not profile["motion_drive_model"] and not profile["motion_control_method"]
+    assert "module" not in {p["id"] for p in project_confirmed_specification(spec)["parameters"]}
+    assert spec == before
+
+
+
+def test_inactive_typed_io_remains_in_review_but_not_generation():
+    from application.confirmed_generation_context import project_confirmed_specification
+    spec = {"summary":"fixture", "io_table": [], "parameters":[
+        {"id":"mode", "name":"interface", "value":"builtin"},
+        {"id":"alternate", "name":"备用模块输出地址", "value":"Y1", "required":True,
+         "required_when":{"parameter":"mode", "equals":"module"},
+         "io_binding":{"binding_id":"alternate", "kind":"Y", "label":"备用输出"}}]}
+    before = copy.deepcopy(spec)
+    stored = canonicalize_confirmed_spec(spec)
+    assert spec == before and any(p["id"] == "alternate" for p in stored["parameters"])
+    projected = project_confirmed_specification(stored)
+    assert "alternate" not in {p["id"] for p in projected["parameters"]}
+    assert not projected["io_table"]
+    spec["parameters"][0]["value"] = "module"
+    active = canonicalize_confirmed_spec(spec)
+    assert active["io_table"][0]["address"] == "Y1"
+    active["parameters"][0]["value"] = "builtin"
+    projected = project_confirmed_specification(active)
+    assert not projected["io_table"] and not projected["io_bindings"]

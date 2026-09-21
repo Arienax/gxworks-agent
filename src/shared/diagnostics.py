@@ -30,7 +30,7 @@ _active = ContextVar('runtime_diagnostics', default=None)
 _attempt = ContextVar('diagnostic_attempt', default=0)
 _ALLOWED_EVENTS = {'job_started', 'job_finished', 'model_request', 'provider_request', 'provider_result', 'attempt_finished',
                    'model_response', 'response_rejected', 'model_accepted', 'context_audit',
-                   'provider_exception', 'workflow_exception', 'logging_limit'}
+                   'provider_exception', 'workflow_exception', 'logging_limit', 'retrieval_failed'}
 _NUMBERS = {'request_index', 'attempt_index', 'message_count', 'message_chars', 'tool_count',
             'content_chars', 'reasoning_chars', 'chunk_count', 'choice_count', 'input_tokens',
             'output_tokens', 'total_tokens', 'reasoning_tokens', 'max_tokens',
@@ -49,7 +49,7 @@ _BOOLEANS = {'stream', 'refusal_present', 'finish_seen', 'at_or_near_end', 'fenc
              'bom', 'traceback_truncated', 'content_present', 'prefix_complete_object',
              'punctuation_only_tail', 'allowed_by_registry'}
 _IDS = {'model', 'provider', 'contract', 'error_type', 'code', 'function',
-        'stop_reason', 'tail_class'}
+        'stop_reason', 'tail_class', 'dependency'}
 _ENUMS = {
     'stage': {'workflow', 'model_request', 'provider_transport', 'response_acceptance', 'publication'},
     'status': {'completed', 'failed', 'cancelled', 'interrupted', 'running'},
@@ -555,7 +555,7 @@ def export_diagnostics(state_dir, job):
     meta['error_code'] = _identifier(job.get('error_code') or 'none')
     failure_analysis = {}
     for event_name in ('model_request', 'context_audit', 'provider_result', 'model_response',
-                       'response_rejected', 'workflow_exception'):
+                       'response_rejected', 'workflow_exception', 'retrieval_failed'):
         matched = next((item for item in reversed(records) if item.get('event') == event_name), None)
         if matched is not None:
             failure_analysis[event_name] = {

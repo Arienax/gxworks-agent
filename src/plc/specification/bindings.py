@@ -134,8 +134,25 @@ def confirmed_input_levels(value):
     """
     text = str(value or "").casefold()
     explicit = set()
-    for match in re.finditer(r"(?<!未)(?<!没)(?<!不)(?:按下|动作|有信号|押下)(?:时|時)?\s*(?:为|為|是|=|:|：)?\s*(on|off|1|0|接通|断开)(?![a-z0-9])", text):
-        explicit.add(1 if match[1] in {"on", "1", "接通"} else 0)
+    # Parse event-level statements for any input, not just a start/stop button.
+    # Negative states contribute the inverse level; contradictory statements
+    # stay unresolved rather than falling back to the physical-contact label.
+    state = (r"按下|动作|有信号|押下|到达[^，,。；;:：=\n]{0,20}?|"
+             r"检测到[^，,。；;:：=\n]{0,20}?|触发|报警|故障|信号有效|输入有效|复位")
+    pattern = (r"(?P<negative>没有|未曾|未|没|不|无)?(?P<state>" + state + r")"
+               r"(?:时|時)?\s*(?:信号|输入)?\s*(?:为|為|是|=|:|：)?\s*"
+               r"(?P<level>on|off|1|0|接通|断开)(?![a-z0-9])")
+    inactive = re.compile(r"(?:松开|松開|释放|解除报警|报警解除|无信号)(?:时|時)?\s*(?:为|為|是|=|:|：)?\s*(on|off|1|0|接通|断开)(?![a-z0-9])")
+    for match in inactive.finditer(text):
+        explicit.add(0 if match[1] in {"on", "1", "接通"} else 1)
+    # Don't parse the "报警" substring of "解除报警" a second time.
+    event_text = inactive.sub(" ", text)
+    for match in re.finditer(pattern, event_text):
+        level = 1 if match['level'] in {"on", "1", "接通"} else 0
+        explicit.add(1 - level if match['negative'] else level)
+    for match in re.finditer(r"\b(active|inactive|triggered|released)\s*(?:is|=|:)?\s*(on|off|1|0)\b", text):
+        level = 1 if match[2] in {"on", "1"} else 0
+        explicit.add(1 - level if match[1] in {"inactive", "released"} else level)
     for match in re.finditer(r"(?<![a-z])(?:active|level)[_ -](high|low)(?![a-z])", text):
         explicit.add(1 if match[1] == "high" else 0)
     if explicit:
@@ -209,10 +226,11 @@ def _bound_row(rows, identity, binding):
 def _saved_parameter_binding(parameter, bindings):
     """An explicit binding identity wins over a legacy question-id fallback."""
     hint = binding_hint(parameter)
-    if hint is None:
-        return None
     saved = [item for item in (bindings or ()) if isinstance(item, dict)]
-    matches = [item for item in saved if item.get("binding_id") == hint["binding_id"]]
+    # Public generation parameters intentionally omit io_binding. Their stable
+    # source_parameter_id must still recover the existing owner, not produce a
+    # fresh question_<id> binding on every projection.
+    matches = [item for item in saved if hint and item.get("binding_id") == hint["binding_id"]]
     if not matches:
         identifier = str(parameter.get("id") or "").strip()
         matches = [item for item in saved if identifier and item.get("source_parameter_id") == identifier]
@@ -338,6 +356,10 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
         if not isinstance(item, dict):
             remaining.append(item)
             continue
+        from plc.specification.parameters import parameter_is_applicable
+        if not parameter_is_applicable(item, parameters):
+            remaining.append(item)
+            continue
         name = str(item.get("name") or "").strip()
         identifier = str(item.get("id") or "").strip()
         hint = binding_hint(item)
@@ -389,7 +411,7 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
                 # operator audit, not in the active generation specification.
                 continue
         pending.append((hint, item, address))
-        if _is_io_attribute_answer(item.get("value")):
+        if _is_io_attribute_answer(item.get("value")) or isinstance(item.get("required_when"), dict):
             # Preserve an exact recovered identity through reanalysis even if
             # the next question's display wording no longer contains an address.
             item.setdefault("io_binding", copy.deepcopy(hint))
@@ -431,12 +453,15 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
             # Existing labels (including an intentionally empty one) belong to
             # the I/O table. Reconfirmation must not restore a model's label.
             row.setdefault("label", _purpose_label(hint))
+        owns_purpose = row.get("binding_id") == identity or bool(explicit_row)
+        purpose = (str(row.get("label") or "").strip() if owns_purpose else
+                   str(hint.get("label", (previous.get(identity) or {}).get("label", ""))).strip())
         if isinstance(item.get("io_binding"), dict):
-            item["io_binding"]["label"] = str(row.get("label") or "").strip()
+            item["io_binding"]["label"] = purpose
         claimed.add(index)
         previous[identity] = {**hint, "address": address,
                               "source_parameter_id": str(item.get("id") or ""),
-                              "name": name, "label": str(row.get("label") or "").strip(),
+                              "name": name, "label": purpose,
                               "value": str(item.get("value") or ""),
                               "source": item.get("source") or "user",
                               "row_binding_id": row.get("binding_id") or identity}
@@ -456,7 +481,11 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
         if row is not None:
             binding["address"] = str(row.get("address") or "").strip().upper()
             binding["row_binding_id"] = row.get("binding_id") or identity
-            binding["label"] = str(row.get("label") or "").strip()
+            # Several semantic owners can reference one physical point. Only
+            # the actual owner or an explicitly linked row inherits its label.
+            # An accidental address collision must not rename another signal.
+            if row.get("binding_id") == identity or binding.get("row_id"):
+                binding["label"] = str(row.get("label") or "").strip()
             hint = binding_hint({"id": binding.get("source_parameter_id")})
             if not binding.get("role") and hint and hint["kind"] == binding.get("kind"):
                 binding["role"] = hint["role"]
@@ -505,7 +534,8 @@ def restore_bound_choices(questions, rows, bindings):
             continue
         question["source"] = binding.get("source") or "previous"
         if isinstance(question.get("io_binding"), dict):
-            question["io_binding"]["label"] = str(row.get("label") or "").strip()
+            owns_row = row.get("binding_id") == binding["binding_id"] or binding.get("row_id")
+            question["io_binding"]["label"] = str((row if owns_row else binding).get("label") or "").strip()
     return result
 
 
@@ -521,6 +551,16 @@ def generation_io_snapshot(spec, *, protected_ids=()):
         return result
     parameters = result.get("parameters")
     bindings = result.get("io_bindings")
+    if isinstance(parameters, list):
+        from plc.specification.parameters import parameter_is_applicable
+        disabled = {p.get("id") for p in parameters if isinstance(p, dict)
+                    and p.get("id") and not parameter_is_applicable(p, parameters)}
+        parameters = [p for p in parameters if not isinstance(p, dict) or p.get("id") not in disabled]
+        if isinstance(bindings, list):
+            bindings = [b for b in bindings if not isinstance(b, dict) or b.get("source_parameter_id") not in disabled]
+        referenced = {b.get("address") for b in (bindings or []) if isinstance(b, dict)}
+        result["io_table"] = [r for r in result["io_table"] if not isinstance(r, dict)
+                              or r.get("source_parameter_id") not in disabled or r.get("address") in referenced]
     rows, remaining, bindings, _ = bind_answers(
         result["io_table"], parameters if isinstance(parameters, list) else [],
         bindings if isinstance(bindings, list) else [], protected_ids=protected_ids,

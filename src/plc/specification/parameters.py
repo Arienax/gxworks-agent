@@ -178,12 +178,71 @@ def parameter_metadata(raw):
     return metadata
 
 
+def parameter_selections(rows):
+    """Index current answers by exact id, semantic key or label; no fuzzy match."""
+    candidates = {}
+    for row in rows if isinstance(rows, (list, tuple)) else ():
+        if not isinstance(row, Mapping):
+            continue
+        value = row.get("value")
+        for key in (row.get("id"), row.get("semantic_key"), row.get("name")):
+            if isinstance(key, str) and key.strip():
+                candidates.setdefault(key.strip(), []).append(value)
+    return {key: values[0] for key, values in candidates.items()
+            if all(type(value) is type(values[0]) and value == values[0] for value in values)}
+
+
+def dependency_state(condition, values, *, _depth=0):
+    """True/False for understood dependencies, None for missing/unknown evidence.
+
+    Negative-only rules are useful (e.g. not a drive-internal home). They must
+    not require a positive matcher, and zero/False are not missing answers.
+    Unknown conditions never erase a confirmed value from generation context.
+    """
+    if not isinstance(condition, Mapping) or _depth > 12:
+        return None
+    for key in ("all", "any"):
+        if key in condition:
+            group = condition[key]
+            if not isinstance(group, list) or not group:
+                return None
+            states = [dependency_state(c, values, _depth=_depth+1) for c in group]
+            if key == "all":
+                return False if False in states else None if None in states else True
+            return True if True in states else None if None in states else False
+    controller = condition.get("parameter")
+    if not isinstance(controller, str) or controller not in values:
+        return None
+    selected = values[controller]
+    if selected is None or isinstance(selected, str) and not selected.strip():
+        return None
+    text = str(selected).strip().casefold()
+    matches = []
+    for key in ("equals", "in", "contains_any", "contains", "not_equals", "not_contains"):
+        if key not in condition:
+            continue
+        choices = condition[key]
+        choices = choices if isinstance(choices, (list, tuple, set)) else [choices]
+        choices = [str(c).strip().casefold() for c in choices if c is not None and str(c).strip()]
+        if not choices:
+            return None
+        matched = any(c in text if key in {"contains_any", "contains", "not_contains"}
+                      else c == text for c in choices)
+        matches.append(not matched if key in {"not_equals", "not_contains"} else matched)
+    return all(matches) if matches else None
+
+
+def parameter_is_applicable(parameter, rows):
+    condition = parameter.get("required_when") if isinstance(parameter, Mapping) else None
+    return not isinstance(condition, Mapping) or dependency_state(condition, parameter_selections(rows)) is not False
+
+
 def generation_parameters(rows):
     """No form choices/defaults in model input; unknown user notes are retained."""
     result = []
     for raw in rows if isinstance(rows, list) else []:
         view, valid = read_parameter(raw)
-        if view is None or view.typed_value.value == "":
+        if view is None or view.typed_value.value == "" or not parameter_is_applicable(raw, rows):
             continue
         projected = view.generation(explicit_kind=valid and bool(raw.get("value_kind")))
         # Keep legacy absence of optional scalar fields, rather than inventing
@@ -216,7 +275,13 @@ def hardware_parameter_id(raw, labels):
             return ""
     if "semantic_key" in raw:
         key = raw.get("semantic_key")
-        return next((name for name in labels if key == "hardware." + name), "")
+        # Explicit registered aliases only. In particular transport.mode or an
+        # arbitrary positioning.* field cannot acquire a hardware owner.
+        aliases = {"hardware.base_unit_output_type": "output_type",
+                   "positioning.interface": "positioning_implementation",
+                   "positioning.homing_signal_type": "homing_method"}
+        field = aliases.get(key) or next((name for name in labels if key == "hardware." + name), "")
+        return field if field in labels else ""
     identifier = str(raw.get("id") or "").strip()
     if identifier in labels:
         return identifier

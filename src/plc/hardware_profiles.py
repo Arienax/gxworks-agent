@@ -12,7 +12,7 @@ import copy
 import json
 import re
 from shared.i18n import tr
-from plc.specification.parameters import hardware_parameter_id
+from plc.specification.parameters import hardware_parameter_id, parameter_is_applicable
 
 
 HARDWARE_PROFILE_SCHEMA_VERSION = 1
@@ -563,8 +563,9 @@ def parameter_values(spec):
     values = {}
     indices = {}
     bound = {}
-    for index, parameter in enumerate((spec or {}).get("parameters", []) or []):
-        if not isinstance(parameter, dict):
+    parameters = (spec or {}).get("parameters", []) or []
+    for index, parameter in enumerate(parameters):
+        if not isinstance(parameter, dict) or not parameter_is_applicable(parameter, parameters):
             continue
         name = str(parameter.get("name", "")).strip()
         question_id = str(parameter.get("id", "")).strip()

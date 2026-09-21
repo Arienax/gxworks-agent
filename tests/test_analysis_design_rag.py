@@ -201,3 +201,89 @@ def test_scoped_retrieval_cache_does_not_reuse_unscoped_debug_hits():
     assert scoped and unscoped
     assert all(row.get("manual_type") != "debug_cases" for row in scoped)
     assert any(row.get("manual_type") == "positioning" for row in scoped)
+
+
+
+def test_retrieval_exception_is_visible_in_receipt_and_operator_export_without_raw_message(tmp_path, monkeypatch):
+    import io
+    import zipfile
+    from knowledge.evidence import context_manifest
+    from plc.specification.provenance import seal_confirmation
+    import shared.diagnostics as diagnostics
+    def unavailable(*args, **kwargs):
+        raise ModuleNotFoundError("PRIVATE requirement and secret must not leak", name="haystack")
+    monkeypatch.setattr(knowledge_retriever, "build_knowledge_context", unavailable)
+    with diagnostics.diagnostic_scope(tmp_path, "job_retrieval"):
+        with context_policy_scope("legacy"):
+            context = api._build_knowledge_context("ZRN", plc_model="FX3U", task_type="analysis")
+    assert not context
+    manifest = context_manifest(context)
+    assert manifest["status"] == "unavailable" and manifest["reason"] == "retrieval_failed"
+    assert manifest["failure"] == {"code":"dependency_missing", "error_type":"ModuleNotFoundError", "dependency":"haystack"}
+    assert "PRIVATE" not in json.dumps(manifest)
+    # Keep failure evidence through the same review/confirmation receipt filter.
+    from application.analysis_results import attach_analysis_evidence
+    from plc.specification.confirmed import build_review_draft
+    analysis = attach_analysis_evidence({"summary":"fixture", "missing_info":[]}, context)
+    _, receipt = seal_confirmation(build_review_draft(analysis))
+    assert receipt["analysis_evidence"]["failure"] == manifest["failure"]
+    with zipfile.ZipFile(io.BytesIO(diagnostics.export_diagnostics(tmp_path, {"id":"job_retrieval", "kind":"analysis", "status":"completed"}))) as archive:
+        rows = [json.loads(line) for line in archive.read("diagnostics.jsonl").splitlines()]
+        event = next(r for r in rows if r["event"] == "retrieval_failed")
+        assert event["dependency"] == "haystack"
+        assert "PRIVATE" not in archive.read("diagnostics.jsonl").decode()
+
+
+def test_knowledge_runtime_health_is_nonblocking_and_reports_same_dependency(monkeypatch):
+    import knowledge.scope as scope
+    def unavailable(*args, **kwargs):
+        raise ModuleNotFoundError("do not echo this", name="haystack")
+    monkeypatch.setattr(scope, "retrieval_plan", unavailable)
+    status = scope.runtime_status()
+    assert status["status"] == "unavailable" and status["failure"]["dependency"] == "haystack"
+    assert "do not echo" not in json.dumps(status)
+
+
+def test_bundled_motion_facts_use_actual_haystack_and_are_not_catalogue_only():
+    from knowledge.evidence import KnowledgeQuery
+    from knowledge.scope import runtime_status
+    assert runtime_status()["status"] == "available"
+    with context_policy_scope("legacy"):
+        context = api._build_knowledge_context(KnowledgeQuery(
+            "ZRN DRVA M8029 operands completion", precompiled=True,
+            metadata={"instruction_fact_mode":"targeted"}), plc_model="FX3U", task_type="generate")
+    assert context and context.manifest["records"], context.manifest
+    assert all(row.get("manual_type") != "debug_cases" for row in context.manifest["records"])
+    assert "ZRN" in context and "DRVA" in context and "M8029" in context
+    assert any("4.7.4" in record.get("section", "") for record in context.manifest["records"])
+    assert not context.manifest.get("failure")
+
+
+def test_flag_companion_packing_keeps_referenced_entity_not_an_unrelated_short_table():
+    from knowledge.instruction_facts import _pack_target
+    row = {"id": "flag-reference", "manual_id": "official", "revision": "1", "manual_type": "positioning",
+           "section": "Completion flags", "fact_focus_terms": ["M8029"],
+           "text": "[PAGE 1 PROSE]\n" + "long unrelated lead " * 300 + "M8029\n\n"
+                   "[TABLE page=1]\nPulse stop | M8349\n\n"
+                   "[PAGE 2 PROSE]\nCopy M8029 immediately below the instruction; the flag is shared."}
+    packed = _pack_target([row], 1000)
+    assert packed and all("M8029" in p["text"] for p in packed)
+    assert "Pulse stop | M8349" not in "\n".join(p["text"] for p in packed)
+    assert row["id"] == "flag-reference"
+
+
+def test_targeted_instruction_and_companion_lookups_reuse_haystack_source_scope(monkeypatch):
+    from knowledge.evidence import KnowledgeQuery
+    import knowledge.instruction_facts as facts
+    calls = []
+    def lookup(query, **kwargs):
+        calls.append(kwargs.get("source_lanes"))
+        return []
+    def targeted(query, **kwargs):
+        kwargs["retrieve"]("ZRN operands", plc_model="FX3U", task_type="generate")
+        kwargs["retrieve"]("M8029 completion", plc_model="FX3U", task_type="generate")
+        return [], {"targets": [], "records": []}
+    monkeypatch.setattr(knowledge_retriever, "retrieve_knowledge", lookup)
+    monkeypatch.setattr(facts, "retrieve_instruction_facts", targeted)
+    knowledge_retriever.build_knowledge_context(KnowledgeQuery("ZRN", metadata={"instruction_fact_mode": "targeted"}))
+    assert len(calls) == 3 and all(scope and "debug" not in scope for scope in calls)

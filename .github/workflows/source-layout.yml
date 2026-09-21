@@ -113,6 +113,8 @@ jobs:
       - name: Verify packaged SDK without a model call
         shell: pwsh
         run: |
+          & ./dist/GXWorks-Agent-Web/GXWorks-Agent-Web.exe --self-test-knowledge
+          if ($LASTEXITCODE -ne 0) { throw "Packaged knowledge runtime failed" }
           & ./dist/GXWorks-Agent-Web/GXWorks-Agent-Web.exe --self-test-openai-sdk
           if ($LASTEXITCODE -ne 0) { throw "Packaged SDK smoke failed: $LASTEXITCODE" }
       - name: Verify package startup, resources and Qt exclusion

@@ -84,6 +84,12 @@ try {
 
         & $venvPython -c "import fastapi, uvicorn, openai, numpy, mcp"
         if ($LASTEXITCODE -ne 0) { throw "Web runtime dependency verification failed." }
+        $previousPythonPath = $env:PYTHONPATH
+        try {
+            $env:PYTHONPATH = Join-Path $root "src"
+            & $venvPython (Join-Path $root "scripts\web_entry.py") --self-test-knowledge
+            if ($LASTEXITCODE -ne 0) { throw "Knowledge runtime verification failed in .venv. Check requirements\context.txt and bundled SQLite resources." }
+        } finally { $env:PYTHONPATH = $previousPythonPath }
     } else {
         Write-Step "[1/4] Skipping Python setup (--frontend-only)."
     }

@@ -237,6 +237,7 @@ EVIDENCE_FIELDS = {
                     "query_truncated", "reason")),
     "records": [EVIDENCE_RECORD_FIELDS],
     "omitted_ids": [None],
+    "failure": dict.fromkeys(("code", "error_type", "dependency")),
 }
 INTENT_CONTEXT_FIELDS = {
     "schema_version": None,

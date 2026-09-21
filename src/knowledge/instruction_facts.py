@@ -186,6 +186,53 @@ def _render_units(result, selected):
     return value
 
 
+def _completion_sources(seed, plc_model, task_type, retrieve):
+    """Follow explicit structured-index completion links, not opcode recipes.
+
+    The selected instruction's own manual/revision remains the authority. A
+    flag mention is only candidate evidence; never a new program requirement.
+    Missing older-index relationship columns simply provide no companion.
+    """
+    from knowledge import core
+    path = core._index_path()
+    identity = core._index_identity(path)
+    if identity[0] == "missing":
+        return []
+    try:
+        connection = core._connection(path, identity)
+        table = core._schema(connection).get("instructions", {})
+        if not {"chunk_id", "completion_flags_json"} <= set(table.get("columns", ())):
+            return []
+        record = connection.execute(
+            "SELECT completion_flags_json FROM " + core._quote_identifier(table["name"]) + " WHERE chunk_id=? LIMIT 1",
+            (seed.get("id"),)).fetchone()
+        flags = json.loads(record[0] or "[]") if record else []
+    except (OSError, sqlite3.Error, ValueError, TypeError):
+        return []
+    if not isinstance(flags, list):
+        return []
+    results, seen = [], set()
+    for flag in dict.fromkeys(f for f in flags if isinstance(f, str) and re.fullmatch(r"(?:M|SM)[0-9]+", f)):
+        if len(seen) >= 8:
+            break
+        hits = retrieve(flag + " instruction execution complete shared flag positioning", plc_model=plc_model,
+                        task_type=task_type, top_k=core._MAX_TOP_K, char_budget=2**31-1)
+        for row in hits:
+            if (row.get("manual_type") not in _OFFICIAL or row.get("manual_id") != seed.get("manual_id")
+                    or row.get("revision") != seed.get("revision") or row.get("id") in seen
+                    or not re.search(r"(?<![A-Z0-9])" + re.escape(flag) + r"(?![0-9])", str(row.get("text", "")), re.I)):
+                continue
+            seen.add(row.get("id"))
+            focused = copy.deepcopy(row)
+            focused["fact_focus_terms"] = [flag]
+            results.append(focused)
+            if len(seen) >= 8:
+                break
+    # General flag definitions precede examples belonging to other opcodes.
+    # Metadata controls priority, not a task-specific instruction recipe.
+    return sorted(results, key=lambda row: bool(row.get("instruction_opcode")))
+
+
 def _pack_target(results, allowance):
     """Pack definition, tables and cautions together before any top-k truncation.
 
@@ -205,6 +252,9 @@ def _pack_target(results, allowance):
         page_markers = list(re.finditer(r"(?m)^\[PAGE[^\n]*", text))
         for start, end in _units(text):
             raw = text[start:end]
+            focus = result.get("fact_focus_terms", ())
+            if focus and not any(re.search(r"(?<![A-Z0-9])" + re.escape(term) + r"(?![A-Z0-9])", raw, re.I) for term in focus):
+                continue
             if raw.startswith(("SOURCE:", "[STRUCTURED INSTRUCTION RECORD]")):
                 # Source identity is in the citation. Structured extraction can
                 # omit operand symbols, so original definition/table wins.
@@ -222,6 +272,8 @@ def _pack_target(results, allowance):
                 priority = 2
             else:
                 priority = 1
+            if focus and not result.get("instruction_opcode"):
+                priority += 5  # The referenced flag definition precedes opcode examples.
             cats = [key for key, pattern in _FACT_TERMS.items() if pattern.search(raw)]
             candidates.append((source_index, (start, end, cats), priority))
     selected, rendered, covered = {}, {}, set()
@@ -267,6 +319,7 @@ def retrieve_instruction_facts(query, *, plc_model, task_type, char_budget, cand
         return [], report
     allowance = max(0, int(char_budget) // max(1, len(targets)))
     groups = []
+    companion_seen = set()
     for target in targets:
         lookup = target["opcode"] + " " + " ".join(FACT_QUESTIONS.values())
         report["queries"].append(lookup)
@@ -286,7 +339,18 @@ def retrieve_instruction_facts(query, *, plc_model, task_type, char_budget, cand
                     continue
                 seen.add(marker)
                 sources.append(result)
-        pool = _pack_target(sources, allowance)
+        # The index can link the instruction to a shared completion flag.
+        # Reserve part of the SAME budget for that definition/caution, rather
+        # than handing B only an opcode/operand table and asking it to recall it.
+        companions = _completion_sources(seeds[0], plc_model, task_type, retrieve) if seeds else []
+        companion_pool = [row for row in _pack_target(companions, min(allowance * 2 // 3, 2200))
+                          if row["id"] not in companion_seen]
+        companion_seen.update(row["id"] for row in companion_pool)
+        companion_cost = sum(len(core._format_result_block(row)) + 40 for row in companion_pool)
+        primary_pool = _pack_target(sources, allowance - companion_cost)
+        # Keep one definition first, then its linked result/caution. Otherwise
+        # a public top-k cap can discard every companion after packing them.
+        pool = primary_pool[:1] + companion_pool + primary_pool[1:]
         for value in pool:
             value["fact_target"] = target["opcode"]
         groups.append(pool)

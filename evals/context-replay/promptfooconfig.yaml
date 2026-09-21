@@ -27,3 +27,4 @@ tests:
   - vars:
       case_id: legacy-generation-view
   - vars: {case_id: historical-review-recovery}
+  - vars: {case_id: servo-typed-handoff}

@@ -4,6 +4,11 @@ import sys
 
 
 def run():
+    if sys.argv[1:] == ["--self-test-knowledge"]:
+        from knowledge.scope import runtime_status
+        status = runtime_status()
+        print(json.dumps(status, ensure_ascii=True))
+        return 0 if status["status"] == "available" else 1
     if sys.argv[1:] == ["--self-test-openai-sdk"]:
         from model_runtime.provider import sdk_runtime_self_test
         return 0 if sdk_runtime_self_test() else 1

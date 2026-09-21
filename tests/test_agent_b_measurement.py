@@ -131,7 +131,7 @@ def test_transcript_metering_and_custom_headers_remain_credential_redacted(tmp_p
     assert row["usage"]["raw_usage"]["completion_tokens_details"]["reasoning_tokens"] == 12
 
 
-@pytest.mark.parametrize("case_id", ["design-conveyor", "typed-parameter-identity", "user-edited-prose", "legacy-generation-view", "historical-review-recovery"])
+@pytest.mark.parametrize("case_id", ["design-conveyor", "typed-parameter-identity", "user-edited-prose", "legacy-generation-view", "historical-review-recovery", "servo-typed-handoff"])
 def test_offline_context_replay_uses_real_components_and_single_completions(case_id):
     from scripts.context_replay import load_cases, run_case
     case = next(row for row in load_cases() if row["case_id"] == case_id)
@@ -146,6 +146,10 @@ def test_offline_context_replay_uses_real_components_and_single_completions(case
         assert params["duration"]["value"] == 0 and type(params["duration"]["value"]) is int
         assert params["enabled"]["value"] is False
         assert params["transport_mode"]["semantic_key"] == "transport.mode"
+    if case_id == "servo-typed-handoff":
+        assert "module" not in {p["id"] for p in spec["parameters"]}
+        assert all(b["active_level"] == 1 for b in spec["io_bindings"] if b["kind"] == "X")
+        assert len([b for b in spec["io_bindings"] if b["kind"] == "X"]) == 3
     if case_id == "legacy-generation-view":
         assert spec["summary"] == case["confirmed_spec"]["summary"]
         assert "note" not in spec["parameters"][0]
