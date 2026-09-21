@@ -179,6 +179,58 @@ def test_offline_archive_reader_never_uses_recorded_credentials_or_reconstructs_
     assert "analysis" not in case and case["capture_scope"].startswith("generation_only")
 
 
+def test_archive_replay_result_is_attached_atomically_and_replaces_prior_member(tmp_path):
+    import zipfile
+    from scripts.context_replay import REPLAY_MEMBER, attach_replay_result
+    path = tmp_path / "gxworks-interaction.zip"
+    job = json.dumps({"id": "job_fixture", "snapshot": {"project": {"confirmed_spec": {"summary": "keep"}}}})
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("job.json", job)
+        archive.writestr("transcript.jsonl", "{}\n")
+        archive.writestr("README.txt", "operator export")
+    attach_replay_result(path, {"schema_version": 1, "passed": False, "marker": 1})
+    attach_replay_result(path, {"schema_version": 1, "passed": True, "marker": 2})
+    with zipfile.ZipFile(path) as archive:
+        assert archive.namelist().count(REPLAY_MEMBER) == 1
+        assert archive.read("job.json").decode() == job
+        assert archive.read("README.txt").decode() == "operator export"
+        assert json.loads(archive.read(REPLAY_MEMBER)) == {
+            "schema_version": 1, "passed": True, "marker": 2
+        }
+    assert not list(tmp_path.glob("*.replay.tmp"))
+
+
+def test_archive_cli_writes_back_by_default_but_output_keeps_archive_read_only(tmp_path, monkeypatch, capsys):
+    import zipfile
+    import scripts.context_replay as replay
+
+    def make_archive(name):
+        path = tmp_path / name
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr("job.json", "{}")
+            archive.writestr("transcript.jsonl", "{}\n")
+        return path
+
+    monkeypatch.setattr(replay, "archive_case", lambda path: {"case_id": "operator_archive"})
+    monkeypatch.setattr(replay, "run_case", lambda case, include_content=False: {
+        "case_id": "operator_archive", "passed": True
+    })
+
+    attached = make_archive("attached.zip")
+    assert replay.main(["--archive", str(attached)]) == 0
+    status = json.loads(capsys.readouterr().out)
+    assert status["member"] == replay.REPLAY_MEMBER and status["passed"] is True
+    with zipfile.ZipFile(attached) as archive:
+        assert replay.REPLAY_MEMBER in archive.namelist()
+
+    detached_source = make_archive("detached-source.zip")
+    detached = tmp_path / "detached.json"
+    assert replay.main(["--archive", str(detached_source), "--output", str(detached)]) == 0
+    assert json.loads(detached.read_text(encoding="utf-8"))["passed"] is True
+    with zipfile.ZipFile(detached_source) as archive:
+        assert replay.REPLAY_MEMBER not in archive.namelist()
+
+
 @pytest.mark.parametrize("operation", ["getaddrinfo", "gethostbyname", "gethostbyname_ex", "sendto"])
 def test_offline_replay_blocks_dns_and_datagram_paths_and_restores_patches(operation):
     import socket

@@ -57,16 +57,23 @@ calibrate a continuous conveyor's timer-to-distance model.
 ## Private diagnostic archives
 
 ```powershell
-python scripts/context_replay.py --archive path/to/diagnostics.zip --output archive-replay.json
+python scripts/context_replay.py --archive path/to/gxworks-diagnostics-job.zip
 ```
 
 Only the frozen confirmed spec and last recorded response are read. Saved model
 profiles/keys are never reused. A generation archive without A's completion is
 marked `generation_only_no_analysis_reconstruction`, not fabricated into a full
-A/B test. Original files are not modified; output must be a new path. Default
-reports contain checks/counts/hashes, not full prompts. `--include-content` adds
-sanitized source and runtime views for local investigation; review before sharing.
-Do not check private archives or generated reports into the repository.
+A/B test. By default the report is written atomically back into the same
+operator export as `offline_replay.json`; the existing job, transcript,
+operator actions and decision receipt members are preserved. Re-running replaces
+that one replay member instead of creating duplicate ZIP entries.
+
+Use `--output archive-replay.json` only when a detached report is explicitly
+wanted; detached output still must be a new path and leaves the source archive
+unchanged. Default reports contain checks/counts/hashes, not full prompts.
+`--include-content` adds sanitized source and runtime views for local
+investigation; review before sharing. Do not check private archives or generated
+reports into the repository.
 
 ## Component boundaries
 

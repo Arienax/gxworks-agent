@@ -15,8 +15,10 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
 import socket
 import sys
+import tempfile
 import traceback
 import zipfile
 from unittest.mock import patch
@@ -25,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 FIXTURES = ROOT / "evals" / "context-replay" / "cases.json"
+REPLAY_MEMBER = "offline_replay.json"
 
 
 def digest(value):
@@ -60,6 +63,42 @@ def archive_case(path):
     return {"case_id": "operator_archive", "confirmed_spec": spec,
             "plc_model": project.get("plc_model", "FX3U"), "completion": outputs[-1],
             "capture_scope": "generation_only_no_analysis_reconstruction"}
+
+
+def attach_replay_result(path, report):
+    """Atomically add/replace the replay report inside an operator export ZIP."""
+    path = Path(path)
+    if not path.is_file() or path.is_symlink():
+        raise ValueError("Replay archive is unavailable")
+    payload = (json.dumps(report, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    if len(payload) > 16 * 1024 * 1024:
+        raise ValueError("Replay report exceeds archive limit")
+
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=path.name + ".", suffix=".replay.tmp", dir=path.parent
+    )
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        with zipfile.ZipFile(path) as source:
+            members = source.infolist()
+            if len(members) > 64 or len({item.filename for item in members}) != len(members):
+                raise ValueError("Invalid or ambiguous diagnostic archive")
+            with zipfile.ZipFile(temporary, "w") as target:
+                target.comment = source.comment
+                for item in members:
+                    if item.filename == REPLAY_MEMBER:
+                        continue
+                    with source.open(item, "r") as reader, target.open(item, "w") as writer:
+                        shutil.copyfileobj(reader, writer, length=1024 * 1024)
+                target.writestr(REPLAY_MEMBER, payload, compress_type=zipfile.ZIP_DEFLATED)
+        os.replace(temporary, path)
+    finally:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+    return path
 
 
 @contextmanager
@@ -233,8 +272,8 @@ def run_case(case, *, include_content=False):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--case", help="One bundled case_id (otherwise run all)")
-    parser.add_argument("--archive", type=Path, help="Private diagnostic ZIP; generation-only replay")
-    parser.add_argument("--output", type=Path, help="New local report file; never overwrite")
+    parser.add_argument("--archive", type=Path, help="Private task interaction/diagnostic ZIP; without --output, attach offline_replay.json to this ZIP")
+    parser.add_argument("--output", type=Path, help="Optional new standalone JSON report; never overwrite")
     parser.add_argument("--include-content", action="store_true", help="Include sanitized private inputs/prompts; review before sharing")
     args = parser.parse_args(argv)
     if args.case and args.archive:
@@ -246,15 +285,24 @@ def main(argv=None):
         if not cases:
             raise ValueError("Unknown/empty replay selection")
         rows = [run_case(case, include_content=args.include_content) for case in cases]
-        data = json.dumps({"mode": "offline", "results": rows, "passed": all(r["passed"] for r in rows)}, ensure_ascii=False, indent=2)
+        report = {"schema_version": 1, "mode": "offline", "results": rows,
+                  "passed": all(r["passed"] for r in rows)}
+        data = json.dumps(report, ensure_ascii=False, indent=2)
         if args.output:
+            if args.archive and args.output.resolve() == args.archive.resolve():
+                raise ValueError("Use --archive without --output to attach the replay result")
             args.output.parent.mkdir(parents=True, exist_ok=True)
             descriptor = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
                 stream.write(data + "\n")
+        elif args.archive:
+            attach_replay_result(args.archive, report)
+            print(json.dumps({"mode": "offline", "archive": str(args.archive),
+                              "member": REPLAY_MEMBER, "passed": report["passed"]},
+                             ensure_ascii=False))
         else:
             print(data)
-        return 0 if all(r["passed"] for r in rows) else 1
+        return 0 if report["passed"] else 1
     except (OSError, ValueError, zipfile.BadZipFile) as error:
         parser.error(type(error).__name__ + ": replay input/output unavailable")
 

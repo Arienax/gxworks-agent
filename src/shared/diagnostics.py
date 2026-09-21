@@ -583,6 +583,7 @@ def export_diagnostics(state_dir, job):
              'transcript.jsonl: actual model messages, reasoning, final content, tool calls, request options and usage.\n'
              'operator_actions.jsonl: relevant specification/job actions recorded for this project/job.\n'
              'decision_receipt.json: when available, the historical analysis/confirmation audit bound to this job.\n'
+             'offline_replay.json: optional offline replay result added later by scripts/context_replay.py --archive.\n'
              'API credentials, Authorization values and image/binary bodies are not included.\n'
              'Model/user text is included because this export is explicitly operator-only and downloaded on demand.\n'
              'Output is not uploaded automatically. Inspect before sharing.\n')
