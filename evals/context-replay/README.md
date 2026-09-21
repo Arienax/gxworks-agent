@@ -28,7 +28,7 @@ $env:PROMPTFOO_PYTHON = (Get-Command python).Source
 On Linux/macOS use `export` and the executable without `.cmd`. Dependencies
 require networking only at installation time. Replay has no live provider,
 remote grader, model download or cloud upload. The Python provider blocks socket
-connections and implicit production-provider resolution; any attempted call
+connections, DNS/datagram calls and implicit production-provider resolution; any attempted call
 fails the replay even if the application catches it. CLI telemetry and update
 checks must be disabled as above (CI sets both). Runs are serial because the
 existing retrieval compatibility hooks are process-global.
@@ -37,6 +37,8 @@ existing retrieval compatibility hooks are process-global.
 
 - Stable parameter identities, including generic transport questions that must
   not become a drive model; typed zero and false remain real selected values.
+- Historical review drafts recover choices without manufacturing note provenance,
+  changing answers or crossing stable parameter identities (the fifth fixture).
 - Review choices/defaults/provenance do not enter generation parameter fields;
   a generated candidate overview stays in review, while a user-edited summary
   or note survives. Unknown historical free text is not guessed away.

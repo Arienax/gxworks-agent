@@ -334,5 +334,277 @@
         }
       ]
     }
+  },
+  {
+    "case_id": "historical-review-recovery",
+    "mode": "direct",
+    "plc_model": "FX3U",
+    "request": "Mitsubishi FX3U。采用工件槽位跟踪。使用 DEC D100 维护剩余节拍。",
+    "analysis": {
+      "summary": "比较位串移位、工位数组与工件槽位计数三种方案。",
+      "missing_info": [
+        {
+          "id": "transport_mode",
+          "question": "输送线是步进式还是连续运行？",
+          "required": true,
+          "options": [
+            "步进式",
+            "连续运行"
+          ],
+          "semantic_key": "transport.mode",
+          "value_kind": "choice"
+        },
+        {
+          "id": "duration",
+          "question": "时间参数",
+          "options": [],
+          "required": false,
+          "semantic_key": "tracking.delay",
+          "value_kind": "number",
+          "unit": "s"
+        },
+        {
+          "id": "enabled",
+          "question": "自动使能",
+          "options": [],
+          "required": false,
+          "semantic_key": "tracking.enabled",
+          "value_kind": "boolean"
+        }
+      ],
+      "suggested_io": {
+        "X0": "输送节拍",
+        "M10": "运行状态",
+        "D100": "剩余节拍",
+        "T0": "启动延时",
+        "C0": "产品计数"
+      },
+      "approaches": [
+        {
+          "approach_id": "slot_position_counter",
+          "name": "工件槽位计数",
+          "description": "各工件占用独立槽位。",
+          "pros": "",
+          "cons": "",
+          "generation_guide": "每节拍使用 DEC D100 更新剩余节拍计数。",
+          "generation_contract": {}
+        }
+      ],
+      "assumptions": []
+    },
+    "answers": {
+      "transport_mode": "连续运行",
+      "duration": "0",
+      "enabled": "false"
+    },
+    "selected_approach_id": "slot_position_counter",
+    "no_drive_model": true,
+    "expected_labels": {
+      "X0": "输送节拍",
+      "M10": "运行状态",
+      "D100": "剩余节拍",
+      "T0": "启动延时",
+      "C0": "产品计数"
+    },
+    "requires_facts": true,
+    "check_debug_lane": true,
+    "completion": {
+      "r": [
+        {
+          "h": null,
+          "s": [],
+          "b": [
+            {
+              "i": [
+                "P X0"
+              ],
+              "o": [
+                "DEC D100"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "user_summary": "历史确认：采用工件槽位计数，停机后保留跟踪数据。",
+    "user_notes": {
+      "transport_mode": "操作员要求：停机后保留跟踪数据。"
+    },
+    "review_draft": {
+      "schema_version": 3,
+      "plc_model": "FX3U",
+      "summary": "比较位串移位、工位数组与工件槽位计数三种方案。",
+      "approaches": [
+        {
+          "approach_id": "slot_position_counter",
+          "name": "工件槽位计数",
+          "description": "各工件占用独立槽位。",
+          "pros": "",
+          "cons": "",
+          "generation_guide": "每节拍使用 DEC D100 更新剩余节拍计数。",
+          "generation_contract": {
+            "schema_version": 1,
+            "required_opcodes": [],
+            "forbidden_opcodes": [],
+            "required_devices": [],
+            "forbidden_devices": [],
+            "required_structures": [],
+            "forbidden_structures": [],
+            "any_of_opcode_groups": [],
+            "any_of_structure_groups": [],
+            "enforce": true,
+            "source": "inferred",
+            "unverified_constraints": {
+              "required_opcodes": [
+                "DEC"
+              ]
+            }
+          }
+        }
+      ],
+      "selected_approach": {
+        "approach_id": "slot_position_counter",
+        "name": "工件槽位计数",
+        "description": "各工件占用独立槽位。",
+        "pros": "",
+        "cons": "",
+        "generation_guide": "每节拍使用 DEC D100 更新剩余节拍计数。",
+        "generation_contract": {
+          "schema_version": 1,
+          "required_opcodes": [],
+          "forbidden_opcodes": [],
+          "required_devices": [],
+          "forbidden_devices": [],
+          "required_structures": [],
+          "forbidden_structures": [],
+          "any_of_opcode_groups": [],
+          "any_of_structure_groups": [],
+          "enforce": true,
+          "source": "inferred",
+          "unverified_constraints": {
+            "required_opcodes": [
+              "DEC"
+            ]
+          }
+        }
+      },
+      "parameters": [
+        {
+          "id": "transport_mode",
+          "name": "输送线是步进式还是连续运行？",
+          "value": "",
+          "source": "analysis",
+          "required": true,
+          "note": "操作员要求：停机后保留跟踪数据。",
+          "semantic_key": "transport.mode",
+          "value_kind": "choice"
+        },
+        {
+          "id": "duration",
+          "name": "时间参数",
+          "value": "",
+          "source": "analysis",
+          "required": false,
+          "note": "",
+          "semantic_key": "tracking.delay",
+          "unit": "s",
+          "value_kind": "number"
+        },
+        {
+          "id": "enabled",
+          "name": "自动使能",
+          "value": "",
+          "source": "analysis",
+          "required": false,
+          "note": "",
+          "semantic_key": "tracking.enabled",
+          "value_kind": "boolean"
+        }
+      ],
+      "io_table": [
+        {
+          "kind": "X",
+          "address": "X0",
+          "label": "输送节拍",
+          "source": "user"
+        },
+        {
+          "kind": "M",
+          "address": "M10",
+          "label": "运行状态",
+          "source": "user"
+        },
+        {
+          "kind": "D",
+          "address": "D100",
+          "label": "剩余节拍",
+          "source": "user"
+        },
+        {
+          "kind": "T",
+          "address": "T0",
+          "label": "启动延时",
+          "source": "user"
+        },
+        {
+          "kind": "C",
+          "address": "C0",
+          "label": "产品计数",
+          "source": "user"
+        }
+      ],
+      "io_allocation_raw": "",
+      "user_notes": "",
+      "missing_answers": {},
+      "hardware_requirements": {
+        "hardware_dependent": false,
+        "vfd": false,
+        "pulse": false,
+        "motion": false,
+        "analog": false,
+        "serial": false
+      },
+      "hardware_context": {},
+      "execution_semantics": [],
+      "summary_provenance": {
+        "kind": "analysis_overview",
+        "sha256": "285155756adff865808fc728610ecb76d2d747fb3f8909e777c7af1702f82d59"
+      },
+      "hardware_intent": {
+        "version": 1,
+        "source": "legacy_unknown",
+        "flags": {
+          "hardware_dependent": false,
+          "vfd": false,
+          "pulse": false,
+          "motion": false,
+          "analog": false,
+          "serial": false
+        },
+        "vfd_method_selected": false,
+        "vfd_method_value": ""
+      },
+      "hardware_profile": {
+        "schema_version": 1,
+        "min_reader_version": 1,
+        "plc_family": "FX3U",
+        "cpu_full_model": "",
+        "output_type": "",
+        "firmware": "",
+        "modules": [],
+        "drive_model": "",
+        "control_method": "",
+        "control_method_label": "",
+        "wiring_mapping": "",
+        "motion_drive_model": "",
+        "motion_control_method": "",
+        "motion_control_method_label": "",
+        "motion_wiring_mapping": "",
+        "positioning_implementation": "",
+        "positioning_module_model": "",
+        "positioning_module_quantity": "",
+        "source": "user_confirmed_spec"
+      }
+    }
   }
 ]

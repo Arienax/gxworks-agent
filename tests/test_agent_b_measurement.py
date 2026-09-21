@@ -131,7 +131,7 @@ def test_transcript_metering_and_custom_headers_remain_credential_redacted(tmp_p
     assert row["usage"]["raw_usage"]["completion_tokens_details"]["reasoning_tokens"] == 12
 
 
-@pytest.mark.parametrize("case_id", ["design-conveyor", "typed-parameter-identity", "user-edited-prose", "legacy-generation-view"])
+@pytest.mark.parametrize("case_id", ["design-conveyor", "typed-parameter-identity", "user-edited-prose", "legacy-generation-view", "historical-review-recovery"])
 def test_offline_context_replay_uses_real_components_and_single_completions(case_id):
     from scripts.context_replay import load_cases, run_case
     case = next(row for row in load_cases() if row["case_id"] == case_id)
@@ -177,3 +177,22 @@ def test_offline_archive_reader_never_uses_recorded_credentials_or_reconstructs_
     case = archive_case(path)
     assert "SECRET_DO_NOT_USE" not in json.dumps(case)
     assert "analysis" not in case and case["capture_scope"].startswith("generation_only")
+
+
+@pytest.mark.parametrize("operation", ["getaddrinfo", "gethostbyname", "gethostbyname_ex", "sendto"])
+def test_offline_replay_blocks_dns_and_datagram_paths_and_restores_patches(operation):
+    import socket
+    from scripts.context_replay import offline_environment
+    owner = socket.socket if operation == "sendto" else socket
+    original = getattr(owner, operation)
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as channel:
+        with offline_environment() as attempts:
+            with pytest.raises(RuntimeError, match="Offline replay forbids"):
+                if operation == "sendto":
+                    channel.sendto(b"fixture", ("127.0.0.1", 9))
+                elif operation == "getaddrinfo":
+                    socket.getaddrinfo("provider.invalid", 443)
+                else:
+                    getattr(socket, operation)("provider.invalid")
+        assert attempts == ["blocked_network_or_provider_access"]
+    assert getattr(owner, operation) is original

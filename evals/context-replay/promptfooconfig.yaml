@@ -26,3 +26,4 @@ tests:
       case_id: user-edited-prose
   - vars:
       case_id: legacy-generation-view
+  - vars: {case_id: historical-review-recovery}
