@@ -5,11 +5,9 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/source-layout.yml'
-      - '.github/context-components.part*'
-
+      - '.github/context-components.*'
 permissions:
   contents: read
-
 jobs:
   verify-components:
     if: github.event.pull_request.head.repo.full_name == 'Arienax/gxworks-agent' && github.event.pull_request.head.ref == 'fix/prompt-cleanup-io-binding-20260921'
@@ -37,27 +35,24 @@ jobs:
       - name: Reconstruct exact reviewed source
         run: |
           python - <<'PY'
-          import hashlib, json, lzma, subprocess
+          import difflib, hashlib, json, lzma, subprocess
           from pathlib import Path
           base = '293ce90a87b2721078f8e61d19fa74dd07e728b8'
-          payload = b''.join(Path(f'.github/context-components.part{i}').read_bytes() for i in range(4))
-          raw = lzma.decompress(payload)
+          raw = lzma.decompress(b''.join(Path(f'.github/context-components.part{i}').read_bytes() for i in range(4)))
           assert hashlib.sha256(raw).hexdigest() == '31736822708f83a82310bc4328f67b26d2783e68e968235db35300eb4c366f84'
           operations = json.loads(raw)
           assert len(operations) == 25
           def blob(raw):
               return hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
-          for name, change in operations.items():
+          def baseline(name):
+              found = subprocess.run(['git','show',base + ':' + name], capture_output=True)
+              return found.stdout if found.returncode == 0 else None
+          def apply(name, change, original):
               path = Path(name)
               assert not path.is_absolute() and '..' not in path.parts and not path.is_symlink()
               assert path.resolve().is_relative_to(Path.cwd())
-              if change['old_sha'] is None:
-                  assert subprocess.run(['git', 'cat-file', '-e', base + ':' + name], capture_output=True).returncode != 0
-                  original = b''
-              else:
-                  original = subprocess.check_output(['git', 'show', base + ':' + name])
-                  assert blob(original) == change['old_sha'], name
-              lines = original.decode('utf-8').splitlines(keepends=True)
+              assert (blob(original) if original is not None else None) == change['old_sha'], name
+              lines = (original or b'').decode('utf-8').splitlines(keepends=True)
               right = len(lines)
               for start, end, replacement in reversed(change['changes']):
                   assert 0 <= start <= end <= right
@@ -67,8 +62,19 @@ jobs:
               assert blob(new) == change['new_sha'], name
               path.parent.mkdir(parents=True, exist_ok=True)
               path.write_bytes(new)
+          for name, change in operations.items():
+              apply(name, change, baseline(name))
+          fixes = Path('.github/context-components.boundary.json').read_bytes()
+          assert hashlib.sha256(fixes).hexdigest() == '624f88fd80d304fb633fb4ec04eaf79905417ebbc61e947ae720fb3a1b7a5b89'
+          for name, change in json.loads(fixes).items():
+              apply(name, change, Path(name).read_bytes())
+              original = baseline(name)
+              new = Path(name).read_bytes()
+              a, b = (original or b'').decode().splitlines(keepends=True), new.decode().splitlines(keepends=True)
+              changes = [[i,j,''.join(b[k:l])] for op,i,j,k,l in difflib.SequenceMatcher(a=a,b=b,autojunk=False).get_opcodes() if op != 'equal']
+              operations[name] = {'old_sha':blob(original) if original is not None else None,'new_sha':blob(new),'changes':changes}
           Path('validation-context').mkdir(exist_ok=True)
-          Path('validation-context/operations.json').write_bytes(raw)
+          Path('validation-context/operations.json').write_text(json.dumps(operations,ensure_ascii=False),encoding='utf-8')
           subprocess.run(['git', 'diff', '--check'], check=True)
           PY
       - name: Install pinned runtime and offline evaluation tools
@@ -103,12 +109,11 @@ jobs:
           def api(path, payload=None):
               request = urllib.request.Request(root + path,
                   data=json.dumps(payload).encode() if payload is not None else None,
-                  headers={'Accept':'application/vnd.github+json',
-                           'Authorization':'Bearer ' + os.environ['GH_OBJECT_TOKEN'],
-                           'X-GitHub-Api-Version':'2022-11-28', 'Content-Type':'application/json'})
+                  headers={'Accept':'application/vnd.github+json','Authorization':'Bearer ' + os.environ['GH_OBJECT_TOKEN'],
+                           'X-GitHub-Api-Version':'2022-11-28','Content-Type':'application/json'})
               with urllib.request.urlopen(request, timeout=60) as response:
                   return json.load(response)
-          head = subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip()
+          head = subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
           assert api('/git/ref/heads/fix/prompt-cleanup-io-binding-20260921')['object']['sha'] == head
           operations = json.loads(Path('validation-context/operations.json').read_text())
           entries = []
@@ -123,7 +128,7 @@ jobs:
               entries.append({'path':name,'mode':'100644','type':'blob','sha':local})
           Path('validation-context/verified-blobs.json').write_text(json.dumps({
               'baseline_sha':'293ce90a87b2721078f8e61d19fa74dd07e728b8',
-              'parent_sha':head,'files':entries,'branch_moved':False}, indent=2))
+              'parent_sha':head,'files':entries,'branch_moved':False},indent=2))
           print(json.dumps({'verified_files':len(entries),'branch_moved':False}))
           PY
       - uses: actions/upload-artifact@v4
