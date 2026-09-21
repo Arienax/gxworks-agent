@@ -100,7 +100,7 @@ def test_supporting_candidate_budget_is_applied_after_rerank(monkeypatch):
     def retrieve(query, **kwargs):
         calls.append(kwargs)
         return [dict(_candidate("st_rule"), id="rule", text="Use IF/ELSE")]
-    monkeypatch.setattr(retriever._core, "retrieve_knowledge", retrieve)
+    monkeypatch.setattr(retriever._core, "_retrieve_knowledge", retrieve)
     result = retriever.retrieve_knowledge("CONTINUE", task_type="st", top_k=5, char_budget=1000)
     assert calls[0]["top_k"] == 40
     assert calls[0]["char_budget"] > 160000

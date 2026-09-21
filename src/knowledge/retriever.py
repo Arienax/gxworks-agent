@@ -99,6 +99,14 @@ def retrieve_knowledge(
         return []
 
     task = _core._normalize_text(task_type).casefold() or "generate"
+    from knowledge.scope import retrieval_plan, filter_records
+    plan = retrieval_plan(query, task)
+    if not plan["facts"]:
+        return []
+    permitted = set(plan["source_lanes"])
+    source_lanes = tuple(sorted(permitted if source_lanes is None else permitted.intersection(source_lanes)))
+    if not source_lanes:
+        return []
     expand = (
         task in {"st", "generate", "edit", "analysis"}
         and _query_has_gxw2_skill_concept(query, task)
@@ -112,7 +120,7 @@ def retrieve_knowledge(
     # a short, relevant supporting rule reaches the reranker.
     candidate_budget = sys.maxsize if expand else normalized_budget
 
-    results = _core.retrieve_knowledge(
+    results = _core._retrieve_knowledge(
         query,
         plc_model=plc_model,
         task_type=task,
@@ -120,6 +128,7 @@ def retrieve_knowledge(
         char_budget=candidate_budget,
         **({"source_lanes": tuple(source_lanes)} if source_lanes is not None else {}),
     )
+    results = filter_records(results, source_lanes)
     if not results:
         return []
 
@@ -152,7 +161,7 @@ def retrieve_design_knowledge(
 ):
     """Return analysis-only curated design evidence from the SQLite index."""
     _sync_core_hooks()
-    return _core.retrieve_design_knowledge(
+    return _core._retrieve_design_knowledge(
         query,
         plc_model=plc_model,
         task_type=task_type,

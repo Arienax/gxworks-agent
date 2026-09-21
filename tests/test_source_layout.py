@@ -86,17 +86,26 @@ def test_production_never_imports_research_baselines():
         assert not any(n == "research" or n.startswith("research.") for n in _imports(path)), path
 
 
-def test_config_location_survives_source_move(monkeypatch):
+def test_config_location_survives_source_move(monkeypatch, tmp_path):
     from storage.config import get_config_path
+    monkeypatch.delenv("PLC_AI_CONFIG_PATH", raising=False)
+    monkeypatch.setenv("PLC_AI_DATA_DIR", str(tmp_path / "user-settings"))
     monkeypatch.delattr(sys, "frozen", raising=False)
-    assert Path(get_config_path()) == SRC / "config.json"
+    assert Path(get_config_path()) == tmp_path / "user-settings" / "config.json"
+    monkeypatch.chdir(tmp_path)
+    assert Path(get_config_path()) == tmp_path / "user-settings" / "config.json"
+    assert not (tmp_path / "user-settings").exists()
 
 
 def test_config_location_survives_frozen_move(monkeypatch, tmp_path):
     from storage.config import get_config_path
+    monkeypatch.delenv("PLC_AI_CONFIG_PATH", raising=False)
+    monkeypatch.setenv("PLC_AI_DATA_DIR", str(tmp_path / "user-settings"))
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "executable", str(tmp_path / "GXWorks-Agent.exe"))
-    assert Path(get_config_path()) == tmp_path / "config.json"
+    assert Path(get_config_path()) == tmp_path / "user-settings" / "config.json"
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "moved" / "GXWorks-Agent.exe"))
+    assert Path(get_config_path()) == tmp_path / "user-settings" / "config.json"
 
 
 def test_read_only_resources_keep_the_same_source_root(monkeypatch):

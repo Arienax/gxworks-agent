@@ -76,3 +76,9 @@ explicit stream rejection before output. The two renamed parameterized test
 families have explicit mappings in `scripts/source_layout_regression.py`; missing,
 skipped or newly failing cases still fail the comparison. Baseline failures remain
 reported separately; comparison success does not mean every old test is green.
+
+## Profile-owned tuning
+
+Production workflow effort hints are neutral, including legacy API and project
+inputs. Saved model settings remain authoritative in capability-contract and
+contractless profiles. See [runtime ownership](runtime-ownership.md).

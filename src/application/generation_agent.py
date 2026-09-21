@@ -147,7 +147,7 @@ def _response_options(provider, *, model_name=None, effort=None):
     return response_plan(
         getattr(provider, "profile", {}), _compact_response_schema(),
         model=model_name, api_key=getattr(provider, "api_key", None),
-        hints={"reasoning_effort": effort} if effort is not None else {},
+        hints=None,
     )[0]
 
 
@@ -228,7 +228,7 @@ def generate_confirmed_ladder(
     options, streaming = response_plan(
         getattr(base_provider, "profile", {}), _compact_response_schema(),
         model=model_name, api_key=getattr(base_provider, "api_key", None),
-        hints={"reasoning_effort": effort} if effort is not None else {},
+        hints=None,
     )
     with api.provider_scope(provider, model_name=model_name):
         response = api.request_model(
@@ -237,7 +237,7 @@ def generate_confirmed_ladder(
                 {"role": "user", "content": _GENERATION_REQUEST},
             ],
             model_name=model_name,
-            effort=effort,
+            effort=None,
             stream=streaming,
             max_retries=0,
             options=options,

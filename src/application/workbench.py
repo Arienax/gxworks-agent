@@ -699,7 +699,7 @@ class WorkbenchService:
                 else:
                     previous_json = ir_to_ladder(program) if program else None
                 request = GenerationRequest(
-                    user_input=scoped_text, effort=project.get("effort"), target_mode=project["target_mode"],
+                    user_input=scoped_text, effort=None, target_mode=project["target_mode"],
                     previous_json=previous_json, previous_ir=program,
                     confirmed_context=project.get("confirmed_spec"),
                     decision_receipt_id=project.get("confirmed_decision_receipt_id"),
@@ -775,7 +775,7 @@ class WorkbenchService:
         project_id, version_id = project["id"], version["id"]
         common = {"on_event": ctx.emit, "response_language": snapshot["response_language"],
                   "provider": provider, "model_name": snapshot.get("model", {}).get("model"),
-                  "effort": project.get("effort"), "program_ir": program}
+                  "effort": None, "program_ir": program}
         def before_save():
             ctx.checkpoint()
             self._check_snapshot(snapshot)

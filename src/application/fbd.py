@@ -135,7 +135,7 @@ def generate_candidate(output, snapshot, images, ctx):
     ctx.emit("progress", {"message": "正在生成 FBD 对象、连线及声明"})
     response = _request_model([{"role": "system", "content": prompt},
         _user_message_with_images(json.dumps(context, ensure_ascii=False), images)],
-        model_name=snapshot.get("model", {}).get("model"), effort=project.get("effort"), stream=True,
+        model_name=snapshot.get("model", {}).get("model"), effort=None, stream=True,
         on_reasoning_chunk=lambda t: ctx.emit("reasoning", {"text": t}),
         on_content_chunk=lambda t: ctx.emit("content", {"text": t}),
         response_contract=ResponseContract("fbd", "json", human_paths=("summary", "unsupported")))

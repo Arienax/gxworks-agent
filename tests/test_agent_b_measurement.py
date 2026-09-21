@@ -91,7 +91,7 @@ def test_runner_uses_real_single_call_path_without_changing_effort(monkeypatch, 
     assert record["generation_status"] == "completed", record
     assert record["behavior"]["status"] == "verified" and record["structural_valid"]
     assert record["model_calls"] == 1 and provider.requests[0].max_retries == 0
-    assert provider.requests[0].options["reasoning_effort"] == "high"
+    assert "reasoning_effort" not in provider.requests[0].options
     assert record["attempts"][0]["usage"]["reasoning_tokens"] == 12
     assert agent._build_knowledge_context("fixture").manifest == {"records": []}
 

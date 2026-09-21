@@ -55,6 +55,7 @@ class GenerationRequest:
     response_language: Optional[str] = None
 
     def __post_init__(self):
+        object.__setattr__(self, "effort", None)
         for item in fields(self):
             object.__setattr__(self, item.name, copy.deepcopy(getattr(self, item.name)))
         object.__setattr__(self, "response_language", self.response_language or get_language())
@@ -355,7 +356,7 @@ class GenerationWorkflow:
                         self.plc_model,
                         decision_receipt_id=self.decision_receipt_id,
                         model_name=self.model_name,
-                        effort=self.effort,
+                        effort=None,
                         on_context=lambda value: generation_handoff.update(copy.deepcopy(value)),
                         on_stage=lambda stage, message: self._emit(
                             "progress", {"stage": stage, "message": message}

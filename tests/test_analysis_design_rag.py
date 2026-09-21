@@ -287,3 +287,36 @@ def test_targeted_instruction_and_companion_lookups_reuse_haystack_source_scope(
     monkeypatch.setattr(facts, "retrieve_instruction_facts", targeted)
     knowledge_retriever.build_knowledge_context(KnowledgeQuery("ZRN", metadata={"instruction_fact_mode": "targeted"}))
     assert len(calls) == 3 and all(scope and "debug" not in scope for scope in calls)
+
+
+def test_legacy_core_context_names_forward_to_the_single_facade(monkeypatch):
+    from knowledge import core, retriever
+    calls = []
+    for name in ("retrieve_knowledge", "retrieve_design_knowledge", "build_knowledge_context"):
+        def forward(*args, _name=name, **kwargs):
+            calls.append((_name, args, kwargs))
+            return "sentinel"
+        monkeypatch.setattr(retriever, name, forward)
+        assert getattr(core, name)("fixture", task_type="debug") == "sentinel"
+    assert [c[0] for c in calls] == ["retrieve_knowledge", "retrieve_design_knowledge", "build_knowledge_context"]
+    assert core.__all__ == []
+
+
+def test_public_rows_scope_before_backend_and_recheck_returned_records(monkeypatch):
+    from knowledge import core, retriever
+    scopes = []
+    rows = [{"id": "fact", "manual_type": "programming"},
+            {"id": "debug", "manual_type": "debug_cases"},
+            {"id": "design", "manual_type": "curated_design"}]
+    def backend(*args, **kwargs):
+        scopes.append(kwargs.get("source_lanes"))
+        return rows
+    monkeypatch.setattr(core, "_retrieve_knowledge", backend)
+    assert [r["id"] for r in retriever.retrieve_knowledge("ZRN", task_type="generate")] == ["fact"]
+    assert [r["id"] for r in core.retrieve_knowledge("ZRN", task_type="generate", source_lanes=["fact", "debug"])] == ["fact"]
+    assert [r["id"] for r in retriever.retrieve_knowledge("ZRN", task_type="debug")] == ["fact", "debug"]
+    assert retriever.retrieve_knowledge("ZRN", task_type="format_repair") == []
+    assert retriever.retrieve_knowledge("ZRN", source_lanes=[]) == []
+    assert len(scopes) == 3
+    assert all("design" not in scope for scope in scopes)
+    assert "debug" not in scopes[0] and "debug" not in scopes[1] and "debug" in scopes[2]

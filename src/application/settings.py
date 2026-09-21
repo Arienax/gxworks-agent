@@ -82,13 +82,14 @@ def _profile_id(value):
 class SettingsService:
     def read_config(self):
         # Reuse the desktop normalizers without its file/credential migration.
-        from storage.config import get_config_path, _normalize_profile_selection
+        from storage.config import get_config_path, migrate_user_settings, _normalize_profile_selection
         from shared.paths import resource_path
         from shared.i18n import normalize_language
+        migrate_user_settings()  # location copy only, no credential/schema migration
         path = Path(get_config_path())
         if not path.is_file():
             path = resource_path("config.default.json")
-        config = json.loads(path.read_text(encoding="utf-8"))
+        config = json.loads(path.read_text(encoding="utf-8-sig"))
         config["language"] = normalize_language(config.get("language"))
         return _normalize_profile_selection(config)
 
@@ -311,9 +312,9 @@ class SettingsService:
 
     @staticmethod
     def _observations():
-        from storage.config import get_config_path
+        from storage.config import get_observations_path
         from model_runtime.observations import ObservationStore
-        return ObservationStore(Path(get_config_path()).parent / "model-observations.sqlite")
+        return ObservationStore(get_observations_path())
 
     def _draft(self, id=None, api_key=None, **values):
         from storage.config import get_model_profile, _normalize_profile

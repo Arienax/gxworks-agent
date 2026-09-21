@@ -40,7 +40,7 @@ class EvidenceDebugPlanWorkflow(Workflow):
         self.project_id = project_id
         self.base_version_id = base_version_id
         self.run_id = run_id
-        self.effort = effort
+        self.effort = None  # retired workflow preference
         self.program_ir = copy.deepcopy(program_ir)
         self.saved_run = copy.deepcopy(saved_run)
         self.before_save = before_save
@@ -86,7 +86,7 @@ class EvidenceDebugPlanWorkflow(Workflow):
                     self._emit("progress", tr('AI 正在分析证据链'))
                     return model_call(debug_evidence_diagnosis,
                         payload["evidence"],
-                        effort=self.effort,
+                        effort=None,
                         raise_errors=True,
                     )
                 if role == PATCH_AGENT:
@@ -94,7 +94,7 @@ class EvidenceDebugPlanWorkflow(Workflow):
                     return model_call(debug_evidence_patch,
                         payload["evidence"],
                         payload["diagnosis"],
-                        effort=self.effort,
+                        effort=None,
                         raise_errors=True,
                     )
                 raise ValueError(tr('不支持的调试代理角色：{v0}', v0=role))
@@ -144,7 +144,7 @@ class SimulatorTestPlanWorkflow(Workflow):
         self.store = store
         self.project_id = project_id
         self.version_id = version_id
-        self.effort = effort
+        self.effort = None  # retired workflow preference
         self.program_ir = copy.deepcopy(program_ir)
         self.before_save = before_save
         self.write_lock = write_lock
@@ -168,7 +168,7 @@ class SimulatorTestPlanWorkflow(Workflow):
             self._emit("progress", tr('AI 正在生成仿真测试方案'))
             candidate = model_call(generate_simulator_test_suite,
                 context,
-                effort=self.effort,
+                effort=None,
                 raise_errors=True,
                 on_reasoning_chunk=lambda token: self._emit("reasoning", token),
                 on_content_chunk=lambda token: self._emit("content", token),

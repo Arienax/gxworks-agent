@@ -102,7 +102,7 @@ def run_case(case, arm, *, provider, model=None, effort=None, evaluator=None):
     original_builder = agent._build_knowledge_context
     observed = ObservedProvider(provider)
     record = {"case_id": case["case_id"], "arm": arm, "spec_sha256": digest(case["confirmed_spec"]),
-              "requested_model": model, "requested_effort": effort, "actual_requests": [],
+              "requested_model": model, "retired_effort_argument": effort, "tuning_source": "model_profile", "actual_requests": [],
               "evidence": [], "generation_status": "not_started", "structural_valid": None,
               "behavior": {"status": "not_covered"}, "attempts": observed.attempts}
     previous_sink = getattr(provider, "observation_sink", None)
@@ -196,7 +196,7 @@ def main(argv=None):
     parser.add_argument("--repeat", type=int, default=3)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--model", default=None)
-    parser.add_argument("--effort", default=None, help="Omit to preserve the saved model settings")
+    parser.add_argument("--effort", default=None, help="Deprecated, ignored. Tune effort in the model profile.")
     parser.add_argument("--evaluator", help="Optional module:function(case, result) behavioral evaluator")
     parser.add_argument("--output", type=Path, help="Private JSONL result path; required with --live")
     parser.add_argument("--live", action="store_true", help="Authorize paid calls using the saved active profile")
@@ -210,7 +210,7 @@ def main(argv=None):
         parser.error(str(error))
     if not args.live:
         print(json.dumps({"live": False, "scheduled_runs": len(tasks), "case_ids": [c["case_id"] for c in cases],
-                          "arms": args.arms.split(","), "effort": args.effort or "saved_profile_unchanged"}, ensure_ascii=False, indent=2))
+                          "arms": args.arms.split(","), "effort": "saved_profile_unchanged", "retired_effort_argument": args.effort}, ensure_ascii=False, indent=2))
         return 0
     if args.output is None or args.output.exists():
         parser.error("--live requires a new --output path; existing results are never overwritten")

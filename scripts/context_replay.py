@@ -232,7 +232,7 @@ def run_case(case, *, include_content=False):
                 result = agent.generate_confirmed_ladder(spec, case.get("plc_model", "FX3U"), model_name="offline-replay", effort="high")
             projected, prompt = _request_spec(provider.requests[0])
             checks["one_recorded_generation"] = len(provider.requests) == 1
-            checks["effort_preserved"] = provider.requests[0].options.get("reasoning_effort") == "high"
+            checks["workflow_effort_omitted"] = "reasoning_effort" not in provider.requests[0].options
             checks["no_audit_envelope"] = not {"approaches", "engineering_context", "decision_receipt"} & projected.keys()
             checks["no_form_choices"] = all(not {"options", "suggested_default", "note_provenance"} & p.keys() for p in projected.get("parameters", []))
             checks["generation_no_debug_sources"] = all(r.get("manual_type") != "debug_cases" for m in evidence for r in m.get("records", []))

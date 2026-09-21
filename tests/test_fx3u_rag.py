@@ -307,7 +307,7 @@ def test_chinese_fts_query_reaches_high_speed_counter_frequency_section():
     results = retrieve_knowledge(
         "高速计数器响应频率和综合频率",
         plc_model="FX3U",
-        task_type="analysis",
+        task_type="debug",
         top_k=5,
         char_budget=6200,
     )
@@ -342,7 +342,10 @@ def test_timer_time_base_query_prefers_ordinary_timer_device_section():
 
     assert results
     assert "Timer [T]" in results[0]["section"]
-    assert any("CASE_ID: timer_time_base_by_device_range" in item["text"] for item in results)
+    assert all(item.get("manual_type") != "debug_cases" for item in results)
+    debug = retrieve_knowledge("FX3U timer T0 K100 10 seconds time base", plc_model="FX3U",
+                               task_type="debug", top_k=5, char_budget=12000)
+    assert any("CASE_ID: timer_time_base_by_device_range" in item["text"] for item in debug)
 
 
 def test_m8013_clock_query_prefers_internal_clock_section():

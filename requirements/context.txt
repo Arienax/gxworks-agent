@@ -1,3 +1,5 @@
 # Typed parameter views and local retrieval routing (no model downloads).
 pydantic>=2.9,<3
 haystack-ai==2.31.0
+# Cross-process user settings migration/write lock.
+filelock>=3.16,<4

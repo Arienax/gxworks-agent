@@ -115,12 +115,14 @@ jobs:
         run: |
           & ./dist/GXWorks-Agent-Web/GXWorks-Agent-Web.exe --self-test-knowledge
           if ($LASTEXITCODE -ne 0) { throw "Packaged knowledge runtime failed" }
+          & ./dist/GXWorks-Agent-Web/GXWorks-Agent-Web.exe --self-test-settings
+          if ($LASTEXITCODE -ne 0) { throw "Packaged settings migration failed" }
           & ./dist/GXWorks-Agent-Web/GXWorks-Agent-Web.exe --self-test-openai-sdk
           if ($LASTEXITCODE -ne 0) { throw "Packaged SDK smoke failed: $LASTEXITCODE" }
       - name: Verify package startup, resources and Qt exclusion
         run: python scripts/web_package_smoke.py
       - name: Verify Windows source startup contracts
-        run: python -m pytest -q tests/test_web_startup.py tests/test_web_source_entrypoints.py tests/test_mcp_product_launcher.py
+        run: python -m pytest -q tests/test_web_startup.py tests/test_web_source_entrypoints.py tests/test_mcp_product_launcher.py tests/test_model_profile_config.py tests/test_model_contract.py tests/test_architecture_boundaries.py
 
   context-replay:
     name: Typed context and offline promptfoo replay

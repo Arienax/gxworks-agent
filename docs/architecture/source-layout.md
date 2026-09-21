@@ -76,7 +76,9 @@ can be deleted safely.
 Keep configuration resolution, explicit overrides, user-data-directory defaults,
 legacy configuration/session lookup, and frozen `_MEIPASS` resource behavior.
 Moving Python code is not authorization to migrate, clear or regenerate user data.
-Model observations stay attached to their existing configuration/state path.
+Model observations stay beside the active user configuration. The explicit
+copy-once location migration retains legacy files; see
+[runtime ownership](runtime-ownership.md).
 The resource catalogue, SQLite/LSA files, original GXW evidence and snapshots are
 not changed by this refactor. `model-observations.sqlite` is local state and ignored.
 

@@ -18,7 +18,7 @@ def _utc_now():
 _PROJECT_DEFAULTS = {
     "plc_model": "FX3U",
     "target_mode": "ladder",
-    "effort": "high",
+    "effort": None,
     "workflow_mode": "generate",
     "messages": [],
     "confirmed_spec": None,
@@ -337,7 +337,7 @@ class SessionStore:
         name="新项目",
         plc_model="FX3U",
         target_mode="ladder",
-        effort="high",
+        effort=None,
     ):
         project_id = uuid.uuid4().hex[:12]
         now = _utc_now()
@@ -348,7 +348,7 @@ class SessionStore:
             "updated_at": now,
             "plc_model": plc_model,
             "target_mode": target_mode,
-            "effort": effort,
+            "effort": None,
             "workflow_mode": "generate",
             "messages": [],
             "confirmed_spec": None,
@@ -414,7 +414,7 @@ class SessionStore:
         updates = {
             "plc_model": plc_model,
             "target_mode": target_mode,
-            "effort": effort,
+            "effort": None,
             "name": name,
             "workflow_mode": workflow_mode,
         }
