@@ -62,6 +62,8 @@ def project_confirmed_specification(confirmed_spec):
     source = (generation_io_snapshot(dict(confirmed_spec), protected_ids=QUESTION_IDS)
               if isinstance(confirmed_spec, Mapping) else None)
     projected = public_generation_specification(source) or {}
+    if projected:
+        projected["schema_version"] = 4
     # Preserve the existing public-projection contract: malformed optional
     # label metadata is omitted, not replaced while enriching electrical facts.
     raw_bindings = confirmed_spec.get("io_bindings") if isinstance(confirmed_spec, Mapping) else None
@@ -82,9 +84,6 @@ def project_confirmed_specification(confirmed_spec):
     for row in projected.get("io_bindings", []):
         if "address" in row:
             row["address"] = canonical_device(row["address"])
-    from plc.specification.provenance import selected_context
-    if "engineering_context" in projected:
-        projected["engineering_context"] = selected_context(projected)
     return projected
 
 
@@ -110,7 +109,7 @@ class ConfirmedGenerationContext:
 
 def build_confirmed_generation_context(
     confirmed_spec, plc_model, *, user_requirement="", current_program=None,
-    task_type="generate", evidence=None, knowledge_builder=None, model_profile=None,
+    task_type="generate", evidence=None, knowledge_builder=None, model_profile=None, decision_receipt_id=None,
 ):
     """Project before routing/retrieval; first generation cannot replay Agent A.
 
@@ -135,7 +134,7 @@ def build_confirmed_generation_context(
     compiler = ContextCompiler()
     compiler_input = ContextCompilerInput(
         confirmed_spec=projected,
-        engineering_context=projected.get("engineering_context") or {},
+        intent_context=projected.get("intent_context"),
         selected_approach=projected.get("selected_approach") or {},
         evidence=public_generation_value(evidence),
         plc_model=model,
@@ -176,7 +175,8 @@ def build_confirmed_generation_context(
     # identify retrieved blocks; the context hash must identify the actual
     # privacy-cleaned text delivered to either generation adapter.
     manifest["context_sha256"] = text_sha256(knowledge_text)
-    handoff = handoff_snapshot(projected, evidence=manifest, stage=task_type)
+    handoff = handoff_snapshot(projected, evidence=manifest, stage=task_type,
+                               decision_receipt_id=decision_receipt_id)
     # The generic provenance allowlist predates instruction-fact receipts. Keep
     # this application-owned audit intact without changing stored PLC specs.
     if isinstance(manifest.get("instruction_facts"), dict):

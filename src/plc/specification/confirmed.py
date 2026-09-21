@@ -1283,11 +1283,17 @@ def build_review_draft(analysis, previous_spec=None):
             draft["selected_approach"] = {}
     if isinstance(analysis.get("hardware_intent"), dict):
         draft["hardware_intent"] = copy.deepcopy(analysis["hardware_intent"])
-    if isinstance(analysis.get("engineering_context"), dict):
-        draft["engineering_context"] = copy.deepcopy(analysis["engineering_context"])
-    elif isinstance(previous.get("engineering_context"), dict):
-        draft["engineering_context"] = copy.deepcopy(previous["engineering_context"])
-        draft["engineering_context"]["confirmation"] = {"status": "draft"}
+    from plc.specification.provenance import intent_context, decision_context
+    intent_source = analysis if ("intent_context" in analysis or "engineering_context" in analysis) else previous
+    intent = intent_context(intent_source)
+    if intent:
+        draft["intent_context"] = intent
+    # No fallback to the previous confirmation's proposals/evidence. A draft
+    # may preserve current intent without resurrecting any old candidate audit.
+    receipt = decision_context(analysis)
+    if receipt:
+        receipt["confirmation"] = {"status": "draft"}
+        draft["decision_receipt"] = receipt
     if previous.get("io_bindings"):
         draft["io_bindings"] = copy.deepcopy(previous["io_bindings"])
     draft["hardware_profile"] = build_hardware_profile(draft, plc_model)
@@ -1506,7 +1512,10 @@ def canonicalize_confirmed_spec(spec):
             canonical.pop("io_user_overrides", None)
     elif "io_user_overrides" in canonical:
         canonical.pop("io_user_overrides", None)
-    canonical["schema_version"] = 3
+    if (spec or {}).get("schema_version") == 4:
+        from plc.specification.provenance import confirmed_spec_fields
+        return confirmed_spec_fields(canonical)
+    canonical["schema_version"] = 3  # Editable legacy/review draft, not a sealed confirmation.
     return canonical
 
 

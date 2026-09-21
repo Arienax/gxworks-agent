@@ -49,6 +49,7 @@ class GenerationRequest:
     allowed_addresses: object = None
     repair_plan: object = None
     source_handoff: object = None
+    decision_receipt_id: Optional[str] = None
     image_attachments: object = None
     model_name: Optional[str] = None
     response_language: Optional[str] = None
@@ -243,7 +244,8 @@ class GenerationWorkflow:
             )
             from plc.specification.provenance import handoff_snapshot
             generation_handoff = handoff_snapshot(self.confirmed_context or {}, stage=(
-                "format_repair" if self.format_repair else "contract_repair" if self.repair_mode else self.task_type or "generate"))
+                "format_repair" if self.format_repair else "contract_repair" if self.repair_mode else self.task_type or "generate"),
+                decision_receipt_id=self.decision_receipt_id)
             if is_edit_mode or repair_call:
                 from application.generation_support import public_generation_value
                 generation_handoff["change_request"] = {
@@ -255,7 +257,7 @@ class GenerationWorkflow:
                     "receipt_sha256": canonical_sha256(self.source_handoff),
                     "projection_sha256": self.source_handoff.get("projection_sha256"),
                     "confirmed_spec_sha256": self.source_handoff.get("confirmed_spec_sha256"),
-                    "generation_evidence": copy.deepcopy(self.source_handoff.get("generation_evidence", {})),
+                    "decision_receipt_id": self.source_handoff.get("decision_receipt_id"),
                 }
             if repair_call:
                 generation_handoff["generation_evidence"] = {
@@ -351,6 +353,7 @@ class GenerationWorkflow:
                         generate_confirmed_ladder,
                         self.confirmed_context,
                         self.plc_model,
+                        decision_receipt_id=self.decision_receipt_id,
                         model_name=self.model_name,
                         effort=self.effort,
                         on_context=lambda value: generation_handoff.update(copy.deepcopy(value)),
@@ -605,7 +608,8 @@ class GenerationWorkflow:
                     "repair_attempts": repair_attempts,
                     "first_pass_pipeline": generation_agent_metadata or {"mode": "direct"},
                     "generation_handoff": {**generation_handoff,
-                        "confirmed_spec_sha256": canonical_sha256(self.confirmed_context) if self.confirmed_context is not None else None},
+                        "confirmed_spec_sha256": canonical_sha256(self.confirmed_context) if self.confirmed_context is not None else None,
+                        "decision_receipt_id": self.decision_receipt_id},
                     "validation_profile": "generation_structural",
                     "program_name": self.program_name,
                     "revision": self.revision,

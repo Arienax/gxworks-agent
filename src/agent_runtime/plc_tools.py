@@ -327,6 +327,9 @@ def _get_generation_context(
             knowledge_builder=_build_knowledge_context,
             on_context=capture_context,
         )
+    receipt_id = _decision_receipt_id(context)
+    if receipt_id:
+        generation_handoff["decision_receipt_id"] = receipt_id
     return {
         "project_id": context.project_id,
         "plc_model": context.plc_model,
@@ -365,6 +368,7 @@ def _create_program_candidate(
         from plc.specification.provenance import handoff_snapshot
         generation_handoff = handoff_snapshot(
             project_confirmed_specification(confirmed_spec), stage="external_generate",
+            decision_receipt_id=_decision_receipt_id(context),
             evidence={"stage": "external_generate", "status": "not_recorded", "records": [],
                       "reason": "external_context_not_correlated"},
         )
@@ -593,6 +597,15 @@ def _require_program_ir(context: ToolContext) -> Mapping[str, Any]:
     if not isinstance(context.program_ir, Mapping):
         raise ValueError("当前没有可供 PLC Core 读取的程序 IR。")
     return context.program_ir
+
+
+def _decision_receipt_id(context: ToolContext):
+    # The same binding as _confirmed_spec: a historical version must never
+    # acquire the current project's newer decision merely because it lacks one.
+    if (context.version or {}).get("confirmed_spec_snapshot"):
+        handoff = (context.version or {}).get("generation_handoff") or {}
+        return handoff.get("decision_receipt_id") if isinstance(handoff, Mapping) else None
+    return context.project.get("confirmed_decision_receipt_id")
 
 
 def _confirmed_spec(context: ToolContext):

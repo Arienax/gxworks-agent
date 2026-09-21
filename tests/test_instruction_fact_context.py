@@ -184,7 +184,8 @@ def test_resolved_generic_io_does_not_open_instruction_retrieval(with_role, monk
     }
     before = copy.deepcopy(spec)
     compiled = ContextCompiler().compile(ContextCompilerInput(confirmed_spec=spec))
-    assert compiled.generation_packet["confirmed_spec"] == spec == before
+    assert compiled.generation_packet["confirmed_spec"] == {**spec, "schema_version": 4}
+    assert spec == before
     query = KnowledgeQuery(compiled.retrieval_packet["query"], precompiled=True,
                            metadata={"instruction_fact_mode": "targeted", "instruction_fact_targets": []})
     assert not any(address in query for _, _, address in roles)
@@ -206,4 +207,5 @@ def test_explicit_lookup_survives_settled_io_projection(question):
         confirmed_spec=spec, task_type="edit", generation_request=question))
     query = compiled.retrieval_packet["query"]
     assert question in query and "5 秒" in query and has_generation_fact_target(query)
-    assert compiled.generation_packet["confirmed_spec"] == spec == before
+    assert compiled.generation_packet["confirmed_spec"] == {**spec, "schema_version": 4}
+    assert spec == before

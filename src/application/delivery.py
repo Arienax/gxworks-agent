@@ -51,6 +51,13 @@ def delivery_summary(workbench, project_id, version_id):
         if parent:
             detail = PLCCore().diff_programs(parent, program)
             diff = {k: detail[k] for k in ("added", "deleted", "modified", "device_comment_changes", "network_order_changed", "property_changes")}
+    from plc.specification.provenance import decision_context
+    handoff = version.get("generation_handoff") or {}
+    receipt_id = handoff.get("decision_receipt_id") if isinstance(handoff, dict) else None
+    receipt = projects.store.get_decision_receipt(project_id, receipt_id)
+    if receipt is None and isinstance(version.get("confirmed_spec_snapshot"), dict):
+        # Old versions are read as archived; do not update their hashes/files.
+        receipt = decision_context(version["confirmed_spec_snapshot"]) or None
     result = public({"project_id": project_id, "project_name": project["name"], "version_id": version_id,
         "is_active_version": project.get("active_version_id") == version_id,
         "created_at": datetime.now(timezone.utc).isoformat(), "plc_model": version.get("plc_model"),
@@ -59,6 +66,8 @@ def delivery_summary(workbench, project_id, version_id):
         "ir_sha256": version.get("ir_sha256"), "artifacts": artifacts, "changes": diff,
         "validation_profile": version.get("validation_profile", "strict"),
         "generation_handoff": version.get("generation_handoff"),
+        "decision_receipt_id": receipt_id, "decision_receipt": receipt,
+        "decision_receipt_status": "available" if receipt else "not_recorded",
         "static_validation": version.get("validation"), "simulation_runs": runs,
         "requirements": requirements, "native_validation": native,
         "reports": [r for r in projects.reports(project_id) if r.get("base_version_id") == version_id],
@@ -146,9 +155,11 @@ def render_delivery(value):
     else:
         lines.append("此版本未保存已确认规格快照。")
     lines += ["", "## 需求、方案与证据来源", ""]
-    lineage = (spec or {}).get("engineering_context", {}) if isinstance(spec, dict) else {}
+    from plc.specification.provenance import intent_context
+    intent = intent_context(spec)
+    lineage = value.get("decision_receipt") or {}
     lineage = lineage if isinstance(lineage, dict) else {}
-    requests = lineage.get("requests") or []
+    requests = intent.get("requests") or []
     for row in requests:
         if isinstance(row, dict):
             lines.append(f"- 用户请求 {cell(row.get('id'))}：{cell(row.get('text'))}")
@@ -157,7 +168,10 @@ def render_delivery(value):
     receipt = value.get("generation_handoff") or {}
     receipt = receipt if isinstance(receipt, dict) else {}
     stages = [("需求分析", lineage.get("analysis_evidence") or {})]
-    stages.extend(("选中候选方案", row.get("evidence") or {}) for row in receipt.get("selected_proposals", []) if isinstance(row, dict))
+    selected_id = ((spec or {}).get("selected_approach") or {}).get("approach_id") if isinstance(spec, dict) else None
+    stages.extend(("历史候选补查（不代表模型已使用）", row.get("evidence") or {})
+                  for row in lineage.get("proposals", []) if isinstance(row, dict)
+                  and row.get("approach_id") == selected_id and row.get("evidence"))
     stages.append(("本次生成", receipt.get("generation_evidence") or {}))
     for label, manifest in stages:
         manifest = manifest if isinstance(manifest, dict) else {}

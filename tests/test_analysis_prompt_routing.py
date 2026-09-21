@@ -194,9 +194,10 @@ def test_full_contract_guide_and_raw_user_request_are_preserved_without_mutation
     result, _, _ = build("只补充停止参数", spec)
     snapshot = json.loads(result.system_prompt.split("# Confirmed project specification\n", 1)[1])
     assert snapshot["selected_approach"] == spec["selected_approach"]
-    assert snapshot["engineering_context"]["requests"] == spec["engineering_context"]["requests"]
+    assert snapshot["intent_context"]["requests"] == spec["engineering_context"]["requests"]
     assert "approaches" not in snapshot
-    assert "proposals" not in snapshot["engineering_context"]
+    assert "engineering_context" not in snapshot
+    assert "proposals" not in snapshot["intent_context"]
     assert spec == original
 
 
@@ -304,7 +305,7 @@ def test_old_display_metadata_is_not_reintroduced_by_confirmed_baseline(analysis
     assert not {"control_type", "flowchart_steps", "format_diagnostics"} & snapshot.keys()
     assert snapshot["execution_semantics"] == spec["execution_semantics"]
     assert snapshot["selected_approach"] == spec["selected_approach"]
-    assert snapshot["engineering_context"]["requests"] == spec["engineering_context"]["requests"]
+    assert snapshot["intent_context"]["requests"] == spec["engineering_context"]["requests"]
     assert spec == before
 
 

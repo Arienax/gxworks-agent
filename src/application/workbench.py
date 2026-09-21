@@ -46,6 +46,8 @@ class WorkbenchService:
             from application.execution import GXExecutionCoordinator
             self.lock = WorkspaceWriterLock(self.store.base_dir).acquire()
             try:
+                with self.lock.thread_lock:
+                    self.spec_migration = self.store.migrate_confirmed_specs()
                 self.jobs = JobManager(self.state_dir, self.lock)
                 self.proposals = ProposalService(self.store, self.state_dir, self.lock)
                 self.execution = GXExecutionCoordinator(self.store)
@@ -162,7 +164,8 @@ class WorkbenchService:
         with self.lock.thread_lock:
             project = self.projects.raw_project(project_id)
             current = project.get("confirmed_spec")
-            if (canonical_sha256(current) if current is not None else None) != expected_hash:
+            from plc.specification.provenance import matches_migrated_spec_hash
+            if not matches_migrated_spec_hash(project, expected_hash):
                 raise ConflictError("确认规格已变化，请重新加载。")
             candidate_spec = preserve_io_user_edits(current, spec)
             issues = validate_spec_draft(candidate_spec, project.get("plc_model"))
@@ -698,6 +701,7 @@ class WorkbenchService:
                     user_input=scoped_text, effort=project.get("effort"), target_mode=project["target_mode"],
                     previous_json=previous_json, previous_ir=program,
                     confirmed_context=project.get("confirmed_spec"),
+                    decision_receipt_id=project.get("confirmed_decision_receipt_id"),
                     conversation_history=[] if (repair_mode or format_repair) else project.get("messages", []),
                     task_type=snapshot.get("task_type"),
                     plc_model=project.get("plc_model", "FX3U"), program_name=(program or {}).get("program_name", "MAIN"),

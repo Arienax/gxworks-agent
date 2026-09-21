@@ -201,6 +201,7 @@ def generate_confirmed_ladder(
     effort=None,
     on_stage=None,
     on_context=None,
+    decision_receipt_id=None,
 ):
     """Make one streaming model call, then locally expand the compact plan."""
     import application.model_api as api
@@ -214,6 +215,7 @@ def generate_confirmed_ladder(
     context = build_confirmed_generation_context(
         projected, model, knowledge_builder=_build_knowledge_context,
         model_profile=getattr(base_provider, "profile", {}),
+        decision_receipt_id=decision_receipt_id,
     )
     if on_context:
         on_context(context.to_dict()["handoff"])

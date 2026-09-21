@@ -62,7 +62,7 @@ Owns prompt assembly, token/context budgeting, RAG query construction, retrieval
 
 | Test file | File-level focus |
 | --- | --- |
-| `tests/test_context_compiler.py` | focused coverage for context compiler |
+| `tests/test_context_compiler.py` | model-aware budgets, intent/evidence projection and unconditional historical-audit exclusion |
 | `tests/test_context_refresh_runtime.py` | focused coverage for context refresh runtime |
 | `tests/test_fx3u_rag.py` | FX3U factual retrieval quality and routing |
 | `tests/test_gxw2_skill_import.py` | focused coverage for gxw2 skill import |
@@ -106,7 +106,7 @@ Owns confirmed-spec to Agent B generation, selected-approach contracts, candidat
 | `tests/test_generation_scope_audit.py` | focused coverage for generation scope audit |
 | `tests/test_generation_workflow.py` | focused coverage for generation workflow |
 | `tests/test_hybrid_compact_recovery.py` | focused coverage for hybrid compact recovery |
-| `tests/test_intent_evidence_handoff.py` | request/selected-plan/evidence lineage through generation, repair, save and delivery |
+| `tests/test_intent_evidence_handoff.py` | ConfirmedSpec v4 / DecisionReceipt v1 lifecycle, migration atomicity, immutable version audit, and API/MCP context isolation |
 | `tests/test_native_repair_scope_schema.py` | focused coverage for native repair scope schema |
 | `tests/test_partial_repair_semantic_freeze.py` | focused coverage for partial repair semantic freeze |
 | `tests/test_rejected_generation_delivery.py` | focused coverage for rejected generation delivery |

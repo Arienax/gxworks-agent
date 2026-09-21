@@ -306,6 +306,19 @@ class SessionStore:
             normalized["messages"] = []
         if not isinstance(normalized.get("reports"), list):
             normalized["reports"] = []
+        spec = normalized.get("confirmed_spec")
+        from plc.specification.provenance import needs_spec_migration
+        if needs_spec_migration(spec):
+            from plc.specification.provenance import migrate_confirmed_spec
+            clean, receipt = migrate_confirmed_spec(spec)
+            old_history = normalized.get("decision_history")
+            history = copy.deepcopy(dict(old_history)) if isinstance(old_history, Mapping) else {}
+            history[receipt["receipt_id"]] = receipt
+            normalized["decision_history"] = history
+            normalized["confirmed_decision_receipt_id"] = receipt["receipt_id"]
+            normalized["confirmed_spec"] = clean
+        # This is an in-memory read adapter. A subsequent explicit save commits
+        # the pair via one existing atomic project write; versions stay intact.
         return normalized
 
     def list_projects(self):
@@ -415,12 +428,55 @@ class SessionStore:
         if project is None:
             raise KeyError(project_id)
         if confirmed_spec is not None:
-            from plc.specification.confirmed import canonicalize_confirmed_spec
-
-            from plc.specification.provenance import confirm_context
-            confirmed_spec = confirm_context(canonicalize_confirmed_spec(confirmed_spec))
+            from plc.specification.provenance import seal_confirmation
+            old_history = project.get("decision_history")
+            history = copy.deepcopy(dict(old_history)) if isinstance(old_history, Mapping) else {}
+            previous = history.get(project.get("confirmed_decision_receipt_id"))
+            confirmed_spec, receipt = seal_confirmation(confirmed_spec, previous_receipt=previous)
+            history[receipt["receipt_id"]] = receipt
+            project["decision_history"] = history
+            project["confirmed_decision_receipt_id"] = receipt["receipt_id"]
+        else:
+            project["confirmed_decision_receipt_id"] = None
         project["confirmed_spec"] = confirmed_spec
         return self.save_project(project)
+
+    def get_decision_receipt(self, project_id, receipt_id):
+        """Read a specific immutable receipt; never substitute the latest one."""
+        project = self.get_project(project_id)
+        history = project.get("decision_history") if isinstance(project, Mapping) else None
+        receipt = history.get(receipt_id) if isinstance(history, Mapping) and receipt_id else None
+        from plc.specification.provenance import receipt_is_intact
+        return copy.deepcopy(receipt) if receipt_is_intact(receipt, receipt_id) else None
+
+    def migrate_confirmed_specs(self):
+        """Explicit writer-only upgrade; retain timestamps and every version value.
+
+        The application owns the workspace lock. Each project is a single atomic
+        transaction: clean facts, archived legacy snapshot, and receipt reference.
+        A failed write leaves the previous project intact and is reported, not
+        converted into a generation/confirmation gate.
+        """
+        from plc.specification.provenance import needs_spec_migration
+        report = {"migrated": [], "failed": []}
+        for project_id in self._load_index().get("projects", []):
+            try:
+                self._validate_record_id(project_id, "project id")
+                path = self.project_path(project_id)
+                if not path.resolve().is_relative_to(self.projects_dir.resolve()):
+                    raise ValueError("Project path escaped workspace")
+                raw = self._read_json(path)
+                if not isinstance(raw, Mapping) or not needs_spec_migration(raw.get("confirmed_spec")):
+                    continue
+                upgraded = self._with_project_defaults(raw)
+                persisted = copy.deepcopy(raw)
+                for key in ("confirmed_spec", "decision_history", "confirmed_decision_receipt_id"):
+                    persisted[key] = upgraded[key]
+                self._write_json(path, persisted)
+                report["migrated"].append(project_id)
+            except (OSError, ValueError, TypeError, KeyError):
+                report["failed"].append(str(project_id))
+        return report
 
     def set_pending_review(self, project_id, pending_review):
         project = self.get_project(project_id)

@@ -127,9 +127,10 @@ def generate_candidate(output, snapshot, images, ctx):
     previous = export_object_model(source, declarations) if baseline else None
     from gxw.generation_contract import FBD_GENERATION_PROMPT
     prompt = FBD_GENERATION_PROMPT
+    from application.generation_support import public_generation_specification
     context = {"program": source.logical_name, "catalog": catalog_description(),
                "declaration_tables": {k: v.scope for k, v in declarations.items()},
-               "confirmed_spec": project.get("confirmed_spec"), "previous": previous,
+               "confirmed_spec": public_generation_specification(project.get("confirmed_spec")), "previous": previous,
                "request": snapshot.get("text", "")}
     ctx.emit("progress", {"message": "正在生成 FBD 对象、连线及声明"})
     response = _request_model([{"role": "system", "content": prompt},

@@ -9,6 +9,8 @@ PLC IR, inspection findings, patches, imports and regression tests.
 
 from __future__ import annotations
 
+from plc.generation_contract import generation_specification
+
 import copy
 from datetime import datetime, timezone
 import hashlib
@@ -148,7 +150,7 @@ def build_review_context(
         "plc": copy.deepcopy(program.get("plc") or {}),
         "program_name": str(program.get("program_name") or "MAIN"),
         "request": copy.deepcopy(request),
-        "confirmed_spec": copy.deepcopy(dict(confirmed_spec or {})),
+        "confirmed_spec": generation_specification(confirmed_spec) or {},
         "networks": _network_context(program),
         "network_scope": {
             "total": len(networks),

@@ -47,7 +47,8 @@ def _extract_user_declared_io(user_text, plc_model):
 def _historical_declared_io(confirmed_spec, plc_model):
     """Return explicit I/O declarations already seen before this analysis turn."""
     historical = {}
-    context = (confirmed_spec or {}).get("engineering_context") if isinstance(confirmed_spec, dict) else None
+    from plc.specification.provenance import intent_context
+    context = intent_context(confirmed_spec)
     requests = context.get("requests", []) if isinstance(context, dict) else []
     for item in requests or []:
         text = item.get("text", "") if isinstance(item, dict) else ""
@@ -106,6 +107,8 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     # cannot authenticate its own questions by emitting this metadata field.
     normalized.pop("hardware_intent", None)
     normalized.pop("engineering_context", None)
+    normalized.pop("intent_context", None)
+    normalized.pop("decision_receipt", None)
     # Legacy UI/classification fields are not part of the current model contract.
     # Do not replay them into later model requests or migrate saved revisions.
     normalized.pop("control_type", None)
@@ -345,43 +348,25 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     normalized = ensure_hardware_questions(normalized, plc_model, user_text, confirmed_spec)
     from plc.specification.provenance import analysis_context
     from application.generation_support import public_generation_value
-    normalized["engineering_context"] = analysis_context(
+    normalized.update(analysis_context(
         public_generation_value(user_text), normalized.get("approaches", []), confirmed_spec,
-    )
+    ))
     return normalized
 
 
 
 def attach_analysis_evidence(result, analysis_evidence, *, plc_model="FX3U", knowledge_builder=None):
-    """Bind engine-produced evidence to candidate identities before user review.
+    """Audit evidence actually supplied to A. No post-candidate retrieval.
 
-    Candidate lookup is evidence collection, not a claim that the plan was verified.
-    No extra model request, hidden analysis text or inferred hard constraint is used.
+    The optional builder remains an API-compatible argument, not an operation.
+    Evidence discovered after a candidate was produced is not its reasoning basis.
     """
+    import copy
     from knowledge.evidence import context_manifest
     from plc.specification.provenance import evidence_snapshot
     from application.generation_support import public_generation_value
-    if knowledge_builder is None:
-        from application.generation_context import _build_knowledge_context
-        knowledge_builder = _build_knowledge_context
-    context = result["engineering_context"]
-    context["analysis_evidence"] = public_generation_value(evidence_snapshot(
+    result = copy.deepcopy(result)
+    receipt = result.setdefault("decision_receipt", {"schema_version": 1, "kind": "analysis"})
+    receipt["analysis_evidence"] = public_generation_value(evidence_snapshot(
         context_manifest(analysis_evidence, stage="analysis")))
-    by_id = {row.get("approach_id"): row for row in result.get("approaches", [])}
-    for index, record in enumerate(context.get("proposals", [])):
-        if index >= 3:
-            record["evidence"] = {"stage": "candidate", "status": "excluded",
-                                  "reason": "candidate_budget", "records": []}
-            continue
-        approach = by_id.get(record.get("approach_id"))
-        if not approach:
-            continue
-        try:
-            evidence = knowledge_builder("", plc_model=plc_model, task_type="generate",
-                                         confirmed_context={"selected_approach": approach})
-            manifest = context_manifest(evidence, stage="candidate")
-            manifest["stage"] = "candidate"
-        except Exception:
-            manifest = {"stage": "candidate", "status": "unavailable", "records": []}
-        record["evidence"] = public_generation_value(evidence_snapshot(manifest))
     return result

@@ -329,50 +329,6 @@ def _pack_sections(sections, token_budget):
     return query, report, estimate_tokens(query)
 
 
-def _compact_evidence_manifest(value):
-    if not isinstance(value, Mapping):
-        return {}
-    keep = ("stage", "status", "query_sha256", "context_sha256", "plc_model",
-            "token_budget", "used_tokens", "query_truncated", "reason")
-    return {key: copy.deepcopy(value[key]) for key in keep if key in value}
-
-
-def _compact_runtime_provenance(runtime, pressure):
-    result = copy.deepcopy(runtime)
-    context = result.get("engineering_context")
-    if pressure not in {"moderate", "high", "critical"} or not isinstance(context, Mapping):
-        return result, 0
-    compact = copy.deepcopy(context)
-    before = _estimate(compact)
-    proposals = compact.get("proposals")
-    if isinstance(proposals, list):
-        reduced = []
-        for row in proposals:
-            if not isinstance(row, Mapping):
-                continue
-            base = {key: copy.deepcopy(row[key]) for key in (
-                "approach_id", "proposal_sha256", "source", "request_ids"
-            ) if key in row}
-            if pressure == "moderate" and isinstance(row.get("evidence"), Mapping):
-                base["evidence"] = _compact_evidence_manifest(row["evidence"])
-            reduced.append(base)
-        compact["proposals"] = reduced
-    if isinstance(compact.get("analysis_evidence"), Mapping):
-        if pressure == "moderate":
-            compact["analysis_evidence"] = _compact_evidence_manifest(compact["analysis_evidence"])
-        else:
-            compact.pop("analysis_evidence", None)
-    confirmation = compact.get("confirmation")
-    if isinstance(confirmation, Mapping) and pressure in {"high", "critical"}:
-        compact["confirmation"] = {
-            key: copy.deepcopy(confirmation[key])
-            for key in ("status", "source", "approach_id", "selected_origin", "request_ids")
-            if key in confirmation
-        }
-    result["engineering_context"] = compact
-    return result, max(0, before - _estimate(compact))
-
-
 def _generation_packet(runtime, value, evidence_text):
     return {
         "confirmed_spec": runtime,
@@ -397,7 +353,7 @@ def _pressure(utilization):
 @dataclass(frozen=True)
 class ContextCompilerInput:
     confirmed_spec: dict
-    engineering_context: dict = field(default_factory=dict)
+    intent_context: dict | None = None
     selected_approach: dict = field(default_factory=dict)
     evidence: object = None
     plc_model: str = "FX3U"
@@ -422,12 +378,15 @@ class ContextCompiler:
     """Compile runtime views without mutating persistent engineering state."""
 
     def compile(self, value: ContextCompilerInput, *, evidence_text="") -> CompiledContext:
-        persistent = copy.deepcopy(value.confirmed_spec or {})
+        from plc.specification.provenance import confirmed_spec_fields, intent_context
+        persistent = confirmed_spec_fields(value.confirmed_spec or {})
         runtime = copy.deepcopy(persistent)
-        context = value.engineering_context or runtime.get("engineering_context") or {}
+        context = (intent_context({"intent_context": value.intent_context})
+                   if value.intent_context is not None else intent_context(runtime))
+        original_evidence_text = str(evidence_text or "")
         runtime_context, duplicate_requests, superseded = _clean_request_rows(context)
-        if runtime_context:
-            runtime["engineering_context"] = runtime_context
+        if runtime_context or "intent_context" in runtime or value.intent_context is not None:
+            runtime["intent_context"] = runtime_context
 
         selected = value.selected_approach or runtime.get("selected_approach") or {}
         method, prefs, contract = _positive_selected(selected)
@@ -463,7 +422,7 @@ class ContextCompiler:
             "current_program": _estimate(value.current_program) if value.current_program is not None else 0,
         }
         usable = budget["usable_input_tokens"]
-        original_packet = _generation_packet(runtime, value, evidence_text)
+        original_packet = _generation_packet(persistent, value, original_evidence_text)
         original_payload_tokens = _estimate(original_packet)
         original_estimated = original_payload_tokens + budget["protocol_overhead_tokens"]
         if usable is None:
@@ -476,19 +435,15 @@ class ContextCompiler:
             original_utilization = original_estimated / usable
             pressure = _pressure(original_utilization)
 
-        compacted_runtime, provenance_saved = _compact_runtime_provenance(runtime, pressure)
+        compacted_runtime = runtime
+        provenance_saved = max(0, _estimate(context) - _estimate(runtime_context))
         generation_packet = _generation_packet(compacted_runtime, value, evidence_text)
         compiled_payload_tokens = _estimate(generation_packet)
         compiled_estimated = compiled_payload_tokens + budget["protocol_overhead_tokens"]
         utilization = (compiled_estimated / usable) if usable is not None and usable > 0 else None
-        if pressure == "unknown":
-            mode = "unknown_budget"
-        elif pressure == "low":
-            mode = "dedupe_only"
-        elif pressure == "moderate":
-            mode = "priority_projection"
-        else:
-            mode = "aggressive_deterministic"
+        # Pressure is telemetry, not permission to trim unknown engineering
+        # intent. Report actual work rather than an "aggressive" no-op label.
+        mode = "priority_projection" if superseded else "dedupe_only"
         report = {
             "model_context_window": budget["context_window"],
             "budget_confidence": budget["budget_confidence"],
@@ -535,14 +490,6 @@ class ContextCompiler:
             "retrieval_query_sha256": hashlib.sha256(retrieval_query.encode("utf-8")).hexdigest(),
             "budget_report": report,
         }
-        confirmation = runtime_context.get("confirmation") if isinstance(runtime_context, Mapping) else {}
-        proposals = runtime_context.get("proposals") if isinstance(runtime_context, Mapping) else []
-        proposals = proposals if isinstance(proposals, list) else []
-        proposal_hash = next((row.get("proposal_sha256") for row in proposals
-                              if isinstance(row, Mapping) and row.get("approach_id") == selected.get("approach_id")), None)
-        selected_hash = confirmation.get("selected_sha256") if isinstance(confirmation, Mapping) else None
-        evidence_relation = ("exact" if proposal_hash and selected_hash == proposal_hash else
-                             "modified_since_retrieval" if proposal_hash and selected_hash else "unrecorded")
         receipt = {
             "context_plan_sha256": _fingerprint(plan),
             "persistent_spec_sha256": plan["persistent_spec_sha256"],
@@ -550,6 +497,6 @@ class ContextCompiler:
             "retrieval_query_sha256": plan["retrieval_query_sha256"],
             "context_pressure": pressure,
             "compression_mode": mode,
-            "evidence_relation": evidence_relation,
+            "audit_policy": "decision_receipt_reference_only",
         }
         return CompiledContext(generation_packet, retrieval_packet, receipt, report)

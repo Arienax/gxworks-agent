@@ -242,7 +242,7 @@ def _confirmed_context_text(confirmed_context):
         legacy_context = confirmed_context.get("legacy_context")
         if legacy_context:
             return str(legacy_context).strip()
-        clean = {key: value for key, value in confirmed_context.items() if not str(key).startswith("_")}
+        clean = public_generation_specification(confirmed_context)
         return json.dumps(clean, ensure_ascii=False, separators=(",", ":"))
     return str(confirmed_context).strip()
 

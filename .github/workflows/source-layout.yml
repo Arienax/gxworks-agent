@@ -1,123 +1,120 @@
 name: Source Layout Validation
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
     paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'tools/**'
+      - 'packaging/**'
+      - 'resources/**'
+      - 'research/**'
+      - 'requirements.txt'
+      - 'requirements/**'
       - '.github/workflows/source-layout.yml'
-      - '.github/spec-v4.part*'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  prepare-reviewed-tree:
-    if: github.event.pull_request.head.repo.full_name == 'Arienax/gxworks-agent' && github.event.pull_request.head.ref == 'fix/prompt-cleanup-io-binding-20260921'
+  regression:
+    name: Full headless suite and MCP smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: write
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 2
-          lfs: true
           persist-credentials: false
+          lfs: true
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Reconstruct exactly the locally reviewed source
-        shell: bash
-        run: |
-          python - <<'PY'
-          import hashlib, json, lzma, subprocess
-          from pathlib import Path
-          base = '6f9aa000f754d81e2fa65176e391844d68f91bff'
-          assert subprocess.check_output(['git', 'rev-parse', 'HEAD^'], text=True).strip() == base
-          encoded = b''.join(Path(f'.github/spec-v4.part{i}').read_bytes() for i in range(3))
-          data = lzma.decompress(encoded)
-          assert hashlib.sha256(data).hexdigest() == '9857d3e77ebb638d0664d53cfb1d63459b637711196faeca37893ec05d9062dc'
-          operations = json.loads(data)
-          assert len(operations) == 31
-          def blob_sha(raw):
-              return hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
-          for name, change in operations.items():
-              path = Path(name)
-              assert not path.is_absolute() and '..' not in path.parts
-              assert path.resolve().is_relative_to(Path.cwd())
-              original = subprocess.check_output(['git', 'show', base + ':' + name])
-              assert blob_sha(original) == change['old_sha'], name
-              lines = original.decode('utf-8').splitlines(keepends=True)
-              right = len(lines)
-              for start, end, replacement in reversed(change['changes']):
-                  assert 0 <= start <= end <= right
-                  lines[start:end] = [replacement]
-                  right = start
-              new = ''.join(lines).encode('utf-8')
-              assert blob_sha(new) == change['new_sha'], name
-              path.write_bytes(new)
-          Path('validation-spec').mkdir(exist_ok=True)
-          Path('validation-spec/operations.json').write_text(json.dumps(operations), encoding='utf-8')
-          subprocess.run(['git', 'diff', '--check'], check=True)
-          PY
-      - name: Install existing headless test dependencies
+      - name: Install headless test dependencies
         run: python -m pip install -r requirements.txt
-      - name: Verify the reviewed lifecycle and model boundaries
-        run: >-
-          python -m pytest -q
-          tests/test_intent_evidence_handoff.py
-          tests/test_context_compiler.py
-          tests/test_runtime_diagnostics_web.py
-          tests/test_spec_choice_metadata.py
-          tests/test_shared_generation_context.py
-          tests/test_confirmed_generation_regressions.py
-          tests/test_analysis_prompt_routing.py
-          tests/test_instruction_fact_context.py
-          tests/test_architecture_boundaries.py
-          tests/test_source_layout.py
-          --junitxml=validation-spec/targeted.xml
-      - name: Upload verified Git objects without moving any branch
+      - name: Compile and run the complete suite
         shell: bash
-        env:
-          GH_OBJECT_TOKEN: ${{ github.token }}
         run: |
-          python - <<'PY'
-          import hashlib, json, os, subprocess, urllib.request
-          from pathlib import Path
-          base = '6f9aa000f754d81e2fa65176e391844d68f91bff'
-          root = 'https://api.github.com/repos/Arienax/gxworks-agent'
-          operations = json.loads(Path('validation-spec/operations.json').read_text())
-          def api(path, payload=None):
-              request = urllib.request.Request(root + path,
-                  data=json.dumps(payload).encode() if payload is not None else None,
-                  headers={'Accept': 'application/vnd.github+json',
-                           'Authorization': 'Bearer ' + os.environ['GH_OBJECT_TOKEN'],
-                           'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json'})
-              with urllib.request.urlopen(request, timeout=60) as response:
-                  return json.load(response)
-          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
-          assert api('/git/ref/heads/fix/prompt-cleanup-io-binding-20260921')['object']['sha'] == head
-          entries = []
-          for name, change in operations.items():
-              raw = Path(name).read_bytes()
-              local_sha = hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
-              assert local_sha == change['new_sha'], name
-              result = api('/git/blobs', {'content': raw.decode('utf-8'), 'encoding': 'utf-8'})
-              assert result['sha'] == local_sha, name
-              mode = subprocess.check_output(['git', 'ls-tree', base, '--', name], text=True).split()[0]
-              entries.append({'path': name, 'mode': mode, 'type': 'blob', 'sha': local_sha})
-          # The baseline tree has no temporary payload files. Its workflow is
-          # replaced by the reviewed original read-only workflow in entries.
-          tree = api('/git/trees', {'base_tree': api('/git/commits/' + base)['tree']['sha'], 'tree': entries})
-          summary = {'baseline_sha': base, 'parent_sha': head, 'tree_sha': tree['sha'],
-                     'files': entries, 'branch_moved': False}
-          Path('validation-spec/verified-tree.json').write_text(json.dumps(summary, indent=2))
-          print(json.dumps({'tree_sha': tree['sha'], 'verified_files': len(entries), 'branch_moved': False}))
-          PY
+          set -euo pipefail
+          mkdir -p validation
+          python -m compileall -q src
+          python -m pytest -q --junitxml=validation/candidate.xml 2>&1 | tee validation/candidate.log
+      - name: MCP real stdio smoke without credentials or model calls
+        run: python scripts/mcp_smoke.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: spec-v4-reviewed-tree
-          path: validation-spec
-          retention-days: 1
+          name: source-layout-full-suite-results
+          path: validation
+          retention-days: 7
+
+  web:
+    name: Web contract, tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements/web.txt
+          npm ci --prefix web
+      - name: Verify unchanged schema and frontend
+        run: |
+          python scripts/export_web_schema.py
+          npm run types --prefix web
+          git diff --exit-code -- web/openapi.json web/src/api/generated.ts
+          node --experimental-strip-types --test web/tests/*.test.mjs
+          npm run build --prefix web
+
+  web-package:
+    name: Windows Web and MCP package smoke
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install headless build dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Build native adapters without starting GX or accessing PLCs
+        shell: pwsh
+        run: |
+          & ./tools/build_simulator_gateway.ps1 -OutputDirectory "$env:RUNNER_TEMP/gx-simulator-gateway"
+          & ./tools/build_hardware_reader.ps1 -OutputDirectory "$env:RUNNER_TEMP/gx-hardware-reader"
+      - name: Build the Web workbench and stdio MCP launcher
+        shell: pwsh
+        run: |
+          $python = (Get-Command python).Source
+          & ./scripts/build_web_package.ps1 -Python $python -GatewayDirectory "$env:RUNNER_TEMP/gx-simulator-gateway"
+      - name: Verify packaged SDK without a model call
+        shell: pwsh
+        run: |
+          & ./dist/GXWorks-Agent-Web/GXWorks-Agent-Web.exe --self-test-openai-sdk
+          if ($LASTEXITCODE -ne 0) { throw "Packaged SDK smoke failed: $LASTEXITCODE" }
+      - name: Verify package startup, resources and Qt exclusion
+        run: python scripts/web_package_smoke.py
+      - name: Verify Windows source startup contracts
+        run: python -m pytest -q tests/test_web_startup.py tests/test_web_source_entrypoints.py tests/test_mcp_product_launcher.py

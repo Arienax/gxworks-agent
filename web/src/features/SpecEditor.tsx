@@ -99,10 +99,14 @@ export function SpecEditor({
         <summary>{t("所选方案的实现建议（不作为硬约束）")}</summary>
         <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify(draft.selected_approach.implementation_preferences, null, 2)}</pre>
       </details>}
-      {!!draft.engineering_context && <details>
-        <summary>{t("原始需求与检索来源记录")}</summary>
-        <p>{t("记录用于核对来源，不代表方案已验证；原始需求、方案建议和硬契约分别保留。")}</p>
-        <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify(draft.engineering_context, null, 2)}</pre>
+      {!!draft.intent_context && <details>
+        <summary>{t("原始用户意图")}</summary>
+        <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify(draft.intent_context, null, 2)}</pre>
+      </details>}
+      {!!draft.decision_receipt && <details>
+        <summary>{t("确认前分析记录（仅审计）")}</summary>
+        <p>{t("分析与检索记录单独保存，不进入生成规格；可从任务诊断 ZIP 追溯。")}</p>
+        <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify(draft.decision_receipt, null, 2)}</pre>
       </details>}
       {parameters.length > 0 && <div className="section-label">{t("确认问题")}</div>}
       {parameters.map((p, i) => (

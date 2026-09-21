@@ -522,6 +522,11 @@ def export_diagnostics(state_dir, job):
     job_record = runtime_trace.sanitize(private_job or job)
     snapshot = private_job.get("snapshot") if isinstance(private_job, dict) else None
     project_id = (snapshot or {}).get("project_id") if isinstance(snapshot, dict) else job.get("project_id")
+    frozen_project = snapshot.get("project") if isinstance(snapshot, dict) else None
+    receipt_id = frozen_project.get("confirmed_decision_receipt_id") if isinstance(frozen_project, dict) else None
+    history = frozen_project.get("decision_history") if isinstance(frozen_project, dict) else None
+    decision_receipt = history.get(receipt_id) if isinstance(history, dict) and receipt_id else None
+    decision_receipt = runtime_trace.sanitize(decision_receipt) if isinstance(decision_receipt, dict) else None
     transcript = runtime_trace.load_transcript(state_dir, job_id)
     operator_actions = runtime_trace.load_operator_actions(
         state_dir, project_id=project_id, job_id=job_id
@@ -542,7 +547,9 @@ def export_diagnostics(state_dir, job):
             'transcript_count':len(transcript), 'operator_action_count':len(operator_actions),
             'content_included':bool(job_record or transcript or operator_actions), 'keys_included':False,
             'validation_values_included':any(contains_observed_opcode(item) for item in records),
-            'captured_after_upgrade_only':True}
+            'captured_after_upgrade_only':True,
+            'decision_receipt_id':receipt_id,
+            'decision_receipt_status':'available' if decision_receipt else 'not_recorded'}
     from application.job_errors import public_error_details
     meta['error_details'] = public_error_details(job.get('error_details'))
     meta['error_code'] = _identifier(job.get('error_code') or 'none')
@@ -575,6 +582,7 @@ def export_diagnostics(state_dir, job):
              'job.json: persisted job snapshot, status, result and event timeline, with credentials/binaries redacted.\n'
              'transcript.jsonl: actual model messages, reasoning, final content, tool calls, request options and usage.\n'
              'operator_actions.jsonl: relevant specification/job actions recorded for this project/job.\n'
+             'decision_receipt.json: when available, the historical analysis/confirmation audit bound to this job.\n'
              'API credentials, Authorization values and image/binary bodies are not included.\n'
              'Model/user text is included because this export is explicitly operator-only and downloaded on demand.\n'
              'Output is not uploaded automatically. Inspect before sharing.\n')
@@ -585,5 +593,7 @@ def export_diagnostics(state_dir, job):
         archive.writestr('job.json', json.dumps(job_record, ensure_ascii=False, indent=2) + '\n')
         archive.writestr('transcript.jsonl', ''.join(json.dumps(r,ensure_ascii=False)+'\n' for r in transcript))
         archive.writestr('operator_actions.jsonl', ''.join(json.dumps(r,ensure_ascii=False)+'\n' for r in operator_actions))
+        if decision_receipt is not None:
+            archive.writestr('decision_receipt.json', json.dumps(decision_receipt, ensure_ascii=False, indent=2) + '\n')
         archive.writestr('README.txt', guide)
     return target.getvalue()

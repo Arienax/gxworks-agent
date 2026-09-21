@@ -20,7 +20,7 @@ approaches 每项含 approach_id、name、description、pros、cons、generation
 用户固定的指令、完整操作数、地址、触点极性、同步触发、执行顺序和参数必须保留，但不要在多个字段重复叙述；原始用户请求由应用另行保留。
 generation_guide 不是教程或需求复述字段。只记录所选方案中无法由原始请求、generation_contract、parameters、io_table、execution_semantics 还原的方案特有生成语义；没有这种差异就用空字符串。
 required/forbidden opcodes/devices 只记录用户明确必用/禁用，不把检索或模型建议变成硬约束。required_structures/forbidden_structures 可记录本方案明确承诺的架构结构，供用户确认后约束生成；无依据时留空。OUT 对应生成协议 COIL/TIMER/COUNTER，不是 APP_INSTR OUT。不得虚构约束来区分方案。
-引用检索事实时保留 source ID；来源元数据由应用记录，不生成 engineering_context。
+引用检索事实时保留 source ID；来源元数据由应用记录，不生成 engineering_context、intent_context 或 decision_receipt。
 
 # Missing-info minimality
 仅询问当前实现确实缺失且会改变程序的参数，不重复问已给答案，不为讨论其他架构增设问题。每项含稳定 id、question、required、options 字符串数组；有候选则列出并允许自定义，default 不是已确认答案。从属项用 required_when（parameter 引用控制问题 id；equals/contains_any/not_contains）。缺失实际接线、极性、数值等必要输入仍为 required；同一物理点的地址和极性可在一个问题中确认时不要拆成两个问题。普通内部地址分配与 PLC 铭牌、固件、通用模块清单不设必填。不得凭空新增硬件、停止或急停输入。PLC 常识、常规扫描行为和“通常如此”的默认做法不是 assumptions；非必要不确定性才放 assumptions。

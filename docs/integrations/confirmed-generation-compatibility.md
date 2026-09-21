@@ -107,3 +107,91 @@ named in the workflow; they are not counted as passing. Final published CI
 results are recorded in PR #13 after the branch is updated.
 
 Qt retirement (2026-09-21): the historical three-worker exclusion above no longer applies. Those IR integration tests now run against `GenerationWorkflow`; the workflow contains no Qt-specific deselection. Earlier CI numbers are historical evidence, not results for the retired client.
+
+
+## ConfirmedSpec v4 and DecisionReceipt v1
+
+Confirmation is now a lifecycle boundary rather than an archive copy. The
+existing review form may hold `approaches` and an application-owned
+`decision_receipt` while awaiting the user's choice. On save, Core constructs a
+positive projection of current engineering fields with `schema_version: 4`.
+The persisted spec has one `selected_approach`, actual parameters, I/O rows and
+binding identities, hardware/execution facts, explicit deletion markers and
+`intent_context.requests`. It does not contain `approaches`,
+`engineering_context`, proposal records, retrieval manifests or a receipt body.
+Unknown top-level candidate/debug additions do not become engineering facts.
+Text inside a legitimate user requirement is not removed merely because it
+contains a word such as "proposals" or an old instruction name.
+
+`plc/specification/provenance.py` owns this pure split. The existing
+`SessionStore.set_confirmed_spec` writes both sides in one atomic project JSON
+replacement. The project's `decision_history` is indexed by content-addressed
+`decision-<sha256>` IDs, and `confirmed_decision_receipt_id` points to the audit
+for the current spec. Receipts retain the candidate snapshots, the evidence
+actually supplied to Agent A, and the confirmation's selected/spec hashes.
+Subsequent confirmations refer to the prior receipt instead of copying its
+retrieval records. A repeated unchanged save reuses its receipt.
+
+Agent A cannot authenticate its own origin by emitting `intent_context` or
+`decision_receipt`; the normalizer drops these model-supplied fields and attaches
+application-captured intent and evidence. `attach_analysis_evidence` no longer
+performs a second retrieval for every completed candidate. That former lookup
+was not evidence used to produce the candidate. Old candidate lookups remain
+available as historical audit, never promoted to present evidence or proof of
+behavior.
+
+### Runtime and generation boundaries
+
+The compact generator, full-wire generation and MCP use the shared current-spec
+projection. Their context includes current intent plus only the evidence selected
+for the present generation/edit task. Reanalysis sees current facts and intent,
+not the preceding decision archive. Generation handoff v2 carries hashes, request
+IDs, an optional `decision_receipt_id`, and the current evidence manifest; it does
+not inline old analysis/candidate receipts. A version-bound MCP operation uses
+that version's receipt, not the active project's newer receipt. Missing receipts
+are trace gaps, not new generation/confirmation gates.
+
+Historical audit exclusion is unconditional; a large context window is not a
+reason to replay it. `ContextCompiler` no longer conditionally trims historical
+proposal records only under high token pressure. Existing token budgeting,
+request/evidence deduplication and explicit absorbed-request handling remain.
+The compression report describes actual projection/deduplication, independently
+of the reported context pressure. Unknown request semantics are not deleted to
+meet a budget, and the user's reasoning settings are unchanged.
+
+### Legacy project migration and immutable versions
+
+Legacy current specifications are split on the storage read boundary into an
+in-memory v4 view and a v1 migration receipt containing the entire original JSON
+value and its original hash. Reads, including standalone MCP/read-only Web, do
+not write files. Writable Web startup persists the split once while holding the
+existing workspace writer lock; per-project atomic replacement changes only the
+current spec, receipt history and receipt pointer. A failed replacement leaves
+the previous project intact and is reported in the startup migration result.
+Later explicit saves also persist an already prepared in-memory split.
+
+Project timestamps, saved version snapshots/hashes, `version.json`, IR, SVG and
+CSV artifacts are not rewritten by this migration. An unknown future schema
+version is not silently downgraded by the read migrator. Legacy optimistic hashes
+remain acceptable only when an intact migration receipt proves their exact
+mapping to the unchanged current v4 spec; genuine user edits still conflict.
+
+Delivery reads the receipt ID bound to the selected saved version. Diagnostic
+ZIP export includes `decision_receipt.json` when the frozen job snapshot contains
+that receipt; it never substitutes the current project's latest audit. The ZIP
+still includes detailed operator/model text with existing credential redaction,
+so review it before sharing. A legacy task without this capture reports
+`not_recorded`; migration does not fabricate old model transcripts.
+
+### Regression ownership
+
+Lifecycle and source-boundary cases live in `tests/test_intent_evidence_handoff.py`,
+compiler isolation in `tests/test_context_compiler.py`, and actual HTTP/job/ZIP
+coverage in `tests/test_runtime_diagnostics_web.py`. The end-to-end fixture runs
+analysis with three candidates, confirms the second, generates once, then changes
+the current spec before exporting the older task. It checks actual provider
+messages, saved facts, receipt bindings and the exported archive. Other cases
+cover read-only migration, atomic failure, immutability, stale hashes,
+same-ID reanalysis, historical MCP binding and absent/tampered receipts. All
+providers in these tests are offline fixtures; no live model or physical PLC
+acceptance is implied.

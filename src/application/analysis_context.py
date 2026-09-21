@@ -1,7 +1,6 @@
 """One analysis prompt assembler shared by streaming and non-streaming calls."""
 from __future__ import annotations
 
-import copy
 import json
 import re
 from collections.abc import Mapping
@@ -14,7 +13,6 @@ from application.prompts import (
 )
 
 _DEVICE = re.compile(r"(?<![A-Za-z0-9_])(?:SM|SD|[XYMDTCSVZ])\d+(?![A-Za-z0-9_])", re.I)
-_PRIVATE = {"reasoning_content", "raw_response", "raw_attempts", "_provider_reasoning", "_provider_fields"}
 
 # Transport metadata for the shared Core binding, not an inferred PLC rule.
 _IO_BINDING_PROMPT = """# I/O purpose metadata
@@ -70,12 +68,8 @@ def _baseline_for_analysis(value):
     """Remove presentation/retrieval duplication, not engineering decisions."""
     if not isinstance(value, Mapping):
         return str(value or "").strip()
-    baseline = {key: copy.deepcopy(child) for key, child in value.items()
-                if key not in _PRIVATE | {"approaches", "control_type", "flowchart_steps", "format_diagnostics"} and not str(key).startswith("_")}
-    context = baseline.get("engineering_context")
-    if isinstance(context, dict):
-        context.pop("proposals", None)
-        context.pop("analysis_evidence", None)
+    from plc.specification.provenance import confirmed_spec_fields
+    baseline = confirmed_spec_fields(value)
     return json.dumps(baseline, ensure_ascii=False, separators=(",", ":"))
 
 

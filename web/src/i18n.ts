@@ -1,5 +1,8 @@
 export type Locale = "zh-CN" | "en" | "ja";
 const words: Record<string, [string, string]> = {
+  "原始用户意图": ["Original user intent", "元のユーザー要件"],
+  "确认前分析记录（仅审计）": ["Pre-confirmation analysis (audit only)", "確認前の分析記録（監査用）"],
+  "分析与检索记录单独保存，不进入生成规格；可从任务诊断 ZIP 追溯。": ["Analysis and retrieval records are stored separately, excluded from generation specifications, and traceable in the job diagnostics ZIP.", "分析・検索記録は別に保存され、生成仕様には含まれません。タスク診断 ZIP で追跡できます。"],
   "获取模型列表": ["Fetch model list", "モデル一覧を取得"],
   "快速能力检测": ["Quick capability check", "能力の簡易確認"],
   "深度参数扫描": ["Deep parameter scan", "パラメーター詳細スキャン"],

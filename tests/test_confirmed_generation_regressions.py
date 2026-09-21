@@ -177,7 +177,8 @@ def test_agent_b_prompt_is_confirmed_spec_scoped_not_generic_model_dump(monkeypa
     }
     prompt = _build_agent_b_prompt(projected, "FX3U")
 
-    assert json.dumps(projected, ensure_ascii=False, separators=(",", ":")) in prompt
+    actual, _ = json.JSONDecoder().raw_decode(prompt.split("# Confirmed project specification\n", 1)[1])
+    assert actual == {**projected, "schema_version": 4}
     assert "FX3U-4DA" not in prompt
     assert "FX3U-2HSY-ADP" not in prompt
     assert "Machine-readable output schema" not in prompt
@@ -191,7 +192,7 @@ def test_agent_a_cannot_drop_verbatim_classification_or_promote_guessed_contract
     )
     draft = build_review_draft(normalized)
 
-    assert draft["engineering_context"]["requests"][0]["text"] == requirement
+    assert draft["intent_context"]["requests"][0]["text"] == requirement
     assert "【当前用户明确要求（逐字保留）】" not in draft["summary"]
 
     contract = draft["selected_approach"]["generation_contract"]
@@ -220,7 +221,8 @@ def test_agent_b_receives_structured_approach_contract_but_not_agent_a_prose():
     assert selected["generation_guide"] == draft["selected_approach"]["generation_guide"]
     assert selected["implementation_preferences"]["enforce"] is False
     assert "reasoning_content" not in selected
-    assert projected["engineering_context"]["proposals"][0]["source"] == "model_proposal"
+    assert "engineering_context" not in projected
+    assert "decision_receipt" not in projected
 
 
 def test_agent_a_low_level_opcode_survives_only_when_user_explicitly_names_it():
