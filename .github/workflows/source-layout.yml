@@ -1,29 +1,93 @@
 name: Source Layout Validation
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
     paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'evals/**'
+      - 'tools/**'
+      - 'packaging/**'
+      - 'resources/**'
+      - 'research/**'
+      - 'requirements.txt'
+      - 'requirements/**'
       - '.github/workflows/source-layout.yml'
-      - '.github/context-components.*'
+  workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
-  verify-components:
-    if: github.event.pull_request.head.repo.full_name == 'Arienax/gxworks-agent' && github.event.pull_request.head.ref == 'fix/prompt-cleanup-io-binding-20260921'
+  regression:
+    name: Full headless suite and MCP smoke
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    permissions:
-      contents: write
-    env:
-      HAYSTACK_TELEMETRY_ENABLED: 'false'
-      PROMPTFOO_DISABLE_TELEMETRY: '1'
-      PROMPTFOO_DISABLE_UPDATE: '1'
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 20
+          persist-credentials: false
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install headless test dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Compile and run the complete suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p validation
+          python -m compileall -q src
+          python -m pytest -q --junitxml=validation/candidate.xml 2>&1 | tee validation/candidate.log
+      - name: MCP real stdio smoke without credentials or model calls
+        run: python scripts/mcp_smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: source-layout-full-suite-results
+          path: validation
+          retention-days: 7
+
+  web:
+    name: Web contract, tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements/web.txt
+          npm ci --prefix web
+      - name: Verify unchanged schema and frontend
+        run: |
+          python scripts/export_web_schema.py
+          npm run types --prefix web
+          git diff --exit-code -- web/openapi.json web/src/api/generated.ts
+          node --experimental-strip-types --test web/tests/*.test.mjs
+          npm run build --prefix web
+
+  web-package:
+    name: Windows Web and MCP package smoke
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
           persist-credentials: false
           lfs: true
       - uses: actions/setup-python@v5
@@ -32,108 +96,68 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Reconstruct exact reviewed source
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install headless build dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Build native adapters without starting GX or accessing PLCs
+        shell: pwsh
         run: |
-          python - <<'PY'
-          import difflib, hashlib, json, lzma, subprocess
-          from pathlib import Path
-          base = '293ce90a87b2721078f8e61d19fa74dd07e728b8'
-          raw = lzma.decompress(b''.join(Path(f'.github/context-components.part{i}').read_bytes() for i in range(4)))
-          assert hashlib.sha256(raw).hexdigest() == '31736822708f83a82310bc4328f67b26d2783e68e968235db35300eb4c366f84'
-          operations = json.loads(raw)
-          assert len(operations) == 25
-          def blob(raw):
-              return hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
-          def baseline(name):
-              found = subprocess.run(['git','show',base + ':' + name], capture_output=True)
-              return found.stdout if found.returncode == 0 else None
-          def apply(name, change, original):
-              path = Path(name)
-              assert not path.is_absolute() and '..' not in path.parts and not path.is_symlink()
-              assert path.resolve().is_relative_to(Path.cwd())
-              assert (blob(original) if original is not None else None) == change['old_sha'], name
-              lines = (original or b'').decode('utf-8').splitlines(keepends=True)
-              right = len(lines)
-              for start, end, replacement in reversed(change['changes']):
-                  assert 0 <= start <= end <= right
-                  lines[start:end] = [replacement]
-                  right = start
-              new = ''.join(lines).encode('utf-8')
-              assert blob(new) == change['new_sha'], name
-              path.parent.mkdir(parents=True, exist_ok=True)
-              path.write_bytes(new)
-          for name, change in operations.items():
-              apply(name, change, baseline(name))
-          fixes = Path('.github/context-components.boundary.json').read_bytes()
-          assert hashlib.sha256(fixes).hexdigest() == '624f88fd80d304fb633fb4ec04eaf79905417ebbc61e947ae720fb3a1b7a5b89'
-          for name, change in json.loads(fixes).items():
-              apply(name, change, Path(name).read_bytes())
-              original = baseline(name)
-              new = Path(name).read_bytes()
-              a, b = (original or b'').decode().splitlines(keepends=True), new.decode().splitlines(keepends=True)
-              changes = [[i,j,''.join(b[k:l])] for op,i,j,k,l in difflib.SequenceMatcher(a=a,b=b,autojunk=False).get_opcodes() if op != 'equal']
-              operations[name] = {'old_sha':blob(original) if original is not None else None,'new_sha':blob(new),'changes':changes}
-          Path('validation-context').mkdir(exist_ok=True)
-          Path('validation-context/operations.json').write_text(json.dumps(operations,ensure_ascii=False),encoding='utf-8')
-          subprocess.run(['git', 'diff', '--check'], check=True)
-          PY
-      - name: Install pinned runtime and offline evaluation tools
+          & ./tools/build_simulator_gateway.ps1 -OutputDirectory "$env:RUNNER_TEMP/gx-simulator-gateway"
+          & ./tools/build_hardware_reader.ps1 -OutputDirectory "$env:RUNNER_TEMP/gx-hardware-reader"
+      - name: Build the Web workbench and stdio MCP launcher
+        shell: pwsh
+        run: |
+          $python = (Get-Command python).Source
+          & ./scripts/build_web_package.ps1 -Python $python -GatewayDirectory "$env:RUNNER_TEMP/gx-simulator-gateway"
+      - name: Verify packaged SDK without a model call
+        shell: pwsh
+        run: |
+          & ./dist/GXWorks-Agent-Web/GXWorks-Agent-Web.exe --self-test-openai-sdk
+          if ($LASTEXITCODE -ne 0) { throw "Packaged SDK smoke failed: $LASTEXITCODE" }
+      - name: Verify package startup, resources and Qt exclusion
+        run: python scripts/web_package_smoke.py
+      - name: Verify Windows source startup contracts
+        run: python -m pytest -q tests/test_web_startup.py tests/test_web_source_entrypoints.py tests/test_mcp_product_launcher.py
+
+  context-replay:
+    name: Typed context and offline promptfoo replay
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HAYSTACK_TELEMETRY_ENABLED: 'false'
+      PROMPTFOO_DISABLE_TELEMETRY: '1'
+      PROMPTFOO_DISABLE_UPDATE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned context/evaluation tools
         run: |
           python -m pip install -r requirements.txt
           npm install --prefix "$RUNNER_TEMP/context-eval" --no-audit --no-fund promptfoo@0.123.1
-      - name: Verify typed identity and real Haystack retrieval
+      - name: Test real typed views and Haystack retrieval
         run: >-
           python -m pytest -q
           tests/test_optional_hardware_parameters.py
           tests/test_analysis_design_rag.py
           tests/test_agent_b_measurement.py
           tests/test_intent_evidence_handoff.py
-          tests/test_spec_choice_metadata.py
-          tests/test_context_compiler.py
-          tests/test_shared_generation_context.py
-          tests/test_architecture_boundaries.py
-          tests/test_source_layout.py
           --junitxml=validation-context/targeted.xml
-      - name: Replay real application calls without model or grading APIs
+      - name: Replay the real call path with recorded providers (no network)
         run: |
           python scripts/context_replay.py --output validation-context/replay.json
           "$RUNNER_TEMP/context-eval/node_modules/.bin/promptfoo" eval -c evals/context-replay/promptfooconfig.yaml --no-cache -o validation-context/promptfoo.json
-      - name: Upload verified source objects without moving any branch
-        env:
-          GH_OBJECT_TOKEN: ${{ github.token }}
-        run: |
-          python - <<'PY'
-          import hashlib, json, os, subprocess, urllib.request
-          from pathlib import Path
-          root = 'https://api.github.com/repos/Arienax/gxworks-agent'
-          def api(path, payload=None):
-              request = urllib.request.Request(root + path,
-                  data=json.dumps(payload).encode() if payload is not None else None,
-                  headers={'Accept':'application/vnd.github+json','Authorization':'Bearer ' + os.environ['GH_OBJECT_TOKEN'],
-                           'X-GitHub-Api-Version':'2022-11-28','Content-Type':'application/json'})
-              with urllib.request.urlopen(request, timeout=60) as response:
-                  return json.load(response)
-          head = subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
-          assert api('/git/ref/heads/fix/prompt-cleanup-io-binding-20260921')['object']['sha'] == head
-          operations = json.loads(Path('validation-context/operations.json').read_text())
-          entries = []
-          for name, change in operations.items():
-              if name == '.github/workflows/source-layout.yml':
-                  continue
-              raw = Path(name).read_bytes()
-              local = hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
-              assert local == change['new_sha'], name
-              result = api('/git/blobs', {'content':raw.decode('utf-8'),'encoding':'utf-8'})
-              assert result['sha'] == local, name
-              entries.append({'path':name,'mode':'100644','type':'blob','sha':local})
-          Path('validation-context/verified-blobs.json').write_text(json.dumps({
-              'baseline_sha':'293ce90a87b2721078f8e61d19fa74dd07e728b8',
-              'parent_sha':head,'files':entries,'branch_moved':False},indent=2))
-          print(json.dumps({'verified_files':len(entries),'branch_moved':False}))
-          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: context-components-reviewed-source
+          name: context-components-offline-results
           path: validation-context
           retention-days: 7

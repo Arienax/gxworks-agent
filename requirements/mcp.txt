@@ -2,3 +2,4 @@
 # Official SDK; keep major upgrades explicit because the server API can change.
 mcp==2.1.1
 jsonschema>=4.18,<5
+-r context.txt

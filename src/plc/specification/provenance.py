@@ -19,7 +19,7 @@ DECISION_RECEIPT_VERSION = 1
 # Persisted engineering state, including the binding identities/tombstones needed
 # for safe reconfirmation. Transport/UI and analysis history are separate owners.
 CONFIRMED_SPEC_FIELDS = frozenset({
-    "schema_version", "plc_model", "summary", "selected_approach", "parameters",
+    "schema_version", "plc_model", "summary", "summary_provenance", "selected_approach", "parameters",
     "io_table", "io_bindings", "user_notes", "hardware_profile", "hardware_context",
     "hardware_requirements", "hardware_intent", "execution_semantics", "timing",
     "scan_budget_ms", "scan_warning_ms", "io_user_overrides",

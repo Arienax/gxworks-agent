@@ -129,3 +129,51 @@ def test_transcript_metering_and_custom_headers_remain_credential_redacted(tmp_p
     row = json.loads((tmp_path / "diagnostics/job_fixture.transcript.jsonl").read_text())
     assert row["usage"]["reasoning_tokens"] == 12
     assert row["usage"]["raw_usage"]["completion_tokens_details"]["reasoning_tokens"] == 12
+
+
+@pytest.mark.parametrize("case_id", ["design-conveyor", "typed-parameter-identity", "user-edited-prose", "legacy-generation-view"])
+def test_offline_context_replay_uses_real_components_and_single_completions(case_id):
+    from scripts.context_replay import load_cases, run_case
+    case = next(row for row in load_cases() if row["case_id"] == case_id)
+    result = run_case(case, include_content=True)
+    assert result["passed"], result
+    assert result["real_model_calls"] == 0
+    assert result["provider_fixture_calls"] == (2 if "analysis" in case else 1)
+    assert result["live_latency_improvement"] == "not_measured"
+    spec = result["content"]["generation_spec"]
+    if case_id == "typed-parameter-identity":
+        params = {p["id"]: p for p in spec["parameters"]}
+        assert params["duration"]["value"] == 0 and type(params["duration"]["value"]) is int
+        assert params["enabled"]["value"] is False
+        assert params["transport_mode"]["semantic_key"] == "transport.mode"
+    if case_id == "legacy-generation-view":
+        assert spec["summary"] == case["confirmed_spec"]["summary"]
+        assert "note" not in spec["parameters"][0]
+
+
+def test_offline_replay_refuses_network_and_ambiguous_archives(tmp_path):
+    import socket
+    import zipfile
+    from scripts.context_replay import offline_environment, archive_case
+    with offline_environment() as attempts:
+        with pytest.raises(RuntimeError):
+            socket.create_connection(("provider.invalid", 443))
+    assert len(attempts) == 1
+    path = tmp_path / "diagnostic.zip"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("job.json", "{}")
+        archive.writestr("transcript.jsonl", "")
+    with pytest.raises(ValueError, match="confirmed specification"):
+        archive_case(path)
+
+
+def test_offline_archive_reader_never_uses_recorded_credentials_or_reconstructs_analysis(tmp_path):
+    import zipfile
+    from scripts.context_replay import archive_case
+    path = tmp_path / "diagnostic.zip"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("job.json", json.dumps({"snapshot": {"project": {"confirmed_spec": {"summary": "保留"}}, "api_key": "SECRET_DO_NOT_USE"}}))
+        archive.writestr("transcript.jsonl", json.dumps({"event": "model_response", "content": '{"r":[]}'}))
+    case = archive_case(path)
+    assert "SECRET_DO_NOT_USE" not in json.dumps(case)
+    assert "analysis" not in case and case["capture_scope"].startswith("generation_only")

@@ -292,8 +292,9 @@ def public_generation_specification(specification):
     model-free projection used by API and external-tool contracts.
     """
     from plc.generation_contract import generation_specification
+    from plc.specification.parameters import generation_parameter_view
 
-    normalized = copy.deepcopy(specification)
+    normalized = generation_parameter_view(specification)
     if isinstance(normalized, dict) and isinstance(normalized.get("selected_approach"), dict):
         selected = normalized["selected_approach"]
         contract = normalize_generation_contract(selected.get("generation_contract"), approach=selected)

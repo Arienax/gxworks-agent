@@ -506,3 +506,89 @@ def test_selected_vfd_approach_must_match_confirmed_control_method():
     assert result["errors"] == []
     assert any(item["code"] == "control_method_approach_conflict"
                and item.get("blocking") is False for item in result["warnings"])
+
+
+@pytest.mark.parametrize("name", [
+    "输送线是步进式还是连续运行？", "电机速度更新方式", "伺服计数值显示名称", "带驱动器字样的业务参数",
+])
+def test_parameter_names_never_bind_unrelated_hardware_fields(name):
+    from plc.hardware_profiles import build_hardware_profile, ensure_hardware_questions
+    raw = {"id": "transport_mode", "question": name, "value": "continuous",
+           "semantic_key": "transport.mode", "value_kind": "choice"}
+    normalized = ensure_hardware_questions({"missing_info": [raw]}, "FX3U")
+    assert normalized["missing_info"][0]["id"] == "transport_mode"
+    profile = build_hardware_profile({"parameters": [{**raw, "name": name}]}, "FX3U")
+    assert profile["motion_drive_model"] == ""
+    assert not profile.get("motion_speed")
+
+
+def test_explicit_parameter_identity_beats_legacy_id_and_exact_question_text():
+    from plc.hardware_profiles import QUESTION_IDS, parameter_values, _lookup
+    row = {"id": "motion_drive_model", "name": QUESTION_IDS["motion_drive_model"],
+           "semantic_key": "transport.mode", "value_kind": "choice", "value": "continuous"}
+    assert _lookup(parameter_values({"parameters": [row]})[0], "motion_drive_model") == ""
+    row.update(id="arbitrary_stable_id", semantic_key="hardware.motion_drive_model", value_kind="text", value="fixture-model")
+    assert _lookup(parameter_values({"parameters": [row]})[0], "motion_drive_model") == "fixture-model"
+    second = {**row, "id": "second", "value": "different-model"}
+    assert _lookup(parameter_values({"parameters": [row, second]})[0], "motion_drive_model") == ""
+
+
+@pytest.mark.parametrize("kind,value,expected", [
+    ("number", 0, 0), ("boolean", False, False), ("number", "12.5", 12.5),
+    ("boolean", "false", False), ("boolean", "true", True),
+])
+def test_typed_form_values_keep_identity_through_storage_and_generation(kind, value, expected):
+    from plc.specification.confirmed import canonicalize_confirmed_spec
+    from application.generation_support import public_generation_specification as generation_specification
+    row = {"id": "local", "name": "业务参数", "value_kind": kind, "value": value,
+           "semantic_key": "tracking.value", "unit": "s" if kind == "number" else None}
+    result = canonicalize_confirmed_spec({"parameters": [row], "io_table": []})
+    wire = generation_specification(result)["parameters"][0]
+    assert wire["value"] == expected and type(wire["value"]) is type(expected)
+    assert wire["semantic_key"] == "tracking.value" and wire["value_kind"] == kind
+    assert canonicalize_confirmed_spec(result) == result
+
+
+@pytest.mark.parametrize("kind,value", [("number", True), ("boolean", 0), ("number", "5 seconds"), ("unsupported", "x")])
+def test_malformed_optional_type_keeps_answer_without_hardware_ownership(kind, value):
+    from plc.specification.parameters import generation_parameters, hardware_parameter_id
+    from plc.hardware_profiles import QUESTION_IDS
+    row = {"id": "motion_speed", "name": "速度", "semantic_key": "hardware.motion_speed",
+           "value_kind": kind, "value": value}
+    output = generation_parameters([row])[0]
+    assert output["value"] == value
+    assert "semantic_key" not in output and "value_kind" not in output
+    assert hardware_parameter_id(row, QUESTION_IDS) == ""
+
+
+def test_unanswered_typed_identity_has_no_invented_value_or_default():
+    from plc.specification.confirmed import build_review_draft, _merge_parameters
+    from plc.specification.parameters import hardware_parameter_id
+    from plc.hardware_profiles import QUESTION_IDS
+    raw = {"id": "a", "question": "延时", "semantic_key": "tracking.delay", "value_kind": "number"}
+    draft = build_review_draft({"missing_info": [raw]})
+    row = draft["parameters"][0]
+    assert row["value"] == "" and row["value_kind"] == "number" and row["semantic_key"] == "tracking.delay"
+    answered = {**row, "value": 0}
+    changed = {**row, "value": 0, "semantic_key": "hardware.motion_speed"}
+    assert _merge_parameters([answered], [changed])[0]["semantic_key"] == "tracking.delay"
+    assert _merge_parameters([answered], [{**row, "value": ""}])[0]["value"] == 0
+    assert hardware_parameter_id({**raw, "semantic_key": "hardware.motion_speed"}, QUESTION_IDS) == "motion_speed"
+
+
+def test_review_only_notes_and_overviews_are_not_runtime_facts_but_user_edits_are():
+    from plc.specification.confirmed import build_review_draft, canonicalize_confirmed_spec
+    from application.generation_support import public_generation_specification as generation_specification
+    draft = build_review_draft({"summary": "candidate A or B",
+                               "missing_info": [{"id": "mode", "question": "方式", "options": ["slot", "shift"]}]})
+    draft["parameters"][0]["value"] = "slot"
+    stored = canonicalize_confirmed_spec(draft)
+    wire = generation_specification(stored)
+    assert "summary" not in wire
+    assert "note" not in wire["parameters"][0] and "options" not in wire["parameters"][0]
+    assert stored["summary"] == "candidate A or B" and stored["parameters"][0]["options"] == ["slot", "shift"]
+    stored["summary"] = "user business term: analysis_evidence"
+    stored["parameters"][0]["note"] = "keep this user constraint"
+    wire = generation_specification(stored)
+    assert wire["summary"] == stored["summary"]
+    assert wire["parameters"][0]["note"] == "keep this user constraint"

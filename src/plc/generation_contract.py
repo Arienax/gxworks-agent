@@ -277,7 +277,7 @@ _SPEC_FIELDS = {
         "generation_contract": _CONTRACT_FIELDS,
         "implementation_preferences": _CONTRACT_FIELDS,
     },
-    "parameters": [dict.fromkeys(("id", "name", "value", "note", "source"))],
+    "parameters": [dict.fromkeys(("id", "name", "value", "note", "source", "semantic_key", "value_kind", "unit"))],
     "io_table": [dict.fromkeys(("address", "kind", "label", "description", "source"))],
     "io_bindings": [dict.fromkeys(("binding_id", "role", "kind", "address", "source_parameter_id",
                                   "name", "active_level", "inactive_level", "label"))],

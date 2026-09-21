@@ -3,6 +3,7 @@ import difflib
 import re
 
 from plc.device_identity import canonical_device
+from plc.specification.parameters import parameter_metadata, parameter_value, text_origin
 from plc.specification.bindings import (
     bind_answers,
     bind_known_question_rows,
@@ -985,7 +986,7 @@ def _suggested_io_to_table(suggested_io):
 
 def _parameter_choice_metadata(item):
     """Keep choices separate from prose and from the user's confirmed value."""
-    metadata = {}
+    metadata = parameter_metadata(item)
     if isinstance(item.get("io_binding"), dict):
         hint = binding_hint(item)
         if hint is not None:
@@ -1023,8 +1024,10 @@ def _missing_info_to_parameters(missing_info):
             "source": str(item.get("source", "")).strip() or "analysis",
             "required": bool(item.get("required", True)),
             "note": " / ".join(notes),
+            "note_provenance": text_origin(" / ".join(notes), "review_choices"),
             "options": options,
         }
+        parameter.update({k: v for k, v in parameter_metadata(item).items() if k != "note_provenance"})
         if isinstance(item.get("io_binding"), dict):
             hint = binding_hint(item)
             if hint is not None:
@@ -1121,7 +1124,7 @@ def _merge_parameters(base_parameters, incoming_parameters):
         clean = {
             "id": str(item.get("id", "")).strip(),
             "name": name,
-            "value": str(item.get("value", "")).strip(),
+            "value": parameter_value(item),
             "source": str(item.get("source", "")).strip() or "analysis",
             "required": bool(item.get("required", False)),
             "note": str(item.get("note", "")).strip(),
@@ -1148,13 +1151,26 @@ def _merge_parameters(base_parameters, incoming_parameters):
             # If two persisted rows already conflict, retain the first
             # confirmed value instead of silently letting list order change
             # the selected implementation.
-            if existing.get("value") and (
-                not clean["value"] or clean["value"] != existing["value"]
+            answered = existing.get("value") not in (None, "")
+            if answered:
+                # Reanalysis cannot rebind an answered identity, even when the
+                # new prose happens to carry exactly the same scalar answer.
+                for key in ("semantic_key", "value_kind", "unit"):
+                    if key in existing:
+                        clean[key] = existing[key]
+            if answered and (
+                clean["value"] in (None, "") or clean["value"] != existing["value"]
             ):
                 clean["value"] = existing["value"]
                 clean["source"] = existing.get("source") or clean["source"]
                 clean["name"] = existing.get("name") or clean["name"]
                 clean["note"] = existing.get("note") or clean["note"]
+                if existing.get("note_provenance"):
+                    clean["note_provenance"] = copy.deepcopy(existing["note_provenance"])
+                # Stable identity belongs to the existing answered parameter.
+                for key in ("semantic_key", "value_kind", "unit"):
+                    if key in existing:
+                        clean[key] = existing[key]
                 clean["required"] = bool(existing.get("required", clean["required"]))
                 if isinstance(existing.get("required_when"), dict):
                     clean["required_when"] = copy.deepcopy(
@@ -1272,6 +1288,10 @@ def build_review_draft(analysis, previous_spec=None):
             or []
         ),
     }
+    if analysis.get("summary"):
+        draft["summary_provenance"] = text_origin(str(draft["summary"]), "analysis_overview")
+    elif previous.get("summary_provenance"):
+        draft["summary_provenance"] = copy.deepcopy(previous["summary_provenance"])
     if drop_prior_vfd:
         cleaned = ensure_hardware_questions({
             "hardware_intent": intent, "hardware_config": draft["hardware_context"],

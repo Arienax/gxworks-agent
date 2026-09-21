@@ -160,7 +160,7 @@ def test_fact_lane_is_not_starved_by_large_design_reference(monkeypatch):
     monkeypatch.setattr(retriever, "retrieve_knowledge", facts)
     monkeypatch.setattr(retriever, "retrieve_design_knowledge", lambda *a, **kw: [
         {"id": "large-design", "source": "curated", "manual_type": "curated_design", "text": "D" * 3000}])
-    context = retriever.build_knowledge_context("FX3U", task_type="analysis", top_k=4, char_budget=1500, include_design=True)
+    context = retriever.build_knowledge_context("FX3U MOV", task_type="analysis", top_k=4, char_budget=1500, include_design=True)
     assert 3 <= calls[0]["top_k"] <= retriever._MAX_TOP_K
     assert all(f"fact-{i}" in context for i in range(3))
     assert "large-design" not in context

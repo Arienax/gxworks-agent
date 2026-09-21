@@ -12,6 +12,7 @@ import copy
 import json
 import re
 from shared.i18n import tr
+from plc.specification.parameters import hardware_parameter_id
 
 
 HARDWARE_PROFILE_SCHEMA_VERSION = 1
@@ -284,7 +285,7 @@ def _confirmed_hardware_evidence(spec):
     for item in spec.get("parameters", []) or []:
         if not isinstance(item, dict) or not str(item.get("value") or "").strip():
             continue
-        identifier = str(item.get("id") or "")
+        identifier = hardware_parameter_id(item, QUESTION_IDS)
         value = str(item["value"])
         if value.strip().casefold() in {"none", "no", "无", "不需要", "不使用"}:
             continue
@@ -411,96 +412,9 @@ def _question_dependencies(item):
 
 
 def _infer_question_id(question):
-    text = str(question or "").casefold()
-    vfd_marked = any(item in text for item in ("变频器", "vfd", "inverter"))
-    motion_marked = any(
-        item in text
-        for item in (
-            "伺服",
-            "servo",
-            "步进",
-            "stepper",
-            "定位",
-            "运动控制",
-            "脉冲输出",
-            "回原点",
-            "原点回归",
-        )
-    )
-    drive_marked = vfd_marked or motion_marked or any(
-        item in text for item in ("驱动器", "驱动设备")
-    )
-
-    module_marked = any(
-        item in text
-        for item in ("扩展模块", "定位模块", "高速输出模块", "高速输出适配器", "适配器")
-    )
-    model_marked = any(
-        item in text for item in ("型号", "订货号", "清单", "安装", "版本", "完整")
-    )
-    if module_marked and any(
-        item in text for item in ("\u6570\u91cf", "\u51e0\u5757", "\u51e0\u4e2a", "\u53f0\u6570", "quantity")
-    ):
-        return "positioning_module_quantity"
-    if module_marked and model_marked and motion_marked:
-        return "positioning_module_model"
-    if motion_marked and any(
-        item in text
-        for item in ("控制方式", "给定方式", "接口方式", "指令方式", "通讯方式", "通信方式")
-    ):
-        return "motion_control_method"
-    if any(item in text for item in ("实现方式", "实现方案")) and motion_marked:
-        return "positioning_implementation"
-    if "脉冲输出" in text and any(item in text for item in ("轴", "端子", "输出点", "y点")):
-        return "pulse_output_axis"
-    if any(item in text for item in ("方向输出", "方向信号")) and any(
-        item in text for item in ("端子", "输出", "y点", "映射")
-    ):
-        return "direction_output"
-    if any(item in text for item in ("是否回原点", "是否需要回原点", "需要回原点吗")):
-        return "homing_required"
-    if any(item in text for item in ("回原点", "原点回归")) and any(
-        item in text for item in ("方式", "方法", "模式", "指令")
-    ):
-        return "homing_method"
-    if any(item in text for item in ("相对/绝对", "相对还是绝对", "定位方式", "绝对定位或相对定位")):
-        return "positioning_mode"
-    if any(item in text for item in ("目标位置", "目标脉冲", "脉冲数", "移动量", "移动距离")):
-        return "position_target"
-    if motion_marked and any(item in text for item in ("速度", "频率", "运行频率")):
-        return "motion_speed"
-    if vfd_marked and any(
-        item in text
-        for item in ("控制方式", "给定方式", "频率给定", "通讯方式", "通信方式")
-    ):
-        return "control_method"
-    if any(item in text for item in ("cpu", "plc")) and any(
-        item in text for item in ("型号", "订货号", "机型", "铭牌", "输出后缀")
-    ):
-        return "cpu_full_model"
-    if any(item in text for item in ("输出类型", "输出形式", "晶体管输出", "继电器输出")) and any(
-        item in text for item in ("plc", "cpu", "基本单元")
-    ):
-        return "output_type"
-    if any(item in text for item in ("固件", "硬件版本", "cpu版本")):
-        return "firmware"
-    if module_marked and model_marked:
-        return "modules"
-    if motion_marked and any(item in text for item in ("型号", "订货号", "品牌", "铭牌")):
-        return "motion_drive_model"
-    if drive_marked and any(item in text for item in ("型号", "订货号", "品牌", "铭牌")):
-        return "drive_model"
-    if motion_marked and any(
-        item in text
-        for item in ("端子", "信号映射", "接线", "站号", "波特率", "寄存器")
-    ):
-        return "motion_wiring_mapping"
-    if drive_marked and any(
-        item in text
-        for item in ("端子", "信号映射", "接线", "站号", "波特率", "寄存器")
-    ):
-        return "wiring_mapping"
-    return ""
+    # Compatibility for exact historical labels only. Wording is presentation,
+    # not a schema: “步进式还是连续” must not acquire a speed/model identity.
+    return hardware_parameter_id({"name": str(question or "")}, QUESTION_IDS)
 
 
 def _selected_vfd_method(text):
@@ -531,8 +445,8 @@ def is_automatic_hardware_question(item):
     """
     if not isinstance(item, dict):
         return False
-    explicit_id = str(item.get("id", "")).strip()
-    inferred_id = _infer_question_id(item.get("question") or item.get("name"))
+    explicit_id = hardware_parameter_id(item, QUESTION_IDS)
+    inferred_id = _infer_question_id(item.get("question") or item.get("name")) if "semantic_key" not in item else ""
     # Older/cached analyses often labelled every module question as ``modules``.
     # Prefer a design-specific inference so a positioning adapter or module is
     # not deleted merely because the model supplied the old generic ID.
@@ -572,15 +486,15 @@ def ensure_hardware_questions(analysis, plc_model="FX3U", user_text="", confirme
             if not isinstance(raw_item, dict) or is_automatic_hardware_question(raw_item):
                 continue
             item = copy.deepcopy(raw_item)
-            explicit_id = str(item.get("id", "")).strip()
-            text_id = _infer_question_id(item.get("question") or item.get("name"))
+            explicit_id = hardware_parameter_id(item, QUESTION_IDS)
+            text_id = _infer_question_id(item.get("question") or item.get("name")) if "semantic_key" not in item else ""
             inferred_id = (
                 text_id
                 if text_id and text_id not in RETIRED_PLC_PROFILE_QUESTION_IDS
                 else explicit_id or text_id
             )
             if inferred_id in QUESTION_IDS:
-                item["id"] = inferred_id
+                item.setdefault("id", inferred_id)
             is_vfd_question = inferred_id in {"control_method", "drive_model", "wiring_mapping"} or (
                 _flags_from_evidence(item.get("question", ""))["vfd"]
                 and not inferred_id.startswith("motion_"))
@@ -649,12 +563,17 @@ def ensure_hardware_questions(analysis, plc_model="FX3U", user_text="", confirme
 def parameter_values(spec):
     values = {}
     indices = {}
+    bound = {}
     for index, parameter in enumerate((spec or {}).get("parameters", []) or []):
         if not isinstance(parameter, dict):
             continue
         name = str(parameter.get("name", "")).strip()
         question_id = str(parameter.get("id", "")).strip()
         value = str(parameter.get("value", "")).strip()
+        field = hardware_parameter_id(parameter, QUESTION_IDS)
+        if field:
+            bound.setdefault(field, set()).add(value)
+            indices[f"@bound:{field}"] = index
         if question_id:
             values[f"@id:{question_id}"] = value
             indices[f"@id:{question_id}"] = index
@@ -662,56 +581,14 @@ def parameter_values(spec):
             continue
         values[name] = value
         indices[name] = index
+    # Conflicting owners remain ordinary parameters; do not choose whichever
+    # one happened to be last in a dictionary.
+    values.update({f"@bound:{field}": next(iter(answers)) for field, answers in bound.items() if len(answers) == 1})
     return values, indices
 
 
 def _lookup(values, question_id):
-    stable_key = f"@id:{question_id}"
-    if stable_key in values:
-        return values[stable_key]
-    exact = QUESTION_IDS[question_id]
-    if exact in values:
-        return values[exact]
-    markers = {
-        "cpu_full_model": ("cpu", "完整型号"),
-        "output_type": ("输出类型", "输出形式"),
-        "firmware": ("固件", "硬件版本"),
-        "modules": ("已安装扩展模块", "通用扩展模块", "模拟量模块"),
-        "drive_model": ("变频器", "驱动器"),
-        "control_method": ("控制方式", "给定方式", "频率给定"),
-        "wiring_mapping": ("端子", "信号映射", "接线"),
-        "motion_drive_model": ("伺服", "步进", "运动驱动器"),
-        "motion_control_method": ("伺服/步进驱动器控制方式", "脉冲+方向", "运动控制接口"),
-        "motion_wiring_mapping": ("伺服/步进驱动器端子", "脉冲/方向映射", "运动接线"),
-        "positioning_implementation": ("运动控制实现方式", "定位实现方式"),
-        "positioning_module_model": ("定位模块", "高速输出适配器", "fx3u-2hsy", "fx3u-1pg", "fx2n-10pg"),
-        "positioning_module_quantity": ("定位模块数量", "高速输出适配器数量", "几块适配器"),
-        "pulse_output_axis": ("脉冲输出轴",),
-        "direction_output": ("方向输出端子", "方向信号输出"),
-        "motion_speed": ("运动速度", "脉冲频率"),
-        "positioning_mode": ("定位方式", "相对/绝对"),
-        "position_target": ("目标位置", "目标脉冲", "脉冲数"),
-        "homing_required": ("是否需要回原点", "是否回原点"),
-        "homing_method": ("回原点方式", "原点回归方式"),
-    }[question_id]
-    vfd_ids = {"drive_model", "control_method", "wiring_mapping"}
-    motion_ids = {
-        "motion_drive_model",
-        "motion_control_method",
-        "motion_wiring_mapping",
-    }
-    for name, value in values.items():
-        if name.startswith("@id:"):
-            continue
-        lowered = name.casefold()
-        inferred = _infer_question_id(name)
-        if question_id in vfd_ids and inferred in motion_ids:
-            continue
-        if question_id in motion_ids and inferred in vfd_ids:
-            continue
-        if any(marker.casefold() in lowered for marker in markers):
-            return value
-    return ""
+    return values.get(f"@bound:{question_id}", "")
 
 
 def control_method_key(value):
@@ -792,7 +669,7 @@ def validate_hardware_spec(spec, plc_model=None):
 
     def path_for(question_id):
         name = QUESTION_IDS[question_id]
-        index = indices.get(f"@id:{question_id}", indices.get(name))
+        index = indices.get(f"@bound:{question_id}", indices.get(f"@id:{question_id}", indices.get(name)))
         return f"$.parameters[{index}].value" if index is not None else "$.parameters"
 
     def issue(code, message, question_id):

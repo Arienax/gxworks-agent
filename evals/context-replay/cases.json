@@ -1,0 +1,338 @@
+[
+  {
+    "case_id": "design-conveyor",
+    "mode": "design",
+    "plc_model": "FX3U",
+    "request": "Mitsubishi FX3U。一条输送线上最多同时存在8个工件，分类结果随输送节拍跟踪。请设计不同的数据跟踪实现，只讨论内部数据。",
+    "analysis": {
+      "summary": "比较位串移位、工位数组与工件槽位计数三种方案。",
+      "missing_info": [
+        {
+          "id": "transport_mode",
+          "question": "输送线是步进式还是连续运行？",
+          "required": true,
+          "options": [
+            "步进式",
+            "连续运行"
+          ],
+          "semantic_key": "transport.mode",
+          "value_kind": "choice"
+        }
+      ],
+      "suggested_io": {
+        "X0": "输送节拍",
+        "M10": "运行状态",
+        "D100": "剩余节拍",
+        "T0": "启动延时",
+        "C0": "产品计数"
+      },
+      "approaches": [
+        {
+          "approach_id": "bit_shift",
+          "name": "位串跟踪",
+          "description": "按位保存工件状态。",
+          "pros": "",
+          "cons": "",
+          "generation_guide": "",
+          "generation_contract": {}
+        },
+        {
+          "approach_id": "station_array",
+          "name": "工位数组",
+          "description": "按工位存放分类结果。",
+          "pros": "",
+          "cons": "",
+          "generation_guide": "",
+          "generation_contract": {}
+        },
+        {
+          "approach_id": "slot_position_counter",
+          "name": "工件槽位计数",
+          "description": "各工件占用独立槽位。",
+          "pros": "",
+          "cons": "",
+          "generation_guide": "每节拍使用 DEC D100 更新剩余节拍计数。",
+          "generation_contract": {}
+        }
+      ],
+      "assumptions": []
+    },
+    "answers": {
+      "transport_mode": "连续运行"
+    },
+    "selected_approach_id": "slot_position_counter",
+    "no_drive_model": true,
+    "expected_labels": {
+      "X0": "输送节拍",
+      "M10": "运行状态",
+      "D100": "剩余节拍",
+      "T0": "启动延时",
+      "C0": "产品计数"
+    },
+    "requires_facts": true,
+    "check_debug_lane": true,
+    "completion": {
+      "r": [
+        {
+          "h": null,
+          "s": [],
+          "b": [
+            {
+              "i": [
+                "P X0"
+              ],
+              "o": [
+                "DEC D100"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "case_id": "typed-parameter-identity",
+    "mode": "direct",
+    "plc_model": "FX3U",
+    "request": "Mitsubishi FX3U。采用工件槽位跟踪。使用 DEC D100 维护剩余节拍。",
+    "analysis": {
+      "summary": "比较位串移位、工位数组与工件槽位计数三种方案。",
+      "missing_info": [
+        {
+          "id": "transport_mode",
+          "question": "输送线是步进式还是连续运行？",
+          "required": true,
+          "options": [
+            "步进式",
+            "连续运行"
+          ],
+          "semantic_key": "transport.mode",
+          "value_kind": "choice"
+        },
+        {
+          "id": "duration",
+          "question": "时间参数",
+          "options": [],
+          "required": false,
+          "semantic_key": "tracking.delay",
+          "value_kind": "number",
+          "unit": "s"
+        },
+        {
+          "id": "enabled",
+          "question": "自动使能",
+          "options": [],
+          "required": false,
+          "semantic_key": "tracking.enabled",
+          "value_kind": "boolean"
+        }
+      ],
+      "suggested_io": {
+        "X0": "输送节拍",
+        "M10": "运行状态",
+        "D100": "剩余节拍",
+        "T0": "启动延时",
+        "C0": "产品计数"
+      },
+      "approaches": [
+        {
+          "approach_id": "slot_position_counter",
+          "name": "工件槽位计数",
+          "description": "各工件占用独立槽位。",
+          "pros": "",
+          "cons": "",
+          "generation_guide": "每节拍使用 DEC D100 更新剩余节拍计数。",
+          "generation_contract": {}
+        }
+      ],
+      "assumptions": []
+    },
+    "answers": {
+      "transport_mode": "连续运行",
+      "duration": "0",
+      "enabled": "false"
+    },
+    "selected_approach_id": "slot_position_counter",
+    "no_drive_model": true,
+    "expected_labels": {
+      "X0": "输送节拍",
+      "M10": "运行状态",
+      "D100": "剩余节拍",
+      "T0": "启动延时",
+      "C0": "产品计数"
+    },
+    "requires_facts": true,
+    "check_debug_lane": true,
+    "completion": {
+      "r": [
+        {
+          "h": null,
+          "s": [],
+          "b": [
+            {
+              "i": [
+                "P X0"
+              ],
+              "o": [
+                "DEC D100"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "case_id": "user-edited-prose",
+    "mode": "direct",
+    "plc_model": "FX3U",
+    "request": "Mitsubishi FX3U。采用工件槽位跟踪。使用 DEC D100 维护剩余节拍。",
+    "analysis": {
+      "summary": "比较位串移位、工位数组与工件槽位计数三种方案。",
+      "missing_info": [
+        {
+          "id": "transport_mode",
+          "question": "输送线是步进式还是连续运行？",
+          "required": true,
+          "options": [
+            "步进式",
+            "连续运行"
+          ],
+          "semantic_key": "transport.mode",
+          "value_kind": "choice"
+        },
+        {
+          "id": "duration",
+          "question": "时间参数",
+          "options": [],
+          "required": false,
+          "semantic_key": "tracking.delay",
+          "value_kind": "number",
+          "unit": "s"
+        },
+        {
+          "id": "enabled",
+          "question": "自动使能",
+          "options": [],
+          "required": false,
+          "semantic_key": "tracking.enabled",
+          "value_kind": "boolean"
+        }
+      ],
+      "suggested_io": {
+        "X0": "输送节拍",
+        "M10": "运行状态",
+        "D100": "剩余节拍",
+        "T0": "启动延时",
+        "C0": "产品计数"
+      },
+      "approaches": [
+        {
+          "approach_id": "slot_position_counter",
+          "name": "工件槽位计数",
+          "description": "各工件占用独立槽位。",
+          "pros": "",
+          "cons": "",
+          "generation_guide": "每节拍使用 DEC D100 更新剩余节拍计数。",
+          "generation_contract": {}
+        }
+      ],
+      "assumptions": []
+    },
+    "answers": {
+      "transport_mode": "连续运行",
+      "duration": "0",
+      "enabled": "false"
+    },
+    "selected_approach_id": "slot_position_counter",
+    "no_drive_model": true,
+    "expected_labels": {
+      "X0": "输送节拍",
+      "M10": "运行状态",
+      "D100": "剩余节拍",
+      "T0": "启动延时",
+      "C0": "产品计数"
+    },
+    "requires_facts": true,
+    "check_debug_lane": true,
+    "completion": {
+      "r": [
+        {
+          "h": null,
+          "s": [],
+          "b": [
+            {
+              "i": [
+                "P X0"
+              ],
+              "o": [
+                "DEC D100"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "user_summary": "业务术语 proposals 和 analysis_evidence 必须保留。",
+    "user_notes": {
+      "transport_mode": "这是用户补充的工程限定。"
+    }
+  },
+  {
+    "case_id": "legacy-generation-view",
+    "capture_scope": "legacy_generation_fixture",
+    "plc_model": "FX3U",
+    "confirmed_spec": {
+      "schema_version": 4,
+      "summary": "用户使用 proposals 作为业务名称。",
+      "io_table": [
+        {
+          "kind": "D",
+          "address": "D100",
+          "label": "剩余节拍"
+        }
+      ],
+      "parameters": [
+        {
+          "id": "transport_mode",
+          "name": "输送线是步进式还是连续运行？",
+          "value": "连续运行",
+          "options": [
+            "步进式",
+            "连续运行"
+          ],
+          "note": "步进式 / 连续运行"
+        }
+      ],
+      "selected_approach": {
+        "approach_id": "slot_position_counter",
+        "name": "工件槽位计数",
+        "description": "各工件占用独立槽位。",
+        "pros": "",
+        "cons": "",
+        "generation_guide": "每节拍使用 DEC D100 更新剩余节拍计数。",
+        "generation_contract": {}
+      }
+    },
+    "no_drive_model": true,
+    "requires_facts": true,
+    "completion": {
+      "r": [
+        {
+          "h": null,
+          "s": [],
+          "b": [
+            {
+              "i": [
+                "P X0"
+              ],
+              "o": [
+                "DEC D100"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

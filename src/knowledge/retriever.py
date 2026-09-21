@@ -85,6 +85,7 @@ def retrieve_knowledge(
     task_type="generate",
     top_k=5,
     char_budget=6000,
+    source_lanes=None,
 ):
     """Return ranked knowledge with scoped gxw2-skill supporting reranking."""
 
@@ -117,6 +118,7 @@ def retrieve_knowledge(
         task_type=task,
         top_k=candidate_top_k,
         char_budget=candidate_budget,
+        **({"source_lanes": tuple(source_lanes)} if source_lanes is not None else {}),
     )
     if not results:
         return []
@@ -200,14 +202,20 @@ def build_knowledge_context(
     manifest["design_enabled"] = design_enabled
     if design_enabled:
         manifest["design_query_sha256"] = text_sha256(query if design_query is None else design_query)
-    design_slots = min(2, count // 3) if design_enabled else 0
-    design_budget = available // 3 if design_slots else 0
-    design_token_budget = available_tokens // 3 if design_slots and available_tokens is not None else None
-    design_results = (retrieve_design_knowledge(
+    from knowledge.scope import retrieval_plan, filter_records
+    plan = retrieval_plan(query, task, include_design=design_enabled)
+    manifest["retrieval_scope"] = plan
+    # A design-only task may use the whole allowance. Don't backfill empty
+    # design results with broad fact/debug hits merely to fill top-k.
+    design_slots = (min(2, max(0, count - 1), count // 2) if plan["facts"] else count) if plan["design"] else 0
+    design_budget = (available // 3 if plan["facts"] else available) if design_slots else 0
+    design_token_budget = ((available_tokens // 3 if plan["facts"] else available_tokens)
+                           if design_slots and available_tokens is not None else None)
+    design_results = (filter_records(retrieve_design_knowledge(
         query if design_query is None else design_query,
         plc_model=plc_model, task_type=task, top_k=max(2, design_slots * 3),
         char_budget=sys.maxsize,
-    ) if design_slots else [])
+    ), ("design",)) if design_slots else [])
     seen = set()
 
     def select(results, slots, allowance, token_allowance=None):
@@ -240,12 +248,11 @@ def build_knowledge_context(
     fact_results = retrieve_knowledge(
         query, plc_model=plc_model, task_type=task,
         top_k=min(_core._MAX_TOP_K, max(12, fact_slots * 3)), char_budget=sys.maxsize,
-    )
-    # Curated designs belong only to the design lane, even if a broad fact
-    # retriever happens to return one. Disabling design is not just a slot label.
-    fact_results = [item for item in fact_results
-                    if item.get("chunk_type") != "design_pattern"
-                    and item.get("manual_id") != "curated_control_design"]
+        source_lanes=tuple(plan["source_lanes"]),
+    ) if plan["facts"] else []
+    # Enforce the same scope for injected/custom retrievers, before final
+    # packing, as for the production SQL recall. This never changes source IDs.
+    fact_results = filter_records(fact_results, plan["source_lanes"])
     fact_report = None
     query_meta = getattr(query, "metadata", {})
     if task in {"generate", "edit"} and isinstance(query_meta, dict) and query_meta.get("instruction_fact_mode") == "targeted":

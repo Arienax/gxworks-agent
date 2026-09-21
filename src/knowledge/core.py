@@ -747,7 +747,7 @@ def _fts_match_quality(query, result, bm25_score=0.0):
     return (coverage if relevant else 0.0), matched
 
 
-def _entity_references(connection, schema, terms, plc_model, task_type):
+def _entity_references(connection, schema, terms, plc_model, task_type, source_lanes=None):
     table = schema.get("entity_index")
     if not table or not terms:
         return []
@@ -790,6 +790,13 @@ def _entity_references(connection, schema, terms, plc_model, task_type):
         order_clause,
         _MAX_ENTITY_ROWS_PER_TERM,
     )
+    scope_values = []
+    if source_lanes is not None and chunks_table:
+        from knowledge.scope import source_subquery
+        subquery, scope_values = source_subquery(connection, schema, source_lanes)
+        scope_clause = f" AND e.{_quote_identifier(chunk_column)} IN ({subquery})"
+        sql = sql.replace(" WHERE (" + term_clause + ")", " WHERE (" + term_clause + ")" + scope_clause)
+
     grouped = {}
     for matched_order, requested_term in enumerate(terms):
         rows = []
@@ -797,7 +804,7 @@ def _entity_references(connection, schema, terms, plc_model, task_type):
         for query_term in _entity_term_variants(requested_term):
             variant_rows = connection.execute(
                 sql,
-                tuple(query_term for _column in term_columns),
+                tuple(query_term for _column in term_columns) + tuple(scope_values),
             ).fetchall()
             for row in variant_rows:
                 chunk_id = row[chunk_column]
@@ -953,7 +960,7 @@ def _manual_instruction_references(connection, schema, terms, plc_model, task_ty
     return references
 
 
-def _structured_references(connection, schema, query, terms, plc_model, task_type):
+def _structured_references(connection, schema, query, terms, plc_model, task_type, source_lanes=None):
     """Return exact structured-table candidates before broad lexical recall."""
 
     references = []
@@ -1143,7 +1150,7 @@ def _structured_references(connection, schema, query, terms, plc_model, task_typ
                         1460.0 - term_order * 2.0,
                     )
 
-    cases = schema.get("debug_cases")
+    cases = schema.get("debug_cases") if source_lanes is None or "debug" in source_lanes else None
     if cases and {
         "chunk_id",
         "title",
@@ -1210,7 +1217,7 @@ def _structured_references(connection, schema, query, terms, plc_model, task_typ
     return references[:_MAX_CANDIDATES]
 
 
-def _fts_references(connection, schema, expression, candidate_limit):
+def _fts_references(connection, schema, expression, candidate_limit, source_lanes=None):
     table = schema.get("chunks_fts")
     if not table or not expression:
         return []
@@ -1219,7 +1226,16 @@ def _fts_references(connection, schema, expression, candidate_limit):
         "SELECT rowid AS _fts_rowid, *, bm25({name}) AS _bm25 "
         "FROM {name} WHERE {name} MATCH ? ORDER BY _bm25 LIMIT ?"
     ).format(name=table_name)
-    rows = connection.execute(sql, (expression, int(candidate_limit))).fetchall()
+    params = [expression]
+    if source_lanes is not None and schema.get("chunks"):
+        from knowledge.scope import source_subquery
+        fts_id = _first_column(table["columns"], _CHUNK_ID_COLUMNS)
+        subquery, values = source_subquery(connection, schema, source_lanes, rowid=not bool(fts_id))
+        identifier = _quote_identifier(fts_id) if fts_id else "rowid"
+        sql = sql.replace(" ORDER BY _bm25", f" AND {identifier} IN ({subquery}) ORDER BY _bm25")
+        params.extend(values)
+    params.append(int(candidate_limit))
+    rows = connection.execute(sql, params).fetchall()
     id_column = _first_column(table["columns"], _CHUNK_ID_COLUMNS)
     references = []
     for rank, row in enumerate(rows):
@@ -1297,7 +1313,7 @@ def _dense_index_ready(connection, schema):
     return result
 
 
-def _dense_references(connection, schema, query, candidate_limit, structured_refs):
+def _dense_references(connection, schema, query, candidate_limit, structured_refs, source_lanes=None):
     if not _query_has_dense_scope(query, structured_refs):
         return []
     state = _dense_index_ready(connection, schema)
@@ -1306,10 +1322,13 @@ def _dense_references(connection, schema, query, candidate_limit, structured_ref
     try:
         from knowledge.dense import dense_search
 
+        options = {}
+        if source_lanes is not None:
+            from knowledge.scope import source_subquery
+            sql, values = source_subquery(connection, schema, source_lanes)
+            options["allowed_ids"] = {str(row[0]) for row in connection.execute(sql, values)}
         return dense_search(
-            query,
-            top_k=int(candidate_limit),
-            minimum_score=0.06,
+            query, top_k=int(candidate_limit), minimum_score=0.06, **options,
         )
     except (ImportError, OSError, TypeError, ValueError):
         return []
@@ -1512,7 +1531,7 @@ def _select_with_budget(candidates, top_k, char_budget):
     return selected
 
 
-def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_budget):
+def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_budget, source_lanes=None):
     connection = _connection(path, identity)
     schema = _schema(connection)
     if "chunks" not in schema:
@@ -1527,6 +1546,7 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
         exact_terms,
         plc_model,
         task_type,
+        **({"source_lanes": source_lanes} if source_lanes is not None else {}),
     )
     structured_refs.extend(_manual_instruction_references(
         connection, schema, exact_terms, plc_model, task_type, structured_refs
@@ -1537,11 +1557,11 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
     routed_terms = query_skill_concepts(query, task_type)
     entity_terms = exact_terms + [term for term in routed_terms if term not in exact_terms]
     exact_refs = _entity_references(
-        connection, schema, entity_terms, plc_model, task_type
+        connection, schema, entity_terms, plc_model, task_type, **({"source_lanes": source_lanes} if source_lanes is not None else {})
     )
     fts_limit = min(_MAX_CANDIDATES, max(60, top_k * 12))
     fts_refs = _fts_references(
-        connection, schema, _fts_expression(query), fts_limit
+        connection, schema, _fts_expression(query), fts_limit, **({"source_lanes": source_lanes} if source_lanes is not None else {})
     )
     dense_limit = min(_MAX_CANDIDATES, max(80, top_k * 16))
     dense_refs = _dense_references(
@@ -1550,6 +1570,7 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
         query,
         dense_limit,
         structured_refs,
+        **({"source_lanes": source_lanes} if source_lanes is not None else {}),
     )
 
     all_refs = [
@@ -1701,7 +1722,11 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
         query_term_set.intersection({"ans", "stmr", "ttmr", "wdt"})
     )
     candidates = []
-    for candidate in candidates_by_id.values():
+    scoped_candidates = list(candidates_by_id.values())
+    if source_lanes is not None:
+        from knowledge.scope import filter_records
+        scoped_candidates = filter_records(scoped_candidates, source_lanes)
+    for candidate in scoped_candidates:
         score = float(candidate.pop("_base_score", 0.0))
         signals = candidate.pop("_signals", [])
         unique_signal_types = {signal["type"] for signal in signals}
@@ -2017,7 +2042,7 @@ def _freeze_results(results):
 
 
 @lru_cache(maxsize=_CACHE_SIZE)
-def _retrieve_cached(identity, query, plc_model, task_type, top_k, char_budget):
+def _retrieve_cached(identity, query, plc_model, task_type, top_k, char_budget, source_lanes=None):
     if identity[0] == "missing":
         return "[]"
     path = Path(identity[0])
@@ -2029,6 +2054,7 @@ def _retrieve_cached(identity, query, plc_model, task_type, top_k, char_budget):
         task_type,
         top_k,
         char_budget,
+        **({"source_lanes": source_lanes} if source_lanes is not None else {}),
     )
     return _freeze_results(results)
 
@@ -2039,6 +2065,7 @@ def retrieve_knowledge(
     task_type="generate",
     top_k=5,
     char_budget=6000,
+    source_lanes=None,
 ):
     """Return ranked knowledge blocks without ever opening the index eagerly.
 
@@ -2073,6 +2100,7 @@ def retrieve_knowledge(
             normalized_task,
             normalized_top_k,
             normalized_budget,
+            **({"source_lanes": tuple(sorted(source_lanes))} if source_lanes is not None else {}),
         )
     except (OSError, sqlite3.Error, TypeError, ValueError, KeyError, IndexError):
         # Exceptions are intentionally handled outside the cached function so

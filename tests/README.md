@@ -42,7 +42,7 @@ Owns Agent A analysis mode, candidate/choice handling, confirmation/re-confirmat
 
 | Test file | File-level focus |
 | --- | --- |
-| `tests/test_analysis_design_rag.py` | focused coverage for analysis design rag |
+| `tests/test_analysis_design_rag.py` | Haystack task/source routing, pre-top-k filtering and Design evidence scope |
 | `tests/test_analysis_format_repair.py` | focused coverage for analysis format repair |
 | `tests/test_analysis_mode_jobs.py` | focused coverage for analysis mode jobs |
 | `tests/test_analysis_prompt_integration.py` | focused coverage for analysis prompt integration |
@@ -51,7 +51,7 @@ Owns Agent A analysis mode, candidate/choice handling, confirmation/re-confirmat
 | `tests/test_confirmed_input_protocol.py` | confirmed physical input levels across legacy projection, generation and validation |
 | `tests/test_confirmed_reconfirmation.py` | focused coverage for confirmed reconfirmation |
 | `tests/test_hardware_intent_boundary.py` | focused coverage for hardware intent boundary |
-| `tests/test_optional_hardware_parameters.py` | focused coverage for optional hardware parameters |
+| `tests/test_optional_hardware_parameters.py` | optional hardware questions plus Pydantic parameter identity/review-to-generation views |
 | `tests/test_program_exploration.py` | focused coverage for program exploration |
 | `tests/test_spec_choice_metadata.py` | focused coverage for spec choice metadata |
 | `tests/test_workbench_planning.py` | focused coverage for workbench planning |

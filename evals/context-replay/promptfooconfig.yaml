@@ -1,0 +1,28 @@
+description: Offline production-context replay (no model or LLM grader)
+prompts:
+  - '{{case_id}}'
+providers:
+  - file://provider.py
+evaluateOptions:
+  maxConcurrency: 1
+  cache: false
+defaultTest:
+  assert:
+    - type: is-json
+    - type: javascript
+      value: |
+        const r = JSON.parse(output);
+        return {
+          pass: r.passed === true && r.real_model_calls === 0,
+          score: r.passed ? 1 : 0,
+          reason: JSON.stringify(r.checks)
+        };
+tests:
+  - vars:
+      case_id: design-conveyor
+  - vars:
+      case_id: typed-parameter-identity
+  - vars:
+      case_id: user-edited-prose
+  - vars:
+      case_id: legacy-generation-view
