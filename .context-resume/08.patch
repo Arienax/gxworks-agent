@@ -1,0 +1,39 @@
+diff --git a/tests/test_optional_hardware_parameters.py b/tests/test_optional_hardware_parameters.py
+index 003c021..41fa694 100644
+--- a/tests/test_optional_hardware_parameters.py
++++ b/tests/test_optional_hardware_parameters.py
+@@ -592,3 +592,34 @@ def test_review_only_notes_and_overviews_are_not_runtime_facts_but_user_edits_ar
+     wire = generation_specification(stored)
+     assert wire["summary"] == stored["summary"]
+     assert wire["parameters"][0]["note"] == "keep this user constraint"
++
++
++@pytest.mark.parametrize("label,expected", [
++    ("定位扩展模块完整型号？", "positioning_module_model"),
++    ("伺服驱动器控制方式？", "motion_control_method"),
++    ("步进驱动器完整型号？", "motion_drive_model"),
++    ("伺服驱动器端子映射？", "motion_wiring_mapping"),
++    ("高速输出适配器数量？", "positioning_module_quantity"),
++])
++def test_legacy_motion_labels_migrate_only_exact_untagged_questions(label, expected):
++    from plc.hardware_profiles import QUESTION_IDS, ensure_hardware_questions
++    from plc.specification.parameters import hardware_parameter_id
++    question = {"id": "modules", "question": label, "required": True}
++    before = dict(question)
++    result = ensure_hardware_questions({"missing_info": [question]}, "FX3U", "伺服定位")
++    assert result["missing_info"][0]["id"] == expected
++    assert question == before
++    assert hardware_parameter_id({"name": label, "value": "fixture"}, QUESTION_IDS) == expected
++    assert hardware_parameter_id({"name": "业务说明：" + label, "value": "fixture"}, QUESTION_IDS) == ""
++    assert hardware_parameter_id({"name": label, "value": "fixture"}, {}) == ""
++    tagged = {**question, "semantic_key": "transport.mode"}
++    restored = ensure_hardware_questions({"missing_info": [tagged]}, "FX3U", "伺服定位")
++    assert restored["missing_info"][0]["id"] == "modules"
++    assert hardware_parameter_id(tagged, QUESTION_IDS) == ""
++
++
++def test_registered_hardware_identity_wins_over_conflicting_legacy_display_label():
++    from plc.hardware_profiles import ensure_hardware_questions
++    row = {"id": "motion_drive_model", "question": "高速输出适配器数量？"}
++    normalized = ensure_hardware_questions({"missing_info": [row]}, "FX3U", "伺服定位")
++    assert normalized["missing_info"][0]["id"] == "motion_drive_model"

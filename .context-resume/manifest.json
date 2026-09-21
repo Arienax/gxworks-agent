@@ -1,0 +1,15 @@
+{
+  "base_commit": "d12ec053333a464cbfbfff3384bb119ee0c017d7",
+  "files": [
+    {"path":"evals/context-replay/README.md","patch":".context-resume/00.patch","before":"b5caabfac9e5afe092f87edb325fd24c0c4891d74fa25ccd03ae735a911876f8","after":"30d4363fc4d424901ab81aee98e95e7783f74f27cb08be0077d263a3babe3a21"},
+    {"path":"evals/context-replay/cases.json","patch":".context-resume/01.patch","before":"a418654a8b3da10224f5471aff0ee76466abd193d5b10fbbda9eaa3b24795034","after":"8060b26e623d242eaad1e27b4857bbb266d99811e90eb19780a24660e3ea4c2a"},
+    {"path":"evals/context-replay/promptfooconfig.yaml","patch":".context-resume/02.patch","before":"38cc43c1d752646d8b96b42edc5520d91ccf953d92ee9222647d5d69d508b458","after":"738c3762d903ab192bffa14d0c65d14cb22b9e694e88ad9f0e2e2f029f2dab6c"},
+    {"path":"scripts/context_replay.py","patch":".context-resume/03.patch","before":"e949740e7bd544cbaf8695de7483d7fa7a600ce349ec3c9e02edd6dc891ece0a","after":"a118c2b10b001a6c4f086be30b41a7b415b7132ca8f292a641ec1f25b732d21f"},
+    {"path":"src/plc/hardware_profiles.py","patch":".context-resume/04.patch","before":"da01545e3b8a671cdbcd23e84a54afed90f998aa146bedba189227c807c335ce","after":"6422c0d3fbeab6bf48dab1178edb3c17d74fe030c7abb096f5cf0794e9d2fb0d"},
+    {"path":"src/plc/specification/confirmed.py","patch":".context-resume/05.patch","before":"32ba3603a905b10bc6c245aa1ccee2e577e7dda232c76936c2729bb162c81d3b","after":"db1351db3fa9585f690952c541f3793c338419219db3b19d9f7a3c8982bbd41a"},
+    {"path":"src/plc/specification/parameters.py","patch":".context-resume/06.patch","before":"bc60a6e4ba6fcc7e26b84c3cf466ab0674616fc71beb184fc6934f6264890af5","after":"386286142ef5d20c6c47ce550f626c1062343bee2e295f3dd70ef7d13b8e4702"},
+    {"path":"tests/test_agent_b_measurement.py","patch":".context-resume/07.patch","before":"0e8f663b3135643777ae4902a2580d0b72416f1acb6d11d85dfebddd2de62741","after":"5ba5d472a6e6299a0fcbd54e99565bc70e93a746e5fe9d777da8929bf7b14dc3"},
+    {"path":"tests/test_optional_hardware_parameters.py","patch":".context-resume/08.patch","before":"3cae65b20b07fd71adca4f6109552535be2ba1a41b8f9534ac3e0e50d1ff87ef","after":"b8e183c2d8524a78f0f8b020df61454045206dbc9bc3e2ef7bba79c0e2945321"},
+    {"path":"tests/test_spec_choice_metadata.py","patch":".context-resume/09.patch","before":"9990be5a5d092daee0200707c3cbdb8ffb79eb489a6602efe5178e34ed59129d","after":"e2871bc4efbee0a96dda184d3fed67e6511c896f2b2d7aaa512699321d2436bb"}
+  ]
+}

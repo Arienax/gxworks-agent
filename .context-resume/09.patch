@@ -1,0 +1,53 @@
+diff --git a/tests/test_spec_choice_metadata.py b/tests/test_spec_choice_metadata.py
+index a16faf2..b28a198 100644
+--- a/tests/test_spec_choice_metadata.py
++++ b/tests/test_spec_choice_metadata.py
+@@ -616,3 +616,48 @@ def test_inline_declarations_reanalysis_preserves_user_clear_move_and_delete():
+     raw["suggested_io"] = {"X000": "启动按钮", "X001": "停止按钮", "Y000": "运行输出"}
+     result = canonicalize_confirmed_spec(build_review_draft(_normalize_analysis_result(raw, "FX3U", text, spec), spec))
+     assert {r["address"]: r["label"] for r in result["io_table"]} == {"X2": "操作台启动", "Y0": ""}
++
++
++@pytest.mark.parametrize("note", [None, "", "操作员要求：保留检测结果", "A / B"])
++def test_restore_choices_never_fabricates_historical_note_provenance(note):
++    from plc.specification.parameters import generation_parameters
++    analysis = {"missing_info": [{"id": "mode", "question": "方式", "options": ["A", "B"], "default": "B"}]}
++    parameter = {"id": "mode", "name": "方式", "value": "A", "source": "user"}
++    if note is not None:
++        parameter["note"] = note
++    draft = {"parameters": [parameter]}
++    before = copy.deepcopy(draft)
++    restored = restore_review_choices(draft, analysis)
++    row = restored["parameters"][0]
++    assert draft == before
++    assert row == {**parameter, "options": ["A", "B"], "suggested_default": "B"}
++    assert restore_review_choices(restored, analysis) == restored
++    assert generation_parameters([row])[0].get("note") == (note or None)
++
++
++@pytest.mark.parametrize("kind", ["different_id", "different_semantic_key", "ambiguous_label", "ambiguous_id"])
++def test_review_choice_recovery_does_not_cross_parameter_identities(kind):
++    row = {"id": "first", "name": "同名参数", "value": "user", "source": "user"}
++    questions = [{"id": "first", "question": "同名参数", "options": ["wrong"]}]
++    if kind == "different_id":
++        questions[0]["id"] = "second"
++    elif kind == "different_semantic_key":
++        row["semantic_key"] = "transport.mode"
++        questions[0]["semantic_key"] = "hardware.motion_control_method"
++    else:
++        questions.append({"id": "second" if kind == "ambiguous_label" else "first",
++                          "question": "同名参数", "options": ["also wrong"]})
++        if kind == "ambiguous_label":
++            row.pop("id")
++    draft = {"parameters": [row]}
++    assert restore_review_choices(draft, {"missing_info": questions}) == draft
++
++
++def test_recovery_keeps_existing_origin_and_legacy_exact_choice_notes_stay_review_only():
++    from plc.specification.parameters import generation_parameters, text_origin
++    analysis = {"missing_info": [{"id": "mode", "question": "方式", "options": ["A", "B"]}]}
++    for provenance in ({}, {"note_provenance": text_origin("A / B", "review_choices")}):
++        draft = {"parameters": [{"id": "mode", "name": "方式", "value": "A", "note": "A / B", **provenance}]}
++        result = restore_review_choices(draft, analysis)
++        assert result["parameters"][0] == {**draft["parameters"][0], "options": ["A", "B"]}
++        assert "note" not in generation_parameters(result["parameters"])[0]

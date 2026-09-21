@@ -1,0 +1,9 @@
+diff --git a/evals/context-replay/promptfooconfig.yaml b/evals/context-replay/promptfooconfig.yaml
+index 6125e83..e01b42d 100644
+--- a/evals/context-replay/promptfooconfig.yaml
++++ b/evals/context-replay/promptfooconfig.yaml
+@@ -26,3 +26,4 @@ tests:
+       case_id: user-edited-prose
+   - vars:
+       case_id: legacy-generation-view
++  - vars: {case_id: historical-review-recovery}
