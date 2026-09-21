@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { ArrowDownToLine, ArrowLeft, ArrowRight, ChevronDown, MoreHorizontal, RefreshCw, Trash2 } from "lucide-react";
 import type { Artifact } from "../api/client";
-import { api, artifactUrl, freshGxCsvUrl } from "../api/client";
+import { api, artifactUrl, freshGxCsvUrl, jobDiagnosticsUrl } from "../api/client";
 import { Button } from "../components/ui";
 
 export function artifactLabel(id: string) {
@@ -29,14 +29,16 @@ function Menu({ label, icon, children, disabled, title, className = "" }: {
     }}>{children}</div>
   </details>;
 }
-export function ProjectToolbar({ pid, vid, artifacts, exportable, canRead, canSend, canRefresh,
+export function ProjectToolbar({ pid, vid, artifacts, exportable, diagnosticJobId, canRead, canSend, canRefresh,
   refreshing, onRead, onSend, onRefresh, more, t }: {
-  pid: string; vid: string; artifacts: Artifact[]; exportable: boolean; canRead: boolean;
+  pid: string; vid: string; artifacts: Artifact[]; exportable: boolean; diagnosticJobId?: string; canRead: boolean;
   canSend: boolean; canRefresh: boolean; refreshing: boolean; onRead: () => void;
   onSend: () => void; onRefresh: () => void; more: ReactNode; t: (s:string) => string;
 }) {
   const files = artifacts.filter((a) => a.available);
-  const canFreshExport = !!pid && !!vid && files.some((a) => ["ir", "json", "program_csv"].includes(a.id));
+  const canArtifactExport = exportable && !!pid && !!vid && files.length > 0;
+  const canDiagnosticExport = !!diagnosticJobId;
+  const canFreshExport = canArtifactExport && files.some((a) => ["ir", "json", "program_csv"].includes(a.id));
   const [deleting, setDeleting] = useState(false);
   async function deleteProject() {
     if (!pid || deleting) return;
@@ -53,14 +55,18 @@ export function ProjectToolbar({ pid, vid, artifacts, exportable, canRead, canSe
   }
   return <div className="project-toolbar" role="toolbar" aria-label={t("工程操作")}>
     <div className="toolbar-group">
-      <Menu label={t("导出文件")} icon={<ArrowDownToLine size={15}/>} disabled={!exportable || !files.length}
-        title={t(exportable ? "下载当前版本的文件" : "生成并通过校验后即可导出文件")} className="export-menu">
-        {files.map((a) => <a key={a.id} href={artifactUrl(pid, vid, a.id, true)}>
+      <Menu label={t("导出文件")} icon={<ArrowDownToLine size={15}/>} disabled={!canArtifactExport && !canDiagnosticExport}
+        title={t(canArtifactExport ? (canDiagnosticExport ? "下载当前版本的文件和任务记录" : "下载当前版本的文件") : canDiagnosticExport ? "下载当前任务记录" : "生成并通过校验后即可导出文件")} className="export-menu">
+        {canArtifactExport && files.map((a) => <a key={a.id} href={artifactUrl(pid, vid, a.id, true)}>
           <span>{t(artifactLabel(a.id))}</span><small>{a.filename}</small>
         </a>)}
         {canFreshExport && <a href={freshGxCsvUrl(pid, vid)}>
           <span>{t("重新导出 GX Works2 CSV")}</span>
           <small>{t("不调用模型，按当前导出器从已保存程序重新生成")}</small>
+        </a>}
+        {canDiagnosticExport && <a href={jobDiagnosticsUrl(diagnosticJobId)} download>
+          <span>{t("任务交互与诊断 ZIP")}</span>
+          <small>{t("当前任务")} · {diagnosticJobId}</small>
         </a>}
       </Menu>
     </div>

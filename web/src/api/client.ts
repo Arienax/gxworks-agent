@@ -59,4 +59,6 @@ export const artifactUrl = (
   `/api/projects/${encodeURIComponent(pid)}/versions/${encodeURIComponent(vid)}/artifacts/${encodeURIComponent(aid)}${download ? "?download=true" : ""}`;
 export const freshGxCsvUrl = (pid: string, vid: string) =>
   `/api/projects/${encodeURIComponent(pid)}/versions/${encodeURIComponent(vid)}/exports/gxworks2-csv`;
+export const jobDiagnosticsUrl = (jobId: string) =>
+  `/api/jobs/${encodeURIComponent(jobId)}/diagnostics`;
 export const key = () => crypto.randomUUID();

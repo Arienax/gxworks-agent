@@ -70,3 +70,30 @@ def test_history_without_sidecar_export_is_explicit(tmp_path):
         assert response.status_code==200
         with zipfile.ZipFile(io.BytesIO(response.content)) as z:
             assert json.loads(z.read('summary.json'))['capture_status']=='not_captured'
+
+
+def test_completed_job_diagnostics_are_exportable(tmp_path):
+    service = WorkbenchService(tmp_path/'workspace', tmp_path/'state')
+    with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as c:
+        _login(c)
+        job = service.jobs.submit(
+            'analysis',
+            {'project_id': 'diagnostics-success'},
+            lambda ctx: {'summary': 'completed without provider calls'},
+            request_id='completed-diagnostics-export',
+        )
+        service.jobs._futures[job['id']].result(timeout=10)
+        saved = service.jobs.get(job['id'])
+        assert saved['status'] == 'completed'
+        response = c.get(f"/api/jobs/{job['id']}/diagnostics")
+        assert response.status_code == 200
+        assert response.headers['content-type'].startswith('application/zip')
+        with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+            summary = json.loads(z.read('summary.json'))
+            exported_job = json.loads(z.read('job.json'))
+            assert summary['job']['status'] == 'completed'
+            assert exported_job['status'] == 'completed'
+            assert set(z.namelist()) == {
+                'summary.json', 'diagnostics.jsonl', 'job.json', 'transcript.jsonl',
+                'operator_actions.jsonl', 'README.txt',
+            }

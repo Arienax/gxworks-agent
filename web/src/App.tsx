@@ -1130,7 +1130,9 @@ export default function App() {
           {version && status(displayedVersionStatus)}
         </div>
         <ProjectToolbar pid={pid} vid={vid} artifacts={version?.artifacts || []}
-          exportable={!!version && !preview} canRead={canWrite && !!pid && !!operations.gx_inspect}
+          exportable={!!version && !preview}
+          diagnosticJobId={currentJob && !activeJob(currentJob) ? currentJob.id : ""}
+          canRead={canWrite && !!pid && !!operations.gx_inspect}
           canSend={canWrite && !preview && !jobs.some(activeJob) && !!operations.gx_import}
           canRefresh={!!session && !!pid && !busy && !loading && !jobs.some(activeJob)}
           refreshing={refreshingDrawing} onRead={() => void guarded(() => submitJob("gx_read"))}
