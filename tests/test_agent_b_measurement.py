@@ -61,12 +61,19 @@ def test_prompt_and_schema_have_one_canonical_required_shape():
     import jsonschema
     example = canonical_compact_example()
     jsonschema.validate(example, compact_response_schema())
-    assert '"rung":["h","s","b"]' in compact_protocol_prompt()
-    assert '"branch":["i","o"]' in compact_protocol_prompt()
+    schema = compact_response_schema()
+    prompt = compact_protocol_prompt()
+    rung = schema["properties"]["r"]["items"]
+    branch = rung["properties"]["b"]["items"]
+    assert "顶层对象必填字段：" + "、".join(schema["required"]) in prompt
+    assert "每个梯级必填字段：" + "、".join(rung["required"]) in prompt
+    assert "每个输出分支必填字段：" + "、".join(branch["required"]) in prompt
+    assert '"root"' not in prompt
     assert "这些字段不省略" in compact_protocol_prompt()
 
 
-def test_runner_uses_real_single_call_path_without_changing_effort(monkeypatch):
+@pytest.mark.parametrize("root_key", ["r", "root"])
+def test_runner_uses_real_single_call_path_without_changing_effort(monkeypatch, root_key):
     from test_confirmed_input_protocol import old_confirmed_spec, compact
     from knowledge.evidence import KnowledgeContext
     import application.generation_agent as agent
@@ -77,7 +84,7 @@ def test_runner_uses_real_single_call_path_without_changing_effort(monkeypatch):
             self.requests = []
         def stream(self, request):
             self.requests.append(request)
-            yield TextDelta(json.dumps(compact()))
+            yield TextDelta(json.dumps({root_key: compact()["r"]}))
             yield Usage(10, 20, 30, 12)
     provider = Provider()
     record = run_case({"case_id": "hold", "confirmed_spec": old_confirmed_spec()}, "automatic", provider=provider, effort="high")

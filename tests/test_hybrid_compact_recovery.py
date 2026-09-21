@@ -91,3 +91,85 @@ def test_rejected_preview_renders_long_key_compact_alias(tmp_path):
         path = tmp_path / metadata["artifacts"][key]
         assert path.is_file()
         assert path.stat().st_size > 0
+
+
+@pytest.mark.parametrize("root_key", ["r", "root"])
+def test_compact_root_alias_is_detached_idempotent_and_logic_preserving(root_key):
+    import copy
+    from application.compact_protocol import normalize_compact, expand_compact_ladder
+    canonical = {"r": [{"h": None, "s": ["NC X1"], "b": [
+        {"i": [{"or": [["NO X0"], ["NO Y0"]]}], "o": ["COIL Y0"]}]}]}
+    value = {root_key: copy.deepcopy(canonical["r"])}
+    before = copy.deepcopy(value)
+    normalized, changes = normalize_compact(value)
+    assert value == before and normalized == canonical
+    assert normalize_compact(normalized) == (normalized, [])
+    assert [row["rule"] for row in changes] == (["root_field_alias"] if root_key == "root" else [])
+    assert expand_compact_ladder(value) == expand_compact_ladder(canonical)
+
+
+@pytest.mark.parametrize("value", [
+    {"root": [], "r": []}, {"root": [], "extra": "ignored?"},
+    {"root": {"r": []}}, {"root": None}, {"root": []},
+])
+def test_compact_alias_never_discards_ambiguity_or_bypasses_schema(value):
+    from application.compact_protocol import CompactProtocolError, expand_compact_ladder
+    with pytest.raises(CompactProtocolError):
+        expand_compact_ladder(value)
+
+
+@pytest.mark.parametrize("field,value,keyword,path", [
+    ("r", [], "minItems", "content.r"),
+    ("s", False, "type", "content.r.0.s"),
+    ("s", [7], "type", "content.r.0.s.0"),
+    ("h", 1, "type", "content.r.0.h"),
+    ("i", None, "type", "content.r.0.b.0.i"),
+    ("i", [{"or": []}], "anyOf", "content.r.0.b.0.i.0"),
+    ("i", [{"or": [[{"or": [["NO X0"]]}]]}], "anyOf", "content.r.0.b.0.i.0"),
+    ("o", [], "minItems", "content.r.0.b.0.o"),
+    ("o", [""], "minLength", "content.r.0.b.0.o.0"),
+    ("o", ["A" * 161], "maxLength", "content.r.0.b.0.o.0"),
+])
+def test_compact_schema_reports_safe_paths_without_type_coercion(field, value, keyword, path):
+    from application.compact_protocol import (
+        CompactProtocolError, canonical_compact_example, expand_compact_ladder,
+    )
+    candidate = canonical_compact_example()
+    target = candidate if field == "r" else candidate["r"][0] if field in {"h", "s"} else candidate["r"][0]["b"][0]
+    target[field] = value
+    with pytest.raises(CompactProtocolError) as caught:
+        expand_compact_ladder(candidate)
+    assert caught.value.path == path
+    assert caught.value.schema_keyword == keyword
+
+
+def test_schema_errors_do_not_echo_unknown_model_fields():
+    from application.compact_protocol import (
+        CompactProtocolError, canonical_compact_example, expand_compact_ladder,
+    )
+    candidate = canonical_compact_example()
+    candidate["r"][0]["model_controlled_secret"] = "do not echo this"
+    with pytest.raises(CompactProtocolError) as caught:
+        expand_compact_ladder(candidate)
+    assert caught.value.schema_keyword == "additionalProperties"
+    assert caught.value.path == "content.r.0"
+    assert "model_controlled_secret" not in str(caught.value)
+    assert "do not echo this" not in str(caught.value)
+
+
+def test_compact_missing_required_output_is_not_materialized():
+    from application.compact_protocol import CompactProtocolError, expand_compact_ladder
+    with pytest.raises(CompactProtocolError) as caught:
+        expand_compact_ladder({"r": [{"b": [{}]}]})
+    assert caught.value.path == "content.r.0.b.0.o"
+    assert caught.value.schema_keyword == "required"
+
+
+def test_compact_schema_keeps_documented_optional_defaults_and_semantic_parser():
+    from application.compact_protocol import CompactProtocolError, expand_compact_ladder
+    sparse = {"r": [{"b": [{"o": ["COIL Y0"]}]}]}
+    explicit = {"r": [{"h": None, "s": [], "b": [{"i": [], "o": ["COIL Y0"]}]}]}
+    assert expand_compact_ladder(sparse) == expand_compact_ladder(explicit)
+    explicit["r"][0]["b"][0]["i"] = ["NOT_A_CONTACT X0"]
+    with pytest.raises(CompactProtocolError):
+        expand_compact_ladder(explicit)

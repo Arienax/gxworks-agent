@@ -230,13 +230,13 @@ def _retrieval_facts(facts):
     """
     result = copy.deepcopy(facts)
     bindings = result.pop("io_bindings", [])
+    # Generic/older bindings can omit role. Their resolved address and stable
+    # parameter link still identify a settled wiring answer, not a manual query.
     bindings = [row for row in bindings if isinstance(row, Mapping)
-                and row.get("kind") in {"X", "Y"}
-                and row.get("role") in {"start", "stop", "output"}]
+                and row.get("kind") in {"X", "Y"} and row.get("address")]
     bound_ids = {row.get("source_parameter_id") for row in bindings
                  if isinstance(row, Mapping) and row.get("source_parameter_id")}
-    bound_addresses = {row.get("address") for row in bindings
-                       if isinstance(row, Mapping) and row.get("source_parameter_id")}
+    bound_addresses = {row["address"] for row in bindings}
     if isinstance(result.get("parameters"), list):
         result["parameters"] = [
             {key: row[key] for key in ("name", "value") if key in row}

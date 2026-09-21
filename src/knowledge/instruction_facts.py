@@ -251,22 +251,19 @@ def retrieve_instruction_facts(query, *, plc_model, task_type, char_budget, cand
     an LLM, writes the index, declares verified facts or rejects a user program.
     """
     from knowledge import core
+    target_source = "provided_targets" if targets is not None else "query_references"
     targets = copy.deepcopy(targets if targets is not None else instruction_fact_targets(query))
     retrieve = retrieve or core.retrieve_knowledge
     report = {"version": _VERSION, "targets": targets, "questions": dict(FACT_QUESTIONS),
+              "target_source": target_source,
               "queries": [], "records": [], "facts": [], "verification": "not_performed"}
     if task_type not in {"generate", "edit"} or char_budget <= 0:
         return [], report
-    # Family-only requests use already-ranked instruction anchors. This does not
-    # pick an implementation or add required_opcodes to the specification.
+    # Broad candidate rank is not evidence that the task selected an opcode.
+    # Family-only questions remain in the ordinary fact lane; do not manufacture
+    # instruction targets from whichever manual sections happened to rank first.
     if not targets:
-        names = dict.fromkeys(str(item.get("instruction_opcode") or "").upper()
-                              for item in candidates if item.get("manual_type") in _OFFICIAL
-                              and item.get("chunk_type") == "instruction")
-        targets = [{"opcode": name, "base_opcode": name, "basis": "retrieved_family_candidate"}
-                   for name in names if name][:3]
-        report["targets"] = targets
-    if not targets:
+        report["reason"] = "no_instruction_target"
         return [], report
     allowance = max(0, int(char_budget) // max(1, len(targets)))
     groups = []

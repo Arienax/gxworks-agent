@@ -151,3 +151,59 @@ def test_shared_generation_handoff_keeps_delivered_fact_report():
     assert set(included_knowledge_ids(context.knowledge_context, report["records"])) == {
         row["id"] for row in report["records"] if row["included"]}
     assert report["facts"] and any(row["source_ids"] for row in report["facts"])
+
+
+@pytest.mark.parametrize("targets", [None, []])
+def test_empty_instruction_targets_never_promote_broad_hits(targets):
+    candidates = [source(name, name) for name in ("MOV", "PLSY", "PRUN")]
+    before = copy.deepcopy(candidates)
+    def unexpected_lookup(*args, **kwargs):
+        pytest.fail("broad candidate rank must not manufacture an instruction target")
+    blocks, report = retrieve_instruction_facts(
+        "启动停止自保持", plc_model="FX3U", task_type="generate", char_budget=7000,
+        targets=targets, candidates=candidates, retrieve=unexpected_lookup,
+    )
+    assert blocks == [] and report["targets"] == [] and report["queries"] == []
+    assert report["reason"] == "no_instruction_target"
+    assert report["target_source"] == ("provided_targets" if targets is not None else "query_references")
+    assert candidates == before
+
+
+@pytest.mark.parametrize("with_role", [False, True])
+def test_resolved_generic_io_does_not_open_instruction_retrieval(with_role, monkeypatch):
+    from application.context_compiler import ContextCompiler, ContextCompilerInput
+    from application.generation_context import _build_knowledge_context
+    import knowledge.retriever as retriever
+    roles = [("start", "X", "X0"), ("stop", "X", "X1"), ("output", "Y", "Y0")]
+    spec = {
+        "parameters": [{"id": role, "name": "已确认接线", "value": address} for role, _, address in roles],
+        "io_bindings": [{"source_parameter_id": role, "kind": kind, "address": address,
+                         **({"role": role} if with_role else {})} for role, kind, address in roles],
+        "io_table": [{"kind": kind, "address": address, "label": role} for role, kind, address in roles],
+        "selected_approach": {"name": "停止优先自保持"},
+    }
+    before = copy.deepcopy(spec)
+    compiled = ContextCompiler().compile(ContextCompilerInput(confirmed_spec=spec))
+    assert compiled.generation_packet["confirmed_spec"] == spec == before
+    query = KnowledgeQuery(compiled.retrieval_packet["query"], precompiled=True,
+                           metadata={"instruction_fact_mode": "targeted", "instruction_fact_targets": []})
+    assert not any(address in query for _, _, address in roles)
+    monkeypatch.setattr(retriever, "build_knowledge_context",
+                        lambda *a, **k: pytest.fail("settled I/O is not a manual fact question"))
+    assert not _build_knowledge_context(query, plc_model="FX3U", confirmed_context=spec)
+
+
+@pytest.mark.parametrize("question", ["MOV K1 D0", "查询 X0 的输入响应时间", "查证 FX3U-4AD 缓冲存储器"])
+def test_explicit_lookup_survives_settled_io_projection(question):
+    from application.context_compiler import ContextCompiler, ContextCompilerInput
+    from knowledge.analysis_router import has_generation_fact_target
+    spec = {"io_bindings": [{"kind": "X", "address": "X0", "source_parameter_id": "start"}],
+            "io_table": [{"kind": "X", "address": "X0"}],
+            "parameters": [{"id": "start", "name": "启动接线", "value": "X0"},
+                           {"id": "timer", "name": "定时时间", "value": "5 秒"}]}
+    before = copy.deepcopy(spec)
+    compiled = ContextCompiler().compile(ContextCompilerInput(
+        confirmed_spec=spec, task_type="edit", generation_request=question))
+    query = compiled.retrieval_packet["query"]
+    assert question in query and "5 秒" in query and has_generation_fact_target(query)
+    assert compiled.generation_packet["confirmed_spec"] == spec == before
