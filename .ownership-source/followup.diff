@@ -1,0 +1,93 @@
+--- a/src/storage/config.py
++++ b/src/storage/config.py
+@@ -365,6 +365,11 @@
+     selected = next(item for item in profiles if item["id"] == profile_id)
+     selected["baseUrl"] = base_url
+     selected["model"] = model
++    # A legacy model name is not an explicit choice of the preset's effort.
++    # Keep other compatibility defaults, then restore only saved tuning below.
++    from model_runtime.request_policy import without_workflow_effort
++    for layer in ("generationDefaults", "requestOverrides"):
++        selected[layer] = without_workflow_effort(selected.get(layer))
+ 
+     template = config.get("request_template")
+     if isinstance(template, dict):
+@@ -385,6 +390,10 @@
+                 continue
+             if value == "{effort}":
+                 continue
++            if key == "extra_body" and isinstance(value, dict):
++                value = copy.deepcopy(value)
++                if value.get("reasoning_effort") == "{effort}":
++                    value.pop("reasoning_effort")
+             target = defaults if key in portable else overrides
+             target[key] = copy.deepcopy(value)
+         selected["generationDefaults"].update(defaults)
+--- a/tests/test_model_profile_config.py
++++ b/tests/test_model_profile_config.py
+@@ -87,7 +87,7 @@
+     assert profile["id"] == "zhipu-glm-5.3-flash"
+     assert profile["capabilities"]["thinking_required"] is True
+     assert profile["capabilities"]["tool_stream"] is True
+-    assert profile["generationDefaults"]["reasoning_effort"] == "max"
++    assert "reasoning_effort" not in profile["generationDefaults"]
+     assert profile["requestOverrides"]["extra_body"]["thinking"]["type"] == "enabled"
+ 
+ 
+@@ -115,7 +115,7 @@
+     assert profile["id"] == expected_profile_id
+     assert profile["model"] == model
+     assert profile["capabilities"]["tool_stream"] is True
+-    assert profile["generationDefaults"]["reasoning_effort"] == "max"
++    assert "reasoning_effort" not in profile["generationDefaults"]
+     assert profile["requestOverrides"]["extra_body"]["thinking"]["type"] == "enabled"
+ 
+ 
+@@ -562,3 +562,32 @@
+     monkeypatch.setenv("PLC_AI_CONFIG_PATH", "relative/config.json")
+     with pytest.raises(ValueError, match="absolute"):
+         data.config_path()
++
++
++@pytest.mark.parametrize("model", ["glm-5.3-flash", "glm-5.3", "glm-5.2", "custom-fixture"])
++@pytest.mark.parametrize("template,expected,nested", [
++    ({}, None, False),
++    ({"reasoning_effort": "{effort}"}, None, False),
++    ({"reasoning_effort": "high"}, "high", False),
++    ({"reasoning_effort": None}, None, False),
++    ({"extra_body": {"reasoning_effort": "medium", "fixture": True}}, "medium", True),
++    ({"extra_body": {"reasoning_effort": "{effort}", "fixture": True}}, None, True),
++])
++def test_flat_legacy_config_never_inherits_preset_effort(model, template, expected, nested):
++    from model_runtime.provider import OpenAICompatibleProvider, ModelRequest, UserMessage
++    config = {"base_url": "https://fixture.invalid/v1", "default_model": model,
++              "request_template": template}
++    before = copy.deepcopy(config)
++    defaults = config_manager._default_profiles()
++    selected, profiles = config_manager._profile_from_legacy(config)
++    profile = next(p for p in profiles if p["id"] == selected)
++    provider = OpenAICompatibleProvider(profile, "synthetic-key", client=object())
++    params = provider._request_params(ModelRequest((UserMessage("fixture"),)))
++    actual = params.get("extra_body", {}) if nested else params
++    assert actual.get("reasoning_effort") == expected
++    if expected is None:
++        assert "reasoning_effort" not in params
++        assert "reasoning_effort" not in params.get("extra_body", {})
++    if nested:
++        assert params["extra_body"]["fixture"] is True
++    assert config == before and config_manager._default_profiles() == defaults
+--- a/docs/architecture/runtime-ownership.md
++++ b/docs/architecture/runtime-ownership.md
+@@ -12,7 +12,11 @@
+ its configured wire alias before provider resolution. The model profile's
+ userModelSettings, requestOverrides and generationDefaults remain intact.
+ Value/omit/inherit behavior is unchanged, including contractless legacy profiles.
+-No profile preference means omission, not an automatic high/low fallback.
++No profile preference means omission, not an automatic high/low fallback. Old
++flat-config migration also removes preset effort from the selected imported
++profile; only an explicit saved template value is carried over. The retired
++{effort} placeholder is not a setting, including in extra_body. Existing saved
++model profiles and explicit preset selection are not rewritten.
+ Other parameters, streaming, cancellation and retry policy are unchanged.
+ Low-level operator-authorized capability probes still use their trial profile;
+ this is not a prohibition on those explicit test requests.
