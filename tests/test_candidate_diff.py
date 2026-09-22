@@ -229,6 +229,7 @@ def test_execution_preview_uses_its_bound_program_artifacts_and_plan(tmp_path, a
     try:
         proposal = service.execution_proposal({"action": action, "project_id": project_id,
             "version_id": base_id, "plan_id": plan_id, "request_id": "execute-reviewed-version"})
+        assert proposal["action"] == action
         active_id = _save(store, project_id, program=_program(input_address="X7"))
         assert store.get_project(project_id)["active_version_id"] == active_id != base_id
         preview = service.proposal_preview(proposal["id"])

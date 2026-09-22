@@ -205,6 +205,7 @@ def test_approved_gx_import_uses_own_copy_on_com_queue(service, tmp_path, gx_rea
     service.execution.close()
     service.execution = execution
     proposal = service.execution_proposal({"action": "gx_import", "project_id": p["id"], "version_id": vid, "request_id": "gx"})
+    assert proposal["action"] == "gx_import"
     assert calls == []
     job = service.decide(proposal["id"], "accept")["job"]
     service.jobs._futures[job["id"]].result(timeout=15)

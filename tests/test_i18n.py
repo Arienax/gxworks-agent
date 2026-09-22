@@ -61,6 +61,25 @@ def test_all_marked_ui_templates_have_english_coverage():
     assert not missing
 
 
+GENERATION_REPAIR_STATUS_TEMPLATES = (
+    "确定性字段修复计划无效",
+    "已根据唯一校验证据确定性修复字段；未调用模型。",
+    "已由独立生成 Agent 根据确认规格一次生成完整 ladder_v1",
+    "模型回复 JSON 格式验收失败；正在检查是否可安全恢复，否则保留候选供显式修复。",
+    "修复调用未返回候选 JSON",
+    "已移除模型 JSON 末尾多余的闭合符号",
+    "已安全移除 JSON 末尾多余闭合符号；继续解析候选程序。",
+    "JSON 格式已恢复；正在对新暴露的字段错误执行一次精确修复。",
+    "JSON 格式已恢复；正在对新暴露的局部结构错误执行一次有界修复。",
+)
+
+
+def test_generation_repair_status_templates_are_catalogued():
+    for language in ("en", "ja"):
+        for source in GENERATION_REPAIR_STATUS_TEMPLATES:
+            assert translate(source, language) != source, (language, source)
+
+
 def test_live_translation_preserves_opaque_substitution_values():
     label = tr("当前项目：{v0}", v0="用户工程 D0")
     set_language("en")

@@ -528,6 +528,7 @@ def test_st_prompt_uses_only_the_selected_model_special_device_prefixes():
         fx5_prompt,
     )
     assert "FX3U" in fx3_prompt
+    assert "SM8002" not in fx3_prompt
     assert re.search(
         r"(?<![A-Za-z0-9_])M8002(?![A-Za-z0-9_])",
         fx3_prompt,

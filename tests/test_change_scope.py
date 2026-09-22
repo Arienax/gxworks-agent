@@ -333,6 +333,7 @@ def test_explicit_structural_repair_inherits_original_scope(engineering, outside
     assert failed["error_code"] is None
     assert failed["result"]["status"] == "saved_invalid"
     diagnostic_version = failed["result"]["version_id"]
+    assert diagnostic_version != version_id
     assert store.get_project(project_id)["active_version_id"] == diagnostic_version
     assert len(store.get_project(project_id)["versions"]) == 2
     assert len(provider.requests) == 1
