@@ -288,11 +288,11 @@ def retrieval_projection(spec):
         "selected_plan": {key: selected[key] for key in ("name", "description", "generation_guide") if key in selected},
         "implementation_choices": {key: preferences[key] for key in (
             "required_opcodes", "required_devices", "required_structures", "any_of_opcode_groups",
-            "any_of_structure_groups",
+            "any_of_structure_groups", "instruction_instances",
         ) if key in preferences},
         "positive_contract": {key: contract[key] for key in (
             "required_opcodes", "required_devices", "required_structures",
-            "any_of_opcode_groups", "any_of_structure_groups",
+            "any_of_opcode_groups", "any_of_structure_groups", "instruction_instances",
         ) if key in contract},
         "requests": [row.get("text", "") for row in reversed(context.get("requests", [])) if isinstance(row, dict)],
         **{key: copy.deepcopy(spec[key]) for key in (
