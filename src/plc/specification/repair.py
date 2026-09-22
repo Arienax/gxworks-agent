@@ -386,13 +386,12 @@ def build_contract_repair_plan(
     lineage = handoff_snapshot(confirmed_spec or {}, stage="contract_repair")
     # Request IDs/evidence identities retain origin without replaying the entire
     # analysis or unrelated original requests into a bounded patch task.
+    # Plan identity is semantic, not provenance-text identity. The audit handoff
+    # is returned with the plan but must not make generation_guide/proposal hashes
+    # change the repair plan when structured requirements and scope are identical.
     serializable = {
-        "handoff": lineage,
-        "approach": {
-            "name": approach.get("name") or "已选方案",
-            "implementation_semantics": approach.get("implementation_semantics") or [],
-            "generation_contract": contract,
-        },
+        "implementation_semantics": approach.get("implementation_semantics") or [],
+        "generation_contract": contract,
         "execution_semantics": normalize_semantic_requirements(
             (confirmed_spec or {}).get("execution_semantics") or []
         ),
