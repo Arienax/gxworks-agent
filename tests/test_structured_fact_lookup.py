@@ -233,7 +233,8 @@ def test_device_target_extractor_covers_special_indexed_families():
 
 
 def test_runtime_device_target_prefixes_cover_bundled_device_index():
-    from knowledge.analysis_router import DEVICE_TARGET_PREFIXES, route_analysis_request
+    from knowledge.analysis_router import route_analysis_request
+    from plc.device_identity import DEVICE_PREFIXES
 
     path = _bundled_index()
     with sqlite3.connect(path) as connection:
@@ -249,8 +250,8 @@ def test_runtime_device_target_prefixes_cover_bundled_device_index():
     # not a runtime device target. Any other new indexed family must be routed.
     indexed.discard("N")
     assert indexed
-    assert indexed <= set(DEVICE_TARGET_PREFIXES), sorted(
-        indexed - set(DEVICE_TARGET_PREFIXES)
+    assert indexed <= set(DEVICE_PREFIXES), sorted(
+        indexed - set(DEVICE_PREFIXES)
     )
     for prefix in sorted(indexed):
         device = prefix + "0"
@@ -270,34 +271,6 @@ def test_device_family_target_coverage_capability_is_enforced():
     report = audit_coverage()
     states = {row["id"]: row["state"] for row in report["capabilities"]}
     assert states["device_family_target_coverage"] == "enforced"
-
-
-def test_runtime_device_target_vocabulary_covers_structured_index_families():
-    from knowledge.analysis_router import route_analysis_request
-    from plc.device_identity import DEVICE_PREFIXES
-
-    path = _bundled_index()
-    with sqlite3.connect(path) as connection:
-        rows = connection.execute(
-            "SELECT prefix, MIN(device) FROM device_records "
-            "WHERE record_type='device' AND chunk_id IS NOT NULL "
-            "GROUP BY prefix ORDER BY prefix"
-        ).fetchall()
-
-    assert rows
-    indexed_prefixes = {str(prefix).upper() for prefix, _device in rows if prefix}
-    # N is an instruction operand/nesting placeholder family in the corpus,
-    # not a runtime PLC device identity.
-    assert indexed_prefixes - {"N"} <= set(DEVICE_PREFIXES)
-    assert "N" not in DEVICE_PREFIXES
-
-    for prefix, device in rows:
-        prefix = str(prefix or "").upper()
-        if not prefix or prefix == "N":
-            continue
-        token = str(device or "").upper()
-        route = route_analysis_request(f"查 {token} 的设备定义")
-        assert token in route.devices, (prefix, token, route.devices)
 
 
 def test_runtime_device_target_vocabulary_covers_extended_families():
