@@ -184,6 +184,26 @@ def test_settled_io_bindings_do_not_become_structured_fact_targets():
     assert targets["errors"] == []
 
 
+def test_confirmed_generation_does_not_lookup_required_devices_as_manual_facts():
+    _bundled_index()
+    from application.confirmed_generation_context import build_confirmed_generation_context
+
+    spec = {
+        "summary": "字寄存器队列",
+        "selected_approach": {
+            "generation_contract": {
+                "required_opcodes": ["WSFL"],
+                "required_devices": ["M0", "D10", "D20"],
+            }
+        },
+    }
+    context = build_confirmed_generation_context(spec, "FX3U")
+    receipt = context.handoff["structured_facts"]
+    assert receipt["targets"]["instructions"][0]["opcode"] == "WSFL"
+    assert receipt["targets"]["devices"] == []
+    assert receipt["targets"]["errors"] == []
+
+
 def test_confirmed_targets_include_selected_opcode_without_broad_search_text():
     spec = {"selected_approach": {"generation_contract": {"required_opcodes": ["WSFL"]}}}
     targets = structured_fact_targets("", spec)
