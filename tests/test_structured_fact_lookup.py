@@ -52,6 +52,18 @@ def test_exact_instruction_is_resolved_from_structured_table(opcode):
     assert all(row["match_type"] == "structured_direct" for row in rows)
 
 
+@pytest.mark.parametrize("opcode", ["DRVI", "ZRN"])
+def test_motion_instruction_direct_lookup_prefers_positioning_manual(opcode):
+    _bundled_index()
+    rows = resolve_instruction_records(
+        [{"opcode": opcode, "base_opcode": opcode}],
+        plc_model="FX3U",
+        task_type="generate",
+    )
+    assert rows
+    assert rows[0]["manual_id"] == "fx3_positioning_k"
+
+
 def test_exact_device_is_resolved_from_device_records():
     _bundled_index()
     rows = resolve_device_records(["M8029"], plc_model="FX3U", task_type="analysis")
