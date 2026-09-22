@@ -376,3 +376,17 @@ def test_model_proposed_instruction_instance_stays_exact_as_selected_preference(
         prompt.split("# Confirmed project specification\n", 1)[1]
     )
     assert payload["selected_approach"]["implementation_preferences"]["instruction_instances"] == [instance]
+
+
+def test_compact_prompt_does_not_duplicate_instruction_contract_lane():
+    from application.compact_protocol import compact_capability_prompt
+
+    spec = {
+        "selected_approach": {
+            "generation_contract": {
+                "required_opcodes": ["MOV"],
+                "instruction_instances": [{"opcode": "MOV", "operands": ["K1", "D0"]}],
+            }
+        }
+    }
+    assert compact_capability_prompt("FX3U", spec) == ""
