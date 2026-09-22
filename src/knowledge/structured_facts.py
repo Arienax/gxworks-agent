@@ -129,6 +129,31 @@ def resolve_instruction_contract(target, *, plc_model="FX3U"):
     return contract
 
 
+def _instruction_contract_prompt_view(contract):
+    """Compact model-facing view; full provenance stays in record metadata."""
+    contract = contract if isinstance(contract, Mapping) else {}
+    keys = (
+        "opcode", "base_mnemonic", "contract_level",
+        "min_operands", "max_operands", "native_operand_order",
+        "execution_form", "instruction_width",
+        "verified_fields", "unverified_fields",
+        "confirmed_operands", "instance_source",
+    )
+    value = {key: copy.deepcopy(contract[key]) for key in keys if key in contract}
+    annotations = contract.get("operand_annotations")
+    if isinstance(annotations, list) and annotations:
+        value["operand_annotations"] = [
+            {
+                key: copy.deepcopy(item[key])
+                for key in ("name", "role", "data_type", "device_prefixes")
+                if isinstance(item, Mapping) and key in item and item[key] not in (None, "", [])
+            }
+            for item in annotations
+            if isinstance(item, Mapping)
+        ]
+    return value
+
+
 def _attach_instruction_contract(record, target, *, plc_model):
     contract = resolve_instruction_contract(target, plc_model=plc_model)
     value = dict(record)
@@ -136,7 +161,8 @@ def _attach_instruction_contract(record, target, *, plc_model):
 
     body = str(value.get("text") or "")
     detail = "INSTRUCTION_CONTRACT: " + json.dumps(
-        contract, ensure_ascii=False, separators=(",", ":"), sort_keys=True,
+        _instruction_contract_prompt_view(contract),
+        ensure_ascii=False, separators=(",", ":"), sort_keys=True,
     )
     if body.startswith("[STRUCTURED INSTRUCTION RECORD]"):
         first, separator, rest = body.partition("\n")
@@ -300,7 +326,8 @@ def _local_instruction_fact_record(target, *, plc_model, task_type):
         "[STRUCTURED LOCAL INSTRUCTION RECORD]",
         f"INSTRUCTION: {opcode}",
         "INSTRUCTION_CONTRACT: " + json.dumps(
-            contract, ensure_ascii=False, separators=(",", ":"), sort_keys=True,
+            _instruction_contract_prompt_view(contract),
+            ensure_ascii=False, separators=(",", ":"), sort_keys=True,
         ),
     ]
     if isinstance(operands, (list, tuple)):
