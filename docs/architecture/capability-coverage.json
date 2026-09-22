@@ -298,38 +298,53 @@
       "id": "device_family_target_coverage",
       "category": "plc_device_fact",
       "state": "enforced",
-      "owner": "knowledge.analysis_router.DEVICE_TARGET_PREFIXES",
-      "summary": "Runtime device target extraction covers the device families present in the structured device index, including ER/TS/TC/CS/CC/R/P/I and ordinary PLC device families.",
+      "owner": "plc.device_identity.DEVICE_TOKEN_RE",
+      "summary": "Analysis routing and broad retrieval share one runtime Mitsubishi device-token vocabulary covering all real structured-index device families while excluding constant/operand placeholder families.",
       "checks": [
         {
           "kind": "contains",
-          "path": "src/knowledge/analysis_router.py",
-          "text": "DEVICE_TARGET_PREFIXES"
+          "path": "src/plc/device_identity.py",
+          "text": "DEVICE_PREFIXES = ("
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/device_identity.py",
+          "text": "DEVICE_TOKEN_RE = re.compile("
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/device_identity.py",
+          "symbol": "device_tokens"
         },
         {
           "kind": "contains",
           "path": "src/knowledge/analysis_router.py",
-          "text": "\"ER\", \"SM\", \"SD\", \"TS\", \"TC\", \"CS\", \"CC\""
+          "text": "from plc.device_identity import DEVICE_TOKEN_RE, device_tokens"
         },
         {
           "kind": "contains",
           "path": "src/knowledge/analysis_router.py",
-          "text": "\"R\", \"V\", \"Z\", \"P\", \"I\""
+          "text": "_DEVICE = DEVICE_TOKEN_RE"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/core.py",
+          "text": "from plc.device_identity import DEVICE_TOKEN_RE"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/core.py",
+          "text": "_DEVICE_RE = DEVICE_TOKEN_RE"
         },
         {
           "kind": "contains",
           "path": "tests/test_structured_fact_lookup.py",
-          "text": "test_device_target_extractor_covers_special_indexed_families"
+          "text": "test_runtime_device_target_vocabulary_covers_structured_index_families"
         },
         {
           "kind": "contains",
           "path": "tests/test_structured_fact_lookup.py",
-          "text": "test_runtime_device_target_prefixes_cover_bundled_device_index"
-        },
-        {
-          "kind": "contains",
-          "path": "tests/test_structured_fact_lookup.py",
-          "text": "test_structured_fact_targets_carry_extended_device_families"
+          "text": "test_runtime_device_target_vocabulary_rejects_constants_and_placeholders"
         }
       ],
       "tests": [
