@@ -136,6 +136,29 @@ def test_explicit_targets_are_removed_before_residual_retrieval():
     assert "查手册" in residual
 
 
+def test_settled_io_bindings_do_not_become_structured_fact_targets():
+    spec = {
+        "io_bindings": [
+            {"kind": "X", "address": "X0", "source_parameter_id": "start"},
+            {"kind": "Y", "address": "Y0", "source_parameter_id": "motor"},
+        ],
+        "io_table": [
+            {"kind": "X", "address": "X0"},
+            {"kind": "Y", "address": "Y0"},
+        ],
+        "selected_approach": {
+            "generation_contract": {
+                "required_opcodes": ["WSFL"],
+                "required_devices": ["M0"],
+            }
+        },
+    }
+    targets = structured_fact_targets("", spec)
+    assert targets["instructions"][0]["opcode"] == "WSFL"
+    assert targets["devices"] == []
+    assert targets["errors"] == []
+
+
 def test_confirmed_targets_include_selected_opcode_without_broad_search_text():
     spec = {"selected_approach": {"generation_contract": {"required_opcodes": ["WSFL"]}}}
     targets = structured_fact_targets("", spec)
