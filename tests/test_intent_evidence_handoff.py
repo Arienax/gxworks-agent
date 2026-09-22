@@ -153,14 +153,20 @@ def test_query_preserves_late_intent_numeric_values_and_reports_global_truncatio
 
 def test_fact_lane_is_not_starved_by_large_design_reference(monkeypatch):
     import knowledge.retriever as retriever
+    import knowledge.structured_facts as structured_facts
     calls = []
     def facts(*a, **kw):
         calls.append(kw)
         return [{"id": f"fact-{i}", "source": "manual", "text": "fact", "manual_type": "programming"} for i in range(3)]
     monkeypatch.setattr(retriever, "retrieve_knowledge", facts)
+    monkeypatch.setattr(
+        structured_facts, "structured_fact_targets",
+        lambda *args, **kwargs: {"version": "test", "instructions": [], "devices": [], "errors": []},
+    )
     monkeypatch.setattr(retriever, "retrieve_design_knowledge", lambda *a, **kw: [
         {"id": "large-design", "source": "curated", "manual_type": "curated_design", "text": "D" * 3000}])
-    context = retriever.build_knowledge_context("FX3U MOV", task_type="analysis", top_k=4, char_budget=1500, include_design=True)
+    context = retriever.build_knowledge_context(
+        "FX3U generic manual fact", task_type="analysis", top_k=4, char_budget=1500, include_design=True)
     assert 3 <= calls[0]["top_k"] <= retriever._MAX_TOP_K
     assert all(f"fact-{i}" in context for i in range(3))
     assert "large-design" not in context
