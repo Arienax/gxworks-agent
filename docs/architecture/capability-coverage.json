@@ -297,22 +297,39 @@
     {
       "id": "device_family_target_coverage",
       "category": "plc_device_fact",
-      "state": "tracked_gap",
-      "owner": "knowledge index device_records",
-      "summary": "Target extraction must cover the device families present in the structured device index rather than only a historical X/Y/M/D/T/C/S/V/Z subset.",
+      "state": "enforced",
+      "owner": "knowledge.analysis_router.DEVICE_TARGET_PREFIXES",
+      "summary": "Runtime device target extraction covers the device families present in the structured device index, including ER/TS/TC/CS/CC/R/P/I and ordinary PLC device families.",
       "checks": [
         {
           "kind": "contains",
-          "path": "tools/build_fx3u_knowledge_v3.py",
-          "text": "(?:ER|SM|SD|TS|TC|CS|CC|[A-Z]+)"
-        }
-      ],
-      "gap_reason": "analysis_router._DEVICE does not yet cover indexed device families such as TS/TC/CS/CC/ER that the structured index can represent.",
-      "gap_checks": [
-        {
-          "kind": "absent",
           "path": "src/knowledge/analysis_router.py",
-          "text": "TS|TC|CS|CC"
+          "text": "DEVICE_TARGET_PREFIXES"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/analysis_router.py",
+          "text": "\"ER\", \"SM\", \"SD\", \"TS\", \"TC\", \"CS\", \"CC\""
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/analysis_router.py",
+          "text": "\"R\", \"V\", \"Z\", \"P\", \"I\""
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_device_target_extractor_covers_special_indexed_families"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_runtime_device_target_prefixes_cover_bundled_device_index"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_structured_fact_targets_carry_extended_device_families"
         }
       ],
       "tests": [
