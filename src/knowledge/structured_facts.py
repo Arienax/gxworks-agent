@@ -25,9 +25,14 @@ def structured_fact_targets(query, confirmed_spec=None):
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
 
     spec = confirmed_spec if isinstance(confirmed_spec, Mapping) else {}
+    # Device/error targets come only from the current retrieval query. The
+    # confirmed specification contains settled I/O bindings and required
+    # devices that are generation inputs, not automatic manual fact requests.
+    # Selected opcodes are different: instruction_fact_targets deliberately
+    # carries required_opcodes from the confirmed generation contract.
     route = route_analysis_request(
         query,
-        confirmed_context=spec,
+        confirmed_context=None,
         resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form,
     )
     instructions = instruction_fact_targets(query, spec)
