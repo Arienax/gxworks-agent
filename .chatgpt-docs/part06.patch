@@ -1,0 +1,1000 @@
++| 专项：修复后 | 0.4000 | 0.9500 | 1.0000 | 0.6472 | —（无负例） |
++| 固定官方：修复前 | 0.8725 | 0.9804 | 0.9951 | 0.9080 | 1.0000 |
++| 固定官方：仅修 skill 后 | 0.8725 | 0.9804 | 0.9951 | 0.9080 | 1.0000 |
++| 固定官方：motion 修复后 | 0.8725 | 0.9804 | 1.0000 | 0.9086 | 1.0000 |
++
++专项 20/20 正例通过，Top5 19/20，Top1 8/20。官方固定基准 204/204 正例通过，16/16 负例保持为空。专项 Recall@1 仍为 0.40，未达到期望中的 0.50；满足召回优先的停止条件后，没有继续调权重。
++
++## 修改文件与设计理由
++
++| 文件 | 修改及理由 |
++|---|---|
++| `src/gxw2_skill_concepts.py`（新增） | tuner/runtime/reranker 共用一份概念定义。弱词采用有主题和 PLC/ST 上下文约束的 `GXW2_*` entity route；`__NEW`/`__DELETE` 保留完整标识符；区分 SR/RS 功能块和串口 RS 指令，区分 CASE 命名标签与 POU 命名。 |
++| `tools/tune_gxw2_skill_ranking.py` | 从 importer 原始 `entities_json` 恢复 native entities，再重建 derived layer。兼容旧 schema 时使用历史词表及非派生索引恢复；清理覆盖所有目标 source chunks，包括已经失去 route 的块。弱概念只写有命名空间的 entity_index，不镜像进 FTS，避免 FTS 拆词重引污染。 |
++| `src/knowledge_retriever_core.py` | 精确概念接入现有 entity pipeline，原 query、FTS 输入和 dense 输入不变。独立新增方向输出分配问题到官方 Output Numbers 章节的窄路由，复用原 manual_section 基础分 1540。 |
++| `src/knowledge_retriever.py` | 复用共享概念解析，按任务决定扩展；Top40 以数量约束，字符预算延后到 rerank 后最终选择，避免正确规则被长手册段落挤掉。 |
++| `src/knowledge_retriever_phase2c.py` | 所有原 boost 数值保持不变。如果精确概念命中的支持材料仍不在 Top5，最多将一条放到第 2 位；保留首条结果，记录 `gxw2_supporting_slot`，不伪造更高 score。 |
++| `tests/test_gxw2_skill_ranking.py` | 覆盖旧数据迁移、route 删除后的彻底清理、native/derived 同词保留、幂等性及官方来源拒绝。 |
++| `tests/test_gxw2_skill_reranker.py` | 覆盖普通软件请求隔离、上下文及 task scope、完整 __ 标识符、SR/RS 歧义、支持材料位置约束和延后的字符预算。 |
++| `tests/test_fx3u_rag.py` | 加入中英文方向输出问题及高速适配器场景的真实索引回归检查，确保官方证据包含硬件区别。 |
++| `tools/trace_rag_candidates.py`（新增） | 只读诊断 CLI，输出 entity/FTS/dense refs、完整 scorer 排名、Top40、rerank 后排名和最终 Top10；可指定 case 与候选预算。 |
++| `resources/knowledge/fx3u_knowledge.sqlite` | 重新运行 tuner，重建派生路由和 FTS。当前 59 条路由、34 个概念、21 个关联块。 |
++| `benchmarks/gxw2_skill_rag_benchmark_report.json`、`benchmarks/fx3u_rag_benchmark_pre_skill_report.json` | 运行原专项和固定官方 JSONL 后更新评估报告，不修改用例或期望。 |
++| `benchmarks/gxw2_skill_candidate_trace_{before,after}.json`、`benchmarks/motion_direction_candidate_trace_{before,after}.json`（新增） | 保留修复前后可核查的逐层证据。 |
++| `benchmarks/gxw2_skill_routing_validation.json`、本文档（新增） | 记录 20 个专项结果、数据库一致性审计、测试结果和根因说明。 |
++
++## 原 5 个失败的精确分类
++
++没有发现错误的 benchmark chunk_type 期望，也没有 task scope 不匹配。4 个是 B（排序失败），另 1 个是 A（传入 reranker 的候选池缺失），但它的 entity 召回本身成功。
++
++| case | 对应正确块 | 原 scorer 排名 | 原 Top40 / rerank 后 | 修复后 Top40 / rerank 后 / 最终排名 | 分类与根因 |
++|---|---|---:|---|---|---|
++| skill_st_002 | 3296 / Comment Style | 13 | 13 / 13 | 11 / 2 / 2 | B：STRUCTURED/TEXT 是环境词，却触发了官方编辑器章节的高分 manual_section；评论规则 entity 成功，FTS 原始召回但 coverage gate 拒绝，dense 未命中。原 +320 仍不足以进 Top10。 |
++| skill_st_004 | 3302 / CASE Statement | 17 | 17 / 11 | 17 / 2 / 2 | B：CASE entity 与 dense 都命中，FTS coverage 被拒绝；大量官方泛章节排在前面，+320 仅从第 17 位推到第 11 位。 |
++| skill_st_007 | 3295 / FB/FUN/PRG POU and File Naming | 12 | 12 / 11 | 12 / 2 / 2 | B：FB/FUN/PROGRAM 已召回正确命名块，dense 也命中；原 +280 后仍为第 11 位。PROGRAM 裸词还污染普通软件请求。 |
++| skill_compat_001 | 3313 / Feature Matrix | 12 | 12 / 13 | 11 / 2 / 2 | B：Feature Matrix 通过 STRING entity 与 dense 召回，FTS Top200 未包含它；STRUCTURED/TEXT 错把注释规则一起引入，其 st_rule 加分又高于 compatibility，矩阵从第 12 位落到第 13 位。 |
++| skill_st_008 | 3291 / Mandatory Constraints | 36 | 无 / 无 | 36 / 2 / 2 | A：SR entity 已召回 3291/3292，原 scorer 排名为 36/37；160000 字符预算在 rerank 前消耗完，实际候选仅 33 条。RS 的 527 条索引记录受每词 64 条限制，未单独召回这两个规则；FTS 原始命中被 coverage gate 拒绝，dense 未命中。主因是预算截断，不是三层都漏召回。 |
++
++以上排名均从运行时真实结果取出；原 Top40 使用原来的 160000 字符预算，修复后的 Top40 在最终选择前不截断字符。基准匹配本身较宽（来源及 chunk_type），表中额外选取了实际对应主题的块进行核查。
++
++## 原失败用例的 Top10 与各层证据
++
++下表列出修复前最终 Top10；完整 entity refs、FTS refs、dense refs、core Top40、phase2c reranked 及对应正确块信息保存在 `gxw2_skill_candidate_trace_before.json`。修复后数据见同名 `after` 文件。
++
++### skill_st_002
++
++GX Works2 FX3U Structured Text 注释应该使用 // 还是 (* ... *)？
++
++category=st_rule；task_type=st；expected chunk_type=st_rule；expected manual_id=gxw2_skill_1_6_1。
++
++正确块 3296：entity=命中，FTS raw=命中，FTS quality=0.0，dense=未命中，scope=匹配。
++
++| rank | chunk id | actual chunk_type | actual manual_id | matched_entity | retrieval_signals | score | gxw2_supporting_boost |
++|---:|---|---|---|---|---|---:|---:|
++| 1 | 2985 | section | gxworks2_structured_ag | 1.3.2 List of functions for editing in Structured Text | manual_section, vector | 2331.8 | 0 |
++| 2 | 3091 | section | gxworks2_structured_ag | 10.4.8 Using function blocks and inline structured text created in other programming languages | manual_section, vector | 2292.1077 | 0 |
++| 3 | 2983 | section | gxworks2_structured_ag | 1.2 Features of Structured Project | manual_section, vector | 2286.8 | 0 |
++| 4 | 3044 | section | gxworks2_structured_ag | 7.1.5 Switching text color on an ST editor | manual_section, vector | 2237.6571 | 0 |
++| 5 | 2984 | section | gxworks2_structured_ag | 1.3.1 List of functions common to Simple project and Structured project | manual_section, vector | 2200.8 | 0 |
++| 6 | 3045 | section | gxworks2_structured_ag | 8 EDITING STRUCTURED LADDER/FBD PROGRAMS | manual_section, vector | 2186.8 | 0 |
++| 7 | 2993 | section | gxworks2_structured_ag | 4.1 Program Configurations of Structured Project | manual_section, vector | 2158.1333 | 0 |
++| 8 | 3112 | section | gxworks2_structured_ag | 12.5 Monitoring Programs in Structured Ladder/FBD Editor | manual_section, vector | 2137.6571 | 0 |
++| 9 | 2987 | section | gxworks2_structured_ag | 1.3.3 List of functions for editing in Structured Ladder/FBD | manual_section, vector | 2100.8 | 0 |
++| 10 | 2986 | section | gxworks2_structured_ag | 1.3.3 List of functions for editing in Structured Ladder/FBD | manual_section | 1835.8 | 0 |
++
++### skill_st_004
++
++GX Works2 ST 的 CASE 能不能写 1..5 这样的范围标签或者命名状态标签？
++
++category=st_rule；task_type=st；expected chunk_type=st_rule；expected manual_id=gxw2_skill_1_6_1。
++
++正确块 3302：entity=命中，FTS raw=命中，FTS quality=0.0，dense=命中，scope=匹配。
++
++| rank | chunk id | actual chunk_type | actual manual_id | matched_entity | retrieval_signals | score | gxw2_supporting_boost |
++|---:|---|---|---|---|---|---:|---:|
++| 1 | 2982 | section | gxworks2_structured_ag | 1 OVERVIEW | manual_section, vector | 2299.8 | 0 |
++| 2 | 3005 | section | gxworks2_structured_ag | 5 SETTING LABELS | manual_section, vector | 2156.4667 | 0 |
++| 3 | 3018 | section | gxworks2_structured_ag | 5.6.1 Setting structures | manual_section, vector | 2084.8 | 0 |
++| 4 | 3048 | section | gxworks2_structured_ag | 8.2.1 Entering elements | manual_section, vector | 2084.8 | 0 |
++| 5 | 3030 | section | gxworks2_structured_ag | 6.1.1 Available programming languages | manual_section, vector | 2041.8 | 0 |
++| 6 | 3035 | section | gxworks2_structured_ag | 6.2.5 Splitting editing screen | manual_section, vector | 2041.8 | 0 |
++| 7 | 3047 | section | gxworks2_structured_ag | 8.1.1 Selecting editing modes | manual_section, vector | 2041.8 | 0 |
++| 8 | 3073 | section | gxworks2_structured_ag | 8.10.1 Overwrite mode and insert mode | manual_section, vector | 2041.8 | 0 |
++| 9 | 3100 | section | gxworks2_structured_ag | 10.6.1 Correcting errors and warnings | manual_section, vector | 2041.8 | 0 |
++| 10 | 2998 | section | gxworks2_structured_ag | 4.3.1 Procedure for creating POUs | manual_section, vector | 2013.1333 | 0 |
++
++### skill_st_007
++
++GX Works2 项目里的 FB、FUN、Program 文件名和 FB 实例名应该采用什么命名规则？
++
++category=st_rule；task_type=generate；expected chunk_type=st_rule；expected manual_id=gxw2_skill_1_6_1。
++
++正确块 3295：entity=命中，FTS raw=命中，FTS quality=0.0，dense=命中，scope=匹配。
++
++| rank | chunk id | actual chunk_type | actual manual_id | matched_entity | retrieval_signals | score | gxw2_supporting_boost |
++|---:|---|---|---|---|---|---:|---:|
++| 1 | 2993 | section | gxworks2_structured_ag | 4.1 Program Configurations of Structured Project | manual_section, vector | 2358.1333 | 0 |
++| 2 | 2995 | section | gxworks2_structured_ag | 4.2.2 Registering program blocks to tasks | manual_section, vector | 2337.6571 | 0 |
++| 3 | 3011 | section | gxworks2_structured_ag | 5.3 Setting Local Labels for Program Blocks | manual_section, vector | 2337.6571 | 0 |
++| 4 | 3033 | section | gxworks2_structured_ag | 6.2.2 Using labels in the program | manual_section, vector | 2337.6571 | 0 |
++| 5 | 3137 | section | gxworks2_structured_ag | Appendix 1.3 Toolbar icons and shortcut keys for program editors | manual_section, vector | 2310.3556 | 0 |
++| 6 | 2992 | section | gxworks2_structured_ag | 4 PROGRAM CONFIGURATIONS | manual_section, vector | 2301.4667 | 0 |
++| 7 | 3038 | section | gxworks2_structured_ag | 6.2.9 Opening label setting and program screens for selected POU | manual_section, vector | 2300.8 | 0 |
++| 8 | 3029 | section | gxworks2_structured_ag | 6.1 Types of Program Editor | manual_section, vector | 2286.8 | 0 |
++| 9 | 2994 | section | gxworks2_structured_ag | 4.2.1 Procedure for creating program files and tasks | manual_section, vector | 2222.3 | 0 |
++| 10 | 3028 | section | gxworks2_structured_ag | 6 COMMON OPERATIONS OF PROGRAM EDITORS | manual_section, vector | 2158.1333 | 0 |
++
++### skill_compat_001
++
++FX3G 在 GX Works2 Structured Text 中支持 STRING 和字符串函数吗？
++
++category=compatibility；task_type=st；expected chunk_type=compatibility；expected manual_id=gxw2_skill_1_6_1。
++
++正确块 3313：entity=命中，FTS raw=未命中，FTS quality=0.0，dense=命中，scope=匹配。
++
++| rank | chunk id | actual chunk_type | actual manual_id | matched_entity | retrieval_signals | score | gxw2_supporting_boost |
++|---:|---|---|---|---|---|---:|---:|
++| 1 | 2985 | section | gxworks2_structured_ag | 1.3.2 List of functions for editing in Structured Text | manual_section, vector | 2431.8 | 0 |
++| 2 | 3091 | section | gxworks2_structured_ag | 10.4.8 Using function blocks and inline structured text created in other programming languages | manual_section, vector | 2292.1077 | 0 |
++| 3 | 2983 | section | gxworks2_structured_ag | 1.2 Features of Structured Project | manual_section, vector | 2286.8 | 0 |
++| 4 | 3044 | section | gxworks2_structured_ag | 7.1.5 Switching text color on an ST editor | manual_section, vector | 2237.6571 | 0 |
++| 5 | 2984 | section | gxworks2_structured_ag | 1.3.1 List of functions common to Simple project and Structured project | manual_section, vector | 2200.8 | 0 |
++| 6 | 3045 | section | gxworks2_structured_ag | 8 EDITING STRUCTURED LADDER/FBD PROGRAMS | manual_section, vector | 2186.8 | 0 |
++| 7 | 2993 | section | gxworks2_structured_ag | 4.1 Program Configurations of Structured Project | manual_section, vector | 2158.1333 | 0 |
++| 8 | 3112 | section | gxworks2_structured_ag | 12.5 Monitoring Programs in Structured Ladder/FBD Editor | manual_section, vector | 2137.6571 | 0 |
++| 9 | 2987 | section | gxworks2_structured_ag | 1.3.3 List of functions for editing in Structured Ladder/FBD | manual_section, vector | 2100.8 | 0 |
++| 10 | 3291 | st_rule | gxw2_skill_1_6_1 | STRUCTURED | entity, entity, vector | 1851.8 | 320.0 |
++
++### skill_st_008
++
++GX Works2 FX3U ST 是否支持 SR/RS 双稳态功能块？推荐替代方案是什么？
++
++category=st_rule；task_type=st；expected chunk_type=st_rule；expected manual_id=gxw2_skill_1_6_1。
++
++正确块 3291：entity=命中，FTS raw=命中，FTS quality=0.0，dense=未命中，scope=匹配。
++
++| rank | chunk id | actual chunk_type | actual manual_id | matched_entity | retrieval_signals | score | gxw2_supporting_boost |
++|---:|---|---|---|---|---|---:|---:|
++| 1 | 538 | instruction | fx3_programming_r | RS | structured_instruction, entity | 2760.0 | 0 |
++| 2 | 1886 | instruction | fxcpu_basic_applied_m | RS | structured_instruction, entity | 2755.5 | 0 |
++| 3 | 4306 | skill_instruction | gxw2_skill_1_6_1 | RS | entity, vector | 1984.8 | 0 |
++| 4 | 539 | instruction | fx3_programming_r | RS | entity | 1964.0 | 0 |
++| 5 | 541 | instruction | fx3_programming_r | RS | entity | 1961.0 | 0 |
++| 6 | 540 | instruction | fx3_programming_r | RS | entity | 1958.0 | 0 |
++| 7 | 1888 | instruction | fxcpu_basic_applied_m | RS | entity | 1954.5 | 0 |
++| 8 | 1887 | instruction | fxcpu_basic_applied_m | RS | entity | 1952.5 | 0 |
++| 9 | 1889 | instruction | fxcpu_basic_applied_m | RS | entity | 1950.5 | 0 |
++| 10 | 4304 | skill_instruction | gxw2_skill_1_6_1 | RS | entity | 1762.8 | 0 |
++
++## 官方方向输出问题
++
++`motion_direction_arbitrary`：正确的官方章节是 `fx3_positioning_k` / chunk 1353 / “1.5.2 Assignment of Output Numbers”，PDF 页 56–57。它同时区分主机晶体管输出和高速输出适配器的分配规则；不能把适配器的固定映射泛化到主机输出。
++
++原 Top40 中该块排第 23（score 1788.1）。窄范围章节路由复用既有 manual_section 基础分，修复后排第 9，原首位 debug case 保留；官方 Recall@10 从 203/204 恢复为 204/204。该修复与 skill 路由独立，未改数据库正文或 benchmark 期望。
++
++## 20 个专项用例的最终结果
++
++| case | category | 首次合格结果排名 | chunk id | section |
++|---|---|---:|---|---|
++| skill_st_001 | st_rule | 1 | 3291 | Common Rules — GX Works 2 ST (Mandatory) > Mandatory Constraints |
++| skill_st_002 | st_rule | 2 | 3296 | Common Rules — GX Works 2 ST (Mandatory) > Comment Style |
++| skill_st_003 | st_rule | 1 | 3291 | Common Rules — GX Works 2 ST (Mandatory) > Mandatory Constraints |
++| skill_st_004 | st_rule | 2 | 3302 | Common Rules — GX Works 2 ST (Mandatory) > Selection > CASE Statement |
++| skill_st_005 | st_rule | 1 | 3299 | Common Rules — GX Works 2 ST (Mandatory) > Assignment Operator |
++| skill_st_006 | st_rule | 1 | 3309 | Common Rules — GX Works 2 ST (Mandatory) > 3-Program Structure (Default Project Layout) |
++| skill_st_007 | st_rule | 2 | 3295 | Common Rules — GX Works 2 ST (Mandatory) > Naming Conventions > FB/FUN/PRG POU and File Naming |
++| skill_type_001 | data_type | 1 | 3341 | Data Types — GX Works 2 ST (FX Series) > Unsupported Types (FX Series) |
++| skill_type_002 | data_type | 1 | 3343 | Data Types — GX Works 2 ST (FX Series) > Memory Consumption |
++| skill_type_003 | data_type | 1 | 3339 | Data Types — GX Works 2 ST (FX Series) > Elementary Types |
++| skill_type_004 | data_type | 2 | 3350 | Data Types — GX Works 2 ST (FX Series) > `_E` Postfix Pattern |
++| skill_compat_001 | compatibility | 2 | 3313 | Compatibility Matrix — FX Series Models (GX Works 2) > Feature Matrix |
++| skill_compat_002 | compatibility | 1 | 3314 | Compatibility Matrix — FX Series Models (GX Works 2) > Device Ranges |
++| skill_compat_003 | compatibility | 2 | 3320 | Compatibility Matrix — FX Series Models (GX Works 2) > GX Works 2 vs GX Works 3 |
++| skill_mov_001 | skill_instruction | 4 | 4091 | MOV — MOV / Move > ST Syntax (GX Works 2) |
++| skill_mov_002 | skill_instruction | 9 | 4095 | MOV — MOV / Move > Key Rules |
++| skill_mov_003 | skill_instruction | 4 | 4091 | MOV — MOV / Move > ST Syntax (GX Works 2) |
++| skill_st_008 | st_rule | 2 | 3291 | Common Rules — GX Works 2 ST (Mandatory) > Mandatory Constraints |
++| skill_st_009 | st_rule | 3 | 3291 | Common Rules — GX Works 2 ST (Mandatory) > Mandatory Constraints |
++| skill_st_010 | st_rule | 2 | 3295 | Common Rules — GX Works 2 ST (Mandatory) > Naming Conventions > FB/FUN/PRG POU and File Naming |
++
++## 验证与边界
++
++- 全仓库 `python -m pytest -q -rs`：730 passed，3 skipped，0 failed。指定的 5 个测试文件均包含在此次通过的测试集中。
++- 3 项跳过：缺少可选 MCP 依赖；GX Works2 没有运行；没有可读取的打开程序。该实验未验证 MCP 实际集成、GX/Simulator/MX 软件链路，也未操作真实 PLC。
++- SQLite integrity_check=ok。逐表双向比较确认 manuals、instructions、instruction_aliases、device_records、debug_cases、vector_embeddings、所有官方 chunks 和非 skill_concept 索引记录没有新增/删除/修改。
++- 所有 chunks 的 text、text_sha256、entities_json、manual_priority 与接手时一致；dense 文件哈希一致，没有重新 build dense。第三方 structured instruction 数量仍为 0。
++- entity_index 中裸 PROGRAM 派生条数=0；第三方 chunks.entities 中 PROGRAM token 数量=0。普通查询 `please revise this program`（FX3U/edit）返回 `[]`。
++- `GX Works2 FX3U ST program structure`（FX3U/st）能返回 st_rule / chunk 3309。
++- 固定官方及专项 benchmark JSONL 的哈希没有变化；release manifest、原 canonical benchmark meta/report、dense 文件均保留用户接手前已有改动，该实验没有再次改写。自定义 evaluator 的 manifest 隔离逻辑未改。
++- UTF-16 CSV importer、JSON→CSV renderer、skill_instruction 身份及第三方低优先级均保持原有设计。
++
++## 复现命令
++
++```powershell
++python tools/tune_gxw2_skill_ranking.py
++python -m pytest tests/test_gxw2_skill_import.py tests/test_gxw2_skill_ranking.py tests/test_gxw2_skill_reranker.py tests/test_fx3u_rag.py -v
++python -m pytest -q -rs
++python tools/evaluate_rag_benchmark.py --benchmark benchmarks/gxw2_skill_rag_benchmark.jsonl --output benchmarks/gxw2_skill_rag_benchmark_report.json --fail-under-recall-10 0.90
++python tools/evaluate_rag_benchmark.py --benchmark benchmarks/fx3u_rag_benchmark_pre_skill.jsonl --output benchmarks/fx3u_rag_benchmark_pre_skill_report.json --fail-under-recall-10 0.98
++python tools/trace_rag_candidates.py --case-id skill_st_002 --case-id skill_st_004 --case-id skill_st_007 --case-id skill_compat_001 --case-id skill_st_008 --output benchmarks/gxw2_skill_candidate_trace_after.json
++python tools/trace_rag_candidates.py --benchmark benchmarks/fx3u_rag_benchmark_pre_skill.jsonl --case-id motion_direction_arbitrary --output benchmarks/motion_direction_candidate_trace_after.json
++```
++
++## PR #3 合并建议
++
++建议将这批已验证的本地改动提交到 PR #3 后合并。召回目标、官方不退化约束、弱词清理和方向输出回归均满足；没有为提升 Top1 继续扩大权重。诊断阶段尚未提交或推送。后续用户授权比较远端与本地后合并，合并准备时重新运行正式 benchmark，并刷新发布 manifest 的数据库哈希、统计计数和正式评估结果；固定专项及官方用例、dense 和数据库正文不变。
+diff --git a/docs/process/qt-retirement.md b/docs/process/qt-retirement.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..1c56af6f88b8688b17ad9137a459d3f265c7708c
+--- /dev/null
++++ b/docs/process/qt-retirement.md
+@@ -0,0 +1,79 @@
++# Qt retirement audit
++
++> 历史记录。来源文档冻结于 `f2f1781a846c9f7073724b4cca485082d57f414c`；实验日期、样本和被测版本按正文记录。代码路径、命令和未完成事项描述当时环境。当前操作从[文档索引](../README.md)进入。
++
++日期：2026-09-21。基线：`fix/prompt-cleanup-io-binding-20260921`，提交 `a07d9c9f4acf055e8b754a5d48306c2628cac8ad`。
++
++## 决定与范围
++
++审查 Qt 独占行为，保留可复用能力，删除 Qt，而不是继续等待所有旧界面功能在 Web 上复刻。该实验不引入新的 PLC 语义、模型提示词、运行时门禁、TS 领域实现或 C# 领域实现。
++
++审查覆盖 `src/ui/` 下 28 个 Python 文件、15,994 行代码，以及入口、依赖、资源、打包、调用方和测试。Qt 主窗口、经典窗口、对话框、画布、控件、主题、翻译绑定、信号与 QThread 适配均退出产品代码。没有把旧目录改名为 legacy、复制到别的运行目录或保留一个伪装的兼容壳。
++
++## 能力归属与处理
++
++| 原 Qt 行为 | 审查结论 | 处理与剩余问题 |
++| --- | --- | --- |
++| 默认工作区目录 | `SessionStore` 仍动态导入 Qt 的 `QStandardPaths`，是唯一发现的非 UI 运行时 Qt 导入 | 用纯 Python `default_workspace_dir()` 保留旧组织/应用标识。显式目录优先，其次 `PLC_AI_WORKSPACE_DIR`；无隐式搬迁、清空或重新生成工程 |
++| SFC 图解释、地址分配、图模型 | 已在 `plc/sfc.py`，不是 Qt 独占领域算法 | 保留现有算法，不复制或重写；删除图形画布 |
++| 旧 `.sfc` 文档加载 | Qt 仍拥有 version-1 `blocks/temp_id/connections/source_id/target_id` 的输入投影 | 增加 `document_graph`、`document_requirement` 和只读模块 CLI；分离副本保留节点属性与几何数据，不修改源文件。它只转换需求，不是 GX 原生 SFC 编译器 |
++| GXW 结构化 POU 选择/检查 | Qt 仅选择文件/POU 并显示 `gxw.decoder` 的结果 | 保留 decoder、resolver、未知记录及既有命令；增加 `--list-programs`。不声称 Structured decoder 覆盖所有 GXW 程序形式 |
++| 原生 CSV 保真回读 | 算法已在 `gxworks2.csv_importer`，QThread 仅调用 `materialize_gxworks2_version` | 原解析、原始指令、注释、原文件保留和往返校验继续存在。不放宽 Web 对未验证 vendor 指令的 `unsupported` 边界；Qt fallback 窗口不再提供 |
++| 生成、增量编辑、语言和流式输出 | 共享实现在 `application.generation/planning/review` 与模型运行时 | 删除信号封装；测试直接调用原应用服务，保留 IR/CSV/ST/SVG、修订号、局部编辑、语言快照、fallback 和流式断言 |
++| GX 导入、同步、回滚、仿真、报告 | 共享能力在 `application.execution`、`gxworks2/`、`simulator/`、调试服务和 storage | 不删除 COM 协调器、桌面资源锁、同步基线、回滚证据、报告数据和原生 helper。删除仅为 Qt 控件/QThread 存在性编写的测试 |
++| 模型配置、密钥、附件、历史会话和多语言 | headless 配置/存储/服务已经存在 | 原数据格式和凭据路径解析保持，不删除共享语言目录；界面控件测试退出，非 GUI 数据行为测试保留 |
++| 离线 OpenAI SDK 自检入口 | 旧桌面 `run()` 的无窗口分支 | `scripts/web_entry.py` 保留 `--self-test-openai-sdk`；真实 SDK 自检仍由原 provider 执行，不启动 Web/GX 或调用模型 |
++
++## 退役功能
++
++不再提供 Qt5/Qt6 桌面客户端、Win7 产品包、旧图形 SFC 画布和 Qt 专属原生回读交互。`.sfc` 文件仍可读取并转换成需求文本，但 Web 没有因此获得新的图形编辑器。未知原生指令的底层保真处理仍存在，但 Web 的编辑/审批覆盖范围没有扩大。
++
++历史迁移清单保留，顶部标明它已被该实验主动退役决定取代。尚未执行的 Windows/GX Works2/GX Simulator2/MX Component、锁屏/RDP、真实设备回滚和完整安装包人工验收仍然未完成，不从删除 Qt 或通过离线测试推导为完成。
++
++## 数据与命令
++
++Windows 旧标准默认工作区为 `%APPDATA%/PLC AI Studio/PLC AI Workbench/workspace`。macOS/Linux 保留对应应用数据根及相同标识。特殊环境可继续通过显式目录或 `PLC_AI_WORKSPACE_DIR` 指向原工作区。该实验不会替用户选择、打开或修改生产工程。
++
++源码环境中设置 `PYTHONPATH=src` 后：
++
++```powershell
++$env:PYTHONPATH = (Resolve-Path .\src).Path
++python -m integrations.web --workspace "D:\PLCWorkspaces\existing-workspace"
++python -m gxw.decoder "example.gxw" --list-programs
++python -m gxw.decoder "example.gxw" --program "1.Program.pou"
++python -m plc.sfc "control_flow.sfc"
++```
++
++独立原生 CSV 解析接口仍可在 Python 中使用，不会调用 GX 或生成 Web 候选：
++
++```python
++from gxworks2.csv_importer import parse_gxworks2_csv
++parsed = parse_gxworks2_csv("program.csv", "comments.csv")
++print(parsed.network_instructions)
++```
++
++这些命令和接口仅在其现有格式能力范围内工作，不将“读取成功”描述为原生编译通过。
++
++## 删除与构建
++
++删除 `src/ui/`、`src/main.py`、Qt/Win7 的两个 PyInstaller spec、`requirements/win7.txt`、Qt 专用 `tools/build_release.ps1` 和只被 Qt 使用的 codicons 资源。保留 `web.spec`、`mcp.spec`、Web 启动/构建脚本、GUI 自动化所需的 Windows vendor 集成、共享图标和知识库。
++
++根 `requirements.txt` 改为 headless Web/Core 开发、测试和打包依赖，不安装 Qt。现有 source-layout workflow 用完整 headless suite 与 Windows Web/MCP 打包烟测替代 Qt 安装/桌面打包和过渡期 missing-test 比较；没有增加 workflow 文件。完整 pytest 保留真实失败，不新增旧失败 allowlist 或自动 skip。Confirmed Generation workflow 移除三条旧 Qt-worker 排除表达式；相应 IR 集成测试现在直接运行。
++
++## 测试处理
++
++删除六个纯 Qt 测试文件：`test_codicon_safety.py`、`test_combo_option_cards.py`、`test_config_dialog_profiles.py`、`test_gxworks2_simple_bridge_ui.py`、`test_legacy_qt_smoke.py`、`test_spec_review_workbench.py`。
++
++混合测试文件只移除控件、QThread、对话框或已删除入口的断言，保留设置、附件、显示名称、语言、原生 CSV、同步、报告和执行协调器的领域测试。三条 CompilerThread/IR 测试、生成语言/fallback 测试及仿真计划流式测试改为调用已有无界面服务，不以删除测试代替迁移。
++
++新增覆盖：旧默认工作区身份和优先级、无创建/迁移行为、旧 SFC 文件投影与只读转换、GXW POU 列举和只读检查、Web SDK 自检分支。`tests/README.md` 的现有归属清单同步更新。
++
++## 本地验证与限制
++
++环境为 Linux / Python 3.13.5，未安装任何 Qt binding。生产 Python 的静态导入审查未发现 Qt、PySide、qtpy 或 `ui` 依赖；`compileall` 通过。退役相关最终定向回归为 **266 passed**。
++
++完整原分支对照为 **2944 passed、22 failed、19 skipped、10 collection errors**。第一次完整退役分支检查为 **3031 passed、14 failed、19 skipped、0 collection errors**。13 条失败与原分支重合；另一个语言目录检查此前因模块顶层导入 Qt 无法收集，单独执行同一检查确认原分支与候选均缺失同样 9 条英文翻译，没有新增条目。没有改写这些无关失败以制造绿色结果。
++
++完整失败涉及既有 GX 环境模拟、修复结果断言、提示词文字断言、Windows 路径/原生证据 hash，以及本机缺少 OpenAI SDK。MCP/独立 MS-CFB reader 等依赖不足导致的 skip 不计为验证通过。最终完整结果与逐项对照随交付包的验证记录提供。
++
++Node 测试本机通过 32 项；`module-resolution.test.mjs` 因缺少 `typescript` 不能运行。离线 `npm ci` 缓存不完整，未完成前端生产构建。未在本机执行 Windows 发布包构建、真实 SDK/stdio MCP 烟测、GitHub CI 或 GX/PLC 操作。CI 配置的更新是待运行的验证步骤，不是其已通过的声明。
+diff --git a/docs/process/research/2026-09-10-spec-interaction-and-live-progress.md b/docs/process/research/2026-09-10-spec-interaction-and-live-progress.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..675230762da637633b18636d1228ec39e48062e6
+--- /dev/null
++++ b/docs/process/research/2026-09-10-spec-interaction-and-live-progress.md
+@@ -0,0 +1,47 @@
++# 规格交互、实时进度和语言偏好
++
++> 历史记录。来源文档冻结于 `f2f1781a846c9f7073724b4cca485082d57f414c`；实验日期、样本和被测版本按正文记录。代码路径、命令和未完成事项描述当时环境。当前操作从[文档索引](../../README.md)进入。
++
++日期：2026-09-10；状态按条目标注。
++
++## 问题与决定
++
++- **confirmed**：分析结果默认通过 `DataView` 展示 `missing_info` 的 id、question、options 等数据字段，真正的 `SpecEditor` 需要再点“查看规格草稿”，形成两层重复界面。
++- **confirmed**：`collect_response` 在收到并检查全部内容后才释放原有正文/思考回调。这些回调是已通过检查的结果，不能用来报告实时接收进度。
++- **confirmed**：用户截图中的 FBD 生成因英文说明被语言验收拒绝。用户明确选择：语言不严格约束，默认显示进度条，按需展开实时输出，程序结构必须继续校验。
++
++## 改动
++
++### 规格交互
++
++- 最新分析完成且工程、版本、确认规格哈希仍匹配时，直接打开已有规格编辑器。
++- 不覆盖用户正在修改的草稿，不重复应用同一任务的草稿；旧任务和过期规格继续走显式打开和冲突检查。
++- 编程方案显示为单选卡片；问题的候选答案直接显示为按钮，保留自定义输入。建议值仍不是已确认答案。
++- 默认 Agent 页面移除 JSON 字段列表，完整数据编辑只保留在折叠的高级区域。
++
++### 实时进度与预览
++
++- `ResponseProgress` 在请求开始、收到思考、收到正文、检查回复格式时立即发出。工作台每 0.4 秒最多持久化一次同阶段更新，阶段切换立即发出。
++- 前端显示不标百分比的活动进度条、实际阶段和已用时间；没有根据 token 数推测完成百分比。
++- “查看实时输出”默认折叠，展示独立的 `model_preview` 事件，明确标记为生成过程预览。只有思考和正文能进入预览，工具调用不经此通道发布。
++- 每次新请求清空前一次预览；回复或传输失败时发送 discard，界面清空对应预览。失败输出不会作为正文回调、规格草稿或可执行工具交付。
++- 可选预览上限为 64000 字符，并显示截断说明；限制只作用于预览，不改变完整响应、程序或最终产物。
++- 已验收的文本通过 `ModelJobContext` 合并后写入任务记录；这不改变 Provider 原有回调契约，且与实时预览独立。实测第一版为一条正文的 1457 个小片段重复写文件，优化后正文仅写一条，避免生成后的收尾等待。
++
++### 语言与结构边界
++
++- 工作台任务在 `response_policy_scope(enforce_language=False)` 内执行，保留语言提示，只放宽语言脚本匹配规则。
++- JSON 语法、根对象类型、声明的人类字段类型、工具参数结构仍严格检查；FBD 的原生对象、端口、连接、声明及产物一致性继续经过原有确定性校验。
++- 既有严格调用方保留默认策略；策略随 `ModelRequest` 冻结，并通过 ContextVar 隔离并发任务，不作为模型服务请求参数发送。
++- 可写入工程的候选仍需审批，GX Works2 编译状态不能因这些检查而标成通过。
++
++## 验证
++
++- **confirmed**：暂停的模型测试证明，任务仍处于 running、最终 output 尚不存在时，已可读到实时接收阶段与正文预览；已验收正文回调尚未执行。
++- **confirmed**：英文 FBD 摘要可生成待审批候选；相同英文摘要搭配不存在的连接节点时仍失败，无 GXW 产物和候选版本。
++- **confirmed**：无效 JSON、字段类型和工具参数仍被拒绝，工具执行回调未释放；默认严格策略、显示上限与一次语法纠正回归保留。
++- **confirmed**：最终全量 `1394 passed, 3 skipped`；前端生产构建通过。现存 Starlette/AnyIO 弃用警告未改变。
++- **confirmed**：安装包烟测通过：静态资源、登录、只读隔离和 Qt 排除。已更新正在使用的安装目录；两个工作区及当前 DeepSeek 配置保持，旧包和状态已备份。最终 EXE SHA-256 为 `8808cd06395d339dbeb667826f4bd91c33cd1bd620502cd067ea1abbd15eb473`。
++- **confirmed**：在原工作区的真实 DeepSeek 任务 `job_a064102374464c448436ab36fcb2df00` 中观察到 running 状态的阶段进度条、秒数和可展开的实时内容。
++- **confirmed**：最终版在用户新工作区的独立“界面验证”工程完成真实分析 `job_2ec120afea5a4cb5b8df6e98a0360b35`，自动进入方案卡片和问题选项界面；点击 Y0 后输入框变为 Y0，再清空恢复待确认状态。未确认规格、未生成程序版本、未操作 PLC。该任务有 27 条进度、27 条预览、1 条最终正文，共 59 条任务事件。
++- **unknown**：这些验证不构成对任意 AI 程序语义正确或已通过 GX Works2 编译的保证。
+diff --git a/docs/process/research/gxw_abi_harvesting_20260913.md b/docs/process/research/gxw_abi_harvesting_20260913.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..133024dcd05c6eb94a5bcdc259719da7305a0c68
+--- /dev/null
++++ b/docs/process/research/gxw_abi_harvesting_20260913.md
+@@ -0,0 +1,27 @@
++# GXW Structured ABI harvesting（2026-09-13）
++
++> 历史记录。来源文档冻结于 `f2f1781a846c9f7073724b4cca485082d57f414c`；实验日期、样本和被测版本按正文记录。代码路径、命令和未完成事项描述当时环境。当前操作从[文档索引](../../README.md)进入。
++
++目标是持续采集证据、自动提取结构和控制差异、保守地提升候选置信度。已有 MOV、CMP、ADD_E、AND_E、DIV_E、ABS/ABS_E、TON/TON_E、CTU/CTU_E 仅索引既有证据与模板，不重新采样或改写其历史验证范围。
++
++## 首轮实验预注册
++
++SET/RST 优先使用同一个离线 `X1→Y1` 原生基线。候选假设：H-kind，线圈种类保存在 node kind；H-flag，kind 不变、由 flag/子结构决定；H-other，对应信息在另一个 source/editor stream。逐个在 GX Works2 线圈属性界面改变普通/置位/复位选项，保持器件、bbox、声明和其他节点/连线不变。先保存未编译快照，避免编译缓存混入对象类型对照。
++
++每个候选包含 type variant、direct/coincident-port variant、spaced/explicit-wire variant。后两者只改变目标与其驱动触点的间距和对应连接表达；不同时换器件或声明。逐一执行 native open→Compile All→save→close→reopen。原生界面截图用于对象名称；受控连接用于左侧执行输入角色。无界面或连接证据的右侧 graphic port 保持 unknown，不能因为 code=0 就命名 ENO/OUT。
++
++所有实验离线；不连接或写入真实 PLC。新候选只有通过证据门槛后才注册。缺失原生闭环、formals 或关键控制时，保存原始结构并输出阻塞原因。
++
++## 2026-09-19 成果固化检查点
++
++既有 block/network 研究、双 block writer 和 C2034 消除证据已在提交 `56c8c37`，目标分支已经包含该提交。该实验固化保存尚未入库的 ABI 实验材料，不表示 harvesting 总任务完成。
++
++`research/evidence/gxw-abi-checkpoint-20260919.zip` 保存 5 个原先冻结的 GXW、11 张原生界面截图，以及恢复的 RST 工作文件。逐文件 SHA-256、大小和实际观察见 `research/results/abi-checkpoint-20260919/evidence-manifest.json`；全流 SHA/长度、record alignment、字段差分、声明和原始节点见同目录 `structural-controls.json`。
++
++- SET：普通线圈→SET 的控制保持器件、其他节点、wire、声明和 block header 不变；目标 record 仅相对 offset 8 从 kind 5 变为 7。direct/spaced 控制保持目标布局、其他节点、声明及端口拓扑一致。原生两种连接均已观察到全部编译 Error=0、Warning=0、CheckWarning=0，以及保存、关闭、重开。保存前后仍需区分 POU 字节变化和语义等价，完整差分已归档。右侧 graphic port 的语义保持 unknown。
++- RST：原生属性选择和编辑器 `(R)` 截图已保存；当前工作文件可解析为 kind 8，但它直到该实验检查点才被恢复归档。不能当作当时已冻结的严格控制样本，原生闭环仍为 `native_validation_pending`。
++- `harvest_gxw_abi.py` / `build_gxw_abi_catalog.py` 是流水线初稿：结构采集与 SET 控制检查已实际运行；尚缺完整 confidence manifest、负例测试、生产注册及生成工程原生闭环。未提交最终 `gxw_abi_catalog.json`，不得把候选或脚本存在视为 writer 已支持 SET/RST。
++
++下一步先给 SET 建立 hash-bound confidence manifest 和回归负例，再完成 RST 的独立 type/geometry 控制与原生闭环；证据门槛通过后才注册模板，生成工程并重新执行原生闭环。其他目标继续按原优先级采样，不重新研究已有 ABI。
++
++该实验复核：两种 SET 样本编译保存后的 POU 都只有绝对 offset 50 的 `01→00`，canonical semantic graph 与连接拓扑均保持相同；不据此给该 header 字段命名。归档内 17 项内容 SHA-256 全部通过。目标分支上运行 `tests/test_gxw_network_blocks.py` 与 `tests/test_gxw_generation_roundtrip.py`，51 项通过；这些回归测试不替代候选 ABI 的原生验证。
+diff --git a/docs/process/research/gxw_cfb_metadata_comparison-follow-up.md b/docs/process/research/gxw_cfb_metadata_comparison-follow-up.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..b1b8e4adc9acb1450773e1e2393de9edc37a9399
+--- /dev/null
++++ b/docs/process/research/gxw_cfb_metadata_comparison-follow-up.md
+@@ -0,0 +1,9 @@
++# nested `_hdb` CFB 元数据比较（2026-09-08）：后续实验
++
++来源版本：`f2f1781`。已完成的结果见[nested `_hdb` CFB 元数据比较（2026-09-08）](../../reports/gxw/gxw_cfb_metadata_comparison.md)。
++
++## 推荐的下一步单一实验（未执行）
++
++只验证 **root modified time**：在 dense-repack 的副本中，仅将 nested root 的 8-byte modified time 改为 native51 的原始值；保持所有分配链、stream size 和流内容不变。复核差异仅为这一个字段，关闭并重新打开工程，以原 dense-repack 为对照观察导线是否显示。
++
++推荐理由是它是本组唯一剩余的非分配目录字段差异，能用一个字段隔离验证，且无需新 allocator。时间差也可能仅记录保存时刻，目前没有证据支持它是原因。无论结果如何，均不能外推成整个 CFB 元数据机制的证明；本里程碑不生成或执行这个实验。
+diff --git a/docs/process/research/gxw_network_boundaries_20260913-follow-up.md b/docs/process/research/gxw_network_boundaries_20260913-follow-up.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..13bd5f43f7741d6e527a888ea36e1df3767931e7
+--- /dev/null
++++ b/docs/process/research/gxw_network_boundaries_20260913-follow-up.md
+@@ -0,0 +1,27 @@
++# Structured Ladder/FBD block/network 边界研究（2026-09-13）：后续实验
++
++来源版本：`f2f1781`。已完成的结果见[Structured Ladder/FBD block/network 边界研究（2026-09-13）](../../reports/gxw/gxw_network_boundaries_20260913.md)。
++
++## 采样前的可证伪假设
++
++| ID | 假设 | 排除方法 |
++| --- | --- | --- |
++| H-record | block 由 node/wire 列表内新的 record class、node kind 或 separator 表示 | 对 B/C 做完整 record alignment，检查所有插入/删除字节是否属于其他层级 |
++| H-envelope | Program.pou 在 record 列表外有每 block 的 envelope、长度和计数 | C/D 完整重排 envelope，且 block 内记录独立保持；受控 B→C mutation |
++| H-other | block 边界只在其他 source/editor logical stream 中 | Program.pou 单流移植能改变 block 数并消除 C2034 时排除“只在其他流” |
++| H-geometry | block 仅由现有 wire/rail/节点几何推导 | 保持逻辑图、对齐 block 局部坐标，观察非几何结构及移植结果 |
++| H-identity | 候选 block DWORD 是稳定 identity | 交换 block 顺序，比较数值跟随内容还是位置；不能只由两个相等常量下结论 |
++
++## 最小原生矩阵（预注册）
++
++用已知直接器件与空声明基线，首条 `X1→Y1`，第二条 `X2→Y2`。B/C/D 中器件、逻辑和声明相同。
++
++| 样本 | 组织 | 与对照的唯一编辑语义变化 |
++| --- | --- | --- |
++| A | 1 block / 1 简单梯形图 | 原生基线 |
++| B | 1 block / 2 独立梯形图 | A 加第二条逻辑；这是计数基线，不作为纯组织因果对照 |
++| C | 2 blocks / 各 1 梯形图 | B 将第二条移动到独立 block；局部坐标重定位是编辑器附带变化，单独列出 |
++| D | 与 C 相同，交换 block 顺序 | 仅顺序；区分 identity、ordering 与 count |
++| E | 在 A 上增加空 block（如编辑器允许） | 空 block 的结构控制；与 C 删除第二条逻辑不同，不冒充语义等价 |
++
++每个样本分别保存编辑后/编译后快照，记录 open→compile all→save→close→reopen；全流 SHA-256、长度、XML 字段 diff、record alignment 与二进制 diff 都进入结果 JSON。重复无编辑保存用于发现 save noise；未经隔离的字段不丢弃、不命名为格式规则。
+diff --git a/docs/process/research/gxw_reverse_engineering.md b/docs/process/research/gxw_reverse_engineering.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..3ec8c8036a864609bcb8faf3b568c5ae7b08fc15
+--- /dev/null
++++ b/docs/process/research/gxw_reverse_engineering.md
+@@ -0,0 +1,644 @@
++# GX Works2 `.gxw` reverse-engineering notes
++
++> 历史记录。来源文档冻结于 `f2f1781a846c9f7073724b4cca485082d57f414c`；实验日期、样本和被测版本按正文记录。代码路径、命令和未完成事项描述当时环境。当前操作从[文档索引](../../README.md)进入。
++
++> Status: experimental / reverse-engineered from controlled FX3U samples created in GX Works2 on 2026-09-05.
++>
++> These observations are intended to support a future **read-only GXW parser**. Do not treat offsets or encodings as universal until they are validated against more PLC families, project layouts, POU types, GX Works2 versions, and structured-ladder projects.
++
++## Goal
++
++The long-term path under investigation is:
++
++```text
++GXW
++  -> container reader
++  -> project object resolver
++  -> Program.pou tokenizer
++  -> Mitsubishi instruction decoder
++  -> PLC IR
++```
++
++Writing `.gxw` directly is a separate, higher-risk problem because a project contains duplicated/derived data, metadata, hashes and compiler state. The first milestone should therefore be a deterministic read-only parser.
++
++## Controlled sample method
++
++Each sample changes one variable where possible. The currently analyzed set includes:
++
++- `00_empty.gxw`
++- `02_X0_Y0.gxw`
++- `03_X1_Y0.gxw`
++- `04_X1_Y1.gxw`
++- `05_add_comment.gxw` (`X1` device comment changed to `"1"`)
++- `06_X2_Y1.gxw`
++- `07_X10_Y1.gxw`
++- `08_X100_Y1.gxw`
++- `09_M1_Y1.gxw`
++- `10_MOV_K10_D1.gxw` through `36_DSUB_D0_D2_D4.gxw`
++- `37_SERIES_X1_M1_Y1.gxw` through `47_COUNTER_C1_K10.gxw`
++
++The filenames beginning with `DM0V` contain a digit zero in the filename only; the actual GX Works2 instruction is `DMOV`.
++
++## Container structure
++
++Observed `.gxw` files are Microsoft Compound File Binary (CFB/OLE) containers rather than a single opaque program blob.
++
++Observed high-level structure:
++
++```text
++GXW (outer CFB)
++├─ checkout.xml
++├─ dataprotection.xml
++├─ history.xml
++├─ label.xml
++├─ projectdatalist.xml
++├─ projectlist.xml
++├─ ...
++└─ _hdb
++   └─ nested CFB
++      ├─ numbered streams
++      ├─ MAIN.res
++      ├─ MAIN.Program.pou
++      ├─ COMMENT.qcd
++      ├─ ESCompiler.stg
++      └─ Gppw2.gpj
++```
++
++In the current sample project, `history.xml` maps numbered streams to logical files. Observed mappings included:
++
++```text
++12 -> MAIN.res
++16 -> MAIN.Program.pou
++19 -> COMMENT.qcd
++37 -> ESCompiler.stg
++39 -> Gppw2.gpj
++```
++
++**Do not hard-code these numeric stream IDs.** A parser should resolve logical object names from the project metadata (`history.xml`, `projectdatalist.xml`, etc.). Different projects can assign different IDs.
++
++## `MAIN.Program.pou`
++
++### Observed layout
++
++For the current controlled sample set, the instruction token stream begins at offset `0x4F`.
++
++Other observed fields:
++
++- `0x22`: a Windows `SYSTEMTIME`-shaped timestamp block (`WORD Year`, `Month`, `DayOfWeek`, `Day`, `Hour`, `Minute`, `Second`, `Milliseconds`). This is save-time noise for diffing purposes.
++- `0x37`: little-endian `uint32` length-like field.
++- `0x3B`: duplicate of the same length-like field.
++- observed relation: `field_at_0x37 == token_stream_length + 20`.
++- observed file-length relation: `file_size == 0x4F + token_stream_length + 24`.
++- observed trailer: 24 zero bytes after the token stream.
++
++These offsets are **sample-layout observations**, not yet proven format invariants.
++
++### Token framing
++
++Instruction and operand tokens observed so far use matching leading/trailing length bytes:
++
++```text
++[length] [payload ...] [length]
++```
++
++Examples:
++
++```text
++03 00 03
++04 9C 01 04
++05 E8 00 01 05
++```
++
++This enables sequential tokenization without searching for magic byte patterns.
++
++## Basic instruction tokens
++
++Observed basic instruction opcodes:
++
++| Instruction | Token | Evidence |
++|---|---|---|
++| `LD` | `03 00 03` | `X1` input samples |
++| `LDI` | `03 01 03` | `39_NC_X1_Y1.gxw` |
++| `OR` | `03 06 03` | `38_PARALLEL_X1_X2_Y1.gxw` |
++| `ORI` | `03 07 03` | `43_ORI_X1_NC_X2_Y1.gxw` |
++| `AND` | `03 0C 03` | `37_SERIES_X1_M1_Y1.gxw` |
++| `ANDI` | `03 0D 03` | `40_SERIES_X1_NC_M1_Y1.gxw` |
++| `ORB` | `03 18 03` | `44_BRANCH_ORB.gxw` |
++| `ANB` | `03 19 03` | `45_BRANCH_ANB.gxw` |
++| `OUT` | `03 20 03` | `Y1` output samples |
++| T/C output variant | `04 21 03 04` | timer/counter samples 41, 42, 46, 47 |
++| `SET` | `03 23 03` | `23_SET_M1.gxw` |
++| `RST` | `03 24 03` | `24_RST_M1.gxw` |
++| `END` | `03 34 03` | all completed program samples |
++
++The following inversion relation is verified for the tested contact families:
++
++```text
++LD   0x00 -> LDI  0x01
++OR   0x06 -> ORI  0x07
++AND  0x0C -> ANDI 0x0D
++```
++
++That is, the normally-closed variant is `normal opcode + 1` for these three tested families. Do not generalize this rule to unrelated instruction classes without evidence.
++
++## Ladder topology findings (samples 37-45)
++
++The topology samples show that ordinary GX Works2 Ladder logic in `MAIN.Program.pou` is represented primarily as a logical instruction sequence rather than as explicit graph nodes/edges.
++
++### Series contact
++
++`37_SERIES_X1_M1_Y1.gxw`:
++
++```text
++LD X1
++AND M1
++OUT Y1
++END
++```
++
++Token stream:
++
++```text
++03 00 03        # LD
++04 9C 01 04     # X1
++03 0C 03        # AND
++04 90 01 04     # M1
++03 20 03        # OUT
++04 9D 01 04     # Y1
++03 34 03        # END
++```
++
++### Simple parallel contact
++
++`38_PARALLEL_X1_X2_Y1.gxw`:
++
++```text
++LD X1
++OR X2
++OUT Y1
++END
++```
++
++Token stream:
++
++```text
++03 00 03
++04 9C 01 04
++03 06 03
++04 9C 02 04
++03 20 03
++04 9D 01 04
++03 34 03
++```
++
++No separate branch-start, branch-end, merge-node, edge, or coordinate token was observed for this simple parallel network.
++
++### Normally-closed contact
++
++`39_NC_X1_Y1.gxw` verifies `LDI`:
++
++```text
++03 01 03        # LDI
++04 9C 01 04     # X1
++03 20 03        # OUT
++04 9D 01 04     # Y1
++03 34 03        # END
++```
++
++`40_SERIES_X1_NC_M1_Y1.gxw` verifies `ANDI`:
++
++```text
++03 00 03        # LD X1
++04 9C 01 04
++03 0D 03        # ANDI M1
++04 90 01 04
++03 20 03        # OUT Y1
++04 9D 01 04
++03 34 03
++```
++
++### ORI
++
++`43_ORI_X1_NC_X2_Y1.gxw` verifies `ORI = 0x07`:
++
++```text
++LD X1
++ORI X2
++OUT Y1
++END
++```
++
++```text
++03 00 03
++04 9C 01 04
++03 07 03
++04 9C 02 04
++03 20 03
++04 9D 01 04
++03 34 03
++```
++
++### ORB branch merge
++
++`44_BRANCH_ORB.gxw` represents two series branches in parallel as a stack-like instruction sequence:
++
++```text
++LD X1
++AND M1
++LD X2
++AND M2
++ORB
++OUT Y1
++END
++```
++
++```text
++03 00 03
++04 9C 01 04
++03 0C 03
++04 90 01 04
++03 00 03
++04 9C 02 04
++03 0C 03
++04 90 02 04
++03 18 03        # ORB
++03 20 03
++04 9D 01 04
++03 34 03
++```
++
++This verifies `ORB = 0x18` for the tested FX3U sample.
++
++### ANB branch merge
++
++`45_BRANCH_ANB.gxw` is represented as:
++
++```text
++LD X1
++LD M1
++OR M2
++ANB
++OUT Y1
++END
++```
++
++with:
++
++```text
++03 19 03        # ANB
++```
++
++This verifies `ANB = 0x19` for the tested FX3U sample.
++
++### Topology conclusion
++
++For the ordinary Ladder cases tested through sample 45, `MAIN.Program.pou` behaves like a Mitsubishi mnemonic/stack bytecode. Simple and compound branch topology is represented using logical instructions (`OR`, `ORB`, `ANB`, etc.) rather than explicit graph topology tokens in the observed instruction stream.
++
++This does **not** prove that GXW never stores graphical/layout information elsewhere. It only establishes that the logical program body in the tested `Program.pou` samples is reconstructible from the instruction sequence.
++
++## Operand tokens
++
++### Device / constant type codes
++
++Observed type bytes:
++
++| Operand class | Type byte | Notes |
++|---|---:|---|
++| `M` | `0x90` | bit device |
++| `X` | `0x9C` | input |
++| `Y` | `0x9D` | output |
++| `D` | `0xA8` | data register |
++| `T` | `0xC2` | timer device |
++| `C` | `0xC5` | counter device |
++| `K` 16-bit semantic constant | `0xE8` | decimal constant |
++| `K` 32-bit semantic constant | `0xE9` | decimal constant in double-word context |
++| `H` | `0xEA` | hexadecimal constant |
++
++### Small operand shape
++
++Observed general form:
++
++```text
++[length] [type] [little-endian value bytes ...] [length]
++```
++
++Examples:
++
++```text
++X1   -> 04 9C 01 04
++M1   -> 04 90 01 04
++Y1   -> 04 9D 01 04
++D1   -> 04 A8 01 04
++D10  -> 04 A8 0A 04
++T0   -> 04 C2 00 04
++T1   -> 04 C2 01 04
++C0   -> 04 C5 00 04
++C1   -> 04 C5 01 04
++K10  -> 04 E8 0A 04
++K11  -> 04 E8 0B 04
++H10  -> 04 EA 10 04
++```
++
++### Numeric address encoding
++
++Addresses are stored as parsed numeric values, not display strings.
++
++For FX-series octal X addresses:
++
++```text
++X1   -> 0x01
++X2   -> 0x02
++X10  -> 0x08
++X100 -> 0x40
++```
++
++This strongly indicates GX Works2 converts the displayed octal X/Y address into its numeric value before serialization.
++
++Values greater than `0xFF` expand naturally in little-endian form:
++
++```text
++K255 -> 04 E8 FF 04
++K256 -> 05 E8 00 01 05
++
++D255 -> 04 A8 FF 04
++D256 -> 05 A8 00 01 05
++```
++
++### Signed constants and semantic width
++
++The constant type byte carries width semantics; raw payload length alone is insufficient to determine signedness/width.
++
++Observed:
++
++```text
++MOV  K-1 D1  -> E8 FF FF
++DMOV K-1 D0  -> E9 FF FF FF FF
++
++MOV  K32767 D0  -> E8 FF 7F
++DMOV K32767 D0  -> E9 FF 7F
++DMOV K1 D0      -> E9 01
++DMOV K32768 D0  -> E9 00 80
++```
++
++Current interpretation:
++
++- `0xE8`: decimal `K` constant in 16-bit semantic context.
++- `0xE9`: decimal `K` constant in 32-bit semantic context.
++- negative values are serialized using two's-complement at the semantic width.
++- positive values may use a shorter magnitude payload, so the parser must preserve the operand type byte and raw bytes before semantic interpretation.
++
++## Timer and counter output form (samples 41, 42, 46, 47)
++
++The tested timer/counter coils use a distinct instruction token before the timer/counter device and preset operand:
++
++```text
++04 21 03 04
++```
++
++Examples:
++
++`41_TIMER_T0_K10.gxw`:
++
++```text
++03 00 03        # LD
++04 9C 01 04     # X1
++04 21 03 04     # T/C output form
++04 C2 00 04     # T0
++04 E8 0A 04     # K10
++03 34 03        # END
++```
++
++`42_COUNTER_C0_K10.gxw` uses the same output form with `C0` (`0xC5`) instead of `T0` (`0xC2`).
++
++Samples 46 and 47 verify device address incrementing:
++
++```text
++T0 -> 04 C2 00 04
++T1 -> 04 C2 01 04
++
++C0 -> 04 C5 00 04
++C1 -> 04 C5 01 04
++```
++
++The exact meaning of the second payload byte `0x03` in `04 21 03 04` is not yet decoded. Keep this token as a distinct verified T/C output form rather than forcing it into the ordinary `03 20 03` OUT encoding.
++
++## Application-instruction header
++
++Observed application instructions use a five-byte header token:
++
++```text
++05 FAMILY WIDTH_OR_SLOT_DESCRIPTOR SUBTYPE 05
++```
++
++The third byte currently follows this verified rule for the tested instructions:
++
++```text
++width_descriptor = 1 + 2 * total_operand_word_slots
++```
++
++Examples:
++
++```text
++MOV:   2 x 16-bit operands -> 2 word slots -> 1 + 2*2 = 0x05
++DMOV:  2 x 32-bit operands -> 4 word slots -> 1 + 2*4 = 0x09
++ADD:   3 x 16-bit operands -> 3 word slots -> 1 + 2*3 = 0x07
++DADD:  3 x 32-bit operands -> 6 word slots -> 1 + 2*6 = 0x0D
++BMOV:  D,D,K              -> 3 word slots -> 1 + 2*3 = 0x07
++INC:   1 x 16-bit operand -> 1 word slot  -> 1 + 2*1 = 0x03
++```
++
++### Arithmetic family (`0x49`)
++
++Observed:
++
++```text
++ADD   D1 D2 D3 -> 05 49 07 28 05
++SUB   D1 D2 D3 -> 05 49 07 2A 05
++MUL   D1 D2 D3 -> 05 49 07 2C 05
++DIV   D1 D2 D3 -> 05 49 07 2E 05
++DADD  D0 D2 D4 -> 05 49 0D 29 05
++DSUB  D0 D2 D4 -> 05 49 0D 2B 05
++```
++
++For the tested arithmetic instructions:
++
++```text
++subtype/opcode = FNC_number * 2 + D_modifier
++```
++
++where `D_modifier` is `0` for the normal word form and `1` for the tested double-word form.
++
++Do not assume this arithmetic-family relation applies to every GX Works2 instruction family until separately verified.
++
++### INC/DEC family (`0x4A`)
++
++Observed:
++
++```text
++INC D1 -> 05 4A 03 00 05
++DEC D1 -> 05 4A 03 02 05
++```
++
++Current hypothesis: family-relative subtype based on a family base instruction. More samples are required before generalizing.
++
++### MOV family (`0x4C`)
++
++Observed:
++
++```text
++MOV  K10 D1    -> 05 4C 05 00 05
++DMOV D1 D10    -> 05 4C 09 01 05
++DMOV K32768 D0 -> 05 4C 09 01 05
++BMOV D0 D10 K5 -> 05 4C 07 06 05
++```
++
++Current interpretation:
++
++- `0x4C` identifies a MOV-like instruction family.
++- subtype `0x00` is observed for MOV.
++- subtype `0x01` is observed for DMOV.
++- subtype `0x06` is observed for BMOV.
++- DMOV appears to be represented as MOV-family + double-word variant rather than an unrelated top-level opcode.
++
++A plausible family-relative rule is:
++
++```text
++subtype = 2 * (FNC - family_base) + D_modifier
++```
++
++For MOV/BMOV this matches the current samples with `family_base = FNC12`, but this remains a hypothesis until more members of the family are tested.
++
++## `COMMENT.qcd`
++
++Adding a device comment `"1"` to `X1` did **not** change `MAIN.Program.pou`, but increased `COMMENT.qcd` from 60 bytes to 82 bytes in the controlled sample.
++
++The changed region contains evidence consistent with:
++
++```text
++X type code: 0x9C
++X1 address:   0x01
++text bytes:   31 00   # UTF-16LE "1"
++```
++
++Conclusion: device comments are stored separately from the ladder instruction body. `COMMENT.qcd` should be parsed as a separate logical object rather than inferred from `Program.pou`.
++
++The exact `COMMENT.qcd` record schema is not yet fully decoded.
++
++## `MAIN.res` duplication
++
++For the controlled samples, `MAIN.res` contains a byte-identical copy of the instruction token stream found in `MAIN.Program.pou` (at a different offset, observed at `0x3A` in the current corpus).
++
++Implication:
++
++- a read-only parser can prioritize `MAIN.Program.pou`.
++- a future writer cannot safely update only `MAIN.Program.pou`; duplicated/derived representations and project metadata would also need consistent updates.
++
++## `ESCompiler.stg` and `Gppw2.gpj`
++
++Both can change when ladder content changes. Current evidence suggests they contain compiler/project-management state rather than being the preferred source of truth for decoding the ladder program.
++
++For the initial reader, treat them as opaque derived state until evidence requires otherwise.
++
++## Provisional grammar
++
++A useful first approximation is:
++
++```text
++Program := Header Instruction* END Trailer
++
++Instruction :=
++    BasicInstruction
++  | ApplicationInstruction
++  | TimerCounterOutputInstruction
++
++BasicInstruction :=
++    [03 opcode 03]
++    Operand*
++
++ApplicationInstruction :=
++    [05 family width_descriptor subtype 05]
++    Operand*
++
++TimerCounterOutputInstruction :=
++    [04 21 03 04]
++    TimerOrCounterOperand
++    PresetOperand
++
++Operand :=
++    [length type value_le... length]
++```
++

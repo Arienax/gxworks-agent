@@ -1,0 +1,1000 @@
++The decoder still needs an instruction registry to determine the number, role and semantic width of operands after an instruction header.
++
++## Parser design constraints
++
++A first implementation should:
++
++1. Parse the outer CFB container.
++2. Locate and parse project metadata rather than hard-coding numbered stream IDs.
++3. Resolve `MAIN.Program.pou` by logical name.
++4. Keep raw token bytes alongside decoded semantic values.
++5. Validate matching token length sentinels.
++6. Treat observed fixed offsets as version/layout-specific until proven otherwise.
++7. Decode instructions through a registry, not a large handwritten `if/elif` chain.
++8. Preserve unknown tokens instead of guessing semantics.
++9. Remain read-only until duplicated project state, hashes/checksums and writer invariants are understood.
++10. Reconstruct ordinary Ladder topology from mnemonic/stack semantics (`OR`, `ORB`, `ANB`, etc.) rather than inventing graph tokens not present in the observed `Program.pou` stream.
++
++Suggested internal form:
++
++```python
++@dataclass
++class RawGXWToken:
++    offset: int
++    raw: bytes
++    kind: str
++
++@dataclass
++class GXWOperand:
++    type_code: int
++    raw_value: bytes
++    semantic_width_bits: int | None
++    decoded: object | None
++
++@dataclass
++class GXWInstruction:
++    family: int | None
++    opcode: int
++    width_descriptor: int | None
++    operands: list[GXWOperand]
++    raw_tokens: list[RawGXWToken]
++```
++
++## Next controlled samples: Structured Ladder/FBD
++
++The ordinary Ladder baseline is now sufficient to start a read-only tokenizer/decoder. The next reverse-engineering line should compare equivalent logic in a GX Works2 **Structured Project / Structured Ladder-FBD** program:
++
++```text
++48_STRUCT_X1_Y1.gxw
++X1 -> Y1
++
++49_STRUCT_NC_X1_Y1.gxw
++/X1 -> Y1
++
++50_STRUCT_SERIES.gxw
++X1 -- M1 -> Y1
++
++51_STRUCT_PARALLEL.gxw
++X1 || X2 -> Y1
++
++52_STRUCT_MOV.gxw
++X1 -- MOV K10 D1
++```
++
++The key question is whether Structured Ladder/FBD ultimately serializes to the same mnemonic token stream or introduces a separate node/graph representation and additional POU/label objects.
++
++## Confidence levels
++
++Treat findings in three classes:
++
++- **Verified across controlled pairs:** X/Y/M/D/T/C type codes listed above; K/H distinctions; octal X numeric conversion; little-endian value expansion; LD/LDI, OR/ORI, AND/ANDI, ORB/ANB, OUT, SET/RST and END tokens; T/C address codes and the observed T/C output form; arithmetic ADD/SUB/MUL/DIV/DADD/DSUB encodings; MOV/DMOV/BMOV encodings; width-descriptor relation for the tested application instructions.
++- **Strong but still scope-limited:** token framing; current `Program.pou` header/trailer relationships; `E8` vs `E9` semantic-width interpretation; ordinary Ladder topology being represented as mnemonic/stack semantics in `Program.pou`; `MAIN.res` token-stream duplication.
++- **Hypotheses requiring more samples:** universal family-relative opcode formula; universal fixed offsets; full `COMMENT.qcd` schema; exact semantics of `04 21 03 04`; writer requirements; Structured Ladder/FBD storage format.
++
++Keep this document synchronized with machine-readable observations under `resources/gxw/` as the reverse-engineering corpus grows.
+diff --git a/docs/process/research/gxw_semantic_model_v1.md b/docs/process/research/gxw_semantic_model_v1.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..13cb5810a7f30d8ddac4219dd69b8bbb1ab99067
+--- /dev/null
++++ b/docs/process/research/gxw_semantic_model_v1.md
+@@ -0,0 +1,228 @@
++# GXW Structured Ladder semantic model v1
++
++> 历史记录。来源文档冻结于 `f2f1781a846c9f7073724b4cca485082d57f414c`；实验日期、样本和被测版本按正文记录。代码路径、命令和未完成事项描述当时环境。当前操作从[文档索引](../../README.md)进入。
++
++> Status: experimental, read-only.
++>
++> Evidence base: controlled GX Works2 / FX3U Structured Ladder/FBD samples through 77.
++
++## Purpose
++
++The binary parser and `ConnectivityGraph` recover editor records and conductive nets, but they deliberately do not decide what a Function port means. `src/gxw/semantic.py` is the first semantic layer above that geometry.
++
++```text
++*.Program.pou
++  -> StructuredProgram
++  -> ConnectivityGraph
++  -> StructuredSemanticModel
++  -> future Structured Ladder lowering
++  -> project-level plc_ir.py
++```
++
++The model does **not** lower Structured Ladder directly into the canonical project PLC IR. It now describes contacts/coils and the observed TON/TON_E/CTU/CTU_E instance interfaces, while execution order, state evaluation and declaration binding remain separate milestones.
++
++## Modeled objects
++
++### Function ports
++
++The model classifies the Function-node port layouts verified by controlled samples:
++
++```text
++port_kind_code 3 on the left  -> incoming Function port
++port_kind_code 2 on the right -> ordinary data result/output
++port_kind_code 0 on the right -> ENO/execution-continuation-like output
++```
++
++When a single code-0 right port exists, the aligned code-3 left port is classified as `enable_in`; the remaining incoming ports are `data_in`.
++
++Current semantic roles:
++
++```text
++enable_in
++data_in
++enable_out
++data_out
++unknown
++```
++
++Unknown layouts are retained and reported as semantic warnings rather than guessed.
++
++### Contacts and coils
++
++`StructuredSemanticModel.contacts` and `.coils` retain the symbol separately from the element's kind. `SemanticContact.polarity` is `NORMALLY_OPEN` for kind `0x03` and `NORMALLY_CLOSED` for kind `0x04`; kind `0x05` becomes `SemanticCoil` with `CoilRole.NORMAL`.
++
++| Element | Left port | Right port |
++|---|---|---|
++| NO contact | code 3, `EXECUTION_IN` | code 2, `EXECUTION_OUT` |
++| NC contact | code **11**, `EXECUTION_IN` | code 2, `EXECUTION_OUT` |
++| Ordinary coil | code 3, `EXECUTION_IN` | code 0, `UNKNOWN` |
++
++The original sample-50 bytes establish the NC input code as 11. The earlier synthetic test that changed only a NO node's kind to NC was insufficient and has been replaced by a real regression. Codes 3 and 11 are not treated as interchangeable.
++
++The observed layout has two aligned ports on opposite bbox edges, inside the bbox height. Every `SemanticLadderPort` preserves its serialized index, code, point, net and terminal bindings. Unsupported counts/layouts preserve all ports with unknown roles; unsupported codes produce a warning for the affected port. Elements with zero ports are still retained.
++
++Contacts expose optional `execution_in` / `execution_out`; coils expose optional `execution_in`. The coil's right graphic port emits `unmodeled_coil_output`: its existence and net are known, but its execution meaning is not. Ordinary coils currently produce this expected warning. Contact polarity is not a runtime contact state, and symbols such as `T0`, `C0` or a label do not change an element's kind.
++
++### FB instances and timer/counter interfaces
++
++Samples 72-75 introduce a separate binary node kind, `0x02`, with instance name and type name stored as separate strings; sample 77 adds CTU_E using the same layout. `StructuredNode.symbol` retains the instance name, `.instance_name` exposes it explicitly, and `.type_name` retains `TON`, `TON_E`, `CTU` or `CTU_E`. This layout has no ordinary-node `object_flag` / `reserved` fields; those values are `None` on FB nodes.
++
++`StructuredSemanticModel.function_blocks` contains `SemanticFunctionBlock` objects, separate from `.functions`. Each block preserves its instance name, type, category and `SemanticFunctionBlockPort` objects. `.timers` and `.counters` filter the registered categories; they do not simulate elapsed time or counting.
++
++FB inputs use code **1**, and all observed FB outputs use code **0**, including ordinary data outputs. Consequently, FB EN/ENO roles cannot use the Function port inference rules. `DEFAULT_FUNCTION_BLOCK_REGISTRY` records only these verified interfaces:
++
++| Type | Input formals, top to bottom | Output formals, top to bottom | Category |
++|---|---|---|---|
++| TON | IN, PT | Q, ET | timer |
++| TON_E | EN, IN, PT | ENO, Q, ET | timer |
++| CTU | CU, RESET, PV | Q, CV | counter |
++| CTU_E | EN, CU, RESET, PV | ENO, Q, CV | counter |
++
++Formal names are supplied by this evidence-backed registry, not decoded from strings on each port. Roles require the full registered count, code and geometry layout, with the first port on each side at local Y=2 and subsequent ports on consecutive rows. Serialized port indices remain intact even when ports are reordered. Unknown types or unsupported layouts retain the instance and every port with `UNKNOWN` roles, no formal names, and warnings.
++
++```python
++block = semantic.function_blocks[0]
++print(block.instance_name, block.type_name)
++port = block.port_named("PT")
++if port is not None:
++    print(port.net_index, port.terminal_symbols)  # observed TON: ("T#1s",)
++```
++
++See [FB ABI findings 72-75 and follow-ups 76-77](../../reports/gxw/gxw_structured_fb_abi_72_75.md) for the exact record layout, rename comparison and remaining evidence limits.
++
++### Source and sink terminals
++
++Observed terminal node kinds are interpreted as graph roles:
++
++```text
++0x0D -> source terminal
++0x0E -> sink terminal
++```
++
++The terminal `symbol` remains separate from the graph role. A source terminal may contain `X1`, `D0`, `10`, a label, or the observed unresolved placeholder `?`.
++
++`?` is accepted by the binary/semantic parser and emitted as an `unresolved_terminal` semantic issue. It is not treated as a malformed GXW record.
++
++### Function family identity and arity
++
++Controlled samples prove that `-N` is not a universal Function suffix:
++
++```text
++ADD_E-2 / ADD_E-3
++AND_E-2 / AND_E-3
++```
++
++are extensible families, while the fixed two-input function:
++
++```text
++DIV_E
++```
++
++has no `-2` suffix.
++
++Therefore v1 uses a small evidence-backed family registry. Only registered extensible families interpret a trailing `-N` as declared data-input arity. Unknown symbols such as an unrelated `FOO-3` are preserved verbatim instead of being split speculatively.
++
++Registry entries currently cover:
++
++```text
++ADD_E    extensible
++AND_E    extensible
++MOV      fixed, observed 1 data input
++CMP      fixed, observed 2 data inputs
++DIV_E    fixed, observed 2 data inputs
++ABS      fixed, observed 1 data input
++ABS_E    fixed, observed 1 data input
++```
++
++## Connectivity binding
++
++Every semantic Function port, FB port, ladder port and terminal keeps its `ConnectivityGraph` net index. A supplied graph is used without rebuilding or renumbering its nets.
++
++This means function-to-function execution flow does not need a special edge type. Sample 65 is represented by a shared net:
++
++```text
++MOV.enable_out.net_index == ADD_E.enable_in.net_index
++```
++
++Directly attached terminals and explicit wire paths resolve to the same semantic binding because both have already been normalized by `ConnectivityGraph`.
++
++Each Function port also exposes directly attached/connected terminal symbols when terminals occur on the same conductive net.
++
++FB and ladder ports expose the same terminal bindings. Nets are never merged through a node. Real sample 54 connects `contact.execution_out` to `MOV.enable_in`, then `MOV.enable_out` to `coil.execution_in`. Sample 51 preserves the successive nets between series contacts, while sample 52's parallel contacts share an input net and share an output net with their two sides remaining distinct.
++
++## Public API
++
++```python
++from gxw import build_semantic_model, read_structured_program
++
++program = read_structured_program("project.gxw")
++semantic = build_semantic_model(program)
++
++for function in semantic.functions:
++    print(function.serialized_symbol)
++    print(function.base_name)
++    print(function.data_input_count)
++    print(function.has_enable_interface)
++    for port in function.ports:
++        print(port.role, port.net_index, port.terminal_symbols)
++```
++
++Primary model types:
++
++```text
++StructuredSemanticModel
++SemanticFunction
++SemanticFunctionPort
++SemanticContact
++SemanticCoil
++SemanticLadderPort
++SemanticFunctionBlock
++SemanticFunctionBlockPort
++SemanticTerminal
++SemanticIssue
++UnmodeledNodeRef
++```
++
++## Fail-soft semantic policy
++
++The binary parser remains fail-closed for unsupported record structure. The semantic layer is intentionally fail-soft for unknown meaning:
++
++- unknown Function port layouts become `SemanticPortRole.UNKNOWN` plus a warning;
++- arity mismatches become warnings;
++- unresolved `?` terminals become warnings;
++- unknown contact/coil port layouts remain on modeled elements with warnings;
++- the observed coil right port remains unknown with an expected warning;
++- unknown FB types remain modeled instances with unknown port roles and warnings;
++- other not-yet-modeled node kinds are retained in `unmodeled_nodes`.
++
++This separation avoids turning incomplete reverse-engineering knowledge into false format errors.
++
++## Regression coverage
++
++The v1 semantic tests use extracted real `Program.pou` fixtures from controlled samples 64-71 and lock the following findings:
++
++- sample 64: unresolved `?` source terminal is preserved and reported;
++- sample 65: `MOV.ENO -> ADD_E.EN` shares one semantic net;
++- samples 66/68: `ADD_E-3` and `AND_E-3` resolve as registered extensible families with arity 3;
++- sample 69: fixed two-input `DIV_E` is not interpreted as a `-2` family instance;
++- samples 70/71: `ABS` is `[data_in, data_out]`, while `ABS_E` is `[enable_in, data_in, enable_out, data_out]`;
++- samples 65-71 produce no unexpected semantic warnings.
++
++Additional real regressions cover samples 49-52 and 54-58 for labels, NC polarity/code 11, series/parallel nets and Contact/Function/Coil connections. Sample 52 reuses the exact bytes already held by the binary reader test. Samples 72-75 preserve exact Program.pou bytes, related label streams and SHA-256 provenance. They lock instance identity, the rename-only record difference, named timer/counter interfaces, net bindings, and sample 75's actual `Q -> T1` sink. All four FB samples produce no semantic warnings under the registered interfaces.
++
++Sample 76 adds two TON instances in the same POU with separate input/preset/output/elapsed-time terminal bindings and disjoint net sets. The existing model preserves both invocations without grouping them by type; this is source-connectivity evidence, not runtime state-allocation evidence. Its exact bytes and related label streams are in `gxw_structured_76.json`.
++
++Sample 77 adds CTU_E with seven ports. EN binds X0 and ENO binds M0, while CU/RESET/PV/Q/CV preserve sample 75's X1/X2/5/T1/D0 bindings. All three right-side ports have code 0, but only ENO is `ENABLE_OUT`; Q and CV are `DATA_OUT` on distinct nets. Its exact bytes and related label streams are in `gxw_structured_77.json`. Registration removes the previous unknown-type warning without changing the binary parser. The `_E` suffix alone still does not identify an unknown FB interface, and a known CTU_E type with an incompatible port layout remains fail-soft.
++
++Synthetic cases are explicitly named as such and test unknown interfaces, changed port order, unsupported geometry/codes/counts and malformed FB record boundaries. They are not counted as additional controlled GX Works2 samples.
++
++## Next semantic milestones
++
++The next layer should not be implemented by guessing from ordinary Function behavior. Controlled samples are still needed for:
++
++1. user-defined FBs, IN_OUT formals and explicit FB-to-FB wire paths;
++2. additional timer/counter forms, declaration binding and stateful execution;
++3. remaining contact/coil execution questions, power rails, SET/RESET and edge forms;
++4. labels and typed local variables at terminals;
++5. multiple networks/POUs;
++6. deterministic lowering from `StructuredSemanticModel` into `plc_ir.py`.
+diff --git a/docs/process/research/gxw_structured_fb_abi_72_75-follow-up.md b/docs/process/research/gxw_structured_fb_abi_72_75-follow-up.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..9b73201ae1bf1f568b32f372405cfa533be88834
+--- /dev/null
++++ b/docs/process/research/gxw_structured_fb_abi_72_75-follow-up.md
+@@ -0,0 +1,9 @@
++# GXW Structured FB ABI findings: samples 72-75, follow-ups 76-77：后续实验
++
++来源版本：`f2f1781`。已完成的结果见[GXW Structured FB ABI findings: samples 72-75, follow-ups 76-77](../../reports/gxw/gxw_structured_fb_abi_72_75.md)。
++
++## Remaining focused evidence
++
++The TON/TON_E and CTU/CTU_E interface comparisons are now covered. User-defined FBs with separately declared formals, explicit FB-to-FB wires and IN_OUT formals remain unverified. Request concrete diagrams for those comparisons when needed.
++
++This implementation provides instance identity, named interfaces, category and net bindings. It does not resolve label declarations, infer device validity, evaluate timer/counter state, assign memory, reconstruct scan order, or lower to `plc_ir.py`.
+diff --git a/docs/process/research/gxw_structured_function_abi_59_66-follow-up.md b/docs/process/research/gxw_structured_function_abi_59_66-follow-up.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..2bf3cefc15ef9b9e043768684f108b75f4b1c2f1
+--- /dev/null
++++ b/docs/process/research/gxw_structured_function_abi_59_66-follow-up.md
+@@ -0,0 +1,35 @@
++# GX Works2 Structured Function ABI findings: samples 59-66：后续实验
++
++来源版本：`f2f1781`。已完成的结果见[GX Works2 Structured Function ABI findings: samples 59-66](../../reports/gxw/gxw_structured_function_abi_59_66.md)。
++
++## Development implications
++
++Keep the binary and semantic layers separate:
++
++```text
++Program.pou
++  -> raw node/port/wire parser
++  -> geometric ConnectivityGraph
++  -> function/terminal semantic layer
++  -> PLC IR
++```
++
++The next semantic layer should use at least:
++
++```text
++node_kind
++symbol
++port_kind_code
++port position/order
++connectivity net
++```
++
++Do not classify devices or expressions from `symbol` alone.
++
++Potential next experiments:
++
++- another variadic function family to test whether `-N` is a general arity convention;
++- functions with multiple ordinary outputs;
++- an FB instance to compare built-in Function ABI vs FB instance ABI;
++- timer/counter blocks;
++- labels and typed local variables attached to function terminals.
+diff --git a/docs/process/research/gxw_structured_function_abi_67_71-follow-up.md b/docs/process/research/gxw_structured_function_abi_67_71-follow-up.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..e14100b0b9818d54e12f2e7ed4aa358729f11afd
+--- /dev/null
++++ b/docs/process/research/gxw_structured_function_abi_67_71-follow-up.md
+@@ -0,0 +1,38 @@
++# GX Works2 Structured Function ABI findings: samples 67-71：后续实验
++
++来源版本：`f2f1781`。已完成的结果见[GX Works2 Structured Function ABI findings: samples 67-71](../../reports/gxw/gxw_structured_function_abi_67_71.md)。
++
++## Development implications
++
++The current semantic pipeline should distinguish at least:
++
++```text
++Function family identity
++Function serialized symbol
++extensible vs fixed arity
++data-input count
++has execution-enable interface
++port_kind_code sequence
++terminal node roles
++ConnectivityGraph nets
++```
++
++A first semantic Function descriptor can now safely model:
++
++```text
++base_name
++serialized_symbol
++data_input_count
++has_enable_interface
++ports
++```
++
++but should keep extensibility as registry-backed evidence rather than infer it from `-N` alone.
++
++Next high-information targets:
++
++- Function/FB with multiple ordinary outputs;
++- FB instance ABI vs built-in Function ABI;
++- timer/counter blocks;
++- labels / typed locals at Function terminals;
++- compile-derived representation after a controlled compile.
+diff --git a/docs/process/research/gxw_structured_ladder_reverse_engineering.md b/docs/process/research/gxw_structured_ladder_reverse_engineering.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..b58f1bd9df7296c6ddd2ce496b15436fe531c9cc
+--- /dev/null
++++ b/docs/process/research/gxw_structured_ladder_reverse_engineering.md
+@@ -0,0 +1,395 @@
++# GX Works2 Structured Ladder/FBD `.gxw` reverse-engineering notes
++
++> 历史记录。来源文档冻结于 `f2f1781a846c9f7073724b4cca485082d57f414c`；实验日期、样本和被测版本按正文记录。代码路径、命令和未完成事项描述当时环境。当前操作从[文档索引](../../README.md)进入。
++
++> Status: experimental, read-only research. Findings below come from controlled FX3U / GX Works2 samples 48-58 created on 2026-09-06. They are deliberately scope-limited until more GX Works2 versions, PLC families, POU types, labels, FBs and network shapes are tested.
++
++## Goal
++
++The first implementation target is a deterministic read-only path:
++
++```text
++GXW
++  -> outer CFB reader
++  -> _hdb nested CFB
++  -> projectdatalist.xml logical-file resolver
++  -> *.Program.pou
++  -> Structured Ladder/FBD record parser
++  -> nodes + wires
++  -> geometric ConnectivityGraph
++  -> future PLC IR / Structured Ladder AST
++```
++
++Direct `.gxw` writing is intentionally out of scope for this milestone.
++
++## Controlled samples 48-58
++
++| Sample | Change / program | Main question |
++|---|---|---|
++| `48_STRUCT_X1_Y1.gxw` | direct device: `X1 -> Y1` | base node/wire layout |
++| `49_STRUCT_GLOBAL_LABEL_X1_Y1.gxw` | same graph through global labels | label separation |
++| `50_STRUCT_NC_X1_Y1.gxw` | normally-closed `X1 -> Y1` | NC node kind |
++| `51_STRUCT_SERIES_X1_M1_Y1.gxw` | `X1 -- M1 -> Y1` | series geometry |
++| `52_STRUCT_PARALLEL_X1_X2_Y1.gxw` | parallel `X1 / X2 -> Y1` | explicit graph topology |
++| `53_STRUCT_MOV_K10_D1(1).gxw` | `X1` enables `MOV`, `10 -> s`, `d -> D1` | function/value ports |
++| `54_STRUCT_MOV_ENO_CONNECTED.gxw` | sample 53 plus `MOV.ENO -> Y1` by coincident ports | whether port field A is connection state |
++| `55_STRUCT_MOV_SPACED_IO.gxw` | sample 53 with `10` and `D1` moved away from MOV | coincident ports vs explicit wires |
++| `56_STRUCT_T_JUNCTION.gxw` | T/branch topology | endpoint-on-segment junction |
++| `57_STRUCT_CROSS.gxw` | two wires cross with both intersections in segment interiors | non-connecting crossing |
++| `58_STRUCT_JUNCTION.gxw` | same crossing area, but one wire starts at the crossing | connecting junction |
++
++The filename of sample 53 contains `(1)` only because of the local saved-file name; it is not part of the GX format.
++
++## Project-object resolution
++
++Structured-project samples contain an outer Microsoft Compound File Binary (CFB/OLE) container and a nested CFB stream named `_hdb`.
++
++`projectdatalist.xml` provides the current logical-object mapping. In the controlled project it includes entries such as:
++
++```text
++12 -> MAIN.res
++14 -> Global1.gh
++15 -> 1.Labels.lh
++16 -> 1.Program.pou
++```
++
++The numeric `_hdb` stream IDs must not be hard-coded. The parser resolves them from `projectdatalist.xml`.
++
++## Structured `1.Program.pou` layout
++
++For samples 48-58, the record area starts at offset `0x5F`.
++
++Observed fields:
++
++```text
++0x37 uint32  size_like      observed == body_size + 12
++0x3B uint32  size_like      observed == body_size + 12
++0x47 uint32  body_size      == file_size - 0x5F
++0x57 uint32  canvas_height  working name; equals left rail end_y in tested graphs
++0x5B uint32  record_count
++0x5F ...     variable-length records
++             24 zero trailer bytes
++```
++
++The `0x37/0x3B` relation is strongly repeated but is not yet enforced by the parser because its universality across project variants is unproven.
++
++The first `uint32` of every record is its byte length, so records can be parsed sequentially.
++
++Two record classes are currently verified:
++
++```text
++record_class = 1 -> node
++record_class = 2 -> wire
++```
++
++No extra junction record class appeared in samples 56-58.
++
++## Node record
++
++The controlled samples support this structure:
++
++```text
++uint32 record_length
++uint32 record_class       # 1
++uint32 node_kind
++uint32 symbol_char_count  # includes terminating NUL
++utf16le symbol[symbol_char_count]
++uint32 object_flag        # observed 1
++uint16 reserved           # observed 0
++uint32 left
++uint32 top
++uint32 right
++uint32 bottom
++uint32 port_count
++PortDescriptor ports[port_count]
++```
++
++### PortDescriptor
++
++Samples 53-55 provide strong cross-validation for two of the three descriptor fields:
++
++```text
++uint32 size               # observed 16
++uint32 port_kind_code     # observed 0, 2, 3; NC sample 50 additionally uses 11
++uint32 local_x            # verified local X coordinate relative to node.left
++uint32 local_y            # verified local Y coordinate relative to node.top
++```
++
++The absolute port point is:
++
++```text
++absolute_x = node.left + local_x
++absolute_y = node.top  + local_y
++```
++
++Sample 55 is direct evidence: moving the value node `10` to bbox `(9,2)-(11,4)` produces a port descriptor with `(local_x, local_y) = (2,1)`, therefore absolute point `(11,3)`, and GX Works2 creates the explicit wire `(11,3) -> (22,3)` to `MOV.s`.
++
++The first semantic field must **not** be interpreted as connected/unconnected state. Sample 54 connects `MOV.ENO` to `Y1` by placing the two ports at `(29,2)`, while the MOV ENO descriptor remains `port_kind_code=0`, byte-identical to sample 53 where ENO was not connected.
++
++Observed values so far:
++
++| Port role in controlled samples | `port_kind_code` |
++|---|---:|
++| contact left, coil left, MOV EN, MOV s, output-value D1 left | 3 |
++| contact right, MOV d, input-value `10` right | 2 |
++| coil right, MOV ENO | 0 |
++| normally-closed contact left (original sample 50) | 11 |
++
++The first row's contact-left code 3 applies to normally-open contacts. Inspecting the original sample-50 bytes establishes `[11, 2]` for NC, not `[3, 2]`.
++
++These values look role-like rather than state-like, but the exact Mitsubishi semantics remain unproven. Keep the neutral name `port_kind_code`.
++
++For compatibility with the earliest experimental API, `PortDescriptor.field_a/field_b/field_c` remain read-only aliases for `port_kind_code/local_x/local_y`.
++
++Verified node-kind codes:
++
++| Code | Meaning | Evidence |
++|---:|---|---|
++| `0x01` | built-in Function node | `MOV` in samples 53-55 |
++| `0x03` | normally-open Contact | X1/M1/X2 samples |
++| `0x04` | normally-closed Contact | sample 50 |
++| `0x05` | Coil | Y1/X2 output-node samples |
++| `0x0D` | Input/value node | `10` in samples 53-55 |
++| `0x0E` | Output/value node | `D1` in samples 53-55 |
++
++The symbol is stored directly as UTF-16LE text. The direct-device and global-label samples show that the program node stores the symbol string; global-label binding is held separately in `Global1.gh`.
++
++Later samples 72-75 establish `0x02` as an FB instance with a different layout: instance string, type string, bbox and ports, without the ordinary-node flag/reserved fields above. FB port codes also differ. See [FB ABI findings 72-75](../../reports/gxw/gxw_structured_fb_abi_72_75.md).
++
++## Wire record
++
++All wires in samples 48-58 are 44 bytes. The currently useful decoded portion is:
++
++```text
++uint32 record_length      # 44
++uint32 record_class       # 2
++uint32 unknown0
++uint32 unknown1
++uint16 unknown2
++uint16 unknown3
++uint32 unknown4
++uint32 start_x            # offset 24
++uint32 start_y            # offset 28
++uint32 end_x              # offset 32
++uint32 end_y              # offset 36
++uint32 suffix             # offset 40
++```
++
++Across the tested ordinary wires, T junctions, non-connecting crossings and connecting junctions, the prefix remains:
++
++```text
++(unknown0, unknown1, unknown2, unknown3, unknown4) = (0, 1, 0, 1, 0)
++suffix = 0
++```
++
++Therefore these currently unnamed fields are **not** required to distinguish the tested crossing/junction semantics. They remain preserved raw until another controlled sample proves their meaning.
++
++## Sample 52: explicit graph structure
++
++`52_STRUCT_PARALLEL_X1_X2_Y1.gxw` parses to:
++
++```text
++Contact X1 @ (6,1)-(8,3)
++Coil Y1    @ (22,1)-(24,3)
++Contact X2 @ (6,4)-(8,6)
++
++Wire (1,0) -> (1,6)
++Wire (1,2) -> (6,2)
++Wire (6,2) -> (6,5)
++Wire (8,2) -> (8,5)
++Wire (8,2) -> (22,2)
++```
++
++This is decisive evidence that Structured Ladder/FBD `1.Program.pou` preserves an editor graph (nodes, coordinates and wires), unlike the ordinary Ladder `MAIN.Program.pou` samples that primarily exposed Mitsubishi mnemonic-like instruction tokens.
++
++## Samples 53-55: port geometry and two connection encodings
++
++Sample 53 parses to four nodes:
++
++```text
++Function MOV @ (22,0)-(29,4)   port_count=4
++Contact X1  @ (6,1)-(8,3)      port_count=2
++Input 10    @ (20,2)-(22,4)    port_count=1
++Output D1   @ (29,2)-(31,4)    port_count=1
++```
++
++The MOV ports resolve to:
++
++```text
++EN  -> (22,2)
++s   -> (22,3)
++ENO -> (29,2)
++d   -> (29,3)
++```
++
++In sample 53 the value/output nodes touch the function directly:
++
++```text
++10.right == MOV.s == (22,3)
++MOV.d == D1.left  == (29,3)
++```
++
++No wire records are needed for those connections.
++
++Sample 54 adds `Y1` with:
++
++```text
++MOV.ENO == Y1.left == (29,2)
++```
++
++Again, no wire is created. This proves coincident port points are themselves a valid connection representation.
++
++Sample 55 moves `10` and `D1` away from MOV while preserving the same logic. GX Works2 creates exactly the missing explicit conductors:
++
++```text
++Wire (11,3) -> (22,3)   # 10.right -> MOV.s
++Wire (29,3) -> (50,3)   # MOV.d -> D1.left
++```
++
++Therefore the read-only semantic layer must support both:
++
++```text
++coincident port points
++OR
++explicit wire paths
++```
++
++## Samples 56-58: junction and crossing semantics
++
++These samples establish the first deterministic geometric net-reconstruction rule.
++
++### Sample 56: T junction
++
++Relevant wires include:
++
++```text
++(10,4) -> (10,7)
++(10,4) -> (44,4)
++(10,7) -> (10,9)
++(10,9) -> (44,9)
++```
++
++The X1 right port is `(10,7)`. The branch is represented entirely by shared endpoints / endpoint-on-segment geometry. There is no junction object or special wire flag.
++
++The left power rail supplies a second endpoint-on-segment example:
++
++```text
++rail       (1,0) -> (1,16)
++branch     (1,7) -> (8,7)
++```
++
++`(1,7)` is an endpoint of the branch and an interior point of the rail, and the two conductors connect.
++
++### Sample 57: interior/interior cross is not connected
++
++```text
++vertical   (73,4) -> (73,7)
++horizontal (71,5) -> (75,5)
++intersection = (73,5)
++```
++
++The intersection lies in the interior of both segments. GX Works2 treats the crossing as non-connecting. No special non-connect flag is present.
++
++### Sample 58: endpoint on another segment is connected
++
++```text
++horizontal (71,5) -> (75,5)
++vertical   (73,5) -> (73,8)
++intersection = (73,5)
++```
++
++The same geometric area becomes a junction because `(73,5)` is the vertical segment endpoint and lies on the horizontal segment interior.
++
++Samples 57 and 58 have the same `Program.pou` size (711 bytes), record count (11), body size (616), height field (16), wire prefix values and suffix values. Apart from save-time header noise, their meaningful differences are wire coordinates. This is strong evidence that connectivity is encoded geometrically rather than through a junction flag.
++
++### Implemented ConnectivityGraph rules
++
++The first read-only `ConnectivityGraph` implements the verified geometry conservatively:
++
++```text
++Port point == Port point
++    -> connected
++
++Port point lies on explicit Wire segment
++    -> connected
++
++Wire endpoint == Wire endpoint
++    -> connected
++
++Wire endpoint lies on another Wire segment interior
++    -> connected
++
++Wire interior crosses Wire interior
++    -> NOT connected
++```
++
++Structured Ladder wires observed so far are orthogonal. The graph builder rejects diagonal wire records rather than guessing at unsupported geometry.
++
++This layer intentionally reconstructs **conductive nets only**. It does not connect the two ports through a contact, coil or function node; element semantics belong in the separate `StructuredSemanticModel`, above geometry and before PLC IR lowering.
++
++## Global-label separation (48 vs 49)
++
++The program graph geometry remains the same while direct device symbols change to labels:
++
++```text
++48: X1       -> Y1
++49: input_x1 -> output_y1
++```
++
++Observed sizes:
++
++```text
++1.Program.pou: 411 -> 437 bytes
++Global1.gh:      58 -> 296 bytes
++1.Labels.lh:    110 -> 110 bytes (save-time changes aside)
++MAIN.res:       142 -> 142 bytes
++```
++
++The `1.Program.pou` growth is accounted for by the longer UTF-16LE symbol strings. This supports a symbol-based node reference rather than a separately observed global-label ID in these node records.
++
++`Global1.gh` contains the global-label definitions/bindings. `1.Labels.lh` appears to be POU-local label state and did not gain the global-label records in this pair.
++
++## Correction: `MAIN.res` is derived/stale unless compiled
++
++A prior working hypothesis treated Structured Project `MAIN.res` as the current compiled equivalent of `1.Program.pou` after every save. Samples 48-53 disprove that assumption.
++
++Across those samples, `MAIN.res` remained byte-identical while `1.Program.pou` changed and its update timestamp advanced. Therefore:
++
++- `1.Program.pou` is the current saved Structured Ladder/FBD editor model.
++- `MAIN.res` is derived/compiled state and may be stale when the user edits/saves without recompiling.
++- a read-only source parser must prefer the current `*.Program.pou`, not infer current Structured Ladder logic from `MAIN.res`.
++
++## Read-only implementation
++
++The implementation is under `src/gxw/`:
++
++```text
++src/gxw/
++├─ __init__.py
++├─ container.py
++├─ project_resolver.py
++├─ structured_pou.py
++├─ connectivity.py
++├─ models.py
++└─ decoder.py
++```
++
++`structured_pou.py` remains the binary record parser. `connectivity.py` is a separate semantic/geometric layer so new binary findings do not get mixed with ladder graph algorithms.
++
++The parser remains fail-closed: unsupported structural invariants raise `GXWFormatError` instead of guessing.
++
++Regression fixtures for samples 54-58 store the extracted `1.Program.pou` bytes as base64 text under `tests/fixtures/`, avoiding binary GXW test assets while preserving the exact controlled record layouts.
++
++## Next samples
++
++Add samples only to answer specific remaining unknowns, especially:
++
++- exact semantics of `port_kind_code` (compare MOV/ADD/FB ports);
++- additional node kinds (comparison, timer/counter, FB instance, connector, label/local variable);
++- multiple networks/pages and multiple POU objects;
++- local-label encoding in `*.Labels.lh`;
++- global-label schema in `*.gh`;
++- compile-state relation between `*.Program.pou`, `MAIN.res`, and other derived streams;
++- any non-orthogonal or unusual wire forms before relaxing the ConnectivityGraph geometry checks.
++
++Keep unknown fields raw until controlled samples prove their meanings.
+diff --git a/docs/process/research/gxw_structured_writeback_validation-follow-up.md b/docs/process/research/gxw_structured_writeback_validation-follow-up.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..afdeee3721d439daf77ece31626da79fa5f4a7fe
+--- /dev/null
++++ b/docs/process/research/gxw_structured_writeback_validation-follow-up.md
+@@ -0,0 +1,67 @@
++# GX Works2 Structured Ladder/FBD write-back validation：后续实验
++
++来源版本：`f2f1781`。已完成的结果见[GX Works2 Structured Ladder/FBD write-back validation](../../reports/gxw/gxw_structured_writeback_validation.md)。
++
++## Next falsifiable write tests
++
++### 1. Record insertion
++
++Starting from sample 48:
++
++```text
++X1 -> Y1
++```
++
++produce a series contact graph such as:
++
++```text
++X1 -> X2 -> Y1
++```
++
++This should test one structural variable set at a time:
++
++```text
++new contact node record
++record_count
++record ordering
++wire construction / modification
++geometry
++Program.pou body rebuild
++```
++
++### 2. Record deletion
++
++Delete a known contact/wire set and verify that GX Works2 opens, saves, closes, and reopens the result.
++
++### 3. Allocation-boundary growth
++
++Construct a mutation whose new Program.pou exceeds the existing 448-byte allocation. This will force the first real mini-sector-chain growth test and should remain separate from the record-insertion experiment if possible.
++
++### 4. General serializer round trip
++
++For every supported controlled fixture:
++
++```text
++raw Program.pou
++  -> parse
++  -> serialize without semantic changes
++  -> byte-for-byte identical Program.pou
++```
++
++This remains the regression target before broader graph generation is treated as supported.
++
++## Implementation implication
++
++Keep the two writing problems separate:
++
++```text
++StructuredProgram serializer
++    -> node/wire/header serialization
++
++CFB writer
++    -> stream-byte replacement
++    -> directory stream_size updates
++    -> future allocation-chain growth
++```
++
++The two successful write-back experiments validate this boundary and provide regression targets for future structure-level writer work.
+diff --git a/docs/process/research/gxw_wire_rendering_history_isolation-follow-up.md b/docs/process/research/gxw_wire_rendering_history_isolation-follow-up.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..eeb3bfe436bf217e6d9c14359ec0c3f76e2b0b84
+--- /dev/null
++++ b/docs/process/research/gxw_wire_rendering_history_isolation-follow-up.md
+@@ -0,0 +1,44 @@
++# GX Works2 Structured Ladder/FBD wire-rendering isolation: `history.xml` / `iFileSize`：后续实验
++
++来源版本：`f2f1781`。已完成的结果见[GX Works2 Structured Ladder/FBD wire-rendering isolation: `history.xml` / `iFileSize`](../../reports/gxw/gxw_wire_rendering_history_isolation.md)。
++
++## Implementation implication
++
++The write path should no longer treat outer `history.xml` as unrelated metadata when a Structured `Program.pou` changes size.
++
++For a safe general writer, the current engineering direction should be:
++
++```text
++serialize Structured Program.pou
++    -> obtain new exact byte length
++    -> write/allocate Program.pou
++    -> update corresponding history.xml iFileSize
++    -> update corresponding history.xml szMD5val when the hash algorithm is confirmed
++    -> validate outer/nested container consistency
++```
++
++For wire rendering specifically, `iFileSize` synchronization is now experimentally required by the controlled growth case.
++
++Even though stale MD5 did not block rendering, production code should not intentionally preserve stale integrity metadata once its derivation is understood.
++
++## Next experiment
++
++Characterize `WIRE0` independently:
++
++```text
++WIRE0 offset = 335
++```
++
++Test short artifacts with:
++
++```text
++iFileSize = 369, 370, 371, 372, 373
++```
++
++Observe only the vertical left bus and record whether it is:
++
++```text
++missing / malformed / normal
++```
++
++This will determine whether the repeated horizontal `offset + 33` threshold is tied to horizontal geometry fields or is a more general wire-record loading rule.
+diff --git a/docs/process/research/semaplc_comparison.md b/docs/process/research/semaplc_comparison.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..2a988a3affcffcf4b2e0c25cc406109e37203815
+--- /dev/null
++++ b/docs/process/research/semaplc_comparison.md
+@@ -0,0 +1,63 @@
++# SemaPLC 对照研究与仿真验收改进
++
++> 历史记录。来源文档冻结于 `f2f1781a846c9f7073724b4cca485082d57f414c`；实验日期、样本和被测版本按正文记录。代码路径、命令和未完成事项描述当时环境。当前操作从[文档索引](../../README.md)进入。
++
++研究日期：2026-09-09。上游固定为 [midea-ai/SemaPLC @ 1c41c1b](https://github.com/midea-ai/SemaPLC/tree/1c41c1bcb69bb43c51d7d0faed30a2b1930d67fe)，提交日期 2026-08-25。本地基线为 feat/gxw2-skill-rag @ d1b78e8，包含此前尚未提交的响应语言验收改动。该实验阅读了上游源码、测试、技能文档和论文；未部署或实测 OpenPLC。
++
++最值得吸收的是：通过结论必须来自可核验的执行记录，且失败阶段应决定下一步处理。该实验将这些原则落实在现有 SimulatorRegressionService、SessionStore 和 DebugPatchLoopService 中，继续使用现有 PLC IR、Test DSL、GX 导入服务及确认流程。
++
++**论文与公开实现的边界**
++
++论文的 Algorithm 1 / §4.5 描述三项原则：有限重试、编辑使旧验证失效、以工具日志核验结论。这是值得采用的设计目标。[论文原文](https://arxiv.org/html/2608.18565v1)
++
++公开应用中可以确认的强制机制更具体：verify runner 保存执行信封和源码快照，子集运行不更新完整验收记录；buildSimulation 检查最近记录的源码指纹和通过状态，也提供显式跳过参数。不能把这些实现概括为“所有自然语言规格、编译和行为检查都由一个不可绕过的统一门保证”。[runner](https://github.com/midea-ai/SemaPLC/blob/1c41c1bcb69bb43c51d7d0faed30a2b1930d67fe/sema-plc-tools/src/verify/runner.ts)、[buildSimulation](https://github.com/midea-ai/SemaPLC/blob/1c41c1bcb69bb43c51d7d0faed30a2b1930d67fe/sema-plc-tools/src/tools/buildSimulation.ts)
++
++此外，构建技能在预算耗尽时建议保留能通过的最小测试集以生成仿真，同时披露未验证项。这是上游交互产品的取舍。本项目已经批准的补丁回归集不能在执行时缩减后仍称为完整通过。[构建与验证技能](https://github.com/midea-ai/SemaPLC/blob/1c41c1bcb69bb43c51d7d0faed30a2b1930d67fe/sema-plc-web/templates/.sema/skills/plc-build-and-verify/SKILL.md)
++
++| 方向 | SemaPLC 中可吸收的设计 | GXWorks Agent 已有基础与判断 | 该实验处理 |
++| --- | --- | --- | --- |
++| Verification gate | 由执行记录决定完成；子集验证不能替代完整验收。[runner 测试](https://github.com/midea-ai/SemaPLC/blob/1c41c1bcb69bb43c51d7d0faed30a2b1930d67fe/sema-plc-tools/tests/verify/runner.test.ts) | 已有候选校验、编译、确认、导入、回归和回滚，但最后启用候选仅检查回调的 status。 | 改为重读已落盘证据，核对候选版本和完整批准套件后才启用。 |
++| Spec review | 按需求核对覆盖、阈值等号、互斥和优先级、跨扫描状态及复位。[规格评审技能](https://github.com/midea-ai/SemaPLC/blob/1c41c1bcb69bb43c51d7d0faed30a2b1930d67fe/sema-plc-web/templates/.sema/skills/plc-spec-review/SKILL.md) | 已有可编辑规格、必填项和地址校验、生成约束、版本规格快照及程序评审。模型逐条自查仍是建议，不能自行产生“规格已证明”的状态。 | 保留现有硬校验与建议分层；未增加依赖模型自报的硬门。 |
++| Skills / patterns | 工作流技能附带按拓扑选择的具体 ST 示例，适合作为局部实现起点。[模式目录](https://github.com/midea-ai/SemaPLC/tree/1c41c1bcb69bb43c51d7d0faed30a2b1930d67fe/sema-plc-web/templates/.sema/skills/plc-build-and-verify/st-patterns) | 已有任务和机型路由、结构化指令知识、带来源的检索及限定范围的 gxw2-skill 辅助排序。ST 示例的“可编译”不证明改写后的行为，也不证明适用于 FX。 | 不导入 OpenPLC 模板或另建知识库；继续由本地机型和指令校验决定合法性。 |
++| Failure taxonomy | 区分计划、编译、部署、运行环境、工况准备、断言、版本冲突及超时；工况没成立时不盲目改程序。[失败类型](https://github.com/midea-ai/SemaPLC/blob/1c41c1bcb69bb43c51d7d0faed30a2b1930d67fe/sema-plc-tools/src/verify/planTypes.ts) | 原先已有 passed / failed / error / unavailable，并禁止环境错误触发补丁；细分原因和证据异常仍欠缺。 | 新增验收类别、后续动作和是否允许进入程序修复的标志；区分输入写入失败与执行错误。 |
++| Runtime evidence / version binding | 源码哈希绑定信封；并行部署检查运行时程序 MD5；录波区分匹配、冲突和无法核验。[部署检查](https://github.com/midea-ai/SemaPLC/blob/1c41c1bcb69bb43c51d7d0faed30a2b1930d67fe/sema-plc-tools/src/verify/cliEntry.ts)、[录波检查](https://github.com/midea-ai/SemaPLC/blob/1c41c1bcb69bb43c51d7d0faed30a2b1930d67fe/sema-plc-tools/src/tools/record.ts) | 已有 project/version/revision/IR hash、追加式测试记录、GX 导入保护。原先读取时会合并两份绑定，执行结果也没有测试契约指纹。 | 增加执行前快照、套件和单项测试指纹、完整结果指纹，以及索引与两份证据的相互核验。 |
++
++**为什么不直接移植规格规则和模式**
++
++上游将“声明的输出没有赋值”做成编译前检查，说明适合确定性判断的规则可以从技能中下沉到代码。但其实现针对 ST 的 located 输出和赋值语法，不能直接用于 FX 梯形图。[输出检查实现](https://github.com/midea-ai/SemaPLC/blob/1c41c1bcb69bb43c51d7d0faed30a2b1930d67fe/sema-plc-tools/src/tools/detectIO.ts)
++
++本地已经区分普通 COIL 与合法 SET/RST 写入，也为 HMI、预留和外部使用的 I/O 保留例外。将“所有输入必须使用”“所有 CASE 必须 ELSE”直接变成通用硬错误，会改变已确认需求或引入误报。具体依据见 [confirmed_spec](https://github.com/Arienax/gxworks-agent/blob/d1b78e8/src/confirmed_spec.py)、[plc_workflow_review](https://github.com/Arienax/gxworks-agent/blob/d1b78e8/src/plc_workflow_review.py)、[pattern_library](https://github.com/Arienax/gxworks-agent/blob/d1b78e8/src/pattern_library.py) 和 [knowledge_retriever](https://github.com/Arienax/gxworks-agent/blob/d1b78e8/src/knowledge_retriever.py)。
++
++后续值得做的是给已确认需求条款分配稳定 ID，再关联评审发现和经确认的测试。当前测试上下文主要来自程序 IR；即使所有测试通过，也不能由此推导出全部自然语言需求都已覆盖。该实验没有虚构这种覆盖关系。
++
++**已经落实的验收契约**
++
++1. 在执行前固定 project_id、version_id、revision、ir_sha256、suite_sha256；保存前重新比对。批准计划的绑定不符时，在准备仿真环境之前拒绝执行。
++2. 执行器在套件结果和单项结果中记录相应测试契约指纹。保存记录使用 evidence_schema_version=2，并为完整结果生成 result_sha256。仅在保存时补加绑定的调用标为 persistence_snapshot，不能获得执行验收资格。
++3. 完整通过要求：测试身份和数量一致、全部执行完成、应有断言逐项出现、结果布尔值与汇总一致、存在相应观测及首末采样、设备值有效、后端身份一致。仅发送输入的任务可以完成操作，但不能因此通过行为验收。
++4. 读取时分别校验索引、套件绑定和轨迹绑定，核对内容指纹及当前 IR，不再用字典合并覆盖来源。旧记录只读返回 legacy_evidence，不补写哈希、不迁移旧 IR，也不重新授予自动修复或候选启用资格。
++5. 候选启用前重新读取记录，核对批准套件、候选 IR、回调结果和落盘结果。缺失记录、缩减测试、引用其他版本或篡改结果都会拒绝启用，并沿用已有回滚流程。
++
++实现入口：[验收规则](https://github.com/Arienax/gxworks-agent/blob/d1b78e8/src/simulator/verification.py)、[版本证据存储](https://github.com/Arienax/gxworks-agent/blob/d1b78e8/src/session_store.py)、[执行服务](https://github.com/Arienax/gxworks-agent/blob/d1b78e8/src/simulator/service.py)、[调试闭环](https://github.com/Arienax/gxworks-agent/blob/d1b78e8/src/plc_debug_loop.py)。
++
++| 验收类别 | 处理方向 | 允许进入程序修复 |
++| --- | --- | --- |
++| assertion / invariant | 同时复核程序与测试，再依据证据提出局部方案 | 是；仍需原有确认 |
++| environment | 修复仿真环境 | 否 |
++| setup | 检查初始化和输入驱动 | 否 |
++| runtime | 检查运行器、读取及执行错误 | 否 |
++| incomplete | 补齐观测并重跑完整套件 | 否 |
++| evidence_invalid | 排查证据不一致并重跑 | 否 |
++| version_conflict / legacy_evidence | 针对当前版本重新获取证据 | 否 |
++
++**保证的范围**
++
++这些哈希用于关联和检测不一致，不是防止有文件写权限者同时重写全部证据的数字签名。execution_snapshot 证明该实验执行使用的应用层版本和测试上下文；GX 网关目前没有与上游 live MD5 等价的运行映像指纹证明，也没有新增运行时独占锁。不能把 IR 绑定描述成已经独立核验了真实设备内部程序。
++
++内存后端仍明确记录 test_memory_not_plc_simulator。自动测试只验证执行、验收和回滚控制流程，不证明梯形图在 GX Simulator2 或真实 PLC 上运行正确。该实验没有操作真实设备，也没有引入 OpenPLC、新的代理架构、模型调用或外部 MCP 写入能力。首次生成的候选仍需确认；静态编译通过没有被改称为运行验证通过。
++
++**验证证据**
++
++先增加了“没有落盘记录但回调返回 passed”的回归测试，旧实现实际错误启用了候选；修复后该测试通过。新增测试还覆盖缩减批准套件、跨版本结果、回调与磁盘不一致、缺失/重复断言、空观测值、执行期间版本变化、后端身份篡改以及旧证据只读兼容。
++
