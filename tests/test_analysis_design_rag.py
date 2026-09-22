@@ -244,10 +244,8 @@ def test_knowledge_runtime_health_is_nonblocking_and_reports_same_dependency(mon
     assert "do not echo" not in json.dumps(status)
 
 
-def test_bundled_motion_facts_use_actual_haystack_and_are_not_catalogue_only():
+def test_bundled_motion_facts_use_structured_direct_manual_evidence():
     from knowledge.evidence import KnowledgeQuery
-    from knowledge.scope import runtime_status
-    assert runtime_status()["status"] == "available"
     with context_policy_scope("legacy"):
         context = api._build_knowledge_context(KnowledgeQuery(
             "ZRN DRVA M8029 operands completion", precompiled=True,
@@ -255,7 +253,11 @@ def test_bundled_motion_facts_use_actual_haystack_and_are_not_catalogue_only():
     assert context and context.manifest["records"], context.manifest
     assert all(row.get("manual_type") != "debug_cases" for row in context.manifest["records"])
     assert "ZRN" in context and "DRVA" in context and "M8029" in context
-    assert any("4.7.4" in record.get("section", "") for record in context.manifest["records"])
+    structured = context.manifest["structured_facts"]
+    assert {row["opcode"] for row in structured["targets"]["instructions"]} >= {"ZRN", "DRVA"}
+    assert structured["targets"]["devices"] == ["M8029"]
+    assert structured["record_ids"]
+    assert context.manifest["instruction_facts"]["retrieval_mode"] == "structured_direct"
     assert not context.manifest.get("failure")
 
 
@@ -272,21 +274,20 @@ def test_flag_companion_packing_keeps_referenced_entity_not_an_unrelated_short_t
     assert row["id"] == "flag-reference"
 
 
-def test_targeted_instruction_and_companion_lookups_reuse_haystack_source_scope(monkeypatch):
+def test_targeted_instruction_and_companion_lookup_do_not_reenter_broad_rag(monkeypatch):
     from knowledge.evidence import KnowledgeQuery
-    import knowledge.instruction_facts as facts
-    calls = []
-    def lookup(query, **kwargs):
-        calls.append(kwargs.get("source_lanes"))
-        return []
-    def targeted(query, **kwargs):
-        kwargs["retrieve"]("ZRN operands", plc_model="FX3U", task_type="generate")
-        kwargs["retrieve"]("M8029 completion", plc_model="FX3U", task_type="generate")
-        return [], {"targets": [], "records": []}
-    monkeypatch.setattr(knowledge_retriever, "retrieve_knowledge", lookup)
-    monkeypatch.setattr(facts, "retrieve_instruction_facts", targeted)
-    knowledge_retriever.build_knowledge_context(KnowledgeQuery("ZRN", metadata={"instruction_fact_mode": "targeted"}))
-    assert len(calls) == 3 and all(scope and "debug" not in scope for scope in calls)
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError("exact instruction facts must not re-enter broad retrieval")
+
+    monkeypatch.setattr(knowledge_retriever, "retrieve_knowledge", unexpected)
+    context = knowledge_retriever.build_knowledge_context(
+        KnowledgeQuery("ZRN", metadata={"instruction_fact_mode": "targeted"}),
+        plc_model="FX3U", task_type="generate",
+    )
+    assert context
+    assert context.manifest["structured_facts"]["residual_retrieval"] is False
+    assert context.manifest["instruction_facts"]["retrieval_mode"] == "structured_direct"
 
 
 def test_legacy_core_context_names_forward_to_the_single_facade(monkeypatch):
