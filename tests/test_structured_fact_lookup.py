@@ -76,6 +76,9 @@ def test_structured_step_width_uses_shared_owner_for_instruction_instance():
         assert fact["resolution"] == "instruction_instance"
         assert fact["operands"] == operands
         assert f"STEP_WIDTH: {expected} program step(s)" in rows[0]["text"]
+        if opcode == "RST":
+            assert rows[0]["manual_id"] == "structured_step_width_catalog"
+            assert rows[0]["source"].endswith("fx3u_step_widths.json")
 
 
 def test_opcode_only_fixed_width_is_exposed_without_inventing_operands():
