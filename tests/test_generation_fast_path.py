@@ -85,3 +85,61 @@ def test_ir_consistency_can_be_checked_without_reinterpreting_ladder_semantics()
     assert validate_plc_ir(program, validate_ladder=False) is program
     with pytest.raises((PLCJsonValidationError, ValueError)):
         validate_plc_ir(program, validate_ladder=True)
+
+
+
+def test_compact_agent_skips_legacy_candidate_normalizers(monkeypatch):
+    import plc.generation as generation
+    from plc.generation import prepare_ladder_candidate
+
+    def legacy_called(*_args, **_kwargs):
+        pytest.fail("fresh compact Agent B candidate entered a legacy normalizer")
+
+    monkeypatch.setattr(generation, "_normalize_legacy_blocks", legacy_called)
+    monkeypatch.setattr(generation, "normalize_legacy_counter_outputs", legacy_called)
+    monkeypatch.setattr(generation, "normalize_app_instr_out_outputs", legacy_called)
+
+    result = prepare_ladder_candidate(
+        _self_hold(),
+        plc_model="FX3U",
+        candidate_origin="compact_agent",
+    )
+    assert result["candidate_origin"] == "compact_agent"
+    assert result["semantic_validation"]["status"] == "not_applicable"
+
+
+def test_confirmed_semantic_validation_enforces_contract_without_full_review_rules():
+    from plc.generation import prepare_ladder_candidate
+    from plc.validation import ApproachContractValidationError
+
+    ladder = _self_hold()
+    spec = {
+        "selected_approach": {
+            "name": "必须使用 MOV",
+            "generation_contract": {
+                "required_opcodes": ["MOV"],
+                "enforce": True,
+            },
+        }
+    }
+    with pytest.raises(ApproachContractValidationError):
+        prepare_ladder_candidate(
+            ladder,
+            plc_model="FX3U",
+            confirmed_spec=spec,
+            candidate_origin="compact_agent",
+        )
+
+    duplicate = copy.deepcopy(ladder["rungs"][0])
+    duplicate["rung_id"] = 2
+    duplicate["branches"][0]["inputs"] = [{"type": "NO", "address": "X2"}]
+    ladder["device_comments"]["X2"] = "旁路"
+    ladder["rungs"].append(duplicate)
+    # Duplicate-coil style remains a full-review concern; it is not promoted
+    # back into confirmed-generation acceptance merely by this refactor.
+    accepted = prepare_ladder_candidate(
+        ladder,
+        plc_model="FX3U",
+        candidate_origin="compact_agent",
+    )
+    assert accepted["semantic_validation"]["status"] == "not_applicable"

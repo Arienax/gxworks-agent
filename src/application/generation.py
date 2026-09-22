@@ -266,6 +266,7 @@ class GenerationWorkflow:
                     "reason": "scoped_repair_no_fresh_rag", "records": [],
                 }
             generation_agent_metadata = None
+            prepared_candidate = None
             repair_payload = None
             repair_kind = "format"
             deterministic_field_patch = False
@@ -362,8 +363,14 @@ class GenerationWorkflow:
                             "progress", {"stage": stage, "message": message}
                         ),
                     )
+                    prepared_candidate = result.get("prepared_candidate")
+                    if not isinstance(prepared_candidate, dict):
+                        raise GenerationError(tr('独立生成 Agent 未返回已校验候选'))
                     full_content = json.dumps(
-                        result["ladder"], ensure_ascii=False, separators=(",", ":")
+                        prepared_candidate["ladder"], ensure_ascii=False, separators=(",", ":")
+                    )
+                    validation_messages.extend(
+                        prepared_candidate.get("validation_messages") or []
                     )
                     generation_handoff = copy.deepcopy(result.get("generation_handoff") or {})
                     generation_agent_metadata = {
@@ -443,23 +450,27 @@ class GenerationWorkflow:
 
             if repair_call and (not streaming_succeeded or not full_content):
                 raise GenerationError(tr('修复调用未返回候选 JSON'))
-            json_str = clean_json_text(full_content) if full_content else ""
 
-            if not json_str:
-                raise GenerationError(tr('大模型未返回合法数据'))
+            if prepared_candidate is None:
+                json_str = clean_json_text(full_content) if full_content else ""
+                if not json_str:
+                    raise GenerationError(tr('大模型未返回合法数据'))
 
-            # Do not pay for another model call when the response is already one
-            # complete object plus a redundant terminal bracket/brace. Anything
-            # less obvious remains a failure and is offered to explicit repair.
-            json_str, local_tail_repair = trim_redundant_json_tail(json_str)
-            if local_tail_repair:
-                validation_messages.append(tr('已移除模型 JSON 末尾多余的闭合符号'))
-                self._emit("progress", {
-                    "stage": "format_recovered",
-                    "message": tr('已安全移除 JSON 末尾多余闭合符号；继续解析候选程序。'),
-                })
-
-            prepared_candidate = None
+                # Do not pay for another model call when the response is already one
+                # complete object plus a redundant terminal bracket/brace. Anything
+                # less obvious remains a failure and is offered to explicit repair.
+                json_str, local_tail_repair = trim_redundant_json_tail(json_str)
+                if local_tail_repair:
+                    validation_messages.append(tr('已移除模型 JSON 末尾多余的闭合符号'))
+                    self._emit("progress", {
+                        "stage": "format_recovered",
+                        "message": tr('已安全移除 JSON 末尾多余闭合符号；继续解析候选程序。'),
+                    })
+            else:
+                # Confirmed Agent B already returned a canonical, structurally
+                # checked candidate and PLC IR. Keep text only for UI delivery;
+                # do not serialize/parse/prepare the same ladder a second time.
+                json_str = ""
 
             def parse_candidate(candidate):
                 nonlocal prepared_candidate
@@ -580,7 +591,11 @@ class GenerationWorkflow:
                 return prepared_candidate["ladder"]
 
             try:
-                parsed_json = parse_candidate(json_str)
+                parsed_json = (
+                    prepared_candidate["ladder"]
+                    if prepared_candidate is not None
+                    else parse_candidate(json_str)
+                )
             except validation_errors as error:
                 try:
                     parsed_json = cascade_format_repair(error)
@@ -647,6 +662,8 @@ class GenerationWorkflow:
                     "width": rendered["width"],
                     "height": rendered["height"],
                     "normalization": prepared_candidate["normalization"],
+                    "semantic_validation": prepared_candidate.get("semantic_validation"),
+                    "candidate_origin": prepared_candidate.get("candidate_origin"),
                     "artifacts": artifacts,
                     "contract_mismatch": None,
                     "validation": {

@@ -93,6 +93,11 @@ def binding_hint(parameter):
                 value = raw.get(key)
                 if isinstance(value, str) and 0 < len(value) <= 128:
                     result[key] = value
+            if "role" not in result:
+                identifier = str(parameter.get("id") or "").strip().casefold()
+                legacy = _ALIASES.get(identifier) or _QUESTION_ALIASES.get(identifier)
+                if legacy and legacy[1] == kind:
+                    result["role"] = legacy[0]
             return result
     identifier = str(parameter.get("id") or "").strip().casefold()
     if identifier in _ALIASES:

@@ -494,7 +494,7 @@
       "category": "intent_handoff",
       "state": "enforced",
       "owner": "plc.specification.bindings",
-      "summary": "I/O binding identity and purpose label remain distinct; confirmed purpose follows address changes into generated comments without using question/reasoning prose.",
+      "summary": "I/O binding identity, machine semantic role, and human purpose label remain distinct; known roles survive confirmation/generation while labels follow address changes into comments without prose inference.",
       "checks": [
         {
           "kind": "python_symbol",
@@ -515,12 +515,72 @@
           "kind": "contains",
           "path": "docs/architecture/io-binding-labels.md",
           "text": "binding_id"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/analysis_context.py",
+          "text": "role 是控制语义身份"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_confirmed_input_protocol.py",
+          "text": "test_io_binding_role_is_machine_semantics_not_comment_text"
         }
       ],
       "tests": [
         "tests/test_spec_choice_metadata.py",
         "tests/test_confirmed_reconfirmation.py",
-        "tests/test_device_identity_delivery.py"
+        "tests/test_device_identity_delivery.py",
+        "tests/test_confirmed_input_protocol.py"
+      ]
+    },
+    {
+      "id": "confirmed_generation_acceptance",
+      "category": "generation",
+      "state": "enforced",
+      "owner": "plc.generation.prepare_ladder_candidate + plc.specification.semantic_validation",
+      "summary": "Fresh confirmed Agent B output is prepared exactly once: compact transport lowers deterministically, skips legacy normalizers, receives structural acceptance plus confirmed-fact semantic checks, then builds PLC IR without a JSON round trip.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/specification/semantic_validation.py",
+          "symbol": "validate_confirmed_semantics"
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/generation.py",
+          "text": "candidate_origin != \"compact_agent\""
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/generation.py",
+          "text": "validate_confirmed_semantics("
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/generation_agent.py",
+          "text": "candidate_origin=\"compact_agent\""
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/generation.py",
+          "text": "do not serialize/parse/prepare the same ladder a second time"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_generation_fast_path.py",
+          "text": "test_compact_agent_skips_legacy_candidate_normalizers"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_confirmed_input_protocol.py",
+          "text": "assert prepare_calls == [\"compact_agent\"]"
+        }
+      ],
+      "tests": [
+        "tests/test_generation_fast_path.py",
+        "tests/test_confirmed_input_protocol.py",
+        "tests/test_confirmed_compatibility.py"
       ]
     },
     {

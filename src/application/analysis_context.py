@@ -17,6 +17,7 @@ _DEVICE = re.compile(r"(?<![A-Za-z0-9_])(?:SM|SD|[XYMDTCSVZ])\d+(?![A-Za-z0-9_])
 # Transport metadata for the shared Core binding, not an inferred PLC rule.
 _IO_BINDING_PROMPT = """# I/O purpose metadata
 地址或输入极性确认问题用 io_binding 标识同一物理点：binding_id 为稳定标识，kind 为地址类别，label 为独立用途名称；已有 row_id 时沿用。已知地址只确认极性时，答案不必重复地址；仅涉及寄存器数值含义的参数不当作地址选择。
+当控制语义明确时同时写 role，使用稳定机器语义而不是 label 推断，例如 start、stop、output、interlock；同一 binding 在后续轮次沿用已有 role。role 是控制语义身份，label 只是人类可读用途/注释，两者不得互相替代。未知 role 不猜测。
 label 是独立的简短用途名称，不是 question：不含提问、选项、触点极性推导或实现解释；用途未知可省略或留空，不为注释新增确认问题。question 保留完整确认问题，只询问尚未提供的地址或极性。已有 I/O 用途以用户编辑的值为准；suggested_io 中的说明也只写用途名称。
 参数可另带 semantic_key（例如 transport.mode）、value_kind（text/choice/number/boolean）和 unit；id 是稳定问题标识，不由问题措辞改名。硬件参数用 hardware.<Core参数ID>，普通工艺参数使用自身命名空间；省略元数据仍保留原参数。"""
 

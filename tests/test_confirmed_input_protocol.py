@@ -198,11 +198,20 @@ class OneResponse:
 
 
 @pytest.mark.parametrize("wrong", [False, True])
-def test_real_http_confirmation_and_generation_have_one_call_and_no_wrong_artifact(tmp_path, wrong):
+def test_real_http_confirmation_and_generation_have_one_call_and_no_wrong_artifact(tmp_path, wrong, monkeypatch):
     from fastapi.testclient import TestClient
     from application.workbench import WorkbenchService
     from integrations.web.app import create_app
     from test_web_api import ORIGIN, OPERATOR, _login
+    from plc.candidate_service import CandidateService
+    prepare_calls = []
+    original_prepare = CandidateService.prepare
+
+    def counted_prepare(self, *args, **kwargs):
+        prepare_calls.append(kwargs.get("candidate_origin"))
+        return original_prepare(self, *args, **kwargs)
+
+    monkeypatch.setattr(CandidateService, "prepare", counted_prepare)
     provider = OneResponse(compact(wrapped=True, wrong=wrong))
     service = WorkbenchService(tmp_path/"workspace", tmp_path/"state",
                                model_factory=lambda: (provider, {"model": provider.profile["model"]}))
@@ -221,6 +230,7 @@ def test_real_http_confirmation_and_generation_have_one_call_and_no_wrong_artifa
         service.jobs._futures[jid].result(timeout=20)
         state = client.get(f"/api/jobs/{jid}").json()
         assert len(provider.requests) == 1 and provider.requests[0].max_retries == 0
+        assert prepare_calls == ["compact_agent"]
         sent = provider.requests[0].messages[0].content
         assert '"active_level":0' in sent and '"active_level":1' in sent
         assert "# Retrieved PLC evidence" not in sent
@@ -307,6 +317,51 @@ def test_execution_missing_level_stays_unknown_without_rejection(level):
     result = generation_input_conditions([{"binding_id": "unknown", "kind": "X", "address": "X3",
         "role": "stop", "name": "常闭停止", "active_level": level}])
     assert result == {"level_predicates": [], "unresolved_input_bindings": ["unknown"]}
+
+
+def test_io_binding_role_is_machine_semantics_not_comment_text():
+    from plc.specification.bindings import binding_hint
+
+    explicit = binding_hint({
+        "id": "custom_stop",
+        "io_binding": {
+            "binding_id": "machine.stop",
+            "kind": "X",
+            "role": "stop",
+            "label": "停机按钮",
+        },
+    })
+    assert explicit["role"] == "stop"
+    assert explicit["label"] == "停机按钮"
+
+    legacy = binding_hint({
+        "id": "stop_input",
+        "io_binding": {
+            "binding_id": "stop_input",
+            "kind": "X",
+            "label": "停止按钮",
+        },
+    })
+    assert legacy["role"] == "stop"
+    assert legacy["label"] == "停止按钮"
+
+    unknown = binding_hint({
+        "id": "sensor_a",
+        "io_binding": {
+            "binding_id": "sensor_a",
+            "kind": "X",
+            "label": "停止字样只是显示文本",
+        },
+    })
+    assert "role" not in unknown
+
+
+def test_analysis_prompt_requires_role_when_control_semantics_are_known():
+    from application.analysis_context import _IO_BINDING_PROMPT
+
+    assert "role 是控制语义身份" in _IO_BINDING_PROMPT
+    assert "label 只是人类可读用途/注释" in _IO_BINDING_PROMPT
+    assert "未知 role 不猜测" in _IO_BINDING_PROMPT
 
 
 def test_execution_typed_bits_do_not_turn_word_registers_or_outputs_into_inputs():

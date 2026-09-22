@@ -2,13 +2,13 @@
 
 ## Identity and purpose
 
-An address question and a device purpose are separate fields. `io_binding.binding_id` identifies the binding; `kind` identifies its address category; optional `label` holds a short purpose. For example:
+An address question, control role, and device purpose are separate fields. `io_binding.binding_id` identifies the binding; `kind` identifies its address category; `role` is the machine-readable control semantic when known; optional `label` holds a short human-facing purpose. For example:
 
 ```json
-{"id":"start_device","question":"启动按钮接在哪个输入点？","required":true,"io_binding":{"binding_id":"machine.start","kind":"X","label":"启动按钮"}}
+{"id":"start_device","question":"启动按钮接在哪个输入点？","required":true,"io_binding":{"binding_id":"machine.start","kind":"X","role":"start","label":"启动按钮"}}
 ```
 
-[binding_hint](../../src/plc/specification/bindings.py) retains this metadata through question normalization. Confirmation binds the actual answer and seeds a new row with the independent label. Question wording and model reasoning are not device comments. A missing optional label does not create a required question or an extra model call.
+[binding_hint](../../src/plc/specification/bindings.py) retains this metadata through question normalization. Exact legacy start/stop/output IDs may recover their historical role, but arbitrary labels never manufacture a role. Confirmation binds the actual answer and seeds a new row with the independent label. Question wording and model reasoning are not device comments. A missing optional label does not create a required question or an extra model call.
 
 ## Edits and aliases
 

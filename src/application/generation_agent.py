@@ -19,7 +19,6 @@ from application.compact_protocol import (
     compact_protocol_prompt, compact_capability_prompt,
 )
 
-from plc.device_identity import canonical_ladder_devices
 from model_runtime.provider import TextDelta
 from application.generation_context import _build_knowledge_context
 from shared.context_policy import audit_section
@@ -163,12 +162,8 @@ def _decode_generated_ladder(value, projected, plc_model):
         return _expand_compact_ladder(value, projected), "compact_ladder"
     if isinstance(value, dict) and "rungs" in value and set(value) <= {"rungs", "device_comments"}:
         from application.compact_alias import expand_hybrid_compact_ladder
-        from plc.validation import validate_ladder_candidate_structure
         converted = expand_hybrid_compact_ladder(value, projected)
         ladder = converted if converted is not None else copy.deepcopy(value)
-        # Choosing a known representation is not accepting an unchecked program.
-        validate_ladder_candidate_structure(ladder, plc_model=plc_model,
-                                            require_catalogued_instructions=True)
         return ladder, "compact_alias_ladder" if converted is not None else "ladder_v1"
     raise CompactProtocolError("unknown or ambiguous ladder representation")
 
@@ -254,8 +249,27 @@ def generate_confirmed_ladder(
             on_stage("compact_normalized", "已在本地兼容确定性的表示差异；正在展开梯形图，未增加模型请求")
     ladder, representation = _decode_generated_ladder(compact, projected, model)
     diagnostics.emit("generation_representation", stage="compact_protocol", representation=representation)
-    ladder = canonical_ladder_devices(ladder)
-    from plc.specification.checks import check_direct_self_hold
-    behavior = check_direct_self_hold(ladder, projected)
-    diagnostics.emit("confirmed_primitive_check", stage="generation_validation", **behavior)
-    return {"ladder": ladder, "model_calls": 1, "generation_handoff": context.to_dict()["handoff"]}
+
+    from plc.candidate_service import CandidateService
+    prepared = CandidateService().prepare(
+        ladder,
+        plc_model=model,
+        confirmed_spec=projected,
+        task_type="generate",
+        candidate_origin="compact_agent",
+        on_progress=(
+            (lambda message: on_stage("candidate_validation", message))
+            if on_stage else None
+        ),
+    )
+    diagnostics.emit(
+        "confirmed_semantic_validation",
+        stage="generation_validation",
+        **prepared["semantic_validation"],
+    )
+    return {
+        "ladder": prepared["ladder"],
+        "prepared_candidate": prepared,
+        "model_calls": 1,
+        "generation_handoff": context.to_dict()["handoff"],
+    }

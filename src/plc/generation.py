@@ -179,7 +179,7 @@ def prepare_ladder_candidate(
     candidate, *, plc_model="FX3U", program_name="MAIN", revision=1,
     confirmed_spec=None, previous_ladder=None, repair_mode=False,
     allowed_rung_ids=None, allowed_addresses=None, task_type=None,
-    on_progress=None,
+    candidate_origin="external", on_progress=None,
 ):
     """Normalize one response, materialize its edit, and build a consistent IR.
 
@@ -193,13 +193,14 @@ def prepare_ladder_candidate(
     progress = on_progress or (lambda _message: None)
     messages = []
     progress(tr('正在解析模型输出：规范化梯形图协议'))
-    _normalize_legacy_blocks(parsed)
-    parsed, counters = normalize_legacy_counter_outputs(parsed)
-    if counters:
-        messages.append(tr('已将旧版 TIMER+C 计数器结构转换为 COUNTER：') + ", ".join(counters))
-    parsed, outs = normalize_app_instr_out_outputs(parsed)
-    if outs:
-        messages.append(tr('已将误放入 APP_INSTR 的 OUT 转换为标准输出结构：') + "；".join(outs))
+    if candidate_origin != "compact_agent":
+        _normalize_legacy_blocks(parsed)
+        parsed, counters = normalize_legacy_counter_outputs(parsed)
+        if counters:
+            messages.append(tr('已将旧版 TIMER+C 计数器结构转换为 COUNTER：') + ", ".join(counters))
+        parsed, outs = normalize_app_instr_out_outputs(parsed)
+        if outs:
+            messages.append(tr('已将误放入 APP_INSTR 的 OUT 转换为标准输出结构：') + "；".join(outs))
 
     allowed_ids = set(allowed_rung_ids or ())
     allowed_devices = {str(item).strip().upper() for item in (allowed_addresses or ())}
@@ -254,6 +255,11 @@ def prepare_ladder_candidate(
     parsed, normalization = normalize_shared_conditions(parsed, allowed_rung_ids=normalization_scope)
     validate_ladder_candidate_structure(parsed, plc_model=plc_model, require_catalogued_instructions=True)
 
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+    semantic_validation = validate_confirmed_semantics(
+        parsed, confirmed_spec, plc_model=plc_model,
+    )
+
     semantics = []
     if isinstance(confirmed_spec, dict) and isinstance(confirmed_spec.get("execution_semantics"), list):
         from plc.semantics import normalize_semantic_requirements
@@ -264,8 +270,15 @@ def prepare_ladder_candidate(
                            semantic_requirements=semantics,
                            _canonicalize_devices=previous_ladder is None and not repair_mode)
     validate_plc_ir(program, validate_ladder=False)
-    return {"ladder": parsed, "program_ir": program, "validation_messages": messages,
-            "normalization": normalization_summary(normalization), "validation_profile": GENERATION_VALIDATION_PROFILE}
+    return {
+        "ladder": parsed,
+        "program_ir": program,
+        "validation_messages": messages,
+        "normalization": normalization_summary(normalization),
+        "validation_profile": GENERATION_VALIDATION_PROFILE,
+        "semantic_validation": semantic_validation,
+        "candidate_origin": candidate_origin,
+    }
 
 
 def render_generation_artifacts(program, output_dir):
