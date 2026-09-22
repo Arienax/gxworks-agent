@@ -178,6 +178,19 @@ def _attach_instruction_step_width(record, target, *, plc_model):
     fact = resolve_instruction_step_width(target, plc_model=plc_model)
     value = dict(record)
     value["instruction_step_width"] = copy.deepcopy(fact)
+    operands = target.get("operands") if isinstance(target, Mapping) else None
+    if isinstance(operands, (list, tuple)):
+        identity = json.dumps(
+            {"opcode": str(target.get("opcode") or "").upper(), "operands": list(operands)},
+            ensure_ascii=True, sort_keys=True, separators=(",", ":"),
+        )
+        original_id = str(value.get("id") or "")
+        value["original_id"] = original_id
+        value["id"] = original_id + "#instance-" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:12]
+        value["instruction_instance"] = {
+            "opcode": str(target.get("opcode") or "").upper(),
+            "operands": [str(item) for item in operands],
+        }
 
     body = str(value.get("text") or "")
     if fact["known"]:
@@ -337,7 +350,11 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
                 )
 
         for *_keys, candidate in sorted(candidates, key=lambda item: item[:-1]):
-            marker = (candidate.get("id"), opcode or base)
+            marker = (
+                candidate.get("id"),
+                opcode or base,
+                tuple(step_target.get("operands") or ()) if isinstance(step_target, Mapping) else (),
+            )
             if marker in seen:
                 continue
             seen.add(marker)
