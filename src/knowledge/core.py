@@ -27,6 +27,7 @@ from urllib.parse import quote
 
 from shared.paths import resource_path
 from knowledge.gxworks2_concepts import query_skill_concepts
+from plc.device_identity import DEVICE_TOKEN_RE
 
 
 _INDEX_RESOURCE = "knowledge/fx3u_knowledge.sqlite"
@@ -37,10 +38,7 @@ _MAX_ENTITY_ROWS_PER_TERM = 64
 
 _thread_state = threading.local()
 
-_DEVICE_RE = re.compile(
-    r"(?<![A-Za-z0-9_])(?:ER|SM|SD|TS|TC|CS|CC|[XYMSTCDRZVPI])\d+(?:\.\d+)?(?![A-Za-z0-9_])",
-    re.IGNORECASE,
-)
+_DEVICE_RE = DEVICE_TOKEN_RE
 _ERROR_CODE_RE = re.compile(
     r"(?<![A-Za-z0-9])(?:0X)?([0-9A-F]{4,5})(H)?(?![A-Za-z0-9])",
     re.IGNORECASE,
