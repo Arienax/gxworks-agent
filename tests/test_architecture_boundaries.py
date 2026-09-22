@@ -240,4 +240,7 @@ def test_capability_coverage_manifest_is_current():
     report = audit_coverage()
     assert report["ok"], "\n".join(report["failures"])
     assert report["counts"]["enforced"] > 0
-    assert report["counts"]["tracked_gap"] > 0
+    assert (
+        report["counts"]["enforced"] + report["counts"]["tracked_gap"]
+        == report["counts"]["total"]
+    )
