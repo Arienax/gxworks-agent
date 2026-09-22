@@ -255,10 +255,18 @@ def prepare_ladder_candidate(
     parsed, normalization = normalize_shared_conditions(parsed, allowed_rung_ids=normalization_scope)
     validate_ladder_candidate_structure(parsed, plc_model=plc_model, require_catalogued_instructions=True)
 
-    from plc.specification.semantic_validation import validate_confirmed_semantics
-    semantic_validation = validate_confirmed_semantics(
-        parsed, confirmed_spec, plc_model=plc_model,
-    )
+    if candidate_origin == "compact_agent":
+        from plc.specification.semantic_validation import validate_confirmed_semantics
+        semantic_validation = validate_confirmed_semantics(
+            parsed, confirmed_spec, plc_model=plc_model,
+        )
+    else:
+        semantic_validation = {
+            "version": "confirmed-semantics-v1",
+            "status": "not_applied",
+            "reason": "non_confirmed_agent_origin",
+            "checks": [],
+        }
 
     semantics = []
     if isinstance(confirmed_spec, dict) and isinstance(confirmed_spec.get("execution_semantics"), list):
