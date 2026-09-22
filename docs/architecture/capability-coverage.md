@@ -30,8 +30,6 @@ enforces the manifest on pull requests.
 The current manifest intentionally tracks gaps that should not be hidden by a
 passing broad regression suite:
 
-- instruction step width remains authoritative in `plc.instruction_steps` and
-  GX Works2 export, but is not yet exposed by `knowledge.structured_facts`;
 - verified instruction contract promotions remain authoritative in
   `plc.instructions`, but the direct structured fact record does not yet merge
   `InstructionRegistry.describe_contract()`;
