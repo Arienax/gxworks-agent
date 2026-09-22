@@ -218,6 +218,9 @@ def selected_instruction_capability_prompt(plc_model, confirmed_spec):
         opcode = target["opcode"]
         form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(opcode, cpu=plc_model)
         row = {"opcode": opcode, "generation_catalogued": opcode in allowed}
+        if isinstance(target.get("operands"), list):
+            row["confirmed_operands"] = copy.deepcopy(target["operands"])
+            row["instance_source"] = target.get("instance_source")
         if form is not None:
             row.update(DEFAULT_INSTRUCTION_REGISTRY.describe_contract(opcode, cpu=plc_model))
             row.pop("operand_annotations", None)
