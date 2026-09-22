@@ -231,3 +231,13 @@ def test_production_workflows_cannot_reintroduce_effort_hints():
                         if arg.arg == "effort" and value is not None and not (isinstance(value, ast.Constant) and value.value is None):
                             violations.append((path.name, node.lineno, "workflow effort default"))
     assert not violations, violations
+
+
+
+def test_capability_coverage_manifest_is_current():
+    from tools.audit_capability_coverage import audit_coverage
+
+    report = audit_coverage()
+    assert report["ok"], "\n".join(report["failures"])
+    assert report["counts"]["enforced"] > 0
+    assert report["counts"]["tracked_gap"] > 0
