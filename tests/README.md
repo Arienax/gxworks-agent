@@ -1,8 +1,8 @@
 # Test ownership and file-boundary rules
 
-This file is the ownership registry for repository test files. The purpose is not to minimize the raw number of test cases; it is to stop the suite from growing by creating a new file for every bug, PR or historical incident.
+This registry assigns each test file a stable responsibility. Add regression cases to the owner of the affected contract.
 
-After the consolidation in this change, the registry contains **170 Python test files** and **3 Web test files**. Data fixtures under `tests/fixtures/` are not independent test owners and are intentionally excluded.
+The registry below lists the current owners. Data fixtures under `tests/fixtures/` belong to the test files that exercise them. Check registry coverage with `python -m pytest -q tests/test_source_layout.py`.
 
 ## Rules for adding tests
 
@@ -25,11 +25,7 @@ A test file should have one primary targeted workflow. It may also run in the fu
 
 Merge a file into another owner when all of the following are true: its assertions protect the same stable contract, it does not require a distinct environment/dependency boundary, and moving it does not make the receiving file cross subsystem ownership. Preserve the test cases; consolidation is about ownership, not deleting regression coverage.
 
-This change applies that rule to three small files:
-
-- `test_contract_repair_policy.py` → `test_contract_repair_planner.py`
-- `test_runtime_diagnostics_context.py` → `test_runtime_diagnostics.py`
-- `test_generation_opcode_contract.py` → `test_instruction_contract_alignment.py`
+Earlier consolidations are recorded in [test ownership history](../docs/process/test-ownership.md).
 
 ## Current file-boundary registry
 

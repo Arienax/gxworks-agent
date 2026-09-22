@@ -1,113 +1,37 @@
 # Source layout
 
-> 2026-09-21: Qt/Win7 has been retired after the [retirement audit](qt-retirement-audit.md). Web/MCP and headless engineering utilities are the supported entry points.
+## Package navigation
 
-This layout is based on `fix/confirmed-generation-compatibility-20260918` at
-`295378d6ac5d24949c03a1c799906f4afe0fd4c9`. The Qt retirement supersedes the desktop launch command while preserving
-persisted engineering formats. It is a package organization change,
-not a new PLC implementation, a new capability catalogue, or a UI redesign.
+| Package | Responsibility |
+| --- | --- |
+| [application](../../src/application/) | Use cases, jobs, approvals, projects and model workflows |
+| [model_runtime](../../src/model_runtime/) | Provider transport, profiles, capability contracts and observations |
+| [knowledge](../../src/knowledge/) | Scoped retrieval, indexes, evidence and ranking |
+| [plc](../../src/plc/) | PLC IR, specifications, instructions, deterministic validation and artifacts |
+| [gxw](../../src/gxw/) | GXW containers, objects, declarations and preserved native records |
+| [gxworks2](../../src/gxworks2/) | GX Works2 CSV and native integration |
+| [simulator](../../src/simulator/) | Test definitions, execution and verification |
+| [agent_runtime](../../src/agent_runtime/) | Shared tool messages, registry and agent orchestration |
+| [rendering](../../src/rendering/) | Headless SVG rendering |
+| [inspection](../../src/inspection/) | Inspection engine and view models |
+| [storage](../../src/storage/) | Configuration, credentials and project persistence |
+| [shared](../../src/shared/) | Resource paths, language, diagnostics and tracing |
+| [integrations](../../src/integrations/) | Web and MCP protocol adapters |
 
-## Ownership
+[Language boundaries](language-boundaries.md) define which layer may interpret PLC semantics. Put new modules in their owning package. The root [api.py](../../src/api.py) is the explicit compatibility facade; application internals use [application.model_api](../../src/application/model_api.py).
 
-| Package | Owns | Must not own |
-| --- | --- | --- |
-| `application` | Use cases, jobs, approval, project state, generation context | Qt widgets, vendor wire parsing |
-| `model_runtime` | Model messages, transport, local catalog, contracts, observations | PLC/GX implementation, UI |
-| `knowledge` | SQLite/LSA retrieval, source priority, reranking, patterns | Candidate acceptance or UI |
-| `plc` | IR, instructions, confirmed specifications, deterministic checking and artifacts | Models, application orchestration, UI |
-| `agent_runtime` | Neutral tool messages/runtime, agent orchestration, PLC tool implementation | A second MCP-only engineering stack |
-| `inspection` | Inspection data, engine and presentation models | Qt widgets |
-| `rendering` | Headless SVG and rung numbering | CSV export, Qt |
-| `storage` | Configuration, credentials, project/session persistence | UI |
-| `shared` | Paths, language, diagnostics, tracing, context policy | UI and application service ownership |
-| `gxw`, `gxworks2`, `simulator` | Existing native-format, vendor integration and simulation capabilities | Model transport |
-| `integrations` | Web and MCP protocols | Direct GUI/PLC execution instead of shared services |
+## Entry points
 
-`src` contains only the `api.py` public facade plus packages. New modules must go
-straight into their owning package; no new compatibility module, dated patch
-module, `old`/`new` copy, or parallel implementation should be placed at the root.
-`__init__.py` files expose explicit small public surfaces. In particular importing
-`agent_runtime.messages` never imports the model provider.
+Source imports use `PYTHONPATH=src`. The Web launcher is [integrations.web.__main__.main](../../src/integrations/web/__main__.py); MCP uses [integrations.mcp.__main__.main](../../src/integrations/mcp/__main__.py). Installation and commands belong to the [getting-started guide](../guides/getting-started.md) and [MCP reference](../integrations/mcp.md).
 
-## Entry points and imports
+The headless utilities [gxw.decoder](../../src/gxw/decoder.py) and [plc.sfc](../../src/plc/sfc.py) read GXW/POU data and convert legacy SFC input to requirements. Inspect each module's `--help` before supplying input files.
 
-The source layout is still used through `PYTHONPATH=src` as before. This change
-intentionally does not combine repository organization with a packaging migration.
+## Resources and state
 
-```powershell
-$env:PYTHONPATH = (Resolve-Path .\src).Path
-python -m integrations.web --workspace "D:\PLCWorkspaces\my-workspace"
-python -m integrations.mcp
-python -m gxw.decoder "example.gxw" --list-programs
-python -m plc.sfc "example.sfc"
-```
+Bundled resources are separate from writable user settings and project workspaces. Configuration lookup and migration belong to [storage.config](../../src/storage/config.py); query and backup instructions are in [model settings](../guides/model-settings.md#storage).
 
-`api.py` explicitly exports
-the established public service functions; application internals use
-`application.model_api`, not the root compatibility surface. The old model/PLC/
-knowledge/Qt root modules are removed. `tools/source_layout.json` is the complete
-old-to-new navigation map, not a runtime import hook.
+Historical prompt implementations under `research/baselines` support comparisons only. [tools/source_layout.json](../../tools/source_layout.json) records old-to-new module paths; it is a navigation map, not an import hook. Migration experiments and test results are in the [process index](../process/README.md).
 
-The first stage's model aliases are deliberately removed after every product,
-test and tool import is migrated. Tests patch the module where a dependency is
-looked up, so a cached imported function is not accidentally patched elsewhere.
-No new `sys.modules` aliases or wildcard facade are used to conceal old imports.
+## Verification
 
-## Seams extracted before relocation
-
-`rendering/ladder_svg.py` contains the base and wrapped SVG implementations.
-`gxworks2/csv_export.py` contains CSV lowering/formatting/native step widths.
-`plc/artifacts.py` composes deterministic artifacts for core/debug clients without
-importing the application debug loop. The original strict/structural acceptance
-choice is unchanged.
-
-The Qt widgets and signal/thread wrappers have been deleted. Generation, planning,
-review, import/sync and simulation are owned by their existing headless services;
-workflow tests call those services rather than constructing windows.
-
-Required context helpers live in `application/generation_support.py`. The old
-full prompt implementation is retained only under `research/baselines` for
-benchmark comparisons, never in product imports. Active GXW experiments remain
-in their existing bounded backend; a filename alone is not evidence that they
-can be deleted safely.
-
-## Resources and persistent data
-
-Keep configuration resolution, explicit overrides, user-data-directory defaults,
-legacy configuration/session lookup, and frozen `_MEIPASS` resource behavior.
-Moving Python code is not authorization to migrate, clear or regenerate user data.
-Model observations stay beside the active user configuration. The explicit
-copy-once location migration retains legacy files; see
-[runtime ownership](runtime-ownership.md).
-The resource catalogue, SQLite/LSA files, original GXW evidence and snapshots are
-not changed by this refactor. `model-observations.sqlite` is local state and ignored.
-
-## Validation
-
-```text
-python -m compileall -q src
-python -m pytest -q
-python scripts/mcp_smoke.py
-python scripts/export_web_schema.py
-npm run types --prefix web
-node --experimental-strip-types --test web/tests/*.test.mjs
-npm run build --prefix web
-```
-
-Layout tests recursively check package/module shadowing, old imports, dependency
-boundaries, inert foundation packages, resource paths, configuration source/frozen
-behavior, and headless imports. Existing architecture tests inspect implementations,
-not deprecated wrappers. The instruction schema remains derived from the authoritative
-CPU registry; a obsolete stdlib-only assertion must not force duplication of opcodes.
-
-Real Windows GX Works2 / MX Component certification is separate from
-Linux unit tests and Linux PyInstaller smoke. Do not equate the two. Existing
-baseline failures must be reported separately from migration regressions; do not
-silently deselect them or mark an incomplete suite as passing.
-
-
-## Call-contract follow-up
-
-The post-layout semantic projection, transport downgrade policy and shared
-candidate entry points are documented in [generation call contracts](generation-call-contracts.md).
-Shared engineering semantics do not require identical compact/full wire protocols.
+[Test ownership](../../tests/README.md) defines the test boundaries. Source layout and architecture checks live in [test_source_layout.py](../../tests/test_source_layout.py) and [test_architecture_boundaries.py](../../tests/test_architecture_boundaries.py). Packaging and generated-type checks use the existing scripts described in [packaging](../guides/packaging.md) and [HTTP reference](../integrations/http-api.md).

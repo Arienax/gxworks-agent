@@ -1,9 +1,12 @@
-# Optional dependency sets
+# Dependency environments
 
-The root `requirements.txt` installs headless Web/Core development, testing and release tooling.
-No Qt binding is required. Windows 7 product packaging is retired.
-Additional environments are kept here so the repository root stays focused on user-facing entry points and project metadata.
+[requirements.txt](../requirements.txt) installs headless development, testing and packaging tools. The component files here are the source of package versions and platform markers; use the same interpreter for installation and execution.
 
-- `web.txt` — FastAPI/Web runtime used by the local Web workbench and Web packaging; it also includes the MCP SDK because the Windows Web release now builds `gxworks-agent-mcp.exe` beside the workbench.
-- `mcp.txt` — minimal standalone/headless MCP SDK environment for source-only MCP use.
-- `gxw-test.txt` — optional independent MS-CFB reader used by GXW allocator regression tests.
+| File | Environment |
+| --- | --- |
+| [web.txt](web.txt) | Local Web workbench, model provider and packaged MCP launcher |
+| [mcp.txt](mcp.txt) | Standalone MCP and its deterministic context/retrieval dependencies |
+| [context.txt](context.txt) | Typed context, retrieval components and settings locking |
+| [gxw-test.txt](gxw-test.txt) | Independent CFB reader for GXW tests |
+
+Use [getting started](../docs/guides/getting-started.md) for source startup, [MCP](../docs/integrations/mcp.md) for standalone setup and [packaging](../docs/guides/packaging.md) for Windows builds. Optional native integrations require their own installed vendor software.

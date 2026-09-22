@@ -7,7 +7,7 @@ Pydantic projections, Haystack routers, bundled SQLite index and final request
 assembly are real. The small completions in `cases.json` are synthetic boundary
 fixtures, not verified PLC solutions and not transcripts of a live model.
 
-Install once (Python 3.10+, Node 22 for promptfoo):
+Install the pinned Python dependencies and the promptfoo version used by the context-replay CI job:
 
 ```powershell
 python -m pip install -r requirements/web.txt
@@ -38,7 +38,7 @@ existing retrieval compatibility hooks are process-global.
 - Stable parameter identities, including generic transport questions that must
   not become a drive model; typed zero and false remain real selected values.
 - Historical review drafts recover choices without manufacturing note provenance,
-  changing answers or crossing stable parameter identities (the fifth fixture).
+  changing answers or crossing stable parameter identities.
 - Review choices/defaults/provenance do not enter generation parameter fields;
   a generated candidate overview stays in review, while a user-edited summary
   or note survives. Unknown historical free text is not guessed away.
@@ -49,10 +49,7 @@ existing retrieval compatibility hooks are process-global.
 - One fixture completion for A and one for B; no automatic annotation model,
   no changes to B's supplied reasoning effort and no old audit envelope in B.
 
-The replay result is a boundary regression result. It is **not** a claim about
-live reasoning latency, behavioral correctness, GX compilation, hardware timing,
-or general semantic understanding. It doesn't solve hardware-negation scope or
-calibrate a continuous conveyor's timer-to-distance model.
+The result covers context projection, evidence routing and recorded-provider calls. Live-model timing uses the [Agent B measurement procedure](../../docs/guides/agent-b-measurement.md).
 
 ## Private diagnostic archives
 
@@ -77,36 +74,11 @@ reports into the repository.
 
 ## Component boundaries
 
-`plc/specification/parameters.py` uses Pydantic's discriminated value union and
-separate review/generation serializers. `hardware.<registered question ID>` is
-an exact Core namespace; a different explicit namespace cannot bind a hardware
-field even when the old id or question text collides. Missing metadata uses only
-registered IDs and a small frozen **exact label** compatibility set. Unknown
-parameters remain generic. No substring-based identity inference remains.
-Text form values of a declared number/boolean use JSON primitive parsing before
-strict validation; `0` is not a boolean and `"false"` is not truthiness-cast.
-
-`knowledge/scope.py` uses Haystack 2.31 `MetadataRouter` for request lanes and
-source eligibility. Existing SQLite, FTS, structured instruction lookup and local
-LSA remain; no DocumentStore reindexing, external vector service or reranker is
-added. Haystack-selected metadata partitions constrain FTS/entity/dense recall
-before their candidate caps, then the same policy checks final records. Source
-IDs, original text, model/source applicability and budget receipts are retained.
-Unclassified legacy records are not relabeled as official evidence.
-
-References: Pydantic unions/serialization
-https://docs.pydantic.dev/latest/concepts/unions/
-https://docs.pydantic.dev/latest/concepts/serialization/
-Haystack MetadataRouter/filters
-https://docs.haystack.deepset.ai/docs/metadatarouter
-https://docs.haystack.deepset.ai/docs/metadata-filtering
-promptfoo Python provider/telemetry
-https://www.promptfoo.dev/docs/integrations/python/
-https://www.promptfoo.dev/docs/configuration/telemetry/
+Typed parameter identity and review/generation projection belong to [parameters.py](../../src/plc/specification/parameters.py). Retrieval scope belongs to [scope.py](../../src/knowledge/scope.py). Their integration rules are documented under [runtime ownership](../../docs/architecture/runtime-ownership.md); replay cases exercise those implementations directly.
 
 ## Servo identity and retrieval follow-up
 
-The sixth fixture (`servo-typed-handoff`) is a small synthetic boundary sentinel,
+The `servo-typed-handoff` fixture is a small synthetic boundary sentinel,
 not a servo control program: independent signal owners/levels, a conditionally
 inactive module question, actual ZRN evidence and one recorded completion. The
 live operator ZIP is never checked into this corpus. Confirmation rejects two
@@ -126,7 +98,7 @@ $env:PYTHONPATH = 'src'
 `build-web.bat` performs this dependency check in its actual Web interpreter.
 Restart the Web service after updating. Frozen builds have the same
 `--self-test-knowledge` diagnostic. A failure remains nonblocking at service
-startup and is now captured with a safe exception/dependency code in receipts
+startup and is captured with a safe exception/dependency code in receipts
 and the original interaction export. The original `retrieval_failed` trace
 contained no exception detail; it cannot establish the historical cause.
 

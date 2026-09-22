@@ -1,93 +1,21 @@
-# Integration onboarding
+# MCP 接入
 
-The Web workbench is the normal integration entry point. Existing `modelProfiles`,
-`ModelProvider`, `ToolRuntime` and MCP tool schemas remain the source of truth.
+外部 Agent 通过 MCP 使用同一组工程工具。先[启动 Web 工作台](../guides/getting-started.md)，打开目标工程，再在“设置 → 模型 → Integrations / MCP”连接客户端。
 
-## Source checkout quick start
+## Windows 本地服务
 
-On Windows, `build-web.bat` prepares the complete source Web runtime by default:
-it creates `.venv` with Python 3.10+ when needed, installs
-`requirements/web.txt`, installs the locked frontend dependencies, regenerates
-API types and builds `web/dist`. After a successful build, run `start-web.cmd`
-directly from the repository root.
+工作台把 loopback 地址、Agent 凭据及绑定工程保存到本机凭据存储。选择“测试 MCP 连接”会绑定当前工程并调用真实启动器的检查入口。服务启动和项目绑定的实现分别在 [integrations.web.__main__.main](../../src/integrations/web/__main__.py)与 [service_credentials.bind_project](../../src/integrations/mcp/service_credentials.py)。
 
-Use `build-web.bat --frontend-only` only when the Python backend environment is
-managed separately. `start-web.cmd` prefers the extracted release executable,
-then the source `.venv`, and can also fall back to a locally built
-`dist/GXWorks-Agent-Web/GXWorks-Agent-Web.exe` package.
+普通客户端使用 `gxworks-agent-mcp` 启动器，不需要在客户端配置中复制 token、工作区或服务 URL。保持工作台运行；服务停止后客户端无法执行工程工具。切换到另一工程后重新绑定并测试，客户端不会猜测浏览器当前选择。
 
-## Model API
+## Codex 和其他客户端
 
-Open **Settings → Model → Model API**. For an OpenAI-compatible service, enter
-the API URL and key, then choose **自动获取模型 + 检测能力**. The workbench reads
-the provider model list and performs bounded probes for tool calling and JSON
-structured output. The discovered model can then be selected and saved as an
-ordinary existing `modelProfile`.
+选择“连接 Codex”前先测试连接。应用仅更新其管理的 MCP 配置项，保留其他服务器和用户设置。客户端专用步骤见 [Codex](codex.md)。其他支持 stdio MCP 的客户端使用同一启动器和绑定流程。
 
-Provider-specific capability flags, generation defaults and request overrides are
-kept under **高级设置**. Detection is best-effort: it never silently removes an
-existing known-good capability merely because an optional probe fails.
+源码版与发布包版的启动命令由 [application.mcp_integrations](../../src/application/mcp_integrations.py)生成。复制界面给出的完整命令，避免用另一目录的 Python 启动器连接错误实例。
 
-## MCP for Web users
+## Headless 或显式服务配置
 
-Select a project, then open **Settings → Model → Integrations / MCP** to connect
-Codex. Keep the workbench running while using its engineering tools.
+无本地凭据发现的环境可显式传入 loopback 服务地址、Agent token 环境变量及工程 ID。离线读取已有 SessionStore 时使用 `--standalone`。两种模式的参数、上下文选择和结果状态见 [MCP 接口](mcp.md)。
 
-At Web startup the application creates a credential separate from the operator
-login token and stores the current loopback MCP service record in Windows
-Credential Manager. The record contains the loopback service origin, the
-unprivileged Agent token and the currently bound project id. It is private to the
-local process/user boundary and is never returned to the browser or written into
-the PLC workspace.
-
-In **Integrations / MCP**:
-
-1. **测试 MCP 连接** binds the currently selected project and executes the real
-   product launcher with `--check`. A successful result proves that launcher
-   discovery, local credential lookup, Agent authentication and tool discovery
-   all work.
-2. **连接 Codex** performs the same check, then atomically adds or replaces only
-   the `[mcp_servers.gxworks]` table in the user's Codex `config.toml`. Model
-   selection/provider settings, project trust entries and every other MCP server
-   are left unchanged. This does not require the Codex CLI to be in `PATH`.
-3. In Codex, describe the task and its input/output behavior, for example:
-   `使用 gxworks 为当前工程编写启停控制：X0 启动、X1 停止、Y0 控制电机，停止优先。`
-   Review the program, change summary and pending approvals in the workbench.
-
-The normal launcher therefore needs no user-facing URL, token, workspace or
-Python path:
-
-```text
-gxworks-agent-mcp
-```
-
-The Windows Web release builds `gxworks-agent-mcp.exe` beside
-`GXWorks-Agent-Web.exe`. Source checkouts use the same product entry internally
-through the source `.venv`; the Web onboarding action writes the correct absolute
-launcher invocation to Codex automatically.
-
-The selected project binding is preserved across Web restarts when that project
-still exists in the reopened workspace. Opening another workspace never blindly
-reuses a project id that is absent there.
-
-## Advanced / other clients
-
-Claude, Cursor and other stdio MCP clients can use the same launcher. Bind the
-current project once with **测试 MCP 连接**, then configure the client to start
-`gxworks-agent-mcp`. Environment variables and explicit `--service-url` remain
-available for automation and non-Windows development, but are not part of the
-normal Windows user path.
-
-Direct SessionStore access is retained for CI, isolated tests and headless use:
-
-```text
-gxworks-agent-mcp --standalone --workspace <workspace> --project <project-id>
-```
-
-For compatibility, an explicitly supplied legacy `--workspace` also selects
-standalone mode, but new integrations should use `--standalone` so the boundary
-is obvious.
-
-Only stdio MCP transport is changed by this onboarding work. Streamable HTTP is
-not introduced here, and neither `ToolRuntime` nor the existing engineering tool
-catalog is duplicated or rewritten.
+模型设置与 MCP 客户端设置独立：外部客户端负责它自己的模型请求，工作台 MCP 负责工程工具。审批规则仍由[工作区策略](../architecture/approval-modes.md)决定。

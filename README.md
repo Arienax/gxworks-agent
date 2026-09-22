@@ -2,157 +2,52 @@
 
 [简体中文](README.zh-CN.md) | English
 
-> **AI-native engineering workbench and agent runtime for Mitsubishi MELSEC PLC development.**
+GXWorks Agent is a local engineering workbench for Mitsubishi PLC projects, focused on FX3U and GX Works2. It turns requirements into a reviewable specification, generates Ladder candidates, saves versioned PLC IR, and exports engineering artifacts. The Web workbench and external MCP clients use the same Python engineering services.
 
-![License](https://img.shields.io/badge/license-source--available%20proprietary-blue.svg)
-![Platform](https://img.shields.io/badge/platform-Windows-0078D6.svg)
-![PLC](https://img.shields.io/badge/focus-FX3U-orange.svg)
-![Status](https://img.shields.io/badge/status-active%20development-yellow.svg)
-
-<p align="center">
-  <img src="resources/assets/demo.gif" alt="GXWorks Agent demo" width="1200">
-</p>
-
-**GXWorks Agent** is an experimental PLC engineering workbench focused on **FX3U + GX Works2**. It combines natural-language requirement analysis, confirmed control specifications, local PLC knowledge retrieval, model-assisted Ladder generation, deterministic validation, PLC IR, versioned project state, GX Works2 integration, and a shared engineering runtime for built-in models and MCP clients such as Codex.
-
-The project follows one rule: **LLM output is a candidate, not an engineering result.** Engineering facts, instruction limits, validation, project state, versioning, and external side effects remain application-owned.
-
----
-
-## Architecture and maintenance policy
-
-PLC domain semantics have one owner: the headless Python Core. TypeScript is presentation only; C# is a vendor/native adapter only. Web is the sole maintained UI. The Qt/Win7 client, its dependencies and packaging have been retired; reusable engineering services and historical data remain. This is an intentional retirement, not a claim of complete GUI parity or native Windows/GX acceptance. See the [retirement audit](docs/architecture/qt-retirement-audit.md) and [language boundaries](docs/architecture/language-boundaries.md).
-
-## What is distinctive
-
-### SQLite evidence + deterministic instruction contracts
-
-The local knowledge layer uses a packaged **SQLite schema-v3 index** rather than placing whole manuals into the prompt. Runtime retrieval combines structured instruction/device/error/debug records, entity lookup, BM25/FTS5, local dense LSA retrieval, source priority, and task/PLC scoping.
-
-The knowledge layer is deliberately separate from `instruction_registry`:
-
-- **SQLite** answers: what engineering evidence is relevant to this task?
-- **Instruction registry** answers: what instruction forms are actually allowed, and how should deterministic code interpret them?
-
-The registry is shared by generation, validation, import, and PLC IR analysis. CPU support, operand count/roles, read/write semantics, and Mitsubishi D/P instruction forms are kept there. The allowed `APP_INSTR` opcode set used by generation is derived from the same registry that validation later enforces.
-
-### Task-shaped prompt assembly
-
-`application/generation_context.py` assembles the model context for the current operation instead of replaying one large historical prompt. A normal Ladder generation request can include the confirmed specification, current program/edit scope, targeted SQLite evidence, specialist context when needed, and a machine-readable output schema derived from the instruction contract.
-
-Repair paths intentionally receive less context: contract repair is restricted to the failed baseline and allowed scope, while format repair does not receive PLC knowledge context at all.
-
-### Engineering core, not just code generation
-
-Validated candidates are converted into PLC IR and stored as versioned project state. The same engineering layer supports Diff, scoped changes, bounded repair, deterministic artifact generation, GX Works2 CSV operations, and external MCP clients. Built-in models and Codex therefore do not use separate PLC implementations.
-
----
-
-## Current capability status
-
-| Area | Current status |
-| --- | --- |
-| Confirmed-spec Ladder generation and editing | ✅ Available |
-| SQLite-backed PLC knowledge retrieval | ✅ Available |
-| Instruction registry + CPU-scoped generation contract | ✅ Available |
-| Task-shaped prompt/context assembly | ✅ Available |
-| PLC IR, validation, Diff, versioning and bounded repair | ✅ Available |
-| GX Works2 Ladder CSV import / export / synchronization | ✅ Available |
-| Model-free CSV re-export from saved PLC IR | ✅ Available |
-| Web engineering workbench | ✅ Available |
-| MCP server / Codex integration | ✅ Available |
-| Simulation and test-plan tooling | 🧪 Experimental |
-| Structured Ladder / FBD native-format generation | 🧪 **Block-level research only**: currently limited to generating a single supported block from a small set of verified templates; complete program generation is not supported |
-| GXW native-format reverse engineering | 🧪 Research in progress; coverage is limited to known structures and reproducible evidence |
-| Native GXW compilation | 🚧 Not implemented as a general compile workflow |
-| Physical PLC read-only observation | 🔧 Lower-level read-only helper exists, but it is **not integrated into the current Web GUI** |
-| Physical PLC write path | ❌ Not exposed |
-| GX Works3 adapter | 📋 Planned |
-
-“Experimental” means there is bounded implementation or reproducible research evidence. It does **not** mean a complete user-facing workflow or general support for arbitrary programs.
-
----
-
-## GX Works2 path
-
-The most mature end-to-end path is currently **Ladder → PLC IR → GX Works2 CSV**.
-
-Current work includes Ladder/device-comment CSV generation, import/export synchronization, conflict protection, model-free re-export from saved IR, and deterministic lowering for supported Ladder structures that exceed GX Works2 native CSV layout constraints.
-
-A locally validated or exported version does not imply successful native GX compilation, simulator execution, or physical PLC execution.
-
----
-
-## Native GXW / Structured Ladder / FBD research
-
-Native-format work is still reverse-engineering research, not a complete programming backend.
-
-Current evidence covers selected GX Works2 Structured Ladder/FBD records and a small number of known block/object templates. The implementation can generate or rewrite **individual supported blocks** under known layouts, but it cannot yet generate a complete Structured Ladder/FBD program, arbitrary network topology, or general IEC FBD graph.
-
-Research artifacts and evidence are kept under [`docs/research/`](docs/research/).
-
----
+Use the workbench to analyse requirements, review I/O assignments, generate or edit a program, inspect changes, and export the artifacts recorded for that version. GX Works2 import, simulation and hardware observation have separate operating requirements; start with the [Web guide](docs/integrations/web.md).
 
 ## Quick start
 
-### Windows Web workbench
+### From source on Windows
 
-Extract the packaged `GXWorks-Agent-Web` directory and run:
-
-```text
-start-web.cmd
-```
-
-Choose a workspace and open the Web workbench. See [Web integration](docs/integrations/web.md) for operation approvals, workspace behavior, and source/runtime details.
-
-### Source installation
+Install Git with Git LFS, Python, and Node.js/npm. See [environment setup](docs/guides/getting-started.md) for dependency files and troubleshooting.
 
 ```powershell
 git clone https://github.com/Arienax/gxworks-agent.git
 cd gxworks-agent
-
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements/web.txt
-
+git lfs install --local
+git lfs pull
 .\build-web.bat --no-pause
-
-$env:PYTHONPATH = (Resolve-Path .\src).Path
-python -m integrations.web --workspace "D:\PLCWorkspaces\my-workspace" --port 8765 --open-browser
+.\start-web.cmd
 ```
 
-Run tests with:
+The build entry prepares the backend environment and frontend. The launcher asks for a workspace and opens the local workbench. Keep its terminal open while using the application; close the service with `Ctrl+C`.
 
-```powershell
-pytest -q
-```
+Configure a model in **Settings → Model → Model API**, then create a project. Start with Direct analysis, review the specification and I/O, and generate a program. [Your first project](docs/guides/getting-started.md#first-project) explains the complete sequence.
 
-### Codex / MCP
+### From a Web package
 
-Start GXWorks Agent Web, open a PLC project, then use **Settings → Model → Integrations / MCP** to connect Codex. External MCP clients use the same project state, retrieval policy, generation contract, candidate pipeline, and PLC IR as the built-in workflow.
+For a package containing `start-web.cmd` and `GXWorks-Agent-Web.exe`, extract the complete directory and run `start-web.cmd`. Keep the supplied resources beside the executable. [Package installation and updates](docs/guides/packaging.md) describes the directory layout and update procedure.
 
-See [Codex integration](docs/integrations/codex.md) and [MCP integration](docs/integrations/mcp.md).
+### Connect an external agent
 
----
+With a project open, use **Settings → Model → Integrations / MCP**. Follow [MCP onboarding](docs/integrations/onboarding.md) for the product launcher, [Codex integration](docs/integrations/codex.md) for client setup, or the [MCP reference](docs/integrations/mcp.md) for explicit standalone and service configurations.
 
 ## Documentation
 
-- [PLC knowledge engine](resources/knowledge/README.md)
-- [Web workbench](docs/integrations/web.md)
-- [MCP integration](docs/integrations/mcp.md)
-- [Codex integration](docs/integrations/codex.md)
-- [GXW / Structured Ladder / FBD research](docs/research/)
+The [documentation index](docs/README.md) separates usage guides, implementation references, versioned test reports and historical work.
 
----
+- [Model settings and persistent data](docs/guides/model-settings.md)
+- [GX Works2 transfer](docs/guides/gxworks2.md) and [Structured Ladder / FBD](docs/guides/fbd.md)
+- [Diagnostics and interaction exports](docs/guides/diagnostics.md)
+- [Architecture and source navigation](docs/architecture/source-layout.md)
+- [Knowledge resources](resources/knowledge/README.md) and [GXW research evidence](research/README.md)
+- [Verification reports](docs/reports/README.md)
 
-## Safety and scope
+## Before operating machinery
 
-GXWorks Agent is under active development. Generated PLC logic must be reviewed and validated against the actual CPU, wiring, machine behavior, safety circuit, operating mode, and applicable standards before deployment.
-
-Safety-critical functions such as emergency stop, guarding, motion limits, pressure, and temperature protection must not rely solely on generated application logic or software simulation.
-
----
+Review generated logic against the selected CPU, wiring, motion limits and machine operating modes. Compile and check it in the intended GX Works2 environment before commissioning. Emergency stops, guarding and other safety functions require the machine's independent safety system; generated application logic and software tests do not replace it.
 
 ## License
 
-GXWorks Agent is **source-available proprietary software**, not open-source software. See [LICENSE](LICENSE) for the full terms. Source viewing, local execution, modification, research/evaluation, and internal organizational use are permitted; redistribution, sublicensing, distribution of compiled or packaged derivatives, incorporation into distributed products, hosted/SaaS/API offerings, resale, relicensing, and white-label use require prior written permission.
+The project is provided under the source-available proprietary [LICENSE](LICENSE). Keep the full license and [third-party notices](resources/knowledge/THIRD_PARTY_NOTICES.md) with permitted copies.

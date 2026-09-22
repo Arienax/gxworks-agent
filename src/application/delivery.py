@@ -74,9 +74,9 @@ def delivery_summary(workbench, project_id, version_id):
         "device_io": (program or {}).get("devices", {}),
         "fbd_objects": (program or {}).get("nodes", []) if version.get("target_mode") == "fbd" else [],
         "fbd_declarations": (program or {}).get("labels", {}) if version.get("target_mode") == "fbd" else {},
-        "limitations": ["生成及保存本地版本不能证明原生编译或运行正确。",
-                         "需求与测试的关联由设计者确认，不能据此推导全部需求已验证。",
-                         "内存测试后端只验证软件流程；真实设备运行结果需单独核对。"]})
+        "limitations": ["原生编译和运行结果按版本绑定的记录核对。",
+                         "需求覆盖按关联测试的实际执行结果逐条核对。",
+                         "内存后端的观测范围为软件流程；设备结果使用对应原生记录。"]})
     # generation_handoff is an application-authored bounded receipt. Generic
     # metadata filtering treats every key containing "token" as a credential,
     # but ContextCompiler telemetry uses token counts. Re-project this one known
@@ -106,7 +106,7 @@ def render_delivery(value):
             for key in ("label", "name", "text", "value"):
                 if key in v and not isinstance(v[key], (list, dict)):
                     return readable(v[key])
-            return "已记录结构化配置，详见已确认规格"
+            return "已记录结构化配置"
         return str(v)
     lines = [f"# 工程交付摘要 · {cell(value['project_name'])}", "",
              f"版本：{value['version_id']} · {value['plc_model']} · {value['target_mode']}",
@@ -169,10 +169,10 @@ def render_delivery(value):
     receipt = receipt if isinstance(receipt, dict) else {}
     stages = [("需求分析", lineage.get("analysis_evidence") or {})]
     selected_id = ((spec or {}).get("selected_approach") or {}).get("approach_id") if isinstance(spec, dict) else None
-    stages.extend(("历史候选补查（不代表模型已使用）", row.get("evidence") or {})
+    stages.extend(("历史候选补查（模型使用状态未观测）", row.get("evidence") or {})
                   for row in lineage.get("proposals", []) if isinstance(row, dict)
                   and row.get("approach_id") == selected_id and row.get("evidence"))
-    stages.append(("本次生成", receipt.get("generation_evidence") or {}))
+    stages.append(("该版本生成", receipt.get("generation_evidence") or {}))
     for label, manifest in stages:
         manifest = manifest if isinstance(manifest, dict) else {}
         lines.append(f"- {label}检索状态：{cell(manifest.get('status', '未记录'))}。")
@@ -181,15 +181,15 @@ def render_delivery(value):
                 continue
             lines.append(f"  - 来源 {cell(record.get('id'))} · {cell(record.get('source'))} · 页 {cell(record.get('page'))} · {cell(record.get('role'))}；内容 SHA256：{cell(record.get('content_sha256'))}")
         if manifest.get("query_truncated") or manifest.get("omitted_ids"):
-            lines.append("  - 检索预算造成省略；未命中或未注入不代表禁止该实现。")
+            lines.append("  - 检索预算造成省略；缺失项按检索回执检查。")
     if not requests:
-        lines.append("此版本未保存原始请求来源；未从方案说明或聊天推理补造用户意图。")
-    lines.append("以上仅记录信息来源与传递，不证明每条需求已实现；方案说明和检索证据不会自动升级为硬生成契约。")
+        lines.append("此版本未保存原始请求来源。")
+    lines.append("需求实现情况见该版本绑定的评审与测试结果。")
     lines += ["", "## 结构与静态检查", ""]
     validation = value.get("static_validation") or {}
     if value.get("validation_profile") == "generation_structural":
         lines.append("保存时检查层级：生成结构校验；未将全部语义及策略检查作为保存门槛。请结合下方评审与运行证据复核。")
-    lines.append(f"记录状态：{cell(validation.get('status'))}；此状态不代表原生编译通过。")
+    lines.append(f"记录状态：{cell(validation.get('status'))}；检查范围：结构与静态检查。")
     lines.extend(f"- {cell(message)}" for message in validation.get("messages") or [])
     for report in value.get("reports") or []:
         lines.append(f"- 评审 {cell(report.get('report_id'))}：{cell(report.get('status'))}；{cell(report.get('summary'))}")
@@ -226,7 +226,7 @@ def render_delivery(value):
     lines.append("自动原生验证：未提供通过证明。")
     for record in records:
         outcome = {"passed": "报告通过", "failed": "报告失败", "inconclusive": "报告待确认"}.get(record["outcome"], record["outcome"])
-        lines.append(f"- 操作员记录 {cell(record['id'])}：{cell(outcome)}；绑定当前文件：{readable(record['binding_current'])}；未自动验证。")
+        lines.append(f"- 操作员记录 {cell(record['id'])}：{cell(outcome)}；绑定当前文件：{readable(record['binding_current'])}；来源：操作员报告。")
         lines.append(f"  操作员：{cell(record['operator'])}；工具：{cell(record['tool_version'])}；源 GXW SHA256：{record['source_gxw_sha256']}")
         lines.extend("> " + text(line) for line in record["report"].splitlines())
         attachment = record.get("native_gxw")
@@ -235,5 +235,5 @@ def render_delivery(value):
     lines += ["", "## 交付产物指纹", "", "| 文件 | 可用 | SHA256 |", "| --- | --- | --- |"]
     for artifact in value["artifacts"]:
         lines.append(f"| {cell(artifact.get('filename', artifact['id']))} | {'是' if artifact['available'] else '否'} | {artifact.get('sha256', '未提供')} |")
-    lines += ["", "## 待核对边界", ""] + [f"- {text}" for text in value["limitations"]]
+    lines += ["", "## 交付检查", ""] + [f"- {text}" for text in value["limitations"]]
     return "\n".join(lines) + "\n"
