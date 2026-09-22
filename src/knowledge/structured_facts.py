@@ -8,6 +8,8 @@ but it never decides which record represents the explicit fact.
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 import re
 from collections.abc import Mapping
 
@@ -199,6 +201,62 @@ def _attach_instruction_step_width(record, target, *, plc_model):
     return value
 
 
+def _step_width_only_record(target, *, plc_model, task_type):
+    """Return a structured fact when the step-width owner is the only source."""
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+
+    if isinstance(target, Mapping):
+        opcode = str(target.get("opcode") or target.get("base_opcode") or "").strip().upper()
+        operands = target.get("operands")
+    else:
+        opcode = str(target or "").strip().upper()
+        operands = None
+    if not opcode:
+        return None
+
+    fact = resolve_instruction_step_width(target, plc_model=plc_model)
+    form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(opcode, cpu=plc_model)
+    if form is None and not fact["known"]:
+        return None
+
+    identity = json.dumps(
+        {"plc_model": str(plc_model).upper(), "opcode": opcode, "operands": operands},
+        ensure_ascii=True, sort_keys=True, separators=(",", ":"),
+    )
+    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
+    lines = ["[STRUCTURED INSTRUCTION STEP WIDTH]", f"INSTRUCTION: {opcode}"]
+    if isinstance(operands, (list, tuple)):
+        lines.append("OPERANDS: " + " ".join(str(value) for value in operands))
+    if fact["known"]:
+        lines.append(f"STEP_WIDTH: {fact['steps']} program step(s)")
+        lines.append(f"STEP_WIDTH_SOURCE: {fact['source']}")
+    else:
+        lines.append("STEP_WIDTH: unresolved")
+        lines.append("STEP_WIDTH_REASON: " + str(fact.get("reason") or "unknown"))
+
+    return {
+        "id": f"structured-step-width:{digest}",
+        "source": "resources/instructions/mitsubishi/fx3u_step_widths.json",
+        "manual_id": "structured_step_width_catalog",
+        "manual_number": "LOCAL-STEP-WIDTH",
+        "revision": "runtime",
+        "manual_type": "structured_instruction",
+        "manual_priority": 100,
+        "chunk_type": "instruction",
+        "instruction_opcode": opcode,
+        "section": "Instruction step width",
+        "page": "",
+        "pdf_page": 0,
+        "text": "\n".join(lines),
+        "structured_fact_kind": "instruction",
+        "structured_fact_target": opcode,
+        "structured_lookup": True,
+        "match_type": "structured_direct",
+        "instruction_step_width": copy.deepcopy(fact),
+        "task_type": task_type,
+        "plc_model": plc_model,
+    }
+
 def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generate"):
     """Resolve canonical/variant opcodes directly through ``instructions``.
 
@@ -262,6 +320,22 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
                     candidate,
                 )
             )
+        if not candidates:
+            fallback = _step_width_only_record(
+                step_target, plc_model=plc_model, task_type=task_type,
+            )
+            if fallback is not None:
+                candidates.append(
+                    (
+                        0,
+                        0,
+                        -int(fallback.get("manual_priority") or 0),
+                        0,
+                        str(fallback.get("id") or ""),
+                        fallback,
+                    )
+                )
+
         for *_keys, candidate in sorted(candidates, key=lambda item: item[:-1]):
             marker = (candidate.get("id"), opcode or base)
             if marker in seen:
