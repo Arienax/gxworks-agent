@@ -990,6 +990,15 @@ def format_contract_summary(approach, *, localized=False):
         ]
         if instances:
             parts.append(label("固定指令实例 ") + label(" / ").join(instances))
+    preferences = normalized.get("implementation_preferences")
+    preferences = preferences if isinstance(preferences, Mapping) else {}
+    if preferences.get("instruction_instances"):
+        instances = [
+            " ".join([item["opcode"], *item["operands"]]).strip()
+            for item in normalize_instruction_instances(preferences.get("instruction_instances"))
+        ]
+        if instances:
+            parts.append(label("方案指令实例 ") + label(" / ").join(instances))
     if contract.get("unverified_constraints"):
         parts.append(label("另有保留的未机检方案语义"))
     return label("；").join(parts)
