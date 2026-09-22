@@ -161,3 +161,12 @@ def test_confirmed_agent_origin_has_one_core_owner():
     source = inspect.getsource(generation.prepare_ladder_candidate)
     assert "candidate_origin == CONFIRMED_AGENT_ORIGIN" in source
     assert "candidate_origin != CONFIRMED_AGENT_ORIGIN" in source
+
+
+
+def test_confirmed_generation_acceptance_capability_is_enforced():
+    from tools.audit_capability_coverage import audit_coverage
+
+    report = audit_coverage()
+    states = {row["id"]: row["state"] for row in report["capabilities"]}
+    assert states["confirmed_generation_acceptance"] == "enforced"
