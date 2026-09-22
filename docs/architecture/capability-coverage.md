@@ -27,15 +27,10 @@ enforces the manifest on pull requests.
 
 ## Current migration gaps
 
-The current manifest intentionally tracks gaps that should not be hidden by a
-passing broad regression suite:
-
-- the older complete instruction-source precedence set has not yet been
-  replaced by a data-backed authority contract in the direct resolver.
-
-Closing one of these gaps requires changing its manifest state and adding the
-new consumer/regression evidence in the same change. Deleting the gap check
-without establishing an enforced owner is not a valid migration.
+No tracked migration gaps are currently declared. If a later refactor creates
+one, it must be represented explicitly as `tracked_gap` with a machine-observable
+gap check until a data owner, consumer path and regression coverage are all
+restored.
 
 ## Adding coverage
 

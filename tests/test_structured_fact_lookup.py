@@ -208,16 +208,55 @@ def test_step_width_does_not_borrow_fx3u_catalogue_for_other_cpu():
     assert fact["resolution"] == "requires_operands"
 
 
-@pytest.mark.parametrize("opcode", ["DRVI", "ZRN"])
-def test_motion_instruction_direct_lookup_prefers_positioning_manual(opcode):
+@pytest.mark.parametrize(
+    "opcode,manual_id",
+    [
+        ("DRVA", "fx3_positioning_k"),
+        ("DRVI", "fx3_positioning_k"),
+        ("DVIT", "fx3_positioning_k"),
+        ("PLSV", "fx3_positioning_k"),
+        ("ZRN", "fx3_positioning_k"),
+        ("TBL", "fx3_programming_r"),
+    ],
+)
+def test_instruction_source_authority_contract_is_data_backed(opcode, manual_id):
+    from knowledge.source_authority import (
+        authoritative_instruction_manual,
+        instruction_source_authority,
+    )
+
     _bundled_index()
+    authority = instruction_source_authority(opcode, "FX3U")
+    assert authority is not None
+    assert authority["manual_id"] == manual_id
+    assert authoritative_instruction_manual(opcode, "FX3U") == manual_id
+
     rows = resolve_instruction_records(
         [{"opcode": opcode, "base_opcode": opcode}],
         plc_model="FX3U",
         task_type="generate",
     )
     assert rows
-    assert rows[0]["manual_id"] == "fx3_positioning_k"
+    assert {row["manual_id"] for row in rows} == {manual_id}
+    assert {
+        row.get("instruction_source_authority_status") for row in rows
+    } == {"authoritative"}
+
+
+def test_broad_and_direct_instruction_lookup_share_source_authority_owner():
+    import knowledge.core as knowledge_core
+
+    source_text = inspect.getsource(knowledge_core)
+    assert "audited_instruction_precedence" not in source_text
+    assert "authoritative_instruction_manual" in source_text
+
+
+def test_instruction_source_authority_capability_is_enforced():
+    from tools.audit_capability_coverage import audit_coverage
+
+    report = audit_coverage()
+    states = {row["id"]: row["state"] for row in report["capabilities"]}
+    assert states["instruction_source_authority"] == "enforced"
 
 
 def test_device_target_extractor_covers_special_indexed_families():

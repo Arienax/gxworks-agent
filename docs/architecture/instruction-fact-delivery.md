@@ -6,6 +6,8 @@
 
 [retrieve_instruction_facts](../../src/knowledge/instruction_facts.py) selects definition prose, operand tables, execution conditions and limits. Exact instruction definitions take precedence over body mentions. Related units stay within their explicit section or parent and manual revision; neighboring pages are not assumed to belong to the same instruction.
 
+When the same opcode exists in multiple official manuals, [knowledge.source_authority](../../src/knowledge/source_authority.py) reads [instruction_source_authority.json](../../resources/instructions/mitsubishi/instruction_source_authority.json). The same CPU/opcode authority rule is consumed by direct structured lookup and the broad-retrieval compatibility path; manual precedence is not maintained as a second hard-coded table.
+
 The [scoped retrieval facade](runtime-ownership.md#retrieval) applies task and source lanes before candidate limits. CPU applicability remains owned by the index and instruction catalog.
 
 ## Packing and receipts

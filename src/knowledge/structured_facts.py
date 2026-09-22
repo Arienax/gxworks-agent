@@ -375,6 +375,8 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
 
     No call to ``retrieve_knowledge`` is permitted here.
     """
+    from knowledge.source_authority import instruction_source_authority
+
     core, _path, connection, schema, _meta = _runtime()
     table = schema.get("instructions") if schema is not None else None
     table_available = bool(
@@ -397,6 +399,10 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
         names = list(dict.fromkeys(value for value in (opcode, base) if value))
         if not names:
             continue
+        authority = (
+            instruction_source_authority(opcode, plc_model)
+            or instruction_source_authority(base, plc_model)
+        )
         rows = []
         if table_available:
             placeholders = ",".join("?" for _ in names)
@@ -429,8 +435,16 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
             candidate = _attach_instruction_contract(
                 candidate, step_target, plc_model=plc_model,
             )
+            if authority:
+                candidate["instruction_source_authority"] = copy.deepcopy(authority)
+                candidate["instruction_source_authority_status"] = (
+                    "authoritative"
+                    if candidate.get("manual_id") == authority["manual_id"]
+                    else "non_authoritative"
+                )
             candidates.append(
                 (
+                    0 if not authority or candidate.get("manual_id") == authority["manual_id"] else 1,
                     -exact,
                     -_instruction_completeness(row),
                     -int(candidate.get("manual_priority") or 0),
@@ -444,8 +458,12 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
                 step_target, plc_model=plc_model, task_type=task_type,
             )
             if fallback is not None:
+                if authority:
+                    fallback["instruction_source_authority"] = copy.deepcopy(authority)
+                    fallback["instruction_source_authority_status"] = "unavailable"
                 candidates.append(
                     (
+                        1 if authority else 0,
                         0,
                         0,
                         -int(fallback.get("manual_priority") or 0),
@@ -454,6 +472,14 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
                         fallback,
                     )
                 )
+
+        if authority:
+            authoritative = [
+                item for item in candidates
+                if item[-1].get("manual_id") == authority["manual_id"]
+            ]
+            if authoritative:
+                candidates = authoritative
 
         for *_keys, candidate in sorted(candidates, key=lambda item: item[:-1]):
             marker = (

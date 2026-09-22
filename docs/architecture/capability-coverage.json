@@ -387,32 +387,48 @@
     {
       "id": "instruction_source_authority",
       "category": "retrieval",
-      "state": "tracked_gap",
-      "owner": "official manual source authority",
-      "summary": "When the same opcode appears in multiple manuals, the audited authoritative source selection must survive the move away from broad-RAG boosts.",
+      "state": "enforced",
+      "owner": "knowledge.source_authority + resources/instructions/mitsubishi/instruction_source_authority.json",
+      "summary": "Duplicate official instruction records use one data-backed CPU/opcode-to-manual authority contract shared by direct structured lookup and broad retrieval compatibility.",
       "checks": [
+        {
+          "kind": "file",
+          "path": "resources/instructions/mitsubishi/instruction_source_authority.json"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/source_authority.py",
+          "symbol": "instruction_source_authority"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/source_authority.py",
+          "symbol": "authoritative_instruction_manual"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/structured_facts.py",
+          "text": "instruction_source_authority(opcode, plc_model)"
+        },
         {
           "kind": "contains",
           "path": "src/knowledge/core.py",
-          "text": "audited_instruction_precedence"
+          "text": "authoritative_instruction_manual(opcode, plc_model)"
         },
         {
           "kind": "contains",
           "path": "tests/test_structured_fact_lookup.py",
-          "text": "test_motion_instruction_direct_lookup_prefers_positioning_manual"
-        }
-      ],
-      "gap_reason": "The direct resolver currently relies on generic completeness/manual_priority ordering; the older complete precedence set has not yet been migrated into a data-backed authority contract with full coverage tests.",
-      "gap_checks": [
+          "text": "test_instruction_source_authority_contract_is_data_backed"
+        },
         {
-          "kind": "absent",
-          "path": "src/knowledge/structured_facts.py",
-          "text": "audited_instruction_precedence"
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_broad_and_direct_instruction_lookup_share_source_authority_owner"
         }
       ],
       "tests": [
-        "tests/test_instruction_contract_alignment.py",
-        "tests/test_structured_fact_lookup.py"
+        "tests/test_structured_fact_lookup.py",
+        "tests/test_instruction_contract_alignment.py"
       ]
     },
     {

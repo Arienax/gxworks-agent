@@ -1879,22 +1879,25 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
         )
     )
 
-    audited_instruction_precedence = {
-        "drva": "fx3_positioning_k",
-        "drvi": "fx3_positioning_k",
-        "dvit": "fx3_positioning_k",
-        "plsv": "fx3_positioning_k",
-        "zrn": "fx3_positioning_k",
-        "tbl": "fx3_programming_r",
+    from knowledge.source_authority import authoritative_instruction_manual
+
+    source_authority = {
+        opcode: authoritative_instruction_manual(opcode, plc_model)
+        for opcode in query_term_set
     }
-    if query_term_set & set(audited_instruction_precedence):
+    source_authority = {
+        opcode: manual_id
+        for opcode, manual_id in source_authority.items()
+        if manual_id
+    }
+    if source_authority:
         preferred = {}
         for candidate in candidates:
             opcode = _normalize_text(candidate.get("instruction_opcode", "")).casefold()
             chunk_type = _normalize_text(candidate.get("chunk_type", "")).casefold()
             if chunk_type != "instruction" or opcode not in query_term_set:
                 continue
-            expected_manual = audited_instruction_precedence.get(opcode)
+            expected_manual = source_authority.get(opcode)
             if expected_manual and candidate.get("manual_id") == expected_manual and opcode not in preferred:
                 preferred[opcode] = candidate
 
