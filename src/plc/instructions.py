@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple
@@ -92,6 +93,30 @@ class InstructionSpec:
     double_mnemonic: str = ""
     double_pulse_mnemonic: str = ""
     notes: str = ""
+    # Independently corroborated dimensions, scoped to the resolved CPU/form.
+    # Legacy `full` is a compatibility label, not evidence of complete semantics.
+    verified_fields: Tuple[str, ...] = ()
+    native_operand_order: Tuple[str, ...] = ()
+    contract_sources: Tuple[Mapping[str, Any], ...] = ()
+    execution_form: Optional[str] = None
+    instruction_width: Optional[int] = None
+
+    def contract_coverage(self) -> Dict[str, str]:
+        declared = {
+            "arity": self.min_operands is not None or self.max_operands is not None,
+            "operand_order": bool(self.operands),
+            "operand_roles": bool(self.operands),
+            "operand_types": bool(self.operands) and all(o.data_type != "any" for o in self.operands),
+            "device_classes": bool(self.operands) and all(o.device_prefixes for o in self.operands),
+            "form_identity": bool(self.mnemonic),
+            "cpu_applicability": bool(self.cpu_support), "hardware_applicability": False,
+            "execution_form": bool(self.execution_form), "instruction_width": self.instruction_width is not None,
+            "execution_conditions": False, "completion_ownership": False,
+            "numeric_and_memory_boundaries": False,
+        }
+        return {key: "source_verified" if key in self.verified_fields else
+                "declared_unverified" if value else "unresolved"
+                for key, value in declared.items()}
 
     @classmethod
     def from_mapping(
@@ -118,7 +143,7 @@ class InstructionSpec:
                 f"{mnemonic}: invalid semantic kind {semantic_text!r}"
             ) from exc
         contract_level = str(payload.get("contract_level") or "full").strip().lower()
-        if contract_level not in {"full", "opcode_only"}:
+        if contract_level not in {"full", "opcode_only", "signature"}:
             raise ValueError(f"{mnemonic}: invalid contract_level {contract_level!r}")
 
         arity = payload.get("arity") or {}
@@ -257,6 +282,7 @@ class InstructionRegistry:
 
     def __init__(self, specs: Iterable[InstructionSpec] = ()) -> None:
         self._specs: Dict[Tuple[str, str], InstructionSpec] = {}
+        self._cpu_contracts: Dict[Tuple[str, str, str], InstructionSpec] = {}
         self._variant_index: Optional[
             Dict[Tuple[str, str], InstructionResolution]
         ] = None
@@ -345,19 +371,21 @@ class InstructionRegistry:
         mnemonic: Any,
         *,
         vendor: str = "mitsubishi",
+        cpu: Optional[str] = None,
     ) -> Optional[InstructionResolution]:
         normalized_vendor = str(vendor or "mitsubishi").strip().lower()
         token = str(mnemonic or "").strip().upper()
         key = (normalized_vendor, token)
         variant = self._ensure_variant_index().get(key)
         if variant is not None:
-            return variant
+            effective = self._cpu_contracts.get((normalized_vendor, token, str(cpu or "").strip().upper()))
+            return replace(variant, spec=effective) if effective is not None else variant
         exact = self._specs.get(key)
         if exact is None:
             return None
         return InstructionResolution(
             opcode=token,
-            spec=exact,
+            spec=self._cpu_contracts.get((normalized_vendor, token, str(cpu or "").strip().upper()), exact),
             base_spec=exact,
         )
 
@@ -366,9 +394,99 @@ class InstructionRegistry:
         mnemonic: Any,
         *,
         vendor: str = "mitsubishi",
+        cpu: Optional[str] = None,
     ) -> Optional[InstructionSpec]:
-        resolved = self.resolve_form(mnemonic, vendor=vendor)
+        resolved = self.resolve_form(mnemonic, vendor=vendor, cpu=cpu)
         return resolved.spec if resolved is not None else None
+
+    def load_contract_promotions(self, path: Path) -> None:
+        """Load build-time corroborated facts; never discover/promote at runtime.
+
+        Overrides apply only to the exact CPU and literal form in the ledger.
+        No opcode admission, write-role guessing or modifier inference occurs.
+        """
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if (not isinstance(payload, dict) or payload.get("schema_version") != 1
+                or type(payload.get("schema_version")) is not int or payload.get("cpu") != "FX3U"
+                or payload.get("method") != "native-table-geometry+independent-ST-signature-v1"):
+            raise ValueError("Unsupported instruction promotion ledger")
+        sources = payload.get("sources", {})
+        if not isinstance(sources, dict) or not isinstance(payload.get("entries"), list):
+            raise ValueError("Invalid promotion sources/entries")
+        manual_ids = ("fx3_programming_r", "fxcpu_basic_applied_m")
+        for manual in manual_ids:
+            source = sources.get(manual, {})
+            if not isinstance(source, dict) or any(not isinstance(source.get(k), str) or not source[k] for k in ("manual", "revision", "url")):
+                raise ValueError("Promotion source identity missing")
+            digest = source.get("sha256", "")
+            if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+                raise ValueError("Promotion source hash missing")
+        pending = {}
+        for row in payload["entries"]:
+            if not isinstance(row, dict):
+                raise ValueError("Invalid promotion entry")
+            count, order, forms = row.get("arity"), row.get("native_order"), row.get("forms")
+            if (type(count) is not int or count < 0 or not isinstance(order, list)
+                    or len(order) != count
+                    or any(not isinstance(symbol, str) or not re.fullmatch(r"[SDNM]\d?", symbol) for symbol in order)
+                    or len(set(order)) != count
+                    or not isinstance(forms, list) or not forms):
+                raise ValueError("Invalid corroborated instruction signature")
+            if any(not isinstance(row.get(k, {}), dict) for k in ("execution_forms", "instruction_widths")):
+                raise ValueError("Invalid form metadata")
+            evidence = []
+            for manual, prefix in zip(manual_ids, ("native", "structured")):
+                page, proof = row.get(prefix + "_page"), row.get(prefix + "_proof", "")
+                if type(page) is not int or page < 1 or not isinstance(proof, str) or len(proof) != 64 or any(c not in "0123456789abcdef" for c in proof):
+                    raise ValueError("Promotion page/proof missing")
+                evidence.append({"manual_id": manual, "manual": sources[manual]["manual"],
+                                 "revision": sources[manual]["revision"], "pdf_page": page,
+                                 "source_sha256": sources[manual]["sha256"],
+                                 "proof_sha256": proof})
+            for opcode in forms:
+                if not isinstance(opcode, str) or opcode != opcode.upper():
+                    raise ValueError("Invalid promotion opcode")
+                base = self.resolve(opcode)
+                key = ("mitsubishi", opcode, "FX3U")
+                if base is None or not base.supports_cpu("FX3U") or key in pending or key in self._cpu_contracts:
+                    raise ValueError("Unknown/duplicate promotion target: " + opcode)
+                if not base.accepts_arity(count):
+                    raise ValueError("Promotion conflicts with existing arity: " + opcode)
+                verified = ["arity", "operand_order", "form_identity"]
+                execution = row.get("execution_forms", {}).get(opcode)
+                width = row.get("instruction_widths", {}).get(opcode)
+                if execution is not None:
+                    if execution not in {"continuous", "pulse"}:
+                        raise ValueError("Invalid instruction execution form")
+                    verified.append("execution_form")
+                if width is not None:
+                    if type(width) is not int or width not in {16, 32}:
+                        raise ValueError("Invalid instruction width")
+                    verified.append("instruction_width")
+                pending[key] = replace(base, mnemonic=opcode, min_operands=count, max_operands=count,
+                    contract_level="signature" if base.contract_level == "opcode_only" else base.contract_level,
+                    native_operand_order=tuple(order), verified_fields=tuple(verified),
+                    execution_form=execution, instruction_width=width, contract_sources=tuple(evidence))
+        self._cpu_contracts.update(pending)
+
+    def describe_contract(self, mnemonic: Any, cpu: Optional[str] = None) -> Dict[str, Any]:
+        """One compact Core view for analysis, generation, MCP and diagnostics."""
+        form = self.resolve_form(mnemonic, cpu=cpu)
+        if form is None:
+            return {"opcode": str(mnemonic).upper(), "contract_level": "unknown"}
+        spec = form.spec
+        coverage = spec.contract_coverage()
+        return {"opcode": form.opcode, "base_mnemonic": form.base_mnemonic,
+                "contract_level": "signature_verified" if spec.verified_fields else
+                    "opcode_only" if spec.contract_level == "opcode_only" else "partial",
+                "min_operands": spec.min_operands, "max_operands": spec.max_operands,
+                "native_operand_order": list(spec.native_operand_order),
+                "execution_form": spec.execution_form, "instruction_width": spec.instruction_width,
+                "verified_fields": list(spec.verified_fields),
+                "unverified_fields": [key for key, value in coverage.items() if value != "source_verified"],
+                "operand_annotations": [{"name": o.name, "role": o.role.value,
+                    "data_type": o.data_type, "device_prefixes": list(o.device_prefixes)} for o in spec.operands],
+                "sources": [{k: v for k, v in source.items() if k not in {"proof_sha256", "source_sha256"}} for source in spec.contract_sources]}
 
     def is_known(self, mnemonic: Any, *, vendor: str = "mitsubishi") -> bool:
         return self.resolve(mnemonic, vendor=vendor) is not None
@@ -527,7 +645,11 @@ def load_default_instruction_registry() -> InstructionRegistry:
             modifier_rules = directory / "modifier_rules.json"
             if modifier_rules.is_file():
                 paths = paths + (modifier_rules,)
-            return InstructionRegistry.from_files(paths)
+            registry = InstructionRegistry.from_files(paths)
+            promotions = directory / "fx3u_contract_promotions.json"
+            if promotions.is_file():
+                registry.load_contract_promotions(promotions)
+            return registry
     searched = "\n - ".join(str(item) for item in _candidate_catalog_directories())
     raise RuntimeError(
         "Mitsubishi instruction catalogue not found. Searched:\n - " + searched
@@ -548,7 +670,7 @@ def generation_app_instr_mnemonics(cpu=None):
     model = str(cpu or "").strip().upper() or None
     result = []
     for mnemonic in DEFAULT_INSTRUCTION_REGISTRY.known_mnemonics():
-        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(mnemonic)
+        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(mnemonic, cpu=model)
         if spec is None:
             continue
         if mnemonic in GENERATION_TYPED_OUTPUT_OPCODES:

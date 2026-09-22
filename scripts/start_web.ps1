@@ -128,7 +128,7 @@ try {
         [Environment]::SetEnvironmentVariable("PYTHONPATH", $previousPythonPath, "Process")
     }
     if ($resultCode -ne 0) {
-        throw "工作台未能正常启动或已异常停止。请查看上方提示；若工作区被占用，请先正常关闭使用它的 Qt 或 Web 服务。"
+        throw "工作台未能正常启动或已异常停止。请查看上方提示；若工作区被占用，请先正常关闭使用它的工作台服务。"
     }
     Write-Host "工作台服务已停止。"
     exit 0

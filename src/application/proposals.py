@@ -248,7 +248,8 @@ class ProposalService:
         project = self._project(record["project_id"])
         if project.get("active_version_id") != record["active_version_id"]:
             raise ConflictError("Active version changed; regenerate the proposal")
-        if canonical_hash(project.get("confirmed_spec")) != record["confirmed_spec_hash"]:
+        from plc.specification.provenance import matches_migrated_spec_hash
+        if not matches_migrated_spec_hash(project, record["confirmed_spec_hash"]):
             raise ConflictError("Confirmed specification changed; regenerate the proposal")
         if self._base_snapshot(record["project_id"], record["base_version_id"]) != record["base_snapshot"]:
             raise ConflictError("Base version changed; regenerate the proposal")

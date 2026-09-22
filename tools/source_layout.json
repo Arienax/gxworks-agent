@@ -2,8 +2,7 @@
   "schema_version": 2,
   "baseline_commit": "295378d6ac5d24949c03a1c799906f4afe0fd4c9",
   "allowed_root_modules": [
-    "api.py",
-    "main.py"
+    "api.py"
   ],
   "temporary_aliases": {},
   "existing_temporary_names": [],
@@ -19,7 +18,6 @@
     "model_response_format": "model_runtime.response_format",
     "model_verification": "model_runtime.verification",
     "api": "application.model_api",
-    "main": "ui.desktop.main_window",
     "knowledge_retriever": "knowledge.retriever",
     "knowledge_retriever_core": "knowledge.core",
     "knowledge_retriever_phase2c": "knowledge.supporting_reranker",
@@ -61,7 +59,6 @@
     "inspection_engine": "inspection.engine",
     "inspection_models": "inspection.models",
     "inspection_presenter": "inspection.presenter",
-    "inspection_widgets": "ui.desktop.widgets.inspection",
     "config_manager": "storage.config",
     "credential_store": "storage.credentials",
     "windows_credentials": "storage.windows_credentials",
@@ -74,23 +71,14 @@
     "prompt_context_policy": "shared.context_policy",
     "response_language": "model_runtime.responses",
     "workflow_response_contracts": "application.response_contracts",
-    "qt_compat": "ui.desktop.qt",
-    "qt_i18n": "ui.desktop.i18n",
-    "theme_manager": "ui.desktop.theme",
-    "window_chrome": "ui.desktop.chrome",
-    "ui_controls": "ui.desktop.controls",
-    "codicons": "ui.desktop.icons",
-    "config_dialog": "ui.desktop.dialogs.config",
-    "simulator_report_dialog": "ui.desktop.dialogs.simulator_report",
-    "sfc_editor": "ui.desktop.sfc.editor",
-    "ladder_display": "rendering.numbering",
-    "workbench_widgets": "ui.desktop.workbench"
+    "ladder_display": "rendering.numbering"
   },
   "stable_entrypoints": [
-    "src/main.py",
     "src/api.py",
     "integrations.web",
-    "integrations.mcp"
+    "integrations.mcp",
+    "gxw.decoder",
+    "plc.sfc"
   ],
   "preserved_state_locations": [
     "src/config.json",

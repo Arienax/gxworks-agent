@@ -1,66 +1,31 @@
 # I/O purpose labels
 
-An address question and a device purpose are separate fields. Analysis may attach
-optional `io_binding.label` to an existing address question:
+## Identity and purpose
+
+An address question, control role, and device purpose are separate fields. `io_binding.binding_id` identifies the binding; `kind` identifies its address category; `role` is the machine-readable control semantic when known; optional `label` holds a short human-facing purpose. For example:
 
 ```json
-{
-  "id": "start_device",
-  "question": "启动按钮接在哪个输入点，程序中使用何种触点极性？",
-  "required": true,
-  "options": ["X000", "自定义"],
-  "io_binding": {
-    "binding_id": "machine.start",
-    "kind": "X",
-    "label": "启动按钮"
-  }
-}
+{"id":"start_device","question":"启动按钮接在哪个输入点？","required":true,"io_binding":{"binding_id":"machine.start","kind":"X","role":"start","label":"启动按钮"}}
 ```
 
-`binding_id` remains the stable identity, and `kind` identifies the address
-category. `role` and `row_id` keep their existing optional meanings. A purpose
-label is not an address, a polarity answer, a proposed architecture, or a reason
-to create another required question. Missing/invalid optional labels do not
-trigger a model repair or prevent confirmation.
+[binding_hint](../../src/plc/specification/bindings.py) retains this metadata through question normalization. Exact legacy start/stop/output IDs may recover their historical role, but arbitrary labels never manufacture a role. Confirmation binds the actual answer and seeds a new row with the independent label. Question wording and model reasoning are not device comments. A missing optional label does not create a required question or an extra model call.
 
-## Data path
+## Edits and aliases
 
-The shared analysis assembler supplies this metadata contract in both Direct
-and Design, including a selected Direct baseline. `binding_hint` retains the
-string label through question normalization and choice merging. Confirmation
-binds the actual user answer and seeds a *new* I/O row from that independent
-label. It never creates a comment by deleting words from a question.
+An existing label, including an explicit clear, remains authoritative. Its active binding carries the purpose through address changes. Reanalysis preserves manual edits and deletions; a stale answer cannot recreate a deleted row. Canonical device aliases are shared by the I/O table, IR references, explorer view and comment export.
 
-Existing I/O labels, including an explicitly cleared label, remain authoritative.
-After a row edit, its canonical label follows the active `io_bindings` record
-and retained compound address/polarity metadata. Reanalysis cannot overwrite it
-with a fresh model suggestion. Distinct identities stay distinct even when their
-question text is identical. Deleting a row does not resurrect its old answer.
+[application.analysis_results](../../src/application/analysis_results.py) normalizes supported grouped and flat suggested-I/O forms. The bounded declaration adapter can retain explicit `address: purpose`, `address 为/是 purpose` and `address is purpose` statements when the model omits them. It excludes state predicates, numeric classification rules and instruction operands from purpose names. Physical-level suffixes remain in the original request.
 
-The shared confirmed-generation projection carries the allowlisted scalar label
-alongside the binding, while the existing compact expansion obtains device
-comments from `io_table.label`. IR, SVG and GX Works2 comment CSV use that same
-purpose text. No new model call, response-schema gate, frontend domain logic,
-protocol grammar, polarity inference, or native operation is introduced.
+Legacy labels are not rewritten merely because they resemble questions: old records cannot reliably distinguish a generated label from a manual name. Correct an existing purpose in the specification editor before creating a new version. Historical versions remain immutable.
 
-## Older records
+## Input levels
 
-Known legacy start/stop/output binding roles may use a neutral short purpose
-when no independent name exists. Arbitrary questions with neither a label nor a
-known role keep an empty purpose; the question is still retained as provenance.
-The old question-to-label helper is used only to match historical unbound rows,
-not to create comments for new rows.
+An address already present in a question need not be repeated in its polarity answer. Current binding identity resolves the owning point. Physical action levels and Ladder NO/NC instructions are distinct: an active-low stop uses a low-level action predicate and a high-level run-permit predicate.
 
-An existing nonempty label is not automatically rewritten, even when it resembles
-an old generated question. Older records do not reliably distinguish that case
-from a user-authored label. Existing projects can correct the I/O purpose in the
-specification editor; saved historical program versions remain unchanged.
+[generation_input_conditions](../../src/plc/specification/conditions.py) derives these predicates for known input bindings. Contradictory or missing levels remain unresolved; register-value semantics are ordinary parameters, not address selection.
 
-## Regression coverage
+## Artifact path
 
-`tests/test_spec_choice_metadata.py` covers analysis metadata, unresolved values,
-confirmation and rebinding, multiple devices, manual renaming/clearing, stale
-suggestions, malformed optional labels, public projection, and both prompt modes.
-An offline HTTP-to-artifact regression saves and edits the specification without
-a model call, then uses one synthetic generation response containing logic only.
-It checks the saved ladder/IR, SVG and comment CSV for the independent names.
+[ConfirmedGenerationContext](../../src/application/confirmed_generation_context.py) carries current labels; compact expansion reads the I/O table and canonical IR supplies SVG and GX comment CSV. These views use the same purpose text.
+
+[test_spec_choice_metadata.py](../../tests/test_spec_choice_metadata.py) owns identity, label, alias and polarity matrices. [test_confirmed_reconfirmation.py](../../tests/test_confirmed_reconfirmation.py) covers the HTTP-to-saved-artifact path with recorded provider responses.

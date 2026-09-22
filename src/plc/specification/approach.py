@@ -163,6 +163,129 @@ def _normalize_groups(values, *, upper=False, lower=False):
             result.append(normalized)
     return result
 
+def normalize_instruction_instances(values):
+    """Normalize exact opcode+operand calls without inferring or rewriting operands."""
+    if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+        return []
+    result = []
+    seen = set()
+    for item in values:
+        if not isinstance(item, Mapping):
+            continue
+        opcode = str(item.get("opcode") or "").strip().upper()
+        operands = item.get("operands")
+        if not re.fullmatch(r"[$A-Z][A-Z0-9_.$@+<>!=\-]{0,63}", opcode):
+            continue
+        if not isinstance(operands, Sequence) or isinstance(operands, (str, bytes)):
+            continue
+        normalized_operands = []
+        valid = True
+        for operand in operands:
+            if not isinstance(operand, str):
+                valid = False
+                break
+            token = operand.strip()
+            if not token or len(token) > 256:
+                valid = False
+                break
+            normalized_operands.append(token)
+        if not valid:
+            continue
+        marker = (opcode, tuple(normalized_operands))
+        if marker in seen:
+            continue
+        seen.add(marker)
+        result.append({"opcode": opcode, "operands": normalized_operands})
+    return result
+
+
+IMPLEMENTATION_SEMANTIC_KINDS = frozenset({"structure"})
+IMPLEMENTATION_SEMANTIC_STATUSES = frozenset({"required", "forbidden", "any_of"})
+
+
+def _structure_token(value):
+    text = str(value or "").strip()
+    if not text:
+        return None
+    folded = text.casefold()
+    if folded in SUPPORTED_STRUCTURES:
+        return folded
+    labels = {label.casefold(): key for key, label in STRUCTURE_LABELS.items()}
+    return labels.get(folded)
+
+
+def normalize_implementation_semantics(values):
+    """Normalize Agent-A architecture choices only; low-level choices belong to Core/B."""
+    if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+        return []
+    result = []
+    seen = set()
+    for raw in values:
+        if not isinstance(raw, Mapping):
+            continue
+        kind = str(raw.get("kind") or "").strip().casefold()
+        status = str(raw.get("status") or "required").strip().casefold()
+        if kind != "structure" or status not in IMPLEMENTATION_SEMANTIC_STATUSES:
+            continue
+        if status == "any_of":
+            source = raw.get("values")
+            if isinstance(source, str):
+                source = [source]
+            if not isinstance(source, Sequence):
+                continue
+            values = []
+            for value in source:
+                token = _structure_token(value)
+                if token and token not in values:
+                    values.append(token)
+            if not values:
+                continue
+            item = {"kind": "structure", "status": status, "values": values}
+            marker = ("structure", status, tuple(values))
+        else:
+            value = _structure_token(raw.get("value"))
+            if not value:
+                continue
+            item = {"kind": "structure", "status": status, "value": value}
+            marker = ("structure", status, value)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        result.append(item)
+    return result
+
+
+def project_semantics_to_generation_contract(
+    values, *, explicit_user_constraints=None, source="analysis_semantics"
+):
+    """Project architecture semantics plus Core-owned user constraints."""
+    semantics = normalize_implementation_semantics(values)
+    from plc.specification.explicit_constraints import normalize_explicit_user_constraints
+    explicit = normalize_explicit_user_constraints(explicit_user_constraints)
+    contract = {
+        "schema_version": CONTRACT_SCHEMA_VERSION,
+        "required_opcodes": list(explicit["required_opcodes"]),
+        "forbidden_opcodes": list(explicit["forbidden_opcodes"]),
+        "required_devices": list(explicit["required_devices"]),
+        "forbidden_devices": list(explicit["forbidden_devices"]),
+        "required_structures": [],
+        "forbidden_structures": [],
+        "any_of_opcode_groups": [],
+        "any_of_structure_groups": [],
+        "instruction_instances": copy.deepcopy(explicit["instruction_instances"]),
+        "enforce": True,
+        "source": source,
+    }
+    for item in semantics:
+        status = item["status"]
+        if status == "any_of":
+            contract["any_of_structure_groups"].append(list(item["values"]))
+            continue
+        key = "required_structures" if status == "required" else "forbidden_structures"
+        if item["value"] not in contract[key]:
+            contract[key].append(item["value"])
+    return contract
+
 
 def _opcode_mentions(text):
     mentions = []
@@ -497,9 +620,15 @@ def normalize_generation_contract(contract=None, *, approach=None):
         "any_of_structure_groups": _normalize_groups(value_source("any_of_structure_groups")),
         # Explicit constraints cannot be disabled by model-authored enforce=false.
         "enforce": True,
-        "source": raw.get("source") if raw.get("source") in {"explicit", "inferred", "analysis_sanitized"} else (
+        "source": raw.get("source") if raw.get("source") in {"explicit", "inferred", "analysis_sanitized", "analysis_semantics"} else (
             "explicit" if isinstance(contract, Mapping) and contract else inferred.get("source", "inferred")),
     }
+    # Exact instruction calls are optional but lossless when explicitly present.
+    # Absence means "not supplied"; an explicit [] means "clear the prior instances".
+    if "instruction_instances" in raw:
+        normalized["instruction_instances"] = normalize_instruction_instances(
+            raw.get("instruction_instances")
+        )
     unverified = _constraint_values(raw.get("unverified_constraints"))
     if normalized["source"] == "inferred":
         # The chosen prose still reaches the generator. Historical keyword
@@ -585,10 +714,24 @@ def normalize_approach(approach):
         approach_id = f"approach_{digest}"
     normalized["approach_id"] = approach_id
     normalized.pop("id", None)
-    normalized["generation_contract"] = normalize_generation_contract(
-        normalized.get("generation_contract"),
-        approach=normalized,
-    )
+    if "implementation_semantics" in normalized or "explicit_user_constraints" in normalized:
+        normalized["implementation_semantics"] = normalize_implementation_semantics(
+            normalized.get("implementation_semantics")
+        )
+        from plc.specification.explicit_constraints import normalize_explicit_user_constraints
+        normalized["explicit_user_constraints"] = normalize_explicit_user_constraints(
+            normalized.get("explicit_user_constraints")
+        )
+        normalized["generation_contract"] = project_semantics_to_generation_contract(
+            normalized["implementation_semantics"],
+            explicit_user_constraints=normalized["explicit_user_constraints"],
+            source="analysis_semantics",
+        )
+    else:
+        normalized["generation_contract"] = normalize_generation_contract(
+            normalized.get("generation_contract"),
+            approach=normalized,
+        )
     return normalized
 
 
@@ -638,6 +781,7 @@ def generation_contract_signature(approach):
             "forbidden_structures",
             "any_of_opcode_groups",
             "any_of_structure_groups",
+            "instruction_instances",
         )
     }
     return hashlib.sha256(
@@ -940,6 +1084,23 @@ def format_contract_summary(approach, *, localized=False):
         )
     if contract.get("required_devices"):
         parts.append(label("指定软元件 ") + label("/").join(contract["required_devices"]))
+    if contract.get("instruction_instances"):
+        instances = [
+            " ".join([item["opcode"], *item["operands"]]).strip()
+            for item in contract["instruction_instances"]
+            if isinstance(item, Mapping)
+        ]
+        if instances:
+            parts.append(label("固定指令实例 ") + label(" / ").join(instances))
+    preferences = normalized.get("implementation_preferences")
+    preferences = preferences if isinstance(preferences, Mapping) else {}
+    if preferences.get("instruction_instances"):
+        instances = [
+            " ".join([item["opcode"], *item["operands"]]).strip()
+            for item in normalize_instruction_instances(preferences.get("instruction_instances"))
+        ]
+        if instances:
+            parts.append(label("方案指令实例 ") + label(" / ").join(instances))
     if contract.get("unverified_constraints"):
         parts.append(label("另有保留的未机检方案语义"))
     return label("；").join(parts)
@@ -955,5 +1116,8 @@ __all__ = [
     "inspect_ladder_features",
     "normalize_approach",
     "normalize_generation_contract",
+    "normalize_implementation_semantics",
+    "normalize_instruction_instances",
+    "project_semantics_to_generation_contract",
     "validate_ladder_against_selected_approach",
 ]

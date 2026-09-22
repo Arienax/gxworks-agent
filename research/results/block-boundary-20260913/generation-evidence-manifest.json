@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "archive": "research\\evidence\\gxw-block-generation-20260913.zip",
+  "archive": "research/evidence/gxw-block-generation-20260913.zip",
   "files": [
     {
       "member": "samples/R.gxw",

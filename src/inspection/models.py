@@ -2,7 +2,7 @@
 
 The inspection boundary deliberately accepts dictionaries because reports are
 stored as JSON and may also originate from an AI response.  Every public helper
-returns plain JSON-compatible dictionaries so Qt, the session store and older
+returns plain JSON-compatible dictionaries so Web, the session store and older
 callers do not need to know about the dataclasses used internally.
 """
 

@@ -61,3 +61,16 @@ class KnowledgeQuery(str):
         result.precompiled = bool(precompiled)
         result.metadata = copy.deepcopy(metadata or {})
         return result
+
+
+def retrieval_failure(error):
+    """A small safe failure record instead of swallowing all retrieval errors."""
+    dependency = getattr(error, "name", None) if isinstance(error, ImportError) else None
+    dependency = dependency if isinstance(dependency, str) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]{0,100}", dependency) else None
+    kind = type(error).__name__
+    result = {"code": "dependency_missing" if isinstance(error, ModuleNotFoundError) else
+                      "dependency_import_failed" if isinstance(error, ImportError) else "retrieval_exception",
+              "error_type": kind if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,100}", kind) else "Exception"}
+    if dependency:
+        result["dependency"] = dependency
+    return result

@@ -14,7 +14,7 @@ class CandidateService:
         self, candidate, *, plc_model="FX3U", program_name="MAIN", revision=1,
         confirmed_spec=None, previous_ladder=None, repair_mode=False,
         allowed_rung_ids=None, allowed_addresses=None, task_type=None,
-        on_progress=None,
+        candidate_origin="external", on_progress=None,
     ):
         from plc.generation import prepare_ladder_candidate
         return prepare_ladder_candidate(
@@ -22,7 +22,7 @@ class CandidateService:
             confirmed_spec=confirmed_spec, previous_ladder=previous_ladder,
             repair_mode=repair_mode, allowed_rung_ids=allowed_rung_ids,
             allowed_addresses=allowed_addresses, task_type=task_type,
-            on_progress=on_progress,
+            candidate_origin=candidate_origin, on_progress=on_progress,
         )
 
     def compile(self, program, output_dir, *, validation_profile="generation_structural"):

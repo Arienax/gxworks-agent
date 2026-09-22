@@ -1,0 +1,830 @@
+{
+  "schema_version": 1,
+  "purpose": "Cross-refactor capability migration coverage. Enforced capabilities must keep their declared owners/consumers/tests. tracked_gap capabilities must keep an explicit, machine-observable gap until the migration is completed and the state is changed to enforced.",
+  "states": [
+    "enforced",
+    "tracked_gap"
+  ],
+  "capabilities": [
+    {
+      "id": "structured_plc_fact_resolution",
+      "category": "retrieval",
+      "state": "enforced",
+      "owner": "knowledge.structured_facts",
+      "summary": "Explicit instruction/device/error identities resolve deterministically before residual broad retrieval.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/structured_facts.py",
+          "symbol": "resolve_instruction_records"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/structured_facts.py",
+          "symbol": "resolve_device_records"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/structured_facts.py",
+          "symbol": "resolve_error_records"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/retriever.py",
+          "symbol": "retrieve_fact_aware_knowledge"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_application_runtime_cannot_bypass_fact_aware_retrieval"
+        }
+      ],
+      "tests": [
+        "tests/test_structured_fact_lookup.py",
+        "tests/test_instruction_fact_context.py"
+      ]
+    },
+    {
+      "id": "instruction_step_width",
+      "category": "plc_instruction_fact",
+      "state": "enforced",
+      "owner": "plc.instruction_steps",
+      "summary": "FX3U/GX Works2 step width is operand- and CPU-aware and shared by export, GXW decoding, and structured instruction facts.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/instruction_steps.py",
+          "symbol": "instruction_step_width"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/instruction_steps.py",
+          "symbol": "StepWidthCatalog"
+        },
+        {
+          "kind": "file",
+          "path": "resources/instructions/mitsubishi/fx3u_step_widths.json"
+        },
+        {
+          "kind": "contains",
+          "path": "src/gxworks2/csv_export.py",
+          "text": "instruction_step_width("
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/structured_facts.py",
+          "symbol": "resolve_instruction_step_width"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/structured_facts.py",
+          "text": "instruction_step_width(opcode, operands, plc_model=plc_model)"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_structured_step_width_uses_shared_owner_for_instruction_instance"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_gxworks2_sftl_native_steps.py",
+          "text": "test_catalogue_every_fixed_native_form_and_every_variant_is_resolved"
+        }
+      ],
+      "tests": [
+        "tests/test_gxworks2_sftl_native_steps.py",
+        "tests/test_gxw_lossless.py",
+        "tests/test_structured_fact_lookup.py"
+      ]
+    },
+    {
+      "id": "instruction_contract_promotion",
+      "category": "plc_instruction_fact",
+      "state": "enforced",
+      "owner": "plc.instructions.InstructionRegistry.describe_contract",
+      "summary": "Verified instruction contract promotions are merged into each structured instruction fact, including exact instance operands, with no duplicate Agent-B capability lane.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/instructions.py",
+          "symbol": "InstructionRegistry"
+        },
+        {
+          "kind": "file",
+          "path": "resources/instructions/mitsubishi/fx3u_contract_promotions.json"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/structured_facts.py",
+          "symbol": "resolve_instruction_contract"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/structured_facts.py",
+          "text": "DEFAULT_INSTRUCTION_REGISTRY.describe_contract(opcode, cpu=plc_model)"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/structured_facts.py",
+          "text": "value[\"instruction_contract\"]"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_every_promoted_fx3u_contract_uses_registry_owner"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_structured_instruction_record_merges_registry_contract"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_instruction_instance_contract_keeps_exact_operands_and_source"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_fx3u_contract_promotions_do_not_leak_into_fx5u_structured_facts"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_confirmed_generation_regressions.py",
+          "text": "test_compact_prompt_does_not_duplicate_instruction_contract_lane"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/compact_protocol.py",
+          "text": "Instruction contracts are delivered once through structured PLC facts."
+        }
+      ],
+      "tests": [
+        "tests/test_structured_fact_lookup.py",
+        "tests/test_instruction_contract_alignment.py",
+        "tests/test_instruction_registry.py",
+        "tests/test_confirmed_generation_regressions.py"
+      ]
+    },
+    {
+      "id": "confirmed_instruction_instances",
+      "category": "intent_handoff",
+      "state": "enforced",
+      "owner": "plc.specification.approach.normalize_instruction_instances",
+      "summary": "Exact selected instruction calls retain opcode+ordered operands from Agent A analysis through confirmation, generation projection, context compilation, structured facts, and Agent B.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/specification/approach.py",
+          "symbol": "normalize_instruction_instances"
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/specification/approach.py",
+          "text": "normalized[\"instruction_instances\"]"
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/specification/confirmed.py",
+          "text": "_preserve_pinned_instruction_instances"
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/generation_contract.py",
+          "text": "_CONTRACT_FIELDS[\"instruction_instances\"]"
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/specification/provenance.py",
+          "text": "\"instruction_instances\""
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/context_compiler.py",
+          "text": "\"instruction_instances\""
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/instruction_facts.py",
+          "text": "instance_source"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/structured_facts.py",
+          "text": "instruction_instance"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/generation_agent.py",
+          "text": "opcode 与 operands 必须逐项原样使用"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_confirmed_generation_regressions.py",
+          "text": "test_exact_instruction_instance_survives_agent_a_confirmation_to_agent_b"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_confirmed_generation_regressions.py",
+          "text": "test_pinned_reanalysis_preserves_instances_until_explicitly_cleared"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_confirmed_generation_regressions.py",
+          "text": "test_model_proposed_instruction_instance_stays_exact_as_selected_preference"
+        }
+      ],
+      "tests": [
+        "tests/test_confirmed_generation_regressions.py",
+        "tests/test_analysis_prompt_routing.py",
+        "tests/test_context_compiler.py"
+      ]
+    },
+    {
+      "id": "device_canonical_identity",
+      "category": "plc_device_fact",
+      "state": "enforced",
+      "owner": "plc.device_identity.canonical_device",
+      "summary": "Structured device lookups use the shared Mitsubishi canonical identity owner so zero-padded aliases resolve to one physical device without base conversion.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/device_identity.py",
+          "symbol": "canonical_device"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/device_identity.py",
+          "symbol": "canonical_ladder_devices"
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/specification/bindings.py",
+          "text": "canonical_device"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/confirmed_generation_context.py",
+          "text": "canonical_device"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/structured_facts.py",
+          "text": "from plc.device_identity import canonical_device"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/structured_facts.py",
+          "text": "device = canonical_device(requested_device)"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_device_lookup_uses_canonical_device_identity_owner"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_device_aliases_do_not_duplicate_structured_records"
+        }
+      ],
+      "tests": [
+        "tests/test_structured_fact_lookup.py",
+        "tests/test_device_identity_delivery.py",
+        "tests/test_spec_choice_metadata.py"
+      ]
+    },
+    {
+      "id": "device_family_target_coverage",
+      "category": "plc_device_fact",
+      "state": "enforced",
+      "owner": "plc.device_identity.DEVICE_TOKEN_RE",
+      "summary": "Analysis routing and broad retrieval share one runtime Mitsubishi device-token vocabulary covering all real structured-index device families while excluding constant/operand placeholder families.",
+      "checks": [
+        {
+          "kind": "contains",
+          "path": "src/plc/device_identity.py",
+          "text": "DEVICE_PREFIXES = ("
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/device_identity.py",
+          "text": "DEVICE_TOKEN_RE = re.compile("
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/device_identity.py",
+          "symbol": "device_tokens"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/analysis_router.py",
+          "text": "from plc.device_identity import DEVICE_TOKEN_RE, device_tokens"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/analysis_router.py",
+          "text": "_DEVICE = DEVICE_TOKEN_RE"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/core.py",
+          "text": "from plc.device_identity import DEVICE_TOKEN_RE"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/core.py",
+          "text": "_DEVICE_RE = DEVICE_TOKEN_RE"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_runtime_device_vocabulary_covers_actual_index_prefixes"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_runtime_device_target_vocabulary_rejects_constants_and_placeholders"
+        }
+      ],
+      "tests": [
+        "tests/test_structured_fact_lookup.py",
+        "tests/test_device_entity_cleanup.py"
+      ]
+    },
+    {
+      "id": "completion_flag_direct_resolution",
+      "category": "plc_instruction_fact",
+      "state": "enforced",
+      "owner": "knowledge.instruction_facts",
+      "summary": "Instruction completion flags are read from structured instruction records and resolved through direct device lookup, never broad RAG ranking.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/instruction_facts.py",
+          "symbol": "_completion_sources"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/instruction_facts.py",
+          "text": "completion_flags_json"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/instruction_facts.py",
+          "text": "resolve_device_records"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_instruction_fact_context.py",
+          "text": "delivered_fact_report"
+        }
+      ],
+      "tests": [
+        "tests/test_instruction_fact_context.py"
+      ]
+    },
+    {
+      "id": "instruction_source_authority",
+      "category": "retrieval",
+      "state": "enforced",
+      "owner": "knowledge.source_authority + resources/instructions/mitsubishi/instruction_source_authority.json",
+      "summary": "Duplicate official instruction records use one data-backed CPU/opcode-to-manual authority contract shared by direct structured lookup and broad retrieval compatibility.",
+      "checks": [
+        {
+          "kind": "file",
+          "path": "resources/instructions/mitsubishi/instruction_source_authority.json"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/source_authority.py",
+          "symbol": "instruction_source_authority"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/source_authority.py",
+          "symbol": "authoritative_instruction_manual"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/structured_facts.py",
+          "text": "instruction_source_authority(opcode, plc_model)"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/core.py",
+          "text": "authoritative_instruction_manual(opcode, plc_model)"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_instruction_source_authority_contract_is_data_backed"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_broad_and_direct_instruction_lookup_share_source_authority_owner"
+        }
+      ],
+      "tests": [
+        "tests/test_structured_fact_lookup.py",
+        "tests/test_instruction_contract_alignment.py"
+      ]
+    },
+    {
+      "id": "fact_coverage_delivery",
+      "category": "retrieval",
+      "state": "enforced",
+      "owner": "knowledge.fact_coverage.build_coverage",
+      "summary": "Arbitrary fact kinds use one domain-agnostic delivery-accounting core; structured instruction, device and error targets are adapters over that core, with final-prompt reconciliation.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/fact_coverage.py",
+          "symbol": "build_coverage"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/fact_coverage.py",
+          "symbol": "build_fact_coverage"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/fact_coverage.py",
+          "symbol": "reconcile_fact_coverage"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/fact_coverage.py",
+          "symbol": "included_evidence_ids"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/retriever.py",
+          "text": "manifest[\"fact_coverage\"] = build_fact_coverage("
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/confirmed_generation_context.py",
+          "text": "reconcile_fact_coverage("
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_instruction_fact_context.py",
+          "text": "test_generic_fact_coverage_accounts_for_instruction_device_and_error"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_device_context_uses_generic_fact_coverage"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_instruction_fact_context.py",
+          "text": "test_fact_coverage_core_is_domain_agnostic"
+        }
+      ],
+      "tests": [
+        "tests/test_instruction_fact_context.py",
+        "tests/test_structured_fact_lookup.py"
+      ]
+    },
+    {
+      "id": "io_binding_purpose_comment_identity",
+      "category": "intent_handoff",
+      "state": "enforced",
+      "owner": "plc.specification.bindings",
+      "summary": "I/O binding identity, machine semantic role, and human purpose label remain distinct; known roles survive confirmation/generation while labels follow address changes into comments without prose inference.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/specification/bindings.py",
+          "symbol": "binding_hint"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/specification/bindings.py",
+          "symbol": "generation_io_snapshot"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/confirmed_generation_context.py",
+          "text": "generation_io_snapshot"
+        },
+        {
+          "kind": "contains",
+          "path": "docs/architecture/io-binding-labels.md",
+          "text": "binding_id"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/analysis_context.py",
+          "text": "role 是控制语义身份"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_confirmed_input_protocol.py",
+          "text": "test_io_binding_role_is_machine_semantics_not_comment_text"
+        }
+      ],
+      "tests": [
+        "tests/test_spec_choice_metadata.py",
+        "tests/test_confirmed_reconfirmation.py",
+        "tests/test_device_identity_delivery.py",
+        "tests/test_confirmed_input_protocol.py"
+      ]
+    },
+    {
+      "id": "implementation_semantics_contract_projection",
+      "category": "intent_handoff",
+      "state": "enforced",
+      "owner": "plc.specification.approach + plc.specification.explicit_constraints",
+      "summary": "Fresh Agent A implementation_semantics is structure-only. Core independently extracts caller-fixed opcode/device/exact-instruction constraints into explicit_user_constraints, persists both owners, and projects their union into generation_contract; legacy contracts remain compatibility input.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/specification/approach.py",
+          "symbol": "normalize_implementation_semantics"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/specification/approach.py",
+          "symbol": "project_semantics_to_generation_contract"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/specification/explicit_constraints.py",
+          "symbol": "extract_explicit_user_constraints"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/specification/explicit_constraints.py",
+          "symbol": "merge_explicit_user_constraints"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/prompts.py",
+          "text": "implementation_semantics 只允许结构语义"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/analysis_results.py",
+          "text": "_apply_explicit_user_constraints("
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_confirmed_generation_regressions.py",
+          "text": "test_core_extracts_low_level_constraints_without_agent_a_repeating_them"
+        }
+      ],
+      "tests": [
+        "tests/test_confirmed_generation_regressions.py",
+        "tests/test_analysis_prompt_routing.py",
+        "tests/test_context_compiler.py"
+      ]
+    },
+    {
+      "id": "confirmed_generation_acceptance",
+      "category": "generation",
+      "state": "enforced",
+      "owner": "plc.generation.prepare_ladder_candidate + plc.specification.semantic_validation",
+      "summary": "Fresh confirmed Agent B output passes structural acceptance followed by one requirement registry. Structure requirements come from implementation_semantics; opcode/device/exact-instance requirements come from Core-owned explicit_user_constraints. Capability-specific deterministic checks attach to the same coverage receipt; legacy specs retain compatibility behavior.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/specification/semantic_validation.py",
+          "symbol": "validate_confirmed_semantics"
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/generation.py",
+          "text": "CONFIRMED_AGENT_ORIGIN = \"compact_agent\""
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/generation.py",
+          "text": "candidate_origin != CONFIRMED_AGENT_ORIGIN"
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/generation.py",
+          "text": "validate_confirmed_semantics("
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_generation_fast_path.py",
+          "text": "test_compact_agent_skips_legacy_candidate_normalizers"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_confirmed_input_protocol.py",
+          "text": "assert prepare_calls == [\"compact_agent\"]"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_generation_fast_path.py",
+          "text": "test_confirmed_agent_origin_has_one_core_owner"
+        },
+        {
+          "kind": "absent",
+          "path": "src/application/generation_agent.py",
+          "text": "CandidateService"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/generation.py",
+          "text": "CONFIRMED_AGENT_ORIGIN"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/generation.py",
+          "text": "copy.deepcopy(direct_candidate)"
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/specification/semantic_validation.py",
+          "text": "_BLOCKING_HANDOFF_GAPS"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_generation_fast_path.py",
+          "text": "test_required_self_hold_missing_role_fails_closed_without_label_inference"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/specification/semantic_validation.py",
+          "symbol": "semantic_requirements"
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/specification/semantic_validation.py",
+          "text": "_CHECKER_REGISTRY"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_generation_fast_path.py",
+          "text": "test_semantic_requirement_registry_covers_structure_and_core_user_constraints"
+        }
+      ],
+      "tests": [
+        "tests/test_generation_fast_path.py",
+        "tests/test_confirmed_input_protocol.py",
+        "tests/test_confirmed_compatibility.py"
+      ]
+    },
+    {
+      "id": "direct_design_explicit_mode",
+      "category": "analysis_routing",
+      "state": "enforced",
+      "owner": "knowledge.analysis_router",
+      "summary": "Only explicit caller analysis_mode enables Design; complexity, keywords, missing parameters, or selected approaches cannot auto-open design exploration.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/analysis_router.py",
+          "symbol": "route_analysis_request"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/analysis_router.py",
+          "text": "if analysis_mode == \"design\""
+        },
+        {
+          "kind": "contains",
+          "path": "docs/architecture/analysis-modes.md",
+          "text": "selected by the caller"
+        }
+      ],
+      "tests": [
+        "tests/test_analysis_prompt_routing.py",
+        "tests/test_analysis_mode_jobs.py"
+      ]
+    },
+    {
+      "id": "scoped_retrieval_facade",
+      "category": "retrieval",
+      "state": "enforced",
+      "owner": "knowledge.retriever",
+      "summary": "Application, agent runtime, and integrations cannot bypass the scoped retrieval facade into knowledge.core or private retriever internals.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/retriever.py",
+          "symbol": "build_knowledge_context"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_architecture_boundaries.py",
+          "text": "test_application_agents_and_integrations_use_the_scoped_retrieval_facade"
+        },
+        {
+          "kind": "contains",
+          "path": "docs/architecture/runtime-ownership.md",
+          "text": "Application, agent runtime and integrations enter through"
+        }
+      ],
+      "tests": [
+        "tests/test_architecture_boundaries.py"
+      ]
+    },
+    {
+      "id": "reasoning_effort_profile_ownership",
+      "category": "model_runtime",
+      "state": "enforced",
+      "owner": "model_runtime.request_policy",
+      "summary": "User model configuration owns reasoning tuning; workflow/project stages may not reintroduce non-neutral reasoning_effort.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/model_runtime/request_policy.py",
+          "symbol": "without_workflow_effort"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/model_runtime/request_policy.py",
+          "symbol": "resolve_request"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_architecture_boundaries.py",
+          "text": "test_production_workflows_cannot_reintroduce_effort_hints"
+        },
+        {
+          "kind": "contains",
+          "path": "docs/architecture/runtime-ownership.md",
+          "text": "The saved model profile owns tuning"
+        }
+      ],
+      "tests": [
+        "tests/test_architecture_boundaries.py",
+        "tests/test_model_contract.py"
+      ]
+    },
+    {
+      "id": "user_data_settings_migration",
+      "category": "persistence",
+      "state": "enforced",
+      "owner": "storage.user_data",
+      "summary": "Config and model observations migrate to stable user data with recovery/atomic replacement rather than living in a source clone.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/storage/config.py",
+          "symbol": "migrate_user_settings"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/storage/user_data.py",
+          "symbol": "prepare"
+        },
+        {
+          "kind": "contains",
+          "path": "docs/architecture/runtime-ownership.md",
+          "text": "storage.user_data"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_application_settings.py",
+          "text": "migration"
+        }
+      ],
+      "tests": [
+        "tests/test_application_settings.py",
+        "tests/test_model_profile_config.py"
+      ]
+    },
+    {
+      "id": "model_aware_context_compiler",
+      "category": "context",
+      "state": "enforced",
+      "owner": "application.context_compiler",
+      "summary": "Confirmed engineering state, retrieval query projection, and RAG evidence budgets are compiled from the selected model context contract without silently dropping current intent.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/application/context_compiler.py",
+          "symbol": "ContextCompiler"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/application/context_compiler.py",
+          "symbol": "model_budget"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/confirmed_generation_context.py",
+          "text": "ContextCompilerInput"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_context_compiler.py",
+          "text": "context"
+        }
+      ],
+      "tests": [
+        "tests/test_context_compiler.py",
+        "tests/test_intent_evidence_handoff.py"
+      ]
+    }
+  ]
+}

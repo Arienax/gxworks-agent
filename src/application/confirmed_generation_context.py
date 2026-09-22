@@ -6,6 +6,7 @@ receive detached snapshots; private analysis prose is not an engineering fact.
 from __future__ import annotations
 
 import copy
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
 
@@ -26,6 +27,34 @@ CONFIRMED_GENERATION_REQUEST = (
 
 
 
+# Prompt policy only: no reasoning-token limit, truncation, retry or acceptance gate.
+GENERATION_EXECUTION_POLICY_VERSION = "settled-facts-v1"
+GENERATION_EXECUTION_POLICY = """# Generation execution policy
+当前是实现阶段：确认规格 → 只核对未定技术事实 → 固定一个实现 → 输出。即使前阶段选择了 Design，此处也只实现已选方案，不重新列方案或比较等价写法。
+已确认 I/O、参数和本轮明确修改是已定输入。参数/绑定优先于方案说明和 unverified_constraints 中过时的表述；保留其他未冲突的方案语义，不把参考文字升级成额外硬约束。已有结构化硬约束仍须遵守。
+形成决定后不反复重开；只有新的用户修订、技术证据或具体正确性矛盾才重审受影响部分。不要因冗余触点、等价布局或猜测评测器偏好重做整个方案。
+技术事实只作必要的定向核对（操作数/方向/触发/范围）；反复回忆不增加证据。检索文本存在不代表覆盖全部事实，缺证据也不等于禁止；不得编造已查证、测试通过或工具调用。不为缩短推理而跳过实际发现的错误。
+下面的输入谓词由当前绑定确定性推导，只表示电平测试，不替代边沿语义或完整控制逻辑；edit 时本轮明确修改优先于这些 baseline 谓词。未定电平不从名称或物理常闭字样猜测。
+完成一次必要的一致性检查后按既有协议输出一份程序；不输出中间计划，不在同次 completion 反复重写。"""
+
+
+def generation_execution_prompt(confirmed_spec, *, evidence_text="", task_type="generate"):
+    """Render one shared materialization policy from the current public snapshot.
+
+    No persisted spec fields are removed or reconciled by parsing natural language.
+    Evidence availability is explicitly NOT an evidence-coverage assertion.
+    """
+    if task_type not in {"generate", "edit"}:
+        return ""
+    from plc.specification.conditions import generation_input_conditions
+    spec = confirmed_spec if isinstance(confirmed_spec, Mapping) else {}
+    facts = generation_input_conditions(spec.get("io_bindings"))
+    facts["basis"] = "edit_baseline" if task_type == "edit" else "current_confirmed_bindings"
+    facts["retrieved_text_present"] = bool(str(evidence_text or "").strip())
+    return ("\n\n" + GENERATION_EXECUTION_POLICY + "\n# Settled input predicates (not a new requirement)\n"
+            + json.dumps(public_generation_value(facts), ensure_ascii=False, separators=(",", ":")))
+
+
 def project_confirmed_specification(confirmed_spec):
     """Expose the same allowlisted, canonical confirmed facts to every adapter."""
     from plc.specification.bindings import generation_io_snapshot
@@ -33,6 +62,8 @@ def project_confirmed_specification(confirmed_spec):
     source = (generation_io_snapshot(dict(confirmed_spec), protected_ids=QUESTION_IDS)
               if isinstance(confirmed_spec, Mapping) else None)
     projected = public_generation_specification(source) or {}
+    if projected:
+        projected["schema_version"] = 4
     # Preserve the existing public-projection contract: malformed optional
     # label metadata is omitted, not replaced while enriching electrical facts.
     raw_bindings = confirmed_spec.get("io_bindings") if isinstance(confirmed_spec, Mapping) else None
@@ -53,9 +84,6 @@ def project_confirmed_specification(confirmed_spec):
     for row in projected.get("io_bindings", []):
         if "address" in row:
             row["address"] = canonical_device(row["address"])
-    from plc.specification.provenance import selected_context
-    if "engineering_context" in projected:
-        projected["engineering_context"] = selected_context(projected)
     return projected
 
 
@@ -81,7 +109,7 @@ class ConfirmedGenerationContext:
 
 def build_confirmed_generation_context(
     confirmed_spec, plc_model, *, user_requirement="", current_program=None,
-    task_type="generate", evidence=None, knowledge_builder=None, model_profile=None,
+    task_type="generate", evidence=None, knowledge_builder=None, model_profile=None, decision_receipt_id=None,
 ):
     """Project before routing/retrieval; first generation cannot replay Agent A.
 
@@ -102,10 +130,13 @@ def build_confirmed_generation_context(
         knowledge_builder = _build_knowledge_context
     from application.context_compiler import ContextCompiler, ContextCompilerInput
     from knowledge.evidence import KnowledgeQuery
+    from knowledge.fact_coverage import included_evidence_ids, reconcile_fact_coverage
+    from knowledge.instruction_facts import delivered_fact_report
+    from knowledge.structured_facts import structured_fact_targets
     compiler = ContextCompiler()
     compiler_input = ContextCompilerInput(
         confirmed_spec=projected,
-        engineering_context=projected.get("engineering_context") or {},
+        intent_context=projected.get("intent_context"),
         selected_approach=projected.get("selected_approach") or {},
         evidence=public_generation_value(evidence),
         plc_model=model,
@@ -115,12 +146,22 @@ def build_confirmed_generation_context(
         current_program=current,
     )
     precompiled = compiler.compile(compiler_input)
+    # Exact device/error facts come from the active request, not from the
+    # compiler's projection of settled implementation devices. Required opcodes
+    # still come from the confirmed generation contract inside the resolver.
+    structured_targets = structured_fact_targets(request, projected)
     retrieval_query = KnowledgeQuery(
         precompiled.retrieval_packet["query"],
-        precompiled= True,
+        precompiled=True,
         metadata={
             "context_plan": precompiled.provenance_receipt,
             "rag_evidence_token_budget": precompiled.budget_report.get("rag_evidence_token_budget"),
+            "structured_fact_mode": "direct",
+            "structured_fact_targets": structured_targets,
+            # Compatibility for older diagnostics/readers while the structured
+            # fact receipt becomes the canonical handoff.
+            "instruction_fact_mode": "targeted",
+            "instruction_fact_targets": structured_targets["instructions"],
         },
     )
     knowledge = knowledge_builder(
@@ -136,13 +177,38 @@ def build_confirmed_generation_context(
     runtime_spec = compiled.generation_packet["confirmed_spec"]
     selected = runtime_spec.get("selected_approach") or {}
     manifest = context_manifest(knowledge, stage=task_type)
+    # Reconcile after final budget compilation, not merely after retrieval.
+    if isinstance(manifest.get("fact_coverage"), dict):
+        manifest["fact_coverage"] = reconcile_fact_coverage(
+            manifest["fact_coverage"],
+            included_evidence_ids(
+                knowledge_text, manifest["fact_coverage"].get("records", [])
+            ),
+        )
+    if isinstance(manifest.get("instruction_facts"), dict):
+        manifest["instruction_facts"] = delivered_fact_report(
+            manifest["instruction_facts"],
+            included_evidence_ids(
+                knowledge_text, manifest["instruction_facts"].get("records", [])
+            ),
+        )
     # A custom builder may return unsanitized text. The source hashes still
     # identify retrieved blocks; the context hash must identify the actual
     # privacy-cleaned text delivered to either generation adapter.
     manifest["context_sha256"] = text_sha256(knowledge_text)
-    handoff = handoff_snapshot(projected, evidence=manifest, stage=task_type)
+    handoff = handoff_snapshot(projected, evidence=manifest, stage=task_type,
+                               decision_receipt_id=decision_receipt_id)
+    # Retrieval receipts are application-owned audit data, not stored PLC specs.
+    if isinstance(manifest.get("fact_coverage"), dict):
+        handoff["fact_coverage"] = copy.deepcopy(manifest["fact_coverage"])
+    if isinstance(manifest.get("instruction_facts"), dict):
+        handoff["instruction_facts"] = copy.deepcopy(manifest["instruction_facts"])
+    if isinstance(manifest.get("structured_facts"), dict):
+        handoff["structured_facts"] = copy.deepcopy(manifest["structured_facts"])
     handoff.update(copy.deepcopy(compiled.provenance_receipt))
     handoff["budget_report"] = copy.deepcopy(compiled.budget_report)
+    # This receipt identifies the policy, not a claimed reduction in model tokens.
+    handoff["generation_execution_policy"] = GENERATION_EXECUTION_POLICY_VERSION
     return ConfirmedGenerationContext(
         plc_model=model, confirmed_spec=runtime_spec,
         io_bindings=runtime_spec.get("io_bindings") or [],

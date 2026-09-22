@@ -2,7 +2,21 @@ import copy
 import difflib
 import re
 
-from plc.specification.bindings import bind_answers, binding_hint, single_address, restore_bound_choices
+from plc.device_identity import canonical_device
+from plc.specification.parameters import (parameter_metadata, parameter_value, text_origin,
+    parameter_selections, dependency_state, parameter_is_applicable)
+from plc.specification.bindings import (
+    bind_answers,
+    bind_known_question_rows,
+    binding_hint,
+    single_address,
+    restore_bound_choices,
+    resolve_parameter_address,
+    parameter_uses_bound_address,
+    bound_parameter_is_removed,
+    confirmed_input_levels,
+    merge_declared_bindings,
+)
 
 from plc.specification.approach import (
     contract_definition_issues,
@@ -250,49 +264,8 @@ def _condition_values(condition, key):
 
 
 def _required_when_matches(required_when, parameter_values):
-    """Evaluate one declarative dependency against confirmed parameter values."""
-    if not isinstance(required_when, dict):
-        return False
-    all_conditions = required_when.get("all")
-    if isinstance(all_conditions, list):
-        return bool(all_conditions) and all(
-            _required_when_matches(condition, parameter_values)
-            for condition in all_conditions
-        )
-    any_conditions = required_when.get("any")
-    if isinstance(any_conditions, list):
-        return any(
-            _required_when_matches(condition, parameter_values)
-            for condition in any_conditions
-        )
-    controller = str(required_when.get("parameter", "")).strip()
-    selected_value = str(parameter_values.get(controller, "") or "").strip()
-    if not controller or not selected_value:
-        return False
-    selected_folded = selected_value.casefold()
-
-    equals = _condition_values(required_when, "equals") or _condition_values(
-        required_when, "in"
-    )
-    contains = _condition_values(required_when, "contains_any") or _condition_values(
-        required_when, "contains"
-    )
-    not_equals = _condition_values(required_when, "not_equals")
-    not_contains = _condition_values(required_when, "not_contains")
-
-    if equals:
-        positive = any(selected_folded == value.casefold() for value in equals)
-    elif contains:
-        positive = any(value.casefold() in selected_folded for value in contains)
-    else:
-        positive = False
-    if not positive:
-        return False
-    if any(selected_folded == value.casefold() for value in not_equals):
-        return False
-    if any(value.casefold() in selected_folded for value in not_contains):
-        return False
-    return True
+    """The same exact dependency semantics used by the generation view."""
+    return dependency_state(required_when, parameter_values) is True
 
 
 def _validate_device_address(address, plc_model):
@@ -378,7 +351,7 @@ def validate_spec_draft(spec, plc_model=None):
 
     The function deliberately validates the draft *before* canonicalization so
     duplicate rows and incomplete required values are not silently discarded.
-    It returns structured issues that can be rendered by either Qt5 or Qt6 UI.
+    It returns structured issues that can be rendered by application clients.
     """
     errors = []
     warnings = []
@@ -462,20 +435,7 @@ def validate_spec_draft(spec, plc_model=None):
             )
         )
         parameters = []
-    parameter_values = {}
-    for parameter in parameters:
-        if not isinstance(parameter, dict):
-            continue
-        parameter_name = str(parameter.get("name", "")).strip()
-        if parameter_name:
-            parameter_values.setdefault(
-                parameter_name, str(parameter.get("value", "")).strip()
-            )
-        parameter_id = str(parameter.get("id", "")).strip()
-        if parameter_id:
-            parameter_values.setdefault(
-                parameter_id, str(parameter.get("value", "")).strip()
-            )
+    parameter_values = parameter_selections(parameters)
 
     for index, parameter in enumerate(parameters):
         path = f"$.parameters[{index}]"
@@ -538,6 +498,15 @@ def validate_spec_draft(spec, plc_model=None):
                     row=index,
                 )
             )
+        if not parameter_is_applicable(parameter, parameters):
+            continue
+        # A form option asking for an inline value is not that value. Check at
+        # confirmation, before a model call; do not invent missing reset I/O.
+        if required and value and isinstance(parameter.get("options"), list) and value in parameter["options"] and re.search(
+            r"请(?:一并|同时)?(?:填写|给出|说明|补充)|please\s+(?:enter|provide|specify)", value, re.I
+        ):
+            errors.append(_validation_issue(
+                "parameter_details_missing", f"参数“{name}”的所选项仍需补充实际值或地址与极性", f"{path}.value", row=index))
         if value and _asks_contact_type(name) and _io_parameter_kind(parameter) and not _has_contact_type(value):
             errors.append(
                 _validation_issue(
@@ -548,14 +517,29 @@ def validate_spec_draft(spec, plc_model=None):
                 )
             )
 
+    binding_rows = spec.get("io_table")
+    if not isinstance(binding_rows, list):
+        binding_rows = raw_to_io_table(spec.get("io_allocation_raw", ""))
+    binding_history = spec.get("io_bindings", [])
+
     seen_bindings = {}
+    address_owners = {}
     for index, parameter in enumerate(parameters):
         if not isinstance(parameter, dict) or not str(parameter.get("value") or "").strip():
+            continue
+        if not parameter_is_applicable(parameter, parameters):
             continue
         hint = binding_hint(parameter)
         if hint is None or parameter.get("id") in QUESTION_IDS:
             continue
-        address = single_address(parameter["value"], hint["kind"])
+        if bound_parameter_is_removed(parameter, binding_rows, binding_history):
+            continue
+        if not parameter_uses_bound_address(parameter):
+            # A question may be associated with D/M/T/etc. without selecting
+            # that address. Semantic answers are ordinary parameters, not an
+            # invalid I/O answer and therefore create no confirmation gate.
+            continue
+        address = resolve_parameter_address(parameter, binding_rows, binding_history)
         if address is None:
             errors.append(_validation_issue("invalid_io_answer", "请为该输入/输出选择一个明确的软元件地址",
                                             f"$.parameters[{index}].value", row=index))
@@ -569,6 +553,29 @@ def validate_spec_draft(spec, plc_model=None):
             errors.append(_validation_issue("conflicting_io_binding", "同一输入/输出绑定选择了不同地址，请统一选择",
                                             f"$.parameters[{index}].value", row=index))
         seen_bindings[identity] = address
+        owner = hint.get("row_id") or identity
+        previous = address_owners.get(address)
+        if previous and previous[0] != owner and hint["kind"] in {"X", "Y"}:
+            errors.append(_validation_issue(
+                "conflicting_io_owners", f"{address} 被不同输入/输出用途重复选择：{previous[1]}、{hint.get('label') or parameter.get('name') or identity}；请更换地址；有意共用时应显式关联同一 I/O 行",
+                f"$.parameters[{index}].value", row=index, address=address, first_row=previous[2]))
+        else:
+            address_owners[address] = (owner, hint.get("label") or str(parameter.get("name") or identity), index)
+        # When the question explicitly asks for a bit level, an address alone
+        # does not answer it. Apply to every typed input, not only start/stop.
+        question = str(parameter.get("name") or "")
+        if (hint["kind"] == "X" and re.search(r"有效电平|ON.{0,12}OFF|OFF.{0,12}ON", question, re.I)
+                and not confirmed_input_levels(parameter["value"])):
+            errors.append(_validation_issue("input_level_missing", "请明确该信号动作时输入位为 ON 还是 OFF", f"$.parameters[{index}].value", row=index))
+
+    # A degenerate trajectory is not a global ban on equal numeric parameters.
+    # Warn only for explicit, same-unit A/B absolute-position identities.
+    positions = {p.get("semantic_key"): p for p in parameters if isinstance(p, dict)}
+    first, second = positions.get("positioning.position_a"), positions.get("positioning.position_b")
+    if first and second and first.get("unit") == second.get("unit"):
+        av, bv = parameter_value(first), parameter_value(second)
+        if type(av) in (int, float) and type(bv) in (int, float) and av == bv:
+            warnings.append(_validation_issue("coincident_position_targets", "位置 A 与 B 相同；按这些值不会产生两位置之间的往复位移", "$.parameters", blocking=False))
 
     io_table = spec.get("io_table")
     if io_table is None:
@@ -611,7 +618,8 @@ def validate_spec_draft(spec, plc_model=None):
                 )
             continue
 
-        first_row = seen_addresses.get(address)
+        identity_address = canonical_device(address)
+        first_row = seen_addresses.get(identity_address)
         if first_row is not None:
             errors.append(
                 _validation_issue(
@@ -624,7 +632,7 @@ def validate_spec_draft(spec, plc_model=None):
                 )
             )
         else:
-            seen_addresses[address] = index
+            seen_addresses[identity_address] = index
 
         error_message, warning_message, prefix, number = _validate_device_address(
             address, model
@@ -962,7 +970,7 @@ def _suggested_io_to_table(suggested_io):
 
 def _parameter_choice_metadata(item):
     """Keep choices separate from prose and from the user's confirmed value."""
-    metadata = {}
+    metadata = parameter_metadata(item)
     if isinstance(item.get("io_binding"), dict):
         hint = binding_hint(item)
         if hint is not None:
@@ -1000,8 +1008,10 @@ def _missing_info_to_parameters(missing_info):
             "source": str(item.get("source", "")).strip() or "analysis",
             "required": bool(item.get("required", True)),
             "note": " / ".join(notes),
+            "note_provenance": text_origin(" / ".join(notes), "review_choices"),
             "options": options,
         }
+        parameter.update({k: v for k, v in parameter_metadata(item).items() if k != "note_provenance"})
         if isinstance(item.get("io_binding"), dict):
             hint = binding_hint(item)
             if hint is not None:
@@ -1018,6 +1028,15 @@ def _merge_io_rows(base_rows, incoming_rows):
     merged = []
     by_address = {}
     base_count = len(base_rows or [])
+    base_labels = []
+    for row in base_rows or []:
+        if not isinstance(row, dict):
+            continue
+        address = str(row.get("address", "")).strip().upper()
+        if not address:
+            continue
+        kind = str(row.get("kind") or _device_kind(address)).strip() or _device_kind(address)
+        base_labels.append((kind, str(row.get("label", "")).strip().casefold()))
     for position, row in enumerate(list(base_rows or []) + list(incoming_rows or [])):
         if not isinstance(row, dict):
             continue
@@ -1034,19 +1053,18 @@ def _merge_io_rows(base_rows, incoming_rows):
             if isinstance(row.get(field), str):
                 clean[field] = row[field]
         if position >= base_count and not clean.get("binding_id"):
-            previous = merged[by_address[address]] if address in by_address else None
-            if previous and previous.get("binding_id"):
-                # A new analysis is a suggestion, not a user edit to the row
-                # already confirmed at this address (including its purpose).
+            if address in by_address:
+                # Once a row exists in a confirmed specification, a later model
+                # suggestion must never overwrite its address-adjacent metadata
+                # such as a user-edited purpose label.
                 continue
-            exact_bound_labels = [r for r in merged if r.get("binding_id")
-                                  and r["kind"] == clean["kind"] and r["label"]
-                                  and r["label"].casefold() == clean["label"].casefold()]
-            if address not in by_address and len(exact_bound_labels) == 1:
-                # Reanalysis often repeats its original suggested address after
-                # the operator has changed it. Do not add a second row for the
-                # same exact, already-bound purpose. New typed answers are still
-                # independently bound when the user confirms them.
+            exact_previous_labels = [item for item in base_labels
+                                     if item[0] == clean["kind"] and clean["label"]
+                                     and item[1] == clean["label"].casefold()]
+            if len(exact_previous_labels) == 1:
+                # Reanalysis may repeat the old suggested address after the
+                # operator moved the device. Preserve the confirmed row instead
+                # of adding a duplicate suggestion for the same unique purpose.
                 continue
         if address in by_address:
             previous = merged[by_address[address]]
@@ -1090,7 +1108,7 @@ def _merge_parameters(base_parameters, incoming_parameters):
         clean = {
             "id": str(item.get("id", "")).strip(),
             "name": name,
-            "value": str(item.get("value", "")).strip(),
+            "value": parameter_value(item),
             "source": str(item.get("source", "")).strip() or "analysis",
             "required": bool(item.get("required", False)),
             "note": str(item.get("note", "")).strip(),
@@ -1117,13 +1135,26 @@ def _merge_parameters(base_parameters, incoming_parameters):
             # If two persisted rows already conflict, retain the first
             # confirmed value instead of silently letting list order change
             # the selected implementation.
-            if existing.get("value") and (
-                not clean["value"] or clean["value"] != existing["value"]
+            answered = existing.get("value") not in (None, "")
+            if answered:
+                # Reanalysis cannot rebind an answered identity, even when the
+                # new prose happens to carry exactly the same scalar answer.
+                for key in ("semantic_key", "value_kind", "unit"):
+                    if key in existing:
+                        clean[key] = existing[key]
+            if answered and (
+                clean["value"] in (None, "") or clean["value"] != existing["value"]
             ):
                 clean["value"] = existing["value"]
                 clean["source"] = existing.get("source") or clean["source"]
                 clean["name"] = existing.get("name") or clean["name"]
                 clean["note"] = existing.get("note") or clean["note"]
+                if existing.get("note_provenance"):
+                    clean["note_provenance"] = copy.deepcopy(existing["note_provenance"])
+                # Stable identity belongs to the existing answered parameter.
+                for key in ("semantic_key", "value_kind", "unit"):
+                    if key in existing:
+                        clean[key] = existing[key]
                 clean["required"] = bool(existing.get("required", clean["required"]))
                 if isinstance(existing.get("required_when"), dict):
                     clean["required_when"] = copy.deepcopy(
@@ -1148,6 +1179,42 @@ def _merge_parameters(base_parameters, incoming_parameters):
         # stable id with slightly different punctuation.
         by_name[name_key] = position
     return merged
+
+
+def _preserve_pinned_instruction_instances(previous_selected, approaches):
+    """Carry canonical implementation semantics and legacy exact calls across pinned reanalysis."""
+    if not isinstance(previous_selected, dict):
+        return approaches
+    previous_id = str(previous_selected.get("approach_id") or "").strip()
+    if not previous_id:
+        return approaches
+    result = copy.deepcopy(approaches)
+    for approach in result:
+        if not isinstance(approach, dict) or str(approach.get("approach_id") or "").strip() != previous_id:
+            continue
+        if "implementation_semantics" not in approach and "implementation_semantics" in previous_selected:
+            approach["implementation_semantics"] = copy.deepcopy(
+                previous_selected["implementation_semantics"]
+            )
+        if "explicit_user_constraints" not in approach and "explicit_user_constraints" in previous_selected:
+            approach["explicit_user_constraints"] = copy.deepcopy(
+                previous_selected["explicit_user_constraints"]
+            )
+        if "implementation_semantics" in approach or "explicit_user_constraints" in approach:
+            from plc.specification.approach import project_semantics_to_generation_contract
+            approach["generation_contract"] = project_semantics_to_generation_contract(
+                approach.get("implementation_semantics", []),
+                explicit_user_constraints=approach.get("explicit_user_constraints"),
+                source="analysis_semantics",
+            )
+        for field in ("generation_contract", "implementation_preferences"):
+            current = approach.get(field)
+            prior = previous_selected.get(field)
+            if not isinstance(current, dict) or not isinstance(prior, dict):
+                continue
+            if "instruction_instances" not in current and "instruction_instances" in prior:
+                current["instruction_instances"] = copy.deepcopy(prior["instruction_instances"])
+    return result
 
 
 def build_review_draft(analysis, previous_spec=None):
@@ -1202,11 +1269,16 @@ def build_review_draft(analysis, previous_spec=None):
         ),
     )
 
+    io_table, parameters = bind_known_question_rows(io_table, parameters)
+
     approaches = [
         normalize_approach(item)
         for item in (analysis.get("approaches") or [])
         if isinstance(item, dict)
     ]
+    approaches = _preserve_pinned_instruction_instances(
+        previous.get("selected_approach") or {}, approaches,
+    )
     selected_approach = (
         copy.deepcopy(approaches[0])
         if approaches
@@ -1239,6 +1311,10 @@ def build_review_draft(analysis, previous_spec=None):
             or []
         ),
     }
+    if analysis.get("summary"):
+        draft["summary_provenance"] = text_origin(str(draft["summary"]), "analysis_overview")
+    elif previous.get("summary_provenance"):
+        draft["summary_provenance"] = copy.deepcopy(previous["summary_provenance"])
     if drop_prior_vfd:
         cleaned = ensure_hardware_questions({
             "hardware_intent": intent, "hardware_config": draft["hardware_context"],
@@ -1250,13 +1326,24 @@ def build_review_draft(analysis, previous_spec=None):
             draft["selected_approach"] = {}
     if isinstance(analysis.get("hardware_intent"), dict):
         draft["hardware_intent"] = copy.deepcopy(analysis["hardware_intent"])
-    if isinstance(analysis.get("engineering_context"), dict):
-        draft["engineering_context"] = copy.deepcopy(analysis["engineering_context"])
-    elif isinstance(previous.get("engineering_context"), dict):
-        draft["engineering_context"] = copy.deepcopy(previous["engineering_context"])
-        draft["engineering_context"]["confirmation"] = {"status": "draft"}
-    if previous.get("io_bindings"):
-        draft["io_bindings"] = copy.deepcopy(previous["io_bindings"])
+    from plc.specification.provenance import intent_context, decision_context
+    intent_source = analysis if ("intent_context" in analysis or "engineering_context" in analysis) else previous
+    intent = intent_context(intent_source)
+    if intent:
+        draft["intent_context"] = intent
+    # No fallback to the previous confirmation's proposals/evidence. A draft
+    # may preserve current intent without resurrecting any old candidate audit.
+    receipt = decision_context(analysis)
+    if receipt:
+        receipt["confirmation"] = {"status": "draft"}
+        draft["decision_receipt"] = receipt
+    merged_bindings = merge_declared_bindings(
+        draft["io_table"],
+        previous.get("io_bindings", []),
+        analysis.get("declared_io_bindings", []),
+    )
+    if merged_bindings:
+        draft["io_bindings"] = merged_bindings
     draft["hardware_profile"] = build_hardware_profile(draft, plc_model)
     return restore_review_choices(draft, analysis)
 
@@ -1285,7 +1372,7 @@ def _asks_contact_type(question):
 
 
 def _has_contact_type(value):
-    return bool(re.search(r"常[开闭閉]|normally\s+(?:open|closed)|\b(?:NO|NC)\b", str(value), re.IGNORECASE))
+    return bool(confirmed_input_levels(value))
 
 
 def _restore_io_parameter_choices(parameter, io_rows):
@@ -1324,8 +1411,13 @@ def restore_review_choices(draft, analysis):
     if not isinstance(restored, dict) or not isinstance(analysis, dict):
         return restored
     questions = _missing_info_to_parameters(analysis.get("missing_info", []))
-    by_id = {item["id"].casefold(): item for item in questions if item.get("id")}
-    by_name = {item["name"].casefold(): item for item in questions}
+    # An ambiguous old label/id is not enough evidence to copy another row's
+    # choices or type ownership. Keep the draft usable without guessing.
+    by_id, by_name = {}, {}
+    for item in questions:
+        if item.get("id"):
+            by_id.setdefault(item["id"].casefold(), []).append(item)
+        by_name.setdefault(item["name"].casefold(), []).append(item)
     io_rows = list(restored.get("io_table") or [])
     if not io_rows:
         io_rows = _suggested_io_to_table(analysis.get("suggested_io") or analysis.get("io_allocation") or {})
@@ -1334,14 +1426,71 @@ def restore_review_choices(draft, analysis):
     for parameter in restored.get("parameters", []) or []:
         if not isinstance(parameter, dict):
             continue
-        item = by_id.get(str(parameter.get("id", "")).strip().casefold())
-        if item is None:
-            item = by_name.get(str(parameter.get("name", "")).strip().casefold())
-        if item is not None:
-            for key, value in _parameter_choice_metadata(item).items():
-                parameter.setdefault(key, value)
+        identifier = str(parameter.get("id", "")).strip().casefold()
+        candidates = by_id.get(identifier, [])
+        if not candidates:
+            candidates = by_name.get(str(parameter.get("name", "")).strip().casefold(), [])
+            candidates = [item for item in candidates if not identifier or not item.get("id")]
+        if len(candidates) == 1:
+            item = candidates[0]
+            # An explicit different semantic owner also defeats an id/label
+            # collision. Missing optional ownership remains legacy-compatible.
+            same_owner = not ("semantic_key" in parameter and "semantic_key" in item
+                              and parameter["semantic_key"] != item["semantic_key"])
+            if same_owner:
+                for key, value in _parameter_choice_metadata(item).items():
+                    if key != "note_provenance":
+                        parameter.setdefault(key, value)
+                # Recovery did not author the historical note. Keep an existing
+                # origin, but never stamp a new one onto old/missing/user prose.
         _restore_io_parameter_choices(parameter, io_rows)
     return restored
+
+
+def preserve_io_user_edits(previous_spec, draft):
+    """Carry direct specification-editor I/O removals as non-generation provenance.
+
+    The metadata is used only to stop later analysis suggestions from reviving
+    addresses the operator explicitly removed or moved. It never blocks saving,
+    never reaches Agent B, and adding the address again clears its tombstone.
+    """
+    result = copy.deepcopy(draft or {})
+    if not isinstance(previous_spec, dict):
+        return result
+
+    def addresses(value):
+        rows = value.get("io_table", []) if isinstance(value, dict) else []
+        return {
+            canonical_device(str(row.get("address") or "").strip().upper())
+            for row in rows or [] if isinstance(row, dict) and row.get("address")
+        }
+
+    previous_addresses = addresses(previous_spec)
+    current_addresses = addresses(result)
+    previous_overrides = previous_spec.get("io_user_overrides")
+    removed = set()
+    if isinstance(previous_overrides, dict):
+        removed.update(
+            canonical_device(str(address).strip().upper())
+            for address in previous_overrides.get("removed_addresses", []) or []
+            if str(address).strip()
+        )
+    removed.update(previous_addresses - current_addresses)
+    removed.difference_update(current_addresses)
+
+    overrides = copy.deepcopy(result.get("io_user_overrides"))
+    if not isinstance(overrides, dict):
+        overrides = {}
+    if removed:
+        overrides["removed_addresses"] = sorted(removed)
+        result["io_user_overrides"] = overrides
+    else:
+        overrides.pop("removed_addresses", None)
+        if overrides:
+            result["io_user_overrides"] = overrides
+        else:
+            result.pop("io_user_overrides", None)
+    return result
 
 
 def canonicalize_confirmed_spec(spec):
@@ -1406,7 +1555,31 @@ def canonicalize_confirmed_spec(spec):
     canonical["execution_semantics"] = normalize_semantic_requirements(
         canonical.get("execution_semantics") or []
     )
-    canonical["schema_version"] = 3
+    overrides = canonical.get("io_user_overrides")
+    if isinstance(overrides, dict):
+        removed = {
+            canonical_device(str(address).strip().upper())
+            for address in overrides.get("removed_addresses", []) or []
+            if str(address).strip()
+        }
+        active_addresses = {
+            canonical_device(str(row.get("address") or "").strip().upper())
+            for row in canonical.get("io_table", []) or []
+            if isinstance(row, dict) and row.get("address")
+        }
+        removed.difference_update(active_addresses)
+        if removed:
+            overrides = copy.deepcopy(overrides)
+            overrides["removed_addresses"] = sorted(removed)
+            canonical["io_user_overrides"] = overrides
+        else:
+            canonical.pop("io_user_overrides", None)
+    elif "io_user_overrides" in canonical:
+        canonical.pop("io_user_overrides", None)
+    if (spec or {}).get("schema_version") == 4:
+        from plc.specification.provenance import confirmed_spec_fields
+        return confirmed_spec_fields(canonical)
+    canonical["schema_version"] = 3  # Editable legacy/review draft, not a sealed confirmation.
     return canonical
 
 

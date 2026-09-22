@@ -58,6 +58,32 @@ def parameter_override(layer, name, descriptor):
                 return None
     return MISSING
 
+def without_workflow_effort(options, profile=None, *, model=None, api_key=None):
+    """Remove workflow hints without touching the saved profile or other options.
+
+    This is an application adapter, not part of authorized low-level probes.
+    A descriptor identifies tuning aliases even on a framing wrapper which does
+    not expose credentials. It is not evidence that a stale scope is applicable;
+    ordinary provider resolution still validates scope before using selections.
+    """
+    result = copy.deepcopy(dict(options or {}))
+    from model_runtime.contract import path_remove
+    path_remove(result, ("reasoning_effort",))
+    path_remove(result, ("extra_body", "reasoning_effort"))
+    contract = scoped_contract(profile or {}, model, api_key)
+    if contract is None and (profile or {}).get("capabilityContract"):
+        try:
+            contract = CapabilityContract.from_dict(profile["capabilityContract"])
+        except (ValueError, TypeError, KeyError):
+            pass  # Do not add a new capability-validation policy here.
+    descriptor = contract.parameters.get("reasoning_effort") if contract else None
+    if descriptor is not None:
+        descriptor.remove(result, "reasoning_effort")
+    if result.get("extra_body") == {}:
+        result.pop("extra_body")
+    return result
+
+
 def condition_values(options, contract):
     values = {name: (desc.value if desc.value is not None else True) if desc.status == "supported"
         else False if desc.status == "unsupported" else None for name, desc in contract.capabilities.items()}

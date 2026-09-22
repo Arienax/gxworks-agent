@@ -149,3 +149,98 @@ def test_model_provider_reexports_the_same_neutral_tool_types():
 
     assert model_provider.ToolCall is tool_messages.ToolCall
     assert model_provider.ToolResult is tool_messages.ToolResult
+
+
+def _backend_bypasses(source):
+    """Catch static imports/aliases and literal dynamic imports, not hostile reflection."""
+    tree = ast.parse(source)
+    found, aliases, modules = [], {"__import__", "import_module"}, {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == "importlib":
+            aliases.update(a.asname or a.name for a in node.names if a.name == "import_module")
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                modules[alias.asname or alias.name.split(".")[0]] = alias.name if alias.asname else alias.name.split(".")[0]
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                modules[alias.asname or alias.name] = (node.module or "") + "." + alias.name
+    for node in ast.walk(tree):
+        names = []
+        if isinstance(node, ast.Import):
+            names = [a.name for a in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            module = (node.module or "").lstrip(".")
+            names = [module] + [module + "." + a.name for a in node.names]
+        elif isinstance(node, ast.Call) and node.args:
+            fn = getattr(node.func, "id", getattr(node.func, "attr", ""))
+            if fn in aliases and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                names = [node.args[0].value]
+        elif isinstance(node, ast.Attribute):
+            parts, current = [], node
+            while isinstance(current, ast.Attribute):
+                parts.insert(0, current.attr)
+                current = current.value
+            if isinstance(current, ast.Name):
+                names = [".".join([modules.get(current.id, current.id), *parts])]
+        for name in names:
+            if name == "knowledge.core" or name.startswith(("knowledge.core.", "knowledge.retriever._")):
+                found.append((node.lineno, name))
+    return found
+
+
+def test_application_agents_and_integrations_use_the_scoped_retrieval_facade():
+    violations = []
+    for package in ("application", "agent_runtime", "integrations"):
+        for path in (SOURCE_ROOT / package).rglob("*.py"):
+            for line, name in _backend_bypasses(path.read_text(encoding="utf-8")):
+                violations.append(f"{path.relative_to(ROOT)}:{line} -> {name}")
+    assert not violations, "\n".join(violations)
+
+
+def test_scoped_retrieval_guard_catches_aliases_and_literal_dynamic_imports():
+    for source in (
+        "import knowledge.core as backend", "from knowledge import core as backend",
+        "from knowledge.core import retrieve_knowledge as lookup",
+        "from knowledge.retriever import _core as backend",
+        "from knowledge.retriever import _retrieve_uncached",
+        "from knowledge import retriever as r; r._core._retrieve_knowledge('x')",
+        "import knowledge.retriever as r; r._retrieve_uncached('x')",
+        "from importlib import import_module as load; load('knowledge.core')",
+        "import importlib as il; il.import_module('knowledge.core')",
+        "__import__('knowledge.core')", "import knowledge; knowledge.core.retrieve_knowledge('x')",
+    ):
+        assert _backend_bypasses(source), source
+    assert not _backend_bypasses("from knowledge.retriever import retrieve_knowledge")
+
+
+def test_production_workflows_cannot_reintroduce_effort_hints():
+    violations = []
+    for package in ("application", "agent_runtime"):
+        for path in (SOURCE_ROOT / package).rglob("*.py"):
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.keyword) and node.arg == "effort":
+                    if not isinstance(node.value, ast.Constant) or node.value.value is not None:
+                        violations.append((path.name, node.lineno, "non-neutral effort"))
+                if isinstance(node, ast.Dict) and any(isinstance(k, ast.Constant) and k.value == "reasoning_effort" for k in node.keys):
+                    violations.append((path.name, node.lineno, "workflow tuning"))
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    positional = node.args.posonlyargs + node.args.args
+                    defaults = list(zip(positional[-len(node.args.defaults):], node.args.defaults)) if node.args.defaults else []
+                    defaults += list(zip(node.args.kwonlyargs, node.args.kw_defaults))
+                    for arg, value in defaults:
+                        if arg.arg == "effort" and value is not None and not (isinstance(value, ast.Constant) and value.value is None):
+                            violations.append((path.name, node.lineno, "workflow effort default"))
+    assert not violations, violations
+
+
+
+def test_capability_coverage_manifest_is_current():
+    from tools.audit_capability_coverage import audit_coverage
+
+    report = audit_coverage()
+    assert report["ok"], "\n".join(report["failures"])
+    assert report["counts"]["enforced"] > 0
+    assert (
+        report["counts"]["enforced"] + report["counts"]["tracked_gap"]
+        == report["counts"]["total"]
+    )

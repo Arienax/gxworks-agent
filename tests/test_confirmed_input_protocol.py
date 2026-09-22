@@ -91,6 +91,85 @@ def test_confirmed_electrical_answers_are_not_ladder_contacts(text, active):
     assert confirmed_input_levels(text) == ({} if active is None else {"active_level": active, "inactive_level": 1-active})
 
 
+def test_declared_io_builds_bindings_and_drops_agent_a_internal_allocations():
+    from application.model_api import _normalize_analysis_result
+    from plc.specification.confirmed import build_review_draft, canonicalize_confirmed_spec
+
+    raw = {
+        "summary": "declared I/O",
+        "approaches": [{
+            "approach_id": "direct",
+            "name": "direct",
+            "generation_guide": "",
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+            ],
+        }],
+        "suggested_io": {
+            "X": {"X0": "启动按钮", "X1": "停止按钮"},
+            "Y": {"Y0": "主输送带"},
+            "M": {"M0": "模型擅自分配的运行位"},
+            "T": {"T1": "模型擅自分配的定时器"},
+        },
+        "missing_info": [],
+        "assumptions": [],
+    }
+    user_text = (
+        "X0：启动按钮，常开，按下时 ON\n"
+        "X1：停止按钮，常闭，未按下时 ON\n"
+        "Y0：主输送带\n"
+        "按下启动后保持运行，按下停止立即停止。"
+    )
+    normalized = _normalize_analysis_result(raw, "FX3U", user_text)
+    assert set(normalized["suggested_io"]) == {"X", "Y"}
+    assert "M0" not in json.dumps(normalized["suggested_io"], ensure_ascii=False)
+    assert "T1" not in json.dumps(normalized["suggested_io"], ensure_ascii=False)
+
+    spec = canonicalize_confirmed_spec(build_review_draft(normalized))
+    bindings = {row.get("role"): row for row in spec["io_bindings"] if row.get("role")}
+    assert bindings["start"]["address"] == "X0"
+    assert bindings["start"]["active_level"] == 1
+    assert bindings["stop"]["address"] == "X1"
+    assert bindings["stop"]["active_level"] == 0
+
+    ladder = {
+        "device_comments": {},
+        "rungs": [
+            {
+                "rung_id": 1, "header_element": None, "shared_inputs": [],
+                "branches": [{
+                    "branch_id": 1, "y_offset_level": 0,
+                    "inputs": [
+                        {"type": "parallel_block", "branches": [
+                            [{"type": "NO", "address": "X0"}],
+                            [{"type": "NO", "address": "M0"}],
+                        ]},
+                        {"type": "NO", "address": "X1"},
+                        {"type": "NC", "address": "M3"},
+                    ],
+                    "outputs": [{"type": "COIL", "address": "M0"}],
+                }],
+            },
+            {
+                "rung_id": 2, "header_element": None, "shared_inputs": [],
+                "branches": [{
+                    "branch_id": 1, "y_offset_level": 0,
+                    "inputs": [{"type": "NO", "address": "M0"}],
+                    "outputs": [{"type": "COIL", "address": "Y0"}],
+                }],
+            },
+        ],
+    }
+    result = check_direct_self_hold(ladder, spec)
+    assert result["status"] == "verified"
+    assert result["held_address"] == "M0"
+
+    wrong = copy.deepcopy(ladder)
+    wrong["rungs"][0]["branches"][0]["inputs"][1]["type"] = "NC"
+    with pytest.raises(PLCJsonValidationError, match="stop/run-permit polarity"):
+        check_direct_self_hold(wrong, spec)
+
+
 def test_old_snapshot_recovers_output_and_input_facts_without_mutating_storage():
     spec = old_confirmed_spec()
     before = copy.deepcopy(spec)
@@ -126,7 +205,7 @@ def test_confirmed_levels_check_all_states_and_never_flip_generated_logic(start,
     assert result["status"] == "verified" and result["states"] == 8
     wrong = expand_compact_ladder(compact(start, stop, wrong=True))
     before = copy.deepcopy(wrong)
-    with pytest.raises(PLCJsonValidationError, match="start/stop behavior differs"):
+    with pytest.raises(PLCJsonValidationError, match="stop/run-permit polarity"):
         check_direct_self_hold(wrong, spec)
     assert wrong == before
 
@@ -198,11 +277,20 @@ class OneResponse:
 
 
 @pytest.mark.parametrize("wrong", [False, True])
-def test_real_http_confirmation_and_generation_have_one_call_and_no_wrong_artifact(tmp_path, wrong):
+def test_real_http_confirmation_and_generation_have_one_call_and_no_wrong_artifact(tmp_path, wrong, monkeypatch):
     from fastapi.testclient import TestClient
     from application.workbench import WorkbenchService
     from integrations.web.app import create_app
     from test_web_api import ORIGIN, OPERATOR, _login
+    from plc.candidate_service import CandidateService
+    prepare_calls = []
+    original_prepare = CandidateService.prepare
+
+    def counted_prepare(self, *args, **kwargs):
+        prepare_calls.append(kwargs.get("candidate_origin"))
+        return original_prepare(self, *args, **kwargs)
+
+    monkeypatch.setattr(CandidateService, "prepare", counted_prepare)
     provider = OneResponse(compact(wrapped=True, wrong=wrong))
     service = WorkbenchService(tmp_path/"workspace", tmp_path/"state",
                                model_factory=lambda: (provider, {"model": provider.profile["model"]}))
@@ -221,9 +309,12 @@ def test_real_http_confirmation_and_generation_have_one_call_and_no_wrong_artifa
         service.jobs._futures[jid].result(timeout=20)
         state = client.get(f"/api/jobs/{jid}").json()
         assert len(provider.requests) == 1 and provider.requests[0].max_retries == 0
+        assert prepare_calls == ["compact_agent"]
         sent = provider.requests[0].messages[0].content
         assert '"active_level":0' in sent and '"active_level":1' in sent
         assert "# Retrieved PLC evidence" not in sent
+        assert sent.count("# Generation execution policy") == 1
+        assert '"run_permit_when":"NO X1"' in sent
         if wrong:
             assert state["status"] == "failed", state
             assert not service.projects.project(pid).get("versions")
@@ -279,3 +370,182 @@ def test_compact_and_ladder_v1_prompts_distinguish_physical_polarity():
     for prompt in (_COMPACT_PROTOCOL, LADDER_SYSTEM_PROMPT):
         assert 'active_level=0' in prompt
         assert '程序 NO 检查位=1' in prompt and 'NC 检查位=0' in prompt
+
+
+@pytest.mark.parametrize("active", [0, 1])
+@pytest.mark.parametrize("role", ["start", "stop", "sensor", "interlock"])
+def test_execution_input_predicates_are_settled_levels_not_a_circuit(active, role):
+    from plc.specification.conditions import generation_input_conditions
+    bindings = [{"binding_id": "input", "kind": "X", "address": "x003", "role": role,
+                 "active_level": active, "inactive_level": 1 - active}]
+    before = copy.deepcopy(bindings)
+    result = generation_input_conditions(bindings)
+    row = result["level_predicates"][0]
+    assert row["address"] == "X3"
+    assert row["active_when"] == ("NO X3" if active else "NC X3")
+    assert row["inactive_when"] == ("NC X3" if active else "NO X3")
+    assert ("run_permit_when" in row) == (role == "stop")
+    if role == "stop":
+        assert row["run_permit_when"] == row["inactive_when"]
+    assert result["unresolved_input_bindings"] == [] and bindings == before
+
+
+@pytest.mark.parametrize("level", [None, "常闭", "0", 2, True])
+def test_execution_missing_level_stays_unknown_without_rejection(level):
+    from plc.specification.conditions import generation_input_conditions
+    result = generation_input_conditions([{"binding_id": "unknown", "kind": "X", "address": "X3",
+        "role": "stop", "name": "常闭停止", "active_level": level}])
+    assert result == {"level_predicates": [], "unresolved_input_bindings": ["unknown"]}
+
+
+def test_io_binding_role_is_machine_semantics_not_comment_text():
+    from plc.specification.bindings import binding_hint
+
+    explicit = binding_hint({
+        "id": "custom_stop",
+        "io_binding": {
+            "binding_id": "machine.stop",
+            "kind": "X",
+            "role": "stop",
+            "label": "停机按钮",
+        },
+    })
+    assert explicit["role"] == "stop"
+    assert explicit["label"] == "停机按钮"
+
+    legacy = binding_hint({
+        "id": "stop_input",
+        "io_binding": {
+            "binding_id": "stop_input",
+            "kind": "X",
+            "label": "停止按钮",
+        },
+    })
+    assert legacy["role"] == "stop"
+    assert legacy["label"] == "停止按钮"
+
+    unknown = binding_hint({
+        "id": "sensor_a",
+        "io_binding": {
+            "binding_id": "sensor_a",
+            "kind": "X",
+            "label": "停止字样只是显示文本",
+        },
+    })
+    assert "role" not in unknown
+
+
+def test_analysis_prompt_requires_role_when_control_semantics_are_known():
+    from application.analysis_context import _IO_BINDING_PROMPT
+
+    assert "role 是控制语义身份" in _IO_BINDING_PROMPT
+    assert "label 只是人类可读用途/注释" in _IO_BINDING_PROMPT
+    assert "未知 role 不猜测" in _IO_BINDING_PROMPT
+
+
+def test_execution_typed_bits_do_not_turn_word_registers_or_outputs_into_inputs():
+    from plc.specification.conditions import generation_input_conditions
+    rows = [{"binding_id": kind, "kind": kind, "address": kind + "10", "role": "input", "active_level": 0}
+            for kind in ("X", "M", "S", "Y", "D", "T", "C")]
+    result = generation_input_conditions(rows)
+    assert {row["address"] for row in result["level_predicates"]} == {"X10", "M10", "S10"}
+    assert all("run_permit_when" not in row for row in result["level_predicates"])
+    assert generation_input_conditions(None)["level_predicates"] == []
+
+
+def test_execution_conflicting_levels_or_malformed_input_are_not_guessed():
+    from plc.specification.conditions import generation_input_conditions
+    result = generation_input_conditions([
+        {"binding_id": "conflict", "kind": "X", "address": "X3", "active_level": 0, "inactive_level": 0},
+        {"binding_id": "bad-address", "kind": "X", "address": "X8", "active_level": 1},
+        None,
+    ])
+    assert result["level_predicates"] == []
+    assert result["unresolved_input_bindings"] == ["conflict", "bad-address"]
+
+
+def test_execution_predicates_recompute_after_confirmed_io_edits_and_deletion():
+    from plc.specification.confirmed import canonicalize_confirmed_spec
+    from plc.specification.conditions import generation_input_conditions
+    spec = canonicalize_confirmed_spec(old_confirmed_spec())
+    def predicates():
+        return generation_input_conditions(project_confirmed_specification(spec)["io_bindings"])["level_predicates"]
+    before = predicates()
+    assert next(row for row in before if row["role"] == "stop")["run_permit_when"] == "NO X1"
+    next(row for row in spec["io_table"] if row["address"] == "X1")["address"] = "X3"
+    next(row for row in spec["parameters"] if row["id"] == "stop_signal")["value"] = "X1 常开（按下为ON）"
+    after = predicates()
+    assert next(row for row in after if row["role"] == "stop")["run_permit_when"] == "NC X3"
+    spec["io_table"] = [row for row in spec["io_table"] if row["address"] != "X3"]
+    assert not any(row["role"] == "stop" for row in predicates())
+    assert next(row for row in before if row["role"] == "stop")["address"] == "X1"
+
+
+def test_execution_compact_and_full_share_one_policy_and_keep_evidence(monkeypatch):
+    from application.confirmed_generation_context import GENERATION_EXECUTION_POLICY, generation_execution_prompt
+    from application.generation_agent import _build_agent_b_prompt
+    from application.generation_context import build_generation_instructions
+    spec = old_confirmed_spec()
+    original = copy.deepcopy(spec)
+    calls = []
+    evidence = "[KNOWLEDGE source=fixture-1]\nAn intact technical fact block.\n[/KNOWLEDGE]"
+    def retrieve(*args, **kwargs):
+        calls.append((args, kwargs))
+        return evidence
+    context = build_confirmed_generation_context(spec, "FX3U", knowledge_builder=retrieve)
+    prompt = _build_agent_b_prompt(context.confirmed_spec, "FX3U", context=context)
+    assert len(calls) == 1  # constructing compact prompt must not retrieve again
+    expected = generation_execution_prompt(context.confirmed_spec, evidence_text=context.knowledge_context)
+    assert prompt.endswith(expected) and prompt.count(GENERATION_EXECUTION_POLICY) == 1
+    assert evidence in prompt and spec == original
+    full = build_generation_instructions("generate", plc_model="FX3U", confirmed_context=spec,
+        knowledge_builder=retrieve, profile_builder=lambda *a, **k: "",
+        prompt_builder=lambda *a, **k: "existing full protocol")
+    assert len(calls) == 2  # one retrieval per adapter, no extra planning/model pass
+    assert full.endswith(expected) and full.count(GENERATION_EXECUTION_POLICY) == 1
+    assert evidence in full and spec == original
+    assert '"run_permit_when":"NO X1"' in full
+    assert context.handoff["generation_execution_policy"] == "settled-facts-v1"
+
+
+@pytest.mark.parametrize("task", ["format_repair", "contract_repair", "analysis", "program_review"])
+def test_execution_policy_does_not_leak_into_other_tasks(task):
+    from application.confirmed_generation_context import generation_execution_prompt
+    assert generation_execution_prompt({}, task_type=task) == ""
+
+
+def test_execution_policy_keeps_user_amendments_and_does_not_claim_evidence_coverage():
+    from application.confirmed_generation_context import GENERATION_EXECUTION_POLICY, generation_execution_prompt
+    spec = {"io_bindings": [{"binding_id": "stop", "role": "stop", "kind": "X", "address": "X3", "active_level": 0}],
+        "parameters": [{"id": "stop.track_reset", "value": "preserve tracking"}],
+        "selected_approach": {"generation_contract": {"unverified_constraints": {"required_structures": ["reset tracking"]}}}}
+    before = copy.deepcopy(spec)
+    prompt = generation_execution_prompt(spec, task_type="edit")
+    facts = json.loads(prompt.rsplit("\n", 1)[1])
+    assert facts["basis"] == "edit_baseline" and facts["retrieved_text_present"] is False
+    assert "本轮明确修改优先" in prompt and "参数/绑定优先" in prompt
+    assert spec == before  # no unreliable prose reconciliation, no lost intent
+    provided = generation_execution_prompt(spec, evidence_text="one incomplete fact")
+    assert json.loads(provided.rsplit("\n", 1)[1])["retrieved_text_present"] is True
+    assert "不代表覆盖全部事实" in provided
+    assert all(term not in GENERATION_EXECUTION_POLICY for term in ("WSFL", "SFTL", "M8012", "T0"))
+
+
+def test_execution_protocol_does_not_blanket_ban_internal_special_devices():
+    from application.generation_agent import _COMPACT_PROTOCOL
+    assert "模块寄存器或特殊软元件" not in _COMPACT_PROTOCOL
+    assert "当前型号资料/手册证据" in _COMPACT_PROTOCOL
+    assert "已有显式禁用仍须遵守" in _COMPACT_PROTOCOL
+
+
+def test_execution_current_snapshot_is_not_cached_or_written_back():
+    from plc.specification.conditions import generation_input_conditions
+    rows = [{"binding_id": "stop", "kind": "X", "address": "X003", "role": "stop", "active_level": 0}]
+    previous = generation_input_conditions(rows)
+    rows[0].update(address="X005", active_level=1)
+    current = generation_input_conditions(rows)
+    assert previous["level_predicates"][0]["run_permit_when"] == "NO X3"
+    assert current["level_predicates"][0]["run_permit_when"] == "NC X5"
+    assert "run_permit_when" not in rows[0] and rows[0]["address"] == "X005"
+    rows.clear()
+    assert generation_input_conditions(rows)["level_predicates"] == []

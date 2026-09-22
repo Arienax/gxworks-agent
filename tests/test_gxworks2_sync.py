@@ -745,70 +745,8 @@ def test_project_inspection_preserves_empty_uia_timeout_details():
     assert "TimeoutError" in state["message"]
 
 
-def test_sync_failure_dialog_expands_details_and_hides_unsafe_retry():
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    from ui.desktop.dialogs.workflow import GXWorks2SyncErrorDialog
-    from ui.desktop.qt import QApplication
-
-    app = QApplication.instance() or QApplication([])
-    retryable = GXWorks2SyncService._error(
-        "未检测到文件窗口",
-        GXSyncErrorCode.GX_FILE_DIALOG_TIMEOUT,
-        stage="wait_program_file_dialog",
-        retryable=True,
-        details={
-            "gx_running": True,
-            "project_open": True,
-            "program_ready": True,
-            "program_name": "MAIN",
-        },
-    )
-    dialog = GXWorks2SyncErrorDialog(retryable)
-    assert dialog.retry_button is not None
-    assert dialog.details_editor.isHidden()
-    dialog._toggle_details()
-    assert not dialog.details_editor.isHidden()
-    assert '"ok": false' in dialog.details_editor.toPlainText()
-    assert dialog.details_button.text() == "收起技术详情"
-    dialog.close()
-
-    non_retryable = GXWorks2SyncService._error(
-        "权限不一致",
-        GXSyncErrorCode.GX_UIA_ACCESS_DENIED,
-        stage="activate_main",
-        retryable=False,
-    )
-    dialog = GXWorks2SyncErrorDialog(non_retryable)
-    assert dialog.retry_button is None
-    dialog.close()
-    app.processEvents()
 
 
-def test_pending_manual_retry_waits_until_the_worker_is_released():
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    from ui.desktop.main_window import _IndustrialWorkbenchUI
-
-    class _Workbench:
-        def __init__(self):
-            self._gx_sync_retry_pending = True
-            self._gxworks2_sync_thread = object()
-            self.started = 0
-
-        def _gx_sync_busy(self):
-            return self._gxworks2_sync_thread is not None
-
-        def _sync_current_version_with_gxworks2(self):
-            self.started += 1
-
-    workbench = _Workbench()
-    _IndustrialWorkbenchUI._run_pending_gx_sync_retry(workbench)
-    assert workbench.started == 0
-    assert workbench._gx_sync_retry_pending is True
-
-    workbench._gxworks2_sync_thread = None
-    _IndustrialWorkbenchUI._run_pending_gx_sync_retry(workbench)
-    assert workbench.started == 1
-    assert workbench._gx_sync_retry_pending is False
 
 
 def test_read_current_snapshot_needs_no_local_version(tmp_path):

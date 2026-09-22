@@ -855,6 +855,17 @@ def test_all_evidence_manifests_include_nested_archives_and_external_screenshots
     assert sum(r["verified_external_screenshots"] for r in reports) == 17
 
 
+def test_failure_corpus_attestations_are_repo_relative_and_hash_bound():
+    manifest = json.loads((ROOT / "research/corpus/failures.json").read_text(encoding="utf-8"))
+    for case in manifest["cases"]:
+        source_path = case["source"]["path"]
+        assert "\\" not in source_path and ":" not in source_path.split("/", 1)[0]
+        for observation in case.get("recorded_observations", []):
+            path = observation["path"]
+            assert "\\" not in path and ":" not in path.split("/", 1)[0]
+            assert sha256((ROOT / path).read_bytes()) == observation["sha256"]
+
+
 def test_recorded_native_failures_are_kept_even_when_parsing_succeeds():
     report = HARNESS["scan"]([ROOT / "research/corpus/failures.json"])
     failures = [f for f in report["failure_index"] if f["stage"] == "compile"]

@@ -53,7 +53,7 @@ from knowledge.patterns import (
     build_workflow_prompt,
     classify_request,
 )
-from application.prompts import ANALYSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_DIAGNOSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_PATCH_SYSTEM_PROMPT, DEBUG_REPORT_SYSTEM_PROMPT, FIELD_PATCH_REPAIR_SYSTEM_PROMPT, FORMAT_LADDER_REPAIR_SYSTEM_PROMPT, INSPECTION_SYSTEM_PROMPT, MULTI_AGENT_SPECIALIST_PROMPTS, PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT, SIMULATOR_TEST_SUITE_SYSTEM_PROMPT
+from application.prompts import ANALYSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_DIAGNOSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_PATCH_SYSTEM_PROMPT, DEBUG_REPORT_SYSTEM_PROMPT, FIELD_PATCH_REPAIR_SYSTEM_PROMPT, INSPECTION_SYSTEM_PROMPT, MULTI_AGENT_SPECIALIST_PROMPTS, PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT, SIMULATOR_TEST_SUITE_SYSTEM_PROMPT
 from application.analysis_results import _ANALYSIS_IO_KINDS, _ASSUMPTION_MARKERS, _iter_analysis_text, _normalize_analysis_result
 
 
@@ -141,9 +141,14 @@ def _request_model(
 ):
     """Run one canonical request without exposing provider response shapes."""
 
-    request_options = dict(options or {})
-    if effort is not None:
-        request_options["reasoning_effort"] = effort
+    # Legacy effort arguments/options are not an application tuning source.
+    # Saved model settings are applied by the provider after this boundary.
+    from model_runtime.request_policy import without_workflow_effort
+    provider = _workflow_provider()
+    request_options = without_workflow_effort(
+        options, getattr(provider, "profile", {}), model=model_name,
+        api_key=getattr(provider, "api_key", None),
+    )
     # Format and transport are independent. Preserve an explicitly supplied
     # native schema on streaming requests as well as non-streaming requests.
     if response_contract.format == "text":
@@ -161,7 +166,7 @@ def _request_model(
     )
     audit_request(request.messages)
     return collect_response(
-        _workflow_provider(),
+        provider,
         request,
         on_reasoning_chunk=on_reasoning_chunk,
         on_content_chunk=on_content_chunk,
@@ -194,7 +199,7 @@ def request_model(
 ):
     """Public model gateway. Protocol decoding and acceptance stay in the runtime."""
     return _request_model(
-        messages, model_name=model_name, effort=effort, stream=stream, tools=tools,
+        messages, model_name=model_name, effort=None, stream=stream, tools=tools,
         request_timeout=request_timeout, max_retries=max_retries,
         on_reasoning_chunk=on_reasoning_chunk, on_content_chunk=on_content_chunk,
         on_event=on_event, fallback_to_non_stream=fallback_to_non_stream,
@@ -295,8 +300,7 @@ def _request_analysis_response(messages, *, on_format_repair=None, **kwargs):
                 "Return the complete corrected JSON object only, using the analysis schema above. "
                 "Correct JSON syntax and missing schema keys only; preserve the requirement, "
                 "devices, alternatives and questions. Do not invent confirmed answers or generate PLC code. "
-                "Each flowchart_steps item has separate type and label keys, for example "
-                '{"type":"transition","label":"X0"}. No markdown or explanations.'
+                "Use separate property names and values. No markdown or explanations."
             )
             repair_messages = [*messages, rejected.raw_response.message,
                                UserMessage(correction)]
@@ -322,7 +326,7 @@ def analyze_requirement(
     analysis_mode="direct",
 ) -> dict:
     """
-    Phase 1: fast analysis with effort=low.
+    Phase 1: analysis using the selected model settings.
     Auto-detect PLC model from user input and inject special soft-element table.
     Returns: dict or None
     """
@@ -340,7 +344,7 @@ def analyze_requirement(
     )
     knowledge_ctx = analysis_prompt.knowledge_context
     sys_prompt = analysis_prompt.system_prompt
-    print(f"阶段1: 需求分析中... (effort=low, PLC={model})")
+    print(f"阶段1: 需求分析中... (PLC={model})")
 
     messages = _build_clean_messages(conversation_history or [], sys_prompt)
     messages.append(
@@ -350,7 +354,7 @@ def analyze_requirement(
     try:
         response = _request_analysis_response(
             messages,
-            effort="low",
+            effort=None,
             stream=False,
             on_format_repair=on_format_repair,
         )
@@ -412,7 +416,7 @@ def analyze_requirement_streaming(
     )
     knowledge_ctx = analysis_prompt.knowledge_context
     sys_prompt = analysis_prompt.system_prompt
-    print(f"阶段1(流式): 需求分析中... (effort=low, PLC={model})")
+    print(f"阶段1(流式): 需求分析中... (PLC={model})")
 
     messages = _build_clean_messages(conversation_history or [], sys_prompt)
     messages.append(
@@ -422,7 +426,7 @@ def analyze_requirement_streaming(
     try:
         response = _request_analysis_response(
             messages,
-            effort="low",
+            effort=None,
             stream=True,
             on_format_repair=on_format_repair,
             on_reasoning_chunk=on_reasoning_chunk,
@@ -594,7 +598,7 @@ def debug_ladder(
     conversation_history=None,
     local_findings=None,
     model_name=None,
-    effort="high",
+    effort=None,
     request_timeout=120,
     raise_errors=False,
     plc_model="FX3U",
@@ -651,7 +655,7 @@ def debug_ladder(
         response = _request_model(
             messages,
             model_name=model_name,
-            effort=effort,
+            effort=None,
             stream=False,
             response_contract=DEBUG_RESPONSE,
             request_timeout=request_timeout,
@@ -692,7 +696,7 @@ def _call_debug_evidence_json(
     payload,
     *,
     model_name=None,
-    effort="high",
+    effort=None,
     request_timeout=120,
     raise_errors=False,
     on_reasoning_chunk=None,
@@ -719,7 +723,7 @@ def _call_debug_evidence_json(
         response = _request_model(
             messages,
             model_name=selected_model,
-            effort=effort,
+            effort=None,
             stream=wants_stream,
             response_contract=response_contract,
             preserved_annotations=source_annotations(payload),
@@ -759,7 +763,7 @@ def debug_evidence_diagnosis(
     evidence,
     *,
     model_name=None,
-    effort="high",
+    effort=None,
     request_timeout=120,
     raise_errors=False,
 ):
@@ -770,7 +774,7 @@ def debug_evidence_diagnosis(
         {"evidence": evidence},
         response_contract=DIAGNOSIS_RESPONSE,
         model_name=model_name,
-        effort=effort,
+        effort=None,
         request_timeout=request_timeout,
         raise_errors=raise_errors,
     )
@@ -782,7 +786,7 @@ def debug_evidence_patch(
     diagnosis,
     *,
     model_name=None,
-    effort="high",
+    effort=None,
     request_timeout=120,
     raise_errors=False,
 ):
@@ -793,7 +797,7 @@ def debug_evidence_patch(
         {"evidence": evidence, "diagnosis": diagnosis},
         response_contract=PATCH_RESPONSE,
         model_name=model_name,
-        effort=effort,
+        effort=None,
         request_timeout=request_timeout,
         raise_errors=raise_errors,
     )
@@ -806,7 +810,7 @@ def generate_simulator_test_suite(
     test_context,
     *,
     model_name=None,
-    effort="high",
+    effort=None,
     request_timeout=120,
     raise_errors=False,
     on_reasoning_chunk=None,
@@ -820,7 +824,7 @@ def generate_simulator_test_suite(
         {"context": test_context},
         response_contract=TEST_SUITE_RESPONSE,
         model_name=model_name,
-        effort=effort,
+        effort=None,
         request_timeout=request_timeout,
         raise_errors=raise_errors,
         on_reasoning_chunk=on_reasoning_chunk,
@@ -837,7 +841,7 @@ def run_multi_agent_specialist(
     payload,
     *,
     model_name=None,
-    effort="high",
+    effort=None,
     request_timeout=120,
     raise_errors=False,
 ):
@@ -872,7 +876,7 @@ def run_multi_agent_specialist(
         payload,
         response_contract=INSPECTION_RESPONSE,
         model_name=model_name,
-        effort=effort,
+        effort=None,
         request_timeout=request_timeout,
         raise_errors=raise_errors,
     )
@@ -925,7 +929,7 @@ def inspect_ladder(
     confirmed_spec=None,
     conversation_history=None,
     model_name=None,
-    effort="high",
+    effort=None,
     request_timeout=120,
     raise_errors=False,
 ):
@@ -987,7 +991,7 @@ def inspect_ladder(
         response = _request_model(
             messages,
             model_name=model_name,
-            effort=effort,
+            effort=None,
             stream=False,
             request_timeout=request_timeout,
             max_retries=0 if request_timeout is not None else None,
@@ -1229,7 +1233,7 @@ def repair_ladder_response(repair_payload, model_name, effort, *, mode,
         # syntax-only before/after patch is requested and applied locally.
         from application.format_patch_repair import format_repair_response
         return format_repair_response(
-            repair_payload, model_name, effort,
+            repair_payload, model_name, None,
             on_reasoning_chunk=on_reasoning_chunk,
             on_content_chunk=on_content_chunk,
         )
@@ -1258,18 +1262,13 @@ def repair_ladder_response(repair_payload, model_name, effort, *, mode,
         system_prompt = PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT
         response_contract = LADDER_RESPONSE
         audit_reason = "explicit_local_repair"
-    else:
-        native_response_format = None
-        system_prompt = FORMAT_LADDER_REPAIR_SYSTEM_PROMPT
-        response_contract = LADDER_RESPONSE
-        audit_reason = "explicit_format_repair"
     audit_section("repair_system_prompt", system_prompt, reason=audit_reason, source="api")
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": json.dumps(repair_payload, ensure_ascii=False, separators=(",", ":"))},
     ]
     response = _request_model(
-        messages, model_name=model_name, effort=effort, stream=True,
+        messages, model_name=model_name, effort=None, stream=True,
         options={"response_format": native_response_format} if native_response_format else None,
         response_contract=response_contract,
         preserved_annotations=source_annotations(repair_payload),
@@ -1342,10 +1341,10 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
     返回:
         (full_reasoning: str, full_content: str)
     """
-    print(f"思考中(流式)... (当前模式: {effort}, 目标语言: {target_mode})")
+    print(f"思考中(流式)... (模型配置参数, 目标语言: {target_mode})")
 
     messages, conversation_history, should_persist = _prepare_api_call(
-        user_requirement, model_name, effort, target_mode,
+        user_requirement, model_name, None, target_mode,
         is_edit_mode=is_edit_mode,
         conversation_history=conversation_history,
         confirmed_context=confirmed_context,
@@ -1366,7 +1365,7 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
     response = _request_model(
         messages,
         model_name=model_name,
-        effort=effort,
+        effort=None,
         stream=True,
         max_retries=0,
         fallback_to_non_stream=True,
@@ -1407,10 +1406,10 @@ def generate_model_json(user_requirement: str, model_name: str, effort: str,
                                    current_version_json=None,
                                    plc_model=None,
                                    image_attachments=None) -> str:
-    print(f"思考中... (当前模式: {effort}, 目标语言: {target_mode})")
+    print(f"思考中... (模型配置参数, 目标语言: {target_mode})")
 
     messages, conversation_history, should_persist = _prepare_api_call(
-        user_requirement, model_name, effort, target_mode,
+        user_requirement, model_name, None, target_mode,
         is_edit_mode=is_edit_mode,
         conversation_history=conversation_history,
         confirmed_context=confirmed_context,
@@ -1431,7 +1430,7 @@ def generate_model_json(user_requirement: str, model_name: str, effort: str,
         response = _request_model(
             messages,
             model_name=model_name,
-            effort=effort,
+            effort=None,
             stream=False,
             options=native_options,
             request_timeout=request_timeout,

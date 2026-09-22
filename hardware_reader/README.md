@@ -1,6 +1,6 @@
 # 真实 PLC 的独立只读接入
 
-本适配器与 `simulator_gateway` 分开编译和运行。后者仍固定在
+本适配器与 [Simulator Gateway](../simulator_gateway/README.md) 分开编译和运行。后者固定在
 GX Simulator2，模拟测试写入能力不会进入本适配器。
 
 工作台默认没有有效硬件授权。操作员先选择工程版本、MX 逻辑站号、现场设备说明、
@@ -15,8 +15,7 @@ GX Simulator2，模拟测试写入能力不会进入本适配器。
 ## 安装
 
 使用已安装、授权的 Mitsubishi MX Component，并在 Communication Setup Utility
-配置逻辑站。操作员必须核对逻辑站实际对应的现场设备；本适配器不自动证明设备身份，
-也不会锁定或修改 MX 工具中的配置。授权有效期内不要更改该逻辑站的外部配置。
+配置逻辑站。操作员必须核对逻辑站实际对应的现场设备；适配器不会核验物理设备身份，也不锁定或修改 MX 工具中的配置。授权有效期内不要更改该逻辑站的外部配置。
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\build_hardware_reader.ps1
@@ -28,7 +27,7 @@ powershell -ExecutionPolicy Bypass -File tools\build_hardware_reader.ps1
 独立适配器。不会自动安装 MX Component，也不会更改已有 Simulator2 配置。
 
 支持单独的 X、Y、M、D、S、T、C 地址；T/C 表示当前值，底层读取 TN/CN，
-不代表定时器/计数器完成位。结果是各地址顺序读取的观测，不保证同一扫描周期快照。
+完成位应使用独立的状态定义。结果是各地址顺序读取的观测，不保证同一扫描周期快照。
 
 `{"operation":"capabilities"}` 只检查本机 COM 类型注册，不创建对象或连接设备。
 它可用于离线部署检查。测试只使用临时工程、模拟读取器和此能力查询；设备读取必须
@@ -43,6 +42,8 @@ Communication Setup Utility 的逻辑站号，范围 0–1023；`GetDevice` 读�
 [MX Component Version 5 Reference Manual，SH-082395ENG-H](https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh082395eng/sh082395engh.pdf)
 的 utility setting type 与示例程序章节。
 
-## Adapter boundary
+## 实现与字段来源
 
-C# is vendor/native only. Python Core prepares device names and values, including address policy and T/C current-value mapping. This build uses native-plan protocol v2; rebuild the helper with its existing PowerShell build script when upgrading Python. `native_adapters/NativeRequest.cs` is compiled with it. Existing read-only / Simulator2-only routes and transport protections remain; no PLC rule tables should be reintroduced here.
+会话、次数、期限和版本绑定由 [application.hardware](../src/application/hardware.py)维护；HTTP 输入字段及校验在 [schemas.py](../src/integrations/web/schemas.py)。地址及 T/C 当前值映射由 [plc.device_policy](../src/plc/device_policy.py)准备，Python 调用方为 [HardwareReader](../src/gxworks2/hardware_reader.py)。
+
+[Program.cs](Program.cs)只执行供应商读请求，与 [NativeRequest.cs](../native_adapters/NativeRequest.cs)共同编译。升级时使用上述构建脚本重新构建读取器；协议及 COM 参数以这两个文件的定义为准。语言分工见[架构边界](../docs/architecture/language-boundaries.md)。

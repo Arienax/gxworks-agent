@@ -184,12 +184,6 @@ def test_plan_is_json_serializable_for_audit_metadata():
     json.dumps(plan, ensure_ascii=False)
 
 
-def test_main_integrates_contract_repair_as_scoped_partial_patch():
-    source = Path('src/ui/desktop/main_window.py').read_text(encoding="utf-8")
-    assert "build_contract_repair_plan" in source
-    assert 'task_type="contract_repair"' in source
-    assert "allowed_rung_ids=plan[\"allowed_rung_ids\"]" in source
-    assert "allowed_addresses=plan[\"allowed_addresses\"]" in source
 
 
 def test_indexed_devices_are_enforced_by_patch_scope():

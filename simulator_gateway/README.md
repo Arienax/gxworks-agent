@@ -1,11 +1,11 @@
 # GX Simulator2 gateway
 
-This small local process isolates MX Component from the Python application.
+This local process isolates MX Component from the Python application.
 It binds only to `127.0.0.1`, requires a per-process token for every mutating
 endpoint, and fixes `ActProgType.ActUnitType` to `UNIT_SIMULATOR2 (0x30)`.
 Consequently it has no route that can target a physical PLC.
 
-The current implementation targets FX3U/FX3UC (`ActCpuType = 0x208`) and uses
+The adapter targets FX3U/FX3UC (`ActCpuType = 0x208`) and uses
 `ActTargetSimulator = 0`, as required for an FX CPU. Tests may write only
 ordinary X, M and D devices; Y and CPU-owned special devices are read-only.
 
@@ -30,6 +30,8 @@ The design follows Mitsubishi Electric's MX Component programming manual:
 GX Simulator2 uses `UNIT_SIMULATOR2 (0x30)`; `GetDevice` and `SetDevice` are
 the documented single-device operations.
 
-## Adapter boundary
+## Implementation and field owners
 
-C# is vendor/native only. Python Core prepares device names and values, including address policy and T/C current-value mapping. This build uses native-plan protocol v3; rebuild the helper with its existing PowerShell build script when upgrading Python. `native_adapters/NativeRequest.cs` is compiled with it. Existing read-only / Simulator2-only routes and transport protections remain; no PLC rule tables should be reintroduced here.
+[Program.cs](Program.cs) defines gateway configuration, native target constants, token handling and HTTP operations. [NativeRequest.cs](../native_adapters/NativeRequest.cs) owns the native request envelope compiled into the helper. Rebuild with [build_simulator_gateway.ps1](../tools/build_simulator_gateway.ps1) when updating the Python/native protocol.
+
+[plc.device_policy](../src/plc/device_policy.py) owns device and stimulus policy; the helper executes the prepared native plan. [Language boundaries](../docs/architecture/language-boundaries.md) define the Python/Core and C# adapter responsibilities. Physical PLC reading uses the [separate reader](../hardware_reader/README.md).

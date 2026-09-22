@@ -1,46 +1,23 @@
-# Workbench approvals and automatic saving
+# Workbench approvals
 
-Web user requests to generate or edit programs, import a GXW, convert to FBD or
-read a GX program now save a validated program immediately. The existing
-transaction service still checks candidate hashes, the confirmed specification,
-base-version binding and artifacts before activating an immutable version.
-There is no second "accept local version" interaction in the normal flow.
-Internal transaction records remain for audit, replay protection and recovery;
-old pending drafts can still be opened and saved explicitly. Failed validation
-and approach conflicts never become saved/active programs in any mode.
+## Local saving and external actions
 
-The workspace settings screen exposes three execution-consent modes:
+A directly requested Web generation, edit, GXW import, FBD conversion or GX read can save a validated local version through the existing transaction. The transaction checks the candidate, specification, base version and artifacts. Invalid candidates and conflicting proposals do not become active programs.
 
-- `ask` (default): explicit review of GX import, simulation and debug execution.
-- `auto`: deterministic delegation of version-bound simulation/debug plans;
-  standalone GX import still requires user review. It is not a second AI judge.
-- `full`: delegate all three existing external actions, after a specific settings
-  confirmation. It does not introduce arbitrary shell, file or real PLC writes.
+External actions use the workspace's approval policy:
 
-Direct UI local saves are independent of these external-action approvals.
-Connected HTTP Agent clients keep manual candidate approval under `ask`; under
-`auto`/`full` the user delegates those existing local tools as well. Standalone
-MCP retains its original tool registry and confirmation boundaries.
+| Mode | Execution consent |
+| --- | --- |
+| `ask` | Review GX import, simulation and debug actions individually |
+| `auto` | Delegate eligible version-bound simulation and debug actions; review standalone GX import |
+| `full` | Delegate the existing external action types after explicit settings confirmation |
 
-Policy changes use an expected revision, are written per workspace and cannot
-be changed by an Agent credential. Changes do not execute previously pending
-requests. A queued delegated action rechecks its policy revision and frozen
-proposal inputs before any external effect. Downgrading prevents an unstarted
-automatic action; it cannot undo an operation already in progress. No permission
-mode skips PLC validators, immutable input checks, model response validation or
-exclusive workspace/desktop locks.
+Policy definitions and the default are owned by [application.approval](../../src/application/approval.py). Connected Agent candidates use the same policy; standalone MCP returns confirmation-required proposals without executing them. Details are in [MCP](../integrations/mcp.md).
 
-Normal Windows startup selects only a workspace. The legacy `--read-only` /
-`-ReadOnly` flag remains an explicitly requested recovery mechanism, not a role
-picker. A random loopback session link opens automatically; Host/Origin/CSRF and
-cross-site request protections remain. These prevent unrelated websites from
-calling local APIs; they are not an operating-system security boundary against
-a process already running as the same Windows user.
+## Changes and queued work
 
-The project toolbar groups file exports, GX read/send, and utilities. CSV,
-comments, SVG, IR, JSON, ST and supported GXW artifacts use their actual manifest,
-not a claim that every mode can export every format. Exports are visible at the
-top and require no GX connection. One refresh icon also rebuilds ladder previews.
-Import/conversion/synchronization and history activation live in More. The
-header shows the current approval mode; only Settings can change it. Responsive
-controls wrap instead of being cropped by the side panels.
+Policy writes require the expected revision and an operator credential. Raising permissions does not execute old pending requests. Before an external effect, queued work checks the policy and frozen proposal inputs again. Lowering permissions stops an unstarted delegated action; it cannot undo an operation already in progress.
+
+Validation, artifact bindings and workspace/desktop locks apply in every mode. The ordinary Web CSV send also retains its manual-backup confirmation, described in [GX Works2 operations](../guides/gxworks2.md).
+
+HTTP session and request protections are documented in [HTTP reference](../integrations/http-api.md). Read-only startup is a recovery option, documented in [getting started](../guides/getting-started.md).

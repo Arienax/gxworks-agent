@@ -109,7 +109,7 @@ def _fragment_pattern(language):
 
 
 class LocalizedText(str):
-    """A string with its source template retained for live Qt retranslation."""
+    """A string with its source template retained for later presentation translation."""
 
     def __new__(cls, source, values=None):
         values = dict(values or {})

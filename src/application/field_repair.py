@@ -145,7 +145,7 @@ def _opcode_repair_candidates(observed, operands, plc_model):
     count = len(operands) if isinstance(operands, list) else 0
     allowed = []
     for mnemonic in generation_app_instr_mnemonics(plc_model):
-        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(mnemonic)
+        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(mnemonic, cpu=plc_model)
         if spec is not None and spec.accepts_arity(count):
             allowed.append(mnemonic)
     allowed_set = set(allowed)

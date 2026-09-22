@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace as S
 from concurrent.futures import ThreadPoolExecutor
+from threading import RLock
 import zipfile
 import pytest
 import shared.diagnostics as d
@@ -310,6 +311,12 @@ def test_concurrent_scopes_do_not_cross_jobs(tmp_path):
 # Context-audit projection is part of runtime diagnostic observation, not a
 # separate context-compilation contract.
 class _Manager:
+    def __init__(self):
+        self._record_lock = RLock()
+
+    def _load(self, job_id):
+        return {"id": job_id, "cancel_requested": False, "snapshot": {}}
+
     def emit(self, job_id, event_type, data):
         return {"job_id": job_id, "type": event_type, "data": data}
 

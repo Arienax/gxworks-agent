@@ -3,7 +3,6 @@ import os
 import sys
 import json
 import copy
-import shutil
 import tempfile
 
 from storage.credentials import (
@@ -24,31 +23,38 @@ class ModelConfigurationRequiredError(ValueError):
 
 
 def get_config_path():
-    """获取 config.json 的路径（兼容 PyInstaller 打包）"""
-    if getattr(sys, 'frozen', False):
-        base_dir = os.path.dirname(sys.executable)
-    else:
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base_dir, "config.json")
+    """Resolve stable user paths without file or credential access."""
+    from storage.user_data import config_path
+    return str(config_path())
+
+
+def _legacy_config_paths():
+    from pathlib import Path
+    if getattr(sys, "frozen", False):
+        return [Path(sys.executable).parent / "config.json"]
+    source = Path(__file__).resolve().parents[1]
+    return [source / "config.json", source.parent / "config.json"]
+
+
+def migrate_user_settings(*, create_default=False):
+    """Copy settings locations only; never normalize source profiles or keys."""
+    from pathlib import Path
+    from storage.user_data import config_path, prepare
+    target = Path(get_config_path())
+    sources = (_legacy_config_paths() if not os.environ.get("PLC_AI_CONFIG_PATH", "").strip()
+               and target.resolve() == config_path().resolve() else ())
+    return str(prepare(target, sources, template=resource_path("config.default.json"), create_default=create_default))
 
 
 def ensure_config_file():
-    """Create the editable external config from the bundled safe template."""
-    config_path = get_config_path()
-    if os.path.isfile(config_path):
-        return config_path
+    return migrate_user_settings(create_default=True)
 
-    template_path = resource_path("config.default.json")
-    if not template_path.is_file():
-        raise FileNotFoundError(f"找不到配置文件或默认模板: {config_path}")
 
-    try:
-        shutil.copyfile(str(template_path), config_path)
-    except OSError as error:
-        raise OSError(
-            f"无法在程序目录创建 config.json，请检查目录写入权限: {config_path}"
-        ) from error
-    return config_path
+def get_observations_path():
+    from pathlib import Path
+    from storage.user_data import OBSERVATIONS
+    migrate_user_settings()
+    return Path(get_config_path()).parent / OBSERVATIONS
 
 
 def _is_legacy_api_key(value):
@@ -60,24 +66,21 @@ def _is_legacy_api_key(value):
 
 
 def _write_json_atomic(config_path, config):
-    directory = os.path.dirname(config_path)
-    os.makedirs(directory, exist_ok=True)
-    handle, temporary_path = tempfile.mkstemp(
-        prefix="config-",
-        suffix=".tmp",
-        dir=directory,
-        text=True,
-    )
-    try:
-        with os.fdopen(handle, "w", encoding="utf-8") as stream:
-            json.dump(config, stream, ensure_ascii=False, indent=4)
-        os.replace(temporary_path, config_path)
-    except Exception:
+    from pathlib import Path
+    from storage.user_data import settings_lock, _fsync_directory, _resume
+    with settings_lock(config_path):
+        _resume(Path(config_path))
+        directory = str(Path(config_path).parent)
+        handle, temporary_path = tempfile.mkstemp(prefix="config-", suffix=".tmp", dir=directory)
         try:
-            os.unlink(temporary_path)
-        except OSError:
-            pass
-        raise
+            with os.fdopen(handle, "w", encoding="utf-8") as stream:
+                json.dump(config, stream, ensure_ascii=False, indent=4)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary_path, config_path)
+            _fsync_directory(directory)
+        finally:
+            Path(temporary_path).unlink(missing_ok=True)
 
 
 DEEPSEEK_PROFILE_ID = "deepseek-default"
@@ -245,6 +248,7 @@ DEFAULT_MODEL_PROFILES = (
 )
 
 
+
 def _default_profiles():
     return copy.deepcopy(list(DEFAULT_MODEL_PROFILES))
 
@@ -361,6 +365,11 @@ def _profile_from_legacy(config):
     selected = next(item for item in profiles if item["id"] == profile_id)
     selected["baseUrl"] = base_url
     selected["model"] = model
+    # A legacy model name is not an explicit choice of the preset's effort.
+    # Keep other compatibility defaults, then restore only saved tuning below.
+    from model_runtime.request_policy import without_workflow_effort
+    for layer in ("generationDefaults", "requestOverrides"):
+        selected[layer] = without_workflow_effort(selected.get(layer))
 
     template = config.get("request_template")
     if isinstance(template, dict):
@@ -381,6 +390,10 @@ def _profile_from_legacy(config):
                 continue
             if value == "{effort}":
                 continue
+            if key == "extra_body" and isinstance(value, dict):
+                value = copy.deepcopy(value)
+                if value.get("reasoning_effort") == "{effort}":
+                    value.pop("reasoning_effort")
             target = defaults if key in portable else overrides
             target[key] = copy.deepcopy(value)
         selected["generationDefaults"].update(defaults)
@@ -430,7 +443,7 @@ def load_full_config():
     """Load and, when necessary, atomically migrate the external config."""
     config_path = ensure_config_file()
 
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path, "r", encoding="utf-8-sig") as f:
         config = json.load(f)
 
     return _migrate_configuration(config_path, config)
@@ -452,6 +465,7 @@ def save_config(config: dict):
     if (profiles or active) and active not in {item["id"] for item in sanitized["modelProfiles"]}:
         raise ValueError("activeModelProfileId 未指向有效的模型 Profile。")
     sanitized["activeModelProfileId"] = active
+    migrate_user_settings(create_default=True)
     _write_json_atomic(config_path, sanitized)
 
 

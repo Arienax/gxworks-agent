@@ -255,6 +255,7 @@ class JobManager:
             from plc.specification.provenance import handoff_snapshot
             generation_handoff = handoff_snapshot(
                 project_confirmed_specification(confirmed_spec), stage="generate",
+                decision_receipt_id=project_snapshot.get("confirmed_decision_receipt_id"),
                 evidence={"stage": "generate", "status": "not_recorded", "records": []},
             )
         generation_handoff["confirmed_spec_sha256"] = (

@@ -331,7 +331,7 @@ class GXExecutionCoordinator:
             if unverified:
                 result.update(
                     status="unsupported", error_code="unverified_native_instruction",
-                    message="当前GX程序包含语义目录尚未覆盖的原生指令。Web暂不能接受此候选，请使用保留的Qt原生回读流程进行保真检查。",
+                    message="当前GX程序包含语义目录尚未覆盖的原生指令。Web暂不能接受此候选；请保留GX原工程，并使用独立原生CSV解析接口进行只读检查。",
                     findings=unverified,
                 )
                 return result

@@ -89,3 +89,7 @@ dist-web/
 # Model capability observations are local runtime data, not source files.
 model-observations.sqlite
 model-observations.sqlite-journal
+
+# Local offline evaluation tools (never runtime assets)
+.tools/context-eval/
+evals/context-replay/results/

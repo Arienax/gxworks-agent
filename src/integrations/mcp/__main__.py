@@ -91,7 +91,7 @@ def main(argv=None) -> int:
     if standalone and (_has_option(raw_args, "--service-url") or _has_option(raw_args, "--service-token-env") or args.check):
         parser.error("standalone mode cannot be combined with service connection/check options")
     if sys.version_info < (3, 10):
-        parser.error("MCP requires Python 3.10+ in a separate environment from the Win7 desktop")
+        parser.error("MCP requires Python 3.10+")
     logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="%(levelname)s %(name)s: %(message)s")
 
     try:

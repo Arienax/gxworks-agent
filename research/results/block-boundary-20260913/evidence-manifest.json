@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "scope": "Offline FX3U Structured Ladder/FBD native block-boundary matrix and isolated M1 mutation",
-  "archive": "research\\evidence\\gxw-block-boundary-20260913.zip",
+  "archive": "research/evidence/gxw-block-boundary-20260913.zip",
   "files": [
     {
       "member": "samples/A.gxw",

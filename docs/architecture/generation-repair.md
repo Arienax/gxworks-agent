@@ -1,45 +1,21 @@
-# Generation repair boundary
+# Generation repair boundaries
 
-The saved project, the unaccepted candidate, and a repair response are distinct
-objects. A `mode: partial` response during validation repair is applied to the
-current **unaccepted full candidate**, not to the last saved version. This also
-works on the first generation, when no saved version exists.
+The saved version, an unaccepted candidate and a repair response are separate objects. A partial validation repair applies to the current unaccepted full candidate, including during first generation. It must not use the last saved version as an unrelated repair base.
 
-The API prompt uses the existing `plc_generation_contract` schema. Public inputs
-such as `shared_inputs` cannot contain `parallel_block`; local parallel blocks
-belong in branch inputs. Structural repair does not guess contact polarity,
-rewrite priority logic, or replace failed programs with canned examples.
+## Validation profiles
 
-Pipeline:
+[GenerationWorkflow](../../src/application/generation.py) owns the generation pipeline and its validation profile. The confirmed-generation `generation_structural` path does not inherit the strict workflow's semantic retry loop. Retry counts, time budgets and repair transitions are implementation parameters in that class, rather than a universal promise for every entry point.
 
-1. Parse and check container shape before running compatibility normalizers.
-2. Preserve the materialized candidate before PLC hard validation.
-3. Try the existing deterministic repairs, then at most three model repairs.
-4. Apply a valid partial repair by unique rung ID, preserving untouched rungs,
-   order, and comments. Model repairs cannot add/delete/reorder rungs; a truncated
-   full response cannot masquerade as the entire repaired program.
-5. Revalidate the complete candidate. A later repair sees all prior accepted
-   repair changes and the newest diagnostic. There is a 240-second between-call
-   repair budget; each repair request is capped at a 120-second provider timeout.
-6. Build/validate the canonical PLC IR, then derive JSON, SVG, ST and CSV from it.
-   Only an independently reviewed proposal may become a local version. No GX
-   import, simulator operation, PLC write, or automatic approval is added.
+Shape parsing precedes compatibility normalization. Local normalizers may accept equivalent representations, but they do not change contact polarity, scan order or the selected control method. Failed candidates may be retained for inspection with their original validation status.
 
-Evidence-scoped and explicitly requested contract repairs retain their original
-scope restrictions. Contract-repair jobs do not gain hidden retries. Model
-response-acceptance rejection and transport errors are not structural retry
-signals. Cancellation is checked between work stages and repair calls.
+## Explicit repair
 
-Validation exhaustion is exposed as `generation_validation_failed`, with bounded
-schema locations, reason codes and repair counts. Provider failures use safe
-classifications such as `model_timeout`. Raw exception bodies, credentials and
-private paths are not copied into the diagnostics. HTTP, persisted job records,
-and SSE use the same public projection.
+[format_repair_response](../../src/application/format_patch_repair.py) applies the format-patch contract. [structural_repair_response](../../src/application/repair_policy.py) restricts structural repair against the baseline's semantics. [application.field_repair](../../src/application/field_repair.py) handles field-addressed repair requests.
 
-Regression coverage includes a 40-rung fixture with the reported invalid
-`rungs[36].shared_inputs[3].type = parallel_block` and a repaired rung 37 containing
-the three M20/M21/M22 priority branches. Tests exercise the real validation,
-IR, SVG, ST and CSV pipeline, using injected deterministic model responses.
-Browser tests use a mocked HTTP API. Neither proves an arbitrary model-generated
-program's functional correctness or hardware safety; native GX compilation and
-simulator/PLC acceptance remain separate checks.
+Repairs preserve unrelated rungs, order, comments, original amendment scope and frozen instruction semantics. The complete materialized candidate is checked again. An incomplete full response is not accepted as the entire program. Cancellation and provider failures retain their own outcomes instead of being treated as requests to redesign the program.
+
+## Outcomes and evidence
+
+A failed repair records its reason, affected location and available candidate; it does not activate a program or perform native execution. A successful candidate proceeds through [artifact delivery](generation-delivery.md) and the existing save transaction. GX operations still require the [approval policy](approval-modes.md).
+
+[test_contract_repair_planner.py](../../tests/test_contract_repair_planner.py), [test_format_patch_repair.py](../../tests/test_format_patch_repair.py) and [test_partial_repair_semantic_freeze.py](../../tests/test_partial_repair_semantic_freeze.py) own the corresponding invariants. Historical repair experiments are in the [process index](../process/README.md).

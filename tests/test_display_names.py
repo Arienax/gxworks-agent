@@ -1,9 +1,6 @@
 import os
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication
 
 from shared.display_names import (
     DisplayTextStream,
@@ -16,7 +13,6 @@ from shared.display_names import (
 )
 # These assertions intentionally exercise the detailed legacy table editor,
 # which the new review workbench now embeds rather than exposing on its facade.
-from ui.desktop.workbench.editor import RequirementReviewCard
 
 
 def test_function_style_identifier_is_presented_as_a_business_label():
@@ -111,62 +107,3 @@ def test_dotted_dependency_name_is_presented_as_a_readable_component():
     rendered = naturalize_display_text(message)
     assert "pydantic_core" not in rendered
     assert "API 运行组件" in rendered
-
-
-def test_review_card_displays_natural_names_but_collects_stable_values():
-    app = QApplication.instance() or QApplication([])
-    analysis = {
-        "summary": "function_1_A",
-        "missing_info": [
-            {
-                "id": "function_1_A",
-                "question": "function_1_A",
-                "options": ["manual_start_test"],
-                "default": "manual_start_test",
-                "required": False,
-                "source": "deterministic",
-            }
-        ],
-        "suggested_io": {
-            "M": {"M0": "function_1_A"},
-        },
-    }
-    card = RequirementReviewCard(
-        analysis,
-        "测试需求",
-        plc_model="FX3U",
-    )
-
-    parameter_row = next(
-        row
-        for row in range(card.parameter_table.rowCount())
-        if card.parameter_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
-        == "function_1_A"
-    )
-    assert card.parameter_table.item(parameter_row, 0).text() == "功能 1A"
-    assert card.parameter_table.item(parameter_row, 2).text() == "规则推导"
-    assert "manual_start_test" not in card.parameter_table.item(
-        parameter_row, 4
-    ).text()
-    collected_parameter = next(
-        item
-        for item in card._collect_parameters()
-        if item["name"] == "function_1_A"
-    )
-    assert collected_parameter["source"] == "deterministic"
-    assert "manual_start_test" in collected_parameter["note"]
-
-    io_row = next(
-        row
-        for row in range(card.io_table_widget.rowCount())
-        if card.io_table_widget.item(row, 1).text() == "M0"
-    )
-    assert card.io_table_widget.item(io_row, 2).text() == "功能 1A"
-    collected_io = next(
-        item for item in card._collect_io_table() if item["address"] == "M0"
-    )
-    assert collected_io["label"] == "function_1_A"
-    assert "function_1_A" not in card.raw_preview.toPlainText()
-
-    card.close()
-    app.processEvents()

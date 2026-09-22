@@ -1,4 +1,4 @@
-"""SFC requirement semantics, independent of Qt or a particular canvas."""
+"""SFC requirement semantics, independent of a particular canvas."""
 from __future__ import annotations
 
 
@@ -240,3 +240,57 @@ def flowchart_model(steps: list):
             edges.append(conn)
 
     return {"nodes": nodes, "edges": edges}
+
+
+def document_graph(document):
+    """Project a saved version-1 .sfc document into the existing graph input.
+
+    Preserve properties, geometry and unknown document fields in the source:
+    this operation only creates a detached projection and never edits a file.
+    This is a requirements format, not a native GX Works2 SFC program.
+    """
+    from copy import deepcopy
+    if not isinstance(document, dict) or document.get("version", 1) != 1:
+        raise ValueError("Unsupported SFC document version")
+    nodes = []
+    for block in document.get("blocks", []):
+        node = deepcopy(block)
+        node["id"] = block["temp_id"]
+        nodes.append(node)
+    edges = [{"source": edge["source_id"], "target": edge["target_id"]}
+             for edge in document.get("connections", [])]
+    ids = [node["id"] for node in nodes]
+    if len(set(ids)) != len(ids):
+        raise ValueError("Duplicate SFC block identity")
+    if any(edge[side] not in ids for edge in edges for side in ("source", "target")):
+        raise ValueError("SFC connection refers to a missing block")
+    return {"nodes": nodes, "edges": edges,
+            "io_config": deepcopy(document.get("io_config", {}))}
+
+
+def document_requirement(document, *, translate):
+    """Convert an existing .sfc document using the unchanged graph semantics."""
+    graph = document_graph(document)
+    return graph_requirement(graph["nodes"], graph["edges"], graph["io_config"], translate=translate)
+
+
+def main(argv=None):
+    """Read-only source utility: python -m plc.sfc control_flow.sfc."""
+    import argparse
+    import json
+    from pathlib import Path
+    from shared.i18n import tr
+    parser = argparse.ArgumentParser(description="Convert saved SFC requirements to text; no GX/PLC operations")
+    parser.add_argument("source", type=Path)
+    args = parser.parse_args(argv)
+    try:
+        document = json.loads(args.source.read_text(encoding="utf-8-sig"))
+        text = document_requirement(document, translate=tr)
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        parser.error(str(error))
+    print(text)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -13,7 +13,7 @@
       "recorded_observations": [
         {
           "path": "research/results/gxworks_validation.json",
-          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "sha256": "ad6bba6665fea1b60e1c72c0d31a4dc7cbf27c1d3a389238595fd5aca2486c90",
           "json_pointer": "/cases/undeclared",
           "status": "recorded-native-observation; not replayed by scanner"
         }
@@ -41,7 +41,7 @@
       "recorded_observations": [
         {
           "path": "research/results/gxworks_validation.json",
-          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "sha256": "ad6bba6665fea1b60e1c72c0d31a4dc7cbf27c1d3a389238595fd5aca2486c90",
           "json_pointer": "/cases/mixed_rejected",
           "status": "recorded-native-observation; not replayed by scanner"
         }
@@ -67,7 +67,7 @@
       "recorded_observations": [
         {
           "path": "research/results/gxworks_validation.json",
-          "sha256": "cd46fece335d5797498cf72f4aacbb87a68e616bf616624ec3ee2156fb376565",
+          "sha256": "ad6bba6665fea1b60e1c72c0d31a4dc7cbf27c1d3a389238595fd5aca2486c90",
           "json_pointer": "/cases/type_mismatch",
           "status": "recorded-native-observation; not replayed by scanner"
         }

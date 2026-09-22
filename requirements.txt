@@ -1,6 +1,5 @@
-PyQt6==6.11.0
-numpy==2.3.2
-openai==2.43.0
+# Headless Web/Core development and release tooling; no GUI framework.
+-r requirements/web.txt
+-r requirements/gxw-test.txt
 pytest==9.1.1
 pyinstaller==6.21.0
-pywinauto==0.6.9

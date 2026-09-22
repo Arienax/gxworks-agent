@@ -307,7 +307,7 @@ def test_chinese_fts_query_reaches_high_speed_counter_frequency_section():
     results = retrieve_knowledge(
         "高速计数器响应频率和综合频率",
         plc_model="FX3U",
-        task_type="analysis",
+        task_type="debug",
         top_k=5,
         char_budget=6200,
     )
@@ -342,7 +342,10 @@ def test_timer_time_base_query_prefers_ordinary_timer_device_section():
 
     assert results
     assert "Timer [T]" in results[0]["section"]
-    assert any("CASE_ID: timer_time_base_by_device_range" in item["text"] for item in results)
+    assert all(item.get("manual_type") != "debug_cases" for item in results)
+    debug = retrieve_knowledge("FX3U timer T0 K100 10 seconds time base", plc_model="FX3U",
+                               task_type="debug", top_k=5, char_budget=12000)
+    assert any("CASE_ID: timer_time_base_by_device_range" in item["text"] for item in debug)
 
 
 def test_m8013_clock_query_prefers_internal_clock_section():
@@ -518,17 +521,15 @@ def test_st_prompt_uses_only_the_selected_model_special_device_prefixes():
         plc_model="FX3U",
     )
 
-    assert "GX Works3" in fx5_prompt
-    assert "SM8002" in fx5_prompt
+    assert "FX5U" in fx5_prompt and "iQ-F" in fx5_prompt
+    assert "Never copy FX3U M8xxx/D83xx addresses into an FX5U project." in fx5_prompt
     assert not re.search(
         r"(?<![A-Za-z0-9_])M8\d{3}(?![A-Za-z0-9_])",
         fx5_prompt,
     )
-    assert "GX Works2" in fx3_prompt
-    assert re.search(
-        r"(?<![A-Za-z0-9_])M8002(?![A-Za-z0-9_])",
-        fx3_prompt,
-    )
+    assert "FX3U" in fx3_prompt
+    assert "SM8002" not in fx3_prompt
+    assert "FX5U/iQ-F" not in fx3_prompt
 
 
 def test_api_query_compaction_uses_values_not_json_field_names():

@@ -199,6 +199,27 @@ _CONTRACT_FIELDS.update({key: [None] for key in (
 _CONTRACT_FIELDS.update({key: [[None]] for key in (
     "any_of_opcode_groups", "any_of_structure_groups", "one_of_opcodes", "one_of_structures",
 )})
+_CONTRACT_FIELDS["instruction_instances"] = [{
+    "opcode": None,
+    "operands": [None],
+}]
+_IMPLEMENTATION_SEMANTIC_FIELDS = {
+    "kind": None,
+    "status": None,
+    "value": None,
+    "values": [None],
+}
+_EXPLICIT_USER_CONSTRAINT_FIELDS = {
+    **dict.fromkeys(("schema_version", "source")),
+    **{key: [None] for key in (
+        "required_opcodes", "forbidden_opcodes",
+        "required_devices", "forbidden_devices",
+    )},
+    "instruction_instances": [{
+        "opcode": None,
+        "operands": [None],
+    }],
+}
 # Opaque semantics remain visible to all generation adapters, but outside the
 # machine-enforced required/forbidden lists. No arbitrary metadata is exposed.
 _CONTRACT_FIELDS["unverified_constraints"] = {
@@ -237,7 +258,18 @@ EVIDENCE_FIELDS = {
                     "query_truncated", "reason")),
     "records": [EVIDENCE_RECORD_FIELDS],
     "omitted_ids": [None],
+    "failure": dict.fromkeys(("code", "error_type", "dependency")),
 }
+INTENT_CONTEXT_FIELDS = {
+    "schema_version": None,
+    "requests": [{
+        **dict.fromkeys(("id", "text", "source", "superseded_by", "text_sha256",
+                        "runtime_text_status", "duplicate_of")),
+        "absorbed_by_confirmed_fields": [None],
+    }],
+}
+
+# Legacy audit reader only. Never include this envelope in a model projection.
 ENGINEERING_CONTEXT_FIELDS = {
     "schema_version": None,
     "requests": [{
@@ -259,16 +291,20 @@ ENGINEERING_CONTEXT_FIELDS = {
 
 
 _SPEC_FIELDS = {
-    "engineering_context": ENGINEERING_CONTEXT_FIELDS,
+    "intent_context": INTENT_CONTEXT_FIELDS,
     **_HARDWARE_FIELDS,  # Legacy specs sometimes store the hardware profile inline.
     **dict.fromkeys(("schema_version", "summary", "user_notes", "scan_budget_ms", "scan_warning_ms")),
     "selected_approach": {
         **dict.fromkeys(("id", "approach_id", "name", "description", "generation_guide")),
+        "implementation_semantics": [_IMPLEMENTATION_SEMANTIC_FIELDS],
+        "explicit_user_constraints": _EXPLICIT_USER_CONSTRAINT_FIELDS,
         "generation_contract": _CONTRACT_FIELDS,
         "implementation_preferences": _CONTRACT_FIELDS,
     },
-    "parameters": [dict.fromkeys(("id", "name", "value", "note", "source"))],
+    "parameters": [dict.fromkeys(("id", "name", "value", "note", "source", "semantic_key", "value_kind", "unit"))],
     "io_table": [dict.fromkeys(("address", "kind", "label", "description", "source"))],
+    "io_bindings": [dict.fromkeys(("binding_id", "role", "kind", "address", "source_parameter_id",
+                                  "name", "active_level", "inactive_level", "label"))],
     "hardware_profile": _HARDWARE_FIELDS,
     "hardware_context": _HARDWARE_CONTEXT_FIELDS,
     "hardware_requirements": dict.fromkeys(("hardware_dependent", "vfd", "motion", "pulse", "analog", "serial")),
@@ -294,18 +330,32 @@ def _project(value, template):
     return None
 
 
+def intent_context(spec):
+    """Read explicit user intent, never reconstruct it from candidate prose."""
+    if not isinstance(spec, Mapping):
+        return {}
+    raw = spec.get("intent_context")
+    # Presence wins, including an explicit empty object. Do not resurrect an
+    # old request because the new intent happens to be empty.
+    if "intent_context" not in spec:
+        raw = spec.get("engineering_context")
+    result = _project(raw, INTENT_CONTEXT_FIELDS) if isinstance(raw, Mapping) else {}
+    if "requests" in result and not isinstance(result["requests"], list):
+        result["requests"] = []
+    return result
+
+
 def generation_specification(confirmed_spec: Any) -> dict | None:
     """Expose generation facts only; never normalize or alter the stored spec."""
 
     if not isinstance(confirmed_spec, Mapping):
         return None
     result = _project(confirmed_spec, _SPEC_FIELDS)
-    selected = result.get("selected_approach")
-    if isinstance(selected, Mapping):
-        from plc.specification.approach import normalize_generation_contract
-        contract = normalize_generation_contract(selected.get("generation_contract"), approach=selected)
-        if contract.get("unverified_constraints"):
-            selected["generation_contract"] = _project(contract, _CONTRACT_FIELDS)
+    # Compatibility is resolved once at this shared input boundary. Audit
+    # envelopes never become generation facts, even for a direct legacy caller.
+    intent = intent_context(confirmed_spec)
+    if intent or "intent_context" in confirmed_spec:
+        result["intent_context"] = intent
     # Review questions with no confirmed value are provenance/UI state, not
     # engineering facts. They may remain in the persisted specification, but
     # must not consume generation context or invite Agent B to invent an answer.

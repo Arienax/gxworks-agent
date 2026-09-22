@@ -23,7 +23,7 @@ from shared.i18n import language_scoped
 
 from plc.artifacts import render_candidate_artifacts
 from plc.errors import DebugLoopError
-from knowledge.retriever import retrieve_knowledge
+from knowledge.retriever import retrieve_fact_aware_knowledge
 from plc.ir import (
     PLCIRValidationError,
     apply_network_patch,
@@ -390,7 +390,7 @@ def build_failure_evidence(
             for item in excerpt["instructions"]
         )
     knowledge_query = "\n".join(item for item in query_parts if item)[:24_000]
-    lookup = retriever or retrieve_knowledge
+    lookup = retriever or retrieve_fact_aware_knowledge
     try:
         knowledge = list(
             lookup(

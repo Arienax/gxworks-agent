@@ -426,7 +426,7 @@ def _validate_writable_device(value, path, plc_model="FX3U"):
 def _validate_app_instruction_write_targets(
     opcode, operands, path, plc_model="FX3U"
 ):
-    spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode)
+    spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu=normalize_plc_model(plc_model))
     indexes = spec.write_indexes if spec is not None else ()
     for operand_idx in indexes:
         if operand_idx >= len(operands):
@@ -651,7 +651,7 @@ def _validate_element(
                 "be encoded as APP_INSTR",
             )
 
-        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode)
+        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu=normalize_plc_model(plc_model))
         if spec is None:
             if require_catalogued_instructions:
                 fail_opcode(

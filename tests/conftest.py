@@ -25,3 +25,22 @@ def reset_model_metadata_cache():
     module = sys.modules.get("application.model_detection")
     if module is not None:
         module._cache.clear()
+
+
+@pytest.fixture
+def gx_ready(monkeypatch):
+    """Provide a deterministic ready GX desktop only to tests that are not testing preflight."""
+    import application.execution as execution
+
+    monkeypatch.setattr(
+        execution,
+        "read_gx_environment",
+        lambda: {
+            "status": "ready",
+            "passed": True,
+            "desktop_execution_required": True,
+            "gx_works2_running": True,
+            "project_open": True,
+            "message": "GX Works2 已运行。",
+        },
+    )

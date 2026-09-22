@@ -276,3 +276,34 @@ def test_analysis_drops_model_invented_semantics_and_keeps_user_evidence():
     )
     assert evidenced["execution_semantics"][0]["semantic"] == "RISING_EDGE"
     assert evidenced["execution_semantics"][0]["devices"] == ["X0"]
+
+
+# Retained serialized SFC requirements, independent of the retired canvas.
+def test_saved_sfc_document_preserves_graph_properties_and_source():
+    from copy import deepcopy
+    from plc.sfc import document_graph, document_requirement, graph_requirement
+    from shared.i18n import tr
+    document = {"version": 1, "blocks": [
+        {"temp_id": 1, "type": "step", "x": 0, "y": 0, "label": "启动 Y0", "properties": {"output": "Y0"}},
+        {"temp_id": 2, "type": "transition", "x": 0, "y": 90, "label": "X1 到位"},
+        {"temp_id": 3, "type": "step", "x": 0, "y": 180, "label": "停止 Y0"},
+    ], "connections": [{"source_id": 1, "target_id": 2}, {"source_id": 2, "target_id": 3}],
+       "io_config": {}, "future_metadata": {"kept": True}}
+    before = deepcopy(document)
+    graph = document_graph(document)
+    text = document_requirement(document, translate=tr)
+    assert text == graph_requirement(graph["nodes"], graph["edges"], {}, translate=tr)
+    assert "启动 Y0" in text and "X1 到位" in text and "停止 Y0" in text
+    graph["nodes"][0]["properties"]["output"] = "Y7"
+    assert document == before
+
+
+def test_saved_sfc_cli_is_read_only(tmp_path, capsys):
+    import json
+    from plc.sfc import main
+    source = tmp_path / "control_flow.sfc"
+    source.write_text(json.dumps({"version": 1, "blocks": [{"temp_id": 1, "type": "step", "x": 0, "y": 0, "label": "Y0"}], "connections": []}), encoding="utf-8")
+    before = source.read_bytes()
+    assert main([str(source)]) == 0
+    assert "Y0" in capsys.readouterr().out
+    assert source.read_bytes() == before and list(tmp_path.iterdir()) == [source]

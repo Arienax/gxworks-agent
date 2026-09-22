@@ -21,7 +21,7 @@ class ProjectUpdate(Command):
     name: str | None = Field(default=None, min_length=1, max_length=160)
     plc_model: str | None = Field(default=None, max_length=32)
     target_mode: Literal["ladder", "st", "fbd"] | None = None
-    effort: Literal["low", "medium", "high"] | None = None
+    effort: Literal["low", "medium", "high"] | None = None  # deprecated, ignored
 
 
 class ActivateVersion(Command):

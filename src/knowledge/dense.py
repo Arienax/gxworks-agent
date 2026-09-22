@@ -162,7 +162,7 @@ def dense_model_info():
     return dict(model["metadata"]) if model else {}
 
 
-def dense_search(query, *, top_k=80, minimum_score=0.06):
+def dense_search(query, *, top_k=80, minimum_score=0.06, allowed_ids=None):
     """Return ``(chunk_id, cosine, rank)`` without touching SQLite."""
 
     model = _load_model()
@@ -185,6 +185,11 @@ def dense_search(query, *, top_k=80, minimum_score=0.06):
         return []
     projected /= norm
     scores = model["vectors"] @ projected
+    if allowed_ids is not None:
+        # Filter the full score vector before its top-k selection; an unrelated
+        # source cannot consume a semantic-recall slot.
+        allowed = np.array([str(identity) in allowed_ids for identity in model["chunk_ids"]], dtype=bool)
+        scores = np.where(allowed, scores, -np.inf)
     limit = max(0, min(int(top_k), int(scores.shape[0])))
     if limit <= 0:
         return []

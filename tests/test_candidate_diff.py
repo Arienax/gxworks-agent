@@ -217,7 +217,7 @@ def test_gx_read_candidate_gets_the_same_core_review_with_no_desktop_execution(t
 
 
 @pytest.mark.parametrize("action", ["gx_import", "simulation"])
-def test_execution_preview_uses_its_bound_program_artifacts_and_plan(tmp_path, action):
+def test_execution_preview_uses_its_bound_program_artifacts_and_plan(tmp_path, action, gx_ready):
     from test_workbench_service import _save_test_plan
     store = SessionStore(base_dir=tmp_path / "workspace", legacy_dir=tmp_path)
     project_id = store.create_project("Execution review")["id"]
@@ -229,6 +229,7 @@ def test_execution_preview_uses_its_bound_program_artifacts_and_plan(tmp_path, a
     try:
         proposal = service.execution_proposal({"action": action, "project_id": project_id,
             "version_id": base_id, "plan_id": plan_id, "request_id": "execute-reviewed-version"})
+        assert proposal["action"] == action
         active_id = _save(store, project_id, program=_program(input_address="X7"))
         assert store.get_project(project_id)["active_version_id"] == active_id != base_id
         preview = service.proposal_preview(proposal["id"])
@@ -243,7 +244,7 @@ def test_execution_preview_uses_its_bound_program_artifacts_and_plan(tmp_path, a
         service.close()
 
 
-def test_execution_preview_fails_when_its_registered_artifact_is_missing(tmp_path):
+def test_execution_preview_fails_when_its_registered_artifact_is_missing(tmp_path, gx_ready):
     store = SessionStore(base_dir=tmp_path / "workspace", legacy_dir=tmp_path)
     project_id = store.create_project("Missing preview artifact")["id"]
     base_id = _save(store, project_id, program=_program())
@@ -260,7 +261,7 @@ def test_execution_preview_fails_when_its_registered_artifact_is_missing(tmp_pat
         service.close()
 
 
-def test_execution_preview_http_contract_is_bound_to_proposal_not_selected_version(tmp_path):
+def test_execution_preview_http_contract_is_bound_to_proposal_not_selected_version(tmp_path, gx_ready):
     pytest.importorskip("fastapi", reason="HTTP review requires requirements-web.txt")
     pytest.importorskip("httpx", reason="HTTP review requires httpx")
     from fastapi.testclient import TestClient

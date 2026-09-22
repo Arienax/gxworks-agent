@@ -5,6 +5,9 @@ import copy
 import hashlib
 import json
 import re
+from functools import lru_cache
+
+from jsonschema import Draft202012Validator
 from plc.device_identity import canonical_device_map
 
 PROTOCOL_VERSION = "compact_ladder/1.1"
@@ -15,7 +18,7 @@ _MAX_DEPTH = 32
 
 class CompactProtocolError(ValueError):
     """A local, safe-to-classify protocol failure, never a provider failure."""
-    def __init__(self, message, *, reason="invalid_ladder_structure"):
+    def __init__(self, message, *, reason="invalid_ladder_structure", schema_keyword=None):
         # Do not echo model-controlled keys/opcodes through the UI.
         location = str(message).split(":", 1)[0]
         if re.fullmatch(r"r(?:\[\d+\]|\.(?:h|s|b|i|o|or))*", location):
@@ -23,8 +26,16 @@ class CompactProtocolError(ValueError):
         else:
             self.path = "content"
         self.reason = reason
+        schema_details = {
+            "required": "缺少必填字段", "type": "字段类型不符",
+            "additionalProperties": "存在未知字段", "minItems": "数组不能为空",
+            "minLength": "字符串不能为空", "maxLength": "字符串超过协议长度",
+            "anyOf": "输入结构不符合协议",
+        }
+        self.schema_keyword = schema_keyword if schema_keyword in schema_details else None
+        detail = schema_details.get(self.schema_keyword, "结构不完整或字段类型不符")
         self.diagnostic_id = hashlib.sha256(str(message).encode("utf-8")).hexdigest()[:16]
-        super().__init__("梯形图返回结构不完整或字段类型不符（" + self.path + "）。确认规格已保留。")
+        super().__init__("梯形图返回" + detail + "（" + self.path + "）。确认规格已保留。")
 
 
 def _unique_object(pairs):
@@ -72,6 +83,12 @@ def normalize_compact(value):
         elif isinstance(item, list):
             stack.extend((child, depth + 1) for child in item)
     result, changes = copy.deepcopy(value), []
+    # One observed field alias, never unwrap arbitrary objects or choose between
+    # competing representations. Full schema/PLC checks still run afterwards.
+    if isinstance(result, dict) and set(result) == {"root"} and isinstance(result["root"], list):
+        result = {"r": result["root"]}
+        changes.append({"rule": "root_field_alias", "path": "content.r",
+                        "from_field": "root", "to_field": "r"})
     if isinstance(result, dict) and isinstance(result.get("r"), list):
         for index, row in enumerate(result["r"]):
             if isinstance(row, dict) and "s" in row and row["s"] is None:
@@ -141,6 +158,51 @@ def compact_response_schema():
         "required": ["r"],
         "additionalProperties": False,
     }
+
+
+@lru_cache(maxsize=1)
+def _compact_validator():
+    # A private snapshot: callers of compact_response_schema cannot mutate it.
+    schema = compact_response_schema()
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema)
+
+
+def validate_compact_structure(value):
+    """Validate canonical wire structure; do not infer PLC semantics or coerce types."""
+    error = next(_compact_validator().iter_errors(value), None)
+    if error is None:
+        return
+    parts = list(error.absolute_path)
+    if error.validator == "required" and isinstance(error.instance, dict):
+        # Report the missing schema-owned field, not model-controlled error text.
+        missing = next((key for key in error.validator_value if key not in error.instance), None)
+        if missing is not None:
+            parts.append(missing)
+    path = ""
+    for part in parts:
+        path += f"[{part}]" if isinstance(part, int) else ("." if path else "") + str(part)
+    raise CompactProtocolError(f"{path}: schema {error.validator}", schema_keyword=error.validator)
+
+
+def _materialize_legacy_defaults(value):
+    """Keep previously supported omissions before applying the canonical schema.
+
+    h/s/i have always defaulted to null/[]/[] in the decoder. Explicit invalid
+    values are not replaced; required branches and outputs are never invented.
+    The caller already owns the detached copy made by normalize_compact.
+    """
+    if not isinstance(value, dict) or not isinstance(value.get("r"), list):
+        return
+    for row in value["r"]:
+        if not isinstance(row, dict):
+            continue
+        row.setdefault("h", None)
+        row.setdefault("s", [])
+        if isinstance(row.get("b"), list):
+            for branch in row["b"]:
+                if isinstance(branch, dict):
+                    branch.setdefault("i", [])
 
 
 def _simple_input(value, path):
@@ -218,38 +280,24 @@ def _confirmed_comments(projected):
 def expand_compact_ladder(compact, projected=None):
     """Deterministically expand Agent B's short protocol into ladder_v1."""
     compact, _changes = normalize_compact(compact)
-    if not isinstance(compact, dict) or set(compact) != {"r"}:
-        raise CompactProtocolError("compact ladder must contain only top-level field 'r'")
-    rows = compact.get("r")
-    if not isinstance(rows, list) or not rows:
-        raise CompactProtocolError("compact ladder requires at least one rung")
+    _materialize_legacy_defaults(compact)
+    validate_compact_structure(compact)
+    rows = compact["r"]
 
     rungs = []
     for rung_index, row in enumerate(rows, start=1):
         path = f"r[{rung_index - 1}]"
-        if not isinstance(row, dict) or not set(row).issubset({"h", "s", "b"}):
-            raise CompactProtocolError(f"{path}: invalid compact rung fields")
-        branches = row.get("b")
-        if not isinstance(branches, list) or not branches:
-            raise CompactProtocolError(f"{path}.b: requires at least one branch")
-        shared = row.get("s", [])
-        if not isinstance(shared, list):
-            raise CompactProtocolError(f"{path}.s: expected list")
-        header = row.get("h")
+        branches = row["b"]
+        shared = row["s"]
+        header = row["h"]
         if header is not None:
             header = _simple_input(header, f"{path}.h")
 
         expanded_branches = []
         for branch_index, branch in enumerate(branches, start=1):
             branch_path = f"{path}.b[{branch_index - 1}]"
-            if not isinstance(branch, dict) or not set(branch).issubset({"i", "o"}):
-                raise CompactProtocolError(f"{branch_path}: invalid compact branch fields")
-            inputs = branch.get("i", [])
-            outputs = branch.get("o")
-            if not isinstance(inputs, list):
-                raise CompactProtocolError(f"{branch_path}.i: expected list")
-            if not isinstance(outputs, list) or not outputs:
-                raise CompactProtocolError(f"{branch_path}.o: requires at least one output")
+            inputs = branch["i"]
+            outputs = branch["o"]
             expanded_branches.append({
                 "branch_id": branch_index,
                 "y_offset_level": branch_index - 1,
@@ -275,3 +323,38 @@ def expand_compact_ladder(compact, projected=None):
 
     return {"device_comments": _confirmed_comments(projected or {}), "rungs": rungs}
 
+
+def canonical_compact_example():
+    """One valid wire example; these example devices are not project allocations."""
+    return {"r": [{"h": None, "s": [], "b": [{"i": ["NO M0"], "o": ["COIL M1"]}]}]}
+
+
+def compact_protocol_prompt():
+    """Render required fields from the actual schema, not a second field list."""
+    schema = compact_response_schema()
+    rung = schema["properties"]["r"]["items"]
+    branch = rung["properties"]["b"]["items"]
+    return (
+        "\n# Compact wire representation " + PROTOCOL_VERSION + "\n"
+        + "顶层对象必填字段：" + "、".join(schema["required"]) + "（梯级数组）。\n"
+        + "每个梯级必填字段：" + "、".join(rung["required"]) + "。\n"
+        + "每个输出分支必填字段：" + "、".join(branch["required"]) + "。\n"
+        + "统一表示：h 无首触点时为 null；s 无公共串联输入时为 []；i 无分支输入时为 []。这些字段不省略。\n"
+        + "r 是梯级数组，b 是输出分支数组，i 本身是一维串联列表，o 是非空输出字符串数组。\n"
+        + "结构示例（不是本项目地址分配）：" + json.dumps(canonical_compact_example(), separators=(",", ":")) + "\n"
+        + "简单输入写 NO/NC/P/F 加地址；比较写前缀表达式，例如 >= D0 K1。\n"
+        + 'OR 只在 i 内用 {"or":[[简单输入,...],[简单输入,...]]}；子数组是串联支路，不嵌套 OR。\n'
+        + "标准输出：" + ", ".join(sorted(_TYPED_OUTPUTS)) + "；COIL/PLS/PLF 后接地址，TIMER/COUNTER 后接地址和设定值。\n"
+        + "其他输出直接写 opcode 与空格分隔的 operands，例如 MOV K1 D0。\n"
+        + "编号、布局和 device_comments 由本地补齐；仅输出协议 JSON。\n"
+    )
+
+
+def compact_capability_prompt(plc_model, confirmed_spec):
+    """Compatibility entry.
+
+    Instruction contracts are delivered once through structured PLC facts.
+    The compact wire protocol owns representation only and must not duplicate
+    registry/manual engineering facts into Agent B's prompt.
+    """
+    return ""

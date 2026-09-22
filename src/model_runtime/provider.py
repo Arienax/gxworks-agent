@@ -102,6 +102,8 @@ class Usage:
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
+    reasoning_tokens: Optional[int] = None
+    raw_usage: Mapping[str, Any] = field(default_factory=dict, repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -511,7 +513,23 @@ def _usage_event(value: Any) -> Optional[Usage]:
         total_tokens = input_tokens + output_tokens
     if not any((input_tokens, output_tokens, total_tokens)):
         return None
-    return Usage(input_tokens, output_tokens, total_tokens)
+    # Keep the provider's metering separately from canonical totals. In
+    # particular, absent reasoning usage is unknown, not zero or a text estimate.
+    details = _value(value, "completion_tokens_details", None) or _value(value, "output_tokens_details", None)
+    reasoning_tokens = _value(details, "reasoning_tokens", None)
+    if type(reasoning_tokens) is not int or reasoning_tokens < 0:
+        reasoning_tokens = None
+    if isinstance(value, Mapping):
+        raw_usage = copy.deepcopy(dict(value))
+    elif callable(getattr(value, "model_dump", None)):
+        raw_usage = value.model_dump(mode="json")
+    else:
+        raw_usage = {name: copy.deepcopy(_value(value, name)) for name in (
+            "prompt_tokens", "completion_tokens", "input_tokens", "output_tokens", "total_tokens")
+            if _value(value, name, None) is not None}
+        if reasoning_tokens is not None:
+            raw_usage["completion_tokens_details"] = {"reasoning_tokens": reasoning_tokens}
+    return Usage(input_tokens, output_tokens, total_tokens, reasoning_tokens, raw_usage)
 
 
 class OpenAICompatibleProvider:
@@ -826,6 +844,8 @@ class OpenAICompatibleProvider:
                 usage = _usage_event(_value(chunk, "usage", None))
                 if usage is not None:
                     latest_usage = usage
+                    if usage.reasoning_tokens is not None:
+                        reasoning_tokens = usage.reasoning_tokens
                 choices = list(_value(chunk, "choices", []) or [])
                 if not choices:
                     continue
@@ -833,10 +853,6 @@ class OpenAICompatibleProvider:
                 if finish is not None:
                     finish_reason = finish
                 choice_count = max(choice_count, len(choices))
-                details = _value(_value(chunk, "usage", None), "completion_tokens_details", None)
-                current_reasoning_tokens = _value(details, "reasoning_tokens", None)
-                if current_reasoning_tokens is not None:
-                    reasoning_tokens = current_reasoning_tokens
                 delta = _value(choices[0], "delta")
                 if delta is None:
                     continue

@@ -1,5 +1,8 @@
 export type Locale = "zh-CN" | "en" | "ja";
 const words: Record<string, [string, string]> = {
+  "原始用户意图": ["Original user intent", "元のユーザー要件"],
+  "确认前分析记录（仅审计）": ["Pre-confirmation analysis (audit only)", "確認前の分析記録（監査用）"],
+  "分析与检索记录单独保存，不进入生成规格；可从任务诊断 ZIP 追溯。": ["Analysis and retrieval records are stored separately, excluded from generation specifications, and traceable in the job diagnostics ZIP.", "分析・検索記録は別に保存され、生成仕様には含まれません。タスク診断 ZIP で追跡できます。"],
   "获取模型列表": ["Fetch model list", "モデル一覧を取得"],
   "快速能力检测": ["Quick capability check", "能力の簡易確認"],
   "深度参数扫描": ["Deep parameter scan", "パラメーター詳細スキャン"],
@@ -166,6 +169,10 @@ const words: Record<string, [string, string]> = {
   "工程操作": ["Project actions", "プロジェクト操作"],
   "导出文件": ["Export files", "ファイルのエクスポート"],
   "下载当前版本的文件": ["Download files from this version", "このバージョンのファイルを取得"],
+  "下载当前版本的文件和任务记录": ["Download version files and the selected job record", "バージョンファイルと選択中タスクの記録を取得"],
+  "下载当前任务记录": ["Download the selected job record", "選択中タスクの記録を取得"],
+  "任务交互与诊断 ZIP": ["Job interaction & diagnostics ZIP", "タスク対話・診断 ZIP"],
+  "当前任务": ["Selected job", "選択中のタスク"],
   "生成并通过校验后即可导出文件": ["Generate and validate a program to export files", "生成・検証後にファイルを書き出せます"],
   "更多": ["More", "その他"],
   "GX Works2 → 工作台": ["GX Works2 → workbench", "GX Works2 → ワークベンチ"],
