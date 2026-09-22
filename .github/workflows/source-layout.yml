@@ -68,7 +68,7 @@ jobs:
           fi
           git diff --name-only "$from"..."$to" > changed-files.txt
           {
-            { grep -E '^tests/test_.*\.py            if grep -Eq '^(resources/locales/|src/shared/i18n\.py$)' changed-files.txt; then
+            grep -E '^tests/test_.*\.py            if grep -Eq '^(resources/locales/|src/shared/i18n\.py$)' changed-files.txt; then
               printf '%s\n' tests/test_i18n.py
             fi
             if grep -Eq '^research/(audit_gxw_knowledge\.py|gxw_corpus\.py|corpus/|results/block-boundary-20260913/)' changed-files.txt; then
@@ -231,7 +231,7 @@ jobs:
           path: validation-context
           retention-days: 7
  changed-files.txt \
-                | grep -v -E '^tests/test_(source_layout|architecture_boundaries|plc_core_boundary)\.py            if grep -Eq '^(resources/locales/|src/shared/i18n\.py$)' changed-files.txt; then
+              | grep -v -E '^tests/test_(source_layout|architecture_boundaries|plc_core_boundary)\.py            if grep -Eq '^(resources/locales/|src/shared/i18n\.py$)' changed-files.txt; then
               printf '%s\n' tests/test_i18n.py
             fi
             if grep -Eq '^research/(audit_gxw_knowledge\.py|gxw_corpus\.py|corpus/|results/block-boundary-20260913/)' changed-files.txt; then
@@ -394,10 +394,9 @@ jobs:
           path: validation-context
           retention-days: 7
  \
-                || true; } \
               | while IFS= read -r path; do
                   if [[ -f "$path" ]]; then printf '%s\n' "$path"; fi
-                done
+                done || true
             if grep -Eq '^(resources/locales/|src/shared/i18n\.py$)' changed-files.txt; then
               printf '%s\n' tests/test_i18n.py
             fi
