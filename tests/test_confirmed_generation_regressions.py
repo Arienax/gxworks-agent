@@ -340,6 +340,7 @@ def test_pinned_reanalysis_preserves_instances_until_explicitly_cleared():
 def test_model_proposed_instruction_instance_stays_exact_as_selected_preference():
     from application.confirmed_generation_context import build_confirmed_generation_context
     from knowledge.structured_facts import structured_fact_targets
+    from plc.specification.approach import format_contract_summary
     from plc.specification.confirmed import confirm_context
 
     instance = {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
@@ -354,6 +355,9 @@ def test_model_proposed_instruction_instance_stays_exact_as_selected_preference(
     # hard constraint, but the selected implementation still retains it exactly.
     assert draft["selected_approach"]["generation_contract"]["instruction_instances"] == []
     assert draft["selected_approach"]["implementation_preferences"]["instruction_instances"] == [instance]
+    summary = format_contract_summary(draft["selected_approach"])
+    assert "方案指令实例" in summary
+    assert "SFTL M10 M100 K128 K1" in summary
 
     confirmed = confirm_context(draft)
     projected = _strict_generation_projection(confirmed)
