@@ -435,9 +435,14 @@
       "id": "fact_coverage_delivery",
       "category": "retrieval",
       "state": "enforced",
-      "owner": "knowledge.fact_coverage",
-      "summary": "Instruction, device and error fact requirements use one delivery-accounting layer that distinguishes candidate evidence, budget omission and unresolved coverage after final prompt compilation.",
+      "owner": "knowledge.fact_coverage.build_coverage",
+      "summary": "Arbitrary fact kinds use one domain-agnostic delivery-accounting core; structured instruction, device and error targets are adapters over that core, with final-prompt reconciliation.",
       "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/fact_coverage.py",
+          "symbol": "build_coverage"
+        },
         {
           "kind": "python_symbol",
           "path": "src/knowledge/fact_coverage.py",
@@ -472,6 +477,11 @@
           "kind": "contains",
           "path": "tests/test_structured_fact_lookup.py",
           "text": "test_device_context_uses_generic_fact_coverage"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_instruction_fact_context.py",
+          "text": "test_fact_coverage_core_is_domain_agnostic"
         }
       ],
       "tests": [

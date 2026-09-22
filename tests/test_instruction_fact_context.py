@@ -157,6 +157,36 @@ def test_generic_fact_coverage_accounts_for_instruction_device_and_error():
     }
 
 
+def test_fact_coverage_core_is_domain_agnostic():
+    from knowledge.fact_coverage import build_coverage
+
+    report = build_coverage(
+        [{
+            "id": "module:FX3U-4AD:buffer_memory",
+            "kind": "module",
+            "target": "FX3U-4AD",
+            "dimension": "buffer_memory",
+        }],
+        [{
+            "id": "module-source",
+            "fact_kind": "module",
+            "fact_target": "FX3U-4AD",
+            "fact_dimensions": ["buffer_memory"],
+            "text": "buffer memory definition",
+        }],
+        ["module-source"],
+    )
+    assert report["requirements"] == [{
+        "id": "module:FX3U-4AD:buffer_memory",
+        "kind": "module",
+        "target": "FX3U-4AD",
+        "dimension": "buffer_memory",
+        "candidate_source_ids": ["module-source"],
+        "source_ids": ["module-source"],
+        "status": "candidate_evidence",
+    }]
+
+
 def test_truncated_or_changed_blocks_never_count_as_delivered():
     row = _pack_target([source()], 2000)[0]
     block = core._format_result_block(row)

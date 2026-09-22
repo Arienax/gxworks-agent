@@ -113,8 +113,8 @@ def _recompute(report, included_ids):
     return report
 
 
-def build_fact_coverage(targets, records, included_ids=(), *, instruction_questions=None):
-    """Build one coverage receipt for instruction, device and error facts."""
+def build_coverage(requirements, records, included_ids=()):
+    """Account delivery for arbitrary fact kinds and caller-defined dimensions."""
     included = {str(value) for value in included_ids}
     descriptors = []
     for record in records or ():
@@ -122,15 +122,39 @@ def build_fact_coverage(targets, records, included_ids=(), *, instruction_questi
             descriptor = _record_descriptor(record, included)
             if descriptor is not None:
                 descriptors.append(descriptor)
-    requirements = fact_requirements(targets, instruction_questions=instruction_questions)
-    for requirement in requirements:
+    normalized = []
+    for raw in requirements or ():
+        if not isinstance(raw, Mapping):
+            continue
+        kind = str(raw.get("kind") or "").strip().lower()
+        target = str(raw.get("target") or "").strip().upper()
+        dimension = str(raw.get("dimension") or _DEFAULT_DIMENSION).strip()
+        if not kind or not target or not dimension:
+            continue
+        requirement = copy.deepcopy(dict(raw))
+        requirement.update(
+            kind=kind, target=target, dimension=dimension,
+            candidate_source_ids=[], source_ids=[], status="unresolved",
+        )
+        requirement.setdefault("id", ":".join((kind, target, dimension)))
         requirement["candidate_source_ids"] = [
-            record["id"] for record in descriptors if _requirement_matches_record(requirement, record)
+            record["id"] for record in descriptors
+            if _requirement_matches_record(requirement, record)
         ]
+        normalized.append(requirement)
     return _recompute({
         "version": _VERSION, "verification": "not_performed",
-        "records": descriptors, "requirements": requirements,
+        "records": descriptors, "requirements": normalized,
     }, included)
+
+
+def build_fact_coverage(targets, records, included_ids=(), *, instruction_questions=None):
+    """Adapt structured PLC targets into the domain-agnostic coverage core."""
+    return build_coverage(
+        fact_requirements(targets, instruction_questions=instruction_questions),
+        records,
+        included_ids,
+    )
 
 
 def reconcile_fact_coverage(report, included_ids):
