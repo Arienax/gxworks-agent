@@ -7,7 +7,22 @@ from collections.abc import Mapping
 from typing import Callable
 
 _TOKEN = re.compile(r"(?<![A-Za-z0-9_])[A-Za-z][A-Za-z0-9_]*(?![A-Za-z0-9_])")
-_DEVICE = re.compile(r"(?<![A-Za-z0-9_])(?:SM|SD|[XYMDTCSVZ])\d+(?![A-Za-z0-9_])", re.I)
+
+# Runtime target coverage for real device identities present in the structured
+# FX3 knowledge index. Multi-letter families must precede their single-letter
+# prefixes (TS before T, CC before C, ER before R).
+DEVICE_TARGET_PREFIXES = (
+    "ER", "SM", "SD", "TS", "TC", "CS", "CC",
+    "X", "Y", "M", "S", "T", "C", "D", "R", "V", "Z", "P", "I",
+)
+_DEVICE_PREFIX_PATTERN = "|".join(
+    re.escape(prefix)
+    for prefix in sorted(DEVICE_TARGET_PREFIXES, key=lambda value: (-len(value), value))
+)
+_DEVICE = re.compile(
+    rf"(?<![A-Za-z0-9_])(?:{_DEVICE_PREFIX_PATTERN})\d+(?![A-Za-z0-9_])",
+    re.I,
+)
 _NEGATED = re.compile(
     r"(?:不要|不用|不使用|不采用|没有(?!(?:[^，,。；;\n]{0,24})(?:型号|参数|地址|信息))|无需|不需要|不涉及|不包含|不是|不比较|不讨论|禁止|without\b|do not\b|don't\b|no\b)"
     r"(?:(?!改用|改为|改成|而是|但是|\bbut\b|\binstead\b)[^，,。；;\n])*", re.I,
