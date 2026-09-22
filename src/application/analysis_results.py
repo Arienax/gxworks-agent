@@ -174,7 +174,6 @@ def _apply_explicit_user_constraints(result, user_text, plc_model, confirmed_spe
             ):
                 contract[key] = copy.deepcopy(merged[key])
             approach["generation_contract"] = contract
-            approach["explicit_user_constraints"] = merged
         approaches.append(approach)
 
     result["approaches"] = approaches

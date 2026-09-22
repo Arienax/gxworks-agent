@@ -19,7 +19,7 @@ approaches 每项含 approach_id、name、description、pros、cons、generation
 # Implementation semantics
 Agent A 只负责需求、控制结构、I/O/参数缺口和方案边界；原始用户请求由应用另行保留。
 implementation_semantics 只允许结构语义：{"kind":"structure","status":"required|forbidden|any_of","value":"..."}；any_of 用 values，结构名只能来自 Core 词表。不要输出 opcode、operands、device、instruction_instance、generation_contract 或 explicit_user_constraints。
-用户写死的低层约束由 Core 从原文抽取；其余具体指令、操作数和内部 M/D/T/C 分配全部留给 Agent B。
+用户写死的低层约束与完整操作数由 Core 从原文抽取；其余具体指令、操作数和内部 M/D/T/C 分配全部留给 Agent B。
 generation_guide 只写其他结构化字段无法表达的方案级差异；没有这种差异就用空字符串。不规划梯级或具体指令。
 引用检索事实时保留 source ID；来源元数据由应用记录，不生成 engineering_context、intent_context 或 decision_receipt。
 

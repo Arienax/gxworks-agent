@@ -138,15 +138,15 @@ def extract_explicit_user_constraints(text, plc_model="FX3U"):
         directive = _directive_kind(source, match.start())
         tail = source[match.end():]
         tokens = _operand_tokens(tail)
-        fixed_arity = (
+        operand_count = (
             spec.min_operands
             if spec.min_operands is not None
             and spec.min_operands == spec.max_operands
-            else None
+            else len(spec.operands) if spec.operands else None
         )
         instance = None
-        if fixed_arity is not None and fixed_arity > 0 and len(tokens) >= fixed_arity:
-            operands = [token.strip("()（）[]{}:：;；。") for token in tokens[:fixed_arity]]
+        if operand_count is not None and operand_count > 0 and len(tokens) >= operand_count:
+            operands = [token.strip("()（）[]{}:：;；。") for token in tokens[:operand_count]]
             if all(_OPERAND.fullmatch(token) for token in operands):
                 raw_end = match.end()
                 cursor = source[match.end():]
@@ -155,9 +155,13 @@ def extract_explicit_user_constraints(text, plc_model="FX3U"):
                 for token_match in re.finditer(r"[^\s,，]+", cursor):
                     found += 1
                     consumed = token_match.end()
-                    if found == fixed_arity:
+                    if found == operand_count:
                         break
                 raw_end += consumed
+                # Operands belong to this instruction mention, even when the
+                # mention is only comparative. Do not duplicate them as
+                # standalone required_devices.
+                instance_spans.append((match.start(), raw_end))
                 prefix, sentence = _directive_context(source, match.start())
                 explicitly_fixed = directive == "required" or (
                     not _COMPARISON.search(sentence)
@@ -169,7 +173,6 @@ def extract_explicit_user_constraints(text, plc_model="FX3U"):
                     constraints["instruction_instances"].append(instance)
                     if opcode not in constraints["required_opcodes"]:
                         constraints["required_opcodes"].append(opcode)
-                    instance_spans.append((match.start(), raw_end))
         if instance is not None:
             continue
         if directive == "forbidden":
