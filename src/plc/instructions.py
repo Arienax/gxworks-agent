@@ -78,6 +78,40 @@ class OperandSpec:
 
 
 @dataclass(frozen=True)
+class CompletionSemantics:
+    device: str
+    placement: str = "same_rung_parallel_branch"
+
+
+@dataclass(frozen=True)
+class PulseOutputSemantics:
+    frequency_operand_indexes: Tuple[int, ...] = ()
+    pulse_output_operand_index: int = 0
+    direction_output_operand_index: Optional[int] = None
+
+
+@dataclass(frozen=True)
+class NumericOperandBoundary:
+    operand_index: int
+    minimum: Optional[int] = None
+    maximum: Optional[int] = None
+    absolute: bool = False
+    unit: str = ""
+    label: str = "operand"
+
+
+@dataclass(frozen=True)
+class DisjointBitRangeBoundary:
+    source_operand_index: int
+    destination_operand_index: int
+    destination_length_operand_index: int
+    source_length_operand_index: int
+    same_device_prefix_only: bool = True
+    error_code: str = ""
+
+
+
+@dataclass(frozen=True)
 class InstructionSpec:
     mnemonic: str
     vendor: str = "mitsubishi"
@@ -100,6 +134,11 @@ class InstructionSpec:
     contract_sources: Tuple[Mapping[str, Any], ...] = ()
     execution_form: Optional[str] = None
     instruction_width: Optional[int] = None
+    completion: Optional[CompletionSemantics] = None
+    pulse_output: Optional[PulseOutputSemantics] = None
+    numeric_operand_boundaries: Tuple[NumericOperandBoundary, ...] = ()
+    disjoint_bit_ranges: Tuple[DisjointBitRangeBoundary, ...] = ()
+    cpu_replacements: Tuple[Tuple[str, str], ...] = ()
 
     def contract_coverage(self) -> Dict[str, str]:
         declared = {
@@ -109,10 +148,15 @@ class InstructionSpec:
             "operand_types": bool(self.operands) and all(o.data_type != "any" for o in self.operands),
             "device_classes": bool(self.operands) and all(o.device_prefixes for o in self.operands),
             "form_identity": bool(self.mnemonic),
-            "cpu_applicability": bool(self.cpu_support), "hardware_applicability": False,
-            "execution_form": bool(self.execution_form), "instruction_width": self.instruction_width is not None,
-            "execution_conditions": False, "completion_ownership": False,
-            "numeric_and_memory_boundaries": False,
+            "cpu_applicability": bool(self.cpu_support),
+            "hardware_applicability": self.pulse_output is not None,
+            "execution_form": bool(self.execution_form),
+            "instruction_width": self.instruction_width is not None,
+            "execution_conditions": False,
+            "completion_ownership": self.completion is not None,
+            "numeric_and_memory_boundaries": bool(
+                self.numeric_operand_boundaries or self.disjoint_bit_ranges
+            ),
         }
         return {key: "source_verified" if key in self.verified_fields else
                 "declared_unverified" if value else "unresolved"
@@ -236,6 +280,13 @@ class InstructionSpec:
         if self.max_operands is not None and count > self.max_operands:
             return False
         return True
+
+    def replacement_for_cpu(self, cpu: Optional[str]) -> str:
+        model = str(cpu or "").strip().upper()
+        for target_cpu, replacement in self.cpu_replacements:
+            if target_cpu == model:
+                return replacement
+        return ""
 
     @property
     def write_indexes(self) -> Tuple[int, ...]:
@@ -469,6 +520,187 @@ class InstructionRegistry:
                     execution_form=execution, instruction_width=width, contract_sources=tuple(evidence))
         self._cpu_contracts.update(pending)
 
+    def load_capability_contract(self, path: Path) -> None:
+        """Overlay source-backed instruction semantics for one exact CPU/form."""
+
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if (
+            not isinstance(payload, dict)
+            or payload.get("schema_version") != 1
+            or not isinstance(payload.get("entries"), list)
+        ):
+            raise ValueError("Unsupported instruction capability contract")
+        vendor = str(payload.get("vendor") or "mitsubishi").strip().lower()
+        allowed_verified = {
+            "cpu_applicability",
+            "hardware_applicability",
+            "completion_ownership",
+            "numeric_and_memory_boundaries",
+        }
+
+        def optional_index(value, label):
+            if value is None:
+                return None
+            if type(value) is not int or value < 0:
+                raise ValueError(f"Invalid {label}")
+            return value
+
+        for row in payload["entries"]:
+            if not isinstance(row, Mapping):
+                raise ValueError("Invalid instruction capability entry")
+            cpu = str(row.get("cpu") or "").strip().upper()
+            forms = row.get("forms")
+            if not cpu or not isinstance(forms, list) or not forms:
+                raise ValueError("Capability entry requires cpu and forms")
+            completion = None
+            raw_completion = row.get("completion")
+            if raw_completion is not None:
+                if not isinstance(raw_completion, Mapping):
+                    raise ValueError("Invalid completion semantics")
+                device = str(raw_completion.get("device") or "").strip().upper()
+                placement = str(
+                    raw_completion.get("placement") or "same_rung_parallel_branch"
+                ).strip()
+                if not device or placement != "same_rung_parallel_branch":
+                    raise ValueError("Unsupported completion semantics")
+                completion = CompletionSemantics(device=device, placement=placement)
+
+            pulse_output = None
+            raw_pulse = row.get("pulse_output")
+            if raw_pulse is not None:
+                if not isinstance(raw_pulse, Mapping):
+                    raise ValueError("Invalid pulse-output semantics")
+                frequencies = raw_pulse.get("frequency_operand_indexes") or []
+                if (
+                    not isinstance(frequencies, list)
+                    or any(type(value) is not int or value < 0 for value in frequencies)
+                ):
+                    raise ValueError("Invalid pulse frequency indexes")
+                output_index = optional_index(
+                    raw_pulse.get("pulse_output_operand_index"),
+                    "pulse output operand index",
+                )
+                if output_index is None:
+                    raise ValueError("Pulse output operand index is required")
+                pulse_output = PulseOutputSemantics(
+                    frequency_operand_indexes=tuple(frequencies),
+                    pulse_output_operand_index=output_index,
+                    direction_output_operand_index=optional_index(
+                        raw_pulse.get("direction_output_operand_index"),
+                        "direction output operand index",
+                    ),
+                )
+
+            numeric = []
+            for boundary in row.get("numeric_operand_boundaries") or []:
+                if not isinstance(boundary, Mapping):
+                    raise ValueError("Invalid numeric operand boundary")
+                operand_index = optional_index(
+                    boundary.get("operand_index"), "numeric operand index"
+                )
+                if operand_index is None:
+                    raise ValueError("Numeric operand index is required")
+                minimum = boundary.get("minimum")
+                maximum = boundary.get("maximum")
+                if minimum is not None and type(minimum) is not int:
+                    raise ValueError("Invalid numeric minimum")
+                if maximum is not None and type(maximum) is not int:
+                    raise ValueError("Invalid numeric maximum")
+                numeric.append(
+                    NumericOperandBoundary(
+                        operand_index=operand_index,
+                        minimum=minimum,
+                        maximum=maximum,
+                        absolute=bool(boundary.get("absolute", False)),
+                        unit=str(boundary.get("unit") or ""),
+                        label=str(boundary.get("label") or "operand"),
+                    )
+                )
+
+            disjoint = []
+            for boundary in row.get("disjoint_bit_ranges") or []:
+                if not isinstance(boundary, Mapping):
+                    raise ValueError("Invalid disjoint bit-range boundary")
+                indexes = [
+                    optional_index(boundary.get(name), name)
+                    for name in (
+                        "source_operand_index",
+                        "destination_operand_index",
+                        "destination_length_operand_index",
+                        "source_length_operand_index",
+                    )
+                ]
+                if any(value is None for value in indexes):
+                    raise ValueError("Disjoint bit-range indexes are required")
+                disjoint.append(
+                    DisjointBitRangeBoundary(
+                        source_operand_index=indexes[0],
+                        destination_operand_index=indexes[1],
+                        destination_length_operand_index=indexes[2],
+                        source_length_operand_index=indexes[3],
+                        same_device_prefix_only=bool(
+                            boundary.get("same_device_prefix_only", True)
+                        ),
+                        error_code=str(boundary.get("error_code") or ""),
+                    )
+                )
+
+            replacement_opcode = str(row.get("unsupported_replacement") or "").strip().upper()
+            verified = row.get("verified_fields") or []
+            if (
+                not isinstance(verified, list)
+                or any(item not in allowed_verified for item in verified)
+            ):
+                raise ValueError("Invalid capability verified_fields")
+            sources = row.get("sources") or []
+            if not isinstance(sources, list) or any(
+                not isinstance(item, Mapping) for item in sources
+            ):
+                raise ValueError("Invalid capability sources")
+
+            for raw_opcode in forms:
+                opcode = str(raw_opcode or "").strip().upper()
+                if not opcode or opcode != raw_opcode:
+                    raise ValueError("Invalid capability opcode")
+                base = self.resolve(opcode, cpu=cpu) or self.resolve(opcode)
+                if base is None:
+                    raise ValueError("Unknown capability target: " + opcode)
+                key = (vendor, opcode, cpu)
+                current = self._cpu_contracts.get(key, base)
+                replacements = dict(current.cpu_replacements)
+                if replacement_opcode:
+                    replacements[cpu] = replacement_opcode
+                merged_sources = [
+                    *current.contract_sources,
+                    *(dict(source) for source in sources),
+                ]
+                deduped_sources = []
+                seen_sources = set()
+                for source in merged_sources:
+                    marker = json.dumps(dict(source), ensure_ascii=False, sort_keys=True)
+                    if marker not in seen_sources:
+                        seen_sources.add(marker)
+                        deduped_sources.append(dict(source))
+                self._cpu_contracts[key] = replace(
+                    current,
+                    mnemonic=opcode,
+                    completion=completion if raw_completion is not None else current.completion,
+                    pulse_output=pulse_output if raw_pulse is not None else current.pulse_output,
+                    numeric_operand_boundaries=(
+                        tuple(numeric) if "numeric_operand_boundaries" in row
+                        else current.numeric_operand_boundaries
+                    ),
+                    disjoint_bit_ranges=(
+                        tuple(disjoint) if "disjoint_bit_ranges" in row
+                        else current.disjoint_bit_ranges
+                    ),
+                    cpu_replacements=tuple(sorted(replacements.items())),
+                    verified_fields=tuple(dict.fromkeys([
+                        *current.verified_fields, *verified
+                    ])),
+                    contract_sources=tuple(deduped_sources),
+                )
+
     def describe_contract(self, mnemonic: Any, cpu: Optional[str] = None) -> Dict[str, Any]:
         """One compact Core view for analysis, generation, MCP and diagnostics."""
         form = self.resolve_form(mnemonic, cpu=cpu)
@@ -482,6 +714,41 @@ class InstructionRegistry:
                 "min_operands": spec.min_operands, "max_operands": spec.max_operands,
                 "native_operand_order": list(spec.native_operand_order),
                 "execution_form": spec.execution_form, "instruction_width": spec.instruction_width,
+                "completion": (
+                    {"device": spec.completion.device, "placement": spec.completion.placement}
+                    if spec.completion else None
+                ),
+                "pulse_output": (
+                    {
+                        "frequency_operand_indexes": list(spec.pulse_output.frequency_operand_indexes),
+                        "pulse_output_operand_index": spec.pulse_output.pulse_output_operand_index,
+                        "direction_output_operand_index": spec.pulse_output.direction_output_operand_index,
+                    }
+                    if spec.pulse_output else None
+                ),
+                "numeric_operand_boundaries": [
+                    {
+                        "operand_index": item.operand_index,
+                        "minimum": item.minimum,
+                        "maximum": item.maximum,
+                        "absolute": item.absolute,
+                        "unit": item.unit,
+                        "label": item.label,
+                    }
+                    for item in spec.numeric_operand_boundaries
+                ],
+                "disjoint_bit_ranges": [
+                    {
+                        "source_operand_index": item.source_operand_index,
+                        "destination_operand_index": item.destination_operand_index,
+                        "destination_length_operand_index": item.destination_length_operand_index,
+                        "source_length_operand_index": item.source_length_operand_index,
+                        "same_device_prefix_only": item.same_device_prefix_only,
+                        "error_code": item.error_code,
+                    }
+                    for item in spec.disjoint_bit_ranges
+                ],
+                "cpu_replacements": dict(spec.cpu_replacements),
                 "verified_fields": list(spec.verified_fields),
                 "unverified_fields": [key for key, value in coverage.items() if value != "source_verified"],
                 "operand_annotations": [{"name": o.name, "role": o.role.value,
@@ -649,6 +916,9 @@ def load_default_instruction_registry() -> InstructionRegistry:
             promotions = directory / "fx3u_contract_promotions.json"
             if promotions.is_file():
                 registry.load_contract_promotions(promotions)
+            capabilities = directory / "instruction_capabilities.json"
+            if capabilities.is_file():
+                registry.load_capability_contract(capabilities)
             return registry
     searched = "\n - ".join(str(item) for item in _candidate_catalog_directories())
     raise RuntimeError(
@@ -704,12 +974,16 @@ __all__ = [
     "GENERATION_FORBIDDEN_APP_INSTR_CATEGORIES",
     "GENERATION_TYPED_OUTPUT_OPCODES",
     "generation_app_instr_mnemonics",
+    "CompletionSemantics",
+    "DisjointBitRangeBoundary",
     "InstructionCategory",
     "InstructionRegistry",
     "InstructionResolution",
     "InstructionSpec",
+    "NumericOperandBoundary",
     "OperandRole",
     "OperandSpec",
+    "PulseOutputSemantics",
     "SemanticKind",
     "catalogued_read_write_indexes",
     "catalogued_write_indexes",
