@@ -30,9 +30,6 @@ enforces the manifest on pull requests.
 The current manifest intentionally tracks gaps that should not be hidden by a
 passing broad regression suite:
 
-- verified instruction contract promotions remain authoritative in
-  `plc.instructions`, but the direct structured fact record does not yet merge
-  `InstructionRegistry.describe_contract()`;
 - device canonical identity is owned by `plc.device_identity`, while direct
   structured device lookup does not yet canonicalize through that owner;
 - structured device records support more families than the current target
