@@ -170,6 +170,87 @@ def retrieve_design_knowledge(
     )
 
 
+
+def retrieve_fact_aware_knowledge(
+    query,
+    plc_model="FX3U",
+    task_type="analysis",
+    top_k=5,
+    char_budget=6000,
+    source_lanes=None,
+):
+    """Return row results with exact PLC identities resolved before broad recall.
+
+    This is the row-oriented entry point for agent/manual-search tools. Explicit
+    instructions, devices and error codes are owned by structured tables.
+    BM25/LSA sees only the remaining prose and cannot displace those exact rows.
+    """
+    from knowledge.scope import retrieval_plan, filter_records
+    from knowledge.structured_facts import (
+        exclude_structured_target_hits,
+        resolve_device_records,
+        resolve_error_records,
+        resolve_instruction_records,
+        structured_fact_targets,
+        without_structured_targets,
+    )
+
+    try:
+        normalized_top_k = max(0, min(_core._MAX_TOP_K, int(top_k)))
+        normalized_budget = max(0, int(char_budget))
+    except (TypeError, ValueError):
+        return []
+    if not normalized_top_k or not normalized_budget:
+        return []
+
+    task = _core._normalize_text(task_type).casefold() or "analysis"
+    plan = retrieval_plan(query, task)
+    permitted = set(plan["source_lanes"])
+    lanes = tuple(sorted(
+        permitted if source_lanes is None else permitted.intersection(source_lanes)
+    ))
+    if not lanes:
+        return []
+
+    targets = structured_fact_targets(query)
+    direct = [
+        *resolve_instruction_records(
+            targets.get("instructions") or (),
+            plc_model=plc_model,
+            task_type=task,
+        ),
+        *resolve_device_records(
+            targets.get("devices") or (),
+            plc_model=plc_model,
+            task_type=task,
+        ),
+        *resolve_error_records(
+            targets.get("errors") or (),
+            plc_model=plc_model,
+            task_type=task,
+        ),
+    ]
+    direct = filter_records(direct, lanes)
+
+    residual = without_structured_targets(query, targets)
+    broad = retrieve_knowledge(
+        residual,
+        plc_model=plc_model,
+        task_type=task,
+        top_k=min(_core._MAX_TOP_K, max(12, normalized_top_k * 3)),
+        char_budget=sys.maxsize,
+        source_lanes=lanes,
+    ) if plan["facts"] and residual.strip() else []
+    broad = filter_records(exclude_structured_target_hits(broad, targets), lanes)
+
+    # Exact rows are deliberately first. Final budget/top-k packing is shared
+    # with the legacy row API, but no raw score comparison crosses this boundary.
+    return _core._select_with_budget(
+        [*direct, *broad],
+        normalized_top_k,
+        normalized_budget,
+    )
+
 def build_knowledge_context(
     query, plc_model="FX3U", task_type="generate", top_k=5, char_budget=6000,
     token_budget=None, include_design=False, design_query=None,
@@ -362,4 +443,4 @@ def __getattr__(name):
     return getattr(_core, name)
 
 
-__all__ = ["retrieve_knowledge", "retrieve_design_knowledge", "build_knowledge_context"]
+__all__ = ["retrieve_knowledge", "retrieve_fact_aware_knowledge", "retrieve_design_knowledge", "build_knowledge_context"]
