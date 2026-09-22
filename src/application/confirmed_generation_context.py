@@ -187,6 +187,8 @@ def build_confirmed_generation_context(
     # this application-owned audit intact without changing stored PLC specs.
     if isinstance(manifest.get("instruction_facts"), dict):
         handoff["instruction_facts"] = copy.deepcopy(manifest["instruction_facts"])
+    if isinstance(manifest.get("structured_facts"), dict):
+        handoff["structured_facts"] = copy.deepcopy(manifest["structured_facts"])
     handoff.update(copy.deepcopy(compiled.provenance_receipt))
     handoff["budget_report"] = copy.deepcopy(compiled.budget_report)
     # This receipt identifies the policy, not a claimed reduction in model tokens.
