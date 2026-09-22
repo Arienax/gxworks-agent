@@ -258,6 +258,14 @@ def test_device_aliases_do_not_duplicate_structured_records():
     assert {row["structured_fact_target"] for row in rows} == {"M8029"}
 
 
+def test_device_canonical_identity_capability_is_enforced():
+    from tools.audit_capability_coverage import audit_coverage
+
+    report = audit_coverage()
+    states = {row["id"]: row["state"] for row in report["capabilities"]}
+    assert states["device_canonical_identity"] == "enforced"
+
+
 def test_exact_error_is_resolved_from_error_records():
     path = _bundled_index()
     with sqlite3.connect(path) as connection:
