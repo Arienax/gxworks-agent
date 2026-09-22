@@ -1,8 +1,6 @@
 name: Source Layout Validation
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
     paths:
@@ -14,13 +12,22 @@ on:
       - 'packaging/**'
       - 'resources/**'
       - 'research/**'
+      - 'web/**'
       - 'requirements.txt'
       - 'requirements/**'
-      - '.github/workflows/source-layout.yml'
+      - '.github/workflows/**'
+  push:
+    branches: [main]
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: source-layout-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   regression:
@@ -31,13 +38,36 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
           lfs: true
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements.txt
       - name: Install headless test dependencies
         run: python -m pip install -r requirements.txt
+      - name: Fast PR validation
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          python -m compileall -q src tests
+          python -m pytest -q tests/test_source_layout.py tests/test_architecture_boundaries.py tests/test_plc_core_boundary.py
+          git diff --name-only "$BASE_SHA"...HEAD > changed-files.txt
+          mapfile -t changed_tests < <(
+            grep -E '^tests/test_.*\.py$' changed-files.txt               | grep -v -E '^tests/test_(source_layout|architecture_boundaries|plc_core_boundary)\.py$'               | while IFS= read -r path; do
+                  if [[ -f "$path" ]]; then printf '%s\n' "$path"; fi
+                done
+          )
+          if (( ${#changed_tests[@]} )); then
+            python -m pytest -q "${changed_tests[@]}"
+          fi
+          python scripts/mcp_smoke.py
       - name: Compile and run the complete suite
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
@@ -45,18 +75,20 @@ jobs:
           python -m compileall -q src
           python -m pytest -q --junitxml=validation/candidate.xml 2>&1 | tee validation/candidate.log
       - name: MCP real stdio smoke without credentials or model calls
+        if: github.event_name != 'pull_request'
         run: python scripts/mcp_smoke.py
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && github.event_name != 'pull_request'
         with:
           name: source-layout-full-suite-results
           path: validation
           retention-days: 7
 
   web:
-    name: Web contract, tests and build
+    name: Web contract, browser tests and build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -69,20 +101,34 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements/web.txt
       - name: Install dependencies
         run: |
-          python -m pip install -r requirements/web.txt
+          python -m pip install -r requirements/web.txt playwright==1.55.0
           npm ci --prefix web
-      - name: Verify unchanged schema and frontend
+      - name: Verify schema, frontend and browser delivery
         run: |
+          set -euo pipefail
+          mkdir -p validation-web/model-api
           python scripts/export_web_schema.py
           npm run types --prefix web
           git diff --exit-code -- web/openapi.json web/src/api/generated.ts
           node --experimental-strip-types --test web/tests/*.test.mjs
           npm run build --prefix web
+          python -m playwright install --with-deps chromium
+          python scripts/web_model_settings_e2e.py --web-dist web/dist --evidence validation-web/model-api
+          python scripts/web_generation_e2e.py --web-dist web/dist --report validation-web/generation.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: source-layout-web-results
+          path: validation-web
+          retention-days: 7
 
   web-package:
     name: Windows Web and MCP package smoke
+    if: github.event_name != 'pull_request'
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
@@ -93,6 +139,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements.txt
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -126,6 +174,7 @@ jobs:
 
   context-replay:
     name: Typed context and offline promptfoo replay
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -140,6 +189,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements.txt
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
