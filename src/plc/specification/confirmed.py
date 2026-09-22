@@ -1181,7 +1181,7 @@ def _merge_parameters(base_parameters, incoming_parameters):
 
 
 def _preserve_pinned_instruction_instances(previous_selected, approaches):
-    """Carry exact calls across pinned reanalysis unless this turn explicitly replaces them."""
+    """Carry canonical implementation semantics and legacy exact calls across pinned reanalysis."""
     if not isinstance(previous_selected, dict):
         return approaches
     previous_id = str(previous_selected.get("approach_id") or "").strip()
@@ -1191,6 +1191,14 @@ def _preserve_pinned_instruction_instances(previous_selected, approaches):
     for approach in result:
         if not isinstance(approach, dict) or str(approach.get("approach_id") or "").strip() != previous_id:
             continue
+        if "implementation_semantics" not in approach and "implementation_semantics" in previous_selected:
+            approach["implementation_semantics"] = copy.deepcopy(
+                previous_selected["implementation_semantics"]
+            )
+            from plc.specification.approach import project_semantics_to_generation_contract
+            approach["generation_contract"] = project_semantics_to_generation_contract(
+                approach["implementation_semantics"], source="analysis_semantics"
+            )
         for field in ("generation_contract", "implementation_preferences"):
             current = approach.get(field)
             prior = previous_selected.get(field)

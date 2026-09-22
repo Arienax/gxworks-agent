@@ -13,7 +13,11 @@ import json
 import re
 from shared.i18n import tr
 from plc.specification.parameters import hardware_parameter_id, parameter_is_applicable
-from plc.specification.approach import normalize_instruction_instances
+from plc.specification.approach import (
+    normalize_implementation_semantics,
+    normalize_instruction_instances,
+    project_semantics_to_generation_contract,
+)
 
 
 HARDWARE_PROFILE_SCHEMA_VERSION = 1
@@ -172,16 +176,38 @@ def _string_list(value):
 
 
 
-def _sanitize_analysis_approaches(result, user_text):
-    """Prevent Agent-A guesses from becoming hard confirmed constraints.
+def _semantic_user_evidence(item, requirement, *, has_counter_intent):
+    """Apply provenance policy by semantic kind, never by a named use case."""
+    kind = item.get("kind")
+    status = item.get("status")
+    if kind == "instruction_instance":
+        return item if _requirement_mentions_instruction_instance(requirement, item) else None
+    if kind in {"opcode", "device"}:
+        if status == "any_of":
+            bounded = [
+                value for value in item.get("values", [])
+                if _requirement_mentions_token(requirement, value)
+            ]
+            return {**item, "values": bounded} if bounded else None
+        return item if _requirement_mentions_token(requirement, item.get("value")) else None
+    if kind == "structure":
+        values = item.get("values", []) if status == "any_of" else [item.get("value")]
+        if not has_counter_intent:
+            values = [value for value in values if value not in _COUNTER_STRUCTURES]
+        if not values:
+            return None
+        return {**item, "values": values} if status == "any_of" else item
+    return item
 
-    Explicit low-level opcodes/devices survive only when the user's own request
-    names them.  High-level architecture remains available for approach choice,
-    except counter structures when the request contains no counter intent at all.
-    Every contract field is materialized, including empty lists, which blocks the
-    legacy generation_guide inference path from recreating removed constraints.
-    Removed obligations remain model-sourced preferences; an empty hard contract
-    does not invalidate or delete a candidate.
+
+def _sanitize_analysis_approaches(result, user_text):
+    """Keep implementation_semantics canonical and project contracts from it.
+
+    Legacy Agent-A responses that still emit generation_contract retain the
+    previous compatibility sanitizer. New responses use implementation_semantics;
+    low-level opcode/device/instance choices still require matching user evidence
+    before becoming hard constraints, while high-level structures remain selected
+    implementation semantics subject to generic intent guards.
     """
     requirement = str(user_text or "").strip()
     approaches = result.get("approaches")
@@ -194,19 +220,40 @@ def _sanitize_analysis_approaches(result, user_text):
         if not isinstance(raw_approach, dict):
             continue
         approach = copy.deepcopy(raw_approach)
+
+        if "implementation_semantics" in approach:
+            original_semantics = normalize_implementation_semantics(
+                approach.get("implementation_semantics")
+            )
+            kept = []
+            for item in original_semantics:
+                bounded = _semantic_user_evidence(
+                    item, requirement, has_counter_intent=has_counter_intent
+                )
+                if bounded:
+                    kept.append(bounded)
+            approach["implementation_semantics"] = normalize_implementation_semantics(kept)
+            preferences = project_semantics_to_generation_contract(
+                original_semantics, source="model_proposal"
+            )
+            preferences["enforce"] = False
+            approach["implementation_preferences"] = preferences
+            approach["generation_contract"] = project_semantics_to_generation_contract(
+                approach["implementation_semantics"], source="analysis_semantics"
+            )
+            sanitized.append(approach)
+            continue
+
         raw_contract = approach.get("generation_contract")
         contract = copy.deepcopy(raw_contract) if isinstance(raw_contract, dict) else {}
-
         for field in _ANALYSIS_CONTRACT_VALUE_FIELDS:
             contract[field] = _string_list(contract.get(field))
         for field in _ANALYSIS_CONTRACT_GROUP_FIELDS:
             groups = contract.get(field)
             contract[field] = [
-                _string_list(group)
-                for group in groups
+                _string_list(group) for group in groups
                 if isinstance(group, (list, tuple)) and _string_list(group)
             ] if isinstance(groups, (list, tuple)) else []
-
         for field in _ANALYSIS_OPCODE_FIELDS:
             contract[field] = [
                 token for token in contract[field]
@@ -224,14 +271,11 @@ def _sanitize_analysis_approaches(result, user_text):
         contract["any_of_opcode_groups"] = [
             group for group in contract["any_of_opcode_groups"] if group
         ]
-
         if "instruction_instances" in contract:
             contract["instruction_instances"] = [
-                instance
-                for instance in normalize_instruction_instances(contract.get("instruction_instances"))
+                instance for instance in normalize_instruction_instances(contract.get("instruction_instances"))
                 if _requirement_mentions_instruction_instance(requirement, instance)
             ]
-
         if not has_counter_intent:
             for field in ("required_structures", "forbidden_structures"):
                 contract[field] = [
@@ -245,10 +289,6 @@ def _sanitize_analysis_approaches(result, user_text):
             contract["any_of_structure_groups"] = [
                 group for group in contract["any_of_structure_groups"] if group
             ]
-
-        # Retain the proposal under its real origin. Removing an unconfirmed
-        # hard obligation must not delete the architecture or its implementation
-        # choices. These preferences are context only, never validator inputs.
         prior = approach.get("implementation_preferences")
         original = (prior if isinstance(prior, dict) and isinstance(raw_contract, dict)
                     and raw_contract.get("source") == "analysis_sanitized" else raw_contract)

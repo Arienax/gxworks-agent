@@ -42,3 +42,18 @@ gates. A checker that cannot cover a broader engineering shape records
 required semantic check cannot even run because its machine role or confirmed
 electrical level was lost in the handoff, generation fails closed as an internal
 semantic handoff error; human-readable labels are never used to guess that role.
+
+
+## Semantic requirement coverage
+
+For fresh confirmed specifications, generation acceptance derives generic semantic
+requirements from the selected approach's `implementation_semantics`. The registry
+covers required/forbidden/any-of structure, opcode and device semantics plus exact
+instruction instances. Capability-specific deterministic checks attach to the same
+requirement receipt instead of being called directly from Agent B.
+
+A semantic requirement violation blocks the candidate. A registered checker that
+cannot evaluate a broader representation records `unresolved`; loss of machine
+identity/electrical facts required by that checker remains a handoff error. Legacy
+specifications without `implementation_semantics` retain the previous narrow
+compatibility validation.

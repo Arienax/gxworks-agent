@@ -52,6 +52,28 @@ def _confirmed(case=CASES[0]):
 
 
 @pytest.mark.parametrize("case", CASES, ids=lambda c: c["id"])
+def test_implementation_semantics_survive_confirmation_with_core_projected_contract():
+    from plc.specification.approach import normalize_approach
+    from plc.specification.provenance import confirm_context
+
+    selected = normalize_approach({
+        "approach_id": "semantic-owner",
+        "name": "semantic owner",
+        "implementation_semantics": [
+            {"kind": "structure", "status": "required", "value": "direct_logic"},
+        ],
+    })
+    confirmed = confirm_context({
+        "plc_model": "FX3U",
+        "selected_approach": selected,
+        "io_table": [],
+        "parameters": [],
+    })
+    saved = confirmed["selected_approach"]
+    assert saved["implementation_semantics"] == selected["implementation_semantics"]
+    assert saved["generation_contract"]["source"] == "analysis_semantics"
+    assert saved["generation_contract"]["required_structures"] == ["direct_logic"]
+
 def test_representation_intent_survives_without_becoming_an_opcode_constraint(case):
     spec, decision = _confirmation(case)
     before = copy.deepcopy(spec)

@@ -1,9 +1,9 @@
-"""Confirmed-fact semantic validation for generated ladder candidates.
+"""Confirmed implementation-semantic validation for generated ladder candidates.
 
-This layer is deliberately narrower than full engineering review. It checks only
-machine-readable semantics already confirmed by the user/application. Generic
-style heuristics and advisory engineering findings remain outside generation
-acceptance.
+New Agent-A analyses emit implementation_semantics. Core projects those semantics
+into generation_contract for generation/tool compatibility and validates the same
+semantic requirements here. Legacy specs without implementation_semantics keep the
+previous narrow compatibility behavior.
 """
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from collections.abc import Mapping
 
 from plc.validation import PLCJsonValidationError
 
-_VERSION = "confirmed-semantics-v1"
+_VERSION = "confirmed-semantics-v2"
 _BLOCKING_HANDOFF_GAPS = frozenset({
     "missing_roles",
     "ambiguous_roles",
@@ -23,79 +23,203 @@ class ConfirmedSemanticValidationError(PLCJsonValidationError):
     """A candidate or semantic handoff contradicts confirmed machine facts."""
 
 
-def _generation_contract(confirmed_spec):
-    selected = (
-        confirmed_spec.get("selected_approach")
-        if isinstance(confirmed_spec, Mapping)
-        else None
-    )
-    contract = (
-        selected.get("generation_contract")
-        if isinstance(selected, Mapping)
-        else None
-    )
-    return contract if isinstance(contract, Mapping) else {}
-
-
-def _selected_approach_receipt(confirmed_spec):
-    contract = _generation_contract(confirmed_spec)
-    return {
-        "check": "selected_approach_contract",
-        "status": "deferred_to_review" if contract else "not_applicable",
-    }
-
-
-def _self_hold_required(confirmed_spec):
-    contract = _generation_contract(confirmed_spec)
-    if contract.get("enforce") is False:
-        return False
-    return "self_hold" in set(contract.get("required_structures") or ())
-
-
-def validate_confirmed_semantics(ladder, confirmed_spec, plc_model="FX3U"):
-    """Validate confirmed semantics and return an inspectable coverage receipt.
-
-    A narrow checker may decline an engineering shape it does not understand;
-    that remains unresolved rather than becoming a new style gate. Missing
-    machine identity/electrical facts required by an explicit semantic contract
-    are different: accepting them would make deterministic validation impossible,
-    so those handoff gaps fail closed without invoking model repair.
-    """
+def semantic_requirements(confirmed_spec):
+    """Return generic machine requirements from canonical implementation semantics."""
     if not isinstance(confirmed_spec, Mapping):
-        return {"version": _VERSION, "status": "not_applicable", "checks": []}
+        return []
+    selected = confirmed_spec.get("selected_approach")
+    if not isinstance(selected, Mapping) or "implementation_semantics" not in selected:
+        return []
+    from plc.specification.approach import normalize_implementation_semantics
+    result = []
+    for index, item in enumerate(normalize_implementation_semantics(selected.get("implementation_semantics"))):
+        row = dict(item)
+        row["requirement_id"] = f"implementation_semantics[{index}]"
+        result.append(row)
+    return result
 
-    checks = [_selected_approach_receipt(confirmed_spec)]
 
+def _ladder_instruction_instances(ladder):
+    result = set()
+    for rung in (ladder or {}).get("rungs", []) or []:
+        for branch in rung.get("branches", []) if isinstance(rung, Mapping) else []:
+            for output in branch.get("outputs", []) if isinstance(branch, Mapping) else []:
+                if not isinstance(output, Mapping) or output.get("type") != "APP_INSTR":
+                    continue
+                opcode = str(output.get("opcode") or "").strip().upper()
+                operands = tuple(str(value).strip() for value in output.get("operands", []) or [])
+                if opcode:
+                    result.add((opcode, operands))
+    return result
+
+
+def _feature_coverage(ladder, requirements):
+    from plc.specification.approach import inspect_ladder_features
+    features = inspect_ladder_features(ladder)
+    available = {
+        "structure": set(features.get("structures") or []),
+        "opcode": set(features.get("opcodes") or []),
+        "device": set(features.get("devices") or []),
+    }
+    rows, violations = [], []
+    for requirement in requirements:
+        kind = requirement.get("kind")
+        status = requirement.get("status")
+        if kind not in available:
+            continue
+        if status == "any_of":
+            values = list(requirement.get("values") or [])
+            ok = bool(set(values) & available[kind])
+            expected = values
+        else:
+            value = requirement.get("value")
+            present = value in available[kind]
+            ok = present if status == "required" else not present
+            expected = value
+        row = {
+            "requirement_id": requirement["requirement_id"],
+            "check": "contract_feature",
+            "kind": kind,
+            "semantic_status": status,
+            "expected": expected,
+            "status": "verified" if ok else "violated",
+        }
+        rows.append(row)
+        if not ok:
+            violations.append(row)
+    return rows, violations
+
+
+def _instruction_instance_coverage(ladder, requirements):
+    actual = _ladder_instruction_instances(ladder)
+    rows, violations = [], []
+    for requirement in requirements:
+        if requirement.get("kind") != "instruction_instance":
+            continue
+        expected = (requirement["opcode"], tuple(requirement.get("operands") or ()))
+        ok = expected in actual
+        row = {
+            "requirement_id": requirement["requirement_id"],
+            "check": "exact_instruction_instance",
+            "kind": "instruction_instance",
+            "semantic_status": "required",
+            "expected": " ".join([expected[0], *expected[1]]).strip(),
+            "status": "verified" if ok else "violated",
+        }
+        rows.append(row)
+        if not ok:
+            violations.append(row)
+    return rows, violations
+
+
+def _self_hold_truth_table_coverage(ladder, confirmed_spec, requirements):
+    """Registered capability checker for a structure semantic, not text inference."""
+    targets = [row for row in requirements
+               if row.get("kind") == "structure"
+               and row.get("status") == "required"
+               and row.get("value") == "self_hold"]
+    if not targets:
+        return [], []
     from plc.specification.checks import check_direct_self_hold
-    required = _self_hold_required(confirmed_spec)
     try:
-        self_hold = check_direct_self_hold(ladder, confirmed_spec)
+        result = check_direct_self_hold(ladder, confirmed_spec)
     except PLCJsonValidationError as error:
         raise ConfirmedSemanticValidationError(str(error)) from error
-
-    self_hold["required"] = required
-    if required and self_hold.get("status") == "not_covered":
-        self_hold["status"] = "unresolved"
-        reason = str(self_hold.get("reason") or "unknown")
+    row = dict(result)
+    row["requirement_id"] = targets[0]["requirement_id"]
+    row["semantic_status"] = "required"
+    if row.get("status") == "not_covered":
+        row["status"] = "unresolved"
+        reason = str(row.get("reason") or "unknown")
         if reason in _BLOCKING_HANDOFF_GAPS:
             raise ConfirmedSemanticValidationError(
-                "$.confirmed_spec.io_bindings: required self_hold semantic "
-                f"handoff is incomplete ({reason})"
+                "$.confirmed_spec.io_bindings: required semantic handoff "
+                f"is incomplete ({reason})"
             )
-    checks.append(self_hold)
+    return [row], []
 
+
+def _feature_checker(ladder, _confirmed_spec, requirements):
+    return _feature_coverage(ladder, requirements)
+
+
+def _instruction_instance_checker(ladder, _confirmed_spec, requirements):
+    return _instruction_instance_coverage(ladder, requirements)
+
+
+_CHECKER_REGISTRY = (
+    ("contract_features", _feature_checker),
+    ("instruction_instances", _instruction_instance_checker),
+    ("self_hold_truth_table", _self_hold_truth_table_coverage),
+)
+
+
+def _legacy_compatibility_check(ladder, confirmed_spec, plc_model):
+    """Preserve old narrow behavior for saved specs without implementation_semantics."""
+    selected = confirmed_spec.get("selected_approach") if isinstance(confirmed_spec, Mapping) else None
+    contract = selected.get("generation_contract") if isinstance(selected, Mapping) else None
+    checks = [{
+        "check": "selected_approach_contract",
+        "status": "deferred_to_review" if isinstance(contract, Mapping) and contract else "not_applicable",
+    }]
+    from plc.specification.checks import check_direct_self_hold
+    try:
+        checks.append(check_direct_self_hold(ladder, confirmed_spec))
+    except PLCJsonValidationError as error:
+        raise ConfirmedSemanticValidationError(str(error)) from error
     covered = [row for row in checks if row.get("status") == "verified"]
-    unresolved = [row for row in checks if row.get("status") == "unresolved"]
-    status = (
-        "unresolved"
-        if unresolved
-        else "verified"
-        if covered
-        else "not_applicable"
-    )
+    unresolved = [row for row in checks if row.get("status") in {"not_covered", "unresolved"}]
     return {
         "version": _VERSION,
         "plc_model": str(plc_model or "").strip().upper(),
-        "status": status,
+        "status": "verified" if covered and not unresolved else "partial" if covered else "not_applicable",
+        "requirements": [],
         "checks": checks,
+        "legacy_compatibility": True,
+    }
+
+
+def validate_confirmed_semantics(ladder, confirmed_spec, plc_model="FX3U"):
+    """Validate canonical implementation semantics and return coverage."""
+    if not isinstance(confirmed_spec, Mapping):
+        return {"version": _VERSION, "status": "not_applicable", "requirements": [], "checks": []}
+
+    requirements = semantic_requirements(confirmed_spec)
+    if not requirements:
+        return _legacy_compatibility_check(ladder, confirmed_spec, plc_model)
+
+    checks, violations = [], []
+    for _name, checker in _CHECKER_REGISTRY:
+        rows, failed = checker(ladder, confirmed_spec, requirements)
+        checks.extend(rows)
+        violations.extend(failed)
+
+    if violations:
+        summary = ", ".join(
+            f"{row.get('kind')}:{row.get('expected')}" for row in violations[:8]
+        )
+        raise ConfirmedSemanticValidationError(
+            "$.confirmed_spec.selected_approach.implementation_semantics: "
+            "generated candidate violates confirmed implementation semantics: " + summary
+        )
+
+    unresolved = [row for row in checks if row.get("status") == "unresolved"]
+    verified_ids = {row.get("requirement_id") for row in checks if row.get("status") == "verified"}
+    requirement_ids = {row["requirement_id"] for row in requirements}
+    unresolved_ids = {row.get("requirement_id") for row in unresolved}
+    for requirement_id in sorted(requirement_ids - verified_ids - unresolved_ids):
+        checks.append({
+            "requirement_id": requirement_id,
+            "check": "coverage",
+            "status": "unresolved",
+            "reason": "no_registered_checker",
+        })
+    unresolved = [row for row in checks if row.get("status") == "unresolved"]
+    return {
+        "version": _VERSION,
+        "plc_model": str(plc_model or "").strip().upper(),
+        "status": "unresolved" if unresolved else "verified",
+        "requirements": requirements,
+        "checks": checks,
+        "legacy_compatibility": False,
     }

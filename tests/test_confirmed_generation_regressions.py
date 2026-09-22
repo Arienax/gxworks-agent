@@ -65,6 +65,60 @@ def _bad_analysis():
     }
 
 
+def test_implementation_semantics_are_the_core_owned_contract_source():
+    from plc.specification.approach import normalize_approach
+
+    selected = normalize_approach({
+        "approach_id": "semantic_contract",
+        "name": "structured plan",
+        "implementation_semantics": [
+            {"kind": "structure", "status": "required", "value": "direct_logic"},
+            {"kind": "structure", "status": "forbidden", "value": "set_reset_latch"},
+            {"kind": "opcode", "status": "any_of", "values": ["MOV", "DMOV"]},
+            {"kind": "device", "status": "required", "value": "D10"},
+            {"kind": "instruction_instance", "status": "required",
+             "opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]},
+        ],
+    })
+    contract = selected["generation_contract"]
+    assert contract["source"] == "analysis_semantics"
+    assert contract["required_structures"] == ["direct_logic"]
+    assert contract["forbidden_structures"] == ["set_reset_latch"]
+    assert contract["any_of_opcode_groups"] == [["MOV", "DMOV"]]
+    assert contract["required_devices"] == ["D10"]
+    assert contract["instruction_instances"] == [
+        {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
+    ]
+
+
+def test_analysis_semantic_sanitizer_filters_by_kind_then_reprojects_contract():
+    raw = {
+        "summary": "structured plan",
+        "approaches": [{
+            "approach_id": "a1", "name": "one plan", "generation_guide": "",
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "direct_logic"},
+                {"kind": "opcode", "status": "required", "value": "MOV"},
+                {"kind": "device", "status": "required", "value": "D10"},
+                {"kind": "instruction_instance", "status": "required",
+                 "opcode": "SFTL", "operands": ["M10", "M100", "K8", "K1"]},
+            ],
+        }],
+        "missing_info": [], "suggested_io": {}, "hardware_config": {}, "assumptions": [],
+    }
+    normalized = _normalize_analysis_result(
+        raw, plc_model="FX3U",
+        user_text="Use MOV with D10. Keep SFTL M10 M100 K8 K1 exactly.",
+    )
+    selected = normalized["approaches"][0]
+    contract = selected["generation_contract"]
+    assert contract["source"] == "analysis_semantics"
+    assert contract["required_structures"] == ["direct_logic"]
+    assert contract["required_opcodes"] == ["MOV"]
+    assert contract["required_devices"] == ["D10"]
+    assert contract["instruction_instances"][0]["opcode"] == "SFTL"
+    assert selected["implementation_preferences"]["enforce"] is False
+
 def test_agent_b_frames_first_json_but_consumes_trailing_usage():
     base = _DuplicateJsonProvider()
     provider = _FirstJSONObjectProvider(base)

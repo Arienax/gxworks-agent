@@ -31,3 +31,19 @@ The compact and full-wire adapters share this engineering view, not a response g
 Saved-version delivery uses the version's specification and receipt, not the live project's later state. Failed diagnostic candidates retain their own validation status and available origin. [delivery_summary](../../src/application/delivery.py) assembles that report.
 
 Regression coverage belongs to [test_intent_evidence_handoff.py](../../tests/test_intent_evidence_handoff.py) and [test_context_compiler.py](../../tests/test_context_compiler.py). The earlier investigation is preserved in the [process archive](../process/README.md).
+
+
+## Implementation semantics ownership
+
+Fresh Agent A candidates use `implementation_semantics` as the only model-authored
+machine implementation vocabulary. Items describe a structure, opcode, device, an
+any-of group, or an exact instruction instance. `plc.specification.approach`
+normalizes that vocabulary and projects it into `generation_contract`; model-authored
+`generation_contract` is no longer requested for new analyses.
+
+The application provenance filter runs on semantic items before projection. Low-level
+opcodes, devices and exact instruction instances still need matching caller evidence;
+high-level selected structures remain candidate semantics, with generic intent guards
+applied by semantic kind. Removed model choices may remain visible in non-enforcing
+`implementation_preferences`. Saved legacy specifications that only contain
+`generation_contract` continue through the compatibility path and are not rewritten.

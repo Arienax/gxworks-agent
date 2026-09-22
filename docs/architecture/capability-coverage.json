@@ -535,11 +535,50 @@
       ]
     },
     {
+      "id": "implementation_semantics_contract_projection",
+      "category": "intent_handoff",
+      "state": "enforced",
+      "owner": "plc.specification.approach.normalize_implementation_semantics + project_semantics_to_generation_contract",
+      "summary": "Fresh Agent A implementation choices have one machine-readable implementation_semantics source. Core normalizes that vocabulary, applies provenance filtering by semantic kind, and projects surviving semantics into generation_contract; legacy contracts remain compatibility input.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/specification/approach.py",
+          "symbol": "normalize_implementation_semantics"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/specification/approach.py",
+          "symbol": "project_semantics_to_generation_contract"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/prompts.py",
+          "text": "generation_contract 由 Core 从 implementation_semantics 生成"
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/hardware_profiles.py",
+          "text": "Keep implementation_semantics canonical and project contracts from it."
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_confirmed_generation_regressions.py",
+          "text": "test_implementation_semantics_are_the_core_owned_contract_source"
+        }
+      ],
+      "tests": [
+        "tests/test_confirmed_generation_regressions.py",
+        "tests/test_analysis_prompt_routing.py",
+        "tests/test_context_compiler.py"
+      ]
+    },
+    {
       "id": "confirmed_generation_acceptance",
       "category": "generation",
       "state": "enforced",
       "owner": "plc.generation.prepare_ladder_candidate + plc.specification.semantic_validation",
-      "summary": "Fresh confirmed Agent B output lowers compact transport to a Python ladder object; GenerationWorkflow sends that object through CandidateService exactly once, skips legacy normalizers, and applies structural plus confirmed-fact semantic acceptance before PLC IR. Explicit semantic contracts fail closed only when required machine identity/electrical handoff is missing; unsupported engineering shapes remain visible as unresolved coverage for Review.",
+      "summary": "Fresh confirmed Agent B output passes one structural acceptance boundary followed by implementation-semantic requirement coverage. The checker registry validates generic structure/opcode/device/any-of/exact-instance requirements and may add capability-specific deterministic checks; legacy specs without implementation_semantics retain compatibility behavior.",
       "checks": [
         {
           "kind": "python_symbol",
@@ -600,6 +639,21 @@
           "kind": "contains",
           "path": "tests/test_generation_fast_path.py",
           "text": "test_required_self_hold_missing_role_fails_closed_without_label_inference"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/specification/semantic_validation.py",
+          "symbol": "semantic_requirements"
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/specification/semantic_validation.py",
+          "text": "_CHECKER_REGISTRY"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_generation_fast_path.py",
+          "text": "test_semantic_requirement_registry_covers_structure_opcode_device_group_and_instance"
         }
       ],
       "tests": [

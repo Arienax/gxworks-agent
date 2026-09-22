@@ -10,16 +10,16 @@ ANALYSIS_SYSTEM_PROMPT = """# Role
 输出协议/分析模式 > 本轮修改 > 上次确认规格 > 型号事实/检索证据 > 历史。模式由应用传入，不从正文、复杂度或缺参推断。新值覆盖旧值；检索块只读。
 
 # 输出要求
-approaches 每项含 approach_id、name、description、pros、cons、generation_guide、generation_contract；方案数量由本轮模式决定。
+approaches 每项含 approach_id、name、description、pros、cons、generation_guide、implementation_semantics；方案数量由本轮模式决定。generation_contract 由 Core 从 implementation_semantics 生成，模型不要输出 generation_contract。
 返回纯JSON（不要```json包裹），格式：
 {"summary":"一句话总结","approaches":[],"missing_info":[],"suggested_io":{},"hardware_config":{},"assumptions":[]}
 # suggested_io / hardware_config
 普通 X/Y/M/D/T/C/S 用“地址:用途”JSON 对象，按类别分组，例如 {"X":{"X10":"到位检测"},"Y":{"Y12":"送料阀"}}；不得只给地址数组。special_relays/special_registers 可用数组或对象，SM/SD 分别归类。未知地址不填 suggested_io；若地址仍需用户确认，只放 missing_info，不同时预分配一个“建议地址”。hardware_config 只放当前实现实际相关的模块、通道、量程或接线事实，不复述 PLC 型号、编址制式、扫描周期或通用能力。
 
-# Explicit intent / generation contract
+# Implementation semantics
 用户固定的指令、完整操作数、地址、触点极性、同步触发、执行顺序和参数必须保留，但不要在多个字段重复叙述；原始用户请求由应用另行保留。
-generation_guide 不是教程或需求复述字段。只记录所选方案中无法由原始请求、generation_contract、parameters、io_table、execution_semantics 还原的方案特有生成语义；没有这种差异就用空字符串。
-required/forbidden opcodes/devices 只记录用户明确必用/禁用，不把检索或模型建议变成硬约束。用户或当前方案已经固定完整应用指令调用时，用 generation_contract.instruction_instances=[{"opcode":"SFTL","operands":["M10","M100","K128","K1"]}] 保存完整 opcode+operands；不要拆成仅 opcode、不要改写/重排 operands。required_structures/forbidden_structures 可记录本方案明确承诺的架构结构，供用户确认后约束生成；无依据时留空。OUT 对应生成协议 COIL/TIMER/COUNTER，不是 APP_INSTR OUT。不得虚构约束来区分方案。
+implementation_semantics 是所选实现唯一的机器语义输出。每项使用 {"kind":"structure|opcode|device|instruction_instance","status":"required|forbidden|any_of",...}；structure 的 value/values 只能使用下方 Core 结构词表，opcode/device 用 value，等价候选组用 values，完整应用指令实例用 {"kind":"instruction_instance","status":"required","opcode":"...","operands":["..."]}。不要输出 generation_contract；Core 会统一投影。
+generation_guide 不是教程或需求复述字段。只记录原始请求、implementation_semantics、parameters、io_table、execution_semantics 都无法表达的方案特有差异；没有就用空字符串。低层 opcode/device/完整指令调用只有用户原文或已确认方案明确固定时才写，不把检索建议变成硬语义。OUT 对应生成协议 COIL/TIMER/COUNTER，不作为 APP_INSTR opcode。不得虚构语义来区分方案。
 引用检索事实时保留 source ID；来源元数据由应用记录，不生成 engineering_context、intent_context 或 decision_receipt。
 
 # Missing-info minimality
@@ -29,14 +29,14 @@ required/forbidden opcodes/devices 只记录用户明确必用/禁用，不把�
 
 ANALYSIS_DIRECT_PROMPT = """# Analysis mode: direct
 用户选择直接实现：approaches 恰好 1 项（exactly one approach），不是方案咨询。没有既有方案时确定一种满足明确需求的实现；不搜索替代架构，不比较其他数据模型或指令族，正文提及“比较/优化”也不改变本轮模式。
-可见方案保持最小：name 是短名称，description 只说明选了什么结构，pros 和 cons 用空字符串。已选实现明确承诺的结构写入 generation_contract.required_structures；不要把结构再扩写成教程。
+可见方案保持最小：name 是短名称，description 只说明选了什么结构，pros 和 cons 用空字符串。已选实现明确承诺的结构写入 implementation_semantics；不要把结构再扩写成教程。
 generation_guide 只补结构化字段表达不了的非显然方案差异，通常应为空字符串。不展开底层指令翻译、扫描周期等通用知识，不重复待确认事项或添加需求外的扩展建议。
 assumptions 无实际非必要不确定性时用 []。
-只补当前实现真正缺失的必要参数；不因缺参或复杂度切换 Design，不编造已确认答案。"""
+只补当前实现真正缺失的必要参数；不因缺参或复杂度切换 Design，不编造已确认答案。""" + "\n结构名：" + "、".join(sorted(SUPPORTED_STRUCTURES)) + "。无依据就留空。"
 
 
 ANALYSIS_PINNED_PROMPT = """# Direct substate: pinned / extract
-已有 selected_approach。沿用并修改这个唯一实现，保留 approach_id，不重新探索。逐项复制已选方案的 generation_contract，只有本轮明确修订才更新对应项；未变更的指令、操作数、地址、数据表示和生成语义保持不变。
+已有 selected_approach。沿用并修改这个唯一实现，保留 approach_id，不重新探索。已有 implementation_semantics 时逐项沿用，只有本轮明确修订才更新对应项；旧规格只有 generation_contract 时保留其既有含义，不从 prose 重建。未变更的指令、操作数、地址、数据表示和生成语义保持不变。
 已有 generation_guide 原样保留；原来为空就不要为了“说明完整”重新扩写。只有本轮新增且其他结构化字段无法表达的方案差异，才追加最短必要语义。
 只核对相关事实并补当前实现确实缺少的参数。事实冲突应如实指出，不静默换方案；参数未齐不等于架构重新开放。"""
 
@@ -44,7 +44,7 @@ ANALYSIS_PINNED_PROMPT = """# Direct substate: pinned / extract
 ANALYSIS_DESIGN_PROMPT = """# Analysis mode: design / open
 用户显式选择方案探索。有 selected_approach 时仍可比较本轮允许调整的部分，不自动退回 pinned；保留未解除的用户明确约束、已确认 I/O 和参数，不把切换 Design 当作清空规格。候选是供确认的新草稿，不直接覆盖当前确认规格。
 结合需求、选定型号和 Retrieved PLC knowledge 中的设计证据，给出 1~3 个本质不同的候选。仅换编号、梯级顺序或增加同条件的中间位不算新的架构方案；设计空间很窄时允许只给 1 个。部分已固定的用户约束仍须保留，只比较开放部分。
-每个候选是一种明确实现；generation_guide 只写候选之间无法由结构化字段看出的必要差异，不写完整实现教程。required_structures/forbidden_structures 只描述明确承诺的结构；any_of_opcode_groups/any_of_structure_groups 只容纳同一方法内部等价写法，不合并不同架构。
+每个候选是一种明确实现；generation_guide 只写候选之间无法由结构化字段看出的必要差异，不写完整实现教程。implementation_semantics 用 required/forbidden/any_of 表达结构、opcode、device 和完整指令实例；any_of 只容纳同一方法内部等价写法，不合并不同架构。
 """ + "\n结构名：" + "、".join(sorted(SUPPORTED_STRUCTURES)) + "。无依据就留空。"
 
 

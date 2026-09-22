@@ -88,6 +88,45 @@ def test_ir_consistency_can_be_checked_without_reinterpreting_ladder_semantics()
 
 
 
+def test_semantic_requirement_registry_covers_structure_opcode_device_group_and_instance():
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+
+    ladder = {
+        "device_comments": {"X0": "input", "D10": "data"},
+        "rungs": [{
+            "rung_id": 1, "header_element": None, "shared_inputs": [],
+            "branches": [{
+                "branch_id": 1, "y_offset_level": 0,
+                "inputs": [{"type": "NO", "address": "X0"}],
+                "outputs": [{"type": "APP_INSTR", "opcode": "MOV", "operands": ["K1", "D10"]}],
+            }],
+        }],
+    }
+    spec = {"selected_approach": {
+        "implementation_semantics": [
+            {"kind": "structure", "status": "required", "value": "direct_logic"},
+            {"kind": "opcode", "status": "any_of", "values": ["MOV", "DMOV"]},
+            {"kind": "device", "status": "required", "value": "D10"},
+            {"kind": "instruction_instance", "status": "required",
+             "opcode": "MOV", "operands": ["K1", "D10"]},
+        ]
+    }}
+    report = validate_confirmed_semantics(ladder, spec, "FX3U")
+    assert report["status"] == "verified"
+    assert len(report["requirements"]) == 4
+    assert all(row["status"] == "verified" for row in report["checks"])
+
+
+def test_semantic_requirement_violation_is_blocking_without_full_review_rules():
+    from plc.specification.semantic_validation import (
+        ConfirmedSemanticValidationError, validate_confirmed_semantics,
+    )
+    spec = {"selected_approach": {"implementation_semantics": [
+        {"kind": "opcode", "status": "required", "value": "MOV"},
+    ]}}
+    with pytest.raises(ConfirmedSemanticValidationError, match="implementation semantics"):
+        validate_confirmed_semantics(_self_hold(), spec, "FX3U")
+
 def test_compact_agent_skips_legacy_candidate_normalizers(monkeypatch):
     import plc.generation as generation
     from plc.generation import prepare_ladder_candidate
@@ -108,7 +147,7 @@ def test_compact_agent_skips_legacy_candidate_normalizers(monkeypatch):
     assert result["semantic_validation"]["status"] == "not_applicable"
 
 
-def test_confirmed_semantic_validation_does_not_restore_full_review_gates():
+def test_legacy_contract_without_implementation_semantics_remains_review_only():
     from plc.generation import prepare_ladder_candidate
 
     ladder = _self_hold()

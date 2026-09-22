@@ -199,6 +199,124 @@ def normalize_instruction_instances(values):
     return result
 
 
+IMPLEMENTATION_SEMANTIC_KINDS = frozenset({"structure", "opcode", "device", "instruction_instance"})
+IMPLEMENTATION_SEMANTIC_STATUSES = frozenset({"required", "forbidden", "any_of"})
+
+
+def _structure_token(value):
+    text = str(value or "").strip()
+    if not text:
+        return None
+    folded = text.casefold()
+    if folded in SUPPORTED_STRUCTURES:
+        return folded
+    labels = {label.casefold(): key for key, label in STRUCTURE_LABELS.items()}
+    return labels.get(folded)
+
+
+def normalize_implementation_semantics(values):
+    """Normalize Agent-A implementation choices without reading requirement prose."""
+    if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+        return []
+    result = []
+    seen = set()
+    for raw in values:
+        if not isinstance(raw, Mapping):
+            continue
+        kind = str(raw.get("kind") or "").strip().casefold()
+        status = str(raw.get("status") or "required").strip().casefold()
+        if kind not in IMPLEMENTATION_SEMANTIC_KINDS or status not in IMPLEMENTATION_SEMANTIC_STATUSES:
+            continue
+
+        if kind == "instruction_instance":
+            if status != "required":
+                continue
+            instances = normalize_instruction_instances([raw])
+            if not instances:
+                continue
+            item = {"kind": kind, "status": status, **instances[0]}
+            marker = (kind, status, item["opcode"], tuple(item["operands"]))
+        elif status == "any_of":
+            if kind not in {"structure", "opcode"}:
+                continue
+            source = raw.get("values")
+            if isinstance(source, str):
+                source = [source]
+            if not isinstance(source, Sequence):
+                continue
+            normalized_values = []
+            for value in source:
+                if kind == "structure":
+                    token = _structure_token(value)
+                else:
+                    token = str(value or "").strip().upper()
+                    if not re.fullmatch(r"[$A-Z][A-Z0-9_.$@+<>!=\-]{0,63}", token):
+                        token = None
+                if token and token not in normalized_values:
+                    normalized_values.append(token)
+            if not normalized_values:
+                continue
+            item = {"kind": kind, "status": status, "values": normalized_values}
+            marker = (kind, status, tuple(normalized_values))
+        else:
+            value = raw.get("value")
+            if kind == "structure":
+                value = _structure_token(value)
+            elif kind == "opcode":
+                value = str(value or "").strip().upper()
+                if not re.fullmatch(r"[$A-Z][A-Z0-9_.$@+<>!=\-]{0,63}", value):
+                    value = None
+            elif kind == "device":
+                value = str(value or "").strip().upper()
+                if not _DEVICE_RE.fullmatch(value):
+                    value = None
+            if not value:
+                continue
+            item = {"kind": kind, "status": status, "value": value}
+            marker = (kind, status, value)
+
+        if marker in seen:
+            continue
+        seen.add(marker)
+        result.append(item)
+    return result
+
+
+def project_semantics_to_generation_contract(values, *, source="analysis_semantics"):
+    """Project normalized implementation semantics into the shared generation contract."""
+    semantics = normalize_implementation_semantics(values)
+    contract = {
+        "schema_version": CONTRACT_SCHEMA_VERSION,
+        "required_opcodes": [],
+        "forbidden_opcodes": [],
+        "required_devices": [],
+        "forbidden_devices": [],
+        "required_structures": [],
+        "forbidden_structures": [],
+        "any_of_opcode_groups": [],
+        "any_of_structure_groups": [],
+        "instruction_instances": [],
+        "enforce": True,
+        "source": source,
+    }
+    for item in semantics:
+        kind, status = item["kind"], item["status"]
+        if kind == "instruction_instance":
+            contract["instruction_instances"].append({
+                "opcode": item["opcode"], "operands": list(item["operands"]),
+            })
+            continue
+        if status == "any_of":
+            key = "any_of_structure_groups" if kind == "structure" else "any_of_opcode_groups"
+            contract[key].append(list(item["values"]))
+            continue
+        suffix = "structures" if kind == "structure" else "opcodes" if kind == "opcode" else "devices"
+        key = ("required_" if status == "required" else "forbidden_") + suffix
+        if item["value"] not in contract[key]:
+            contract[key].append(item["value"])
+    return contract
+
+
 def _opcode_mentions(text):
     mentions = []
     value = str(text or "")
@@ -532,7 +650,7 @@ def normalize_generation_contract(contract=None, *, approach=None):
         "any_of_structure_groups": _normalize_groups(value_source("any_of_structure_groups")),
         # Explicit constraints cannot be disabled by model-authored enforce=false.
         "enforce": True,
-        "source": raw.get("source") if raw.get("source") in {"explicit", "inferred", "analysis_sanitized"} else (
+        "source": raw.get("source") if raw.get("source") in {"explicit", "inferred", "analysis_sanitized", "analysis_semantics"} else (
             "explicit" if isinstance(contract, Mapping) and contract else inferred.get("source", "inferred")),
     }
     # Exact instruction calls are optional but lossless when explicitly present.
@@ -626,10 +744,19 @@ def normalize_approach(approach):
         approach_id = f"approach_{digest}"
     normalized["approach_id"] = approach_id
     normalized.pop("id", None)
-    normalized["generation_contract"] = normalize_generation_contract(
-        normalized.get("generation_contract"),
-        approach=normalized,
-    )
+    if "implementation_semantics" in normalized:
+        normalized["implementation_semantics"] = normalize_implementation_semantics(
+            normalized.get("implementation_semantics")
+        )
+        normalized["generation_contract"] = project_semantics_to_generation_contract(
+            normalized["implementation_semantics"],
+            source="analysis_semantics",
+        )
+    else:
+        normalized["generation_contract"] = normalize_generation_contract(
+            normalized.get("generation_contract"),
+            approach=normalized,
+        )
     return normalized
 
 
@@ -1014,6 +1141,8 @@ __all__ = [
     "inspect_ladder_features",
     "normalize_approach",
     "normalize_generation_contract",
+    "normalize_implementation_semantics",
     "normalize_instruction_instances",
+    "project_semantics_to_generation_contract",
     "validate_ladder_against_selected_approach",
 ]

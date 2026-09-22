@@ -274,7 +274,7 @@ def test_direct_is_compact_without_losing_structured_engineering_facts():
     assert "pros 和 cons 用空字符串" in ANALYSIS_DIRECT_PROMPT
     assert "generation_guide 只补结构化字段表达不了" in ANALYSIS_DIRECT_PROMPT
     assert "通常应为空字符串" in ANALYSIS_DIRECT_PROMPT
-    assert "required_structures" in ANALYSIS_DIRECT_PROMPT
+    assert "implementation_semantics" in ANALYSIS_DIRECT_PROMPT
     assert "扫描周期" in ANALYSIS_DIRECT_PROMPT
     assert "不编造已确认答案" in ANALYSIS_DIRECT_PROMPT
     assert "原来为空就不要" in ANALYSIS_PINNED_PROMPT

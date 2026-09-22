@@ -129,7 +129,12 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     normalized.pop("control_type", None)
     normalized.pop("flowchart_steps", None)
     normalized["approaches"] = [
-        normalize_approach({key: value for key, value in item.items() if key != "implementation_preferences"})
+        normalize_approach({
+            key: value
+            for key, value in item.items()
+            if key != "implementation_preferences"
+            and not (key == "generation_contract" and "implementation_semantics" in item)
+        })
         for item in (normalized.get("approaches") or [])
         if isinstance(item, dict)
     ]
