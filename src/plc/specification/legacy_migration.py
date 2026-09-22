@@ -162,7 +162,11 @@ def is_legacy_confirmed_spec(spec):
 
     if not isinstance(spec, Mapping) or not spec:
         return False
-    if int(spec.get("schema_version") or 0) >= 4:
+    try:
+        schema_version = int(spec.get("schema_version") or 0)
+    except (TypeError, ValueError):
+        schema_version = 0
+    if schema_version >= 4:
         return False
     # Fresh review drafts carry provenance/intent even while editable schema=3.
     if isinstance(spec.get("intent_context"), Mapping):
