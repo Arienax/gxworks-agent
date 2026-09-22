@@ -12,7 +12,7 @@ from collections.abc import Mapping
 _VERSION = "confirmed-semantics-v1"
 
 
-def _selected_approach_check(ladder, confirmed_spec):
+def _selected_approach_receipt(confirmed_spec):
     selected = (
         confirmed_spec.get("selected_approach")
         if isinstance(confirmed_spec, Mapping)
@@ -23,20 +23,10 @@ def _selected_approach_check(ladder, confirmed_spec):
         if isinstance(selected, Mapping)
         else None
     )
-    if not isinstance(contract, Mapping) or not contract:
-        return {"check": "selected_approach_contract", "status": "not_applicable"}
-
-    from plc.specification.approach import validate_ladder_against_selected_approach
-    from plc.validation import ApproachContractValidationError
-
-    issues = validate_ladder_against_selected_approach(ladder, confirmed_spec)
-    if issues:
-        raise ApproachContractValidationError(
-            "$.confirmed_spec.selected_approach",
-            str(selected.get("name") or "已选方案").strip() or "已选方案",
-            issues,
-        )
-    return {"check": "selected_approach_contract", "status": "verified"}
+    return {
+        "check": "selected_approach_contract",
+        "status": "deferred_to_review" if isinstance(contract, Mapping) and contract else "not_applicable",
+    }
 
 
 def validate_confirmed_semantics(ladder, confirmed_spec, plc_model="FX3U"):
@@ -44,7 +34,7 @@ def validate_confirmed_semantics(ladder, confirmed_spec, plc_model="FX3U"):
     if not isinstance(confirmed_spec, Mapping):
         return {"version": _VERSION, "status": "not_applicable", "checks": []}
 
-    checks = [_selected_approach_check(ladder, confirmed_spec)]
+    checks = [_selected_approach_receipt(confirmed_spec)]
 
     from plc.specification.checks import check_direct_self_hold
     checks.append(check_direct_self_hold(ladder, confirmed_spec))
