@@ -265,6 +265,34 @@ def test_structured_fact_targets_carry_extended_device_families():
     }
 
 
+def test_runtime_device_vocabulary_covers_actual_index_prefixes():
+    from knowledge.analysis_router import route_analysis_request
+    from plc.device_identity import DEVICE_PREFIXES
+
+    path = _bundled_index()
+    with sqlite3.connect(path) as connection:
+        rows = connection.execute(
+            "SELECT prefix, MIN(device) FROM device_records "
+            "WHERE record_type='device' AND chunk_id IS NOT NULL "
+            "GROUP BY prefix ORDER BY prefix"
+        ).fetchall()
+
+    assert rows
+    actual_prefixes = {str(prefix or "").upper() for prefix, _device in rows if prefix}
+    # N rows in the source corpus are operand/nesting placeholders and are
+    # intentionally not promoted to runtime device targets.
+    assert actual_prefixes - {"N"} <= set(DEVICE_PREFIXES)
+    assert "N" not in DEVICE_PREFIXES
+
+    for prefix, device in rows:
+        prefix = str(prefix or "").upper()
+        if not prefix or prefix == "N":
+            continue
+        token = str(device or "").upper()
+        route = route_analysis_request(f"查 {token} 的软元件定义")
+        assert token in route.devices, (prefix, token, route.devices)
+
+
 def test_device_family_target_coverage_capability_is_enforced():
     from tools.audit_capability_coverage import audit_coverage
 
