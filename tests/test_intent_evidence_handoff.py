@@ -304,7 +304,7 @@ def test_confirmation_generation_save_and_delivery_preserve_same_receipt(tmp_pat
         assert delivered["decision_receipt"]["receipt_id"] == decision["receipt_id"]
         assert "NEW_SPEC_NOT_FOR_OLD_VERSION" not in delivered["markdown"]
         assert "manual\\-source" in delivered["markdown"]
-        assert "不证明每条需求已实现" in delivered["markdown"]
+        assert "需求实现情况见该版本绑定的评审与测试结果" in delivered["markdown"]
         assert delivered["validation_profile"] == "generation_structural"
 
 
