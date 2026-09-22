@@ -199,6 +199,10 @@ _CONTRACT_FIELDS.update({key: [None] for key in (
 _CONTRACT_FIELDS.update({key: [[None]] for key in (
     "any_of_opcode_groups", "any_of_structure_groups", "one_of_opcodes", "one_of_structures",
 )})
+_CONTRACT_FIELDS["instruction_instances"] = [{
+    "opcode": None,
+    "operands": [None],
+}]
 # Opaque semantics remain visible to all generation adapters, but outside the
 # machine-enforced required/forbidden lists. No arbitrary metadata is exposed.
 _CONTRACT_FIELDS["unverified_constraints"] = {
