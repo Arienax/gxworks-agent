@@ -555,6 +555,28 @@ def resolve_error_records(codes, *, plc_model="FX3U", task_type="debug"):
     return results
 
 
+def compact_structured_fact_record(record):
+    """Return a compact row view without discarding structured metadata.
+
+    Manual-backed instruction rows may carry an entire page body after the
+    structured header. Row-oriented exact-fact APIs need the deterministic
+    header only; generation's instruction-fact packer still receives the full
+    record and can select the original manual prose/tables separately.
+    """
+    if not isinstance(record, Mapping):
+        return record
+    value = copy.deepcopy(dict(record))
+    if value.get("structured_fact_kind") != "instruction":
+        return value
+    text = str(value.get("text") or "")
+    if text.startswith("[STRUCTURED INSTRUCTION RECORD]"):
+        head, separator, _rest = text.partition("\n\n")
+        if separator:
+            value["text"] = head.rstrip()
+            value["structured_text_compacted"] = True
+    return value
+
+
 def resolve_structured_records(targets, *, plc_model="FX3U", task_type="analysis"):
     """Resolve all supplied exact targets without invoking the broad retriever."""
     targets = targets if isinstance(targets, Mapping) else {}
@@ -637,6 +659,7 @@ __all__ = [
     "resolve_instruction_contract",
     "resolve_instruction_records",
     "resolve_instruction_step_width",
+    "compact_structured_fact_record",
     "resolve_structured_records",
     "structured_fact_targets",
     "without_structured_targets",
