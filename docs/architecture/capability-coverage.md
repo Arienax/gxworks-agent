@@ -30,8 +30,6 @@ enforces the manifest on pull requests.
 The current manifest intentionally tracks gaps that should not be hidden by a
 passing broad regression suite:
 
-- device canonical identity is owned by `plc.device_identity`, while direct
-  structured device lookup does not yet canonicalize through that owner;
 - structured device records support more families than the current target
   extractor recognizes;
 - the older complete instruction-source precedence set has not yet been
