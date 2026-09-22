@@ -1,0 +1,486 @@
+{
+  "schema_version": 1,
+  "purpose": "Cross-refactor capability migration coverage. Enforced capabilities must keep their declared owners/consumers/tests. tracked_gap capabilities must keep an explicit, machine-observable gap until the migration is completed and the state is changed to enforced.",
+  "states": [
+    "enforced",
+    "tracked_gap"
+  ],
+  "capabilities": [
+    {
+      "id": "structured_plc_fact_resolution",
+      "category": "retrieval",
+      "state": "enforced",
+      "owner": "knowledge.structured_facts",
+      "summary": "Explicit instruction/device/error identities resolve deterministically before residual broad retrieval.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/structured_facts.py",
+          "symbol": "resolve_instruction_records"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/structured_facts.py",
+          "symbol": "resolve_device_records"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/structured_facts.py",
+          "symbol": "resolve_error_records"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/retriever.py",
+          "symbol": "retrieve_fact_aware_knowledge"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_application_runtime_cannot_bypass_fact_aware_retrieval"
+        }
+      ],
+      "tests": [
+        "tests/test_structured_fact_lookup.py",
+        "tests/test_instruction_fact_context.py"
+      ]
+    },
+    {
+      "id": "instruction_step_width",
+      "category": "plc_instruction_fact",
+      "state": "tracked_gap",
+      "owner": "plc.instruction_steps",
+      "summary": "FX3U/GX Works2 step width is operand- and CPU-aware and must remain a single source for export, GXW decoding, and structured facts.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/instruction_steps.py",
+          "symbol": "instruction_step_width"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/instruction_steps.py",
+          "symbol": "StepWidthCatalog"
+        },
+        {
+          "kind": "file",
+          "path": "resources/instructions/mitsubishi/fx3u_step_widths.json"
+        },
+        {
+          "kind": "contains",
+          "path": "src/gxworks2/csv_export.py",
+          "text": "instruction_step_width("
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_gxworks2_sftl_native_steps.py",
+          "text": "test_catalogue_every_fixed_native_form_and_every_variant_is_resolved"
+        }
+      ],
+      "gap_reason": "The structured fact resolver does not yet expose instruction step width or consume opcode+operands through instruction_step_width().",
+      "gap_checks": [
+        {
+          "kind": "absent",
+          "path": "src/knowledge/structured_facts.py",
+          "text": "instruction_step_width"
+        }
+      ],
+      "tests": [
+        "tests/test_gxworks2_sftl_native_steps.py",
+        "tests/test_gxw_lossless.py"
+      ]
+    },
+    {
+      "id": "instruction_contract_promotion",
+      "category": "plc_instruction_fact",
+      "state": "tracked_gap",
+      "owner": "plc.instructions.InstructionRegistry",
+      "summary": "Verified arity/order/execution-form/instruction-width contract promotions remain authoritative and must reach every instruction-fact consumer.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/instructions.py",
+          "symbol": "describe_contract"
+        },
+        {
+          "kind": "file",
+          "path": "resources/instructions/mitsubishi/fx3u_contract_promotions.json"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/analysis_context.py",
+          "text": "describe_contract(opcode"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/confirmed_generation_context.py",
+          "text": "selected_instruction_capability_prompt"
+        }
+      ],
+      "gap_reason": "The new structured fact resolver returns manual-index records but does not merge InstructionRegistry.describe_contract() into the same fact object.",
+      "gap_checks": [
+        {
+          "kind": "absent",
+          "path": "src/knowledge/structured_facts.py",
+          "text": "describe_contract"
+        }
+      ],
+      "tests": [
+        "tests/test_instruction_contract_alignment.py",
+        "tests/test_instruction_registry.py"
+      ]
+    },
+    {
+      "id": "confirmed_instruction_instances",
+      "category": "intent_handoff",
+      "state": "tracked_gap",
+      "owner": "confirmed generation contract",
+      "summary": "When an instruction and its operands are fixed, opcode+operands must survive analysis, confirmation, context compilation, and generation as one instruction instance.",
+      "checks": [
+        {
+          "kind": "contains",
+          "path": "src/application/prompts.py",
+          "text": "完整操作数"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_analysis_prompt_routing.py",
+          "text": "instruction_instances"
+        }
+      ],
+      "gap_reason": "instruction_instances is still exercised as historical intent but is not a formal _CONTRACT_FIELDS dimension and is therefore not guaranteed to survive normalization/projection/context compilation.",
+      "gap_checks": [
+        {
+          "kind": "absent",
+          "path": "src/plc/generation_contract.py",
+          "text": "instruction_instances"
+        },
+        {
+          "kind": "absent",
+          "path": "src/application/context_compiler.py",
+          "text": "instruction_instances"
+        }
+      ],
+      "tests": [
+        "tests/test_analysis_prompt_routing.py"
+      ]
+    },
+    {
+      "id": "device_canonical_identity",
+      "category": "plc_device_fact",
+      "state": "tracked_gap",
+      "owner": "plc.device_identity",
+      "summary": "Mitsubishi device aliases such as X001/X1 share identity without base conversion; all fact lookups must use the same canonical identity.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/device_identity.py",
+          "symbol": "canonical_device"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/device_identity.py",
+          "symbol": "canonical_ladder_devices"
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/specification/bindings.py",
+          "text": "canonical_device"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/confirmed_generation_context.py",
+          "text": "canonical_device"
+        }
+      ],
+      "gap_reason": "resolve_device_records() currently uppercases the requested device but does not canonicalize it through plc.device_identity.canonical_device().",
+      "gap_checks": [
+        {
+          "kind": "absent",
+          "path": "src/knowledge/structured_facts.py",
+          "text": "canonical_device"
+        }
+      ],
+      "tests": [
+        "tests/test_device_identity_delivery.py",
+        "tests/test_spec_choice_metadata.py"
+      ]
+    },
+    {
+      "id": "device_family_target_coverage",
+      "category": "plc_device_fact",
+      "state": "tracked_gap",
+      "owner": "knowledge index device_records",
+      "summary": "Target extraction must cover the device families present in the structured device index rather than only a historical X/Y/M/D/T/C/S/V/Z subset.",
+      "checks": [
+        {
+          "kind": "contains",
+          "path": "tools/build_fx3u_knowledge_v3.py",
+          "text": "(?:ER|SM|SD|TS|TC|CS|CC|[A-Z]+)"
+        }
+      ],
+      "gap_reason": "analysis_router._DEVICE does not yet cover indexed device families such as TS/TC/CS/CC/ER that the structured index can represent.",
+      "gap_checks": [
+        {
+          "kind": "absent",
+          "path": "src/knowledge/analysis_router.py",
+          "text": "TS|TC|CS|CC"
+        }
+      ],
+      "tests": [
+        "tests/test_structured_fact_lookup.py",
+        "tests/test_device_entity_cleanup.py"
+      ]
+    },
+    {
+      "id": "completion_flag_direct_resolution",
+      "category": "plc_instruction_fact",
+      "state": "enforced",
+      "owner": "knowledge.instruction_facts",
+      "summary": "Instruction completion flags are read from structured instruction records and resolved through direct device lookup, never broad RAG ranking.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/instruction_facts.py",
+          "symbol": "_completion_sources"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/instruction_facts.py",
+          "text": "completion_flags_json"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/instruction_facts.py",
+          "text": "resolve_device_records"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_instruction_fact_context.py",
+          "text": "delivered_fact_report"
+        }
+      ],
+      "tests": [
+        "tests/test_instruction_fact_context.py"
+      ]
+    },
+    {
+      "id": "instruction_source_authority",
+      "category": "retrieval",
+      "state": "tracked_gap",
+      "owner": "official manual source authority",
+      "summary": "When the same opcode appears in multiple manuals, the audited authoritative source selection must survive the move away from broad-RAG boosts.",
+      "checks": [
+        {
+          "kind": "contains",
+          "path": "src/knowledge/core.py",
+          "text": "audited_instruction_precedence"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_motion_instruction_direct_lookup_prefers_positioning_manual"
+        }
+      ],
+      "gap_reason": "The direct resolver currently relies on generic completeness/manual_priority ordering; the older complete precedence set has not yet been migrated into a data-backed authority contract with full coverage tests.",
+      "gap_checks": [
+        {
+          "kind": "absent",
+          "path": "src/knowledge/structured_facts.py",
+          "text": "audited_instruction_precedence"
+        }
+      ],
+      "tests": [
+        "tests/test_instruction_contract_alignment.py",
+        "tests/test_structured_fact_lookup.py"
+      ]
+    },
+    {
+      "id": "io_binding_purpose_comment_identity",
+      "category": "intent_handoff",
+      "state": "enforced",
+      "owner": "plc.specification.bindings",
+      "summary": "I/O binding identity and purpose label remain distinct; confirmed purpose follows address changes into generated comments without using question/reasoning prose.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/specification/bindings.py",
+          "symbol": "binding_hint"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/specification/bindings.py",
+          "symbol": "generation_io_snapshot"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/confirmed_generation_context.py",
+          "text": "generation_io_snapshot"
+        },
+        {
+          "kind": "contains",
+          "path": "docs/architecture/io-binding-labels.md",
+          "text": "binding_id"
+        }
+      ],
+      "tests": [
+        "tests/test_spec_choice_metadata.py",
+        "tests/test_confirmed_reconfirmation.py",
+        "tests/test_device_identity_delivery.py"
+      ]
+    },
+    {
+      "id": "direct_design_explicit_mode",
+      "category": "analysis_routing",
+      "state": "enforced",
+      "owner": "knowledge.analysis_router",
+      "summary": "Only explicit caller analysis_mode enables Design; complexity, keywords, missing parameters, or selected approaches cannot auto-open design exploration.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/analysis_router.py",
+          "symbol": "route_analysis_request"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/analysis_router.py",
+          "text": "if analysis_mode == \"design\""
+        },
+        {
+          "kind": "contains",
+          "path": "docs/architecture/analysis-modes.md",
+          "text": "selected by the caller"
+        }
+      ],
+      "tests": [
+        "tests/test_analysis_prompt_routing.py",
+        "tests/test_analysis_mode_jobs.py"
+      ]
+    },
+    {
+      "id": "scoped_retrieval_facade",
+      "category": "retrieval",
+      "state": "enforced",
+      "owner": "knowledge.retriever",
+      "summary": "Application, agent runtime, and integrations cannot bypass the scoped retrieval facade into knowledge.core or private retriever internals.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/retriever.py",
+          "symbol": "build_knowledge_context"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_architecture_boundaries.py",
+          "text": "test_application_agents_and_integrations_use_the_scoped_retrieval_facade"
+        },
+        {
+          "kind": "contains",
+          "path": "docs/architecture/runtime-ownership.md",
+          "text": "Application, agent runtime and integrations enter through"
+        }
+      ],
+      "tests": [
+        "tests/test_architecture_boundaries.py"
+      ]
+    },
+    {
+      "id": "reasoning_effort_profile_ownership",
+      "category": "model_runtime",
+      "state": "enforced",
+      "owner": "model_runtime.request_policy",
+      "summary": "User model configuration owns reasoning tuning; workflow/project stages may not reintroduce non-neutral reasoning_effort.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/model_runtime/request_policy.py",
+          "symbol": "without_workflow_effort"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/model_runtime/request_policy.py",
+          "symbol": "resolve_request"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_architecture_boundaries.py",
+          "text": "test_production_workflows_cannot_reintroduce_effort_hints"
+        },
+        {
+          "kind": "contains",
+          "path": "docs/architecture/runtime-ownership.md",
+          "text": "The saved model profile owns tuning"
+        }
+      ],
+      "tests": [
+        "tests/test_architecture_boundaries.py",
+        "tests/test_model_contract.py"
+      ]
+    },
+    {
+      "id": "user_data_settings_migration",
+      "category": "persistence",
+      "state": "enforced",
+      "owner": "storage.user_data",
+      "summary": "Config and model observations migrate to stable user data with recovery/atomic replacement rather than living in a source clone.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/storage/config.py",
+          "symbol": "migrate_user_settings"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/storage/user_data.py",
+          "symbol": "prepare"
+        },
+        {
+          "kind": "contains",
+          "path": "docs/architecture/runtime-ownership.md",
+          "text": "storage.user_data"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_application_settings.py",
+          "text": "migration"
+        }
+      ],
+      "tests": [
+        "tests/test_application_settings.py",
+        "tests/test_model_profile_config.py"
+      ]
+    },
+    {
+      "id": "model_aware_context_compiler",
+      "category": "context",
+      "state": "enforced",
+      "owner": "application.context_compiler",
+      "summary": "Confirmed engineering state, retrieval query projection, and RAG evidence budgets are compiled from the selected model context contract without silently dropping current intent.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/application/context_compiler.py",
+          "symbol": "ContextCompiler"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/application/context_compiler.py",
+          "symbol": "model_budget"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/confirmed_generation_context.py",
+          "text": "ContextCompilerInput"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_context_compiler.py",
+          "text": "context"
+        }
+      ],
+      "tests": [
+        "tests/test_context_compiler.py",
+        "tests/test_intent_evidence_handoff.py"
+      ]
+    }
+  ]
+}
