@@ -108,7 +108,7 @@ def _directive_kind(text, start):
 def _operand_tokens(text):
     return [
         token
-        for token in re.split(r"[\s,，]+", text.strip())
+        for token in re.split(r"[\s,，;；。]+", text.strip())
         if token
     ]
 
@@ -152,7 +152,7 @@ def extract_explicit_user_constraints(text, plc_model="FX3U"):
                 cursor = source[match.end():]
                 consumed = 0
                 found = 0
-                for token_match in re.finditer(r"[^\s,，]+", cursor):
+                for token_match in re.finditer(r"[^\s,，;；。]+", cursor):
                     found += 1
                     consumed = token_match.end()
                     if found == operand_count:

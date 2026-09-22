@@ -59,6 +59,46 @@ def _self_hold_kernel(rung, branch, *, start, stop, output=None):
     }
 
 
+def _has_partial_self_hold_core(ladder, *, start, output=None):
+    """Recognize a latch core even when its stop/run-permit contact is missing."""
+    for rung in (ladder or {}).get("rungs", []) or []:
+        if not isinstance(rung, dict):
+            continue
+        for branch in rung.get("branches", []) or []:
+            if not isinstance(branch, dict):
+                continue
+            outputs = branch.get("outputs", [])
+            if len(outputs) != 1 or outputs[0].get("type") != "COIL":
+                continue
+            held = outputs[0].get("address")
+            if not held or (output and held != output):
+                continue
+            conditions = [
+                rung.get("header_element"),
+                *(rung.get("shared_inputs", []) or []),
+                *(branch.get("inputs", []) or []),
+            ]
+            parallels = [
+                item for item in conditions
+                if isinstance(item, dict) and item.get("type") == "parallel_block"
+            ]
+            if len(parallels) != 1:
+                continue
+            paths = parallels[0].get("branches", [])
+            if len(paths) != 2 or any(len(path) != 1 for path in paths):
+                continue
+            contacts = [path[0] for path in paths]
+            if not all(isinstance(item, dict) and item.get("type") in {"NO", "NC"}
+                       for item in contacts):
+                continue
+            if {item.get("address") for item in contacts} != {start, held}:
+                continue
+            hold = next((item for item in contacts if item.get("address") == held), None)
+            if hold and hold.get("type") == "NO":
+                return True
+    return False
+
+
 def check_direct_self_hold(ladder, spec):
     """Verify the confirmed start/stop polarity of an existing self-hold kernel.
 
@@ -145,6 +185,12 @@ def check_direct_self_hold(ladder, spec):
                 kernels.append(kernel)
 
     if not kernels:
+        if explicit_primitive and _has_partial_self_hold_core(
+            ladder, start=roles["start"], output=roles.get("output")
+        ):
+            raise PLCJsonValidationError(
+                "$.rungs: confirmed self-hold is missing stop/run-permit condition"
+            )
         return uncovered("not_self_hold_topology" if explicit_primitive else "unsupported_topology")
     if len(kernels) != 1:
         return uncovered("ambiguous_self_hold_topology")

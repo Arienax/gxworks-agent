@@ -254,6 +254,7 @@ def test_required_self_hold_checker_ignores_unrelated_program_scope():
     from plc.specification.semantic_validation import validate_confirmed_semantics
 
     ladder = _self_hold()
+    ladder["rungs"][0]["branches"][0]["inputs"][1]["type"] = "NO"
     ladder["rungs"].append({
         "rung_id": 2,
         "header_element": None,
