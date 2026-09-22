@@ -276,7 +276,7 @@ def test_exact_instruction_instance_survives_agent_a_confirmation_to_agent_b():
     from application.confirmed_generation_context import build_confirmed_generation_context
     from knowledge.structured_facts import structured_fact_targets
     from plc.specification.approach import format_contract_summary
-    from plc.specification.confirmed import confirm_context
+    from plc.specification.provenance import confirm_context
 
     instance = {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
     normalized = _normalize_analysis_result(
@@ -311,7 +311,7 @@ def test_exact_instruction_instance_survives_agent_a_confirmation_to_agent_b():
 
 
 def test_pinned_reanalysis_preserves_instances_until_explicitly_cleared():
-    from plc.specification.confirmed import confirm_context
+    from plc.specification.provenance import confirm_context
 
     instance = {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
     first = _normalize_analysis_result(
@@ -341,7 +341,7 @@ def test_model_proposed_instruction_instance_stays_exact_as_selected_preference(
     from application.confirmed_generation_context import build_confirmed_generation_context
     from knowledge.structured_facts import structured_fact_targets
     from plc.specification.approach import format_contract_summary
-    from plc.specification.confirmed import confirm_context
+    from plc.specification.provenance import confirm_context
 
     instance = {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
     normalized = _normalize_analysis_result(
