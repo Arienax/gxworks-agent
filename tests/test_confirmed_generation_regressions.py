@@ -283,9 +283,11 @@ def test_agent_a_cannot_drop_verbatim_classification_or_promote_guessed_contract
     contract = draft["selected_approach"]["generation_contract"]
     assert contract["required_opcodes"] == []
     assert contract["required_devices"] == []
-    assert "hardware_counter" not in contract["required_structures"]
+    # Structures are selected-approach semantics and all follow the same
+    # provenance policy. Counter structures no longer have a keyword-only
+    # exception that silently strips them from Agent A's selected plan.
     assert "data_register_counter" not in contract["required_structures"]
-    assert contract["required_structures"] == ["direct_logic"]
+    assert contract["required_structures"] == ["hardware_counter", "direct_logic"]
 
 
 def test_agent_b_receives_structured_approach_contract_but_not_agent_a_prose():
@@ -300,7 +302,10 @@ def test_agent_b_receives_structured_approach_contract_but_not_agent_a_prose():
     selected = projected["selected_approach"]
 
     assert selected["approach_id"] == "model_guess"
-    assert selected["generation_contract"]["required_structures"] == ["direct_logic"]
+    assert selected["generation_contract"]["required_structures"] == [
+        "hardware_counter",
+        "direct_logic",
+    ]
     assert selected["name"] == draft["selected_approach"]["name"]
     assert selected["description"] == draft["selected_approach"]["description"]
     assert selected["generation_guide"] == draft["selected_approach"]["generation_guide"]
