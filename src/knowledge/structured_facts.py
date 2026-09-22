@@ -469,7 +469,9 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
 
 
 def resolve_device_records(devices, *, plc_model="FX3U", task_type="analysis"):
-    """Resolve explicit device identities through ``device_records`` only."""
+    """Resolve explicit device identities through the canonical device owner."""
+    from plc.device_identity import canonical_device
+
     core, _path, connection, schema, _meta = _runtime()
     if connection is None or schema is None:
         return []
@@ -480,8 +482,11 @@ def resolve_device_records(devices, *, plc_model="FX3U", task_type="analysis"):
     results = []
     seen = set()
     for requested in devices or ():
-        device = str(requested or "").strip().upper()
-        if not device:
+        requested_device = str(requested or "").strip().upper()
+        if not requested_device:
+            continue
+        device = canonical_device(requested_device)
+        if not isinstance(device, str) or not device:
             continue
         rows = connection.execute(
             "SELECT * FROM {} WHERE device_norm=? AND chunk_id IS NOT NULL "
@@ -503,7 +508,10 @@ def resolve_device_records(devices, *, plc_model="FX3U", task_type="analysis"):
                 if marker in seen:
                     continue
                 seen.add(marker)
-                results.append(candidate)
+                value = dict(candidate)
+                value["structured_fact_requested_target"] = requested_device
+                value["structured_fact_target"] = device
+                results.append(value)
     results.sort(
         key=lambda item: (
             -int(item.get("manual_priority") or 0),
