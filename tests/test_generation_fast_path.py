@@ -233,10 +233,9 @@ def test_required_self_hold_missing_role_fails_closed_without_label_inference():
             {"kind": "Y", "address": "Y0", "label": "电机"},
         ],
         "selected_approach": {
-            "generation_contract": {
-                "required_structures": ["self_hold"],
-                "enforce": True,
-            },
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+            ],
         },
     }
     with pytest.raises(ConfirmedSemanticValidationError, match="missing_roles"):
@@ -259,10 +258,9 @@ def test_required_self_hold_unsupported_shape_is_visible_but_not_a_style_gate():
         ],
         "parameters": [{"id": "unrelated_process_parameter", "value": "keep"}],
         "selected_approach": {
-            "generation_contract": {
-                "required_structures": ["self_hold"],
-                "enforce": True,
-            },
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+            ],
         },
     }
     report = validate_confirmed_semantics(_self_hold(), spec, plc_model="FX3U")
@@ -289,10 +287,9 @@ def test_confirmed_semantic_mismatch_is_not_a_format_repair_problem():
             {"kind": "Y", "address": "Y0", "label": "电机"},
         ],
         "selected_approach": {
-            "generation_contract": {
-                "required_structures": ["self_hold"],
-                "enforce": True,
-            },
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+            ],
         },
     }
     with pytest.raises(ConfirmedSemanticValidationError):
