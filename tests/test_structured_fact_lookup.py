@@ -88,6 +88,31 @@ def test_exact_error_is_resolved_from_error_records():
     assert all(item["structured_fact_kind"] == "error" for item in rows)
 
 
+def test_fact_aware_row_api_keeps_exact_instruction_out_of_broad_retrieval(monkeypatch):
+    _bundled_index()
+    import knowledge.retriever as retriever
+
+    def broad_lookup(*args, **kwargs):
+        pytest.fail("exact-only SFTL manual lookup must not enter broad RAG")
+
+    monkeypatch.setattr(retriever, "retrieve_knowledge", broad_lookup)
+    rows = retriever.retrieve_fact_aware_knowledge(
+        "SFTL", plc_model="FX3U", task_type="analysis", top_k=5, char_budget=7000,
+    )
+    assert rows
+    assert rows[0]["structured_lookup"] is True
+    assert rows[0]["structured_fact_kind"] == "instruction"
+    assert rows[0]["structured_fact_target"] == "SFTL"
+
+
+def test_agent_manual_search_uses_fact_aware_entry_point():
+    from agent_runtime import plc_tools
+
+    source_text = inspect.getsource(plc_tools._search_plc_manual)
+    assert "retrieve_fact_aware_knowledge" in source_text
+    assert "retrieve_knowledge(" not in source_text
+
+
 def test_targeted_generation_context_does_not_call_broad_retriever(monkeypatch):
     _bundled_index()
     import knowledge.retriever as retriever
