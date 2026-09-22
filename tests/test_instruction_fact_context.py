@@ -96,13 +96,25 @@ def test_source_expansion_obeys_revision_model_and_section(tmp_path, monkeypatch
 def test_coverage_is_candidate_only_and_tracks_actual_delivery(monkeypatch):
     import knowledge.instruction_facts as facts
     monkeypatch.setattr(facts, "_related_units", lambda *a: [])
+    monkeypatch.setattr(facts, "_completion_sources", lambda *a: [])
     calls = []
-    def retrieve(query, **kwargs):
-        calls.append((query, kwargs))
+
+    def resolve(targets, **kwargs):
+        calls.append((copy.deepcopy(targets), kwargs))
         return [source()]
-    blocks, report = retrieve_instruction_facts("MOV", plc_model="FX3U", task_type="generate",
-                                                char_budget=2000, retrieve=retrieve)
-    assert len(calls) == 1 and "operand" in calls[0][0] and "execution" in calls[0][0]
+
+    def broad_lookup(*args, **kwargs):
+        pytest.fail("explicit instruction facts must not call broad retrieval")
+
+    blocks, report = retrieve_instruction_facts(
+        "MOV", plc_model="FX3U", task_type="generate", char_budget=2000,
+        retrieve=broad_lookup, resolver=resolve,
+    )
+    assert calls == [([{"opcode": "MOV", "base_opcode": "MOV"}],
+                      {"plc_model": "FX3U", "task_type": "generate"})]
+    assert report["retrieval_mode"] == "structured_direct"
+    assert report["queries"] == []
+    assert report["lookups"][0]["source"] == "instructions.opcode_norm"
     included = delivered_fact_report(report, [blocks[0]["id"]])
     assert included["verification"] == "not_performed"
     assert {row["status"] for row in included["facts"]} == {"candidate_evidence", "unresolved"}
