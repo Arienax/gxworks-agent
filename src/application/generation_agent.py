@@ -249,28 +249,8 @@ def generate_confirmed_ladder(
             on_stage("compact_normalized", "已在本地兼容确定性的表示差异；正在展开梯形图，未增加模型请求")
     ladder, representation = _decode_generated_ladder(compact, projected, model)
     diagnostics.emit("generation_representation", stage="compact_protocol", representation=representation)
-
-    from plc.candidate_service import CandidateService
-    from plc.generation import CONFIRMED_AGENT_ORIGIN
-    prepared = CandidateService().prepare(
-        ladder,
-        plc_model=model,
-        confirmed_spec=projected,
-        task_type="generate",
-        candidate_origin=CONFIRMED_AGENT_ORIGIN,
-        on_progress=(
-            (lambda message: on_stage("candidate_validation", message))
-            if on_stage else None
-        ),
-    )
-    diagnostics.emit(
-        "confirmed_semantic_validation",
-        stage="generation_validation",
-        **prepared["semantic_validation"],
-    )
     return {
-        "ladder": prepared["ladder"],
-        "prepared_candidate": prepared,
+        "ladder": ladder,
         "model_calls": 1,
         "generation_handoff": context.to_dict()["handoff"],
     }
