@@ -91,6 +91,113 @@ def _instruction_completeness(row):
             score += 1
     return score
 
+def resolve_instruction_step_width(target, *, plc_model="FX3U"):
+    """Resolve one instruction expected GX program width from the shared owner.
+
+    Exact opcode+operands use instruction_step_width. Opcode-only targets may
+    expose a width only when the catalogue proves the mnemonic has one fixed
+    observed width/arity. Operand-dependent and unsupported forms remain
+    explicitly unresolved; this layer never guesses operands or a one-step
+    fallback.
+    """
+    from plc.instruction_steps import default_step_width_catalog, instruction_step_width
+
+    if isinstance(target, Mapping):
+        opcode = str(target.get("opcode") or target.get("base_opcode") or "").strip().upper()
+        raw_operands = target.get("operands")
+        has_operands = isinstance(raw_operands, (list, tuple))
+        operands = [str(value).strip() for value in raw_operands] if has_operands else []
+    else:
+        opcode = str(target or "").strip().upper()
+        has_operands = False
+        operands = []
+
+    if not opcode:
+        return {
+            "known": False,
+            "steps": None,
+            "resolution": "unresolved",
+            "source": "unknown",
+            "reason": "Instruction opcode is missing",
+            "evidence": [],
+            "operands": operands,
+        }
+
+    if has_operands:
+        width = instruction_step_width(opcode, operands, plc_model=plc_model)
+        return {
+            "known": width.known,
+            "steps": width.steps,
+            "resolution": "instruction_instance" if width.known else "unresolved_instance",
+            "source": width.source,
+            "reason": width.reason,
+            "evidence": list(width.evidence),
+            "operands": operands,
+        }
+
+    try:
+        catalogue = default_step_width_catalog()
+        model = str(plc_model or "FX3U").strip().upper()
+        fixed = catalogue.fixed_forms().get(opcode) if model in catalogue.models else None
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        fixed = None
+        unavailable_reason = "Step-width metadata unavailable: " + str(exc)
+    else:
+        unavailable_reason = ""
+
+    if fixed is not None:
+        steps, arity = fixed
+        return {
+            "known": True,
+            "steps": int(steps),
+            "resolution": "fixed_mnemonic",
+            "source": "native_observation",
+            "reason": "",
+            "evidence": [],
+            "operands": [],
+            "operand_arity": int(arity),
+        }
+
+    return {
+        "known": False,
+        "steps": None,
+        "resolution": "requires_operands",
+        "source": "unknown",
+        "reason": unavailable_reason or (
+            "Opcode-only target is operand-dependent, variable-width, "
+            "unsupported for this CPU, or lacks one fixed observed width"
+        ),
+        "evidence": [],
+        "operands": [],
+    }
+
+
+def _attach_instruction_step_width(record, target, *, plc_model):
+    fact = resolve_instruction_step_width(target, plc_model=plc_model)
+    value = dict(record)
+    value["instruction_step_width"] = copy.deepcopy(fact)
+
+    body = str(value.get("text") or "")
+    if fact["known"]:
+        detail = f"STEP_WIDTH: {fact['steps']} program step(s)"
+        if fact["resolution"] == "fixed_mnemonic":
+            detail += f" [fixed mnemonic; arity={fact.get('operand_arity', '?')}; source={fact['source']}]"
+        else:
+            detail += f" [instruction instance; source={fact['source']}]"
+    else:
+        detail = "STEP_WIDTH: unresolved"
+        if fact["resolution"] == "requires_operands":
+            detail += " [opcode alone is insufficient; supply operands]"
+        elif fact.get("reason"):
+            detail += f" [{fact['reason']}]"
+
+    if body.startswith("[STRUCTURED INSTRUCTION RECORD]"):
+        first, separator, rest = body.partition("\n")
+        value["text"] = first + "\n" + detail + (separator + rest if separator else "")
+    else:
+        value["text"] = detail + ("\n\n" + body if body else "")
+    return value
+
 
 def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generate"):
     """Resolve canonical/variant opcodes directly through ``instructions``.
@@ -110,9 +217,11 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
         if isinstance(target, Mapping):
             opcode = str(target.get("opcode") or "").strip().upper()
             base = str(target.get("base_opcode") or opcode).strip().upper()
+            step_target = copy.deepcopy(dict(target))
         else:
             opcode = str(target or "").strip().upper()
             base = opcode
+            step_target = {"opcode": opcode, "base_opcode": base}
         names = list(dict.fromkeys(value for value in (opcode, base) if value))
         if not names:
             continue
@@ -140,7 +249,9 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
             )
             if not chunk:
                 continue
-            candidate = chunk[0]
+            candidate = _attach_instruction_step_width(
+                chunk[0], step_target, plc_model=plc_model,
+            )
             candidates.append(
                 (
                     -exact,
@@ -327,6 +438,7 @@ __all__ = [
     "resolve_device_records",
     "resolve_error_records",
     "resolve_instruction_records",
+    "resolve_instruction_step_width",
     "resolve_structured_records",
     "structured_fact_targets",
     "without_structured_targets",
