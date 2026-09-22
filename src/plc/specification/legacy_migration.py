@@ -157,6 +157,29 @@ def _needs_legacy_approach_migration(approach):
     )
 
 
+def is_legacy_confirmed_spec(spec):
+    """Recognize persisted pre-provenance specs; fresh drafts must bypass migration."""
+
+    if not isinstance(spec, Mapping) or not spec:
+        return False
+    if int(spec.get("schema_version") or 0) >= 4:
+        return False
+    # Fresh review drafts carry provenance/intent even while editable schema=3.
+    if isinstance(spec.get("intent_context"), Mapping):
+        return False
+    if isinstance(spec.get("decision_receipt"), Mapping):
+        return False
+    candidates = [
+        *(spec.get("approaches") or [] if isinstance(spec.get("approaches"), list) else []),
+        spec.get("selected_approach"),
+    ]
+    return any(
+        _needs_legacy_approach_migration(item)
+        for item in candidates
+        if isinstance(item, Mapping)
+    )
+
+
 def migrate_legacy_approach(approach):
     """Attach an inferred legacy contract only to an unmistakable old shape."""
 
@@ -167,9 +190,11 @@ def migrate_legacy_approach(approach):
 
 
 def migrate_legacy_confirmed_spec(spec):
-    """Migrate persisted prose-only approaches before fresh normalization."""
+    """Migrate only a recognized persisted legacy snapshot."""
 
     migrated = copy.deepcopy(dict(spec)) if isinstance(spec, Mapping) else {}
+    if not is_legacy_confirmed_spec(migrated):
+        return migrated
     approaches = migrated.get("approaches")
     if isinstance(approaches, list):
         migrated["approaches"] = [
@@ -183,4 +208,8 @@ def migrate_legacy_confirmed_spec(spec):
     return migrated
 
 
-__all__ = ["migrate_legacy_approach", "migrate_legacy_confirmed_spec"]
+__all__ = [
+    "is_legacy_confirmed_spec",
+    "migrate_legacy_approach",
+    "migrate_legacy_confirmed_spec",
+]
