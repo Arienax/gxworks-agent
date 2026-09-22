@@ -51,12 +51,22 @@ jobs:
         if: github.event_name == 'pull_request'
         shell: bash
         env:
+          BEFORE_SHA: ${{ github.event.before }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           python -m compileall -q src tests
           python -m pytest -q tests/test_source_layout.py tests/test_architecture_boundaries.py tests/test_plc_core_boundary.py
-          git diff --name-only "$BASE_SHA"...HEAD > changed-files.txt
+          from="$BEFORE_SHA"
+          if [[ -z "$from" || "$from" == "null" || "$from" =~ ^0+$ ]]; then
+            from="$BASE_SHA"
+          fi
+          to="$HEAD_SHA"
+          if [[ -z "$to" || "$to" == "null" ]]; then
+            to=HEAD
+          fi
+          git diff --name-only "$from"..."$to" > changed-files.txt
           mapfile -t changed_tests < <(
             grep -E '^tests/test_.*\.py$' changed-files.txt               | grep -v -E '^tests/test_(source_layout|architecture_boundaries|plc_core_boundary)\.py$'               | while IFS= read -r path; do
                   if [[ -f "$path" ]]; then printf '%s\n' "$path"; fi

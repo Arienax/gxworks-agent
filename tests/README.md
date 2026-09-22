@@ -19,7 +19,7 @@ The registry below lists the current owners. Data fixtures under `tests/fixtures
 
 ## CI placement
 
-Pull requests use three layers. `Source Layout Validation` is the fast gate: it compiles the tree, checks permanent architecture boundaries, runs changed Python test files, and executes the credential-free MCP smoke. Domain workflows run only when their owned source/test paths change. The complete Python suite, Web/Playwright checks, Windows package smoke, and offline context replay run on `main`, releases, or explicit manual validation.
+Pull requests use three layers. `Source Layout Validation` is the fast gate: it compiles the tree, checks permanent architecture boundaries, runs Python test files changed by the current PR synchronization, and executes the credential-free MCP smoke. Domain workflows run only when their owned source/test paths change. The complete Python suite, Web/Playwright checks, Windows package smoke, and offline context replay run on `main`, releases, or explicit manual validation.
 
 A test file should have one primary targeted workflow. It may also run in the full suite. Listing the same file in multiple targeted workflows is justified only when the workflows exercise materially different contracts; platform/package checks belong to full validation rather than every PR.
 
