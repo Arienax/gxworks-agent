@@ -173,3 +173,32 @@ def test_confirmed_generation_acceptance_capability_is_enforced():
     report = audit_coverage()
     states = {row["id"]: row["state"] for row in report["capabilities"]}
     assert states["confirmed_generation_acceptance"] == "enforced"
+
+
+
+def test_confirmed_semantic_mismatch_is_not_a_format_repair_problem():
+    from plc.specification.semantic_validation import (
+        ConfirmedSemanticValidationError,
+        validate_confirmed_semantics,
+    )
+
+    spec = {
+        "io_bindings": [
+            {"role": "start", "kind": "X", "address": "X0", "active_level": 1},
+            {"role": "stop", "kind": "X", "address": "X1", "active_level": 0},
+            {"role": "output", "kind": "Y", "address": "Y0"},
+        ],
+        "io_table": [
+            {"kind": "X", "address": "X0", "label": "启动"},
+            {"kind": "X", "address": "X1", "label": "停止"},
+            {"kind": "Y", "address": "Y0", "label": "电机"},
+        ],
+        "selected_approach": {
+            "generation_contract": {
+                "required_structures": ["self_hold"],
+                "enforce": True,
+            },
+        },
+    }
+    with pytest.raises(ConfirmedSemanticValidationError):
+        validate_confirmed_semantics(_self_hold(), spec, plc_model="FX3U")
