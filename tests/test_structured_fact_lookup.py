@@ -359,3 +359,16 @@ def test_confirmed_targets_include_selected_opcode_without_broad_search_text():
     assert targets["instructions"][0]["opcode"] == "WSFL"
     assert targets["devices"] == []
     assert targets["errors"] == []
+
+
+def test_instruction_contract_delivery_has_one_structured_owner():
+    import application.compact_protocol as compact_protocol
+    import application.confirmed_generation_context as confirmed_context
+    import knowledge.structured_facts as structured_facts
+
+    assert hasattr(structured_facts, "resolve_instruction_contract")
+    assert not hasattr(confirmed_context, "selected_instruction_capability_prompt")
+    assert compact_protocol.compact_capability_prompt(
+        "FX3U",
+        {"selected_approach": {"generation_contract": {"required_opcodes": ["MOV"]}}},
+    ) == ""
