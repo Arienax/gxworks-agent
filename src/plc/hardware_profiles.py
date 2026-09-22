@@ -13,6 +13,7 @@ import json
 import re
 from shared.i18n import tr
 from plc.specification.parameters import hardware_parameter_id, parameter_is_applicable
+from plc.specification.approach import normalize_instruction_instances
 
 
 HARDWARE_PROFILE_SCHEMA_VERSION = 1
@@ -137,6 +138,25 @@ def _requirement_mentions_token(requirement, token):
         )
     )
 
+def _requirement_mentions_instruction_instance(requirement, instance):
+    """Promote an exact call only when the user's text contains that full call."""
+    if not isinstance(instance, dict):
+        return False
+    opcode = str(instance.get("opcode") or "").strip()
+    operands = instance.get("operands") or []
+    if not opcode or not isinstance(operands, (list, tuple)):
+        return False
+    tokens = [opcode, *(str(value).strip() for value in operands)]
+    if any(not token for token in tokens):
+        return False
+    separator = r"[\s,，]+"
+    pattern = (
+        r"(?<![A-Za-z0-9_.$@+<>!=\-])"
+        + separator.join(re.escape(token) for token in tokens)
+        + r"(?![A-Za-z0-9_.$@+<>!=\-])"
+    )
+    return bool(re.search(pattern, str(requirement or ""), re.IGNORECASE))
+
 
 def _string_list(value):
     if isinstance(value, str):
@@ -204,6 +224,13 @@ def _sanitize_analysis_approaches(result, user_text):
         contract["any_of_opcode_groups"] = [
             group for group in contract["any_of_opcode_groups"] if group
         ]
+
+        if "instruction_instances" in contract:
+            contract["instruction_instances"] = [
+                instance
+                for instance in normalize_instruction_instances(contract.get("instruction_instances"))
+                if _requirement_mentions_instruction_instance(requirement, instance)
+            ]
 
         if not has_counter_intent:
             for field in ("required_structures", "forbidden_structures"):
