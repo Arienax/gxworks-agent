@@ -549,6 +549,11 @@
         {
           "kind": "contains",
           "path": "src/plc/generation.py",
+          "text": "CONFIRMED_AGENT_ORIGIN = \"compact_agent\""
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/generation.py",
           "text": "candidate_origin != \"compact_agent\""
         },
         {
@@ -559,7 +564,7 @@
         {
           "kind": "contains",
           "path": "src/application/generation_agent.py",
-          "text": "candidate_origin=\"compact_agent\""
+          "text": "candidate_origin=CONFIRMED_AGENT_ORIGIN"
         },
         {
           "kind": "contains",
@@ -575,6 +580,11 @@
           "kind": "contains",
           "path": "tests/test_confirmed_input_protocol.py",
           "text": "assert prepare_calls == [\"compact_agent\"]"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_generation_fast_path.py",
+          "text": "test_confirmed_agent_origin_has_one_core_owner"
         }
       ],
       "tests": [
