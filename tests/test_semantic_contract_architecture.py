@@ -1,4 +1,5 @@
 import copy
+from pathlib import Path
 
 import pytest
 
@@ -73,6 +74,24 @@ def test_all_structures_share_the_same_selected_approach_provenance(structure):
 
     contract = result["approaches"][0]["generation_contract"]
     assert contract["required_structures"] == [structure]
+
+
+def test_semantic_ownership_does_not_regress_to_named_special_cases():
+    root = Path(__file__).resolve().parents[1]
+    hardware = (root / "src/plc/hardware_profiles.py").read_text(encoding="utf-8")
+    approach = (root / "src/plc/specification/approach.py").read_text(encoding="utf-8")
+    legacy = (root / "src/plc/specification/legacy_migration.py").read_text(encoding="utf-8")
+    repair = (root / "src/plc/ladder_repair.py").read_text(encoding="utf-8")
+    validation = (root / "src/plc/validation.py").read_text(encoding="utf-8")
+    review = (root / "src/plc/review.py").read_text(encoding="utf-8")
+
+    assert "_COUNTER_INTENT_RE" not in hardware
+    assert "_infer_contract_from_guide" not in approach
+    assert "_infer_contract_from_guide" in legacy
+    assert "normalize_m8029_parallel_branches" not in repair
+    for token in ("SFTL", "ZRN", "M8029"):
+        assert token not in validation
+        assert token not in review
 
 
 def test_fresh_review_draft_never_enters_legacy_guide_migration():
