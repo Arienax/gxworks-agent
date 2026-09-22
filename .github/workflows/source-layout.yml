@@ -68,11 +68,13 @@ jobs:
           fi
           git diff --name-only "$from"..."$to" > changed-files.txt
           {
-            grep -E '^tests/test_.*\.py$' changed-files.txt \
-              | grep -v -E '^tests/test_(source_layout|architecture_boundaries|plc_core_boundary)\.py$' \
-              | while IFS= read -r path; do
-                  if [[ -f "$path" ]]; then printf '%s\n' "$path"; fi
-                done
+            while IFS= read -r path; do
+              if [[ "$path" =~ ^tests/test_.*\.py$ \
+                    && ! "$path" =~ ^tests/test_(source_layout|architecture_boundaries|plc_core_boundary)\.py$ \
+                    && -f "$path" ]]; then
+                printf '%s\n' "$path"
+              fi
+            done < changed-files.txt
             if grep -Eq '^(resources/locales/|src/shared/i18n\.py$)' changed-files.txt; then
               printf '%s\n' tests/test_i18n.py
             fi
