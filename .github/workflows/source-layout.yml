@@ -68,8 +68,333 @@ jobs:
           fi
           git diff --name-only "$from"..."$to" > changed-files.txt
           {
-            grep -E '^tests/test_.*\.py$' changed-files.txt \
-              | grep -v -E '^tests/test_(source_layout|architecture_boundaries|plc_core_boundary)\.py$' \
+            { grep -E '^tests/test_.*\.py            if grep -Eq '^(resources/locales/|src/shared/i18n\.py$)' changed-files.txt; then
+              printf '%s\n' tests/test_i18n.py
+            fi
+            if grep -Eq '^research/(audit_gxw_knowledge\.py|gxw_corpus\.py|corpus/|results/block-boundary-20260913/)' changed-files.txt; then
+              printf '%s\n' tests/test_gxw_lossless.py tests/test_gxw_network_blocks.py
+            fi
+          } | sort -u > targeted-tests.txt
+          mapfile -t changed_tests < targeted-tests.txt
+          if (( ${#changed_tests[@]} )); then
+            python -m pytest -q "${changed_tests[@]}"
+          fi
+          python scripts/mcp_smoke.py
+      - name: Compile and run the complete suite
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p validation
+          python -m compileall -q src
+          python -m pytest -q --junitxml=validation/candidate.xml 2>&1 | tee validation/candidate.log
+      - name: MCP real stdio smoke without credentials or model calls
+        if: github.event_name != 'pull_request'
+        run: python scripts/mcp_smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always() && github.event_name != 'pull_request'
+        with:
+          name: source-layout-full-suite-results
+          path: validation
+          retention-days: 7
+
+  web:
+    name: Web contract, browser tests and build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements/web.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements/web.txt playwright==1.55.0
+          npm ci --prefix web
+      - name: Verify schema, frontend and browser delivery
+        run: |
+          set -euo pipefail
+          mkdir -p validation-web/model-api
+          python scripts/export_web_schema.py
+          npm run types --prefix web
+          git diff --exit-code -- web/openapi.json web/src/api/generated.ts
+          node --experimental-strip-types --test web/tests/*.test.mjs
+          npm run build --prefix web
+          python -m playwright install --with-deps chromium
+          python scripts/web_model_settings_e2e.py --web-dist web/dist --evidence validation-web/model-api
+          python scripts/web_generation_e2e.py --web-dist web/dist --report validation-web/generation.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: source-layout-web-results
+          path: validation-web
+          retention-days: 7
+
+  web-package:
+    name: Windows Web and MCP package smoke
+    if: github.event_name != 'pull_request'
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install headless build dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Build native adapters without starting GX or accessing PLCs
+        shell: pwsh
+        run: |
+          & ./tools/build_simulator_gateway.ps1 -OutputDirectory "$env:RUNNER_TEMP/gx-simulator-gateway"
+          & ./tools/build_hardware_reader.ps1 -OutputDirectory "$env:RUNNER_TEMP/gx-hardware-reader"
+      - name: Build the Web workbench and stdio MCP launcher
+        shell: pwsh
+        run: |
+          $python = (Get-Command python).Source
+          & ./scripts/build_web_package.ps1 -Python $python -GatewayDirectory "$env:RUNNER_TEMP/gx-simulator-gateway"
+      - name: Verify packaged SDK without a model call
+        shell: pwsh
+        run: |
+          & ./dist/GXWorks-Agent-Web/GXWorks-Agent-Web.exe --self-test-knowledge
+          if ($LASTEXITCODE -ne 0) { throw "Packaged knowledge runtime failed" }
+          & ./dist/GXWorks-Agent-Web/GXWorks-Agent-Web.exe --self-test-settings
+          if ($LASTEXITCODE -ne 0) { throw "Packaged settings migration failed" }
+          & ./dist/GXWorks-Agent-Web/GXWorks-Agent-Web.exe --self-test-openai-sdk
+          if ($LASTEXITCODE -ne 0) { throw "Packaged SDK smoke failed: $LASTEXITCODE" }
+      - name: Verify package startup, resources and Qt exclusion
+        run: python scripts/web_package_smoke.py
+      - name: Verify Windows source startup contracts
+        run: python -m pytest -q tests/test_web_startup.py tests/test_web_source_entrypoints.py tests/test_mcp_product_launcher.py tests/test_model_profile_config.py tests/test_model_contract.py tests/test_architecture_boundaries.py
+
+  context-replay:
+    name: Typed context and offline promptfoo replay
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HAYSTACK_TELEMETRY_ENABLED: 'false'
+      PROMPTFOO_DISABLE_TELEMETRY: '1'
+      PROMPTFOO_DISABLE_UPDATE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned context/evaluation tools
+        run: |
+          python -m pip install -r requirements.txt
+          npm install --prefix "$RUNNER_TEMP/context-eval" --no-audit --no-fund promptfoo@0.123.1
+      - name: Test real typed views and Haystack retrieval
+        run: >-
+          python -m pytest -q
+          tests/test_optional_hardware_parameters.py
+          tests/test_analysis_design_rag.py
+          tests/test_agent_b_measurement.py
+          tests/test_intent_evidence_handoff.py
+          --junitxml=validation-context/targeted.xml
+      - name: Replay the real call path with recorded providers (no network)
+        run: |
+          python scripts/context_replay.py --output validation-context/replay.json
+          "$RUNNER_TEMP/context-eval/node_modules/.bin/promptfoo" eval -c evals/context-replay/promptfooconfig.yaml --no-cache -o validation-context/promptfoo.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: context-components-offline-results
+          path: validation-context
+          retention-days: 7
+ changed-files.txt \
+                | grep -v -E '^tests/test_(source_layout|architecture_boundaries|plc_core_boundary)\.py            if grep -Eq '^(resources/locales/|src/shared/i18n\.py$)' changed-files.txt; then
+              printf '%s\n' tests/test_i18n.py
+            fi
+            if grep -Eq '^research/(audit_gxw_knowledge\.py|gxw_corpus\.py|corpus/|results/block-boundary-20260913/)' changed-files.txt; then
+              printf '%s\n' tests/test_gxw_lossless.py tests/test_gxw_network_blocks.py
+            fi
+          } | sort -u > targeted-tests.txt
+          mapfile -t changed_tests < targeted-tests.txt
+          if (( ${#changed_tests[@]} )); then
+            python -m pytest -q "${changed_tests[@]}"
+          fi
+          python scripts/mcp_smoke.py
+      - name: Compile and run the complete suite
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p validation
+          python -m compileall -q src
+          python -m pytest -q --junitxml=validation/candidate.xml 2>&1 | tee validation/candidate.log
+      - name: MCP real stdio smoke without credentials or model calls
+        if: github.event_name != 'pull_request'
+        run: python scripts/mcp_smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always() && github.event_name != 'pull_request'
+        with:
+          name: source-layout-full-suite-results
+          path: validation
+          retention-days: 7
+
+  web:
+    name: Web contract, browser tests and build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements/web.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements/web.txt playwright==1.55.0
+          npm ci --prefix web
+      - name: Verify schema, frontend and browser delivery
+        run: |
+          set -euo pipefail
+          mkdir -p validation-web/model-api
+          python scripts/export_web_schema.py
+          npm run types --prefix web
+          git diff --exit-code -- web/openapi.json web/src/api/generated.ts
+          node --experimental-strip-types --test web/tests/*.test.mjs
+          npm run build --prefix web
+          python -m playwright install --with-deps chromium
+          python scripts/web_model_settings_e2e.py --web-dist web/dist --evidence validation-web/model-api
+          python scripts/web_generation_e2e.py --web-dist web/dist --report validation-web/generation.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: source-layout-web-results
+          path: validation-web
+          retention-days: 7
+
+  web-package:
+    name: Windows Web and MCP package smoke
+    if: github.event_name != 'pull_request'
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install headless build dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Build native adapters without starting GX or accessing PLCs
+        shell: pwsh
+        run: |
+          & ./tools/build_simulator_gateway.ps1 -OutputDirectory "$env:RUNNER_TEMP/gx-simulator-gateway"
+          & ./tools/build_hardware_reader.ps1 -OutputDirectory "$env:RUNNER_TEMP/gx-hardware-reader"
+      - name: Build the Web workbench and stdio MCP launcher
+        shell: pwsh
+        run: |
+          $python = (Get-Command python).Source
+          & ./scripts/build_web_package.ps1 -Python $python -GatewayDirectory "$env:RUNNER_TEMP/gx-simulator-gateway"
+      - name: Verify packaged SDK without a model call
+        shell: pwsh
+        run: |
+          & ./dist/GXWorks-Agent-Web/GXWorks-Agent-Web.exe --self-test-knowledge
+          if ($LASTEXITCODE -ne 0) { throw "Packaged knowledge runtime failed" }
+          & ./dist/GXWorks-Agent-Web/GXWorks-Agent-Web.exe --self-test-settings
+          if ($LASTEXITCODE -ne 0) { throw "Packaged settings migration failed" }
+          & ./dist/GXWorks-Agent-Web/GXWorks-Agent-Web.exe --self-test-openai-sdk
+          if ($LASTEXITCODE -ne 0) { throw "Packaged SDK smoke failed: $LASTEXITCODE" }
+      - name: Verify package startup, resources and Qt exclusion
+        run: python scripts/web_package_smoke.py
+      - name: Verify Windows source startup contracts
+        run: python -m pytest -q tests/test_web_startup.py tests/test_web_source_entrypoints.py tests/test_mcp_product_launcher.py tests/test_model_profile_config.py tests/test_model_contract.py tests/test_architecture_boundaries.py
+
+  context-replay:
+    name: Typed context and offline promptfoo replay
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HAYSTACK_TELEMETRY_ENABLED: 'false'
+      PROMPTFOO_DISABLE_TELEMETRY: '1'
+      PROMPTFOO_DISABLE_UPDATE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned context/evaluation tools
+        run: |
+          python -m pip install -r requirements.txt
+          npm install --prefix "$RUNNER_TEMP/context-eval" --no-audit --no-fund promptfoo@0.123.1
+      - name: Test real typed views and Haystack retrieval
+        run: >-
+          python -m pytest -q
+          tests/test_optional_hardware_parameters.py
+          tests/test_analysis_design_rag.py
+          tests/test_agent_b_measurement.py
+          tests/test_intent_evidence_handoff.py
+          --junitxml=validation-context/targeted.xml
+      - name: Replay the real call path with recorded providers (no network)
+        run: |
+          python scripts/context_replay.py --output validation-context/replay.json
+          "$RUNNER_TEMP/context-eval/node_modules/.bin/promptfoo" eval -c evals/context-replay/promptfooconfig.yaml --no-cache -o validation-context/promptfoo.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: context-components-offline-results
+          path: validation-context
+          retention-days: 7
+ \
+                || true; } \
               | while IFS= read -r path; do
                   if [[ -f "$path" ]]; then printf '%s\n' "$path"; fi
                 done
