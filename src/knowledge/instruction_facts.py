@@ -35,19 +35,52 @@ def _sha(text):
 
 
 def instruction_fact_targets(query, confirmed_spec=None):
-    """Resolve actual selected/query opcodes through the existing catalogue.
-
-    Selection is retrieval work only: no change to Direct/Design, acceptance or
-    user confirmation. Unknown explicit opcodes remain queryable manual targets.
-    """
+    """Resolve selected/query opcodes, retaining exact confirmed operands."""
     from knowledge.analysis_router import route_analysis_request
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+    from plc.specification.approach import normalize_instruction_instances
+
     spec = confirmed_spec if isinstance(confirmed_spec, Mapping) else {}
     selected = spec.get("selected_approach") or {}
-    contract = (selected.get("generation_contract") or {}) if isinstance(selected, Mapping) else {}
-    required = (contract.get("required_opcodes") or []) if isinstance(contract, Mapping) else []
-    route = route_analysis_request(query, confirmed_context=spec,
-                                   resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form)
+    selected = selected if isinstance(selected, Mapping) else {}
+    contract = selected.get("generation_contract")
+    contract = contract if isinstance(contract, Mapping) else {}
+    preferences = selected.get("implementation_preferences")
+    preferences = preferences if isinstance(preferences, Mapping) else {}
+
+    targets = []
+    instance_opcodes = set()
+    seen_instances = set()
+
+    def add_instance(item, source):
+        opcode = str(item.get("opcode") or "").strip().upper()
+        operands = [str(value) for value in item.get("operands") or []]
+        if not opcode:
+            return
+        marker = (opcode, tuple(operands))
+        if marker in seen_instances:
+            return
+        seen_instances.add(marker)
+        form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(opcode)
+        base = str(getattr(form, "base_mnemonic", opcode)).upper()
+        targets.append({
+            "opcode": opcode,
+            "base_opcode": base,
+            "operands": operands,
+            "instance_source": source,
+        })
+        instance_opcodes.add(opcode)
+
+    for item in normalize_instruction_instances(contract.get("instruction_instances")):
+        add_instance(item, "generation_contract")
+    for item in normalize_instruction_instances(preferences.get("instruction_instances")):
+        add_instance(item, "implementation_preferences")
+
+    required = contract.get("required_opcodes") or []
+    route = route_analysis_request(
+        query, confirmed_context=spec,
+        resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form,
+    )
     requested = list(required) if isinstance(required, (list, tuple)) else []
     routing_text = re.sub(r"\.(?=\s|$)", " ", route.query_text)
     boundary = r"[A-Za-z0-9_.$@+<>!=\-]"
@@ -57,15 +90,17 @@ def instruction_fact_targets(query, confirmed_spec=None):
     for token in re.findall(r"(?<![A-Za-z0-9_.$@+<>!=\-])[$A-Za-z][A-Za-z0-9_.$@+<>!=\-]*", routing_text):
         if re.search(r"[.$@+<>=!\-]", token) and DEFAULT_INSTRUCTION_REGISTRY.resolve_form(token) is not None:
             requested.append(token)
-    targets = []
-    seen = set()
+
+    seen_generic = set()
     for value in requested:
         if not isinstance(value, str):
             continue
         opcode = value.strip().upper()
-        if not re.fullmatch(r"[$A-Z][A-Z0-9_.$@+<>!=\-]{0,63}", opcode) or opcode in seen:
+        if not re.fullmatch(r"[$A-Z][A-Z0-9_.$@+<>!=\-]{0,63}", opcode):
             continue
-        seen.add(opcode)
+        if opcode in instance_opcodes or opcode in seen_generic:
+            continue
+        seen_generic.add(opcode)
         form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(opcode)
         base = str(getattr(form, "base_mnemonic", opcode)).upper()
         targets.append({"opcode": opcode, "base_opcode": base})
