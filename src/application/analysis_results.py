@@ -60,6 +60,49 @@ def _extract_user_declared_io(user_text, plc_model):
     return declared
 
 
+def _extract_user_declared_bindings(user_text, plc_model):
+    """Extract machine I/O metadata only from explicit address declarations."""
+    from plc.specification.bindings import canonical_signal_role, confirmed_input_levels
+
+    result = []
+    seen = set()
+    for statement in re.split(r"[\n;；。]+", str(user_text or "")):
+        match = _DECLARED_IO_LINE_RE.fullmatch(statement)
+        if match is None:
+            continue
+        address = canonical_device(re.sub(r"\s+", "", match.group(1)).upper())
+        raw_value = match.group(2).strip()
+        try:
+            parsed = parse_device_address(address, plc_model)
+        except (PLCJsonValidationError, ValueError, TypeError):
+            continue
+        if parsed is None:
+            continue
+        kind, _number = parsed
+        label = _INPUT_QUALIFIER_RE.split(raw_value, maxsplit=1)[0].strip() or raw_value
+        role = canonical_signal_role(label)
+        levels = confirmed_input_levels(raw_value) if kind == "X" else {}
+        if not role and not levels:
+            continue
+        binding_id = f"declared.{role or kind.casefold()}.{address}"
+        if binding_id in seen:
+            continue
+        seen.add(binding_id)
+        item = {
+            "binding_id": binding_id,
+            "kind": kind,
+            "address": address,
+            "label": label,
+            "name": label,
+            "source": "user_request",
+        }
+        if role:
+            item["role"] = role
+        item.update(levels)
+        result.append(item)
+    return result
+
+
 def _historical_declared_io(confirmed_spec, plc_model):
     """Return explicit I/O declarations already seen before this analysis turn."""
     historical = {}
@@ -190,6 +233,10 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     if not isinstance(result, dict):
         raise ValueError("Analysis response must be a JSON object")
 
+    fresh_semantics_protocol = any(
+        isinstance(item, dict) and "implementation_semantics" in item
+        for item in (result.get("approaches") or [])
+    )
     normalized = dict(result)
     # Only the application can attach user-derived hardware evidence. A model
     # cannot authenticate its own questions by emitting this metadata field.
@@ -197,6 +244,7 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     normalized.pop("engineering_context", None)
     normalized.pop("intent_context", None)
     normalized.pop("decision_receipt", None)
+    normalized.pop("declared_io_bindings", None)
     # Legacy UI/classification fields are not part of the current model contract.
     # Do not replay them into later model requests or migrate saved revisions.
     normalized.pop("control_type", None)
@@ -387,6 +435,31 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     historical = _historical_declared_io(confirmed_spec, plc_model)
     confirmed_addresses = _confirmed_io_addresses(confirmed_spec)
     removed_addresses = _removed_confirmed_io_addresses(confirmed_spec)
+    if fresh_semantics_protocol:
+        allowed_addresses = set(confirmed_addresses)
+        allowed_addresses.update(
+            canonical_device(address)
+            for values in declared_io.values()
+            for address in values
+        )
+        removed_model_allocations = []
+        for category, values in list(clean_io.items()):
+            if not isinstance(values, dict):
+                continue
+            for address in list(values):
+                identity = canonical_device(address)
+                if identity not in allowed_addresses:
+                    removed_model_allocations.append(identity)
+                    values.pop(address, None)
+            if not values:
+                clean_io.pop(category, None)
+        if removed_model_allocations:
+            add_diagnostic(
+                "model_internal_io_allocation_removed",
+                "suggested_io",
+                str(tr("模型分配的未声明内部软元件已移除；内部地址由生成阶段决定。")),
+                sorted(set(removed_model_allocations)),
+            )
     historical_addresses = {
         address for values in historical.values() for address, _label in values
     }
@@ -422,6 +495,9 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
             target[identity] = label
 
     normalized["suggested_io"] = clean_io
+    normalized["declared_io_bindings"] = _extract_user_declared_bindings(
+        user_text, plc_model
+    )
     if hardware:
         normalized["hardware_config"] = hardware
     else:

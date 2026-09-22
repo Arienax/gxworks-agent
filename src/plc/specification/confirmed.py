@@ -15,6 +15,7 @@ from plc.specification.bindings import (
     parameter_uses_bound_address,
     bound_parameter_is_removed,
     confirmed_input_levels,
+    merge_declared_bindings,
 )
 
 from plc.specification.approach import (
@@ -1336,8 +1337,13 @@ def build_review_draft(analysis, previous_spec=None):
     if receipt:
         receipt["confirmation"] = {"status": "draft"}
         draft["decision_receipt"] = receipt
-    if previous.get("io_bindings"):
-        draft["io_bindings"] = copy.deepcopy(previous["io_bindings"])
+    merged_bindings = merge_declared_bindings(
+        draft["io_table"],
+        previous.get("io_bindings", []),
+        analysis.get("declared_io_bindings", []),
+    )
+    if merged_bindings:
+        draft["io_bindings"] = merged_bindings
     draft["hardware_profile"] = build_hardware_profile(draft, plc_model)
     return restore_review_choices(draft, analysis)
 

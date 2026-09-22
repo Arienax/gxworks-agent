@@ -91,6 +91,85 @@ def test_confirmed_electrical_answers_are_not_ladder_contacts(text, active):
     assert confirmed_input_levels(text) == ({} if active is None else {"active_level": active, "inactive_level": 1-active})
 
 
+def test_declared_io_builds_bindings_and_drops_agent_a_internal_allocations():
+    from application.model_api import _normalize_analysis_result
+    from plc.specification.confirmed import build_review_draft, canonicalize_confirmed_spec
+
+    raw = {
+        "summary": "declared I/O",
+        "approaches": [{
+            "approach_id": "direct",
+            "name": "direct",
+            "generation_guide": "",
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+            ],
+        }],
+        "suggested_io": {
+            "X": {"X0": "启动按钮", "X1": "停止按钮"},
+            "Y": {"Y0": "主输送带"},
+            "M": {"M0": "模型擅自分配的运行位"},
+            "T": {"T1": "模型擅自分配的定时器"},
+        },
+        "missing_info": [],
+        "assumptions": [],
+    }
+    user_text = (
+        "X0：启动按钮，常开，按下时 ON\n"
+        "X1：停止按钮，常闭，未按下时 ON\n"
+        "Y0：主输送带\n"
+        "按下启动后保持运行，按下停止立即停止。"
+    )
+    normalized = _normalize_analysis_result(raw, "FX3U", user_text)
+    assert set(normalized["suggested_io"]) == {"X", "Y"}
+    assert "M0" not in json.dumps(normalized["suggested_io"], ensure_ascii=False)
+    assert "T1" not in json.dumps(normalized["suggested_io"], ensure_ascii=False)
+
+    spec = canonicalize_confirmed_spec(build_review_draft(normalized))
+    bindings = {row.get("role"): row for row in spec["io_bindings"] if row.get("role")}
+    assert bindings["start"]["address"] == "X0"
+    assert bindings["start"]["active_level"] == 1
+    assert bindings["stop"]["address"] == "X1"
+    assert bindings["stop"]["active_level"] == 0
+
+    ladder = {
+        "device_comments": {},
+        "rungs": [
+            {
+                "rung_id": 1, "header_element": None, "shared_inputs": [],
+                "branches": [{
+                    "branch_id": 1, "y_offset_level": 0,
+                    "inputs": [
+                        {"type": "parallel_block", "branches": [
+                            [{"type": "NO", "address": "X0"}],
+                            [{"type": "NO", "address": "M0"}],
+                        ]},
+                        {"type": "NO", "address": "X1"},
+                        {"type": "NC", "address": "M3"},
+                    ],
+                    "outputs": [{"type": "COIL", "address": "M0"}],
+                }],
+            },
+            {
+                "rung_id": 2, "header_element": None, "shared_inputs": [],
+                "branches": [{
+                    "branch_id": 1, "y_offset_level": 0,
+                    "inputs": [{"type": "NO", "address": "M0"}],
+                    "outputs": [{"type": "COIL", "address": "Y0"}],
+                }],
+            },
+        ],
+    }
+    result = check_direct_self_hold(ladder, spec)
+    assert result["status"] == "verified"
+    assert result["held_address"] == "M0"
+
+    wrong = copy.deepcopy(ladder)
+    wrong["rungs"][0]["branches"][0]["inputs"][1]["type"] = "NC"
+    with pytest.raises(PLCJsonValidationError, match="stop/run-permit polarity"):
+        check_direct_self_hold(wrong, spec)
+
+
 def test_old_snapshot_recovers_output_and_input_facts_without_mutating_storage():
     spec = old_confirmed_spec()
     before = copy.deepcopy(spec)
@@ -126,7 +205,7 @@ def test_confirmed_levels_check_all_states_and_never_flip_generated_logic(start,
     assert result["status"] == "verified" and result["states"] == 8
     wrong = expand_compact_ladder(compact(start, stop, wrong=True))
     before = copy.deepcopy(wrong)
-    with pytest.raises(PLCJsonValidationError, match="start/stop behavior differs"):
+    with pytest.raises(PLCJsonValidationError, match="stop/run-permit polarity"):
         check_direct_self_hold(wrong, spec)
     assert wrong == before
 

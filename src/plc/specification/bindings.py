@@ -76,6 +76,59 @@ def label_key(value):
     return re.sub(r"[\W_]+", "", str(value), flags=re.UNICODE).casefold()
 
 
+def canonical_signal_role(label):
+    """Return one exact canonical signal role; never fuzzy-match prose."""
+    key = label_key(label)
+    if not key:
+        return ""
+    matches = [
+        role for role, aliases in _ROLE_LABELS.items()
+        if key in {label_key(alias) for alias in aliases}
+    ]
+    return matches[0] if len(matches) == 1 else ""
+
+
+def merge_declared_bindings(rows, existing=(), declared=()):
+    """Merge Core-extracted declaration bindings against active I/O rows."""
+    active = {
+        canonical_device(str(row.get("address") or "").strip().upper())
+        for row in (rows or ())
+        if isinstance(row, dict) and row.get("address")
+    }
+    result = {}
+    for source in (existing or ()):
+        if not isinstance(source, dict) or not source.get("binding_id"):
+            continue
+        item = copy.deepcopy(source)
+        item["address"] = canonical_device(str(item.get("address") or "").strip().upper())
+        if item["address"] in active:
+            result[str(item["binding_id"])] = item
+
+    for source in (declared or ()):
+        if not isinstance(source, dict) or not source.get("binding_id"):
+            continue
+        item = copy.deepcopy(source)
+        item["address"] = canonical_device(str(item.get("address") or "").strip().upper())
+        if item["address"] not in active:
+            continue
+        same_role = [
+            key for key, value in result.items()
+            if item.get("role")
+            and value.get("role") == item.get("role")
+            and value.get("address") == item["address"]
+        ]
+        if len(same_role) == 1:
+            key = same_role[0]
+            merged = result[key]
+            for field in ("active_level", "inactive_level", "label", "name", "source"):
+                if field in item:
+                    merged[field] = copy.deepcopy(item[field])
+            result[key] = merged
+            continue
+        result[str(item["binding_id"])] = item
+    return [result[key] for key in sorted(result)]
+
+
 def binding_hint(parameter):
     """Return bounded typed metadata; ordinary parameter prose is not metadata."""
     raw = parameter.get("io_binding")

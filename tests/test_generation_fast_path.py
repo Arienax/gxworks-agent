@@ -250,14 +250,25 @@ def test_required_self_hold_missing_role_fails_closed_without_label_inference():
         validate_confirmed_semantics(_self_hold(), spec, plc_model="FX3U")
 
 
-def test_required_self_hold_unsupported_shape_is_visible_but_not_a_style_gate():
+def test_required_self_hold_checker_ignores_unrelated_program_scope():
     from plc.specification.semantic_validation import validate_confirmed_semantics
 
+    ladder = _self_hold()
+    ladder["rungs"].append({
+        "rung_id": 2,
+        "header_element": None,
+        "shared_inputs": [],
+        "branches": [{
+            "branch_id": 1,
+            "y_offset_level": 0,
+            "inputs": [{"type": "NO", "address": "Y0"}],
+            "outputs": [{"type": "COIL", "address": "M10"}],
+        }],
+    })
     spec = {
         "io_bindings": [
             {"role": "start", "kind": "X", "address": "X0", "active_level": 1},
             {"role": "stop", "kind": "X", "address": "X1", "active_level": 0},
-            {"role": "output", "kind": "Y", "address": "Y0"},
         ],
         "io_table": [
             {"kind": "X", "address": "X0", "label": "启动"},
@@ -268,14 +279,14 @@ def test_required_self_hold_unsupported_shape_is_visible_but_not_a_style_gate():
         "selected_approach": {
             "implementation_semantics": [
                 {"kind": "structure", "status": "required", "value": "self_hold"},
+                {"kind": "structure", "status": "required", "value": "bit_state_machine"},
             ],
         },
     }
-    report = validate_confirmed_semantics(_self_hold(), spec, plc_model="FX3U")
-    assert report["status"] == "unresolved"
+    report = validate_confirmed_semantics(ladder, spec, plc_model="FX3U")
+    assert report["status"] == "verified"
     row = next(item for item in report["checks"] if item["check"] == "direct_self_hold_truth_table")
-    assert row["status"] == "unresolved"
-    assert row["reason"] == "additional_parameters"
+    assert row["status"] == "verified"
 
 def test_confirmed_semantic_mismatch_is_not_a_format_repair_problem():
     from plc.specification.semantic_validation import (
