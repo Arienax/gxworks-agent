@@ -145,3 +145,10 @@ def test_confirmed_semantic_validation_does_not_restore_full_review_gates():
         candidate_origin="compact_agent",
     )
     assert accepted["semantic_validation"]["status"] == "not_applicable"
+
+
+
+def test_confirmed_agent_origin_has_one_core_owner():
+    from plc.generation import CONFIRMED_AGENT_ORIGIN
+
+    assert CONFIRMED_AGENT_ORIGIN == "compact_agent"
