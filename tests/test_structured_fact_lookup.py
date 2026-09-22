@@ -10,6 +10,7 @@ from knowledge.evidence import KnowledgeQuery
 from knowledge.structured_facts import (
     resolve_device_records,
     resolve_error_records,
+    resolve_instruction_contract,
     resolve_instruction_records,
     resolve_instruction_step_width,
     structured_fact_targets,
@@ -53,6 +54,65 @@ def test_exact_instruction_is_resolved_from_structured_table(opcode):
     assert all(row["match_type"] == "structured_direct" for row in rows)
     assert all(row["instruction_step_width"]["known"] is True for row in rows)
     assert all("STEP_WIDTH:" in row["text"] for row in rows)
+
+
+def test_every_promoted_fx3u_contract_uses_registry_owner():
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, generation_app_instr_mnemonics
+
+    promoted = [
+        opcode
+        for opcode in generation_app_instr_mnemonics("FX3U")
+        if DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu="FX3U").verified_fields
+    ]
+    assert len(promoted) > 200
+    for opcode in promoted:
+        expected = DEFAULT_INSTRUCTION_REGISTRY.describe_contract(opcode, cpu="FX3U")
+        actual = resolve_instruction_contract(
+            {"opcode": opcode, "base_opcode": expected["base_mnemonic"]},
+            plc_model="FX3U",
+        )
+        assert actual == expected, opcode
+
+
+@pytest.mark.parametrize("opcode", ["MOV", "WSFL", "DRVA"])
+def test_structured_instruction_record_merges_registry_contract(opcode):
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+
+    _bundled_index()
+    rows = resolve_instruction_records(
+        [{"opcode": opcode, "base_opcode": opcode}],
+        plc_model="FX3U",
+        task_type="generate",
+    )
+    assert rows
+    expected = DEFAULT_INSTRUCTION_REGISTRY.describe_contract(opcode, cpu="FX3U")
+    assert rows[0]["instruction_contract"] == expected
+    assert "INSTRUCTION_CONTRACT:" in rows[0]["text"]
+    assert rows[0]["instruction_contract"]["contract_level"] == "signature_verified"
+
+
+def test_instruction_instance_contract_keeps_exact_operands_and_source():
+    target = {
+        "opcode": "SFTL",
+        "base_opcode": "SFTL",
+        "operands": ["M10", "M100", "K128", "K1"],
+        "instance_source": "generation_contract",
+    }
+    contract = resolve_instruction_contract(target, plc_model="FX3U")
+    assert contract["confirmed_operands"] == target["operands"]
+    assert contract["instance_source"] == "generation_contract"
+    assert contract["native_operand_order"] == ["S", "D", "N1", "N2"]
+    assert {"arity", "operand_order", "form_identity"} <= set(contract["verified_fields"])
+
+
+def test_fx3u_contract_promotions_do_not_leak_into_fx5u_structured_facts():
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+
+    expected = DEFAULT_INSTRUCTION_REGISTRY.describe_contract("MOV", cpu="FX5U")
+    actual = resolve_instruction_contract({"opcode": "MOV"}, plc_model="FX5U")
+    assert actual == expected
+    assert actual["verified_fields"] == []
+    assert actual["contract_level"] != "signature_verified"
 
 
 def test_structured_step_width_uses_shared_owner_for_instruction_instance():
