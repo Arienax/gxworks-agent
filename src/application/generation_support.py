@@ -293,11 +293,13 @@ def public_generation_specification(specification):
     """
     from plc.generation_contract import generation_specification
     from plc.specification.parameters import generation_parameter_view
+    from plc.specification.legacy_migration import migrate_legacy_approach
 
     normalized = generation_parameter_view(specification)
     if isinstance(normalized, dict) and isinstance(normalized.get("selected_approach"), dict):
-        selected = normalized["selected_approach"]
-        contract = normalize_generation_contract(selected.get("generation_contract"), approach=selected)
+        selected = migrate_legacy_approach(normalized["selected_approach"])
+        normalized["selected_approach"] = selected
+        contract = normalize_generation_contract(selected.get("generation_contract"))
         if contract.get("unverified_constraints"):
             selected["generation_contract"] = contract
 
