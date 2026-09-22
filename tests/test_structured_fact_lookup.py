@@ -301,6 +301,15 @@ def test_device_family_target_coverage_capability_is_enforced():
     assert states["device_family_target_coverage"] == "enforced"
 
 
+def test_router_and_core_share_device_token_owner():
+    import knowledge.analysis_router as analysis_router
+    import knowledge.core as knowledge_core
+    from plc.device_identity import DEVICE_TOKEN_RE
+
+    assert analysis_router._DEVICE is DEVICE_TOKEN_RE
+    assert knowledge_core._DEVICE_RE is DEVICE_TOKEN_RE
+
+
 def test_runtime_device_target_vocabulary_covers_extended_families():
     from knowledge.analysis_router import route_analysis_request
 
