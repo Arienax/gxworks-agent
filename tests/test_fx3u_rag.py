@@ -522,7 +522,7 @@ def test_st_prompt_uses_only_the_selected_model_special_device_prefixes():
     )
 
     assert "FX5U" in fx5_prompt and "iQ-F" in fx5_prompt
-    assert "SM8002" in fx5_prompt
+    assert "Never copy FX3U M8xxx/D83xx addresses into an FX5U project." in fx5_prompt
     assert not re.search(
         r"(?<![A-Za-z0-9_])M8\d{3}(?![A-Za-z0-9_])",
         fx5_prompt,

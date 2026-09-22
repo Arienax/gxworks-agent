@@ -46,7 +46,10 @@ def verify_evidence_manifests():
         if not archive_ref or "files" not in manifest:
             continue
         archive_name = archive_ref["path"] if isinstance(archive_ref, dict) else archive_ref
-        archive_path = _manifest_path(archive_name, label="archive")
+        try:
+            archive_path = _manifest_path(archive_name, label="archive")
+        except ValueError:
+            archive_path = _manifest_path(archive_name, base=path.parent, label="archive")
         if not archive_path.is_file():
             archive_path = _manifest_path(archive_name, base=path.parent, label="archive")
         archive_hash = digest(archive_path.read_bytes())["sha256"]

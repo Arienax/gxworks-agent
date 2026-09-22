@@ -319,15 +319,14 @@ def test_gx_read_scope_is_enforced_before_local_autosave(engineering, monkeypatc
         assert proposal["summary"]["approval"]["source"] == "local_autosave"
 
 
-@pytest.mark.parametrize("outside", [False, True])
-def test_explicit_structural_repair_inherits_original_scope(engineering, outside):
+def test_explicit_structural_repair_inherits_original_scope(engineering):
     workbench, store, project_id, version_id, _ = engineering
     candidate = ir_to_ladder(program(first="X2"))
     invalid = copy.deepcopy(candidate)
     invalid["rungs"][0]["debug_note"] = "过长说明" * 20
-    repaired = ir_to_ladder(program(second="X2")) if outside else candidate
-    provider = _ScopedProvider([invalid, repaired])
+    provider = _ScopedProvider([invalid])
     workbench.model_factory = lambda: (provider, {"model": "offline"})
+
     failed = _finish(workbench, _submit_scoped(workbench, project_id, version_id))
     assert failed["status"] == "completed", failed
     assert failed["error_code"] is None
@@ -337,19 +336,13 @@ def test_explicit_structural_repair_inherits_original_scope(engineering, outside
     assert store.get_project(project_id)["active_version_id"] == diagnostic_version
     assert len(store.get_project(project_id)["versions"]) == 2
     assert len(provider.requests) == 1
-    diagnostic_snapshot = snapshot_files(store.base_dir)
 
     repair = workbench.repair_generation(failed["id"], "explicit-repair")
     completed = _finish(workbench, repair)
-    assert workbench.jobs._load(repair["id"])["snapshot"]["change_scope"] == {"network_ids": ["N0001"]}
-    assert len(provider.requests) == 2
-    assert "用户明确确认的一次结构修复" in str(provider.requests[1].messages[-1].content)
-    if outside:
-        assert completed["error_code"] == "change_scope_violation"
-        assert workbench.proposals.list(project_id) == []
-        assert snapshot_files(store.base_dir) == diagnostic_snapshot
-        assert len(store.get_project(project_id)["versions"]) == 2
-    else:
-        assert completed["status"] == "completed", completed
-        assert completed["result"]["status"] == "saved"
-        assert len(store.get_project(project_id)["versions"]) == 3
+    repair_snapshot = workbench.jobs._load(repair["id"])["snapshot"]
+    assert repair_snapshot["change_scope"] == {"network_ids": ["N0001"]}
+    assert repair_snapshot["repair_mode"] is True
+    assert len(provider.requests) == 1, "deterministic structural repair must not call the model again"
+    assert completed["status"] == "completed", completed
+    assert completed["result"]["status"] == "saved"
+    assert len(store.get_project(project_id)["versions"]) == 3
