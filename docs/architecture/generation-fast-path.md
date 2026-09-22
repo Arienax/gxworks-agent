@@ -37,4 +37,8 @@ Agent B path does not enter them.
 owns generation-time checks against machine-readable confirmed facts. It is
 deliberately narrower than `validate_ladder_full`: generic engineering style
 checks remain review concerns and are not promoted back into hard generation
-gates.
+gates. A checker that cannot cover a broader engineering shape records
+`unresolved` coverage rather than inventing a prohibition. If an explicitly
+required semantic check cannot even run because its machine role or confirmed
+electrical level was lost in the handoff, generation fails closed as an internal
+semantic handoff error; human-readable labels are never used to guess that role.

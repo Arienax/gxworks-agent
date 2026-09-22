@@ -137,12 +137,13 @@ class GenerationWorkflow:
             return self._run()
 
     def _run(self):
-        """Generate one candidate and perform only transport/shape acceptance.
+        """Generate one candidate through the canonical acceptance boundary.
 
-        Once the user has confirmed the specification, this workflow does not
-        reinterpret that intent with approach heuristics, regex-derived semantic
-        requirements, or hidden model repair loops. Strong semantic/static
-        checks remain available to Review, simulator and GX execution paths.
+        Fresh confirmed Agent B output is checked only against transport/PLC
+        structure plus deterministic machine-readable confirmed semantics.
+        Broader engineering heuristics and style findings remain in Review,
+        simulator and GX execution paths; semantic mismatches never enter the
+        format-repair loop.
 
         A completed ladder response rejected *only* for invalid JSON syntax is
         treated differently from transport/language/schema-field rejection: its
@@ -678,7 +679,7 @@ class GenerationWorkflow:
                         "status": "candidate_ready",
                         "profile": "generation_structural",
                         "messages": validation_messages or [
-                            tr('候选结构可解析；需求一致性不在生成阶段重复判定')
+                            tr('候选结构与当前可机检的已确认语义已通过；其余工程检查保留给 Review')
                         ],
                     },
                 }

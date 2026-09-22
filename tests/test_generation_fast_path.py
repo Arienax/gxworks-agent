@@ -158,7 +158,7 @@ def test_confirmed_agent_origin_has_one_core_owner():
     assert CONFIRMED_AGENT_ORIGIN == "compact_agent"
     agent_source = inspect.getsource(generation_agent.generate_confirmed_ladder)
     assert "CandidateService" not in agent_source
-    workflow_source = inspect.getsource(generation_workflow.GenerationWorkflow.run)
+    workflow_source = inspect.getsource(generation_workflow.GenerationWorkflow._run)
     assert "CONFIRMED_AGENT_ORIGIN" in workflow_source
     assert "direct_candidate is not None" in workflow_source
     source = inspect.getsource(generation.prepare_ladder_candidate)
@@ -175,6 +175,62 @@ def test_confirmed_generation_acceptance_capability_is_enforced():
     assert states["confirmed_generation_acceptance"] == "enforced"
 
 
+
+def test_required_self_hold_missing_role_fails_closed_without_label_inference():
+    from plc.specification.semantic_validation import (
+        ConfirmedSemanticValidationError,
+        validate_confirmed_semantics,
+    )
+
+    spec = {
+        "io_bindings": [
+            {"role": "start", "kind": "X", "address": "X0", "active_level": 1},
+            {"kind": "X", "address": "X1", "active_level": 0, "label": "停止按钮"},
+            {"role": "output", "kind": "Y", "address": "Y0"},
+        ],
+        "io_table": [
+            {"kind": "X", "address": "X0", "label": "启动"},
+            {"kind": "X", "address": "X1", "label": "停止按钮"},
+            {"kind": "Y", "address": "Y0", "label": "电机"},
+        ],
+        "selected_approach": {
+            "generation_contract": {
+                "required_structures": ["self_hold"],
+                "enforce": True,
+            },
+        },
+    }
+    with pytest.raises(ConfirmedSemanticValidationError, match="missing_roles"):
+        validate_confirmed_semantics(_self_hold(), spec, plc_model="FX3U")
+
+
+def test_required_self_hold_unsupported_shape_is_visible_but_not_a_style_gate():
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+
+    spec = {
+        "io_bindings": [
+            {"role": "start", "kind": "X", "address": "X0", "active_level": 1},
+            {"role": "stop", "kind": "X", "address": "X1", "active_level": 0},
+            {"role": "output", "kind": "Y", "address": "Y0"},
+        ],
+        "io_table": [
+            {"kind": "X", "address": "X0", "label": "启动"},
+            {"kind": "X", "address": "X1", "label": "停止"},
+            {"kind": "Y", "address": "Y0", "label": "电机"},
+        ],
+        "parameters": [{"id": "unrelated_process_parameter", "value": "keep"}],
+        "selected_approach": {
+            "generation_contract": {
+                "required_structures": ["self_hold"],
+                "enforce": True,
+            },
+        },
+    }
+    report = validate_confirmed_semantics(_self_hold(), spec, plc_model="FX3U")
+    assert report["status"] == "unresolved"
+    row = next(item for item in report["checks"] if item["check"] == "direct_self_hold_truth_table")
+    assert row["status"] == "unresolved"
+    assert row["reason"] == "additional_parameters"
 
 def test_confirmed_semantic_mismatch_is_not_a_format_repair_problem():
     from plc.specification.semantic_validation import (

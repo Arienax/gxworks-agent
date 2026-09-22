@@ -539,7 +539,7 @@
       "category": "generation",
       "state": "enforced",
       "owner": "plc.generation.prepare_ladder_candidate + plc.specification.semantic_validation",
-      "summary": "Fresh confirmed Agent B output lowers compact transport to a Python ladder object; GenerationWorkflow sends that object through CandidateService exactly once, skipping legacy normalizers and applying structural plus confirmed-fact semantic acceptance before PLC IR.",
+      "summary": "Fresh confirmed Agent B output lowers compact transport to a Python ladder object; GenerationWorkflow sends that object through CandidateService exactly once, skips legacy normalizers, and applies structural plus confirmed-fact semantic acceptance before PLC IR. Explicit semantic contracts fail closed only when required machine identity/electrical handoff is missing; unsupported engineering shapes remain visible as unresolved coverage for Review.",
       "checks": [
         {
           "kind": "python_symbol",
@@ -589,7 +589,17 @@
         {
           "kind": "contains",
           "path": "src/application/generation.py",
-          "text": "acceptance consumes the object directly and never parses these bytes again"
+          "text": "copy.deepcopy(direct_candidate)"
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/specification/semantic_validation.py",
+          "text": "_BLOCKING_HANDOFF_GAPS"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_generation_fast_path.py",
+          "text": "test_required_self_hold_missing_role_fails_closed_without_label_inference"
         }
       ],
       "tests": [
