@@ -220,6 +220,50 @@ def test_motion_instruction_direct_lookup_prefers_positioning_manual(opcode):
     assert rows[0]["manual_id"] == "fx3_positioning_k"
 
 
+def test_device_target_extractor_covers_special_indexed_families():
+    from knowledge.analysis_router import route_analysis_request
+
+    route = route_analysis_request(
+        "TS0 TC1 CS2 CC3 ER4 R5 P6 I7 SM8 SD9 X10 Y11 M12 D13 V14 Z15"
+    )
+    assert set(route.devices) == {
+        "TS0", "TC1", "CS2", "CC3", "ER4", "R5", "P6", "I7",
+        "SM8", "SD9", "X10", "Y11", "M12", "D13", "V14", "Z15",
+    }
+
+
+def test_runtime_device_target_prefixes_cover_bundled_device_index():
+    from knowledge.analysis_router import DEVICE_TARGET_PREFIXES, route_analysis_request
+
+    path = _bundled_index()
+    with sqlite3.connect(path) as connection:
+        indexed = {
+            str(row[0] or "").upper()
+            for row in connection.execute(
+                "SELECT DISTINCT prefix FROM device_records "
+                "WHERE chunk_id IS NOT NULL AND record_type='device' AND prefix <> ''"
+            )
+        }
+
+    # N is instruction nesting/operand syntax and is intentionally cleaned out,
+    # not a runtime device target. Any other new indexed family must be routed.
+    indexed.discard("N")
+    assert indexed
+    assert indexed <= set(DEVICE_TARGET_PREFIXES), sorted(
+        indexed - set(DEVICE_TARGET_PREFIXES)
+    )
+    for prefix in sorted(indexed):
+        device = prefix + "0"
+        assert device in route_analysis_request(device).devices
+
+
+def test_structured_fact_targets_carry_extended_device_families():
+    targets = structured_fact_targets("查 TS0 TC1 CS2 CC3 ER4 R5 P6 I7")
+    assert set(targets["devices"]) == {
+        "TS0", "TC1", "CS2", "CC3", "ER4", "R5", "P6", "I7",
+    }
+
+
 def test_exact_device_is_resolved_from_device_records():
     _bundled_index()
     rows = resolve_device_records(["M8029"], plc_model="FX3U", task_type="analysis")
