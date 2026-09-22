@@ -93,7 +93,7 @@ Owns confirmed-spec to Agent B generation, selected-approach contracts, candidat
 | `tests/test_field_patch_repair_protocol.py` | focused coverage for field patch repair protocol |
 | `tests/test_format_patch_repair.py` | focused coverage for format patch repair |
 | `tests/test_generation_agent_boundary.py` | focused coverage for generation agent boundary |
-| `tests/test_generation_delivery.py` | focused coverage for generation delivery |
+| `tests/test_generation_delivery.py` | generation preview/artifact delivery, including deterministic repair re-entry |
 | `tests/test_generation_fast_path.py` | focused coverage for generation fast path |
 | `tests/test_generation_path_parity.py` | generation behavior parity across API/worker/MCP entry paths |
 | `tests/test_generation_rejected_json_repair.py` | focused coverage for generation rejected json repair |
@@ -106,7 +106,6 @@ Owns confirmed-spec to Agent B generation, selected-approach contracts, candidat
 | `tests/test_native_repair_scope_schema.py` | focused coverage for native repair scope schema |
 | `tests/test_partial_repair_semantic_freeze.py` | focused coverage for partial repair semantic freeze |
 | `tests/test_rejected_generation_delivery.py` | focused coverage for rejected generation delivery |
-| `tests/test_repair_render_delivery.py` | focused coverage for repair render delivery |
 | `tests/test_repair_responsibility_simplification.py` | focused coverage for repair responsibility simplification |
 | `tests/test_review_noise_regressions.py` | focused coverage for review noise regressions |
 | `tests/test_user_confirmed_generation_repair.py` | focused coverage for user confirmed generation repair |
@@ -117,11 +116,10 @@ Owns deterministic PLC IR, semantic checks, instruction/device registry, timing 
 
 | Test file | File-level focus |
 | --- | --- |
-| `tests/test_analog_instruction_regressions.py` | focused coverage for analog instruction regressions |
 | `tests/test_device_entity_cleanup.py` | focused coverage for device entity cleanup |
 | `tests/test_device_identity_delivery.py` | focused coverage for device identity delivery |
 | `tests/test_index_register_operands.py` | focused coverage for index register operands |
-| `tests/test_instruction_contract_alignment.py` | instruction registry/manual evidence/validator/schema/prompt alignment |
+| `tests/test_instruction_contract_alignment.py` | instruction registry/manual evidence/validator/schema/prompt alignment, including model-specific analog and zone-reset contracts |
 | `tests/test_instruction_registry.py` | focused coverage for instruction registry |
 | `tests/test_motion_control_regressions.py` | focused coverage for motion control regressions |
 | `tests/test_native_validation.py` | focused coverage for native validation |
@@ -136,7 +134,6 @@ Owns deterministic PLC IR, semantic checks, instruction/device registry, timing 
 | `tests/test_plc_static_analysis.py` | focused coverage for plc static analysis |
 | `tests/test_plc_timing.py` | focused coverage for plc timing |
 | `tests/test_timer_semantics_regressions.py` | focused coverage for timer semantics regressions |
-| `tests/test_zrst_registry_alignment.py` | focused coverage for zrst registry alignment |
 
 ### GXW reverse engineering and round-trip
 
@@ -151,8 +148,7 @@ Owns GXW container/object/ABI/declaration/network parsing, preservation and roun
 | `tests/test_gxw_container_appended_growth.py` | focused coverage for gxw container appended growth |
 | `tests/test_gxw_container_writer.py` | focused coverage for gxw container writer |
 | `tests/test_gxw_declarations.py` | focused coverage for gxw declarations |
-| `tests/test_gxw_function_abi.py` | focused coverage for gxw function abi |
-| `tests/test_gxw_function_abi_67_71.py` | focused coverage for gxw function abi 67 71 |
+| `tests/test_gxw_function_abi.py` | native function ABI observations across the structured 65-71 sample series |
 | `tests/test_gxw_function_blocks.py` | focused coverage for gxw function blocks |
 | `tests/test_gxw_generation_roundtrip.py` | focused coverage for gxw generation roundtrip |
 | `tests/test_gxw_lossless.py` | native source/compiled token corpora, operand groups and labels, opaque preservation, bounded patches and failure replay |
@@ -171,8 +167,7 @@ Owns GX Works2 import/export, native bridge, comment CSV, live/read-only boundar
 
 | Test file | File-level focus |
 | --- | --- |
-| `tests/test_fresh_gxworks2_csv_export.py` | focused coverage for fresh gxworks2 csv export |
-| `tests/test_fresh_gxworks2_csv_http.py` | focused coverage for fresh gxworks2 csv http |
+| `tests/test_fresh_gxworks2_csv_export.py` | deterministic saved-IR GX Works2 CSV export plus one model-free/read-only HTTP sentinel |
 | `tests/test_gx_execution_ui_and_project_delete.py` | focused coverage for gx execution ui and project delete |
 | `tests/test_gx_fast_send.py` | focused coverage for gx fast send |
 | `tests/test_gxworks2_comment_export.py` | focused coverage for gxworks2 comment export |
@@ -277,7 +272,6 @@ Owns source/import ownership, architecture constraints, issue-to-test linkage, W
 | `tests/test_architecture_boundaries.py` | focused coverage for architecture boundaries |
 | `tests/test_issue_test_links.py` | focused coverage for issue test links |
 | `tests/test_source_layout.py` | source/import ownership plus completeness of this test-boundary registry |
-| `tests/test_source_layout_regression_gate.py` | focused coverage for source layout regression gate |
 | `tests/test_windows_credentials.py` | focused coverage for windows credentials |
 
 ### Cross-cutting application and execution

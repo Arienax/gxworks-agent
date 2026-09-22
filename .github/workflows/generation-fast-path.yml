@@ -51,7 +51,6 @@ jobs:
             tests/test_field_patch_repair_protocol.py `
             tests/test_format_patch_repair.py `
             tests/test_hybrid_compact_recovery.py `
-            tests/test_repair_render_delivery.py `
             tests/test_generation_fast_path.py `
             tests/test_generation_workflow.py `
             tests/test_confirmed_generation_regressions.py `
@@ -83,7 +82,6 @@ jobs:
             tests/test_approach_contracts.py `
             tests/test_timer_semantics_regressions.py `
             tests/test_motion_control_regressions.py `
-            tests/test_analog_instruction_regressions.py `
             tests/test_contract_repair_planner.py `
             tests/test_instruction_registry.py
       - name: Build Web frontend through the repository entry point

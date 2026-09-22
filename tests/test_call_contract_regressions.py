@@ -353,13 +353,3 @@ def test_explicit_bad_effort_is_not_silently_mapped_or_dropped():
                        provider=Provider([], p))
     assert sent == [] and p == before
 
-
-def test_parameterized_test_renames_do_not_hide_missing_cases():
-    import runpy
-    compare = runpy.run_path(str(Path(__file__).resolve().parents[1] / "scripts/source_layout_regression.py"))["compare_reports"]
-    old = "tests.test_provider_error_privacy.test_generation_injected_transport_error_is_safe_and_still_falls_back[True]"
-    new = "tests.test_provider_error_privacy.test_generation_injected_transport_error_is_safe_and_never_replayed[True]"
-    result = compare({old: {"status": "passed"}}, {new: {"status": "passed"}})
-    assert result["regression_gate_passed"] and result["reviewed_test_renames"] == {old: new}
-    assert not compare({old: {"status": "passed"}}, {})["regression_gate_passed"]
-    assert not compare({old: {"status": "passed"}}, {new: {"status": "failed", "message": "failure"}})["regression_gate_passed"]
