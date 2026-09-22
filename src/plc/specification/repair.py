@@ -14,6 +14,7 @@ import json
 import re
 from collections.abc import Mapping
 
+from plc.semantics import normalize_semantic_requirements
 from plc.specification.approach import inspect_ladder_features, normalize_approach
 
 
@@ -25,16 +26,6 @@ _INDEXED_DEVICE_TOKEN_RE = re.compile(
     r"(?<![A-Za-z0-9_])(?P<base>(?:SM|SD|[XYMSTCDR])\d+)(?P<index>[VZ]\d+)(?![A-Za-z0-9_])",
     re.IGNORECASE,
 )
-_STATE_COMPARE_RE = re.compile(
-    r"(?:^|\s)(?:=|==)\s*(D\d+)\s*K[+-]?\d+(?:\s|$)",
-    re.IGNORECASE,
-)
-_STATE_WORDS_RE = re.compile(
-    r"状态|步骤|阶段|工步|待机|就绪|运行态|完成态|state|step",
-    re.IGNORECASE,
-)
-
-
 def _selected_approach(confirmed_spec):
     if not isinstance(confirmed_spec, Mapping):
         return {}
@@ -155,67 +146,107 @@ def patch_device_addresses(partial):
     return addresses
 
 
-def _rung_text(rung):
-    try:
-        return json.dumps(rung, ensure_ascii=False, sort_keys=True)
-    except Exception:
-        return str(rung)
+def _rung_inspected_features(rung, comments):
+    """Inspect one rung through the same structured feature extractor as validation."""
+
+    devices = _rung_devices(rung)
+    scoped_comments = {
+        address: label
+        for address, label in (comments or {}).items()
+        if str(address).upper() in devices
+    }
+    return inspect_ladder_features(
+        {"rungs": [rung], "device_comments": scoped_comments}
+    )
+
+
+def _flatten_violation_values(violations, kinds, *, upper=False):
+    values = set()
+    for violation in violations:
+        if violation.get("kind") not in kinds:
+            continue
+        raw = violation.get("value")
+        items = raw if isinstance(raw, list) else [raw]
+        for item in items:
+            token = str(item or "").strip()
+            if token:
+                values.add(token.upper() if upper else token)
+    return values
 
 
 def _scope_for_contract(ladder, confirmed_spec, violations, features):
-    """Infer a conservative existing-rung scope from program evidence.
+    """Infer repair scope only from structured requirements and program facts.
 
-    Returning an empty scope means the semantic location is not known well
-    enough for automatic repair.  A required opcode alone is intentionally not
-    enough evidence.
+    Free-form approach prose is deliberately excluded. A missing opcode by
+    itself still cannot identify a safe edit location.
     """
 
     approach, contract = _contract(confirmed_spec)
-    guide = " ".join(
-        str(approach.get(key) or "")
-        for key in ("name", "description", "generation_guide")
-    )
     required_devices = {
         str(item).strip().upper()
         for item in contract.get("required_devices") or []
         if str(item).strip()
     }
-    required_structures = set(contract.get("required_structures") or [])
-    missing_values = {
-        str(v.get("value") or "").upper()
-        for v in violations
-        if v.get("kind") in {"missing_opcode", "missing_device", "missing_structure"}
-        and not isinstance(v.get("value"), list)
+    forbidden_devices = {
+        str(item).strip().upper()
+        for item in contract.get("forbidden_devices") or []
+        if str(item).strip()
+    }
+    required_structures = {
+        str(item).strip()
+        for item in contract.get("required_structures") or []
+        if str(item).strip()
+    }
+    forbidden_structures = {
+        str(item).strip()
+        for item in contract.get("forbidden_structures") or []
+        if str(item).strip()
     }
 
-    state_registers = set(features.get("state_registers") or [])
-    state_registers.update(
-        item for item in required_devices if re.fullmatch(r"D\d+", item)
+    violation_devices = _flatten_violation_values(
+        violations, {"missing_device", "forbidden_device"}, upper=True
     )
-    state_semantics = bool(
-        required_structures
-        & {
-            "register_state_machine",
-            "state_initialization",
-            "state_comparison",
-            "state_transition",
-        }
-    ) or bool(re.search(r"状态机|状态转移|步进状态|MOV\s+K\d+\s+D\d+", guide, re.I))
+    violation_opcodes = _flatten_violation_values(
+        violations, {"forbidden_opcode"}, upper=True
+    )
+    violation_structures = _flatten_violation_values(
+        violations,
+        {"missing_structure", "forbidden_structure", "missing_any_structure"},
+    )
+    structure_anchors = (
+        required_structures | forbidden_structures | violation_structures
+    )
 
-    pulse_semantics = bool(
-        required_structures & {"pulse_positioning"}
-        or {"PLSY", "PLSV", "DRVI", "DRVA", "ZRN", "DSZR", "DVIT"}
-        & missing_values
-    )
-    analog_semantics = "analog_control" in required_structures
-    serial_semantics = "serial_communication" in required_structures
+    state_structures = {
+        "register_state_machine",
+        "bit_state_machine",
+        "state_initialization",
+        "state_comparison",
+        "state_transition",
+    }
+    state_devices = set(features.get("state_registers") or [])
+    state_devices.update(features.get("state_bits") or [])
+
+    execution_requirements = normalize_semantic_requirements(
+        (confirmed_spec or {}).get("execution_semantics") or []
+    ) if isinstance(confirmed_spec, Mapping) else []
+    edge_devices = {
+        str(device).upper()
+        for requirement in execution_requirements
+        if requirement.get("semantic") in {"RISING_EDGE", "FALLING_EDGE"}
+        for device in requirement.get("devices") or []
+    }
+    edge_repair = "edge_trigger" in structure_anchors
 
     allowed = set()
     reasons = {}
-    all_rungs = [r for r in (ladder or {}).get("rungs") or [] if isinstance(r, Mapping)]
+    all_rungs = [
+        rung for rung in (ladder or {}).get("rungs") or []
+        if isinstance(rung, Mapping)
+    ]
     comments = {
-        str(addr).upper(): str(label)
-        for addr, label in ((ladder or {}).get("device_comments") or {}).items()
+        str(address).upper(): str(label)
+        for address, label in ((ladder or {}).get("device_comments") or {}).items()
     }
 
     for rung in all_rungs:
@@ -223,31 +254,23 @@ def _scope_for_contract(ladder, confirmed_spec, violations, features):
         if rid is None:
             continue
         rid = int(rid)
-        devices = _rung_devices(rung)
-        text = _rung_text(rung)
+        rung_features = _rung_inspected_features(rung, comments)
+        rung_devices = set(rung_features.get("devices") or [])
+        rung_opcodes = set(rung_features.get("opcodes") or [])
+        rung_structures = set(rung_features.get("structures") or [])
         why = []
 
-        if required_devices & devices:
-            why.append("包含 generation_contract 指定软元件")
-        if state_semantics:
-            if state_registers & devices:
-                why.append("包含状态寄存器")
-            if _STATE_COMPARE_RE.search(text):
-                why.append("包含状态比较")
-            if {"M8002", "SM402", "SM8002"} & devices:
-                why.append("包含首扫初始化触点")
-            if any(_STATE_WORDS_RE.search(comments.get(d, "")) for d in devices):
-                why.append("包含已标注的状态软元件")
-        if pulse_semantics and (
-            re.search(r"PLSY|PLSV|DRVI|DRVA|ZRN|DSZR|DVIT|M8029", text, re.I)
-        ):
-            why.append("包含定位/完成逻辑")
-        if analog_semantics and (
-            re.search(r"\b(?:TO|DTO|FROM|DFROM|RD3A|WR3A)\b|D82[6-9]\d|M82[6-9]\d", text, re.I)
-        ):
-            why.append("包含模拟量访问逻辑")
-        if serial_semantics and re.search(r"\b(?:RS2?|ADPRW)\b", text, re.I):
-            why.append("包含串行通信逻辑")
+        device_anchors = required_devices | forbidden_devices | violation_devices
+        if device_anchors & rung_devices:
+            why.append("命中结构化软元件约束")
+        if violation_opcodes & rung_opcodes:
+            why.append("包含已确认违例指令")
+        if structure_anchors & rung_structures:
+            why.append("命中结构化实现语义")
+        if structure_anchors & state_structures and state_devices & rung_devices:
+            why.append("包含已检查出的状态软元件")
+        if edge_repair and edge_devices & rung_devices:
+            why.append("命中已确认边沿语义的输入")
 
         if why:
             allowed.add(rid)
@@ -255,13 +278,27 @@ def _scope_for_contract(ladder, confirmed_spec, violations, features):
 
     fallback_scope = False
     if not allowed:
-        # A small-program fallback is permitted only when the contract contains
-        # semantic anchors beyond a naked opcode token.  It is still restricted
-        # to existing rungs and existing device addresses.
-        has_semantic_anchor = bool(required_devices or required_structures)
+        # A small-program fallback is permitted only when machine-readable
+        # semantics provide an anchor beyond a naked opcode requirement.
+        has_semantic_anchor = bool(
+            required_devices
+            or forbidden_devices
+            or required_structures
+            or forbidden_structures
+            or violation_devices
+            or violation_structures
+            or (edge_repair and edge_devices)
+        )
         if has_semantic_anchor and len(all_rungs) <= 6:
-            allowed = {int(r["rung_id"]) for r in all_rungs if r.get("rung_id") is not None}
-            reasons = {rid: ["小型程序且已有结构/软元件语义锚点"] for rid in allowed}
+            allowed = {
+                int(rung["rung_id"])
+                for rung in all_rungs
+                if rung.get("rung_id") is not None
+            }
+            reasons = {
+                rid: ["小型程序且已有结构化语义锚点"]
+                for rid in allowed
+            }
             fallback_scope = True
 
     return sorted(allowed), reasons, fallback_scope
@@ -353,10 +390,12 @@ def build_contract_repair_plan(
         "handoff": lineage,
         "approach": {
             "name": approach.get("name") or "已选方案",
-            "description": approach.get("description") or "",
-            "generation_guide": approach.get("generation_guide") or "",
+            "implementation_semantics": approach.get("implementation_semantics") or [],
             "generation_contract": contract,
         },
+        "execution_semantics": normalize_semantic_requirements(
+            (confirmed_spec or {}).get("execution_semantics") or []
+        ),
         "violations": violations,
         "allowed_rung_ids": allowed_rung_ids,
         "allowed_addresses": allowed_addresses,
@@ -377,10 +416,15 @@ def build_contract_repair_plan(
 
 目标 PLC：{plc_model}
 已选方案：{approach.get('name') or '已选方案'}
-方案说明：{approach.get('description') or ''}
-方案生成要点：{approach.get('generation_guide') or ''}
-方案文字是实现上下文；不要从中推导新硬约束。以下为现有硬契约及来源记录，检索记录不是验证结论：
-{json.dumps({"generation_contract": contract, "source_handoff": lineage}, ensure_ascii=False, sort_keys=True)}
+以下仅有结构化语义与硬契约可决定修复内容；不得从方案描述或 generation_guide 推导约束：
+{json.dumps({
+    "implementation_semantics": approach.get("implementation_semantics") or [],
+    "execution_semantics": normalize_semantic_requirements(
+        (confirmed_spec or {}).get("execution_semantics") or []
+    ),
+    "generation_contract": contract,
+    "source_handoff": lineage,
+}, ensure_ascii=False, sort_keys=True)}
 
 待修复违例：
 {violation_lines}
@@ -395,7 +439,7 @@ def build_contract_repair_plan(
 1. mode 必须为 "partial"；只能返回上述 rung_id，禁止删除既有梯级。
 2. 禁止引用允许清单以外的任何新软元件；不得改变 I/O 分配、定时器/计数器参数或无关输出逻辑。
 3. 禁止为了通过 required_opcodes 检查而添加无实际作用的 M8000+MOV、无用 SET/RST、死代码或永远不会影响控制结果的指令。
-4. 必用指令必须真正承担 generation_guide 中指定的控制语义；禁用指令必须以同一已确认语义的合法实现替换，而不是机械删除。
+4. 只按上述 structured semantics + generation_contract 修复；禁用指令必须以同一已确认结构化语义的合法实现替换，而不是机械删除。
 5. 保持允许范围以外的所有梯级完全不变。不要重新分析需求，不要切换实现方案。
 6. 修复结果必须同时通过普通 PLC 硬校验和完整 generation_contract 校验。
 """.strip()
