@@ -493,11 +493,11 @@ def _get_current_program_info(
 
 
 def _search_plc_manual(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
-    from knowledge.retriever import retrieve_knowledge
+    from knowledge.retriever import retrieve_fact_aware_knowledge
 
     query = str(arguments.get("query") or "").strip()
     top_k = int(arguments.get("top_k", 5))
-    rows = retrieve_knowledge(
+    rows = retrieve_fact_aware_knowledge(
         query,
         plc_model=context.plc_model,
         task_type="analysis",
