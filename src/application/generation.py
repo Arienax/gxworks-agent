@@ -267,6 +267,7 @@ class GenerationWorkflow:
                 }
             generation_agent_metadata = None
             prepared_candidate = None
+            direct_candidate = None
             repair_payload = None
             repair_kind = "format"
             deterministic_field_patch = False
@@ -363,14 +364,12 @@ class GenerationWorkflow:
                             "progress", {"stage": stage, "message": message}
                         ),
                     )
-                    prepared_candidate = result.get("prepared_candidate")
-                    if not isinstance(prepared_candidate, dict):
-                        raise GenerationError(tr('独立生成 Agent 未返回已校验候选'))
+                    direct_candidate = result.get("ladder")
+                    if not isinstance(direct_candidate, dict):
+                        raise GenerationError(tr('独立生成 Agent 未返回梯形图候选'))
+                    direct_candidate = copy.deepcopy(direct_candidate)
                     full_content = json.dumps(
-                        prepared_candidate["ladder"], ensure_ascii=False, separators=(",", ":")
-                    )
-                    validation_messages.extend(
-                        prepared_candidate.get("validation_messages") or []
+                        direct_candidate, ensure_ascii=False, separators=(",", ":")
                     )
                     generation_handoff = copy.deepcopy(result.get("generation_handoff") or {})
                     generation_agent_metadata = {
@@ -451,7 +450,7 @@ class GenerationWorkflow:
             if repair_call and (not streaming_succeeded or not full_content):
                 raise GenerationError(tr('修复调用未返回候选 JSON'))
 
-            if prepared_candidate is None:
+            if direct_candidate is None:
                 json_str = clean_json_text(full_content) if full_content else ""
                 if not json_str:
                     raise GenerationError(tr('大模型未返回合法数据'))
@@ -467,15 +466,19 @@ class GenerationWorkflow:
                         "message": tr('已安全移除 JSON 末尾多余闭合符号；继续解析候选程序。'),
                     })
             else:
-                # Confirmed Agent B already returned a canonical, structurally
-                # checked candidate and PLC IR. Keep text only for UI delivery;
-                # do not serialize/parse/prepare the same ladder a second time.
-                json_str = ""
+                # Agent B already returned a Python ladder object. Keep one local
+                # serialization only for UI/rejected-candidate staging; acceptance
+                # consumes the object directly and never parses these bytes again.
+                json_str = full_content
 
             def parse_candidate(candidate):
                 nonlocal prepared_candidate
                 emit_parsing_progress(tr('正在解析模型输出：读取 JSON 结构'))
-                parsed = json.loads(candidate)
+                parsed = (
+                    copy.deepcopy(direct_candidate)
+                    if direct_candidate is not None
+                    else json.loads(candidate)
+                )
                 if not isinstance(parsed, dict):
                     raise PLCJsonValidationError("$: expected JSON object")
                 if self.target_mode == "ladder":
@@ -489,12 +492,18 @@ class GenerationWorkflow:
                             on_progress=emit_parsing_progress,
                         )
                     else:
+                        from plc.generation import CONFIRMED_AGENT_ORIGIN
                         prepared_candidate = self.candidates.prepare(
                             parsed, plc_model=self.plc_model, program_name=self.program_name,
                             revision=self.revision, confirmed_spec=self.confirmed_context,
                             previous_ladder=self.previous_json, repair_mode=self.repair_mode,
                             allowed_rung_ids=self.allowed_rung_ids,
                             allowed_addresses=self.allowed_addresses, task_type=self.task_type,
+                            candidate_origin=(
+                                CONFIRMED_AGENT_ORIGIN
+                                if direct_candidate is not None
+                                else "external"
+                            ),
                             on_progress=emit_parsing_progress,
                         )
                     validation_messages.extend(prepared_candidate["validation_messages"])
@@ -590,12 +599,11 @@ class GenerationWorkflow:
                 repair_attempts += 1
                 return prepared_candidate["ladder"]
 
+            from plc.specification.semantic_validation import ConfirmedSemanticValidationError
             try:
-                parsed_json = (
-                    prepared_candidate["ladder"]
-                    if prepared_candidate is not None
-                    else parse_candidate(json_str)
-                )
+                parsed_json = parse_candidate(json_str)
+            except ConfirmedSemanticValidationError as error:
+                raise GenerationError(str(error)) from error
             except validation_errors as error:
                 try:
                     parsed_json = cascade_format_repair(error)
