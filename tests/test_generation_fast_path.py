@@ -149,6 +149,15 @@ def test_confirmed_semantic_validation_does_not_restore_full_review_gates():
 
 
 def test_confirmed_agent_origin_has_one_core_owner():
+    import inspect
+    import application.generation_agent as generation_agent
+    import plc.generation as generation
     from plc.generation import CONFIRMED_AGENT_ORIGIN
 
     assert CONFIRMED_AGENT_ORIGIN == "compact_agent"
+    assert "candidate_origin=CONFIRMED_AGENT_ORIGIN" in inspect.getsource(
+        generation_agent.generate_confirmed_ladder
+    )
+    source = inspect.getsource(generation.prepare_ladder_candidate)
+    assert "candidate_origin == CONFIRMED_AGENT_ORIGIN" in source
+    assert "candidate_origin != CONFIRMED_AGENT_ORIGIN" in source
