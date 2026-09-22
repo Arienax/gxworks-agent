@@ -33,10 +33,6 @@ passing broad regression suite:
 - verified instruction contract promotions remain authoritative in
   `plc.instructions`, but the direct structured fact record does not yet merge
   `InstructionRegistry.describe_contract()`;
-- fixed opcode+operand instruction instances are still described by the
-  analysis contract, but `instruction_instances` is not yet a formal
-  generation-contract field carried through normalization and context
-  compilation;
 - device canonical identity is owned by `plc.device_identity`, while direct
   structured device lookup does not yet canonicalize through that owner;
 - structured device records support more families than the current target
