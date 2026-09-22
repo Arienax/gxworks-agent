@@ -1180,6 +1180,27 @@ def _merge_parameters(base_parameters, incoming_parameters):
     return merged
 
 
+def _preserve_pinned_instruction_instances(previous_selected, approaches):
+    """Carry exact calls across pinned reanalysis unless this turn explicitly replaces them."""
+    if not isinstance(previous_selected, dict):
+        return approaches
+    previous_id = str(previous_selected.get("approach_id") or "").strip()
+    if not previous_id:
+        return approaches
+    result = copy.deepcopy(approaches)
+    for approach in result:
+        if not isinstance(approach, dict) or str(approach.get("approach_id") or "").strip() != previous_id:
+            continue
+        for field in ("generation_contract", "implementation_preferences"):
+            current = approach.get(field)
+            prior = previous_selected.get(field)
+            if not isinstance(current, dict) or not isinstance(prior, dict):
+                continue
+            if "instruction_instances" not in current and "instruction_instances" in prior:
+                current["instruction_instances"] = copy.deepcopy(prior["instruction_instances"])
+    return result
+
+
 def build_review_draft(analysis, previous_spec=None):
     """Build the editable single-source review draft from AI analysis."""
     analysis = analysis or {}
@@ -1239,6 +1260,9 @@ def build_review_draft(analysis, previous_spec=None):
         for item in (analysis.get("approaches") or [])
         if isinstance(item, dict)
     ]
+    approaches = _preserve_pinned_instruction_instances(
+        previous.get("selected_approach") or {}, approaches,
+    )
     selected_approach = (
         copy.deepcopy(approaches[0])
         if approaches
