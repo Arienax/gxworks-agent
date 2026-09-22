@@ -259,6 +259,9 @@ def test_fact_aware_row_api_keeps_exact_instruction_out_of_broad_retrieval(monke
     assert rows[0]["structured_lookup"] is True
     assert rows[0]["structured_fact_kind"] == "instruction"
     assert rows[0]["structured_fact_target"] == "SFTL"
+    assert rows[0]["structured_text_compacted"] is True
+    assert rows[0]["instruction_contract"]["opcode"] == "SFTL"
+    assert "INSTRUCTION_CONTRACT:" in rows[0]["text"]
 
 
 def test_application_runtime_cannot_bypass_fact_aware_retrieval():
@@ -377,6 +380,24 @@ def test_confirmed_targets_include_selected_opcode_without_broad_search_text():
     assert targets["instructions"][0]["opcode"] == "WSFL"
     assert targets["devices"] == []
     assert targets["errors"] == []
+
+
+def test_compact_row_view_does_not_mutate_full_manual_backed_record():
+    from knowledge.structured_facts import compact_structured_fact_record
+
+    rows = resolve_instruction_records(
+        [{"opcode": "SFTL", "base_opcode": "SFTL"}],
+        plc_model="FX3U",
+        task_type="analysis",
+    )
+    assert rows
+    full = rows[0]
+    compact = compact_structured_fact_record(full)
+    assert compact is not full
+    assert compact["instruction_contract"] == full["instruction_contract"]
+    assert len(compact["text"]) < len(full["text"])
+    assert "INSTRUCTION_CONTRACT:" in compact["text"]
+    assert full["text"].startswith("[STRUCTURED INSTRUCTION RECORD]")
 
 
 def test_instruction_contract_delivery_has_one_structured_owner():
