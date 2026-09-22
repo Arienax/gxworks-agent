@@ -74,6 +74,7 @@ Owns prompt assembly, token/context budgeting, RAG query construction, retrieval
 | `tests/test_rag_instruction_recall.py` | focused coverage for rag instruction recall |
 | `tests/test_rag_natural_language_recall.py` | focused coverage for rag natural language recall |
 | `tests/test_shared_generation_context.py` | focused coverage for shared generation context |
+| `tests/test_structured_fact_lookup.py` | exact instruction/device/error resolution outside broad RAG, residual-query separation and agent manual-search boundary |
 | `tests/test_structured_knowledge_quality.py` | focused coverage for structured knowledge quality |
 
 ### Generation, contracts, repair and delivery
