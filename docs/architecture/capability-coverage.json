@@ -554,7 +554,7 @@
         {
           "kind": "contains",
           "path": "src/plc/generation.py",
-          "text": "candidate_origin != \"compact_agent\""
+          "text": "candidate_origin != CONFIRMED_AGENT_ORIGIN"
         },
         {
           "kind": "contains",
