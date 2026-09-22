@@ -163,6 +163,41 @@ def _normalize_groups(values, *, upper=False, lower=False):
             result.append(normalized)
     return result
 
+def normalize_instruction_instances(values):
+    """Normalize exact opcode+operand calls without inferring or rewriting operands."""
+    if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+        return []
+    result = []
+    seen = set()
+    for item in values:
+        if not isinstance(item, Mapping):
+            continue
+        opcode = str(item.get("opcode") or "").strip().upper()
+        operands = item.get("operands")
+        if not re.fullmatch(r"[$A-Z][A-Z0-9_.$@+<>!=\-]{0,63}", opcode):
+            continue
+        if not isinstance(operands, Sequence) or isinstance(operands, (str, bytes)):
+            continue
+        normalized_operands = []
+        valid = True
+        for operand in operands:
+            if not isinstance(operand, str):
+                valid = False
+                break
+            token = operand.strip()
+            if not token or len(token) > 256:
+                valid = False
+                break
+            normalized_operands.append(token)
+        if not valid:
+            continue
+        marker = (opcode, tuple(normalized_operands))
+        if marker in seen:
+            continue
+        seen.add(marker)
+        result.append({"opcode": opcode, "operands": normalized_operands})
+    return result
+
 
 def _opcode_mentions(text):
     mentions = []
@@ -500,6 +535,12 @@ def normalize_generation_contract(contract=None, *, approach=None):
         "source": raw.get("source") if raw.get("source") in {"explicit", "inferred", "analysis_sanitized"} else (
             "explicit" if isinstance(contract, Mapping) and contract else inferred.get("source", "inferred")),
     }
+    # Exact instruction calls are optional but lossless when explicitly present.
+    # Absence means "not supplied"; an explicit [] means "clear the prior instances".
+    if "instruction_instances" in raw:
+        normalized["instruction_instances"] = normalize_instruction_instances(
+            raw.get("instruction_instances")
+        )
     unverified = _constraint_values(raw.get("unverified_constraints"))
     if normalized["source"] == "inferred":
         # The chosen prose still reaches the generator. Historical keyword
@@ -638,6 +679,7 @@ def generation_contract_signature(approach):
             "forbidden_structures",
             "any_of_opcode_groups",
             "any_of_structure_groups",
+            "instruction_instances",
         )
     }
     return hashlib.sha256(
@@ -940,6 +982,14 @@ def format_contract_summary(approach, *, localized=False):
         )
     if contract.get("required_devices"):
         parts.append(label("指定软元件 ") + label("/").join(contract["required_devices"]))
+    if contract.get("instruction_instances"):
+        instances = [
+            " ".join([item["opcode"], *item["operands"]]).strip()
+            for item in contract["instruction_instances"]
+            if isinstance(item, Mapping)
+        ]
+        if instances:
+            parts.append(label("固定指令实例 ") + label(" / ").join(instances))
     if contract.get("unverified_constraints"):
         parts.append(label("另有保留的未机检方案语义"))
     return label("；").join(parts)
@@ -955,5 +1005,6 @@ __all__ = [
     "inspect_ladder_features",
     "normalize_approach",
     "normalize_generation_contract",
+    "normalize_instruction_instances",
     "validate_ladder_against_selected_approach",
 ]
