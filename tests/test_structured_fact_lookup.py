@@ -318,6 +318,16 @@ def test_runtime_device_target_vocabulary_rejects_constants_and_placeholders():
     assert route.devices == ("D0",)
 
 
+def test_structured_fact_targets_use_full_runtime_device_vocabulary():
+    targets = structured_fact_targets(
+        "ER10 SM8000 SD0 TS0 TC0 CS0 CC0 R10 P1 I2 K10 H100 E1 N1"
+    )
+    assert set(targets["devices"]) == {
+        "ER10", "SM8000", "SD0", "TS0", "TC0", "CS0", "CC0",
+        "R10", "P1", "I2",
+    }
+
+
 def test_exact_device_is_resolved_from_device_records():
     _bundled_index()
     rows = resolve_device_records(["M8029"], plc_model="FX3U", task_type="analysis")
