@@ -264,6 +264,14 @@ def test_structured_fact_targets_carry_extended_device_families():
     }
 
 
+def test_device_family_target_coverage_capability_is_enforced():
+    from tools.audit_capability_coverage import audit_coverage
+
+    report = audit_coverage()
+    states = {row["id"]: row["state"] for row in report["capabilities"]}
+    assert states["device_family_target_coverage"] == "enforced"
+
+
 def test_exact_device_is_resolved_from_device_records():
     _bundled_index()
     rows = resolve_device_records(["M8029"], plc_model="FX3U", task_type="analysis")
