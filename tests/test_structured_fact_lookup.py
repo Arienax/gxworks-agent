@@ -51,6 +51,8 @@ def test_exact_instruction_is_resolved_from_structured_table(opcode):
     assert all(row["structured_fact_kind"] == "instruction" for row in rows)
     assert any(str(row.get("instruction_opcode") or "").upper() == opcode for row in rows)
     assert all(row["match_type"] == "structured_direct" for row in rows)
+    assert all(row["instruction_step_width"]["known"] is True for row in rows)
+    assert all("STEP_WIDTH:" in row["text"] for row in rows)
 
 
 def test_structured_step_width_uses_shared_owner_for_instruction_instance():
