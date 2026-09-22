@@ -108,7 +108,7 @@ def test_fact_aware_row_api_keeps_exact_instruction_out_of_broad_retrieval(monke
 def test_application_runtime_cannot_bypass_fact_aware_retrieval():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     offenders = []
-    for folder in ("src/application", "src/agent_runtime"):
+    for folder in ("src/application", "src/agent_runtime", "src/integrations"):
         for source_file in (root / folder).rglob("*.py"):
             source_text = source_file.read_text(encoding="utf-8")
             if "from knowledge.retriever import retrieve_knowledge" in source_text:
