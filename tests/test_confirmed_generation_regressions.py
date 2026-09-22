@@ -248,3 +248,127 @@ def test_counter_structure_is_kept_when_request_really_is_counter_control():
     contract = draft["selected_approach"]["generation_contract"]
 
     assert "hardware_counter" in contract["required_structures"]
+
+
+def _instruction_instance_analysis(instances):
+    return {
+        "summary": "使用固定移位指令实例",
+        "approaches": [{
+            "approach_id": "fixed_shift",
+            "name": "固定移位",
+            "description": "按确认的完整指令调用实现",
+            "pros": "",
+            "cons": "",
+            "generation_guide": "",
+            "generation_contract": {
+                "required_opcodes": ["SFTL"],
+                "instruction_instances": instances,
+            },
+        }],
+        "missing_info": [],
+        "suggested_io": {},
+        "hardware_config": {},
+        "assumptions": [],
+    }
+
+
+def test_exact_instruction_instance_survives_agent_a_confirmation_to_agent_b():
+    from application.confirmed_generation_context import build_confirmed_generation_context
+    from knowledge.structured_facts import structured_fact_targets
+    from plc.specification.approach import format_contract_summary
+    from plc.specification.confirmed import confirm_context
+
+    instance = {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
+    normalized = _normalize_analysis_result(
+        _instruction_instance_analysis([instance]),
+        plc_model="FX3U",
+        user_text="明确使用 SFTL M10 M100 K128 K1 实现移位。",
+    )
+    draft = build_review_draft(normalized)
+    assert draft["selected_approach"]["generation_contract"]["instruction_instances"] == [instance]
+    assert "SFTL M10 M100 K128 K1" in format_contract_summary(draft["selected_approach"])
+
+    confirmed = confirm_context(draft)
+    projected = _strict_generation_projection(confirmed)
+    assert projected["selected_approach"]["generation_contract"]["instruction_instances"] == [instance]
+
+    context = build_confirmed_generation_context(
+        confirmed, "FX3U", knowledge_builder=lambda *args, **kwargs: "",
+    )
+    assert context.confirmed_spec["selected_approach"]["generation_contract"]["instruction_instances"] == [instance]
+
+    targets = structured_fact_targets("", context.confirmed_spec)
+    exact = next(row for row in targets["instructions"] if row["opcode"] == "SFTL")
+    assert exact["operands"] == instance["operands"]
+    assert exact["instance_source"] == "generation_contract"
+
+    prompt = _build_agent_b_prompt(projected, "FX3U", context=context)
+    payload, _ = json.JSONDecoder().raw_decode(
+        prompt.split("# Confirmed project specification\n", 1)[1]
+    )
+    assert payload["selected_approach"]["generation_contract"]["instruction_instances"] == [instance]
+    assert "opcode 与 operands 必须逐项原样使用" in prompt
+
+
+def test_pinned_reanalysis_preserves_instances_until_explicitly_cleared():
+    from plc.specification.confirmed import confirm_context
+
+    instance = {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
+    first = _normalize_analysis_result(
+        _instruction_instance_analysis([instance]),
+        plc_model="FX3U",
+        user_text="明确使用 SFTL M10 M100 K128 K1。",
+    )
+    previous = confirm_context(build_review_draft(first))
+
+    omitted = _instruction_instance_analysis([instance])
+    omitted["approaches"][0]["generation_contract"].pop("instruction_instances")
+    normalized = _normalize_analysis_result(
+        omitted, plc_model="FX3U", user_text="只修改停止保持参数。", confirmed_spec=previous,
+    )
+    draft = build_review_draft(normalized, previous)
+    assert draft["selected_approach"]["generation_contract"]["instruction_instances"] == [instance]
+
+    cleared = _instruction_instance_analysis([])
+    normalized_clear = _normalize_analysis_result(
+        cleared, plc_model="FX3U", user_text="清除原固定指令实例，重新开放具体调用。", confirmed_spec=previous,
+    )
+    cleared_draft = build_review_draft(normalized_clear, previous)
+    assert cleared_draft["selected_approach"]["generation_contract"]["instruction_instances"] == []
+
+
+def test_model_proposed_instruction_instance_stays_exact_as_selected_preference():
+    from application.confirmed_generation_context import build_confirmed_generation_context
+    from knowledge.structured_facts import structured_fact_targets
+    from plc.specification.confirmed import confirm_context
+
+    instance = {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
+    normalized = _normalize_analysis_result(
+        _instruction_instance_analysis([instance]),
+        plc_model="FX3U",
+        user_text="做一个三路移位方案，具体调用由方案确定。",
+    )
+    draft = build_review_draft(normalized)
+
+    # Agent-A implementation detail is not silently promoted to a user-authored
+    # hard constraint, but the selected implementation still retains it exactly.
+    assert draft["selected_approach"]["generation_contract"]["instruction_instances"] == []
+    assert draft["selected_approach"]["implementation_preferences"]["instruction_instances"] == [instance]
+
+    confirmed = confirm_context(draft)
+    projected = _strict_generation_projection(confirmed)
+    assert projected["selected_approach"]["implementation_preferences"]["instruction_instances"] == [instance]
+
+    context = build_confirmed_generation_context(
+        confirmed, "FX3U", knowledge_builder=lambda *args, **kwargs: "",
+    )
+    targets = structured_fact_targets("", context.confirmed_spec)
+    exact = next(row for row in targets["instructions"] if row["opcode"] == "SFTL")
+    assert exact["operands"] == instance["operands"]
+    assert exact["instance_source"] == "implementation_preferences"
+
+    prompt = _build_agent_b_prompt(projected, "FX3U", context=context)
+    payload, _ = json.JSONDecoder().raw_decode(
+        prompt.split("# Confirmed project specification\n", 1)[1]
+    )
+    assert payload["selected_approach"]["implementation_preferences"]["instruction_instances"] == [instance]
