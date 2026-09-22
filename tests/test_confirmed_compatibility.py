@@ -372,14 +372,20 @@ def test_scoped_contract_overrides_legacy_format_flags_without_model_name_rules(
     assert options["response_format"] == {"type": "json_object"}
 
 
-def test_known_ladder_representations_never_bypass_validation():
+def test_known_ladder_representations_use_single_candidate_validation_owner():
     from application.generation_agent import _decode_generated_ladder
+    from plc.candidate_service import CandidateService
     from plc.validation import PLCJsonValidationError
+
     good = expand_compact_ladder(_compact([]))
     bad = copy.deepcopy(good)
     bad["rungs"][0]["branches"][0]["outputs"][0]["address"] = "NOT_A_DEVICE"
+    decoded, representation = _decode_generated_ladder(bad, {}, "FX3U")
+    assert representation == "ladder_v1"
     with pytest.raises(PLCJsonValidationError):
-        _decode_generated_ladder(bad, {}, "FX3U")
+        CandidateService().prepare(
+            decoded, plc_model="FX3U", candidate_origin="compact_agent",
+        )
     for value in ({"r": [], "rungs": []}, {"wrapper": good}, {**good, "unknown_field": "X1"}):
         with pytest.raises(CompactProtocolError):
             _decode_generated_ladder(value, {}, "FX3U")
