@@ -108,9 +108,8 @@ def test_compact_agent_skips_legacy_candidate_normalizers(monkeypatch):
     assert result["semantic_validation"]["status"] == "not_applicable"
 
 
-def test_confirmed_semantic_validation_enforces_contract_without_full_review_rules():
+def test_confirmed_semantic_validation_does_not_restore_full_review_gates():
     from plc.generation import prepare_ladder_candidate
-    from plc.validation import ApproachContractValidationError
 
     ladder = _self_hold()
     spec = {
@@ -122,13 +121,16 @@ def test_confirmed_semantic_validation_enforces_contract_without_full_review_rul
             },
         }
     }
-    with pytest.raises(ApproachContractValidationError):
-        prepare_ladder_candidate(
-            ladder,
-            plc_model="FX3U",
-            confirmed_spec=spec,
-            candidate_origin="compact_agent",
-        )
+    accepted_contract = prepare_ladder_candidate(
+        ladder,
+        plc_model="FX3U",
+        confirmed_spec=spec,
+        candidate_origin="compact_agent",
+    )
+    assert {
+        row["check"]: row["status"]
+        for row in accepted_contract["semantic_validation"]["checks"]
+    }["selected_approach_contract"] == "deferred_to_review"
 
     duplicate = copy.deepcopy(ladder["rungs"][0])
     duplicate["rung_id"] = 2
