@@ -229,7 +229,7 @@ def test_capability_manifest_tracks_instruction_migration_gaps():
 
     report = audit_coverage()
     states = {row["id"]: row["state"] for row in report["capabilities"]}
-    assert states["instruction_step_width"] == "tracked_gap"
+    assert states["instruction_step_width"] == "enforced"
     assert states["instruction_contract_promotion"] == "tracked_gap"
     assert states["confirmed_instruction_instances"] == "tracked_gap"
     assert states["instruction_source_authority"] == "tracked_gap"
