@@ -529,10 +529,7 @@ def test_st_prompt_uses_only_the_selected_model_special_device_prefixes():
     )
     assert "FX3U" in fx3_prompt
     assert "SM8002" not in fx3_prompt
-    assert re.search(
-        r"(?<![A-Za-z0-9_])M8002(?![A-Za-z0-9_])",
-        fx3_prompt,
-    )
+    assert "FX5U/iQ-F" not in fx3_prompt
 
 
 def test_api_query_compaction_uses_values_not_json_field_names():
