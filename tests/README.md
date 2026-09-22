@@ -111,6 +111,7 @@ Owns confirmed-spec to Agent B generation, selected-approach contracts, candidat
 | `tests/test_rejected_generation_delivery.py` | focused coverage for rejected generation delivery |
 | `tests/test_repair_responsibility_simplification.py` | focused coverage for repair responsibility simplification |
 | `tests/test_review_noise_regressions.py` | focused coverage for review noise regressions |
+| `tests/test_semantic_contract_architecture.py` | provenance, structured repair scope, legacy migration separation, and instruction capability ownership |
 | `tests/test_user_confirmed_generation_repair.py` | focused coverage for user confirmed generation repair |
 
 ### Deterministic PLC Core and instruction semantics
