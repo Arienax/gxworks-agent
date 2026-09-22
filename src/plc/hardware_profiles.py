@@ -123,11 +123,6 @@ _ANALYSIS_CONTRACT_GROUP_FIELDS = (
 )
 _ANALYSIS_OPCODE_FIELDS = ("required_opcodes", "forbidden_opcodes")
 _ANALYSIS_DEVICE_FIELDS = ("required_devices", "forbidden_devices")
-_COUNTER_STRUCTURES = {"hardware_counter", "data_register_counter"}
-_COUNTER_INTENT_RE = re.compile(
-    r"计数|计次|次数|counter|(?<![A-Za-z])count(?:ing|s|ed)?(?![A-Za-z])",
-    re.IGNORECASE,
-)
 
 
 def _requirement_mentions_token(requirement, token):
@@ -176,8 +171,15 @@ def _string_list(value):
 
 
 
-def _semantic_user_evidence(item, requirement, *, has_counter_intent):
-    """Apply provenance policy by semantic kind, never by a named use case."""
+def _apply_semantic_provenance_policy(item, requirement):
+    """Apply one provenance policy to every semantic item of the same kind.
+
+    Exact opcodes, devices and instruction instances become hard obligations
+    only when the user supplied that low-level fact. Architecture structures
+    belong to the selected implementation proposal, so every structure token
+    follows the same selected-approach provenance; no structure gets a
+    keyword-based intent exception.
+    """
     kind = item.get("kind")
     status = item.get("status")
     if kind == "instruction_instance":
@@ -191,12 +193,7 @@ def _semantic_user_evidence(item, requirement, *, has_counter_intent):
             return {**item, "values": bounded} if bounded else None
         return item if _requirement_mentions_token(requirement, item.get("value")) else None
     if kind == "structure":
-        values = item.get("values", []) if status == "any_of" else [item.get("value")]
-        if not has_counter_intent:
-            values = [value for value in values if value not in _COUNTER_STRUCTURES]
-        if not values:
-            return None
-        return {**item, "values": values} if status == "any_of" else item
+        return item
     return item
 
 
@@ -214,7 +211,6 @@ def _sanitize_analysis_approaches(result, user_text):
     if not requirement or not isinstance(approaches, list):
         return
 
-    has_counter_intent = bool(_COUNTER_INTENT_RE.search(requirement))
     sanitized = []
     for raw_approach in approaches:
         if not isinstance(raw_approach, dict):
@@ -227,9 +223,7 @@ def _sanitize_analysis_approaches(result, user_text):
             )
             kept = []
             for item in original_semantics:
-                bounded = _semantic_user_evidence(
-                    item, requirement, has_counter_intent=has_counter_intent
-                )
+                bounded = _apply_semantic_provenance_policy(item, requirement)
                 if bounded:
                     kept.append(bounded)
             approach["implementation_semantics"] = normalize_implementation_semantics(kept)
@@ -275,19 +269,6 @@ def _sanitize_analysis_approaches(result, user_text):
             contract["instruction_instances"] = [
                 instance for instance in normalize_instruction_instances(contract.get("instruction_instances"))
                 if _requirement_mentions_instruction_instance(requirement, instance)
-            ]
-        if not has_counter_intent:
-            for field in ("required_structures", "forbidden_structures"):
-                contract[field] = [
-                    item for item in contract[field]
-                    if item.casefold() not in _COUNTER_STRUCTURES
-                ]
-            contract["any_of_structure_groups"] = [
-                [item for item in group if item.casefold() not in _COUNTER_STRUCTURES]
-                for group in contract["any_of_structure_groups"]
-            ]
-            contract["any_of_structure_groups"] = [
-                group for group in contract["any_of_structure_groups"] if group
             ]
         prior = approach.get("implementation_preferences")
         original = (prior if isinstance(prior, dict) and isinstance(raw_contract, dict)
