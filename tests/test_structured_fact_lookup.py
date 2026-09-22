@@ -11,6 +11,7 @@ from knowledge.structured_facts import (
     resolve_device_records,
     resolve_error_records,
     resolve_instruction_records,
+    resolve_instruction_step_width,
     structured_fact_targets,
     without_structured_targets,
 )
@@ -50,6 +51,62 @@ def test_exact_instruction_is_resolved_from_structured_table(opcode):
     assert all(row["structured_fact_kind"] == "instruction" for row in rows)
     assert any(str(row.get("instruction_opcode") or "").upper() == opcode for row in rows)
     assert all(row["match_type"] == "structured_direct" for row in rows)
+
+
+def test_structured_step_width_uses_shared_owner_for_instruction_instance():
+    _bundled_index()
+    cases = [
+        ("RST", ["D10"], 3),
+        ("RST", ["T16"], 2),
+        ("RST", ["M2"], 1),
+        ("SFTL", ["M10", "M100", "K56", "K1"], 9),
+    ]
+    for opcode, operands, expected in cases:
+        rows = resolve_instruction_records(
+            [{"opcode": opcode, "base_opcode": opcode, "operands": operands}],
+            plc_model="FX3U",
+            task_type="generate",
+        )
+        assert rows, opcode
+        fact = rows[0]["instruction_step_width"]
+        assert fact["known"] is True
+        assert fact["steps"] == expected
+        assert fact["resolution"] == "instruction_instance"
+        assert fact["operands"] == operands
+        assert f"STEP_WIDTH: {expected} program step(s)" in rows[0]["text"]
+
+
+def test_opcode_only_fixed_width_is_exposed_without_inventing_operands():
+    fact = resolve_instruction_step_width(
+        {"opcode": "SFTL", "base_opcode": "SFTL"},
+        plc_model="FX3U",
+    )
+    assert fact["known"] is True
+    assert fact["steps"] == 9
+    assert fact["resolution"] == "fixed_mnemonic"
+    assert fact["operand_arity"] == 4
+    assert fact["operands"] == []
+
+
+def test_operand_dependent_opcode_without_operands_stays_unresolved():
+    fact = resolve_instruction_step_width(
+        {"opcode": "RST", "base_opcode": "RST"},
+        plc_model="FX3U",
+    )
+    assert fact["known"] is False
+    assert fact["steps"] is None
+    assert fact["resolution"] == "requires_operands"
+    assert "operand-dependent" in fact["reason"]
+
+
+def test_step_width_does_not_borrow_fx3u_catalogue_for_other_cpu():
+    fact = resolve_instruction_step_width(
+        {"opcode": "SFTL", "base_opcode": "SFTL"},
+        plc_model="FX5U",
+    )
+    assert fact["known"] is False
+    assert fact["steps"] is None
+    assert fact["resolution"] == "requires_operands"
 
 
 @pytest.mark.parametrize("opcode", ["DRVI", "ZRN"])
