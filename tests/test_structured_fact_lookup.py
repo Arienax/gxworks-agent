@@ -229,6 +229,35 @@ def test_exact_device_is_resolved_from_device_records():
     assert {row["structured_fact_target"] for row in rows} == {"M8029"}
 
 
+def test_device_lookup_uses_canonical_device_identity_owner():
+    _bundled_index()
+
+    canonical = resolve_device_records(
+        ["M8029"], plc_model="FX3U", task_type="analysis",
+    )
+    aliased = resolve_device_records(
+        ["M08029"], plc_model="FX3U", task_type="analysis",
+    )
+
+    assert canonical
+    assert aliased
+    assert [row["id"] for row in aliased] == [row["id"] for row in canonical]
+    assert {row["structured_fact_target"] for row in aliased} == {"M8029"}
+    assert {row["structured_fact_requested_target"] for row in aliased} == {"M08029"}
+
+
+def test_device_aliases_do_not_duplicate_structured_records():
+    _bundled_index()
+    rows = resolve_device_records(
+        ["M08029", "M8029"],
+        plc_model="FX3U",
+        task_type="analysis",
+    )
+    assert rows
+    assert len({row["id"] for row in rows}) == len(rows)
+    assert {row["structured_fact_target"] for row in rows} == {"M8029"}
+
+
 def test_exact_error_is_resolved_from_error_records():
     path = _bundled_index()
     with sqlite3.connect(path) as connection:
