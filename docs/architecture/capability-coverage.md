@@ -30,8 +30,6 @@ enforces the manifest on pull requests.
 The current manifest intentionally tracks gaps that should not be hidden by a
 passing broad regression suite:
 
-- structured device records support more families than the current target
-  extractor recognizes;
 - the older complete instruction-source precedence set has not yet been
   replaced by a data-backed authority contract in the direct resolver.
 
