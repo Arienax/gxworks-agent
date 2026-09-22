@@ -25,11 +25,13 @@ compact_ladder/1.1
     -> artifact rendering
 ```
 
-The prepared candidate is returned directly to the generation workflow. It is
-not serialized back to ladder JSON, parsed again, and prepared a second time.
-Legacy BLOCK_OUTPUT/counter/OUT compatibility normalizers remain available for
-legacy, external, import, and repair inputs, but the fresh compact Agent B path
-does not enter them.
+Agent B returns the lowered ladder object, not an already accepted candidate.
+The generation workflow passes that object directly to `CandidateService.prepare`
+exactly once. A local JSON serialization may still be retained for UI delivery
+and rejected-candidate staging, but those bytes are never parsed back into the
+acceptance path. Legacy BLOCK_OUTPUT/counter/OUT compatibility normalizers remain
+available for legacy, external, import, and repair inputs, but the fresh compact
+Agent B path does not enter them.
 
 [plc.specification.semantic_validation](../../src/plc/specification/semantic_validation.py)
 owns generation-time checks against machine-readable confirmed facts. It is
