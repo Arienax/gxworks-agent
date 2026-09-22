@@ -100,41 +100,70 @@
     {
       "id": "instruction_contract_promotion",
       "category": "plc_instruction_fact",
-      "state": "tracked_gap",
-      "owner": "plc.instructions.InstructionRegistry",
-      "summary": "Verified arity/order/execution-form/instruction-width contract promotions remain authoritative and must reach every instruction-fact consumer.",
+      "state": "enforced",
+      "owner": "plc.instructions.InstructionRegistry.describe_contract",
+      "summary": "Verified instruction contract promotions are merged into each structured instruction fact, including exact instance operands, with no duplicate Agent-B capability lane.",
       "checks": [
         {
           "kind": "python_symbol",
           "path": "src/plc/instructions.py",
-          "symbol": "describe_contract"
+          "symbol": "InstructionRegistry"
         },
         {
           "kind": "file",
           "path": "resources/instructions/mitsubishi/fx3u_contract_promotions.json"
         },
         {
-          "kind": "contains",
-          "path": "src/application/analysis_context.py",
-          "text": "describe_contract(opcode"
+          "kind": "python_symbol",
+          "path": "src/knowledge/structured_facts.py",
+          "symbol": "resolve_instruction_contract"
         },
         {
           "kind": "contains",
-          "path": "src/application/confirmed_generation_context.py",
-          "text": "selected_instruction_capability_prompt"
-        }
-      ],
-      "gap_reason": "The new structured fact resolver returns manual-index records but does not merge InstructionRegistry.describe_contract() into the same fact object.",
-      "gap_checks": [
-        {
-          "kind": "absent",
           "path": "src/knowledge/structured_facts.py",
-          "text": "describe_contract"
+          "text": "DEFAULT_INSTRUCTION_REGISTRY.describe_contract(opcode, cpu=plc_model)"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/structured_facts.py",
+          "text": "value[\"instruction_contract\"]"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_every_promoted_fx3u_contract_uses_registry_owner"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_structured_instruction_record_merges_registry_contract"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_instruction_instance_contract_keeps_exact_operands_and_source"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_fx3u_contract_promotions_do_not_leak_into_fx5u_structured_facts"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_confirmed_generation_regressions.py",
+          "text": "test_compact_prompt_does_not_duplicate_instruction_contract_lane"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/compact_protocol.py",
+          "text": "Instruction contracts are delivered once through structured PLC facts."
         }
       ],
       "tests": [
+        "tests/test_structured_fact_lookup.py",
         "tests/test_instruction_contract_alignment.py",
-        "tests/test_instruction_registry.py"
+        "tests/test_instruction_registry.py",
+        "tests/test_confirmed_generation_regressions.py"
       ]
     },
     {
