@@ -202,10 +202,23 @@ def _units(text):
 
 
 def _render_units(result, selected):
-    """Preserve source offsets and provenance while grouping selected units."""
+    """Preserve source offsets and provenance while grouping selected units.
+
+    Structured contract/step-width facts are supplemental to the original
+    manual evidence. They are not candidates for prose/table selection, but
+    once a manual block is selected the structured prefix is delivered with it.
+    """
     text = str(result.get("text") or "")
     selected = sorted(selected, key=lambda unit: unit[0])
     source_text = "\n\n".join(text[start:end].rstrip() for start, end, _ in selected)
+
+    structured_prefix = ""
+    if text.startswith("[STRUCTURED INSTRUCTION RECORD]"):
+        cut = text.find("\n\n")
+        structured_prefix = (text if cut < 0 else text[:cut]).rstrip()
+    if structured_prefix:
+        source_text = structured_prefix + ("\n\n" + source_text if source_text else "")
+
     metadata = ("Manual: " + str(result.get("manual_number") or result.get("manual_id") or result.get("source") or "")
                 + "; revision: " + str(result.get("revision") or "unspecified")
                 + "; section: " + str(result.get("section") or "") + "\n")
@@ -423,7 +436,9 @@ def retrieve_instruction_facts(
             for key in (
                 "id", "original_id", "source_text_sha256", "content_sha256",
                 "source_spans", "candidate_fact_categories", "fact_target",
+                "instruction_contract", "instruction_step_width", "instruction_instance",
             )
+            if key in item
         }
         for item in results
     ]
