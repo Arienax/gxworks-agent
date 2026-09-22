@@ -32,7 +32,7 @@ def test_handoff_keeps_memory_backend_and_execution_binding_without_any_read_mig
     assert run["binding"]["run_id"] == execution["record"]["run_id"]
     assert run["binding"]["result_sha256"] in result["markdown"]
     assert "test\\_memory\\_not\\_plc\\_simulator" in result["markdown"]
-    assert "内存测试后端只验证软件流程" in result["markdown"]
+    assert "内存后端的观测范围为软件流程" in result["markdown"]
     for artifact in result["artifacts"]:
         assert artifact["sha256"] == hashlib.sha256((folder / artifact["filename"]).read_bytes()).hexdigest()
 
@@ -78,7 +78,7 @@ def test_fbd_handoff_contains_source_and_returned_file_fingerprints_and_operator
     result = delivery_summary(service, project["id"], vid)
     assert result["native_validation"]["records"] == [evidence]
     assert digest in result["markdown"] and "原生附件" in result["markdown"]
-    assert "未自动验证" in result["markdown"] and "操作员记录" in result["markdown"]
+    assert "自动原生验证：未提供通过证明" in result["markdown"] and "操作员记录" in result["markdown"]
     assert "TIMER\\_A" in result["markdown"] and result["fbd_declarations"]["1.Labels.lh"]
     assert result["static_validation"]["gx_compile"] == "not_run"
 

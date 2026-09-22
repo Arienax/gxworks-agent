@@ -189,7 +189,7 @@ def test_english_fbd_summary_is_allowed_but_dangling_connection_is_rejected(serv
         assert service.proposal_preview(proposals[0]["id"])["target_mode"] == "fbd"
 
 
-def test_approved_gx_import_uses_own_copy_on_com_queue(service, tmp_path):
+def test_approved_gx_import_uses_own_copy_on_com_queue(service, tmp_path, gx_ready):
     p, _, candidate = generate(service)
     vid = accept(service, candidate)
     source = service.projects.artifact(p["id"], vid, "gxw")
