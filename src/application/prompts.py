@@ -19,7 +19,7 @@ approaches 每项含 approach_id、name、description、pros、cons、generation
 # Explicit intent / generation contract
 用户固定的指令、完整操作数、地址、触点极性、同步触发、执行顺序和参数必须保留，但不要在多个字段重复叙述；原始用户请求由应用另行保留。
 generation_guide 不是教程或需求复述字段。只记录所选方案中无法由原始请求、generation_contract、parameters、io_table、execution_semantics 还原的方案特有生成语义；没有这种差异就用空字符串。
-required/forbidden opcodes/devices 只记录用户明确必用/禁用，不把检索或模型建议变成硬约束。required_structures/forbidden_structures 可记录本方案明确承诺的架构结构，供用户确认后约束生成；无依据时留空。OUT 对应生成协议 COIL/TIMER/COUNTER，不是 APP_INSTR OUT。不得虚构约束来区分方案。
+required/forbidden opcodes/devices 只记录用户明确必用/禁用，不把检索或模型建议变成硬约束。用户或当前方案已经固定完整应用指令调用时，用 generation_contract.instruction_instances=[{"opcode":"SFTL","operands":["M10","M100","K128","K1"]}] 保存完整 opcode+operands；不要拆成仅 opcode、不要改写/重排 operands。required_structures/forbidden_structures 可记录本方案明确承诺的架构结构，供用户确认后约束生成；无依据时留空。OUT 对应生成协议 COIL/TIMER/COUNTER，不是 APP_INSTR OUT。不得虚构约束来区分方案。
 引用检索事实时保留 source ID；来源元数据由应用记录，不生成 engineering_context、intent_context 或 decision_receipt。
 
 # Missing-info minimality
