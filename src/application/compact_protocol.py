@@ -351,6 +351,10 @@ def compact_protocol_prompt():
 
 
 def compact_capability_prompt(plc_model, confirmed_spec):
-    """Compatibility entry; the engineering catalogue view is wire-independent."""
-    from application.confirmed_generation_context import selected_instruction_capability_prompt
-    return selected_instruction_capability_prompt(plc_model, confirmed_spec)
+    """Compatibility entry.
+
+    Instruction contracts are delivered once through structured PLC facts.
+    The compact wire protocol owns representation only and must not duplicate
+    registry/manual engineering facts into Agent B's prompt.
+    """
+    return ""
