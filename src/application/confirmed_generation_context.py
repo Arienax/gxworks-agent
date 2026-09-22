@@ -130,7 +130,8 @@ def build_confirmed_generation_context(
         knowledge_builder = _build_knowledge_context
     from application.context_compiler import ContextCompiler, ContextCompilerInput
     from knowledge.evidence import KnowledgeQuery
-    from knowledge.instruction_facts import instruction_fact_targets, delivered_fact_report, included_knowledge_ids
+    from knowledge.instruction_facts import delivered_fact_report, included_knowledge_ids
+    from knowledge.structured_facts import structured_fact_targets
     compiler = ContextCompiler()
     compiler_input = ContextCompilerInput(
         confirmed_spec=projected,
@@ -144,14 +145,19 @@ def build_confirmed_generation_context(
         current_program=current,
     )
     precompiled = compiler.compile(compiler_input)
+    structured_targets = structured_fact_targets(precompiled.retrieval_packet["query"], projected)
     retrieval_query = KnowledgeQuery(
         precompiled.retrieval_packet["query"],
-        precompiled= True,
+        precompiled=True,
         metadata={
             "context_plan": precompiled.provenance_receipt,
             "rag_evidence_token_budget": precompiled.budget_report.get("rag_evidence_token_budget"),
+            "structured_fact_mode": "direct",
+            "structured_fact_targets": structured_targets,
+            # Compatibility for older diagnostics/readers while the structured
+            # fact receipt becomes the canonical handoff.
             "instruction_fact_mode": "targeted",
-            "instruction_fact_targets": instruction_fact_targets(precompiled.retrieval_packet["query"], projected),
+            "instruction_fact_targets": structured_targets["instructions"],
         },
     )
     knowledge = knowledge_builder(
