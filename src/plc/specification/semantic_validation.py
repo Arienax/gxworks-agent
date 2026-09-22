@@ -9,7 +9,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from plc.validation import PLCJsonValidationError
+
 _VERSION = "confirmed-semantics-v1"
+
+
+class ConfirmedSemanticValidationError(PLCJsonValidationError):
+    """A candidate contradicts confirmed execution facts, not wire format."""
+
 
 
 def _selected_approach_receipt(confirmed_spec):
@@ -37,7 +44,10 @@ def validate_confirmed_semantics(ladder, confirmed_spec, plc_model="FX3U"):
     checks = [_selected_approach_receipt(confirmed_spec)]
 
     from plc.specification.checks import check_direct_self_hold
-    checks.append(check_direct_self_hold(ladder, confirmed_spec))
+    try:
+        checks.append(check_direct_self_hold(ladder, confirmed_spec))
+    except PLCJsonValidationError as error:
+        raise ConfirmedSemanticValidationError(str(error)) from error
 
     covered = [row for row in checks if row.get("status") == "verified"]
     unresolved = [row for row in checks if row.get("status") == "not_covered"]
