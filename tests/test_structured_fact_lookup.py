@@ -272,6 +272,52 @@ def test_device_family_target_coverage_capability_is_enforced():
     assert states["device_family_target_coverage"] == "enforced"
 
 
+def test_runtime_device_target_vocabulary_covers_structured_index_families():
+    from knowledge.analysis_router import route_analysis_request
+    from plc.device_identity import DEVICE_PREFIXES
+
+    path = _bundled_index()
+    with sqlite3.connect(path) as connection:
+        rows = connection.execute(
+            "SELECT prefix, MIN(device) FROM device_records "
+            "WHERE record_type='device' AND chunk_id IS NOT NULL "
+            "GROUP BY prefix ORDER BY prefix"
+        ).fetchall()
+
+    assert rows
+    indexed_prefixes = {str(prefix).upper() for prefix, _device in rows if prefix}
+    # N is an instruction operand/nesting placeholder family in the corpus,
+    # not a runtime PLC device identity.
+    assert indexed_prefixes - {"N"} <= set(DEVICE_PREFIXES)
+    assert "N" not in DEVICE_PREFIXES
+
+    for prefix, device in rows:
+        prefix = str(prefix or "").upper()
+        if not prefix or prefix == "N":
+            continue
+        token = str(device or "").upper()
+        route = route_analysis_request(f"查 {token} 的设备定义")
+        assert token in route.devices, (prefix, token, route.devices)
+
+
+def test_runtime_device_target_vocabulary_covers_extended_families():
+    from knowledge.analysis_router import route_analysis_request
+
+    text = "ER10 SM8000 SD0 TS0 TC0 CS0 CC0 R10 P1 I2"
+    route = route_analysis_request(text)
+    assert set(route.devices) == {
+        "ER10", "SM8000", "SD0", "TS0", "TC0", "CS0", "CC0",
+        "R10", "P1", "I2",
+    }
+
+
+def test_runtime_device_target_vocabulary_rejects_constants_and_placeholders():
+    from knowledge.analysis_router import route_analysis_request
+
+    route = route_analysis_request("MOV K10 D0，常数 H100、浮点 E1、操作数 N1")
+    assert route.devices == ("D0",)
+
+
 def test_exact_device_is_resolved_from_device_records():
     _bundled_index()
     rows = resolve_device_records(["M8029"], plc_model="FX3U", task_type="analysis")
