@@ -267,8 +267,13 @@ def _attach_instruction_step_width(record, target, *, plc_model):
     return value
 
 
-def _step_width_only_record(target, *, plc_model, task_type):
-    """Return a structured fact when the step-width owner is the only source."""
+def _local_instruction_fact_record(target, *, plc_model, task_type):
+    """Return one local structured record when no manual instruction row exists.
+
+    Registry contract and step-width metadata keep separate provenance inside
+    their respective sub-objects. The wrapper is only a transport record; it
+    does not claim either owner as the source of the other fact family.
+    """
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
 
     if isinstance(target, Mapping):
@@ -280,9 +285,10 @@ def _step_width_only_record(target, *, plc_model, task_type):
     if not opcode:
         return None
 
-    fact = resolve_instruction_step_width(target, plc_model=plc_model)
     form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(opcode, cpu=plc_model)
-    if form is None and not fact["known"]:
+    step_width = resolve_instruction_step_width(target, plc_model=plc_model)
+    contract = resolve_instruction_contract(target, plc_model=plc_model)
+    if form is None and not step_width["known"] and contract.get("contract_level") == "unknown":
         return None
 
     identity = json.dumps(
@@ -290,27 +296,33 @@ def _step_width_only_record(target, *, plc_model, task_type):
         ensure_ascii=True, sort_keys=True, separators=(",", ":"),
     )
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
-    lines = ["[STRUCTURED INSTRUCTION STEP WIDTH]", f"INSTRUCTION: {opcode}"]
+    lines = [
+        "[STRUCTURED LOCAL INSTRUCTION RECORD]",
+        f"INSTRUCTION: {opcode}",
+        "INSTRUCTION_CONTRACT: " + json.dumps(
+            contract, ensure_ascii=False, separators=(",", ":"), sort_keys=True,
+        ),
+    ]
     if isinstance(operands, (list, tuple)):
         lines.append("OPERANDS: " + " ".join(str(value) for value in operands))
-    if fact["known"]:
-        lines.append(f"STEP_WIDTH: {fact['steps']} program step(s)")
-        lines.append(f"STEP_WIDTH_SOURCE: {fact['source']}")
+    if step_width["known"]:
+        lines.append(f"STEP_WIDTH: {step_width['steps']} program step(s)")
+        lines.append(f"STEP_WIDTH_SOURCE: {step_width['source']}")
     else:
         lines.append("STEP_WIDTH: unresolved")
-        lines.append("STEP_WIDTH_REASON: " + str(fact.get("reason") or "unknown"))
+        lines.append("STEP_WIDTH_REASON: " + str(step_width.get("reason") or "unknown"))
 
     value = {
-        "id": f"structured-step-width:{digest}",
-        "source": "resources/instructions/mitsubishi/fx3u_step_widths.json",
-        "manual_id": "structured_step_width_catalog",
-        "manual_number": "LOCAL-STEP-WIDTH",
+        "id": f"structured-instruction:{digest}",
+        "source": "local_structured_instruction_owners",
+        "manual_id": "structured_instruction_registry",
+        "manual_number": "LOCAL-INSTRUCTION-FACT",
         "revision": "runtime",
         "manual_type": "structured_instruction",
         "manual_priority": 100,
         "chunk_type": "instruction",
         "instruction_opcode": opcode,
-        "section": "Instruction step width",
+        "section": "Structured instruction facts",
         "page": "",
         "pdf_page": 0,
         "text": "\n".join(lines),
@@ -318,11 +330,18 @@ def _step_width_only_record(target, *, plc_model, task_type):
         "structured_fact_target": opcode,
         "structured_lookup": True,
         "match_type": "structured_direct",
-        "instruction_step_width": copy.deepcopy(fact),
+        "instruction_step_width": copy.deepcopy(step_width),
+        "instruction_contract": copy.deepcopy(contract),
         "task_type": task_type,
         "plc_model": plc_model,
     }
-    return _attach_instruction_contract(value, target, plc_model=plc_model)
+    if isinstance(operands, (list, tuple)):
+        value["instruction_instance"] = {
+            "opcode": opcode,
+            "operands": [str(item) for item in operands],
+        }
+    return value
+
 
 def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generate"):
     """Resolve canonical/variant opcodes directly through ``instructions``.
@@ -394,7 +413,7 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
                 )
             )
         if not candidates:
-            fallback = _step_width_only_record(
+            fallback = _local_instruction_fact_record(
                 step_target, plc_model=plc_model, task_type=task_type,
             )
             if fallback is not None:
