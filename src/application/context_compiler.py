@@ -191,7 +191,7 @@ def _positive_selected(selected):
     contract = selected.get("generation_contract") if isinstance(selected.get("generation_contract"), Mapping) else {}
     prefs = selected.get("implementation_preferences") if isinstance(selected.get("implementation_preferences"), Mapping) else {}
     positive = ("required_opcodes", "required_devices", "required_structures",
-                "any_of_opcode_groups", "any_of_structure_groups")
+                "any_of_opcode_groups", "any_of_structure_groups", "instruction_instances")
     return (
         {k: copy.deepcopy(selected[k]) for k in ("name", "description", "generation_guide") if k in selected},
         {k: copy.deepcopy(prefs[k]) for k in positive if k in prefs},
