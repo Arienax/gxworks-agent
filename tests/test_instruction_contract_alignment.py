@@ -259,12 +259,18 @@ def test_fx3u_promotions_do_not_leak_into_fx5u_or_model_neutral_import(opcode):
     assert fx3.cpu_support == neutral.cpu_support
 
 
-def test_selected_model_context_exposes_verified_native_syntax_and_real_gaps():
+def test_selected_model_structured_contracts_expose_verified_syntax_and_real_gaps():
     from application.compact_protocol import compact_capability_prompt
-    spec = {"selected_approach": {"generation_contract": {"required_opcodes": ["DRVA", "WSFL", "MOV"]}}}
-    snapshot = compact_capability_prompt("FX3U", spec)
-    payload = json.loads(snapshot.split("# Selected instruction capability snapshot\n", 1)[1])
-    rows = {r["opcode"]: r for r in payload["instructions"]}
+    from knowledge.structured_facts import resolve_instruction_contract
+
+    spec = {"selected_approach": {"generation_contract": {
+        "required_opcodes": ["DRVA", "WSFL", "MOV"],
+    }}}
+    assert compact_capability_prompt("FX3U", spec) == ""
+    rows = {
+        opcode: resolve_instruction_contract({"opcode": opcode}, plc_model="FX3U")
+        for opcode in ("DRVA", "WSFL", "MOV")
+    }
     assert rows["DRVA"]["native_operand_order"] == ["S1", "S2", "D1", "D2"]
     assert rows["WSFL"]["native_operand_order"] == ["S", "D", "N1", "N2"]
     assert rows["MOV"]["min_operands"] == 2
@@ -308,10 +314,11 @@ def test_promotion_ledger_is_validated_before_registry_mutation(tmp_path, mutati
     assert not registry.resolve("MOV", cpu="FX3U").verified_fields
 
 
-def test_mcp_and_compact_use_the_same_selected_contract_view(monkeypatch):
+def test_mcp_and_compact_do_not_restore_duplicate_instruction_contract_lane(monkeypatch):
     from application.compact_protocol import compact_capability_prompt
     from agent_runtime.plc_tools import build_tool_context, build_default_tool_registry
     import knowledge.retriever as retriever
+
     monkeypatch.setattr(retriever, "build_knowledge_context", lambda *a, **k: "")
     spec = {"summary": "MOV WSFL", "selected_approach": {"name": "selected",
             "generation_contract": {"required_opcodes": ["MOV", "WSFL"]}}}
@@ -320,11 +327,9 @@ def test_mcp_and_compact_use_the_same_selected_contract_view(monkeypatch):
     assert result["ok"], result
     full = result["data"]["generation_instructions"]
     marker = "# Selected instruction capability snapshot\n"
-    decode = lambda text: json.JSONDecoder().raw_decode(text.split(marker, 1)[1])[0]
-    assert decode(full) == decode(compact_capability_prompt("FX3U", spec))
-    assert "signature_verified" in full
-    assert full.count(marker) == 1
-    assert set(row["opcode"] for row in decode(full)["instructions"]) == {"MOV", "WSFL"}
+    assert compact_capability_prompt("FX3U", spec) == ""
+    assert marker not in full
+    assert "signature_verified" not in full
 
 
 @pytest.mark.parametrize("opcode,operands", [
