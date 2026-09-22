@@ -78,6 +78,9 @@ def _chunk_results(chunk_ids, *, plc_model, task_type, fact_kind, fact_target, a
         value = dict(result)
         value["structured_fact_kind"] = fact_kind
         value["structured_fact_target"] = fact_target
+        value["fact_kind"] = fact_kind
+        value["fact_target"] = fact_target
+        value["fact_dimensions"] = ["definition"]
         value["structured_lookup"] = True
         value["match_type"] = "structured_direct"
         results.append(value)
@@ -355,6 +358,9 @@ def _local_instruction_fact_record(target, *, plc_model, task_type):
         "text": "\n".join(lines),
         "structured_fact_kind": "instruction",
         "structured_fact_target": opcode,
+        "fact_kind": "instruction",
+        "fact_target": opcode,
+        "fact_dimensions": ["definition"],
         "structured_lookup": True,
         "match_type": "structured_direct",
         "instruction_step_width": copy.deepcopy(step_width),

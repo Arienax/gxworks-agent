@@ -425,8 +425,22 @@ def build_knowledge_context(
     fact_token_budget = (available_tokens - design_used_tokens) if available_tokens is not None else None
     fact_blocks, fact_records, _, fact_used_tokens = select(
         fact_results, fact_slots, available - design_used, fact_token_budget)
+    included_fact_ids = [record["id"] for record in fact_records]
+    from knowledge.fact_coverage import build_fact_coverage
+    instruction_questions = (
+        fact_report.get("questions")
+        if isinstance(fact_report, dict) else None
+    )
+    manifest["fact_coverage"] = build_fact_coverage(
+        exact_targets,
+        direct_results,
+        included_fact_ids,
+        instruction_questions=instruction_questions,
+    )
     if fact_report is not None:
-        manifest["instruction_facts"] = delivered_fact_report(fact_report, [record["id"] for record in fact_records])
+        manifest["instruction_facts"] = delivered_fact_report(
+            fact_report, included_fact_ids,
+        )
     # Facts appear first; unused design budget is available to facts.
     parts = [header, *fact_blocks, *design_blocks]
     manifest["records"] = [*fact_records, *design_records]

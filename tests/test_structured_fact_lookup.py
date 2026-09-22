@@ -395,6 +395,25 @@ def test_exact_device_is_resolved_from_device_records():
     assert {row["structured_fact_target"] for row in rows} == {"M8029"}
 
 
+def test_device_context_uses_generic_fact_coverage():
+    _bundled_index()
+    import knowledge.retriever as retriever
+
+    context = retriever.build_knowledge_context(
+        KnowledgeQuery("M8029"), plc_model="FX3U",
+        task_type="analysis", top_k=5, char_budget=7000,
+    )
+    report = context.manifest["fact_coverage"]
+    requirement = next(
+        row for row in report["requirements"]
+        if row["kind"] == "device"
+        and row["target"] == "M8029"
+        and row["dimension"] == "definition"
+    )
+    assert requirement["status"] == "candidate_evidence"
+    assert requirement["source_ids"]
+
+
 def test_device_lookup_uses_canonical_device_identity_owner():
     _bundled_index()
 

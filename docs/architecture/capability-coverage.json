@@ -432,6 +432,54 @@
       ]
     },
     {
+      "id": "fact_coverage_delivery",
+      "category": "retrieval",
+      "state": "enforced",
+      "owner": "knowledge.fact_coverage",
+      "summary": "Instruction, device and error fact requirements use one delivery-accounting layer that distinguishes candidate evidence, budget omission and unresolved coverage after final prompt compilation.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/fact_coverage.py",
+          "symbol": "build_fact_coverage"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/fact_coverage.py",
+          "symbol": "reconcile_fact_coverage"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/knowledge/fact_coverage.py",
+          "symbol": "included_evidence_ids"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/retriever.py",
+          "text": "manifest[\"fact_coverage\"] = build_fact_coverage("
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/confirmed_generation_context.py",
+          "text": "reconcile_fact_coverage("
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_instruction_fact_context.py",
+          "text": "test_generic_fact_coverage_accounts_for_instruction_device_and_error"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_device_context_uses_generic_fact_coverage"
+        }
+      ],
+      "tests": [
+        "tests/test_instruction_fact_context.py",
+        "tests/test_structured_fact_lookup.py"
+      ]
+    },
+    {
       "id": "io_binding_purpose_comment_identity",
       "category": "intent_handoff",
       "state": "enforced",

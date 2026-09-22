@@ -121,6 +121,40 @@ def test_coverage_is_candidate_only_and_tracks_actual_delivery(monkeypatch):
     omitted = delivered_fact_report(report, [])
     assert {row["status"] for row in omitted["facts"]} == {"budget_omitted", "unresolved"}
     assert not any(row.get("included") for row in omitted["records"])
+    assert included["coverage_version"] == "fact-coverage-v1"
+
+
+def test_generic_fact_coverage_accounts_for_instruction_device_and_error():
+    from knowledge.fact_coverage import build_fact_coverage, reconcile_fact_coverage
+
+    targets = {
+        "instructions": [{"opcode": "MOV", "base_opcode": "MOV"}],
+        "devices": ["M8029"],
+        "errors": ["1234H"],
+    }
+    records = [
+        {"id": "instruction", "fact_kind": "instruction", "fact_target": "MOV",
+         "fact_dimensions": ["operands"], "text": "MOV operands"},
+        {"id": "device", "fact_kind": "device", "fact_target": "M8029",
+         "fact_dimensions": ["definition"], "text": "M8029 definition"},
+        {"id": "error", "fact_kind": "error", "fact_target": "1234H",
+         "fact_dimensions": ["definition"], "text": "1234H definition"},
+    ]
+    report = build_fact_coverage(
+        targets, records, ["instruction", "device"],
+        instruction_questions={"operands": "operand semantics"},
+    )
+    by_kind = {
+        (row["kind"], row["target"], row["dimension"]): row
+        for row in report["requirements"]
+    }
+    assert by_kind[("instruction", "MOV", "operands")]["status"] == "candidate_evidence"
+    assert by_kind[("device", "M8029", "definition")]["status"] == "candidate_evidence"
+    assert by_kind[("error", "1234H", "definition")]["status"] == "budget_omitted"
+    reconciled = reconcile_fact_coverage(report, ["error"])
+    assert {row["status"] for row in reconciled["requirements"]} == {
+        "candidate_evidence", "budget_omitted",
+    }
 
 
 def test_truncated_or_changed_blocks_never_count_as_delivered():
@@ -142,6 +176,14 @@ def test_bundled_index_delivers_instruction_definitions_inside_existing_budget(o
     assert len(context) <= 7000
     report = context.manifest["instruction_facts"]
     assert report["verification"] == "not_performed" and report["records"]
+    generic = context.manifest["fact_coverage"]
+    assert generic["version"] == "fact-coverage-v1"
+    assert any(
+        row["kind"] == "instruction"
+        and row["target"] == opcode
+        and row["status"] == "candidate_evidence"
+        for row in generic["requirements"]
+    )
     assert "Operand Type" in context
     assert not any(row.get("manual_type") == "third_party_skill" for row in context.manifest["records"])
     if opcode in {"SFTL", "WSFL"}:
@@ -184,6 +226,9 @@ def test_shared_generation_handoff_keeps_delivered_fact_report():
     assert set(included_knowledge_ids(context.knowledge_context, report["records"])) == {
         row["id"] for row in report["records"] if row["included"]}
     assert report["facts"] and any(row["source_ids"] for row in report["facts"])
+    generic = context.handoff["fact_coverage"]
+    assert generic["version"] == "fact-coverage-v1"
+    assert any(row["source_ids"] for row in generic["requirements"])
 
 
 @pytest.mark.parametrize("targets", [None, []])
@@ -253,4 +298,5 @@ def test_capability_manifest_tracks_instruction_migration_gaps():
     assert states["instruction_step_width"] == "enforced"
     assert states["instruction_contract_promotion"] == "enforced"
     assert states["confirmed_instruction_instances"] == "enforced"
-    assert states["instruction_source_authority"] == "tracked_gap"
+    assert states["instruction_source_authority"] == "enforced"
+    assert states["fact_coverage_delivery"] == "enforced"

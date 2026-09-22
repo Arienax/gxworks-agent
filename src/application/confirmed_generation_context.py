@@ -130,7 +130,8 @@ def build_confirmed_generation_context(
         knowledge_builder = _build_knowledge_context
     from application.context_compiler import ContextCompiler, ContextCompilerInput
     from knowledge.evidence import KnowledgeQuery
-    from knowledge.instruction_facts import delivered_fact_report, included_knowledge_ids
+    from knowledge.fact_coverage import included_evidence_ids, reconcile_fact_coverage
+    from knowledge.instruction_facts import delivered_fact_report
     from knowledge.structured_facts import structured_fact_targets
     compiler = ContextCompiler()
     compiler_input = ContextCompilerInput(
@@ -177,17 +178,29 @@ def build_confirmed_generation_context(
     selected = runtime_spec.get("selected_approach") or {}
     manifest = context_manifest(knowledge, stage=task_type)
     # Reconcile after final budget compilation, not merely after retrieval.
+    if isinstance(manifest.get("fact_coverage"), dict):
+        manifest["fact_coverage"] = reconcile_fact_coverage(
+            manifest["fact_coverage"],
+            included_evidence_ids(
+                knowledge_text, manifest["fact_coverage"].get("records", [])
+            ),
+        )
     if isinstance(manifest.get("instruction_facts"), dict):
         manifest["instruction_facts"] = delivered_fact_report(
-            manifest["instruction_facts"], included_knowledge_ids(knowledge_text, manifest["instruction_facts"].get("records", [])))
+            manifest["instruction_facts"],
+            included_evidence_ids(
+                knowledge_text, manifest["instruction_facts"].get("records", [])
+            ),
+        )
     # A custom builder may return unsanitized text. The source hashes still
     # identify retrieved blocks; the context hash must identify the actual
     # privacy-cleaned text delivered to either generation adapter.
     manifest["context_sha256"] = text_sha256(knowledge_text)
     handoff = handoff_snapshot(projected, evidence=manifest, stage=task_type,
                                decision_receipt_id=decision_receipt_id)
-    # The generic provenance allowlist predates instruction-fact receipts. Keep
-    # this application-owned audit intact without changing stored PLC specs.
+    # Retrieval receipts are application-owned audit data, not stored PLC specs.
+    if isinstance(manifest.get("fact_coverage"), dict):
+        handoff["fact_coverage"] = copy.deepcopy(manifest["fact_coverage"])
     if isinstance(manifest.get("instruction_facts"), dict):
         handoff["instruction_facts"] = copy.deepcopy(manifest["instruction_facts"])
     if isinstance(manifest.get("structured_facts"), dict):

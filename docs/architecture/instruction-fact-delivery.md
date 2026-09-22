@@ -14,9 +14,9 @@ The [scoped retrieval facade](runtime-ownership.md#retrieval) applies task and s
 
 Evidence is packed as complete source units within the available allowance. Tables and source identities remain intact; duplicate diagram/layout renditions do not replace missing prose. Records retain manual identity, revision, offsets and content hashes where available.
 
-[delivered_fact_report](../../src/knowledge/instruction_facts.py) reconciles candidate evidence with the compiled prompt using block identities and hashes. `candidate_evidence`, `budget_omitted` and `unresolved` retain different meanings. A recorded keyword category is a packing hint; a fact is only marked as delivered when its block survives compilation.
+[knowledge.fact_coverage](../../src/knowledge/fact_coverage.py) is the canonical delivery-accounting layer for exact instruction, device and error facts. It projects targets into dimension-addressed requirements, records candidate source IDs, and reconciles them again after final prompt compilation using complete block identities and hashes. `candidate_evidence`, `budget_omitted` and `unresolved` retain different meanings.
 
-Missing facts remain visible in receipts without creating an instruction prohibition or inventing an I/O. Context compilation is owned by [application.context_compiler](../../src/application/context_compiler.py).
+[delivered_fact_report](../../src/knowledge/instruction_facts.py) remains a compatibility view for existing instruction diagnostics, but its status calculation delegates to the generic coverage owner. A recorded keyword category is a packing hint; a fact is only marked as delivered when its block survives compilation. Missing facts remain visible without creating an instruction prohibition or inventing an I/O. Context compilation is owned by [application.context_compiler](../../src/application/context_compiler.py).
 
 ## Representation and measurement
 

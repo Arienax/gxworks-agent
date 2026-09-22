@@ -422,7 +422,11 @@ def retrieve_instruction_facts(
         primary_pool = _pack_target(sources, allowance - companion_cost)
         pool = primary_pool[:1] + companion_pool + primary_pool[1:]
         for value in pool:
+            value["fact_kind"] = "instruction"
             value["fact_target"] = target["opcode"]
+            value["fact_dimensions"] = list(
+                value.get("candidate_fact_categories") or ()
+            )
         groups.append(pool)
 
     results = []
@@ -435,8 +439,9 @@ def retrieve_instruction_facts(
             key: copy.deepcopy(item[key])
             for key in (
                 "id", "original_id", "source_text_sha256", "content_sha256",
-                "source_spans", "candidate_fact_categories", "fact_target",
-                "instruction_contract", "instruction_step_width", "instruction_instance",
+                "source_spans", "candidate_fact_categories", "fact_kind",
+                "fact_target", "fact_dimensions", "instruction_contract",
+                "instruction_step_width", "instruction_instance",
             )
             if key in item
         }
@@ -445,34 +450,12 @@ def retrieve_instruction_facts(
     return results, report
 
 def delivered_fact_report(report, included_ids):
-    """Coverage describes only delivered candidates; a hit is not a verified fact."""
-    result = copy.deepcopy(report)
-    included = set(included_ids)
-    records = result.get("records", [])
-    for record in records:
-        record["included"] = record["id"] in included
-    facts = []
-    for target in result.get("targets", []):
-        for category in FACT_QUESTIONS:
-            candidates = [row["id"] for row in records if row["fact_target"] == target["opcode"]
-                          and category in row["candidate_fact_categories"]]
-            delivered = [marker for marker in candidates if marker in included]
-            facts.append({"opcode": target["opcode"], "question": category, "source_ids": delivered,
-                          "status": "candidate_evidence" if delivered else "budget_omitted" if candidates else "unresolved"})
-    result["facts"] = facts
-    return result
+    """Compatibility view backed by the generic fact-coverage owner."""
+    from knowledge.fact_coverage import instruction_report_view
+    return instruction_report_view(report, included_ids)
 
 
 def included_knowledge_ids(text, records=()):
-    """Read only complete, unchanged blocks; never match across a broken block."""
-    expected = {record["id"]: record.get("content_sha256") for record in records}
-    ids = []
-    pattern = r"(?ms)^\[KNOWLEDGE (\{[^\n]*\})\]\n((?:(?!^\[KNOWLEDGE |^\[/KNOWLEDGE\]).)*?)\n\[/KNOWLEDGE\]"
-    for match in re.finditer(pattern, str(text)):
-        try:
-            marker = json.loads(match.group(1)).get("id")
-        except (ValueError, AttributeError):
-            continue
-        if isinstance(marker, str) and (not expected.get(marker) or _sha(match.group(2)) == expected[marker]):
-            ids.append(marker)
-    return ids
+    """Compatibility alias for generic complete-block delivery accounting."""
+    from knowledge.fact_coverage import included_evidence_ids
+    return included_evidence_ids(text, records)
