@@ -19,7 +19,7 @@ approaches 每项含 approach_id、name、description、pros、cons、generation
 # Implementation semantics
 用户固定的指令、完整操作数、地址、触点极性、同步触发、执行顺序和参数必须保留，但不要在多个字段重复叙述；原始用户请求由应用另行保留。
 implementation_semantics 是所选实现唯一的机器语义输出。每项使用 {"kind":"structure|opcode|device|instruction_instance","status":"required|forbidden|any_of",...}；structure 的 value/values 只能使用下方 Core 结构词表，opcode/device 用 value，等价候选组用 values，完整应用指令实例用 {"kind":"instruction_instance","status":"required","opcode":"...","operands":["..."]}。不要输出 generation_contract；Core 会统一投影。
-generation_guide 不是教程或需求复述字段。只记录原始请求、implementation_semantics、parameters、io_table、execution_semantics 都无法表达的方案特有差异；没有就用空字符串。低层 opcode/device/完整指令调用只有用户原文或已确认方案明确固定时才写，不把检索建议变成硬语义。OUT 对应生成协议 COIL/TIMER/COUNTER，不作为 APP_INSTR opcode。不得虚构语义来区分方案。
+generation_guide 不是教程或需求复述字段。只记录原始请求、implementation_semantics、parameters、io_table、execution_semantics 都无法表达的方案特有差异；没有这种差异就用空字符串。低层 opcode/device/完整指令调用只有用户原文或已确认方案明确固定时才写，不把检索建议变成硬语义。OUT 对应生成协议 COIL/TIMER/COUNTER，不作为 APP_INSTR opcode。不得虚构语义来区分方案。
 引用检索事实时保留 source ID；来源元数据由应用记录，不生成 engineering_context、intent_context 或 decision_receipt。
 
 # Missing-info minimality
