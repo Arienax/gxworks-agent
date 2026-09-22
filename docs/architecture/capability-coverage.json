@@ -140,36 +140,75 @@
     {
       "id": "confirmed_instruction_instances",
       "category": "intent_handoff",
-      "state": "tracked_gap",
-      "owner": "confirmed generation contract",
-      "summary": "When an instruction and its operands are fixed, opcode+operands must survive analysis, confirmation, context compilation, and generation as one instruction instance.",
+      "state": "enforced",
+      "owner": "plc.specification.approach.normalize_instruction_instances",
+      "summary": "Exact selected instruction calls retain opcode+ordered operands from Agent A analysis through confirmation, generation projection, context compilation, structured facts, and Agent B.",
       "checks": [
         {
-          "kind": "contains",
-          "path": "src/application/prompts.py",
-          "text": "完整操作数"
+          "kind": "python_symbol",
+          "path": "src/plc/specification/approach.py",
+          "symbol": "normalize_instruction_instances"
         },
         {
           "kind": "contains",
-          "path": "tests/test_analysis_prompt_routing.py",
-          "text": "instruction_instances"
-        }
-      ],
-      "gap_reason": "instruction_instances is still exercised as historical intent but is not a formal _CONTRACT_FIELDS dimension and is therefore not guaranteed to survive normalization/projection/context compilation.",
-      "gap_checks": [
+          "path": "src/plc/specification/approach.py",
+          "text": "normalized[\"instruction_instances\"]"
+        },
         {
-          "kind": "absent",
+          "kind": "contains",
+          "path": "src/plc/specification/confirmed.py",
+          "text": "_preserve_pinned_instruction_instances"
+        },
+        {
+          "kind": "contains",
           "path": "src/plc/generation_contract.py",
-          "text": "instruction_instances"
+          "text": "_CONTRACT_FIELDS[\"instruction_instances\"]"
         },
         {
-          "kind": "absent",
+          "kind": "contains",
+          "path": "src/plc/specification/provenance.py",
+          "text": "\"instruction_instances\""
+        },
+        {
+          "kind": "contains",
           "path": "src/application/context_compiler.py",
-          "text": "instruction_instances"
+          "text": "\"instruction_instances\""
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/instruction_facts.py",
+          "text": "instance_source"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/structured_facts.py",
+          "text": "instruction_instance"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/generation_agent.py",
+          "text": "opcode 与 operands 必须逐项原样使用"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_confirmed_generation_regressions.py",
+          "text": "test_exact_instruction_instance_survives_agent_a_confirmation_to_agent_b"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_confirmed_generation_regressions.py",
+          "text": "test_pinned_reanalysis_preserves_instances_until_explicitly_cleared"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_confirmed_generation_regressions.py",
+          "text": "test_model_proposed_instruction_instance_stays_exact_as_selected_preference"
         }
       ],
       "tests": [
-        "tests/test_analysis_prompt_routing.py"
+        "tests/test_confirmed_generation_regressions.py",
+        "tests/test_analysis_prompt_routing.py",
+        "tests/test_context_compiler.py"
       ]
     },
     {
