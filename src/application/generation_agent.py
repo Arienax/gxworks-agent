@@ -38,6 +38,7 @@ _COMPACT_PROTOCOL = """# Agent B compact ladder protocol
 把当前已确认规格实现为一个紧凑梯级计划。
 
 - 当前确认的 I/O、参数、输入有效电平和 selected_approach.generation_contract 是实现依据；unverified_constraints 不升级为额外硬约束。
+- selected_approach.generation_contract 或 implementation_preferences 中的 instruction_instances 是已选实现的完整应用指令调用；opcode 与 operands 必须逐项原样使用，不得省略、替换、重排或自行改写。
 - io_bindings.active_level=0 表示位为0时信号动作，不是程序触点类型。程序 NO 检查位=1，NC 检查位=0；具体 active_when 与 run_permit_when 使用下方由绑定派生的谓词。停止/联锁须在输出路径实际生效。
 - 不新增未确认的 X/Y、停止/急停、硬件或模块寄存器。内部状态使用普通 M/D/T/C；已确认语义需要的内部特殊软元件以当前型号资料/手册证据为准，已有显式禁用仍须遵守。
 - 同一普通 Y/M 只有一个 COIL owner，多条件并入该输出的输入结构；不把输入 OR 拆成多个输出 branch。
