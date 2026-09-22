@@ -105,6 +105,21 @@ def test_instruction_instance_contract_keeps_exact_operands_and_source():
     assert {"arity", "operand_order", "form_identity"} <= set(contract["verified_fields"])
 
 
+def test_local_instruction_fallback_keeps_contract_and_step_width_provenance_separate():
+    rows = resolve_instruction_records(
+        [{"opcode": "RST", "base_opcode": "RST", "operands": ["D10"]}],
+        plc_model="FX3U",
+        task_type="generate",
+    )
+    assert rows
+    row = rows[0]
+    assert row["source"] == "local_structured_instruction_owners"
+    assert row["instruction_contract"]["opcode"] == "RST"
+    assert isinstance(row["instruction_contract"].get("sources"), list)
+    assert row["instruction_step_width"]["steps"] == 3
+    assert row["instruction_step_width"]["source"] in {"exact_native_form", "operand_rule", "native_observation"}
+
+
 def test_fx3u_contract_promotions_do_not_leak_into_fx5u_structured_facts():
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
 
@@ -137,8 +152,9 @@ def test_structured_step_width_uses_shared_owner_for_instruction_instance():
         assert fact["operands"] == operands
         assert f"STEP_WIDTH: {expected} program step(s)" in rows[0]["text"]
         if opcode == "RST":
-            assert rows[0]["manual_id"] == "structured_step_width_catalog"
-            assert rows[0]["source"].endswith("fx3u_step_widths.json")
+            assert rows[0]["manual_id"] == "structured_instruction_registry"
+            assert rows[0]["source"] == "local_structured_instruction_owners"
+            assert rows[0]["instruction_contract"]["opcode"] == "RST"
 
 
 def test_opcode_only_fixed_width_is_exposed_without_inventing_operands():
