@@ -13,7 +13,7 @@ import json
 import re
 from collections.abc import Mapping
 
-_VERSION = "structured-facts-v1"
+_VERSION = "structured-facts-v2-contract-merged"
 _OFFICIAL_INSTRUCTION_TYPES = frozenset(
     {"programming", "positioning", "structured_instruction", "structured_function"}
 )
@@ -92,6 +92,59 @@ def _instruction_completeness(row):
         if text and text not in {"[]", "{}", '""'}:
             score += 1
     return score
+
+def resolve_instruction_contract(target, *, plc_model="FX3U"):
+    """Return the registry-owned instruction contract for one exact target.
+
+    This is a deterministic catalogue lookup, not retrieval ranking. Verified
+    and unverified fields are both retained so consumers can distinguish what
+    the registry proves from what remains unknown.
+    """
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+
+    if isinstance(target, Mapping):
+        opcode = str(target.get("opcode") or target.get("base_opcode") or "").strip().upper()
+        operands = target.get("operands")
+        instance_source = target.get("instance_source")
+    else:
+        opcode = str(target or "").strip().upper()
+        operands = None
+        instance_source = None
+
+    if not opcode:
+        return {
+            "opcode": "",
+            "contract_level": "unknown",
+            "verified_fields": [],
+            "unverified_fields": [],
+        }
+
+    contract = copy.deepcopy(
+        DEFAULT_INSTRUCTION_REGISTRY.describe_contract(opcode, cpu=plc_model)
+    )
+    if isinstance(operands, (list, tuple)):
+        contract["confirmed_operands"] = [str(value) for value in operands]
+        if instance_source:
+            contract["instance_source"] = str(instance_source)
+    return contract
+
+
+def _attach_instruction_contract(record, target, *, plc_model):
+    contract = resolve_instruction_contract(target, plc_model=plc_model)
+    value = dict(record)
+    value["instruction_contract"] = copy.deepcopy(contract)
+
+    body = str(value.get("text") or "")
+    detail = "INSTRUCTION_CONTRACT: " + json.dumps(
+        contract, ensure_ascii=False, separators=(",", ":"), sort_keys=True,
+    )
+    if body.startswith("[STRUCTURED INSTRUCTION RECORD]"):
+        first, separator, rest = body.partition("\n")
+        value["text"] = first + "\n" + detail + (separator + rest if separator else "")
+    else:
+        value["text"] = detail + ("\n\n" + body if body else "")
+    return value
+
 
 def resolve_instruction_step_width(target, *, plc_model="FX3U"):
     """Resolve one instruction expected GX program width from the shared owner.
@@ -247,7 +300,7 @@ def _step_width_only_record(target, *, plc_model, task_type):
         lines.append("STEP_WIDTH: unresolved")
         lines.append("STEP_WIDTH_REASON: " + str(fact.get("reason") or "unknown"))
 
-    return {
+    value = {
         "id": f"structured-step-width:{digest}",
         "source": "resources/instructions/mitsubishi/fx3u_step_widths.json",
         "manual_id": "structured_step_width_catalog",
@@ -269,6 +322,7 @@ def _step_width_only_record(target, *, plc_model, task_type):
         "task_type": task_type,
         "plc_model": plc_model,
     }
+    return _attach_instruction_contract(value, target, plc_model=plc_model)
 
 def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generate"):
     """Resolve canonical/variant opcodes directly through ``instructions``.
@@ -276,11 +330,12 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
     No call to ``retrieve_knowledge`` is permitted here.
     """
     core, _path, connection, schema, _meta = _runtime()
-    if connection is None or schema is None:
-        return []
-    table = schema.get("instructions")
-    if not table or not {"opcode_norm", "chunk_id"}.issubset(set(table["columns"])):
-        return []
+    table = schema.get("instructions") if schema is not None else None
+    table_available = bool(
+        connection is not None
+        and table
+        and {"opcode_norm", "chunk_id"}.issubset(set(table["columns"]))
+    )
 
     results = []
     seen = set()
@@ -296,13 +351,15 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
         names = list(dict.fromkeys(value for value in (opcode, base) if value))
         if not names:
             continue
-        placeholders = ",".join("?" for _ in names)
-        rows = connection.execute(
-            "SELECT * FROM {} WHERE opcode_norm IN ({}) AND chunk_id IS NOT NULL".format(
-                core._quote_identifier(table["name"]), placeholders
-            ),
-            tuple(value.casefold() for value in names),
-        ).fetchall()
+        rows = []
+        if table_available:
+            placeholders = ",".join("?" for _ in names)
+            rows = connection.execute(
+                "SELECT * FROM {} WHERE opcode_norm IN ({}) AND chunk_id IS NOT NULL".format(
+                    core._quote_identifier(table["name"]), placeholders
+                ),
+                tuple(value.casefold() for value in names),
+            ).fetchall()
         # Prefer the exact selected form and the most complete structured record.
         # Manual priority only resolves otherwise-equivalent official sources;
         # there is no query-dependent score or opcode-specific boost here.
@@ -322,6 +379,9 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
                 continue
             candidate = _attach_instruction_step_width(
                 chunk[0], step_target, plc_model=plc_model,
+            )
+            candidate = _attach_instruction_contract(
+                candidate, step_target, plc_model=plc_model,
             )
             candidates.append(
                 (
@@ -528,6 +588,7 @@ __all__ = [
     "exclude_structured_target_hits",
     "resolve_device_records",
     "resolve_error_records",
+    "resolve_instruction_contract",
     "resolve_instruction_records",
     "resolve_instruction_step_width",
     "resolve_structured_records",
