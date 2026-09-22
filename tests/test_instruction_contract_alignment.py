@@ -275,7 +275,15 @@ def test_selected_model_structured_contracts_expose_verified_syntax_and_real_gap
     assert rows["WSFL"]["native_operand_order"] == ["S", "D", "N1", "N2"]
     assert rows["MOV"]["min_operands"] == 2
     assert all(row["contract_level"] == "signature_verified" for row in rows.values())
-    assert all("completion_ownership" in row["unverified_fields"] for row in rows.values())
+    assert rows["DRVA"]["completion"] == {
+        "device": "M8029",
+        "placement": "same_rung_parallel_branch",
+    }
+    assert "completion_ownership" in rows["DRVA"]["verified_fields"]
+    assert all(
+        "completion_ownership" in rows[opcode]["unverified_fields"]
+        for opcode in ("WSFL", "MOV")
+    )
 
 
 def test_instruction_template_icon_is_not_an_executable_mnemonic():
