@@ -105,6 +105,17 @@ def test_fact_aware_row_api_keeps_exact_instruction_out_of_broad_retrieval(monke
     assert rows[0]["structured_fact_target"] == "SFTL"
 
 
+def test_application_runtime_cannot_bypass_fact_aware_retrieval():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    offenders = []
+    for folder in ("src/application", "src/agent_runtime"):
+        for source_file in (root / folder).rglob("*.py"):
+            source_text = source_file.read_text(encoding="utf-8")
+            if "from knowledge.retriever import retrieve_knowledge" in source_text:
+                offenders.append(source_file.relative_to(root).as_posix())
+    assert offenders == []
+
+
 def test_agent_manual_search_uses_fact_aware_entry_point():
     from agent_runtime import plc_tools
 
