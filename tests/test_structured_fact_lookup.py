@@ -265,6 +265,15 @@ def test_structured_fact_targets_carry_extended_device_families():
     }
 
 
+def test_router_and_core_share_the_same_device_token_owner():
+    import knowledge.analysis_router as analysis_router
+    import knowledge.core as knowledge_core
+    from plc.device_identity import DEVICE_TOKEN_RE
+
+    assert analysis_router._DEVICE is DEVICE_TOKEN_RE
+    assert knowledge_core._DEVICE_RE is DEVICE_TOKEN_RE
+
+
 def test_runtime_device_vocabulary_covers_actual_index_prefixes():
     from knowledge.analysis_router import route_analysis_request
     from plc.device_identity import DEVICE_PREFIXES
