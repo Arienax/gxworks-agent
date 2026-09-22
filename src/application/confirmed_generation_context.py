@@ -145,7 +145,10 @@ def build_confirmed_generation_context(
         current_program=current,
     )
     precompiled = compiler.compile(compiler_input)
-    structured_targets = structured_fact_targets(precompiled.retrieval_packet["query"], projected)
+    # Exact device/error facts come from the active request, not from the
+    # compiler's projection of settled implementation devices. Required opcodes
+    # still come from the confirmed generation contract inside the resolver.
+    structured_targets = structured_fact_targets(request, projected)
     retrieval_query = KnowledgeQuery(
         precompiled.retrieval_packet["query"],
         precompiled=True,
