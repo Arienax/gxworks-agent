@@ -339,7 +339,7 @@
         {
           "kind": "contains",
           "path": "tests/test_structured_fact_lookup.py",
-          "text": "test_runtime_device_target_vocabulary_covers_structured_index_families"
+          "text": "test_runtime_device_vocabulary_covers_actual_index_prefixes"
         },
         {
           "kind": "contains",
