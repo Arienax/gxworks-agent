@@ -151,6 +151,27 @@ def test_bundled_index_delivers_instruction_definitions_inside_existing_budget(o
     assert set(included_knowledge_ids(context, report["records"])) == {r["id"] for r in report["records"] if r["included"]}
 
 
+def test_generation_packer_delivers_structured_contract_with_manual_evidence():
+    if core._index_identity(core._index_path())[0] == "missing":
+        pytest.skip("Bundled index is not installed")
+    spec = {"selected_approach": {"generation_contract": {
+        "required_opcodes": ["WSFL"],
+        "instruction_instances": [{
+            "opcode": "WSFL",
+            "operands": ["D0", "D10", "K56", "K1"],
+        }],
+    }}}
+    from application.confirmed_generation_context import build_confirmed_generation_context
+    context = build_confirmed_generation_context(spec, "FX3U")
+    assert "INSTRUCTION_CONTRACT:" in context.knowledge_context
+    assert "STEP_WIDTH: 9 program step(s)" in context.knowledge_context
+    report = context.handoff["instruction_facts"]
+    record = next(row for row in report["records"] if row.get("instruction_contract"))
+    assert record["instruction_contract"]["native_operand_order"] == ["S", "D", "N1", "N2"]
+    assert record["instruction_contract"]["confirmed_operands"] == ["D0", "D10", "K56", "K1"]
+    assert record["instruction_step_width"]["steps"] == 9
+
+
 def test_shared_generation_handoff_keeps_delivered_fact_report():
     from application.confirmed_generation_context import build_confirmed_generation_context
     spec = {"summary": "字寄存器队列", "selected_approach": {
