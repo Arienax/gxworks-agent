@@ -539,7 +539,7 @@
       "category": "generation",
       "state": "enforced",
       "owner": "plc.generation.prepare_ladder_candidate + plc.specification.semantic_validation",
-      "summary": "Fresh confirmed Agent B output is prepared exactly once: compact transport lowers deterministically, skips legacy normalizers, receives structural acceptance plus confirmed-fact semantic checks, then builds PLC IR without a JSON round trip.",
+      "summary": "Fresh confirmed Agent B output lowers compact transport to a Python ladder object; GenerationWorkflow sends that object through CandidateService exactly once, skipping legacy normalizers and applying structural plus confirmed-fact semantic acceptance before PLC IR.",
       "checks": [
         {
           "kind": "python_symbol",
@@ -563,16 +563,6 @@
         },
         {
           "kind": "contains",
-          "path": "src/application/generation_agent.py",
-          "text": "candidate_origin=CONFIRMED_AGENT_ORIGIN"
-        },
-        {
-          "kind": "contains",
-          "path": "src/application/generation.py",
-          "text": "do not serialize/parse/prepare the same ladder a second time"
-        },
-        {
-          "kind": "contains",
           "path": "tests/test_generation_fast_path.py",
           "text": "test_compact_agent_skips_legacy_candidate_normalizers"
         },
@@ -585,6 +575,21 @@
           "kind": "contains",
           "path": "tests/test_generation_fast_path.py",
           "text": "test_confirmed_agent_origin_has_one_core_owner"
+        },
+        {
+          "kind": "absent",
+          "path": "src/application/generation_agent.py",
+          "text": "CandidateService"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/generation.py",
+          "text": "CONFIRMED_AGENT_ORIGIN"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/generation.py",
+          "text": "acceptance consumes the object directly and never parses these bytes again"
         }
       ],
       "tests": [
