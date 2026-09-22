@@ -1,11 +1,16 @@
-"""Low-latency hybrid retrieval for the bundled PLC knowledge index.
+"""Low-latency broad retrieval for the bundled PLC knowledge index.
+
+This module is compatibility-frozen for domain-specific ranking heuristics.
+Do not add new opcode/device/error special boosts here. Explicit PLC facts are
+resolved by :mod:`knowledge.structured_facts`; this module only handles broad
+lexical/semantic recall and the legacy ranking needed by existing benchmarks.
 
 The module does not touch SQLite or import the optional dense runtime until the
-first retrieval call.  A connection and its schema snapshot are kept per
-calling thread so concurrent workers never share SQLite objects.
+first retrieval call. A connection and its schema snapshot are kept per calling
+thread so concurrent workers never share SQLite objects.
 
 Expected index tables are ``meta``, ``chunks``, ``entity_index`` and
-``chunks_fts``.  Column names are discovered at runtime to keep the reader
+``chunks_fts``. Column names are discovered at runtime to keep the reader
 compatible with small schema revisions of the prebuilt index.
 """
 
