@@ -27,7 +27,7 @@ _FACT_TERMS = {
     "limits": re.compile(r"range|limit|restrict|overflow|overlap|outside|exceed|maximum|minimum|caution|supported|≤|≥|范围|边界|限制|溢出|重叠|最大|最小", re.I),
 }
 _OFFICIAL = frozenset({"programming", "positioning", "structured_instruction", "structured_function"})
-_VERSION = "instruction-facts-v1"
+_VERSION = "instruction-facts-v2-direct-structured"
 
 
 def _sha(text):
@@ -186,14 +186,16 @@ def _render_units(result, selected):
     return value
 
 
-def _completion_sources(seed, plc_model, task_type, retrieve):
-    """Follow explicit structured-index completion links, not opcode recipes.
+def _completion_sources(seed, plc_model, task_type):
+    """Resolve linked completion devices without broad retrieval.
 
-    The selected instruction's own manual/revision remains the authority. A
-    flag mention is only candidate evidence; never a new program requirement.
-    Missing older-index relationship columns simply provide no companion.
+    The instruction table supplies the linked device identity. Device evidence is
+    then fetched through the exact structured-device index; BM25/dense ranking is
+    never used to decide what a completion flag means.
     """
     from knowledge import core
+    from knowledge.structured_facts import resolve_device_records
+
     path = core._index_path()
     identity = core._index_identity(path)
     if identity[0] == "missing":
@@ -211,27 +213,33 @@ def _completion_sources(seed, plc_model, task_type, retrieve):
         return []
     if not isinstance(flags, list):
         return []
+
     results, seen = [], set()
-    for flag in dict.fromkeys(f for f in flags if isinstance(f, str) and re.fullmatch(r"(?:M|SM)[0-9]+", f)):
+    for flag in dict.fromkeys(
+        value for value in flags
+        if isinstance(value, str) and re.fullmatch(r"(?:M|SM)[0-9]+", value)
+    ):
         if len(seen) >= 8:
             break
-        hits = retrieve(flag + " instruction execution complete shared flag positioning", plc_model=plc_model,
-                        task_type=task_type, top_k=core._MAX_TOP_K, char_budget=2**31-1)
-        for row in hits:
-            if (row.get("manual_type") not in _OFFICIAL or row.get("manual_id") != seed.get("manual_id")
-                    or row.get("revision") != seed.get("revision") or row.get("id") in seen
-                    or not re.search(r"(?<![A-Z0-9])" + re.escape(flag) + r"(?![0-9])", str(row.get("text", "")), re.I)):
+        hits = resolve_device_records([flag], plc_model=plc_model, task_type=task_type)
+        same_revision = [
+            row for row in hits
+            if row.get("manual_id") == seed.get("manual_id")
+            and row.get("revision") == seed.get("revision")
+        ]
+        same_manual = [row for row in hits if row.get("manual_id") == seed.get("manual_id")]
+        selected = same_revision or same_manual or hits
+        for row in selected:
+            marker = row.get("id")
+            if not marker or marker in seen:
                 continue
-            seen.add(row.get("id"))
+            seen.add(marker)
             focused = copy.deepcopy(row)
             focused["fact_focus_terms"] = [flag]
             results.append(focused)
             if len(seen) >= 8:
                 break
-    # General flag definitions precede examples belonging to other opcodes.
-    # Metadata controls priority, not a task-specific instruction recipe.
-    return sorted(results, key=lambda row: bool(row.get("instruction_opcode")))
-
+    return results
 
 def _pack_target(results, allowance):
     """Pack definition, tables and cautions together before any top-k truncation.
@@ -296,36 +304,52 @@ def _pack_target(results, allowance):
     return [rendered[index] for index in sorted(rendered)]
 
 
-def retrieve_instruction_facts(query, *, plc_model, task_type, char_budget, candidates=(), targets=None, retrieve=None):
-    """Prioritize exact instruction questions and expand matching source context.
+def retrieve_instruction_facts(
+    query, *, plc_model, task_type, char_budget, candidates=(), targets=None,
+    retrieve=None, resolver=None,
+):
+    """Resolve selected instructions directly, then pack their source evidence.
 
-    Returns detached candidate blocks and an audit report. Nothing here requests
-    an LLM, writes the index, declares verified facts or rejects a user program.
+    ``candidates`` and ``retrieve`` remain accepted for compatibility but are
+    deliberately unused: an explicit opcode must never be recovered from broad
+    BM25/dense candidate ranking.
     """
     from knowledge import core
+    from knowledge.structured_facts import resolve_instruction_records
+
     target_source = "provided_targets" if targets is not None else "query_references"
     targets = copy.deepcopy(targets if targets is not None else instruction_fact_targets(query))
-    retrieve = retrieve or core.retrieve_knowledge
-    report = {"version": _VERSION, "targets": targets, "questions": dict(FACT_QUESTIONS),
-              "target_source": target_source,
-              "queries": [], "records": [], "facts": [], "verification": "not_performed"}
+    resolver = resolver or resolve_instruction_records
+    report = {
+        "version": _VERSION,
+        "targets": targets,
+        "questions": dict(FACT_QUESTIONS),
+        "target_source": target_source,
+        "queries": [],
+        "lookups": [],
+        "records": [],
+        "facts": [],
+        "verification": "not_performed",
+        "retrieval_mode": "structured_direct",
+    }
     if task_type not in {"generate", "edit"} or char_budget <= 0:
         return [], report
-    # Broad candidate rank is not evidence that the task selected an opcode.
-    # Family-only questions remain in the ordinary fact lane; do not manufacture
-    # instruction targets from whichever manual sections happened to rank first.
     if not targets:
         report["reason"] = "no_instruction_target"
         return [], report
+
     allowance = max(0, int(char_budget) // max(1, len(targets)))
     groups = []
     companion_seen = set()
     for target in targets:
-        lookup = target["opcode"] + " " + " ".join(FACT_QUESTIONS.values())
-        report["queries"].append(lookup)
-        hits = list(retrieve(lookup, plc_model=plc_model, task_type=task_type,
-                             top_k=core._MAX_TOP_K, char_budget=2**31-1))
-        seeds = [item for item in [*hits, *candidates] if _is_target(item, target)]
+        report["lookups"].append({
+            "kind": "instruction",
+            "opcode": target["opcode"],
+            "base_opcode": target["base_opcode"],
+            "source": "instructions.opcode_norm",
+        })
+        hits = list(resolver([target], plc_model=plc_model, task_type=task_type))
+        seeds = [item for item in hits if _is_target(item, target)]
         sources, seen = [], set()
         for seed in seeds:
             if seed.get("id") in seen:
@@ -339,32 +363,36 @@ def retrieve_instruction_facts(query, *, plc_model, task_type, char_budget, cand
                     continue
                 seen.add(marker)
                 sources.append(result)
-        # The index can link the instruction to a shared completion flag.
-        # Reserve part of the SAME budget for that definition/caution, rather
-        # than handing B only an opcode/operand table and asking it to recall it.
-        companions = _completion_sources(seeds[0], plc_model, task_type, retrieve) if seeds else []
-        companion_pool = [row for row in _pack_target(companions, min(allowance * 2 // 3, 2200))
-                          if row["id"] not in companion_seen]
+
+        companions = _completion_sources(seeds[0], plc_model, task_type) if seeds else []
+        companion_pool = [
+            row for row in _pack_target(companions, min(allowance * 2 // 3, 2200))
+            if row["id"] not in companion_seen
+        ]
         companion_seen.update(row["id"] for row in companion_pool)
         companion_cost = sum(len(core._format_result_block(row)) + 40 for row in companion_pool)
         primary_pool = _pack_target(sources, allowance - companion_cost)
-        # Keep one definition first, then its linked result/caution. Otherwise
-        # a public top-k cap can discard every companion after packing them.
         pool = primary_pool[:1] + companion_pool + primary_pool[1:]
         for value in pool:
             value["fact_target"] = target["opcode"]
         groups.append(pool)
-    # Round-robin prevents one long instruction from monopolizing all top-k slots.
+
     results = []
     while any(groups):
         for group in groups:
             if group:
                 results.append(group.pop(0))
-    report["records"] = [{key: copy.deepcopy(item[key]) for key in (
-        "id", "original_id", "source_text_sha256", "content_sha256", "source_spans", "candidate_fact_categories", "fact_target")}
-        for item in results]
+    report["records"] = [
+        {
+            key: copy.deepcopy(item[key])
+            for key in (
+                "id", "original_id", "source_text_sha256", "content_sha256",
+                "source_spans", "candidate_fact_categories", "fact_target",
+            )
+        }
+        for item in results
+    ]
     return results, report
-
 
 def delivered_fact_report(report, included_ids):
     """Coverage describes only delivered candidates; a hit is not a verified fact."""
