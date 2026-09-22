@@ -91,6 +91,24 @@ def test_structured_instruction_record_merges_registry_contract(opcode):
     assert rows[0]["instruction_contract"]["contract_level"] == "signature_verified"
 
 
+def test_structured_contract_prompt_view_is_compact_but_metadata_keeps_sources():
+    rows = resolve_instruction_records(
+        [{"opcode": "SFTL", "base_opcode": "SFTL"}],
+        plc_model="FX3U",
+        task_type="analysis",
+    )
+    assert rows
+    row = rows[0]
+    assert row["instruction_contract"].get("sources")
+    contract_line = next(
+        line for line in row["text"].splitlines()
+        if line.startswith("INSTRUCTION_CONTRACT:")
+    )
+    assert '"verified_fields"' in contract_line
+    assert '"operand_annotations"' in contract_line
+    assert '"sources"' not in contract_line
+
+
 def test_instruction_instance_contract_keeps_exact_operands_and_source():
     target = {
         "opcode": "SFTL",
