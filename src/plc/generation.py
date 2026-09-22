@@ -23,6 +23,7 @@ from plc.validation import (
 
 
 GENERATION_VALIDATION_PROFILE = "generation_structural"
+CONFIRMED_AGENT_ORIGIN = "compact_agent"
 
 
 def _normalize_legacy_blocks(ladder):
@@ -193,7 +194,7 @@ def prepare_ladder_candidate(
     progress = on_progress or (lambda _message: None)
     messages = []
     progress(tr('正在解析模型输出：规范化梯形图协议'))
-    if candidate_origin != "compact_agent":
+    if candidate_origin != CONFIRMED_AGENT_ORIGIN:
         _normalize_legacy_blocks(parsed)
         parsed, counters = normalize_legacy_counter_outputs(parsed)
         if counters:
@@ -255,7 +256,7 @@ def prepare_ladder_candidate(
     parsed, normalization = normalize_shared_conditions(parsed, allowed_rung_ids=normalization_scope)
     validate_ladder_candidate_structure(parsed, plc_model=plc_model, require_catalogued_instructions=True)
 
-    if candidate_origin == "compact_agent":
+    if candidate_origin == CONFIRMED_AGENT_ORIGIN:
         from plc.specification.semantic_validation import validate_confirmed_semantics
         semantic_validation = validate_confirmed_semantics(
             parsed, confirmed_spec, plc_model=plc_model,
