@@ -254,28 +254,85 @@ def build_knowledge_context(
     design_blocks, design_records, design_used, design_used_tokens = select(
         design_results, design_slots, design_budget, design_token_budget)
     fact_slots = count - len(design_blocks)
-    fact_results = retrieve_knowledge(
-        query, plc_model=plc_model, task_type=task,
+    query_meta = getattr(query, "metadata", {})
+    from knowledge.structured_facts import (
+        exclude_structured_target_hits, resolve_device_records,
+        resolve_error_records, resolve_instruction_records,
+        structured_fact_targets, without_structured_targets,
+    )
+
+    provided_structured = (
+        query_meta.get("structured_fact_targets")
+        if isinstance(query_meta, dict) else None
+    )
+    if isinstance(provided_structured, dict):
+        exact_targets = provided_structured
+    else:
+        exact_targets = structured_fact_targets(query)
+        # Backward-compatible handoffs created before structured_fact_targets
+        # existed still get direct instruction lookup.
+        if isinstance(query_meta, dict) and query_meta.get("instruction_fact_mode") == "targeted":
+            exact_targets["instructions"] = list(query_meta.get("instruction_fact_targets") or ())
+        # Raw generation requests often contain ordinary settled X/Y wiring.
+        # Those are control inputs, not automatic requests for device-manual
+        # definitions. The compiled generation path supplies explicit targets.
+        if task in {"generate", "edit"} and not getattr(query, "precompiled", False):
+            exact_targets["devices"] = []
+
+    instruction_targets = list(exact_targets.get("instructions") or ())
+    device_targets = list(exact_targets.get("devices") or ())
+    error_targets = list(exact_targets.get("errors") or ())
+    direct_results = []
+    fact_report = None
+
+    if instruction_targets:
+        if task in {"generate", "edit"}:
+            from knowledge.instruction_facts import retrieve_instruction_facts, delivered_fact_report
+            targeted, fact_report = retrieve_instruction_facts(
+                query, plc_model=plc_model, task_type=task,
+                char_budget=available - design_used, targets=instruction_targets,
+            )
+            direct_results.extend(targeted)
+        else:
+            direct_results.extend(resolve_instruction_records(
+                instruction_targets, plc_model=plc_model, task_type=task,
+            ))
+    if device_targets:
+        direct_results.extend(resolve_device_records(
+            device_targets, plc_model=plc_model, task_type=task,
+        ))
+    if error_targets:
+        direct_results.extend(resolve_error_records(
+            error_targets, plc_model=plc_model, task_type=task,
+        ))
+
+    # The broad retriever sees only the residual prose. Exact PLC identities are
+    # owned by the structured tables above and are filtered from broad results
+    # even if a surrounding sentence still happens to mention the same section.
+    residual_query = without_structured_targets(query, exact_targets)
+    should_retrieve_residual = bool(plan["facts"] and residual_query.strip())
+    if should_retrieve_residual and task in {"generate", "edit"} and getattr(query, "precompiled", False):
+        from knowledge.analysis_router import has_generation_fact_target
+        should_retrieve_residual = has_generation_fact_target(residual_query)
+    broad_results = retrieve_knowledge(
+        residual_query, plc_model=plc_model, task_type=task,
         top_k=min(_core._MAX_TOP_K, max(12, fact_slots * 3)), char_budget=sys.maxsize,
         source_lanes=tuple(plan["source_lanes"]),
-    ) if plan["facts"] else []
-    # Enforce the same scope for injected/custom retrievers, before final
-    # packing, as for the production SQL recall. This never changes source IDs.
-    fact_results = filter_records(fact_results, plan["source_lanes"])
-    fact_report = None
-    query_meta = getattr(query, "metadata", {})
-    if task in {"generate", "edit"} and isinstance(query_meta, dict) and query_meta.get("instruction_fact_mode") == "targeted":
-        from knowledge.instruction_facts import retrieve_instruction_facts, delivered_fact_report
-        targeted, fact_report = retrieve_instruction_facts(
-            query, plc_model=plc_model, task_type=task, char_budget=available - design_used,
-            candidates=fact_results, targets=query_meta.get("instruction_fact_targets"),
-            retrieve=lambda text, **kwargs: retrieve_knowledge(text, source_lanes=tuple(plan["source_lanes"]), **kwargs),
-        )
-        replaced = {item["original_id"] for item in targeted}
-        target_names = {name for target in fact_report["targets"] for name in (target["opcode"], target["base_opcode"])}
-        fact_results = targeted + [item for item in fact_results if item.get("id") not in replaced
-                                   and (not target_names or not item.get("instruction_opcode")
-                                        or str(item["instruction_opcode"]).upper() in target_names)]
+    ) if should_retrieve_residual else []
+    broad_results = exclude_structured_target_hits(broad_results, exact_targets)
+    fact_results = filter_records([*direct_results, *broad_results], plan["source_lanes"])
+
+    manifest["structured_facts"] = {
+        "version": exact_targets.get("version", "structured-facts-v1"),
+        "targets": {
+            "instructions": instruction_targets,
+            "devices": device_targets,
+            "errors": error_targets,
+        },
+        "record_ids": [str(item.get("id")) for item in direct_results if item.get("id")],
+        "residual_retrieval": bool(should_retrieve_residual),
+        "residual_query_sha256": text_sha256(residual_query),
+    }
     fact_token_budget = (available_tokens - design_used_tokens) if available_tokens is not None else None
     fact_blocks, fact_records, _, fact_used_tokens = select(
         fact_results, fact_slots, available - design_used, fact_token_budget)
