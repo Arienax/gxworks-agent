@@ -5,6 +5,8 @@ import pytest
 from application.analysis_results import _normalize_analysis_result
 from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
 from plc.review import review_ladder
+from plc.specification.confirmed import build_review_draft, canonicalize_confirmed_spec
+from plc.specification.legacy_migration import is_legacy_confirmed_spec
 from plc.specification.repair import build_contract_repair_plan
 from plc.validation import (
     PLCJsonValidationError,
@@ -71,6 +73,37 @@ def test_all_structures_share_the_same_selected_approach_provenance(structure):
 
     contract = result["approaches"][0]["generation_contract"]
     assert contract["required_structures"] == [structure]
+
+
+def test_fresh_review_draft_never_enters_legacy_guide_migration():
+    analysis = _normalize_analysis_result(
+        {
+            "summary": "fresh",
+            "missing_info": [],
+            "assumptions": [],
+            "suggested_io": {},
+            "approaches": [
+                {
+                    "name": "fresh direct",
+                    "generation_guide": "MOV K1 D0 is only explanatory text",
+                    "implementation_semantics": [
+                        {"kind": "structure", "status": "required", "value": "direct_logic"}
+                    ],
+                }
+            ],
+        },
+        "FX3U",
+        "X0 drives Y0",
+    )
+    draft = build_review_draft(analysis)
+    assert draft["schema_version"] == 3
+    assert not is_legacy_confirmed_spec(draft)
+
+    canonical = canonicalize_confirmed_spec(draft)
+    contract = canonical["selected_approach"]["generation_contract"]
+    assert contract["source"] == "analysis_semantics"
+    assert contract["required_opcodes"] == []
+    assert contract["required_structures"] == ["direct_logic"]
 
 
 def test_repair_scope_is_independent_of_generation_guide_text():
