@@ -243,9 +243,9 @@
     {
       "id": "device_canonical_identity",
       "category": "plc_device_fact",
-      "state": "tracked_gap",
-      "owner": "plc.device_identity",
-      "summary": "Mitsubishi device aliases such as X001/X1 share identity without base conversion; all fact lookups must use the same canonical identity.",
+      "state": "enforced",
+      "owner": "plc.device_identity.canonical_device",
+      "summary": "Structured device lookups use the shared Mitsubishi canonical identity owner so zero-padded aliases resolve to one physical device without base conversion.",
       "checks": [
         {
           "kind": "python_symbol",
@@ -266,17 +266,30 @@
           "kind": "contains",
           "path": "src/application/confirmed_generation_context.py",
           "text": "canonical_device"
-        }
-      ],
-      "gap_reason": "resolve_device_records() currently uppercases the requested device but does not canonicalize it through plc.device_identity.canonical_device().",
-      "gap_checks": [
+        },
         {
-          "kind": "absent",
+          "kind": "contains",
           "path": "src/knowledge/structured_facts.py",
-          "text": "canonical_device"
+          "text": "from plc.device_identity import canonical_device"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/structured_facts.py",
+          "text": "device = canonical_device(requested_device)"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_device_lookup_uses_canonical_device_identity_owner"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_device_aliases_do_not_duplicate_structured_records"
         }
       ],
       "tests": [
+        "tests/test_structured_fact_lookup.py",
         "tests/test_device_identity_delivery.py",
         "tests/test_spec_choice_metadata.py"
       ]
