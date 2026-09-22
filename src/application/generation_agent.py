@@ -251,12 +251,13 @@ def generate_confirmed_ladder(
     diagnostics.emit("generation_representation", stage="compact_protocol", representation=representation)
 
     from plc.candidate_service import CandidateService
+    from plc.generation import CONFIRMED_AGENT_ORIGIN
     prepared = CandidateService().prepare(
         ladder,
         plc_model=model,
         confirmed_spec=projected,
         task_type="generate",
-        candidate_origin="compact_agent",
+        candidate_origin=CONFIRMED_AGENT_ORIGIN,
         on_progress=(
             (lambda message: on_stage("candidate_validation", message))
             if on_stage else None
