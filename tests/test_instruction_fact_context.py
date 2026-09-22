@@ -221,3 +221,15 @@ def test_explicit_lookup_survives_settled_io_projection(question):
     assert question in query and "5 秒" in query and has_generation_fact_target(query)
     assert compiled.generation_packet["confirmed_spec"] == {**spec, "schema_version": 4}
     assert spec == before
+
+
+
+def test_capability_manifest_tracks_instruction_migration_gaps():
+    from tools.audit_capability_coverage import audit_coverage
+
+    report = audit_coverage()
+    states = {row["id"]: row["state"] for row in report["capabilities"]}
+    assert states["instruction_step_width"] == "tracked_gap"
+    assert states["instruction_contract_promotion"] == "tracked_gap"
+    assert states["confirmed_instruction_instances"] == "tracked_gap"
+    assert states["instruction_source_authority"] == "tracked_gap"
