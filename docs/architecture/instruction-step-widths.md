@@ -2,7 +2,7 @@
 
 ## Ownership
 
-[fx3u_step_widths.json](../../resources/instructions/mitsubishi/fx3u_step_widths.json) is the runtime step-width resource. [plc.instruction_steps](../../src/plc/instruction_steps.py) exposes `instruction_step_width`, `StepWidth` and `StepCursor`. GXW native decoding and CSV export consume this API; the serializer does not maintain a second mnemonic table.
+[fx3u_step_widths.json](../../resources/instructions/mitsubishi/fx3u_step_widths.json) is the runtime step-width resource. [plc.instruction_steps](../../src/plc/instruction_steps.py) exposes `instruction_step_width`, `StepWidth` and `StepCursor`. GXW native decoding, CSV export, and [structured PLC facts](../../src/knowledge/structured_facts.py) consume this API; none of those consumers maintains a second mnemonic/width table.
 
 Instruction admission and operand contracts belong to [plc.instructions](../../src/plc/instructions.py), as described in [contract coverage](instruction-contract-coverage.md).
 
