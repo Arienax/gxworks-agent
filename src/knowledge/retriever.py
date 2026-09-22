@@ -271,7 +271,11 @@ def build_knowledge_context(
         exact_targets = structured_fact_targets(query)
         # Backward-compatible handoffs created before structured_fact_targets
         # existed still get direct instruction lookup.
-        if isinstance(query_meta, dict) and query_meta.get("instruction_fact_mode") == "targeted":
+        if (
+            isinstance(query_meta, dict)
+            and query_meta.get("instruction_fact_mode") == "targeted"
+            and "instruction_fact_targets" in query_meta
+        ):
             exact_targets["instructions"] = list(query_meta.get("instruction_fact_targets") or ())
         # Raw generation requests often contain ordinary settled X/Y wiring.
         # Those are control inputs, not automatic requests for device-manual
