@@ -280,7 +280,6 @@ def test_required_self_hold_checker_ignores_unrelated_program_scope():
         "selected_approach": {
             "implementation_semantics": [
                 {"kind": "structure", "status": "required", "value": "self_hold"},
-                {"kind": "structure", "status": "required", "value": "bit_state_machine"},
             ],
         },
     }

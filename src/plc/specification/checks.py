@@ -59,8 +59,14 @@ def _self_hold_kernel(rung, branch, *, start, stop, output=None):
     }
 
 
-def _has_partial_self_hold_core(ladder, *, start, output=None):
-    """Recognize a latch core even when its stop/run-permit contact is missing."""
+def _has_partial_self_hold_core(ladder, *, start, stop, output=None):
+    """Recognize a nearly-complete latch without treating arbitrary logic as one.
+
+    A hard error is justified only when the candidate already chose a plain
+    latch-shaped path and omitted/misplaced a confirmed start/stop condition.
+    If other expression kinds participate, coverage remains unresolved instead
+    of turning the checker into a generic Boolean verifier.
+    """
     for rung in (ladder or {}).get("rungs", []) or []:
         if not isinstance(rung, dict):
             continue
@@ -78,6 +84,7 @@ def _has_partial_self_hold_core(ladder, *, start, output=None):
                 *(rung.get("shared_inputs", []) or []),
                 *(branch.get("inputs", []) or []),
             ]
+            conditions = [item for item in conditions if item is not None]
             parallels = [
                 item for item in conditions
                 if isinstance(item, dict) and item.get("type") == "parallel_block"
@@ -91,10 +98,31 @@ def _has_partial_self_hold_core(ladder, *, start, output=None):
             if not all(isinstance(item, dict) and item.get("type") in {"NO", "NC"}
                        for item in contacts):
                 continue
-            if {item.get("address") for item in contacts} != {start, held}:
+            addresses = {item.get("address") for item in contacts}
+            if held not in addresses or not ({start, stop} & addresses):
                 continue
             hold = next((item for item in contacts if item.get("address") == held), None)
-            if hold and hold.get("type") == "NO":
+            if hold is None or hold.get("type") != "NO":
+                continue
+
+            outside = [item for item in conditions if item is not parallels[0]]
+            # Simple contacts may be ordinary interlocks around a latch. A
+            # COMPARE/parallel/other expression means this checker no longer
+            # owns the surrounding Boolean semantics.
+            if any(
+                not isinstance(item, dict) or item.get("type") not in {"NO", "NC"}
+                for item in outside
+            ):
+                continue
+
+            has_start = start in addresses or any(item.get("address") == start for item in outside)
+            has_stop = stop in addresses or any(item.get("address") == stop for item in outside)
+            if not (has_start and has_stop):
+                return True
+            # Both roles are present but one is in the latch branch where the
+            # canonical kernel cannot accept it: still a concrete malformed
+            # self-hold, not an unsupported generic expression.
+            if start not in addresses or any(item.get("address") == stop for item in contacts):
                 return True
     return False
 
@@ -186,7 +214,10 @@ def check_direct_self_hold(ladder, spec):
 
     if not kernels:
         if explicit_primitive and _has_partial_self_hold_core(
-            ladder, start=roles["start"], output=roles.get("output")
+            ladder,
+            start=roles["start"],
+            stop=roles["stop"],
+            output=roles.get("output"),
         ):
             raise PLCJsonValidationError(
                 "$.rungs: confirmed self-hold is missing stop/run-permit condition"
