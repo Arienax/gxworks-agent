@@ -187,6 +187,7 @@ def retrieve_fact_aware_knowledge(
     """
     from knowledge.scope import retrieval_plan, filter_records
     from knowledge.structured_facts import (
+        compact_structured_fact_record,
         exclude_structured_target_hits,
         resolve_device_records,
         resolve_error_records,
@@ -230,7 +231,10 @@ def retrieve_fact_aware_knowledge(
             task_type=task,
         ),
     ]
-    direct = filter_records(direct, lanes)
+    direct = [
+        compact_structured_fact_record(row)
+        for row in filter_records(direct, lanes)
+    ]
 
     residual = without_structured_targets(query, targets)
     broad = retrieve_knowledge(
