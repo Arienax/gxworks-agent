@@ -206,9 +206,11 @@ def build_confirmed_generation_context(
 
 
 def selected_instruction_capability_prompt(plc_model, confirmed_spec):
-    """Describe selected catalogue contracts, not simulated/hardware correctness."""
+    """Render the same contract view carried by structured instruction facts."""
     from knowledge.instruction_facts import instruction_fact_targets
+    from knowledge.structured_facts import resolve_instruction_contract
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, generation_app_instr_mnemonics
+
     targets = instruction_fact_targets("", confirmed_spec)
     if not targets:
         return ""
@@ -216,24 +218,25 @@ def selected_instruction_capability_prompt(plc_model, confirmed_spec):
     rows = []
     for target in targets:
         opcode = target["opcode"]
+        row = resolve_instruction_contract(target, plc_model=plc_model)
+        row["generation_catalogued"] = opcode in allowed
+        annotations = row.pop("operand_annotations", [])
+        row["operands"] = [
+            {
+                "name": item.get("name"),
+                "role": item.get("role"),
+                "data_type": item.get("data_type"),
+                **({"device_prefixes": list(item.get("device_prefixes") or [])}
+                   if item.get("device_prefixes") else {}),
+            }
+            for item in annotations
+            if isinstance(item, Mapping)
+        ]
         form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(opcode, cpu=plc_model)
-        row = {"opcode": opcode, "generation_catalogued": opcode in allowed}
-        if isinstance(target.get("operands"), list):
-            row["confirmed_operands"] = copy.deepcopy(target["operands"])
-            row["instance_source"] = target.get("instance_source")
-        if form is not None:
-            row.update(DEFAULT_INSTRUCTION_REGISTRY.describe_contract(opcode, cpu=plc_model))
-            row.pop("operand_annotations", None)
-            row.update(
-                       min_operands=form.spec.min_operands, max_operands=form.spec.max_operands,
-                       operands=[{"name": item.name, "role": item.role.value,
-                                  "data_type": item.data_type,
-                                  **({"device_prefixes": list(item.device_prefixes)} if item.device_prefixes else {})}
-                                 for item in form.spec.operands])
-            if form.spec.notes:
-                row["notes"] = form.spec.notes
+        if form is not None and form.spec.notes:
+            row["notes"] = form.spec.notes
         rows.append(row)
-    value = {"source": "current_python_catalogue", "plc_model": plc_model,
+    value = {"source": "structured_instruction_contract", "plc_model": plc_model,
              "instructions": rows, "runtime_semantics": "requires_manual_evidence",
              "simulation_verification": "not_claimed"}
     return "\n# Selected instruction capability snapshot\n" + json.dumps(value, ensure_ascii=False, separators=(",", ":"))
