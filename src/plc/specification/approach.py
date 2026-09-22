@@ -199,7 +199,7 @@ def normalize_instruction_instances(values):
     return result
 
 
-IMPLEMENTATION_SEMANTIC_KINDS = frozenset({"structure", "opcode", "device", "instruction_instance"})
+IMPLEMENTATION_SEMANTIC_KINDS = frozenset({"structure"})
 IMPLEMENTATION_SEMANTIC_STATUSES = frozenset({"required", "forbidden", "any_of"})
 
 
@@ -215,7 +215,7 @@ def _structure_token(value):
 
 
 def normalize_implementation_semantics(values):
-    """Normalize Agent-A implementation choices without reading requirement prose."""
+    """Normalize Agent-A architecture choices only; low-level choices belong to Core/B."""
     if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
         return []
     result = []
@@ -225,56 +225,29 @@ def normalize_implementation_semantics(values):
             continue
         kind = str(raw.get("kind") or "").strip().casefold()
         status = str(raw.get("status") or "required").strip().casefold()
-        if kind not in IMPLEMENTATION_SEMANTIC_KINDS or status not in IMPLEMENTATION_SEMANTIC_STATUSES:
+        if kind != "structure" or status not in IMPLEMENTATION_SEMANTIC_STATUSES:
             continue
-
-        if kind == "instruction_instance":
-            if status != "required":
-                continue
-            instances = normalize_instruction_instances([raw])
-            if not instances:
-                continue
-            item = {"kind": kind, "status": status, **instances[0]}
-            marker = (kind, status, item["opcode"], tuple(item["operands"]))
-        elif status == "any_of":
-            if kind not in {"structure", "opcode"}:
-                continue
+        if status == "any_of":
             source = raw.get("values")
             if isinstance(source, str):
                 source = [source]
             if not isinstance(source, Sequence):
                 continue
-            normalized_values = []
+            values = []
             for value in source:
-                if kind == "structure":
-                    token = _structure_token(value)
-                else:
-                    token = str(value or "").strip().upper()
-                    if not re.fullmatch(r"[$A-Z][A-Z0-9_.$@+<>!=\-]{0,63}", token):
-                        token = None
-                if token and token not in normalized_values:
-                    normalized_values.append(token)
-            if not normalized_values:
+                token = _structure_token(value)
+                if token and token not in values:
+                    values.append(token)
+            if not values:
                 continue
-            item = {"kind": kind, "status": status, "values": normalized_values}
-            marker = (kind, status, tuple(normalized_values))
+            item = {"kind": "structure", "status": status, "values": values}
+            marker = ("structure", status, tuple(values))
         else:
-            value = raw.get("value")
-            if kind == "structure":
-                value = _structure_token(value)
-            elif kind == "opcode":
-                value = str(value or "").strip().upper()
-                if not re.fullmatch(r"[$A-Z][A-Z0-9_.$@+<>!=\-]{0,63}", value):
-                    value = None
-            elif kind == "device":
-                value = str(value or "").strip().upper()
-                if not _DEVICE_RE.fullmatch(value):
-                    value = None
+            value = _structure_token(raw.get("value"))
             if not value:
                 continue
-            item = {"kind": kind, "status": status, "value": value}
-            marker = (kind, status, value)
-
+            item = {"kind": "structure", "status": status, "value": value}
+            marker = ("structure", status, value)
         if marker in seen:
             continue
         seen.add(marker)
@@ -282,36 +255,33 @@ def normalize_implementation_semantics(values):
     return result
 
 
-def project_semantics_to_generation_contract(values, *, source="analysis_semantics"):
-    """Project normalized implementation semantics into the shared generation contract."""
+def project_semantics_to_generation_contract(
+    values, *, explicit_user_constraints=None, source="analysis_semantics"
+):
+    """Project architecture semantics plus Core-owned user constraints."""
     semantics = normalize_implementation_semantics(values)
+    from plc.specification.explicit_constraints import normalize_explicit_user_constraints
+    explicit = normalize_explicit_user_constraints(explicit_user_constraints)
     contract = {
         "schema_version": CONTRACT_SCHEMA_VERSION,
-        "required_opcodes": [],
-        "forbidden_opcodes": [],
-        "required_devices": [],
-        "forbidden_devices": [],
+        "required_opcodes": list(explicit["required_opcodes"]),
+        "forbidden_opcodes": list(explicit["forbidden_opcodes"]),
+        "required_devices": list(explicit["required_devices"]),
+        "forbidden_devices": list(explicit["forbidden_devices"]),
         "required_structures": [],
         "forbidden_structures": [],
         "any_of_opcode_groups": [],
         "any_of_structure_groups": [],
-        "instruction_instances": [],
+        "instruction_instances": copy.deepcopy(explicit["instruction_instances"]),
         "enforce": True,
         "source": source,
     }
     for item in semantics:
-        kind, status = item["kind"], item["status"]
-        if kind == "instruction_instance":
-            contract["instruction_instances"].append({
-                "opcode": item["opcode"], "operands": list(item["operands"]),
-            })
-            continue
+        status = item["status"]
         if status == "any_of":
-            key = "any_of_structure_groups" if kind == "structure" else "any_of_opcode_groups"
-            contract[key].append(list(item["values"]))
+            contract["any_of_structure_groups"].append(list(item["values"]))
             continue
-        suffix = "structures" if kind == "structure" else "opcodes" if kind == "opcode" else "devices"
-        key = ("required_" if status == "required" else "forbidden_") + suffix
+        key = "required_structures" if status == "required" else "forbidden_structures"
         if item["value"] not in contract[key]:
             contract[key].append(item["value"])
     return contract
@@ -744,12 +714,17 @@ def normalize_approach(approach):
         approach_id = f"approach_{digest}"
     normalized["approach_id"] = approach_id
     normalized.pop("id", None)
-    if "implementation_semantics" in normalized:
+    if "implementation_semantics" in normalized or "explicit_user_constraints" in normalized:
         normalized["implementation_semantics"] = normalize_implementation_semantics(
             normalized.get("implementation_semantics")
         )
+        from plc.specification.explicit_constraints import normalize_explicit_user_constraints
+        normalized["explicit_user_constraints"] = normalize_explicit_user_constraints(
+            normalized.get("explicit_user_constraints")
+        )
         normalized["generation_contract"] = project_semantics_to_generation_contract(
             normalized["implementation_semantics"],
+            explicit_user_constraints=normalized["explicit_user_constraints"],
             source="analysis_semantics",
         )
     else:

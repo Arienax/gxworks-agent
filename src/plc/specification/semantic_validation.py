@@ -24,18 +24,48 @@ class ConfirmedSemanticValidationError(PLCJsonValidationError):
 
 
 def semantic_requirements(confirmed_spec):
-    """Return generic machine requirements from canonical implementation semantics."""
+    """Return generic requirements from structure semantics and Core user constraints."""
     if not isinstance(confirmed_spec, Mapping):
         return []
     selected = confirmed_spec.get("selected_approach")
-    if not isinstance(selected, Mapping) or "implementation_semantics" not in selected:
+    if not isinstance(selected, Mapping):
         return []
+
     from plc.specification.approach import normalize_implementation_semantics
+    from plc.specification.explicit_constraints import normalize_explicit_user_constraints
+
     result = []
-    for index, item in enumerate(normalize_implementation_semantics(selected.get("implementation_semantics"))):
+    for index, item in enumerate(
+        normalize_implementation_semantics(selected.get("implementation_semantics"))
+    ):
         row = dict(item)
         row["requirement_id"] = f"implementation_semantics[{index}]"
         result.append(row)
+
+    explicit = normalize_explicit_user_constraints(
+        selected.get("explicit_user_constraints")
+    )
+    for field, kind, status in (
+        ("required_opcodes", "opcode", "required"),
+        ("forbidden_opcodes", "opcode", "forbidden"),
+        ("required_devices", "device", "required"),
+        ("forbidden_devices", "device", "forbidden"),
+    ):
+        for index, value in enumerate(explicit[field]):
+            result.append({
+                "requirement_id": f"explicit_user_constraints.{field}[{index}]",
+                "kind": kind,
+                "status": status,
+                "value": value,
+            })
+    for index, item in enumerate(explicit["instruction_instances"]):
+        result.append({
+            "requirement_id": f"explicit_user_constraints.instruction_instances[{index}]",
+            "kind": "instruction_instance",
+            "status": "required",
+            "opcode": item["opcode"],
+            "operands": list(item["operands"]),
+        })
     return result
 
 
@@ -184,9 +214,26 @@ def validate_confirmed_semantics(ladder, confirmed_spec, plc_model="FX3U"):
     if not isinstance(confirmed_spec, Mapping):
         return {"version": _VERSION, "status": "not_applicable", "requirements": [], "checks": []}
 
+    selected = confirmed_spec.get("selected_approach")
+    canonical_sources = (
+        isinstance(selected, Mapping)
+        and (
+            "implementation_semantics" in selected
+            or "explicit_user_constraints" in selected
+        )
+    )
     requirements = semantic_requirements(confirmed_spec)
-    if not requirements:
+    if not canonical_sources:
         return _legacy_compatibility_check(ladder, confirmed_spec, plc_model)
+    if not requirements:
+        return {
+            "version": _VERSION,
+            "plc_model": str(plc_model or "").strip().upper(),
+            "status": "not_applicable",
+            "requirements": [],
+            "checks": [],
+            "legacy_compatibility": False,
+        }
 
     checks, violations = [], []
     for _name, checker in _CHECKER_REGISTRY:
@@ -199,8 +246,8 @@ def validate_confirmed_semantics(ladder, confirmed_spec, plc_model="FX3U"):
             f"{row.get('kind')}:{row.get('expected')}" for row in violations[:8]
         )
         raise ConfirmedSemanticValidationError(
-            "$.confirmed_spec.selected_approach.implementation_semantics: "
-            "generated candidate violates confirmed implementation semantics: " + summary
+            "$.confirmed_spec.selected_approach: generated candidate violates "
+            "confirmed implementation semantics/user constraints: " + summary
         )
 
     unresolved = [row for row in checks if row.get("status") == "unresolved"]

@@ -65,7 +65,7 @@ def _bad_analysis():
     }
 
 
-def test_implementation_semantics_are_the_core_owned_contract_source():
+def test_implementation_semantics_are_structure_only_and_core_projects_user_constraints():
     from plc.specification.approach import normalize_approach
 
     selected = normalize_approach({
@@ -74,50 +74,81 @@ def test_implementation_semantics_are_the_core_owned_contract_source():
         "implementation_semantics": [
             {"kind": "structure", "status": "required", "value": "direct_logic"},
             {"kind": "structure", "status": "forbidden", "value": "set_reset_latch"},
-            {"kind": "opcode", "status": "any_of", "values": ["MOV", "DMOV"]},
-            {"kind": "device", "status": "required", "value": "D10"},
-            {"kind": "instruction_instance", "status": "required",
-             "opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]},
+            # Low-level model output is outside Agent-A's semantic vocabulary.
+            {"kind": "opcode", "status": "required", "value": "MOV"},
+            {"kind": "device", "status": "required", "value": "D99"},
         ],
+        "explicit_user_constraints": {
+            "required_opcodes": ["DMOV"],
+            "required_devices": ["D10"],
+            "instruction_instances": [
+                {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]},
+            ],
+        },
     })
+    assert selected["implementation_semantics"] == [
+        {"kind": "structure", "status": "required", "value": "direct_logic"},
+        {"kind": "structure", "status": "forbidden", "value": "set_reset_latch"},
+    ]
     contract = selected["generation_contract"]
-    assert contract["source"] == "analysis_semantics"
     assert contract["required_structures"] == ["direct_logic"]
     assert contract["forbidden_structures"] == ["set_reset_latch"]
-    assert contract["any_of_opcode_groups"] == [["MOV", "DMOV"]]
+    assert contract["required_opcodes"] == ["DMOV"]
     assert contract["required_devices"] == ["D10"]
     assert contract["instruction_instances"] == [
         {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
     ]
 
 
-def test_analysis_semantic_sanitizer_filters_by_kind_then_reprojects_contract():
+def test_core_extracts_low_level_constraints_without_agent_a_repeating_them():
     raw = {
         "summary": "structured plan",
         "approaches": [{
-            "approach_id": "a1", "name": "one plan", "generation_guide": "",
+            "approach_id": "a1",
+            "name": "one plan",
+            "generation_guide": "",
             "implementation_semantics": [
                 {"kind": "structure", "status": "required", "value": "direct_logic"},
                 {"kind": "opcode", "status": "required", "value": "MOV"},
-                {"kind": "device", "status": "required", "value": "D10"},
+                {"kind": "device", "status": "required", "value": "D99"},
                 {"kind": "instruction_instance", "status": "required",
-                 "opcode": "SFTL", "operands": ["M10", "M100", "K8", "K1"]},
+                 "opcode": "MOV", "operands": ["K1", "D99"]},
             ],
         }],
         "missing_info": [], "suggested_io": {}, "hardware_config": {}, "assumptions": [],
     }
     normalized = _normalize_analysis_result(
-        raw, plc_model="FX3U",
-        user_text="Use MOV with D10. Keep SFTL M10 M100 K8 K1 exactly.",
+        raw,
+        plc_model="FX3U",
+        user_text=(
+            "明确使用 SFTL M10 M100 K8 K1。"
+            "指定 D10 作为状态寄存器。"
+        ),
     )
     selected = normalized["approaches"][0]
+    assert selected["implementation_semantics"] == [
+        {"kind": "structure", "status": "required", "value": "direct_logic"},
+    ]
     contract = selected["generation_contract"]
-    assert contract["source"] == "analysis_semantics"
-    assert contract["required_structures"] == ["direct_logic"]
-    assert contract["required_opcodes"] == ["MOV"]
+    assert contract["required_opcodes"] == ["SFTL"]
     assert contract["required_devices"] == ["D10"]
-    assert contract["instruction_instances"][0]["opcode"] == "SFTL"
-    assert selected["implementation_preferences"]["enforce"] is False
+    assert contract["instruction_instances"] == [
+        {"opcode": "SFTL", "operands": ["M10", "M100", "K8", "K1"]}
+    ]
+    assert "MOV" not in contract["required_opcodes"]
+    assert "D99" not in contract["required_devices"]
+
+
+def test_comparison_text_does_not_become_a_fixed_instruction_instance():
+    from plc.specification.explicit_constraints import extract_explicit_user_constraints
+
+    result = extract_explicit_user_constraints(
+        "比较 SFTL M10 M100 K8 K1 和 WSFL 方案，暂未指定具体指令。",
+        "FX3U",
+    )
+    assert result["constraints"]["instruction_instances"] == []
+    assert result["constraints"]["required_opcodes"] == []
+
 
 def test_agent_b_frames_first_json_but_consumes_trailing_usage():
     base = _DuplicateJsonProvider()
@@ -304,13 +335,34 @@ def test_counter_structure_is_kept_when_request_really_is_counter_control():
     assert "hardware_counter" in contract["required_structures"]
 
 
-def _instruction_instance_analysis(instances):
+def _structure_only_analysis():
     return {
-        "summary": "使用固定移位指令实例",
+        "summary": "固定方案",
         "approaches": [{
             "approach_id": "fixed_shift",
-            "name": "固定移位",
-            "description": "按确认的完整指令调用实现",
+            "name": "固定结构",
+            "description": "按确认结构实现",
+            "pros": "",
+            "cons": "",
+            "generation_guide": "",
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "direct_logic"},
+            ],
+        }],
+        "missing_info": [],
+        "suggested_io": {},
+        "hardware_config": {},
+        "assumptions": [],
+    }
+
+
+def _legacy_instruction_instance_analysis(instances):
+    return {
+        "summary": "legacy fixed instruction",
+        "approaches": [{
+            "approach_id": "legacy_fixed_shift",
+            "name": "legacy fixed shift",
+            "description": "legacy compatibility",
             "pros": "",
             "cons": "",
             "generation_guide": "",
@@ -334,7 +386,7 @@ def test_exact_instruction_instance_survives_agent_a_confirmation_to_agent_b():
 
     instance = {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
     normalized = _normalize_analysis_result(
-        _instruction_instance_analysis([instance]),
+        _structure_only_analysis(),
         plc_model="FX3U",
         user_text="明确使用 SFTL M10 M100 K128 K1 实现移位。",
     )
@@ -369,21 +421,20 @@ def test_pinned_reanalysis_preserves_instances_until_explicitly_cleared():
 
     instance = {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
     first = _normalize_analysis_result(
-        _instruction_instance_analysis([instance]),
+        _structure_only_analysis(),
         plc_model="FX3U",
         user_text="明确使用 SFTL M10 M100 K128 K1。",
     )
     previous = confirm_context(build_review_draft(first))
 
-    omitted = _instruction_instance_analysis([instance])
-    omitted["approaches"][0]["generation_contract"].pop("instruction_instances")
+    omitted = _structure_only_analysis()
     normalized = _normalize_analysis_result(
         omitted, plc_model="FX3U", user_text="只修改停止保持参数。", confirmed_spec=previous,
     )
     draft = build_review_draft(normalized, previous)
     assert draft["selected_approach"]["generation_contract"]["instruction_instances"] == [instance]
 
-    cleared = _instruction_instance_analysis([])
+    cleared = _structure_only_analysis()
     normalized_clear = _normalize_analysis_result(
         cleared, plc_model="FX3U", user_text="清除原固定指令实例，重新开放具体调用。", confirmed_spec=previous,
     )
@@ -399,7 +450,7 @@ def test_model_proposed_instruction_instance_stays_exact_as_selected_preference(
 
     instance = {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
     normalized = _normalize_analysis_result(
-        _instruction_instance_analysis([instance]),
+        _legacy_instruction_instance_analysis([instance]),
         plc_model="FX3U",
         user_text="做一个三路移位方案，具体调用由方案确定。",
     )

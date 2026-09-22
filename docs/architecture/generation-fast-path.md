@@ -46,14 +46,15 @@ semantic handoff error; human-readable labels are never used to guess that role.
 
 ## Semantic requirement coverage
 
-For fresh confirmed specifications, generation acceptance derives generic semantic
-requirements from the selected approach's `implementation_semantics`. The registry
-covers required/forbidden/any-of structure, opcode and device semantics plus exact
-instruction instances. Capability-specific deterministic checks attach to the same
-requirement receipt instead of being called directly from Agent B.
+For fresh confirmed specifications, generation acceptance derives structure
+requirements from `implementation_semantics` and caller-fixed low-level requirements
+from `explicit_user_constraints`. The same registry checks required/forbidden/any-of
+structures, required/forbidden opcodes and devices, and exact instruction instances.
+Capability-specific deterministic checks attach to that same coverage receipt instead
+of being called directly from Agent B.
 
-A semantic requirement violation blocks the candidate. A registered checker that
-cannot evaluate a broader representation records `unresolved`; loss of machine
+A requirement violation blocks the candidate. A registered checker that cannot
+evaluate a broader representation records `unresolved`; loss of machine
 identity/electrical facts required by that checker remains a handoff error. Legacy
-specifications without `implementation_semantics` retain the previous narrow
+specifications without the new canonical source fields retain the previous narrow
 compatibility validation.

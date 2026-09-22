@@ -538,8 +538,8 @@
       "id": "implementation_semantics_contract_projection",
       "category": "intent_handoff",
       "state": "enforced",
-      "owner": "plc.specification.approach.normalize_implementation_semantics + project_semantics_to_generation_contract",
-      "summary": "Fresh Agent A implementation choices have one machine-readable implementation_semantics source. Core normalizes that vocabulary, applies provenance filtering by semantic kind, and projects surviving semantics into generation_contract; legacy contracts remain compatibility input.",
+      "owner": "plc.specification.approach + plc.specification.explicit_constraints",
+      "summary": "Fresh Agent A implementation_semantics is structure-only. Core independently extracts caller-fixed opcode/device/exact-instruction constraints into explicit_user_constraints, persists both owners, and projects their union into generation_contract; legacy contracts remain compatibility input.",
       "checks": [
         {
           "kind": "python_symbol",
@@ -552,19 +552,29 @@
           "symbol": "project_semantics_to_generation_contract"
         },
         {
-          "kind": "contains",
-          "path": "src/application/prompts.py",
-          "text": "generation_contract 由 Core 从 implementation_semantics 生成"
+          "kind": "python_symbol",
+          "path": "src/plc/specification/explicit_constraints.py",
+          "symbol": "extract_explicit_user_constraints"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/specification/explicit_constraints.py",
+          "symbol": "merge_explicit_user_constraints"
         },
         {
           "kind": "contains",
-          "path": "src/plc/hardware_profiles.py",
-          "text": "Keep implementation_semantics canonical and project contracts from it."
+          "path": "src/application/prompts.py",
+          "text": "implementation_semantics 只允许结构语义"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/analysis_results.py",
+          "text": "_apply_explicit_user_constraints("
         },
         {
           "kind": "contains",
           "path": "tests/test_confirmed_generation_regressions.py",
-          "text": "test_implementation_semantics_are_the_core_owned_contract_source"
+          "text": "test_core_extracts_low_level_constraints_without_agent_a_repeating_them"
         }
       ],
       "tests": [
@@ -578,7 +588,7 @@
       "category": "generation",
       "state": "enforced",
       "owner": "plc.generation.prepare_ladder_candidate + plc.specification.semantic_validation",
-      "summary": "Fresh confirmed Agent B output passes one structural acceptance boundary followed by implementation-semantic requirement coverage. The checker registry validates generic structure/opcode/device/any-of/exact-instance requirements and may add capability-specific deterministic checks; legacy specs without implementation_semantics retain compatibility behavior.",
+      "summary": "Fresh confirmed Agent B output passes structural acceptance followed by one requirement registry. Structure requirements come from implementation_semantics; opcode/device/exact-instance requirements come from Core-owned explicit_user_constraints. Capability-specific deterministic checks attach to the same coverage receipt; legacy specs retain compatibility behavior.",
       "checks": [
         {
           "kind": "python_symbol",
@@ -653,7 +663,7 @@
         {
           "kind": "contains",
           "path": "tests/test_generation_fast_path.py",
-          "text": "test_semantic_requirement_registry_covers_structure_opcode_device_group_and_instance"
+          "text": "test_semantic_requirement_registry_covers_structure_and_core_user_constraints"
         }
       ],
       "tests": [

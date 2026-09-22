@@ -1,4 +1,5 @@
 """Analysis results."""
+import copy
 import json
 import re
 from shared.i18n import tr
@@ -107,6 +108,79 @@ def _iter_analysis_text(value):
         yield str(value)
 
 
+
+def _selected_low_level_constraints(selected):
+    """Read confirmed low-level constraints without reconstructing them from prose."""
+    from plc.specification.explicit_constraints import normalize_explicit_user_constraints
+    if not isinstance(selected, dict):
+        return normalize_explicit_user_constraints({})
+    if isinstance(selected.get("explicit_user_constraints"), dict):
+        return normalize_explicit_user_constraints(selected["explicit_user_constraints"])
+    contract = selected.get("generation_contract")
+    if not isinstance(contract, dict):
+        return normalize_explicit_user_constraints({})
+    return normalize_explicit_user_constraints({
+        "required_opcodes": contract.get("required_opcodes", []),
+        "forbidden_opcodes": contract.get("forbidden_opcodes", []),
+        "required_devices": contract.get("required_devices", []),
+        "forbidden_devices": contract.get("forbidden_devices", []),
+        "instruction_instances": contract.get("instruction_instances", []),
+    })
+
+
+def _apply_explicit_user_constraints(result, user_text, plc_model, confirmed_spec=None):
+    """Merge caller-fixed low-level choices independently of Agent-A output."""
+    from plc.specification.explicit_constraints import (
+        extract_explicit_user_constraints,
+        merge_explicit_user_constraints,
+    )
+
+    update = extract_explicit_user_constraints(user_text, plc_model)
+    previous_selected = (
+        confirmed_spec.get("selected_approach")
+        if isinstance(confirmed_spec, dict)
+        else None
+    )
+    previous_id = str((previous_selected or {}).get("approach_id") or "").strip()
+    previous_constraints = _selected_low_level_constraints(previous_selected)
+
+    approaches = []
+    for raw in result.get("approaches", []) or []:
+        if not isinstance(raw, dict):
+            continue
+        approach = dict(raw)
+        same_plan = (
+            previous_id
+            and str(approach.get("approach_id") or "").strip() == previous_id
+        )
+        base = previous_constraints if same_plan else {}
+        merged = merge_explicit_user_constraints(
+            base,
+            update["constraints"],
+            clear_fields=update["clear_fields"],
+        )
+
+        if "implementation_semantics" in approach:
+            approach["explicit_user_constraints"] = merged
+            approach = normalize_approach(approach)
+        else:
+            # Compatibility for old Agent-A response fixtures/saved protocol.
+            approach = normalize_approach(approach)
+            contract = dict(approach.get("generation_contract") or {})
+            for key in (
+                "required_opcodes", "forbidden_opcodes",
+                "required_devices", "forbidden_devices",
+                "instruction_instances",
+            ):
+                contract[key] = copy.deepcopy(merged[key])
+            approach["generation_contract"] = contract
+            approach["explicit_user_constraints"] = merged
+        approaches.append(approach)
+
+    result["approaches"] = approaches
+    return result
+
+
 def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed_spec=None):
     """Normalize phase-one AI JSON before the specification editor sees it.
 
@@ -132,7 +206,7 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
         normalize_approach({
             key: value
             for key, value in item.items()
-            if key != "implementation_preferences"
+            if key not in {"implementation_preferences", "explicit_user_constraints"}
             and not (key == "generation_contract" and "implementation_semantics" in item)
         })
         for item in (normalized.get("approaches") or [])
@@ -373,6 +447,9 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
         inferred_semantics
     )
     normalized = ensure_hardware_questions(normalized, plc_model, user_text, confirmed_spec)
+    normalized = _apply_explicit_user_constraints(
+        normalized, user_text, plc_model, confirmed_spec
+    )
     from plc.specification.provenance import analysis_context
     from application.generation_support import public_generation_value
     normalized.update(analysis_context(

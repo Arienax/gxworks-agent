@@ -88,7 +88,7 @@ def test_ir_consistency_can_be_checked_without_reinterpreting_ladder_semantics()
 
 
 
-def test_semantic_requirement_registry_covers_structure_opcode_device_group_and_instance():
+def test_semantic_requirement_registry_covers_structure_and_core_user_constraints():
     from plc.specification.semantic_validation import validate_confirmed_semantics
 
     ladder = {
@@ -105,27 +105,35 @@ def test_semantic_requirement_registry_covers_structure_opcode_device_group_and_
     spec = {"selected_approach": {
         "implementation_semantics": [
             {"kind": "structure", "status": "required", "value": "direct_logic"},
-            {"kind": "opcode", "status": "any_of", "values": ["MOV", "DMOV"]},
-            {"kind": "device", "status": "required", "value": "D10"},
-            {"kind": "instruction_instance", "status": "required",
-             "opcode": "MOV", "operands": ["K1", "D10"]},
-        ]
+            {"kind": "structure", "status": "any_of", "values": ["direct_logic", "self_hold"]},
+        ],
+        "explicit_user_constraints": {
+            "required_opcodes": ["MOV"],
+            "required_devices": ["D10"],
+            "instruction_instances": [
+                {"opcode": "MOV", "operands": ["K1", "D10"]},
+            ],
+        },
     }}
     report = validate_confirmed_semantics(ladder, spec, "FX3U")
     assert report["status"] == "verified"
-    assert len(report["requirements"]) == 4
+    assert len(report["requirements"]) == 5
     assert all(row["status"] == "verified" for row in report["checks"])
 
 
-def test_semantic_requirement_violation_is_blocking_without_full_review_rules():
+def test_explicit_user_constraint_violation_is_blocking_without_full_review_rules():
     from plc.specification.semantic_validation import (
         ConfirmedSemanticValidationError, validate_confirmed_semantics,
     )
-    spec = {"selected_approach": {"implementation_semantics": [
-        {"kind": "opcode", "status": "required", "value": "MOV"},
-    ]}}
-    with pytest.raises(ConfirmedSemanticValidationError, match="implementation semantics"):
+    spec = {"selected_approach": {
+        "implementation_semantics": [
+            {"kind": "structure", "status": "required", "value": "direct_logic"},
+        ],
+        "explicit_user_constraints": {"required_opcodes": ["MOV"]},
+    }}
+    with pytest.raises(ConfirmedSemanticValidationError, match="user constraints"):
         validate_confirmed_semantics(_self_hold(), spec, "FX3U")
+
 
 def test_compact_agent_skips_legacy_candidate_normalizers(monkeypatch):
     import plc.generation as generation

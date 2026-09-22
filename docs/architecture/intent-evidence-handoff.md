@@ -35,15 +35,17 @@ Regression coverage belongs to [test_intent_evidence_handoff.py](../../tests/tes
 
 ## Implementation semantics ownership
 
-Fresh Agent A candidates use `implementation_semantics` as the only model-authored
-machine implementation vocabulary. Items describe a structure, opcode, device, an
-any-of group, or an exact instruction instance. `plc.specification.approach`
-normalizes that vocabulary and projects it into `generation_contract`; model-authored
-`generation_contract` is no longer requested for new analyses.
+Fresh Agent A candidates use `implementation_semantics` for control-structure
+semantics only. Agent A does not own opcode selection, operand layout, or internal
+M/D/T/C allocation. `plc.specification.approach` normalizes the structure vocabulary.
 
-The application provenance filter runs on semantic items before projection. Low-level
-opcodes, devices and exact instruction instances still need matching caller evidence;
-high-level selected structures remain candidate semantics, with generic intent guards
-applied by semantic kind. Removed model choices may remain visible in non-enforcing
-`implementation_preferences`. Saved legacy specifications that only contain
-`generation_contract` continue through the compatibility path and are not rewritten.
+Caller-fixed low-level choices are extracted independently by
+`plc.specification.explicit_constraints` from the caller's own text and stored as
+`explicit_user_constraints`. That owner covers required/forbidden opcodes and
+devices plus exact opcode+operands instances. Pinned reanalysis merges these persisted
+constraints with the current caller amendment, so Agent A does not have to repeat them.
+
+Core projects `implementation_semantics + explicit_user_constraints` into
+`generation_contract`. Model-authored `generation_contract` is not requested for
+fresh analyses. Saved legacy specifications that only contain `generation_contract`
+continue through the compatibility path and are not rewritten.

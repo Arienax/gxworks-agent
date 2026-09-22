@@ -203,6 +203,23 @@ _CONTRACT_FIELDS["instruction_instances"] = [{
     "opcode": None,
     "operands": [None],
 }]
+_IMPLEMENTATION_SEMANTIC_FIELDS = {
+    "kind": None,
+    "status": None,
+    "value": None,
+    "values": [None],
+}
+_EXPLICIT_USER_CONSTRAINT_FIELDS = {
+    **dict.fromkeys(("schema_version", "source")),
+    **{key: [None] for key in (
+        "required_opcodes", "forbidden_opcodes",
+        "required_devices", "forbidden_devices",
+    )},
+    "instruction_instances": [{
+        "opcode": None,
+        "operands": [None],
+    }],
+}
 # Opaque semantics remain visible to all generation adapters, but outside the
 # machine-enforced required/forbidden lists. No arbitrary metadata is exposed.
 _CONTRACT_FIELDS["unverified_constraints"] = {
@@ -279,6 +296,8 @@ _SPEC_FIELDS = {
     **dict.fromkeys(("schema_version", "summary", "user_notes", "scan_budget_ms", "scan_warning_ms")),
     "selected_approach": {
         **dict.fromkeys(("id", "approach_id", "name", "description", "generation_guide")),
+        "implementation_semantics": [_IMPLEMENTATION_SEMANTIC_FIELDS],
+        "explicit_user_constraints": _EXPLICIT_USER_CONSTRAINT_FIELDS,
         "generation_contract": _CONTRACT_FIELDS,
         "implementation_preferences": _CONTRACT_FIELDS,
     },

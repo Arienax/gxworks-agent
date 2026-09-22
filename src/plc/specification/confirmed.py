@@ -1195,9 +1195,16 @@ def _preserve_pinned_instruction_instances(previous_selected, approaches):
             approach["implementation_semantics"] = copy.deepcopy(
                 previous_selected["implementation_semantics"]
             )
+        if "explicit_user_constraints" not in approach and "explicit_user_constraints" in previous_selected:
+            approach["explicit_user_constraints"] = copy.deepcopy(
+                previous_selected["explicit_user_constraints"]
+            )
+        if "implementation_semantics" in approach or "explicit_user_constraints" in approach:
             from plc.specification.approach import project_semantics_to_generation_contract
             approach["generation_contract"] = project_semantics_to_generation_contract(
-                approach["implementation_semantics"], source="analysis_semantics"
+                approach.get("implementation_semantics", []),
+                explicit_user_constraints=approach.get("explicit_user_constraints"),
+                source="analysis_semantics",
             )
         for field in ("generation_contract", "implementation_preferences"):
             current = approach.get(field)
