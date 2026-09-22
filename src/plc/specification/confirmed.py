@@ -1495,9 +1495,14 @@ def preserve_io_user_edits(previous_spec, draft):
 
 def canonicalize_confirmed_spec(spec):
     """Return one conflict-free specification for storage and API injection."""
-    from plc.specification.legacy_migration import migrate_legacy_confirmed_spec
+    from plc.specification.legacy_migration import (
+        is_legacy_confirmed_spec,
+        migrate_legacy_confirmed_spec,
+    )
 
-    canonical = migrate_legacy_confirmed_spec(spec)
+    canonical = copy.deepcopy(spec or {})
+    if is_legacy_confirmed_spec(canonical):
+        canonical = migrate_legacy_confirmed_spec(canonical)
     canonical["approaches"] = [
         normalize_approach(item)
         for item in (canonical.get("approaches") or [])
