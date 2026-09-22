@@ -47,9 +47,9 @@
     {
       "id": "instruction_step_width",
       "category": "plc_instruction_fact",
-      "state": "tracked_gap",
+      "state": "enforced",
       "owner": "plc.instruction_steps",
-      "summary": "FX3U/GX Works2 step width is operand- and CPU-aware and must remain a single source for export, GXW decoding, and structured facts.",
+      "summary": "FX3U/GX Works2 step width is operand- and CPU-aware and shared by export, GXW decoding, and structured instruction facts.",
       "checks": [
         {
           "kind": "python_symbol",
@@ -71,22 +71,30 @@
           "text": "instruction_step_width("
         },
         {
+          "kind": "python_symbol",
+          "path": "src/knowledge/structured_facts.py",
+          "symbol": "resolve_instruction_step_width"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/structured_facts.py",
+          "text": "instruction_step_width(opcode, operands, plc_model=plc_model)"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_structured_step_width_uses_shared_owner_for_instruction_instance"
+        },
+        {
           "kind": "contains",
           "path": "tests/test_gxworks2_sftl_native_steps.py",
           "text": "test_catalogue_every_fixed_native_form_and_every_variant_is_resolved"
         }
       ],
-      "gap_reason": "The structured fact resolver does not yet expose instruction step width or consume opcode+operands through instruction_step_width().",
-      "gap_checks": [
-        {
-          "kind": "absent",
-          "path": "src/knowledge/structured_facts.py",
-          "text": "instruction_step_width"
-        }
-      ],
       "tests": [
         "tests/test_gxworks2_sftl_native_steps.py",
-        "tests/test_gxw_lossless.py"
+        "tests/test_gxw_lossless.py",
+        "tests/test_structured_fact_lookup.py"
       ]
     },
     {
