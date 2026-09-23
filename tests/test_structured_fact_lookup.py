@@ -722,3 +722,27 @@ def test_exact_instruction_residual_broad_retrieval_uses_instruction_prefilter(m
     assert receipt["residual_pre_filters"] == {
         "exclude_chunk_types": ["instruction"],
     }
+
+
+
+def test_broad_scorer_has_no_plc_topic_specific_boosts():
+    import ast
+    import inspect
+    import knowledge.core as knowledge_core
+
+    source = inspect.getsource(knowledge_core._retrieve_uncached)
+    tree = ast.parse(source)
+
+    score_augments = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
+            if node.target.id == "score":
+                score_augments.append(node.lineno)
+
+    assert score_augments == []
+    assert "_query_is_timer_semantics" not in source
+    assert "_timer_debug_case_matches_query" not in source
+    assert "positioning_query" not in source
+    assert "timer_query" not in source
+    assert "structured_error" not in source or "score +=" not in source
+    assert "_RRF_K" in source
