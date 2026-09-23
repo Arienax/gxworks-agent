@@ -185,7 +185,7 @@ def test_provider_request_path_has_no_legacy_parameter_or_capability_branch():
 
     assert "apply_parameter_contract" not in request_source
     assert 'profile.get("capabilities")' not in request_source
-    assert "capability_available(" not in request_source
+    assert "contract_capability_available(" in request_source
     assert "resolve_request(" in request_source
     assert "materialize_runtime_profile(" in runtime_source
 
@@ -198,15 +198,29 @@ def test_parameter_precedence_and_capability_constraints_for_built_in_profiles()
     deepseek = OpenAICompatibleProvider(
         _profile("deepseek-default"), "key", client=_Client([iter([])])
     )
+    # The catalog declares temperature incompatible with enabled thinking.
+    # The provider must now enforce that contract instead of falling through a
+    # legacy raw-parameter path.
+    with pytest.raises(ModelProviderError) as conflict:
+        deepseek._request_params(
+            ModelRequest(
+                (UserMessage("检查"),),
+                tools=(tool,),
+                options={"temperature": 0.2},
+                stream=True,
+            )
+        )
+    assert conflict.value.code == "invalid_request"
+
     deepseek_params = deepseek._request_params(
         ModelRequest(
             (UserMessage("检查"),),
             tools=(tool,),
-            options={"temperature": 0.2, "response_format": None, "tool_choice": "auto"},
+            options={"response_format": None, "tool_choice": "auto"},
             stream=True,
         )
     )
-    assert deepseek_params["temperature"] == 0.2
+    assert "temperature" not in deepseek_params
     assert "response_format" not in deepseek_params
     assert "tool_choice" not in deepseek_params
     assert deepseek_params["extra_body"]["thinking"]["type"] == "enabled"
@@ -506,7 +520,7 @@ def test_deprecated_vendor_named_entrypoint_is_only_a_forwarding_alias(monkeypat
     assert alias.__deprecated__ is True
 
 
-@pytest.mark.parametrize("profile_id", ["deepseek-default", "zhipu-glm-5.3-flash"])
+@pytest.mark.parametrize("profile_id", ["zhipu-glm-5.3-flash"])
 @pytest.mark.parametrize("stream", [True, False])
 def test_real_request_parameters_keep_language_and_native_schema_before_acceptance(
     monkeypatch, profile_id, stream
@@ -546,6 +560,30 @@ def test_real_request_parameters_keep_language_and_native_schema_before_acceptan
     assert "response_language" not in params  # It is not an OpenAI wire option.
     assert "English (en)" in params["messages"][0]["content"]
     assert params["messages"][1]["content"] == "请分析 X0"
+
+
+@pytest.mark.parametrize("stream", [True, False])
+def test_deepseek_catalog_rejects_undeclared_json_schema_before_sdk(stream):
+    native_format = {"type": "json_schema", "json_schema": {
+        "name": "summary", "strict": True, "schema": {
+            "type": "object", "properties": {"summary": {"type": "string"}},
+            "required": ["summary"], "additionalProperties": False,
+        },
+    }}
+    client = _Client([])
+    provider = OpenAICompatibleProvider(_profile("deepseek-default"), "offline-key", client=client)
+
+    with pytest.raises(ModelProviderError) as error:
+        provider._request_params(
+            ModelRequest(
+                (UserMessage("fixture"),),
+                stream=stream,
+                options={"response_format": native_format},
+            )
+        )
+
+    assert error.value.code == "invalid_request"
+    assert client.completions.calls == []
 
 
 def test_ladder_generation_replaces_stale_native_schema_with_current_opcode_contract(monkeypatch):
