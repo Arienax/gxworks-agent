@@ -319,3 +319,22 @@ def test_provider_and_application_cannot_restore_raw_profile_capability_fallback
                         f"{path.relative_to(ROOT)}:{node.lineno} raw profile capabilities"
                     )
     assert not violations, "\n".join(violations)
+
+
+
+def test_fresh_builtin_model_profiles_do_not_seed_legacy_runtime_fields():
+    import json
+    from storage.config import DEFAULT_MODEL_PROFILES
+
+    retired = {
+        "capabilities", "parameterSupport", "generationDefaults", "requestOverrides"
+    }
+    assert all(not retired.intersection(profile) for profile in DEFAULT_MODEL_PROFILES)
+
+    payload = json.loads(
+        (ROOT / "resources" / "config.default.json").read_text(encoding="utf-8")
+    )
+    assert all(
+        not retired.intersection(profile)
+        for profile in payload.get("modelProfiles", [])
+    )
