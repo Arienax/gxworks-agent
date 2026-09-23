@@ -1675,6 +1675,7 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
         )
     )
 
+    query_term_set = {term.casefold() for term in exact_terms}
     from knowledge.source_authority import authoritative_instruction_manual
 
     source_authority = {
