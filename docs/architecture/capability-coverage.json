@@ -584,6 +584,60 @@
       ]
     },
     {
+      "id": "agent_a_current_protocol_boundary",
+      "category": "analysis_protocol",
+      "state": "enforced",
+      "owner": "application.analysis_results.validate_current_analysis_protocol + application.model_api._request_analysis_response",
+      "summary": "Fresh Agent-A provider responses must use the current implementation_semantics protocol; missing/mixed legacy generation_contract output gets one bounded response-format repair and never falls through to PLC validation or legacy inference. Persisted old specs migrate only through plc.specification.legacy_migration.",
+      "checks": [
+        {
+          "kind": "python_symbol",
+          "path": "src/application/analysis_results.py",
+          "symbol": "validate_current_analysis_protocol"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/application/analysis_results.py",
+          "symbol": "AnalysisProtocolError"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/model_api.py",
+          "text": "_validate_fresh_analysis_content(first.message.content)"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/model_api.py",
+          "text": "except AnalysisProtocolError as protocol_error:"
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/specification/legacy_migration.py",
+          "text": "def migrate_legacy_confirmed_spec(spec):"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_analysis_format_repair.py",
+          "text": "test_fresh_agent_a_protocol_violation_uses_one_existing_format_repair"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_analysis_format_repair.py",
+          "text": "test_second_current_protocol_failure_is_protocol_error_not_plc_error"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_approach_contracts.py",
+          "text": "test_legacy_prose_scheme_does_not_retroactively_invalidate_saved_version"
+        }
+      ],
+      "tests": [
+        "tests/test_analysis_format_repair.py",
+        "tests/test_semantic_contract_architecture.py",
+        "tests/test_approach_contracts.py"
+      ]
+    },
+    {
       "id": "implementation_semantics_contract_projection",
       "category": "intent_handoff",
       "state": "enforced",
