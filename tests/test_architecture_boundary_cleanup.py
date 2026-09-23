@@ -50,3 +50,12 @@ def test_workflows_do_not_set_reasoning_effort_defaults():
 
 def test_self_hold_has_no_dedicated_checker_module():
     assert not (SRC / "plc" / "specification" / "checks.py").exists()
+
+
+def test_generation_does_not_turn_semantic_findings_into_job_failures():
+    generation = (SRC / "application" / "generation.py").read_text(encoding="utf-8")
+    semantic = (SRC / "plc" / "specification" / "semantic_validation.py").read_text(
+        encoding="utf-8"
+    )
+    assert "ConfirmedSemanticValidationError" not in generation
+    assert "raise ConfirmedSemanticValidationError" not in semantic
