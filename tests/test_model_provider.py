@@ -236,15 +236,12 @@ def test_parameter_precedence_and_capability_constraints_for_built_in_profiles()
             stream=True,
         )
     )
-    # Legacy profile tuning is materialized into UserModelSettings before the
-    # provider sees the request, so workflow hints cannot retake ownership.
-    assert glm_params["temperature"] == 1.0
-    assert glm_params["top_p"] == 0.95
-    assert glm_params["reasoning_effort"] == "max"
-    assert glm_params["extra_body"]["thinking"] == {
-        "type": "enabled",
-        "clear_thinking": False,
-    }
+    # Fresh built-ins no longer carry legacy tuning defaults. Explicit
+    # low-level request values are validated by the catalog contract.
+    assert glm_params["temperature"] == 0.15
+    assert "top_p" not in glm_params
+    assert glm_params["reasoning_effort"] == "high"
+    assert glm_params["extra_body"]["thinking"] == {"type": "enabled"}
     assert glm_params["extra_body"]["tool_stream"] is True
 
 
@@ -323,7 +320,7 @@ def test_glm_text_profiles_use_the_shared_streaming_tool_adapter(
     )
 
     assert params["model"] == _profile(profile_id)["model"]
-    assert params["reasoning_effort"] == "max"
+    assert params["reasoning_effort"] == effort
     assert params["extra_body"]["thinking"]["type"] == "enabled"
     assert params["extra_body"]["tool_stream"] is True
 
