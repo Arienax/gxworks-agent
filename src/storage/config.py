@@ -108,18 +108,6 @@ DEFAULT_MODEL_PROFILES = (
         "adapter": "openai_compatible",
         "baseUrl": "https://api.deepseek.com",
         "model": "deepseek-v4-pro",
-        "capabilities": {
-            "reasoning": True,
-            "tools": True,
-            "structured_output": True,
-            "disable_tool_choice_with_thinking": True,
-        },
-        "generationDefaults": {
-            "response_format": {"type": "json_object"},
-        },
-        "requestOverrides": {
-            "extra_body": {"thinking": {"type": "enabled"}},
-        },
         "credentialTarget": credential_target_for_profile(DEEPSEEK_PROFILE_ID),
     },
     {
@@ -128,18 +116,6 @@ DEFAULT_MODEL_PROFILES = (
         "adapter": "openai_compatible",
         "baseUrl": "https://api.deepseek.com",
         "model": "deepseek-v4-flash",
-        "capabilities": {
-            "reasoning": True,
-            "tools": True,
-            "structured_output": True,
-            "disable_tool_choice_with_thinking": True,
-        },
-        "generationDefaults": {
-            "response_format": {"type": "json_object"},
-        },
-        "requestOverrides": {
-            "extra_body": {"thinking": {"type": "enabled"}},
-        },
         "credentialTarget": credential_target_for_profile(
             DEEPSEEK_V4_FLASH_PROFILE_ID
         ),
@@ -150,19 +126,6 @@ DEFAULT_MODEL_PROFILES = (
         "adapter": "openai_compatible",
         "baseUrl": "https://api.deepseek.com",
         "model": "deepseek-v4-flash-vision-exp",
-        "capabilities": {
-            "reasoning": True,
-            "tools": True,
-            "structured_output": True,
-            "multimodal": True,
-            "disable_tool_choice_with_thinking": True,
-        },
-        "generationDefaults": {
-            "response_format": {"type": "json_object"},
-        },
-        "requestOverrides": {
-            "extra_body": {"thinking": {"type": "enabled"}},
-        },
         "credentialTarget": credential_target_for_profile(
             DEEPSEEK_V4_FLASH_VISION_PROFILE_ID
         ),
@@ -173,25 +136,6 @@ DEFAULT_MODEL_PROFILES = (
         "adapter": "openai_compatible",
         "baseUrl": "https://open.bigmodel.cn/api/paas/v4/",
         "model": "glm-5.3-flash",
-        "capabilities": {
-            "reasoning": True,
-            "tools": True,
-            "tool_stream": True,
-            "structured_output": True,
-            "multimodal": True,
-            "thinking_required": True,
-        },
-        "generationDefaults": {
-            "temperature": 1.0,
-            "top_p": 0.95,
-            "reasoning_effort": "max",
-            "response_format": {"type": "json_object"},
-        },
-        "requestOverrides": {
-            "extra_body": {
-                "thinking": {"type": "enabled", "clear_thinking": False}
-            },
-        },
         "credentialTarget": credential_target_for_profile(ZHIPU_PROFILE_ID),
     },
     {
@@ -200,21 +144,6 @@ DEFAULT_MODEL_PROFILES = (
         "adapter": "openai_compatible",
         "baseUrl": "https://open.bigmodel.cn/api/paas/v4/",
         "model": "glm-5.3",
-        "capabilities": {
-            "reasoning": True,
-            "tools": True,
-            "tool_stream": True,
-            "structured_output": True,
-            "thinking_required": True,
-        },
-        "generationDefaults": {
-            "temperature": 1.0,
-            "reasoning_effort": "max",
-            "response_format": {"type": "json_object"},
-        },
-        "requestOverrides": {
-            "extra_body": {"thinking": {"type": "enabled"}},
-        },
         "credentialTarget": credential_target_for_profile(
             ZHIPU_GLM_53_PROFILE_ID
         ),
@@ -225,28 +154,11 @@ DEFAULT_MODEL_PROFILES = (
         "adapter": "openai_compatible",
         "baseUrl": "https://open.bigmodel.cn/api/paas/v4/",
         "model": "glm-5.2",
-        "capabilities": {
-            "reasoning": True,
-            "tools": True,
-            "tool_stream": True,
-            "structured_output": True,
-        },
-        "generationDefaults": {
-            "temperature": 1.0,
-            "reasoning_effort": "max",
-            "response_format": {"type": "json_object"},
-        },
-        "requestOverrides": {
-            "extra_body": {
-                "thinking": {"type": "enabled", "clear_thinking": False}
-            },
-        },
         "credentialTarget": credential_target_for_profile(
             ZHIPU_GLM_52_PROFILE_ID
         ),
     },
 )
-
 
 
 def _default_profiles():
