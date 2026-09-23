@@ -13,8 +13,8 @@ import json
 import re
 import sys
 
-from knowledge.patterns import KNOWLEDGE_BUNDLES, classify_request, load_library
-from shared.context_policy import audit_section, manual_lookup_decision, resolve_context_policy
+from knowledge.patterns import KNOWLEDGE_BUNDLES, classify_request
+from shared.context_audit import audit_section
 
 from application.generation_support import _engineering_hardware_snapshot
 from application.generation_support import _build_knowledge_query
@@ -119,24 +119,6 @@ def _specialist_context(classification, *, target_mode, plc_model, char_budget=4
         if name in allowed:
             add(KNOWLEDGE_BUNDLES.get(name, ""))
 
-    policy = resolve_context_policy()
-    if policy.examples:
-        lib = load_library()
-        matched = set(classification.get("matched_ids") or ())
-        model = str(plc_model or "").upper()
-        candidates = []
-        for item in lib.get("examples", ()):
-            if item.get("id") not in matched or item.get("target_mode", "ladder") != target_mode:
-                continue
-            models = [str(value).upper() for value in item.get("plc_models", ["FX3U"])]
-            if model and model not in models:
-                continue
-            candidates.append(item)
-        candidates.sort(key=lambda item: (item.get("priority", 999), str(item.get("id", ""))))
-        if candidates:
-            item = candidates[0]
-            add("# Matched example\n" + str(item.get("header", "")).strip() + "\n" + str(item.get("content", "")).strip())
-
     result = "\n\n".join(parts)
     audit_section("dynamic_prompt", result, status="included" if result else "excluded",
                   reason="specialist_delta" if result else "no_specialist_delta", source="pattern_library")
@@ -165,9 +147,7 @@ def _select_system_prompt(target_mode, is_edit_mode=False, user_requirement="", 
                            separators=(",", ":")))
     else:
         base = _st_system_prompt_for_model(selected_vendor)
-    audit_section("base_prompt", base,
-                  reason="legacy" if resolve_context_policy().legacy else "controlled_baseline",
-                  source="base_prompt")
+    audit_section("base_prompt", base, reason="canonical_generation_base", source="base_prompt")
     dynamic = _specialist_context(classification, target_mode=target_mode, plc_model=selected_vendor)
     result = "\n\n".join(part for part in (base, dynamic) if part)
     audit_section("system_prompt", result, reason="compact_generation", source="api")
@@ -195,17 +175,27 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
     else:
         query = (_build_knowledge_query(engineering, primary_query, evidence) if normalized_task == "generate"
                  else _build_knowledge_query(primary_query, engineering, evidence))
-    should_lookup, lookup_reason = manual_lookup_decision(query)
-    if (not should_lookup and normalized_task == "analysis" and
-            resolve_context_policy().manuals == "adaptive" and query.strip()):
-        should_lookup = True
-        lookup_reason = "analysis_design_retrieval" if include_design else "analysis_fact_retrieval"
+    query_text = str(query or "").strip()
+    if normalized_task == "analysis":
+        should_lookup = bool(query_text)
+        lookup_reason = (
+            "analysis_design_retrieval" if include_design
+            else "analysis_fact_retrieval"
+        )
+    elif normalized_task in {"generate", "edit"}:
+        from knowledge.analysis_router import has_generation_fact_target
+        should_lookup = bool(query_text) and has_generation_fact_target(query)
+        lookup_reason = (
+            "generation_fact_retrieval"
+            if should_lookup else "no_specific_fact_target"
+        )
+    else:
+        should_lookup = bool(query_text)
+        lookup_reason = (
+            f"{normalized_task}_retrieval" if should_lookup else "empty_query"
+        )
     if not should_lookup:
         return absent("excluded", lookup_reason)
-    if normalized_task in {"generate", "edit"} and getattr(query, "precompiled", False):
-        from knowledge.analysis_router import has_generation_fact_target
-        if not has_generation_fact_target(query):
-            return absent("excluded", "no_specific_fact_target")
     try:
         from knowledge.retriever import build_knowledge_context as retrieve_context
         query_meta = getattr(query, "metadata", {}) if getattr(query, "precompiled", False) else {}
