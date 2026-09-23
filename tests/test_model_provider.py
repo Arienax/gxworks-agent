@@ -176,6 +176,20 @@ def test_streaming_fragmented_multi_tool_calls_and_empty_chunks_are_normalized()
     assert events[-1] == Usage(20, 10, 30)
 
 
+def test_provider_request_path_has_no_legacy_parameter_or_capability_branch():
+    import inspect
+    from model_runtime.provider import OpenAICompatibleProvider
+
+    request_source = inspect.getsource(OpenAICompatibleProvider._request_params)
+    runtime_source = inspect.getsource(OpenAICompatibleProvider._runtime_profile)
+
+    assert "apply_parameter_contract" not in request_source
+    assert 'profile.get("capabilities")' not in request_source
+    assert "capability_available(" not in request_source
+    assert "resolve_request(" in request_source
+    assert "materialize_runtime_profile(" in runtime_source
+
+
 def test_parameter_precedence_and_capability_constraints_for_built_in_profiles():
     tool = {
         "type": "function",
@@ -208,9 +222,11 @@ def test_parameter_precedence_and_capability_constraints_for_built_in_profiles()
             stream=True,
         )
     )
-    assert glm_params["temperature"] == 0.15
+    # Legacy profile tuning is materialized into UserModelSettings before the
+    # provider sees the request, so workflow hints cannot retake ownership.
+    assert glm_params["temperature"] == 1.0
     assert glm_params["top_p"] == 0.95
-    assert glm_params["reasoning_effort"] == "high"
+    assert glm_params["reasoning_effort"] == "max"
     assert glm_params["extra_body"]["thinking"] == {
         "type": "enabled",
         "clear_thinking": False,
@@ -293,7 +309,7 @@ def test_glm_text_profiles_use_the_shared_streaming_tool_adapter(
     )
 
     assert params["model"] == _profile(profile_id)["model"]
-    assert params["reasoning_effort"] == effort
+    assert params["reasoning_effort"] == "max"
     assert params["extra_body"]["thinking"]["type"] == "enabled"
     assert params["extra_body"]["tool_stream"] is True
 
