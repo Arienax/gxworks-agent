@@ -16,7 +16,6 @@ from plc.specification.approach import normalize_approach, normalize_generation_
 from plc.specification.confirmed import build_review_draft, canonicalize_confirmed_spec
 from plc.specification.legacy_migration import migrate_legacy_approach
 from plc.specification.provenance import confirm_context, fingerprint, retrieval_projection, seal_confirmation
-from shared.context_policy import context_policy_scope
 
 CASES = json.loads((Path(__file__).parent / "fixtures/call_chain/intent_cases.json").read_text())["cases"]
 
