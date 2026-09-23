@@ -30,6 +30,12 @@ def generation_input_conditions(bindings):
             continue
         identity = str(row.get("binding_id") or f"io_bindings[{index}]")
         address = canonical_device(row.get("address"))
+        has_level_fact = "active_level" in row or "inactive_level" in row
+        if not has_level_fact:
+            # A generic I/O identity is still a valid confirmed binding. Only
+            # bindings that actually carry electrical-level metadata participate
+            # in predicate materialization or unresolved-level diagnostics.
+            continue
         level = row.get("active_level")
         inactive = row.get("inactive_level")
         valid_level = type(level) is int and level in (0, 1)
