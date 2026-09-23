@@ -4,7 +4,6 @@ import pytest
 
 import application.generation_context as compact
 import research.baselines.generation_context as legacy
-from shared.context_policy import context_policy_scope
 
 
 def _rung(identifier):
@@ -117,17 +116,16 @@ def test_normal_edit_uses_rung_index_plus_local_detail_instead_of_full_baseline(
         captured["evidence"] = kwargs.get("evidence")
         return ""
 
-    with context_policy_scope("minimal"):
-        prompt = compact.build_generation_instructions(
-            "把 Y3 的控制条件改为常闭 X3",
-            plc_model="FX3U",
-            target_mode="ladder",
-            is_edit_mode=True,
-            current_version_json=baseline,
-            knowledge_builder=knowledge,
-            profile_builder=lambda *_a, **_k: "",
-            confirmed_builder=lambda value, _ctx=None: value,
-        )
+    prompt = compact.build_generation_instructions(
+        "把 Y3 的控制条件改为常闭 X3",
+        plc_model="FX3U",
+        target_mode="ladder",
+        is_edit_mode=True,
+        current_version_json=baseline,
+        knowledge_builder=knowledge,
+        profile_builder=lambda *_a, **_k: "",
+        confirmed_builder=lambda value, _ctx=None: value,
+    )
     assert "Current program edit context" in prompt
     assert "RUNG_2_DETAIL_SENTINEL" in prompt
     assert "RUNG_3_DETAIL_SENTINEL" in prompt
@@ -150,16 +148,15 @@ def test_user_turn_keeps_only_the_short_edit_hint():
     assert len(edit) < len(request) + 100
 
 
-def test_simple_minimal_generation_does_not_reinject_generic_workflow_bundles():
-    with context_policy_scope("minimal"):
-        prompt = compact.build_generation_instructions(
-            "X0 控制 Y0",
-            plc_model="FX3U",
-            target_mode="ladder",
-            knowledge_builder=lambda *_a, **_k: "",
-            profile_builder=lambda *_a, **_k: "",
-            confirmed_builder=lambda value, _ctx=None: value,
-        )
+def test_simple_generation_does_not_reinject_generic_workflow_bundles():
+    prompt = compact.build_generation_instructions(
+        "X0 控制 Y0",
+        plc_model="FX3U",
+        target_mode="ladder",
+        knowledge_builder=lambda *_a, **_k: "",
+        profile_builder=lambda *_a, **_k: "",
+        confirmed_builder=lambda value, _ctx=None: value,
+    )
     assert "## Knowledge priority" not in prompt
     assert "## Scan cycle and output ownership review" not in prompt
     assert "## PLC execution semantics" not in prompt
