@@ -1,9 +1,9 @@
 """Low-latency broad retrieval for the bundled PLC knowledge index.
 
-This module is compatibility-frozen for domain-specific ranking heuristics.
-Do not add new opcode/device/error special boosts here. Explicit PLC facts are
-resolved by :mod:`knowledge.structured_facts`; this module only handles broad
-lexical/semantic recall and the legacy ranking needed by existing benchmarks.
+Explicit PLC facts are resolved by :mod:`knowledge.structured_facts`. Broad
+retrieval applies metadata scope before candidate limits, then combines exact
+entity, lexical and dense ranks with reciprocal-rank fusion. No PLC topic gets
+its own ranking boost.
 
 The module does not touch SQLite or import the optional dense runtime until the
 first retrieval call. A connection and its schema snapshot are kept per calling
@@ -35,6 +35,7 @@ _CACHE_SIZE = 256
 _MAX_TOP_K = 50
 _MAX_CANDIDATES = 200
 _MAX_ENTITY_ROWS_PER_TERM = 64
+_RRF_K = 60.0
 
 _thread_state = threading.local()
 
@@ -532,29 +533,6 @@ def _query_is_positioning(query):
     )
 
 
-def _query_is_timer_semantics(query):
-    """Recognize ordinary timer behavior rather than any instruction named timer."""
-
-    normalized = _normalize_text(query)
-    if re.search(r"定时|延时|计时|时基|闪烁|振荡|时钟", normalized, re.IGNORECASE):
-        return True
-    if re.search(
-        r"(?<![A-Za-z0-9_])(?:T\d+|M8000|M801[1-4])(?![A-Za-z0-9_])",
-        normalized,
-        re.IGNORECASE,
-    ):
-        return True
-    return bool(
-        re.search(r"\btimer\b", normalized, re.IGNORECASE)
-        and re.search(
-            r"\b(?:reset|input|off|on-delay|non-retentive|preset|second|seconds|"
-            r"time\s*base|oscillat\w*|flash\w*|blink\w*|clock)\b",
-            normalized,
-            re.IGNORECASE,
-        )
-    )
-
-
 def _query_is_direction_output_assignment(query):
     """Recognize pulse/direction wiring assignment questions in either language."""
 
@@ -609,31 +587,6 @@ def _timer_range_evidence(text, plc_model):
         and re.search(r"\bT\d+\s*(?:to|[-–～]|至)\s*T\d+\b", body, re.IGNORECASE)
         and re.search(r"\b\d+(?:\.\d+)?\s*(?:ms|s|sec|seconds?)\b", body, re.IGNORECASE)
     )
-
-
-def _timer_debug_case_matches_query(case_id, query):
-    normalized = _normalize_text(query).casefold()
-    markers = {
-        "timer_m8000_not_oscillator": (
-            "m8000", "oscillat", "flash", "blink", "闪烁", "振荡",
-        ),
-        "timer_enable_off_reset_semantics": (
-            "non-retentive", "reset", "input off", "enable off", "复位", "断开",
-        ),
-        "timer_time_base_by_device_range": (
-            "time base", "preset", "seconds", "second", "时基", "设定值", "k100",
-        ),
-        "clock_relay_blink_period": (
-            "m8011", "m8012", "m8013", "m8014", "clock", "hz", "时钟", "闪烁",
-        ),
-        "timer_counter_schema_confusion": (
-            "counter", "schema", "timer+c", "计数器", "协议类型",
-        ),
-        "timer_scan_reset": (
-            "state machine", "scan", "transition", "状态机", "扫描", "迁移",
-        ),
-    }
-    return any(marker in normalized for marker in markers.get(str(case_id), ()))
 
 
 def _error_terms(query):
@@ -958,7 +911,7 @@ def _manual_instruction_references(connection, schema, terms, plc_model, task_ty
             term, row = group[depth]
             references.append({
                 "kind": "id", "value": row[id_column], "matched": term,
-                "match_type": "manual_instruction", "base_score": 1760.0,
+                "match_type": "manual_instruction", "rank": len(references),
             })
             if len(references) >= _MAX_CANDIDATES:
                 return references
@@ -966,25 +919,28 @@ def _manual_instruction_references(connection, schema, terms, plc_model, task_ty
 
 
 def _structured_references(connection, schema, query, terms, plc_model, task_type, source_lanes=None):
-    """Return exact structured-table candidates before broad lexical recall."""
+    """Return exact/metadata candidates; final ordering is owned by RRF."""
 
     references = []
     seen = set()
+    ranks = {}
 
-    def add(chunk_id, matched, match_type, score):
+    def add(chunk_id, matched, match_type):
         if chunk_id is None:
             return
         key = (str(chunk_id), str(match_type), _normalize_text(matched).casefold())
         if key in seen:
             return
         seen.add(key)
+        rank = ranks.get(str(match_type), 0)
+        ranks[str(match_type)] = rank + 1
         references.append(
             {
                 "kind": "id",
                 "value": chunk_id,
                 "matched": str(matched or ""),
                 "match_type": str(match_type),
-                "base_score": float(score),
+                "rank": rank,
             }
         )
 
@@ -1027,7 +983,7 @@ def _structured_references(connection, schema, query, terms, plc_model, task_typ
                 ),
                 (manual_id,),
             ).fetchall()
-            scored_rows = []
+            matched_rows = []
             for row in rows:
                 section = _normalize_text(row["section"])
                 section_terms = {
@@ -1041,18 +997,13 @@ def _structured_references(connection, schema, query, terms, plc_model, task_typ
                     if section_terms
                     else 0.0
                 )
-                if coverage <= 0:
-                    continue
-                score = 1540.0 + 860.0 * coverage
-                scored_rows.append((score, row["id"], section))
-            scored_rows.sort(key=lambda item: (-item[0], str(item[1])))
-            for score, chunk_id, section in scored_rows[:16]:
-                add(chunk_id, section, "manual_section", score)
+                if coverage > 0:
+                    matched_rows.append((coverage, str(row["id"]), row["id"], section))
+            matched_rows.sort(key=lambda item: (-item[0], item[1]))
+            for _coverage, _stable_id, chunk_id, section in matched_rows[:16]:
+                add(chunk_id, section, "manual_section")
 
-    # The output-assignment section explicitly distinguishes main-unit
-    # transistor outputs from the fixed high-speed-adapter terminal mapping.
-    # Use the existing manual-section base score for this precise heading
-    # route; ordinary Y-address matches alone are insufficient to select it.
+    # Precise metadata routes remain candidate selectors, not scoring boosts.
     if (
         chunks
         and {"id", "manual_type", "section"}.issubset(chunks["columns"])
@@ -1065,11 +1016,8 @@ def _structured_references(connection, schema, query, terms, plc_model, task_typ
             )
         ).fetchall()
         for row in rows:
-            add(row["id"], row["section"], "manual_section", 1540.0)
+            add(row["id"], row["section"], "manual_section")
 
-    # A concrete timer address often matches an example but not the table's
-    # range endpoints. Recall the official range section when the user asks
-    # about preset units. Keep the original complete chunk and budget policy.
     if (
         chunks and {"id", "manual_type", "section", "text"}.issubset(chunks["columns"])
         and _query_is_timer_preset(query)
@@ -1080,7 +1028,7 @@ def _structured_references(connection, schema, query, terms, plc_model, task_typ
         ).fetchall()
         for row in rows:
             if _row_in_scope(row, plc_model, task_type) and _timer_range_evidence(row["text"], plc_model):
-                add(row["id"], row["section"], "manual_section", 1540.0)
+                add(row["id"], row["section"], "manual_section")
 
     aliases = schema.get("instruction_aliases")
     if aliases and {
@@ -1095,23 +1043,10 @@ def _structured_references(connection, schema, query, terms, plc_model, task_typ
                 _quote_identifier(aliases["name"])
             )
         ).fetchall()
-        alias_scores = {
-            "opcode": 1760.0,
-            "fnc": 1740.0,
-            "zh_alias": 1700.0,
-            "variant": 1680.0,
-            "title": 1620.0,
-        }
         for row in rows:
             alias = str(row["alias"] or "")
             if _literal_instruction_word(query, alias) and _alias_occurs(query, alias):
-                alias_type = str(row["alias_type"] or "")
-                add(
-                    row["chunk_id"],
-                    alias,
-                    "structured_instruction",
-                    alias_scores.get(alias_type, 1600.0),
-                )
+                add(row["chunk_id"], alias, "structured_instruction")
 
     errors = schema.get("error_records")
     error_terms = _error_terms(query)
@@ -1129,7 +1064,7 @@ def _structured_references(connection, schema, query, terms, plc_model, task_typ
             tuple(value.casefold() for value in error_terms),
         ).fetchall()
         for row in rows:
-            add(row["chunk_id"], row["error_code"], "structured_error", 1820.0)
+            add(row["chunk_id"], row["error_code"], "structured_error")
 
     devices = schema.get("device_records")
     if devices and terms and {
@@ -1138,22 +1073,16 @@ def _structured_references(connection, schema, query, terms, plc_model, task_typ
         "chunk_id",
     }.issubset(set(devices["columns"])):
         device_terms = [term for term in terms if _DEVICE_RE.fullmatch(term)]
-        if device_terms:
-            for term_order, term in enumerate(device_terms):
-                rows = connection.execute(
-                    "SELECT device,chunk_id FROM {} "
-                    "WHERE device_norm=? AND chunk_id IS NOT NULL".format(
-                        _quote_identifier(devices["name"])
-                    ),
-                    (term.casefold(),),
-                ).fetchall()
-                for row in rows:
-                    add(
-                        row["chunk_id"],
-                        row["device"],
-                        "structured_device",
-                        1460.0 - term_order * 2.0,
-                    )
+        for term in device_terms:
+            rows = connection.execute(
+                "SELECT device,chunk_id FROM {} "
+                "WHERE device_norm=? AND chunk_id IS NOT NULL".format(
+                    _quote_identifier(devices["name"])
+                ),
+                (term.casefold(),),
+            ).fetchall()
+            for row in rows:
+                add(row["chunk_id"], row["device"], "structured_device")
 
     cases = schema.get("debug_cases") if source_lanes is None or "debug" in source_lanes else None
     if cases and {
@@ -1168,6 +1097,7 @@ def _structured_references(connection, schema, query, terms, plc_model, task_typ
         query_tokens = _fts_tokens(query)
         query_bigrams = _cjk_bigram_set(query)
         query_terms = {str(term).casefold() for term in terms}
+        matched_cases = []
         rows = connection.execute(
             "SELECT * FROM {}".format(_quote_identifier(cases["name"]))
         ).fetchall()
@@ -1201,26 +1131,22 @@ def _structured_references(connection, schema, query, terms, plc_model, task_typ
             )
             if not entity_hits and len(lexical_hits) < 2 and bigram_coverage < 0.12:
                 continue
-            task_boost = 160.0 if str(task_type).casefold() in {
-                "debug",
-                "program_review",
-                "review",
-                "analysis",
-            } else 0.0
-            score = (
-                1320.0
-                + task_boost
-                + 45.0 * len(entity_hits)
-                + 12.0 * len(lexical_hits)
-                + 900.0 * bigram_coverage
+            matched_cases.append(
+                (
+                    bool(entity_hits),
+                    len(lexical_hits),
+                    bigram_coverage,
+                    str(row["chunk_id"]),
+                    row,
+                )
             )
-            add(row["chunk_id"], row["title"], "debug_case", score)
+        matched_cases.sort(
+            key=lambda item: (-int(item[0]), -item[1], -item[2], item[3])
+        )
+        for _entity, _lexical, _coverage, _stable_id, row in matched_cases:
+            add(row["chunk_id"], row["title"], "debug_case")
 
-    references.sort(
-        key=lambda item: (-float(item["base_score"]), str(item["value"]))
-    )
     return references[:_MAX_CANDIDATES]
-
 
 def _fts_references(connection, schema, expression, candidate_limit, source_lanes=None, exclude_chunk_types=()):
     table = schema.get("chunks_fts")
@@ -1621,7 +1547,7 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
 
     candidates_by_id = {}
 
-    def merge_candidate(result, match_type, matched, base_score, details=None):
+    def merge_candidate(result, match_type, matched, rank, details=None):
         if result is None:
             return
         chunk_id = str(result.get("id", ""))
@@ -1630,23 +1556,18 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
         candidate = candidates_by_id.get(chunk_id)
         if candidate is None:
             candidate = dict(result)
-            candidate["_base_score"] = float("-inf")
             candidate["_signals"] = []
             candidates_by_id[chunk_id] = candidate
         signal = {
             "type": str(match_type),
             "matched": str(matched or ""),
-            "score": round(float(base_score), 4),
+            "rank": max(0, int(rank)),
         }
         if details:
             signal.update(details)
         candidate["_signals"].append(signal)
-        if float(base_score) > float(candidate["_base_score"]):
-            candidate["_base_score"] = float(base_score)
-            candidate["match_type"] = str(match_type)
-            candidate["matched_entity"] = str(matched or "")
 
-    for reference in structured_refs:
+    for fallback_rank, reference in enumerate(structured_refs):
         row = rows.get((reference["kind"], str(reference["value"])))
         result = _chunk_result(row, meta, path, plc_model, task_type)
         if reference["match_type"] == "structured_instruction":
@@ -1659,50 +1580,15 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
             result,
             reference["match_type"],
             reference["matched"],
-            reference["base_score"],
+            reference.get("rank", fallback_rank),
         )
 
-    for rank, (kind, value, entity, _entity_order) in enumerate(exact_refs):
+    for kind, value, entity, entity_rank in exact_refs:
         row = rows.get((kind, str(value)))
         result = _chunk_result(row, meta, path, plc_model, task_type)
         if result is None:
             continue
-        normalized_entity = _normalize_text(entity).upper()
-        term_order = next(
-            (
-                index
-                for index, term in enumerate(exact_terms)
-                if term.casefold() == normalized_entity.casefold()
-            ),
-            0,
-        )
-        is_positioning_identifier = bool(
-            _PRODUCT_TERM_RE.fullmatch(normalized_entity)
-            or re.fullmatch(r"M8029|M83(?:3|4)\d|D83(?:4|5)\d", normalized_entity)
-        )
-        is_device_identifier = bool(_DEVICE_RE.fullmatch(normalized_entity))
-        # Positioning special devices and exact module models must survive the
-        # many generic MOV/DMOV/ZRN occurrences.  Ordinary devices receive a
-        # smaller exact-match boost so instruction queries still stay focused.
-        if is_positioning_identifier:
-            base_score = float(2000 - min(rank, 180))
-        elif is_device_identifier:
-            base_score = float(1480 - min(rank, 180))
-        else:
-            base_score = float(1160 - min(rank, 180))
-        order_penalty = 120.0 if is_positioning_identifier else 20.0
-        base_score -= min(term_order, 8) * order_penalty
-        if (
-            result.get("instruction_opcode", "").casefold()
-            == str(entity or "").casefold()
-        ):
-            base_score += 260.0
-        merge_candidate(
-            result,
-            "entity",
-            entity,
-            base_score,
-        )
+        merge_candidate(result, "entity", entity, entity_rank)
 
     for kind, value, rank, bm25_score in fts_refs:
         row = rows.get((kind, str(value)))
@@ -1712,17 +1598,11 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
         coverage, matched_terms = _fts_match_quality(query, result, bm25_score)
         if coverage <= 0:
             continue
-        lexical_score = (
-            220.0
-            + coverage * 220.0
-            + 100.0 / (rank + 1)
-            + max(0.0, min(80.0, -float(bm25_score)))
-        )
         merge_candidate(
             result,
             "bm25",
             "",
-            lexical_score,
+            rank,
             {
                 "bm25": bm25_score,
                 "query_coverage": round(coverage, 4),
@@ -1730,174 +1610,56 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
             },
         )
 
-    # Dense candidates provide paraphrase recall.  They do not bypass the PLC
-    # scope gate above, and exact entity/structured evidence remains dominant.
     for chunk_id, cosine, rank in dense_refs:
         row = rows.get(("id", str(chunk_id)))
         result = _chunk_result(row, meta, path, plc_model, task_type)
         if result is None:
             continue
-        vector_score = 170.0 + max(0.0, float(cosine)) * 310.0 + 90.0 / (rank + 1)
         merge_candidate(
             result,
             "vector",
             "",
-            vector_score,
+            rank,
             {
                 "vector_cosine": round(float(cosine), 6),
                 "vector_rank": int(rank + 1),
             },
         )
 
-    query_term_set = {term.casefold() for term in exact_terms}
-    normalized_task = str(task_type or "").casefold()
-    positioning_query = _query_is_positioning(query)
-    timer_preset_query = _query_is_timer_preset(query)
-    timer_query = _query_is_timer_semantics(query) or timer_preset_query
-    clock_query = _query_is_clock_semantics(query)
-    explicit_timer_instruction = bool(
-        query_term_set.intersection({"ans", "stmr", "ttmr", "wdt"})
-    )
     candidates = []
     scoped_candidates = list(candidates_by_id.values())
     if source_lanes is not None:
         from knowledge.scope import filter_records
         scoped_candidates = filter_records(scoped_candidates, source_lanes)
     for candidate in scoped_candidates:
-        score = float(candidate.pop("_base_score", 0.0))
         signals = candidate.pop("_signals", [])
-        unique_signal_types = {signal["type"] for signal in signals}
-        # Weighted reciprocal-rank style cross-signal fusion.  A semantic hit
-        # reinforces entity/BM25 candidates, while vector-only results stay
-        # below exact structured evidence unless the later domain reranker
-        # finds strong section/opcode agreement.
-        score += max(0, len(unique_signal_types) - 1) * 95.0
-        if "vector" in unique_signal_types and (
-            "bm25" in unique_signal_types or "entity" in unique_signal_types
-        ):
-            score += 130.0
-        if "vector" in unique_signal_types and any(
-            signal_type.startswith("structured_")
-            or signal_type in {"debug_case", "manual_section"}
-            for signal_type in unique_signal_types
-        ):
-            score += 170.0
-        # Exact rows from the structured instruction/device/error stores are
-        # authoritative. Semantic similarity may reinforce them, but must not
-        # let a thematically similar debugging case displace the exact record.
-        if "structured_error" in unique_signal_types:
-            score += 1100.0
-        elif unique_signal_types.intersection({"structured_instruction", "manual_instruction"}):
-            score += 420.0
-        elif "structured_device" in unique_signal_types:
-            score += 320.0
-        score += min(100, int(candidate.get("manual_priority", 0) or 0)) * 0.9
-
-        section = _normalize_text(candidate.get("section", "")).casefold()
-        opcode = _normalize_text(candidate.get("instruction_opcode", "")).casefold()
-        chunk_type = _normalize_text(candidate.get("chunk_type", "")).casefold()
-        candidate_text = _normalize_text(candidate.get("text", "")).casefold()
-        title_hits = sum(term in section for term in query_term_set if term)
-        score += min(4, title_hits) * 45.0
-        candidate_haystack = (
-            section + " " + _normalize_text(candidate.get("text", "")).casefold()
+        best_by_type = {}
+        for signal in signals:
+            current = best_by_type.get(signal["type"])
+            if current is None or signal["rank"] < current["rank"]:
+                best_by_type[signal["type"]] = signal
+        fused = sum(
+            1.0 / (_RRF_K + signal["rank"] + 1.0)
+            for signal in best_by_type.values()
         )
-        exact_coverage_hits = sum(
-            term in candidate_haystack for term in query_term_set if term
+        ordered_signals = sorted(
+            best_by_type.values(),
+            key=lambda signal: (signal["rank"], signal["type"]),
         )
-        score += min(6, exact_coverage_hits) * 100.0
-        exact_product_hits = sum(
-            bool(_PRODUCT_TERM_RE.fullmatch(term)) and term in candidate_haystack
-            for term in query_term_set
-        )
-        score += min(2, exact_product_hits) * 800.0
-        if (
-            positioning_query
-            and _normalize_text(candidate.get("manual_type", "")).casefold()
-            == "positioning"
-        ):
-            score += 160.0
-        if opcode and opcode in query_term_set:
-            score += 180.0
-
-        if timer_query:
-            timer_device_section = bool(
-                re.search(
-                    r"devices? in detail.*timer \[t\]|details on timer operation|"
-                    r"off-delay timer and flicker timer",
-                    section,
-                    re.IGNORECASE,
-                )
-            )
-            internal_clock_section = "internal clock [m8011 to m8014]" in section
-            timer_case_match = re.search(
-                r"case_id:\s*([a-z0-9_]+)", candidate_text, re.IGNORECASE
-            )
-            timer_case_id = timer_case_match.group(1) if timer_case_match else ""
-            timer_debug_case = timer_case_id.startswith("timer_") or timer_case_id == "clock_relay_blink_period"
-            if timer_device_section and not explicit_timer_instruction:
-                score += 950.0
-            if (
-                timer_preset_query and "numbers of timers" in section
-                and candidate.get("manual_type") in {"programming", "structured_device"}
-                and _timer_range_evidence(candidate.get("text"), plc_model)
-                and not explicit_timer_instruction
-            ):
-                score += 900.0
-            if timer_debug_case:
-                if _timer_debug_case_matches_query(timer_case_id, query):
-                    score += (
-                        1100.0
-                        if normalized_task
-                        in {"debug", "program_review", "review"}
-                        else 750.0
-                    )
-                else:
-                    score -= 450.0
-                if normalized_task in {"generate", "edit", "ladder", "st"}:
-                    # Generation needs the normative manual section first;
-                    # the debugging case remains supporting evidence.
-                    score -= 400.0
-            if clock_query and internal_clock_section:
-                score += 1100.0
-            relevant_timer_evidence = (
-                timer_device_section or internal_clock_section or timer_debug_case
-            )
-            if not relevant_timer_evidence and (not opcode or opcode not in query_term_set):
-                score -= 380.0
-            if opcode and opcode not in query_term_set:
-                score -= 320.0
-
-        if normalized_task in {"debug", "program_review", "review", "analysis"}:
-            if chunk_type == "debug_case":
-                score += 220.0
-            elif chunk_type == "error":
-                score += 130.0
-            elif chunk_type == "instruction":
-                score += 90.0
-        elif normalized_task in {"generate", "edit", "ladder", "st"}:
-            if chunk_type == "instruction":
-                score += 150.0
-            elif chunk_type == "debug_case":
-                score += 20.0
-
-        signals.sort(key=lambda item: -float(item.get("score", 0.0)))
-        candidate["retrieval_signals"] = [signal["type"] for signal in signals]
-        candidate["score"] = round(score, 4)
-        best_signal = signals[0] if signals else None
-        if best_signal:
+        candidate["retrieval_signals"] = [
+            signal["type"] for signal in ordered_signals
+        ]
+        candidate["score"] = round(fused, 8)
+        if ordered_signals:
+            best_signal = ordered_signals[0]
             candidate["match_type"] = best_signal["type"]
             candidate["matched_entity"] = best_signal.get("matched", "")
-        bm25_signal = next(
-            (signal for signal in signals if signal["type"] == "bm25"), None
-        )
+        bm25_signal = best_by_type.get("bm25")
         if bm25_signal:
             for key in ("bm25", "query_coverage", "matched_terms"):
                 if key in bm25_signal:
                     candidate[key] = bm25_signal[key]
-        vector_signal = next(
-            (signal for signal in signals if signal["type"] == "vector"), None
-        )
+        vector_signal = best_by_type.get("vector")
         if vector_signal:
             for key in ("vector_cosine", "vector_rank"):
                 if key in vector_signal:
