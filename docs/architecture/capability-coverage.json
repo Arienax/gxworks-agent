@@ -49,7 +49,7 @@
       "category": "retrieval",
       "state": "enforced",
       "owner": "knowledge.core + knowledge.scope",
-      "summary": "Broad recall applies metadata pre-filters before candidate limits and fuses structured/entity/BM25/dense ranks with unweighted reciprocal-rank fusion; PLC topics do not receive hand-tuned ranking boosts.",
+      "summary": "Broad recall applies metadata pre-filters before candidate limits and fuses metadata/entity/BM25/dense ranks with unweighted reciprocal-rank fusion; PLC topics do not receive hand-tuned ranking boosts and exact PLC facts remain outside broad retrieval.",
       "checks": [
         {
           "kind": "contains",
@@ -85,6 +85,11 @@
           "kind": "contains",
           "path": "tests/test_gxw2_skill_ranking.py",
           "text": "test_skill_concept_expands_recall_without_post_rrf_score_mutation"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_broad_retrieval_does_not_own_exact_plc_fact_tables"
         }
       ],
       "tests": [
