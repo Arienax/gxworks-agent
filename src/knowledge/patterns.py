@@ -6,7 +6,6 @@ import json
 import re
 
 from shared.paths import resource_path
-from shared.context_policy import controlled_dynamic_prompt, resolve_context_policy
 
 
 # ============================
@@ -332,17 +331,6 @@ def classify_request(user_input, target_mode="ladder", is_edit_mode=False):
     if not sequence_specific:
         matched.difference_update(sequence_only_ids)
 
-    # --- 8. 兜底 ---
-    # 至少一个范例
-    has_example = any(eid.startswith("example_") for eid in matched)
-    if not has_example and resolve_context_policy().legacy:
-        matched.add("example_self_lock")
-
-    # 至少一个模式
-    has_pattern = any(pid.startswith("pattern_") for pid in matched)
-    if not has_pattern and resolve_context_policy().legacy:
-        matched.add("pattern_a")
-
     route = KnowledgeRouter.route(user_input, target_mode, is_edit_mode)
 
     return {
@@ -659,13 +647,6 @@ def assemble_prompt(
     返回:
       str: 组装后的 Prompt 文本
     """
-    if not include_core:
-        optional = controlled_dynamic_prompt(
-            classification, load_library(), target_mode, plc_model,
-            char_budget=MAX_ASSEMBLED_CHARS,
-        )
-        if optional is not None:
-            return optional
     if target_mode == "st":
         route_vendor = (classification.get("workflow_route") or {}).get("vendor")
         return _assemble_st_prompt(plc_model or route_vendor)
