@@ -293,14 +293,14 @@ def test_text_profiles_reject_images_before_calling_the_sdk(profile_id):
 
 
 @pytest.mark.parametrize(
-    ("profile_id", "effort"),
+    ("profile_id", "effort", "thinking_required"),
     [
-        ("zhipu-glm-5.3", "low"),
-        ("zhipu-glm-5.2", "high"),
+        ("zhipu-glm-5.3", "low", True),
+        ("zhipu-glm-5.2", "high", False),
     ],
 )
 def test_glm_text_profiles_use_the_shared_streaming_tool_adapter(
-    profile_id, effort
+    profile_id, effort, thinking_required
 ):
     tool = {
         "type": "function",
@@ -321,8 +321,12 @@ def test_glm_text_profiles_use_the_shared_streaming_tool_adapter(
 
     assert params["model"] == _profile(profile_id)["model"]
     assert params["reasoning_effort"] == effort
-    assert params["extra_body"]["thinking"]["type"] == "enabled"
-    assert params["extra_body"]["tool_stream"] is True
+    extra = params["extra_body"]
+    if thinking_required:
+        assert extra["thinking"]["type"] == "enabled"
+    else:
+        assert "thinking" not in extra
+    assert extra["tool_stream"] is True
 
 
 def test_assistant_reasoning_is_replayed_only_by_transport_adapter():
@@ -530,7 +534,16 @@ def test_real_request_parameters_keep_language_and_native_schema_before_acceptan
         choices=[SimpleNamespace(message=SimpleNamespace(content=raw, tool_calls=[]))],
     )
     client = _Client([wire_response])
-    provider = OpenAICompatibleProvider(_profile(profile_id), "offline-key", client=client)
+    profile = _profile(profile_id)
+    profile["capabilityOverrides"] = {
+        "capabilities": {
+            "structured_output": {
+                "status": "supported",
+                "modes": ["json_schema"],
+            }
+        }
+    }
+    provider = OpenAICompatibleProvider(profile, "offline-key", client=client)
     monkeypatch.setattr(api, "get_active_provider", lambda: provider)
     native_format = {"type": "json_schema", "json_schema": {
         "name": "summary", "strict": True, "schema": {
@@ -672,7 +685,15 @@ def test_workflow_response_format_overrides_stale_profile_request_override():
             "schema": {"type": "object"},
         },
     }
-    profile["requestOverrides"]["response_format"] = stale
+    profile.setdefault("requestOverrides", {})["response_format"] = stale
+    profile["capabilityOverrides"] = {
+        "capabilities": {
+            "structured_output": {
+                "status": "supported",
+                "modes": ["json_schema"],
+            }
+        }
+    }
     provider = OpenAICompatibleProvider(profile, "key", client=_Client([iter([])]))
     requested = {
         "type": "json_schema",
