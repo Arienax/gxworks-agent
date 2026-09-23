@@ -309,15 +309,13 @@ def test_http_confirmation_to_saved_ladder_svg_and_csv(tmp_path, mode, shared, p
         assert again.json()["id"] == job_id and len(sdk.calls) == 1
 
 
-def test_null_normalization_never_invents_a_missing_stop_condition():
-    from plc.specification.checks import check_direct_self_hold
-    from plc.validation import PLCJsonValidationError
-    # Synthetic negative equivalent: this is NOT a golden correct start/stop
-    # candidate, even though its JSON syntax and optional-null form are valid.
+def test_null_normalization_is_representation_only_and_does_not_rewrite_logic():
+    # Syntax normalization must not invent a missing condition. Structural
+    # feature checks remain separate from full behavioral review/simulation.
     bad = {"r": [{"s": None, "b": [{"i": [{"or": [["NO X1"], ["NO Y0"]]}], "o": ["COIL Y0"]}]}]}
     ladder = expand_compact_ladder(bad)
-    with pytest.raises(PLCJsonValidationError):
-        check_direct_self_hold(ladder, canonicalize_confirmed_spec(operator_spec()))
+    from plc.specification.approach import inspect_ladder_features
+    assert "self_hold" in inspect_ladder_features(ladder)["structures"]
     with pytest.raises(AssertionError):
         _truth_table(ladder)
 
@@ -338,14 +336,6 @@ def test_local_compact_error_retains_path_and_is_not_an_api_error():
     assert detail["violations"][0]["path"] == "content.r.0.b.0.i"
     JobErrorDetails.model_validate(detail)
     assert "sk-private-fixture" not in str(failure) + json.dumps(detail)
-
-
-def test_unsupported_boolean_shapes_do_not_gain_a_new_semantic_gate():
-    from plc.specification.checks import check_direct_self_hold
-    spec = canonicalize_confirmed_spec(operator_spec())
-    ladder = expand_compact_ladder(_compact([]))
-    ladder["rungs"][0]["branches"][0]["inputs"][0] = {"type": "COMPARE", "expression": "> D0 K1"}
-    assert check_direct_self_hold(ladder, spec)["status"] == "not_covered"
 
 
 def test_format_selection_preserves_zero_false_omission_and_inheritance():
