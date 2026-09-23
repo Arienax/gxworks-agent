@@ -223,7 +223,7 @@ def test_confirmed_generation_acceptance_capability_is_enforced():
 
 
 
-def test_required_self_hold_missing_role_fails_closed_without_label_inference():
+def test_structure_obligation_requires_explicit_binding_roles_without_label_inference():
     from plc.specification.semantic_validation import (
         ConfirmedSemanticValidationError,
         validate_confirmed_semantics,
@@ -250,7 +250,7 @@ def test_required_self_hold_missing_role_fails_closed_without_label_inference():
         validate_confirmed_semantics(_self_hold(), spec, plc_model="FX3U")
 
 
-def test_required_self_hold_checker_ignores_unrelated_program_scope():
+def test_structure_binding_predicates_ignore_unrelated_program_scope():
     from plc.specification.semantic_validation import validate_confirmed_semantics
 
     ladder = _self_hold()
@@ -285,8 +285,15 @@ def test_required_self_hold_checker_ignores_unrelated_program_scope():
     }
     report = validate_confirmed_semantics(ladder, spec, plc_model="FX3U")
     assert report["status"] == "verified"
-    row = next(item for item in report["checks"] if item["check"] == "direct_self_hold_truth_table")
+    row = next(
+        item for item in report["checks"]
+        if item["check"] == "structure_binding_predicate"
+        and item.get("role") == "stop"
+    )
     assert row["status"] == "verified"
+    assert row["expected"] == "NO X1"
+    assert row["rung_id"] == 1
+    assert row["target"] == "Y0"
 
 def test_confirmed_semantic_mismatch_is_not_a_format_repair_problem():
     from plc.specification.semantic_validation import (
@@ -311,5 +318,33 @@ def test_confirmed_semantic_mismatch_is_not_a_format_repair_problem():
             ],
         },
     }
-    with pytest.raises(ConfirmedSemanticValidationError):
+    with pytest.raises(
+        ConfirmedSemanticValidationError, match="binding_predicate_mismatch"
+    ):
         validate_confirmed_semantics(_self_hold(), spec, plc_model="FX3U")
+
+
+def test_structure_binding_predicate_checks_start_active_polarity():
+    from plc.specification.semantic_validation import (
+        ConfirmedSemanticValidationError,
+        validate_confirmed_semantics,
+    )
+
+    ladder = _self_hold()
+    start = ladder["rungs"][0]["branches"][0]["inputs"][0]["branches"][0][0]
+    start["type"] = "NC"
+    spec = {
+        "io_bindings": [
+            {"role": "start", "kind": "X", "address": "X0", "active_level": 1},
+            {"role": "stop", "kind": "X", "address": "X1", "active_level": 1},
+        ],
+        "selected_approach": {
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+            ],
+        },
+    }
+    with pytest.raises(
+        ConfirmedSemanticValidationError, match="binding_predicate_mismatch"
+    ):
+        validate_confirmed_semantics(ladder, spec, plc_model="FX3U")
