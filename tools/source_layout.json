@@ -37,7 +37,6 @@
     "instruction_registry": "plc.instructions",
     "ladder_repair": "plc.ladder_repair",
     "plc_device_identity": "plc.device_identity",
-    "plc_confirmed_checks": "plc.specification.checks",
     "confirmed_spec": "plc.specification.confirmed",
     "approach_contracts": "plc.specification.approach",
     "contract_repair": "plc.specification.repair",
