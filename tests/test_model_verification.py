@@ -26,7 +26,6 @@ def scoped_provider(endpoint=None,**changes):
     return p
 
 
-@pytest.mark.parametrize('consent',[False,None,'true',1])
 def test_verification_has_no_pre_resolve_or_cleared_contract_bypass():
     import inspect
     import model_runtime.verification as verification
@@ -42,6 +41,7 @@ def test_verification_has_no_pre_resolve_or_cleared_contract_bypass():
     assert "_runtime_profiles" in source
 
 
+@pytest.mark.parametrize('consent',[False,None,'true',1])
 def test_consent_is_required_before_any_client_request(consent):
     p=scoped_provider()
     with pytest.raises(ValueError):verify_one(p,p.profile['capabilityContract'],'temperature',value=.73,consent=consent)
