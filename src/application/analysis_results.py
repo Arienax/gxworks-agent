@@ -342,7 +342,9 @@ def _apply_explicit_user_constraints(result, user_text, plc_model, confirmed_spe
             approach["explicit_user_constraints"] = merged
             approach = normalize_approach(approach)
         else:
-            # Compatibility for old Agent-A response fixtures/saved protocol.
+            # Non-provider compatibility only. Fresh provider responses are
+            # accepted by validate_current_analysis_protocol() before entering
+            # this normalizer; persisted old specs migrate in legacy_migration.
             approach = normalize_approach(approach)
             contract = dict(approach.get("generation_contract") or {})
             for key in (
