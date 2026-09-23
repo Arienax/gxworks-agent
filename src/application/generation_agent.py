@@ -50,8 +50,13 @@ _COMPACT_PROTOCOL = """# Agent B compact ladder protocol
 def _compact_wire_renderer(plc_model):
     model = str(plc_model or "FX3U").strip().upper() or "FX3U"
 
-    def render(runtime_spec, evidence_text, generation_request, _current_program):
-        from application.generation_wire import render_wire_messages
+    def render(
+        runtime_spec, evidence_text, generation_request, _current_program,
+        context_checkpoint, _wire_history,
+    ):
+        from application.generation_wire import (
+            render_context_checkpoint, render_wire_messages,
+        )
         from plc.specification.provenance import SOURCE_PRECEDENCE
 
         confirmed = json.dumps(
@@ -64,6 +69,7 @@ def _compact_wire_renderer(plc_model):
             + "\n# Confirmed project specification\n"
             + confirmed
             + compact_capability_prompt(model, runtime_spec)
+            + render_context_checkpoint(context_checkpoint)
             + str(evidence_text or "")
             + generation_execution_prompt(
                 runtime_spec,
