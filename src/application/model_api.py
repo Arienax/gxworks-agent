@@ -1345,22 +1345,26 @@ def repair_ladder_response(repair_payload, model_name, effort, *, mode,
 
 
 def _native_ladder_generation_options(plc_model, *, allow_partial=False):
-    """Use the current ladder contract when the selected profile already uses native JSON Schema.
-
-    Profiles that use json_object/text keep their existing transport behavior.
-    This only replaces a persisted/native json_schema so its opcode enum cannot
-    drift behind the registry enforced by final PLC validation.
-    """
+    """Use native JSON Schema only when the v3 model contract declares it."""
     provider = _workflow_provider()
     profile = getattr(provider, "profile", None)
     if not isinstance(profile, dict):
         return None
-    response_format = None
-    for key in ("generationDefaults", "requestOverrides"):
-        source = profile.get(key)
-        if isinstance(source, dict) and "response_format" in source:
-            response_format = source.get("response_format")
-    if not (isinstance(response_format, dict) and response_format.get("type") == "json_schema"):
+    from model_runtime.runtime_profile import materialize_runtime_profile
+    try:
+        runtime = materialize_runtime_profile(
+            profile,
+            api_key=getattr(provider, "api_key", None),
+        )
+    except (TypeError, ValueError):
+        return None
+    capability = runtime.contract.capabilities.get("structured_output")
+    if not (
+        capability
+        and capability.status in {"supported", "conditional"}
+        and "json_schema" in capability.modes
+        and capability.source in {"metadata", "catalog", "manual", "legacy"}
+    ):
         return None
 
     selected_model = str(plc_model or "FX3U").strip().upper() or "FX3U"
