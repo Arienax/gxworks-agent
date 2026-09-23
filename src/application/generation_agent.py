@@ -223,6 +223,8 @@ def _build_agent_b_prompt(projected, plc_model, *, context=None):
             context.knowledge_context,
             context.generation_request,
             context.current_program,
+            "",
+            [],
         )
     prompt = packet["messages"][0]["content"]
     audit_section(
