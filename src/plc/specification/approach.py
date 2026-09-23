@@ -64,6 +64,11 @@ STRUCTURE_LABELS = {
 _STRUCTURE_OBLIGATIONS = {
     "self_hold": {
         "instance_selector": "feedback_coil",
+        # If a canonical output role exists, bind the inspected structure
+        # instance to that target.  The role stays optional for legacy/current
+        # specs that confirm start/stop semantics without a separate output
+        # binding.
+        "instance_target_role": {"role": "output", "required": False},
         "required_roles": ("start", "stop"),
         "distinct_roles": (("start", "stop"),),
         "predicates": (
