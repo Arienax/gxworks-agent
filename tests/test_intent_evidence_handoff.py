@@ -276,6 +276,11 @@ def test_full_wire_and_mcp_share_projection_and_do_not_truncate_tool_json(monkey
     messages, _, _ = api._prepare_api_call("LOOSE_RAW_TEXT", None, None, "ladder", confirmed_context=spec,
         conversation_history=[{"role": "assistant", "content": "PRIVATE_ANALYSIS"}], on_generation_context=receipts.append)
     assert "PRIVATE_ANALYSIS" not in json.dumps(messages) and "LOOSE_RAW_TEXT" not in json.dumps(messages)
+    from application.generation_wire import wire_sha256, wire_token_estimate
+    actual_wire = {"messages": messages}
+    assert receipts[0]["wire_sha256"] == wire_sha256(actual_wire)
+    assert receipts[0]["budget_report"]["budget_basis"] == "application_wire_messages"
+    assert receipts[0]["budget_report"]["compiled_budget_payload_tokens"] == wire_token_estimate(actual_wire)
     context = build_tool_context({"id": "fixture", "plc_model": "FX3U", "target_mode": "ladder", "confirmed_spec": spec})
     result = InProcessToolRuntime(build_default_tool_registry()).invoke(
         ToolCall(id="context", name="get_generation_context", arguments={}), context)
