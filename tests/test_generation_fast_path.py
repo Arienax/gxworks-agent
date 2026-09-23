@@ -271,6 +271,52 @@ def test_structure_obligation_requires_explicit_binding_roles_without_label_infe
         validate_confirmed_semantics(_self_hold(), spec, plc_model="FX3U")
 
 
+def test_structure_obligation_rejects_missing_confirmed_input_level():
+    from plc.specification.semantic_validation import (
+        ConfirmedSemanticValidationError,
+        validate_confirmed_semantics,
+    )
+
+    spec = {
+        "io_bindings": [
+            {"role": "start", "kind": "X", "address": "X0"},
+            {"role": "stop", "kind": "X", "address": "X1", "active_level": 1},
+        ],
+        "selected_approach": {
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+            ],
+        },
+    }
+    with pytest.raises(
+        ConfirmedSemanticValidationError, match="missing_input_levels"
+    ):
+        validate_confirmed_semantics(_self_hold(), spec, plc_model="FX3U")
+
+
+def test_structure_obligation_requires_distinct_binding_roles():
+    from plc.specification.semantic_validation import (
+        ConfirmedSemanticValidationError,
+        validate_confirmed_semantics,
+    )
+
+    spec = {
+        "io_bindings": [
+            {"role": "start", "kind": "X", "address": "X0", "active_level": 1},
+            {"role": "stop", "kind": "X", "address": "X0", "active_level": 0},
+        ],
+        "selected_approach": {
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+            ],
+        },
+    }
+    with pytest.raises(
+        ConfirmedSemanticValidationError, match="roles_not_distinct"
+    ):
+        validate_confirmed_semantics(_self_hold(), spec, plc_model="FX3U")
+
+
 def test_structure_binding_predicates_ignore_unrelated_program_scope():
     from plc.specification.semantic_validation import validate_confirmed_semantics
 
