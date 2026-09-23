@@ -13,7 +13,6 @@ from dataclasses import dataclass, field, fields
 from collections.abc import Mapping
 
 from knowledge.evidence import estimate_tokens
-from model_runtime.capabilities import effective_parameter
 
 
 def _contract_value(profile, name):
@@ -21,18 +20,15 @@ def _contract_value(profile, name):
     direct = profile.get(name)
     if isinstance(direct, (int, float)) and direct > 0:
         return int(direct)
-    capabilities = profile.get("capabilities")
-    if isinstance(capabilities, Mapping):
-        raw = capabilities.get(name)
-        if isinstance(raw, (int, float)) and raw > 0:
-            return int(raw)
-        if isinstance(raw, Mapping) and isinstance(raw.get("value"), (int, float)) and raw["value"] > 0:
-            return int(raw["value"])
     contract = profile.get("capabilityContract")
     if isinstance(contract, Mapping):
         caps = contract.get("capabilities")
         raw = caps.get(name) if isinstance(caps, Mapping) else None
-        if isinstance(raw, Mapping) and isinstance(raw.get("value"), (int, float)) and raw["value"] > 0:
+        if (
+            isinstance(raw, Mapping)
+            and isinstance(raw.get("value"), (int, float))
+            and raw["value"] > 0
+        ):
             return int(raw["value"])
     return None
 
@@ -42,18 +38,21 @@ def _positive_int(value):
 
 
 def _output_limit(profile):
-    """Resolve the effective requested output reserve from the model runtime contract."""
+    """Resolve output reserve from canonical user settings, then contract bounds."""
     profile = profile if isinstance(profile, Mapping) else {}
-    # Reuse the provider's precedence: requestOverrides > generationDefaults,
-    # including extra_body. If both aliases are present, reserve the larger
-    # value rather than claiming input space that either wire field may consume.
-    requested = [
-        _positive_int(effective_parameter(profile, name))
-        for name in ("max_completion_tokens", "max_tokens")
-    ]
-    requested = [value for value in requested if value is not None]
-    if requested:
-        return max(requested)
+    settings = profile.get("userModelSettings")
+    selected = []
+    if isinstance(settings, Mapping):
+        parameters = settings.get("parameters")
+        if isinstance(parameters, Mapping):
+            for key in ("max_completion_tokens", "max_tokens"):
+                choice = parameters.get(key)
+                if isinstance(choice, Mapping) and choice.get("mode") == "value":
+                    value = _positive_int(choice.get("value"))
+                    if value is not None:
+                        selected.append(value)
+    if selected:
+        return max(selected)
 
     contract = profile.get("capabilityContract")
     maxima = []
@@ -65,7 +64,9 @@ def _output_limit(profile):
                 if not isinstance(raw, Mapping):
                     continue
                 domain = raw.get("domain") if isinstance(raw.get("domain"), Mapping) else raw
-                value = _positive_int(domain.get("maximum") if isinstance(domain, Mapping) else None)
+                value = _positive_int(
+                    domain.get("maximum") if isinstance(domain, Mapping) else None
+                )
                 if value is not None:
                     maxima.append(value)
     return max(maxima) if maxima else None
