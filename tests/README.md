@@ -64,8 +64,7 @@ Owns prompt assembly, token/context budgeting, RAG query construction, retrieval
 | `tests/test_context_refresh_runtime.py` | focused coverage for context refresh runtime |
 | `tests/test_fx3u_rag.py` | FX3U factual retrieval quality and routing |
 | `tests/test_gxw2_skill_import.py` | focused coverage for gxw2 skill import |
-| `tests/test_gxw2_skill_ranking.py` | focused coverage for gxw2 skill ranking |
-| `tests/test_gxw2_skill_reranker.py` | focused coverage for gxw2 skill reranker |
+| `tests/test_gxw2_skill_ranking.py` | GX Works2 skill routing, candidate expansion and unified RRF boundary |
 | `tests/test_instruction_fact_context.py` | task-directed instruction evidence assembly, source integrity and final-budget receipts; no behavioral certification |
 | `tests/test_instruction_applicability_rag.py` | focused coverage for instruction applicability rag |
 | `tests/test_prompt_context_budget.py` | focused coverage for prompt context budget |
