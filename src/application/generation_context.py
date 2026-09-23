@@ -508,7 +508,8 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
                 reason="settled_facts",
                 source="application",
             )
-            return system_prompt
+            from application.generation_wire import GenerationWirePrompt
+            return GenerationWirePrompt(system_prompt, context.wire_packet)
     else:
         knowledge_ctx = knowledge_builder(user_requirement, plc_model=plc_model, task_type=normalized_task,
                                           confirmed_context=confirmed_context, evidence=retrieval_evidence)
