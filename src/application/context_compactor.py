@@ -156,7 +156,8 @@ def select_compactable_context(compiled, compiler_input):
         fragments, ensure_ascii=False, separators=(",", ":")
     ))
     pre_tokens = int(report.get("compiled_budget_payload_tokens") or 0)
-    required_reduction = max(0, pre_tokens - usable)
+    estimated_input = int(report.get("estimated_input_tokens") or pre_tokens)
+    required_reduction = max(0, estimated_input - usable)
     target_tokens = max(
         256,
         min(4096, max(256, source_tokens - required_reduction - 512)),
