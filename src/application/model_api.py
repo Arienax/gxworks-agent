@@ -642,7 +642,11 @@ def _prepare_api_call(
         model_profile=bound_provider_profile(),
         wire_history=conversation_history,
     )
-    messages_to_send = _build_clean_messages(conversation_history, system_prompt)
+    compiled_wire = getattr(system_prompt, "wire_packet", None)
+    if isinstance(compiled_wire, dict) and isinstance(compiled_wire.get("messages"), list):
+        messages_to_send = copy.deepcopy(compiled_wire["messages"])
+    else:
+        messages_to_send = _build_clean_messages(conversation_history, system_prompt)
     if image_attachments:
         messages_to_send[-1] = _user_message_with_images(
             user_requirement,
