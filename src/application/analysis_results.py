@@ -5,6 +5,7 @@ import re
 from shared.i18n import tr
 from plc.specification.approach import (
     IMPLEMENTATION_SEMANTIC_STATUSES,
+    SUPPORTED_STRUCTURES,
     normalize_approach,
     normalize_implementation_semantics,
 )
@@ -128,6 +129,11 @@ def current_analysis_protocol_violations(result):
                         semantic_path + ".values: any_of requires a non-empty string array"
                     )
                     continue
+                if any(value.strip().casefold() not in SUPPORTED_STRUCTURES for value in values):
+                    violations.append(
+                        semantic_path + ".values: use canonical Core structure tokens only"
+                    )
+                    continue
             else:
                 value = item.get("value")
                 if not isinstance(value, str) or not value.strip():
@@ -135,10 +141,15 @@ def current_analysis_protocol_violations(result):
                         semantic_path + ".value: required/forbidden requires a structure name"
                     )
                     continue
+                if value.strip().casefold() not in SUPPORTED_STRUCTURES:
+                    violations.append(
+                        semantic_path + ".value: use a canonical Core structure token"
+                    )
+                    continue
 
             if not normalize_implementation_semantics([item]):
                 violations.append(
-                    semantic_path + ": structure value is outside the Core vocabulary"
+                    semantic_path + ": implementation semantic could not be normalized"
                 )
 
     return violations
