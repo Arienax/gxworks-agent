@@ -54,7 +54,14 @@ from knowledge.patterns import (
     classify_request,
 )
 from application.prompts import ANALYSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_DIAGNOSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_PATCH_SYSTEM_PROMPT, DEBUG_REPORT_SYSTEM_PROMPT, FIELD_PATCH_REPAIR_SYSTEM_PROMPT, INSPECTION_SYSTEM_PROMPT, MULTI_AGENT_SPECIALIST_PROMPTS, PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT, SIMULATOR_TEST_SUITE_SYSTEM_PROMPT
-from application.analysis_results import _ANALYSIS_IO_KINDS, _ASSUMPTION_MARKERS, _iter_analysis_text, _normalize_analysis_result
+from application.analysis_results import (
+    AnalysisProtocolError,
+    _ANALYSIS_IO_KINDS,
+    _ASSUMPTION_MARKERS,
+    _iter_analysis_text,
+    _normalize_analysis_result,
+    validate_current_analysis_protocol,
+)
 
 
 
@@ -257,26 +264,42 @@ def _resolve_plc_model(user_input="", confirmed_context=None, explicit_model=Non
 
 
 
-def _parse_analysis_response(raw, plc_model="FX3U", user_text="", confirmed_spec=None):
+def _analysis_json_payload(raw):
     text = str(raw or "").strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[1] if "\n" in text else ""
     if text.endswith("```"):
         text = text.rsplit("\n", 1)[0]
-    result = json.loads(text.strip())
+    return json.loads(text.strip())
+
+
+def _validate_fresh_analysis_content(raw):
+    payload = _analysis_json_payload(raw)
+    validate_current_analysis_protocol(payload)
+    return payload
+
+
+def _parse_analysis_response(raw, plc_model="FX3U", user_text="", confirmed_spec=None):
+    result = _validate_fresh_analysis_content(raw)
     return _normalize_analysis_result(result, plc_model, user_text, confirmed_spec)
 
 
 def _request_analysis_response(messages, *, on_format_repair=None, **kwargs):
-    """Allow one syntax correction of an unconfirmed analysis draft only.
+    """Accept the current Agent-A protocol, with one bounded format repair.
 
-    Keep the shared collector strict. Language/field rejection, transport
-    errors and valid JSON with the wrong root type are not repair signals.
-    Neither attempt publishes content until its normal acceptance succeeds.
+    JSON syntax failures and current-protocol shape failures share the existing
+    single repair turn. Neither is a PLC validation error, and neither may
+    silently fall back to a legacy Agent-A protocol.
     """
     with provider_scope():
+        first_attempts = ()
+        rejected_message = None
+        correction = ""
+
         try:
-            return _request_model(messages, response_contract=ANALYSIS_RESPONSE, **kwargs)
+            first = _request_model(
+                messages, response_contract=ANALYSIS_RESPONSE, **kwargs
+            )
         except ResponseRejectedError as rejected:
             if [(v.path, v.reason) for v in rejected.violations] != [
                 ("content", "invalid_json_object")
@@ -290,26 +313,70 @@ def _request_analysis_response(messages, *, on_format_repair=None, **kwargs):
             try:
                 json.loads(raw)
             except json.JSONDecodeError as syntax_error:
-                location = f"line {syntax_error.lineno}, column {syntax_error.colno}"
+                location = (
+                    f"line {syntax_error.lineno}, column {syntax_error.colno}"
+                )
             else:
                 raise rejected
-            if on_format_repair is not None:
-                on_format_repair()
+            first_attempts = rejected.raw_attempts
+            rejected_message = rejected.raw_response.message
             correction = (
                 "Your previous analysis draft is not valid JSON (" + location + "). "
-                "Return the complete corrected JSON object only, using the analysis schema above. "
-                "Correct JSON syntax and missing schema keys only; preserve the requirement, "
-                "devices, alternatives and questions. Do not invent confirmed answers or generate PLC code. "
-                "Use separate property names and values. No markdown or explanations."
+                "Return the complete corrected JSON object only, using the current "
+                "analysis protocol above. Correct JSON syntax and missing protocol "
+                "keys only; preserve the requirement, devices, alternatives and "
+                "questions. Every approach must include implementation_semantics "
+                "as an array; an empty array is valid. Do not invent confirmed "
+                "answers or generate PLC code. No markdown or explanations."
             )
-            repair_messages = [*messages, rejected.raw_response.message,
-                               UserMessage(correction)]
+        else:
             try:
-                repaired = _request_model(repair_messages, response_contract=ANALYSIS_RESPONSE, **kwargs)
-            except ResponseRejectedError as error:
-                error.raw_attempts = (*rejected.raw_attempts, *error.raw_attempts)
-                raise
-            return replace(repaired, raw_attempts=(*rejected.raw_attempts, *repaired.raw_attempts))
+                _validate_fresh_analysis_content(first.message.content)
+            except AnalysisProtocolError as protocol_error:
+                first_attempts = first.raw_attempts
+                rejected_message = first.message
+                detail = " | ".join(protocol_error.violations[:8])
+                correction = (
+                    "Your previous analysis JSON is syntactically valid but does "
+                    "not satisfy the current Agent-A protocol: " + detail + ". "
+                    "Return the complete corrected JSON object only. Every approach "
+                    "must include implementation_semantics as an array; [] is valid "
+                    "when no architecture structure needs to be fixed. Each semantic "
+                    "may only describe kind=structure with status required, forbidden "
+                    "or any_of and Core structure vocabulary. Do not emit "
+                    "generation_contract, explicit_user_constraints, "
+                    "implementation_preferences, opcode, operands, device or "
+                    "instruction_instance fields. Preserve the user's requirement, "
+                    "alternatives and unanswered questions. Do not generate PLC code."
+                )
+            else:
+                return first
+
+        if on_format_repair is not None:
+            on_format_repair()
+        repair_messages = [
+            *messages,
+            rejected_message,
+            UserMessage(correction),
+        ]
+        try:
+            repaired = _request_model(
+                repair_messages,
+                response_contract=ANALYSIS_RESPONSE,
+                **kwargs,
+            )
+        except ResponseRejectedError as error:
+            error.raw_attempts = (*first_attempts, *error.raw_attempts)
+            raise
+
+        combined_attempts = (*first_attempts, *repaired.raw_attempts)
+        try:
+            _validate_fresh_analysis_content(repaired.message.content)
+        except AnalysisProtocolError as error:
+            error.raw_attempts = combined_attempts
+            error.raw_response = repaired.message
+            raise
+        return replace(repaired, raw_attempts=combined_attempts)
 
 
 
