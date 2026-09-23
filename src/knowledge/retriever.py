@@ -8,6 +8,7 @@ qualified GX Works2 skill concepts. It does not apply a second scoring layer.
 from __future__ import annotations
 
 import sys
+from collections.abc import Mapping
 from shared.context_policy import audit_retrieval_fragment
 
 from knowledge.gxworks2_concepts import CONTEXT_RE as _GXW2_CONTEXT_RE, query_skill_concepts
@@ -66,6 +67,84 @@ def _sync_core_hooks():
             setattr(_core, name, globals()[name])
 
 
+def _fact_identity(kind, value):
+    kind = str(kind or "").strip().casefold()
+    if kind == "instruction":
+        if isinstance(value, Mapping):
+            opcode = str(value.get("opcode") or value.get("base_opcode") or "").strip().upper()
+            operands = value.get("operands")
+            instance = (
+                tuple(str(item).strip() for item in operands)
+                if isinstance(operands, (list, tuple))
+                else None
+            )
+            return opcode, instance
+        return str(value or "").strip().upper(), None
+    if kind == "device":
+        from plc.device_identity import canonical_device
+        return canonical_device(str(value or "").strip().upper()), None
+    if kind == "error":
+        return str(value or "").strip().upper().removesuffix("H"), None
+    return str(value or "").strip().upper(), None
+
+
+def _covered_structured_kinds(targets, records):
+    """Return fact kinds whose every explicit target has direct structured evidence."""
+    targets = targets if isinstance(targets, Mapping) else {}
+    records = [row for row in (records or ()) if isinstance(row, Mapping)]
+    covered = set()
+    for kind, key in (
+        ("instruction", "instructions"),
+        ("device", "devices"),
+        ("error", "errors"),
+    ):
+        requested = [
+            _fact_identity(kind, value)
+            for value in targets.get(key) or ()
+        ]
+        requested = [value for value in requested if value[0]]
+        if not requested:
+            continue
+
+        available = []
+        for row in records:
+            row_kind = str(
+                row.get("fact_kind") or row.get("structured_fact_kind") or ""
+            ).strip().casefold()
+            if row_kind != kind:
+                continue
+            target = row.get("fact_target") or row.get("structured_fact_target")
+            identity = _fact_identity(kind, target)
+            if kind == "instruction":
+                instance = row.get("instruction_instance")
+                if isinstance(instance, Mapping):
+                    identity = _fact_identity(kind, instance)
+            available.append(identity)
+
+        all_found = True
+        for target, instance in requested:
+            if instance is None:
+                found = any(candidate == target for candidate, _ in available)
+            else:
+                found = (target, instance) in available
+            if not found:
+                all_found = False
+                break
+        if all_found:
+            covered.add(kind)
+    return frozenset(covered)
+
+
+def _residual_prefilters(covered_kinds):
+    covered = set(covered_kinds or ())
+    return {
+        "exclude_chunk_types": ("instruction",) if "instruction" in covered else (),
+        "exclude_structured_kinds": tuple(
+            kind for kind in ("device", "error") if kind in covered
+        ),
+    }
+
+
 def retrieve_knowledge(
     query,
     plc_model="FX3U",
@@ -74,6 +153,7 @@ def retrieve_knowledge(
     char_budget=6000,
     source_lanes=None,
     exclude_chunk_types=(),
+    exclude_structured_kinds=(),
 ):
     """Return ranked knowledge with scoped gxw2-skill supporting reranking."""
 
@@ -116,6 +196,7 @@ def retrieve_knowledge(
         char_budget=candidate_budget,
         **({"source_lanes": tuple(source_lanes)} if source_lanes is not None else {}),
         exclude_chunk_types=exclude_chunk_types,
+        exclude_structured_kinds=exclude_structured_kinds,
     )
     results = filter_records(results, source_lanes)
     if not results:
