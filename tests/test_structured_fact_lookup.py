@@ -259,12 +259,15 @@ def test_instruction_source_authority_contract_is_data_backed(opcode, manual_id)
     } == {"authoritative"}
 
 
-def test_broad_and_direct_instruction_lookup_share_source_authority_owner():
+def test_instruction_source_authority_is_owned_only_by_structured_facts():
     import knowledge.core as knowledge_core
+    import knowledge.structured_facts as structured_facts
 
-    source_text = inspect.getsource(knowledge_core)
-    assert "audited_instruction_precedence" not in source_text
-    assert "authoritative_instruction_manual" in source_text
+    broad_source = inspect.getsource(knowledge_core._retrieve_uncached)
+    direct_source = inspect.getsource(structured_facts.resolve_instruction_records)
+    assert "authoritative_instruction_manual" not in broad_source
+    assert "instruction_source_authority" not in broad_source
+    assert "instruction_source_authority" in direct_source
 
 
 def test_instruction_source_authority_capability_is_enforced():
