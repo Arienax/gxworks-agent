@@ -8,8 +8,9 @@ import pytest
 
 from model_runtime.contract import (
     CapabilityContract, CapabilityDescriptor, ConstraintDescriptor, ParameterDescriptor,
-    UserModelSettings, contract_scope, legacy_contract, metadata_contract_parts, normalize_contract,
+    UserModelSettings, contract_scope, metadata_contract_parts, normalize_contract,
 )
+from model_runtime.legacy_migration import legacy_contract
 from model_runtime.request_policy import resolve_request, public_contract_settings
 from model_runtime.provider import OpenAICompatibleProvider, ModelRequest, ModelProviderError, UserMessage
 from application.model_detection import inspect_openai_compatible
