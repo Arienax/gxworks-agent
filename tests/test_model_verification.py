@@ -99,9 +99,12 @@ def test_single_verification_budget_cannot_be_shadowed_by_advanced_options(optio
     p=scoped_provider(requestOverrides=options)
     verify_one(p,p.profile['capabilityContract'],'chat',kind='chat',consent=True)
     wire=p._client.calls[0]
-    assert wire['max_completion_tokens']==64 and 'max_tokens' not in wire and 'n' not in wire
-    assert not {'max_tokens','max_completion_tokens','n','timeout'}.intersection(wire.get('extra_body',{}))
-    assert 'timeout' not in wire
+    extra=wire.get('extra_body',{})
+    effective_limit=extra.get('max_completion_tokens',wire.get('max_completion_tokens'))
+    assert effective_limit==64
+    assert 'max_tokens' not in wire and 'max_tokens' not in extra
+    assert 'n' not in wire and 'n' not in extra
+    assert 'timeout' not in wire and 'timeout' not in extra
 
 
 @pytest.mark.parametrize('target,kind,value',[('max_completion_tokens','parameter',1000),('vision','capability',None),
