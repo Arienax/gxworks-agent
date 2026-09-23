@@ -445,7 +445,7 @@ class ContextCompiler:
         if original_wire:
             from application.generation_wire import wire_token_estimate
             original_budget_payload_tokens = wire_token_estimate(original_wire)
-            budget_basis = "wire_messages"
+            budget_basis = "application_wire_messages"
         else:
             original_budget_payload_tokens = original_payload_tokens
             budget_basis = "logical_generation_packet"
