@@ -14,8 +14,12 @@ from application.response_contracts import ANALYSIS_RESPONSE
 
 # Minimized from the 2026-09-10 GLM stream, which ended with finish_reason=stop
 # even though the transition object was missing its label key.
-BROKEN = '{"summary":"起保停控制","flowchart_steps":[{"type":"transition":"X0启动"}]}'
-FIXED = '{"summary":"起保停控制","flowchart_steps":[{"type":"transition","label":"X0启动"}]}'
+BROKEN = '{"summary":"起保停控制","approaches":[],"flowchart_steps":[{"type":"transition":"X0启动"}]}'
+FIXED = '{"summary":"起保停控制","approaches":[],"flowchart_steps":[{"type":"transition","label":"X0启动"}]}'
+LEGACY_PROTOCOL = '{"summary":"起保停控制","approaches":[{"name":"旧协议","generation_contract":{"required_structures":["self_hold"]}}]}'
+CURRENT_EMPTY = '{"summary":"起保停控制","approaches":[{"name":"当前协议","implementation_semantics":[]}]}'
+MIXED_PROTOCOL = '{"summary":"起保停控制","approaches":[{"name":"新","implementation_semantics":[]},{"name":"旧","generation_contract":{"required_structures":["self_hold"]}}]}'
+LOW_LEVEL_SEMANTIC = '{"summary":"起保停控制","approaches":[{"name":"错误","implementation_semantics":[{"kind":"opcode","status":"required","value":"SFTL"}]}]}'
 
 
 class Provider:
@@ -81,14 +85,60 @@ def test_valid_analysis_uses_one_request(content):
 
 
 @pytest.mark.parametrize("bad", [
-    "", "[]", "not json", '{"summary":"Start the motor."}',
-    '{"summary":{"unexpected":"value"}}',
+    "", "[]", "not json", '{"summary":{"unexpected":"value"}}',
 ])
 def test_other_acceptance_failures_do_not_trigger_format_correction(bad):
     provider = Provider(bad)
     with api.provider_scope(provider), pytest.raises(ResponseRejectedError):
         api._request_analysis_response([UserMessage("起保停")])
     assert len(provider.requests) == 1
+
+
+
+@pytest.mark.parametrize("first", [LEGACY_PROTOCOL, MIXED_PROTOCOL, LOW_LEVEL_SEMANTIC])
+def test_fresh_agent_a_protocol_violation_uses_one_existing_format_repair(first):
+    provider = Provider(first, CURRENT_EMPTY)
+    events = []
+    with api.provider_scope(provider):
+        result = api._request_analysis_response(
+            [UserMessage("起保停")],
+            on_format_repair=lambda: events.append("repair"),
+        )
+    assert result.message.content == CURRENT_EMPTY
+    assert len(provider.requests) == 2
+    assert events == ["repair"]
+    correction = provider.requests[1].messages[-1].content
+    assert "implementation_semantics" in correction
+    assert "generation_contract" in correction
+    assert provider.requests[1].messages[-2].content == first
+
+
+def test_empty_implementation_semantics_is_valid_current_protocol():
+    provider = Provider(CURRENT_EMPTY)
+    with api.provider_scope(provider):
+        result = api._request_analysis_response([UserMessage("起保停")])
+    assert result.message.content == CURRENT_EMPTY
+    assert len(provider.requests) == 1
+
+
+def test_second_current_protocol_failure_is_protocol_error_not_plc_error():
+    from application.analysis_results import AnalysisProtocolError
+    from plc.validation import PLCJsonValidationError
+
+    provider = Provider(LEGACY_PROTOCOL, MIXED_PROTOCOL)
+    with api.provider_scope(provider), pytest.raises(AnalysisProtocolError) as caught:
+        api._request_analysis_response([UserMessage("起保停")])
+    assert not isinstance(caught.value, PLCJsonValidationError)
+    assert len(provider.requests) == 2
+    assert len(caught.value.raw_attempts) == 2
+    assert any("implementation_semantics" in item for item in caught.value.violations)
+
+
+def test_parse_analysis_response_never_auto_detects_fresh_legacy_protocol():
+    from application.analysis_results import AnalysisProtocolError
+
+    with pytest.raises(AnalysisProtocolError):
+        api._parse_analysis_response(LEGACY_PROTOCOL, "FX3U", "起保停")
 
 
 def test_transport_failure_is_not_a_format_correction_signal():
