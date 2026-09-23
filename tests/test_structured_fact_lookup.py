@@ -725,24 +725,30 @@ def test_exact_instruction_residual_broad_retrieval_uses_instruction_prefilter(m
 
 
 
-def test_broad_scorer_has_no_plc_topic_specific_boosts():
+def test_retrieval_scorers_have_no_hand_tuned_score_accumulators():
     import ast
     import inspect
     import knowledge.core as knowledge_core
 
-    source = inspect.getsource(knowledge_core._retrieve_uncached)
+    source = inspect.getsource(knowledge_core)
     tree = ast.parse(source)
 
-    score_augments = []
+    named_score_assignments = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
-            if node.target.id == "score":
-                score_augments.append(node.lineno)
+        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+            targets = []
+            if isinstance(node, ast.Assign):
+                targets = node.targets
+            else:
+                targets = [node.target]
+            if any(isinstance(target, ast.Name) and target.id == "score" for target in targets):
+                named_score_assignments.append(getattr(node, "lineno", 0))
 
-    assert score_augments == []
+    assert named_score_assignments == []
+    assert "base_score" not in source
+    assert "score +=" not in source and "score -=" not in source
     assert "_query_is_timer_semantics" not in source
     assert "_timer_debug_case_matches_query" not in source
     assert "positioning_query" not in source
     assert "timer_query" not in source
-    assert "structured_error" not in source or "score +=" not in source
     assert "_RRF_K" in source
