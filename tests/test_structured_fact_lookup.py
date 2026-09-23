@@ -755,3 +755,23 @@ def test_retrieval_scorers_have_no_hand_tuned_score_accumulators():
     assert "positioning_query" not in source
     assert "timer_query" not in source
     assert "_RRF_K" in source
+
+
+
+def test_broad_retrieval_does_not_own_exact_plc_fact_tables():
+    import inspect
+    import knowledge.core as knowledge_core
+
+    broad = inspect.getsource(knowledge_core._retrieve_uncached)
+    routed = inspect.getsource(knowledge_core._broad_metadata_references)
+    for forbidden in (
+        "instruction_aliases",
+        "error_records",
+        "device_records",
+        "_manual_instruction_references",
+        "authoritative_instruction_manual",
+        "structured_instruction",
+        "structured_error",
+    ):
+        assert forbidden not in broad
+        assert forbidden not in routed
