@@ -633,3 +633,76 @@ def test_instruction_contract_delivery_has_one_structured_owner():
         "FX3U",
         {"selected_approach": {"generation_contract": {"required_opcodes": ["MOV"]}}},
     ) == ""
+
+
+
+def test_source_subquery_prefilters_instruction_chunks_before_candidate_limit():
+    from knowledge.scope import source_subquery
+
+    connection = sqlite3.connect(":memory:")
+    try:
+        connection.execute(
+            "CREATE TABLE chunks (id TEXT, manual_type TEXT, chunk_type TEXT, manual_id TEXT)"
+        )
+        connection.executemany(
+            "INSERT INTO chunks VALUES (?,?,?,?)",
+            [
+                ("or", "programming", "instruction", "manual"),
+                ("general", "programming", "prose", "manual"),
+            ],
+        )
+        schema = {
+            "chunks": {
+                "name": "chunks",
+                "columns": ("id", "manual_type", "chunk_type", "manual_id"),
+            }
+        }
+
+        sql, values = source_subquery(connection, schema, ("fact",))
+        assert {row[0] for row in connection.execute(sql, values)} == {"or", "general"}
+
+        sql, values = source_subquery(
+            connection, schema, ("fact",), exclude_chunk_types=("instruction",),
+        )
+        assert [row[0] for row in connection.execute(sql, values)] == ["general"]
+    finally:
+        connection.close()
+
+
+def test_exact_instruction_residual_broad_retrieval_uses_instruction_prefilter(monkeypatch):
+    _bundled_index()
+    import knowledge.retriever as retriever
+
+    targets = {
+        "version": "structured-facts-v2-contract-merged",
+        "instructions": [{
+            "opcode": "SFTL",
+            "base_opcode": "SFTL",
+            "operands": ["M100", "M200", "K20", "K1"],
+            "instance_source": "generation_contract",
+        }],
+        "devices": [],
+        "errors": [],
+    }
+    query = KnowledgeQuery(
+        "SFTL M100 M200 K20 K1 timer scan cycle",
+        precompiled=True,
+        metadata={"structured_fact_targets": targets},
+    )
+    calls = []
+
+    def broad_lookup(*args, **kwargs):
+        calls.append((args, kwargs))
+        assert kwargs.get("exclude_chunk_types") == ("instruction",)
+        return []
+
+    monkeypatch.setattr(retriever, "retrieve_knowledge", broad_lookup)
+    context = retriever.build_knowledge_context(
+        query, plc_model="FX3U", task_type="generate", top_k=5, char_budget=7000,
+    )
+    assert len(calls) == 1
+    receipt = context.manifest["structured_facts"]
+    assert receipt["residual_retrieval"] is True
+    assert receipt["residual_pre_filters"] == {
+        "exclude_chunk_types": ["instruction"],
+    }
