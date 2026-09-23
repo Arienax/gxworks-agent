@@ -391,6 +391,40 @@ def test_confirmed_semantic_mismatch_is_not_a_format_repair_problem():
         validate_confirmed_semantics(_self_hold(), spec, plc_model="FX3U")
 
 
+def test_optional_structure_target_does_not_block_multiple_outputs():
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+
+    ladder = _self_hold()
+    ladder["rungs"][0]["branches"][0]["inputs"][1]["type"] = "NO"
+    spec = {
+        "io_bindings": [
+            {"role": "start", "kind": "X", "address": "X0", "active_level": 1},
+            {"role": "stop", "kind": "X", "address": "X1", "active_level": 0},
+            {"role": "output", "kind": "Y", "address": "Y0"},
+            {"role": "output", "kind": "Y", "address": "Y1"},
+        ],
+        "selected_approach": {
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+            ],
+        },
+    }
+
+    report = validate_confirmed_semantics(ladder, spec, plc_model="FX3U")
+    target = next(
+        row for row in report["checks"]
+        if row["check"] == "structure_instance_target"
+    )
+    assert target["status"] == "unresolved"
+    assert target["reason"] == "optional_role_ambiguous"
+    assert report["status"] == "unresolved"
+    assert all(
+        row["status"] == "verified"
+        for row in report["checks"]
+        if row["check"] == "structure_binding_predicate"
+    )
+
+
 def test_structure_binding_predicates_use_confirmed_output_instance():
     from plc.specification.semantic_validation import (
         ConfirmedSemanticValidationError,
