@@ -591,9 +591,12 @@ def validate_confirmed_semantics(ladder, confirmed_spec, plc_model="FX3U"):
     # model call; deployment/review layers may decide how to use the findings.
     unresolved = [row for row in checks if row.get("status") == "unresolved"]
     verified_ids = {row.get("requirement_id") for row in checks if row.get("status") == "verified"}
+    violated_ids = {row.get("requirement_id") for row in checks if row.get("status") == "violated"}
     requirement_ids = {row["requirement_id"] for row in requirements}
     unresolved_ids = {row.get("requirement_id") for row in unresolved}
-    for requirement_id in sorted(requirement_ids - verified_ids - unresolved_ids):
+    for requirement_id in sorted(
+        requirement_ids - verified_ids - violated_ids - unresolved_ids
+    ):
         checks.append({
             "requirement_id": requirement_id,
             "check": "coverage",
