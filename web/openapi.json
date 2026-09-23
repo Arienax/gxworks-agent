@@ -191,7 +191,7 @@
             "type": "boolean"
           },
           "revision": {
-            "minimum": 0.0,
+            "minimum": 0,
             "title": "Revision",
             "type": "integer"
           }
@@ -214,7 +214,7 @@
             "type": "boolean"
           },
           "expected_revision": {
-            "minimum": 0.0,
+            "minimum": 0,
             "title": "Expected Revision",
             "type": "integer"
           },
@@ -271,7 +271,7 @@
           "size": {
             "anyOf": [
               {
-                "minimum": 0.0,
+                "minimum": 0,
                 "type": "integer"
               },
               {
@@ -326,7 +326,7 @@
             "type": "string"
           },
           "size_bytes": {
-            "minimum": 0.0,
+            "minimum": 0,
             "title": "Size Bytes",
             "type": "integer"
           }
@@ -949,8 +949,8 @@
             "type": "array"
           },
           "logical_station": {
-            "maximum": 1023.0,
-            "minimum": 0.0,
+            "maximum": 1023,
+            "minimum": 0,
             "title": "Logical Station",
             "type": "integer"
           },
@@ -967,8 +967,8 @@
           },
           "ttl_seconds": {
             "default": 60,
-            "maximum": 300.0,
-            "minimum": 30.0,
+            "maximum": 300,
+            "minimum": 30,
             "title": "Ttl Seconds",
             "type": "integer"
           }
@@ -995,8 +995,8 @@
             "type": "array"
           },
           "logical_station": {
-            "maximum": 1023.0,
-            "minimum": 0.0,
+            "maximum": 1023,
+            "minimum": 0,
             "title": "Logical Station",
             "type": "integer"
           },
@@ -1008,8 +1008,8 @@
           },
           "ttl_seconds": {
             "default": 60,
-            "maximum": 300.0,
-            "minimum": 30.0,
+            "maximum": 300,
+            "minimum": 30,
             "title": "Ttl Seconds",
             "type": "integer"
           }
@@ -1114,7 +1114,7 @@
             "type": "string"
           },
           "last_sequence": {
-            "minimum": 0.0,
+            "minimum": 0,
             "title": "Last Sequence",
             "type": "integer"
           },
@@ -1292,8 +1292,8 @@
           "attempt_count": {
             "anyOf": [
               {
-                "maximum": 3.0,
-                "minimum": 0.0,
+                "maximum": 3,
+                "minimum": 0,
                 "type": "integer"
               },
               {
@@ -1321,8 +1321,8 @@
           "max_attempts": {
             "anyOf": [
               {
-                "maximum": 3.0,
-                "minimum": 0.0,
+                "maximum": 3,
+                "minimum": 0,
                 "type": "integer"
               },
               {
@@ -1374,8 +1374,8 @@
             "type": "boolean"
           },
           "violation_count": {
-            "maximum": 1000000.0,
-            "minimum": 0.0,
+            "maximum": 1000000,
+            "minimum": 0,
             "title": "Violation Count",
             "type": "integer"
           },
@@ -1923,7 +1923,7 @@
           "tool_count": {
             "anyOf": [
               {
-                "minimum": 0.0,
+                "minimum": 0,
                 "type": "integer"
               },
               {
@@ -2225,13 +2225,6 @@
             ],
             "title": "Base Url"
           },
-          "capabilities": {
-            "additionalProperties": {
-              "type": "boolean"
-            },
-            "title": "Capabilities",
-            "type": "object"
-          },
           "capability_overrides": {
             "additionalProperties": {
               "$ref": "#/components/schemas/JsonValue"
@@ -2254,13 +2247,6 @@
             "default": false,
             "title": "Deletable",
             "type": "boolean"
-          },
-          "generation_defaults": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/JsonValue"
-            },
-            "title": "Generation Defaults",
-            "type": "object"
           },
           "id": {
             "title": "Id",
@@ -2287,20 +2273,6 @@
               }
             ],
             "title": "Name"
-          },
-          "parameter_support": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/JsonValue"
-            },
-            "title": "Parameter Support",
-            "type": "object"
-          },
-          "request_overrides": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/JsonValue"
-            },
-            "title": "Request Overrides",
-            "type": "object"
           },
           "user_settings": {
             "additionalProperties": {
@@ -2339,13 +2311,6 @@
             "title": "Base Url",
             "type": "string"
           },
-          "capabilities": {
-            "additionalProperties": {
-              "type": "boolean"
-            },
-            "title": "Capabilities",
-            "type": "object"
-          },
           "capability_overrides": {
             "additionalProperties": true,
             "title": "Capability Overrides",
@@ -2354,11 +2319,6 @@
           "contract": {
             "additionalProperties": true,
             "title": "Contract",
-            "type": "object"
-          },
-          "generation_defaults": {
-            "additionalProperties": true,
-            "title": "Generation Defaults",
             "type": "object"
           },
           "id": {
@@ -2384,16 +2344,6 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
-          },
-          "parameter_support": {
-            "additionalProperties": true,
-            "title": "Parameter Support",
-            "type": "object"
-          },
-          "request_overrides": {
-            "additionalProperties": true,
-            "title": "Request Overrides",
-            "type": "object"
           },
           "user_settings": {
             "additionalProperties": true,
@@ -2425,20 +2375,6 @@
             ],
             "title": "Base Url"
           },
-          "capabilities": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "type": "boolean"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Capabilities"
-          },
           "capability_overrides": {
             "anyOf": [
               {
@@ -2462,18 +2398,6 @@
               }
             ],
             "title": "Contract"
-          },
-          "generation_defaults": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Generation Defaults"
           },
           "id": {
             "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
@@ -2505,30 +2429,6 @@
               }
             ],
             "title": "Name"
-          },
-          "parameter_support": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parameter Support"
-          },
-          "request_overrides": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Request Overrides"
           },
           "user_settings": {
             "anyOf": [
@@ -2869,7 +2769,7 @@
             "title": "Updated At"
           },
           "version_count": {
-            "minimum": 0.0,
+            "minimum": 0,
             "title": "Version Count",
             "type": "integer"
           },
