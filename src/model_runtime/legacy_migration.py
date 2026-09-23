@@ -188,6 +188,9 @@ def normalize_parameter_support(value):
     return result
 
 
+capability_scope = legacy_capability_scope
+
+
 def scoped_parameters(profile, model=None):
     support = normalize_parameter_support(profile.get("parameterSupport") or {})
     return (
@@ -213,6 +216,42 @@ def effective_parameter(profile, name):
                 else:
                     extra[name] = body[name]
     return extra.get(name, value)
+
+
+def apply_parameter_contract(params, profile, model=None):
+    """Legacy v1 parameter application retained only for migration regression tests."""
+    params = copy.deepcopy(params)
+    descriptors = scoped_parameters(profile, model)
+    for name, descriptor in descriptors.items():
+        if descriptor["status"] in {"supported", "fixed", "unsupported"}:
+            params.pop(name, None)
+            (params.get("extra_body") or {}).pop(name, None)
+            selected = effective_parameter(profile, name)
+            if descriptor["status"] == "supported" and selected is not None:
+                params[name] = copy.deepcopy(selected)
+    for name, descriptor in descriptors.items():
+        extra = params.get("extra_body") or {}
+        value = extra.get(name, params.get(name))
+        if descriptor["status"] in {"unsupported", "fixed"}:
+            params.pop(name, None)
+            extra.pop(name, None)
+            continue
+        if value is None or descriptor["status"] != "supported":
+            continue
+        values = descriptor.get("values")
+        if (values is not None and value not in values) or (
+            name == "temperature" and (not _number(value) or not 0 <= value <= 2)
+        ):
+            raise ValueError(f"{name} is outside its detected parameter contract")
+        if "minimum" in descriptor and not descriptor["minimum"] <= value <= descriptor["maximum"]:
+            raise ValueError("temperature is outside its detected range")
+        if name == "temperature" and "reasoning_effort" in descriptor:
+            effort = extra.get("reasoning_effort", params.get("reasoning_effort"))
+            if effort != descriptor["reasoning_effort"]:
+                raise ValueError(
+                    "Reasoning mode changed; reset temperature or detect capabilities again"
+                )
+    return params
 
 
 def metadata_parameters(metadata):
