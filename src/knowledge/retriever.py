@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Mapping
-from shared.context_policy import audit_retrieval_fragment
+from shared.context_audit import audit_retrieval_fragment
 
 from knowledge.gxworks2_concepts import CONTEXT_RE as _GXW2_CONTEXT_RE, query_skill_concepts
 
