@@ -335,6 +335,7 @@ def _generation_packet(runtime, value, evidence_text):
         "generation_request": value.generation_request,
         "current_program": copy.deepcopy(value.current_program),
         "evidence": str(evidence_text or ""),
+        "context_checkpoint": str(value.context_checkpoint or ""),
     }
 
 
@@ -347,6 +348,8 @@ def _wire_packet(renderer, runtime, value, evidence_text):
         str(evidence_text or ""),
         str(value.generation_request or ""),
         copy.deepcopy(value.current_program),
+        str(value.context_checkpoint or ""),
+        copy.deepcopy(value.wire_history),
     )
     return normalize_wire_packet(rendered)
 
@@ -375,6 +378,9 @@ class ContextCompilerInput:
     generation_request: str = ""
     current_program: object = None
     wire_renderer: object = None
+    wire_history: list = field(default_factory=list)
+    context_checkpoint: str = ""
+    compacted_request_ids: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -400,6 +406,24 @@ class ContextCompiler:
                    if value.intent_context is not None else intent_context(runtime))
         original_evidence_text = str(evidence_text or "")
         runtime_context, duplicate_requests, superseded = _clean_request_rows(context)
+        compacted_ids = {
+            str(item) for item in (value.compacted_request_ids or ())
+            if str(item)
+        }
+        checkpoint_compacted_requests = 0
+        if compacted_ids and isinstance(runtime_context.get("requests"), list):
+            for row in runtime_context["requests"]:
+                if not isinstance(row, dict) or str(row.get("id") or "") not in compacted_ids:
+                    continue
+                text = str(row.get("text") or "")
+                if text:
+                    row.pop("text", None)
+                    row.setdefault(
+                        "text_sha256",
+                        hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                    )
+                    row["runtime_text_status"] = "compacted_checkpoint"
+                    checkpoint_compacted_requests += 1
         if runtime_context or "intent_context" in runtime or value.intent_context is not None:
             runtime["intent_context"] = runtime_context
 
@@ -435,6 +459,8 @@ class ContextCompiler:
             "generation_contract": _estimate(selected.get("generation_contract", {})),
             "rag_evidence": estimate_tokens(evidence_text),
             "current_program": _estimate(value.current_program) if value.current_program is not None else 0,
+            "context_checkpoint": estimate_tokens(value.context_checkpoint),
+            "wire_history": _estimate(value.wire_history),
         }
         usable = budget["usable_input_tokens"]
         original_packet = _generation_packet(persistent, value, original_evidence_text)
@@ -476,7 +502,11 @@ class ContextCompiler:
         utilization = (compiled_estimated / usable) if usable is not None and usable > 0 else None
         # Pressure is telemetry, not permission to trim unknown engineering
         # intent. Report actual work rather than an "aggressive" no-op label.
-        mode = "priority_projection" if superseded else "dedupe_only"
+        mode = (
+            "checkpoint_compaction"
+            if str(value.context_checkpoint or "").strip()
+            else "priority_projection" if superseded else "dedupe_only"
+        )
         report = {
             "model_context_window": budget["context_window"],
             "budget_confidence": budget["budget_confidence"],
@@ -507,6 +537,7 @@ class ContextCompiler:
             "source_tokens": source_tokens,
             "dropped": {"duplicate_requests": duplicate_requests,
                         "superseded_structured": superseded,
+                        "checkpoint_compacted_requests": checkpoint_compacted_requests,
                         "duplicate_evidence_blocks": duplicate_evidence,
                         "provenance_tokens": provenance_saved},
             "compression_mode": mode,
