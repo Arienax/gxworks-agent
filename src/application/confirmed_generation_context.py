@@ -97,6 +97,7 @@ class ConfirmedGenerationContext:
     knowledge_context: str
     current_program: dict | None
     generation_request: str
+    wire_packet: dict = field(default_factory=dict)
     handoff: dict = field(default_factory=dict)
 
     def __post_init__(self):
@@ -109,7 +110,8 @@ class ConfirmedGenerationContext:
 
 def build_confirmed_generation_context(
     confirmed_spec, plc_model, *, user_requirement="", current_program=None,
-    task_type="generate", evidence=None, knowledge_builder=None, model_profile=None, decision_receipt_id=None,
+    task_type="generate", evidence=None, knowledge_builder=None, model_profile=None,
+    decision_receipt_id=None, wire_renderer=None,
 ):
     """Project before routing/retrieval; first generation cannot replay Agent A.
 
@@ -144,6 +146,7 @@ def build_confirmed_generation_context(
         task_type=task_type,
         generation_request=request,
         current_program=current,
+        wire_renderer=wire_renderer,
     )
     precompiled = compiler.compile(compiler_input)
     # Exact device/error facts come from the active request, not from the
@@ -214,5 +217,7 @@ def build_confirmed_generation_context(
         io_bindings=runtime_spec.get("io_bindings") or [],
         generation_contract=selected.get("generation_contract") or {},
         knowledge_context=knowledge_text,
-        current_program=current, generation_request=request, handoff=public_generation_value(handoff),
+        current_program=current, generation_request=request,
+        wire_packet=compiled.wire_packet,
+        handoff=public_generation_value(handoff),
     )
