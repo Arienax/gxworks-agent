@@ -711,7 +711,7 @@
       "category": "generation",
       "state": "enforced",
       "owner": "plc.generation.prepare_ladder_candidate + plc.specification.semantic_validation",
-      "summary": "Fresh confirmed Agent B output passes structural acceptance followed by one requirement registry. Structure requirements come from implementation_semantics; declarative structure obligations bind canonical I/O roles, electrical predicates and optional confirmed targets to one inspected structure instance. Opcode/device/exact-instance requirements come from Core-owned explicit_user_constraints; legacy specs retain compatibility behavior.",
+      "summary": "Fresh confirmed Agent B output passes structural parse/IR acceptance and always retains a semantic coverage receipt. Structure requirements come from implementation_semantics; declarative structure obligations bind canonical I/O roles, electrical predicates and optional confirmed targets to one inspected structure instance. Semantic violations are reported on the delivered candidate and never trigger a second model call or convert an already-produced candidate into a generation job failure.",
       "checks": [
         {
           "kind": "python_symbol",
@@ -802,6 +802,16 @@
           "kind": "contains",
           "path": "tests/test_generation_fast_path.py",
           "text": "test_semantic_requirement_registry_covers_structure_and_core_user_constraints"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_generation_fast_path.py",
+          "text": "test_confirmed_semantic_findings_do_not_fail_candidate_preparation"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_architecture_boundary_cleanup.py",
+          "text": "test_generation_does_not_turn_semantic_findings_into_job_failures"
         }
       ],
       "tests": [
