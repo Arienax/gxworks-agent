@@ -13,7 +13,10 @@ from urllib.parse import urlsplit, urlunsplit
 # Public service error shared with desktop/CLI model selection.
 from storage.config import ModelConfigurationRequiredError
 from model_runtime.contract import CapabilityContract, UserModelSettings, scoped_contract, normalize_contract, credential_fingerprint
-from model_runtime.legacy_migration import clear_legacy_detection
+from model_runtime.legacy_migration import (
+    clear_legacy_detection,
+    strip_legacy_runtime_fields,
+)
 from model_runtime.request_policy import public_contract_settings
 
 
@@ -163,7 +166,7 @@ class SettingsService:
             str(chosen.get("model") or ""),
         )
         if old_identity != new_identity:
-            clear_legacy_detection(chosen)
+            strip_legacy_runtime_fields(chosen)
 
         if "contract" in values:
             chosen["capabilityContract"] = normalize_contract(
