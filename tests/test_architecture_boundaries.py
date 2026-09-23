@@ -338,3 +338,29 @@ def test_fresh_builtin_model_profiles_do_not_seed_legacy_runtime_fields():
         not retired.intersection(profile)
         for profile in payload.get("modelProfiles", [])
     )
+
+
+
+def test_storage_preserves_but_does_not_interpret_retired_model_profile_fields():
+    path = SOURCE_ROOT / "storage" / "config.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    retired = {
+        "capabilities", "parameterSupport", "generationDefaults", "requestOverrides"
+    }
+    violations = []
+    for node in tree.body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.name == "_normalize_profile":
+            continue
+        for child in ast.walk(node):
+            if isinstance(child, ast.Call) and isinstance(child.func, ast.Attribute):
+                if child.func.attr in {"get", "pop", "setdefault"} and child.args:
+                    key = child.args[0]
+                    if isinstance(key, ast.Constant) and key.value in retired:
+                        violations.append((node.name, child.lineno, key.value))
+            elif isinstance(child, ast.Subscript):
+                key = child.slice
+                if isinstance(key, ast.Constant) and key.value in retired:
+                    violations.append((node.name, child.lineno, key.value))
+    assert not violations, violations
