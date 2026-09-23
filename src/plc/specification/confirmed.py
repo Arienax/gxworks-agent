@@ -16,6 +16,7 @@ from plc.specification.bindings import (
     bound_parameter_is_removed,
     confirmed_input_levels,
     merge_declared_bindings,
+    extract_declared_bindings,
 )
 
 from plc.specification.approach import (
@@ -1526,6 +1527,21 @@ def canonicalize_confirmed_spec(spec):
         io_table, parameters + legacy, canonical.get("io_bindings", []),
         protected_ids=QUESTION_IDS,
     )
+    # Older drafts/frontends could preserve the visible I/O table while
+    # dropping hidden binding identities. Recover only explicit declarations
+    # whose addresses are still active; existing bindings and operator edits
+    # remain authoritative, and deleted/moved addresses are never resurrected.
+    intent = canonical.get("intent_context")
+    requests = intent.get("requests", []) if isinstance(intent, dict) else []
+    declared_bindings = []
+    model_for_bindings = str(canonical.get("plc_model") or "FX3U").strip().upper()
+    for request in requests:
+        if not isinstance(request, dict):
+            continue
+        declared_bindings.extend(
+            extract_declared_bindings(request.get("text", ""), model_for_bindings)
+        )
+    bindings = merge_declared_bindings(rows, bindings, declared_bindings)
     for row in rows:
         row["address"] = str(row.get("address") or "").strip().upper()
         row["kind"] = str(row.get("kind") or _device_kind(row["address"])).strip()
