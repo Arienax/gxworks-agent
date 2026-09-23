@@ -111,7 +111,7 @@ class ConfirmedGenerationContext:
 def build_confirmed_generation_context(
     confirmed_spec, plc_model, *, user_requirement="", current_program=None,
     task_type="generate", evidence=None, knowledge_builder=None, model_profile=None,
-    decision_receipt_id=None, wire_renderer=None,
+    decision_receipt_id=None, wire_renderer=None, wire_history=None,
 ):
     """Project before routing/retrieval; first generation cannot replay Agent A.
 
@@ -147,6 +147,7 @@ def build_confirmed_generation_context(
         generation_request=request,
         current_program=current,
         wire_renderer=wire_renderer,
+        wire_history=copy.deepcopy(wire_history or []),
     )
     precompiled = compiler.compile(compiler_input)
     # Exact device/error facts come from the active request, not from the
@@ -176,6 +177,13 @@ def build_confirmed_generation_context(
     from knowledge.evidence import context_manifest, text_sha256
     knowledge_text = public_generation_value(knowledge or "")
     compiled = compiler.compile(compiler_input, evidence_text=knowledge_text)
+    from application.context_compactor import compact_if_needed
+    compiled, compiler_input = compact_if_needed(
+        compiler,
+        compiler_input,
+        compiled,
+        evidence_text=knowledge_text,
+    )
     knowledge_text = compiled.generation_packet["evidence"]
     runtime_spec = compiled.generation_packet["confirmed_spec"]
     selected = runtime_spec.get("selected_approach") or {}
