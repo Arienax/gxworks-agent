@@ -57,6 +57,24 @@ def compact(start=1, stop=0, wrapped=False, wrong=False):
     return {"r": [{"h": None, "s": [], "b": [{"i": [inputs] if wrapped else inputs, "o": ["COIL Y0"]}]}]}
 
 
+@pytest.mark.parametrize(("mnemonic", "expected"), [
+    ("LD", "NO"), ("AND", "NO"), ("OR", "NO"),
+    ("LDI", "NC"), ("ANI", "NC"), ("ORI", "NC"),
+    ("LDP", "P"), ("ANDP", "P"), ("ORP", "P"),
+    ("LDF", "F"), ("ANDF", "F"), ("ORF", "F"),
+])
+def test_mitsubishi_contact_mnemonics_are_canonicalized_at_compact_boundary(mnemonic, expected):
+    value = {"r": [{"h": f"{mnemonic} M8002", "s": [], "b": [{"i": [], "o": ["COIL Y0"]}]}]}
+    header = expand_compact_ladder(value)["rungs"][0]["header_element"]
+    assert header == {"type": expected, "address": "M8002"}
+
+
+def test_unknown_contact_mnemonic_is_still_rejected():
+    value = {"r": [{"h": "LDX M8002", "s": [], "b": [{"i": [], "o": ["COIL Y0"]}]}]}
+    with pytest.raises(CompactProtocolError):
+        expand_compact_ladder(value)
+
+
 def test_single_wrapper_is_representation_only_and_idempotent():
     source = compact(wrapped=True, wrong=True)
     original = copy.deepcopy(source)
