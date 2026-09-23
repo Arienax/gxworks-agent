@@ -25,6 +25,22 @@ def _bundled_index():
     return path
 
 
+def test_broad_retrieval_uses_unweighted_rrf_without_plc_topic_boosts():
+    import knowledge.core as knowledge_core
+
+    broad = inspect.getsource(knowledge_core._retrieve_uncached)
+    structured = inspect.getsource(knowledge_core._structured_references)
+
+    assert "_RRF_K" in broad
+    assert "1.0 / (_RRF_K + signal[\"rank\"] + 1.0)" in broad
+    for legacy in (
+        "positioning_query", "timer_query", "timer_device_section",
+        "task_boost", "alias_scores", "_base_score", "score +=", "score -=",
+    ):
+        assert legacy not in broad
+        assert legacy not in structured
+
+
 def test_direct_fact_module_has_no_broad_retriever_calls():
     import knowledge.structured_facts as facts
 
