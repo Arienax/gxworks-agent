@@ -611,3 +611,36 @@ def test_flat_legacy_config_never_inherits_preset_effort(model, template, expect
     if nested:
         assert params["extra_body"]["fixture"] is True
     assert config == before and config_manager._default_profiles() == defaults
+
+
+
+def test_flat_request_template_is_translated_only_as_legacy_migration_input():
+    from model_runtime.legacy_migration import migrate_request_template
+
+    base = {
+        "id": "legacy-template",
+        "name": "Legacy template",
+        "adapter": "openai_compatible",
+        "baseUrl": "https://models.example.invalid/v1",
+        "model": "example-model",
+    }
+    migrated = migrate_request_template(base, {
+        "temperature": 0.4,
+        "reasoning_effort": "{effort}",
+        "vendor_flag": True,
+        "extra_body": {"reasoning_effort": "{effort}", "vendor_mode": "x"},
+    })
+    assert migrated["generationDefaults"] == {"temperature": 0.4}
+    assert migrated["requestOverrides"] == {
+        "vendor_flag": True,
+        "extra_body": {"vendor_mode": "x"},
+    }
+
+    runtime = materialize_runtime_profile(migrated, api_key="")
+    assert runtime.settings.parameters["temperature"] == {
+        "mode": "value", "value": 0.4
+    }
+    assert runtime.overrides == {
+        "vendor_flag": True,
+        "extra_body": {"vendor_mode": "x"},
+    }
