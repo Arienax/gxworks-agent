@@ -675,25 +675,43 @@ def test_source_subquery_prefilters_instruction_chunks_before_candidate_limit():
         connection.execute(
             "CREATE TABLE chunks (id TEXT, manual_type TEXT, chunk_type TEXT, manual_id TEXT)"
         )
+        connection.execute("CREATE TABLE device_records (chunk_id TEXT)")
+        connection.execute("CREATE TABLE error_records (chunk_id TEXT)")
         connection.executemany(
             "INSERT INTO chunks VALUES (?,?,?,?)",
             [
                 ("or", "programming", "instruction", "manual"),
+                ("device-owner", "structured_device", "prose", "device-manual"),
+                ("error-owner", "programming", "error", "error-manual"),
                 ("general", "programming", "prose", "manual"),
             ],
         )
+        connection.execute("INSERT INTO device_records VALUES ('device-owner')")
+        connection.execute("INSERT INTO error_records VALUES ('error-owner')")
         schema = {
             "chunks": {
                 "name": "chunks",
                 "columns": ("id", "manual_type", "chunk_type", "manual_id"),
-            }
+            },
+            "device_records": {
+                "name": "device_records",
+                "columns": ("chunk_id",),
+            },
+            "error_records": {
+                "name": "error_records",
+                "columns": ("chunk_id",),
+            },
         }
 
         sql, values = source_subquery(connection, schema, ("fact",))
-        assert {row[0] for row in connection.execute(sql, values)} == {"or", "general"}
+        assert {row[0] for row in connection.execute(sql, values)} == {
+            "or", "device-owner", "error-owner", "general",
+        }
 
         sql, values = source_subquery(
-            connection, schema, ("fact",), exclude_chunk_types=("instruction",),
+            connection, schema, ("fact",),
+            exclude_chunk_types=("instruction",),
+            exclude_structured_kinds=("device", "error"),
         )
         assert [row[0] for row in connection.execute(sql, values)] == ["general"]
     finally:
@@ -725,6 +743,7 @@ def test_exact_instruction_residual_broad_retrieval_uses_instruction_prefilter(m
     def broad_lookup(*args, **kwargs):
         calls.append((args, kwargs))
         assert kwargs.get("exclude_chunk_types") == ("instruction",)
+        assert kwargs.get("exclude_structured_kinds") == ()
         return []
 
     monkeypatch.setattr(retriever, "retrieve_knowledge", broad_lookup)
@@ -733,11 +752,84 @@ def test_exact_instruction_residual_broad_retrieval_uses_instruction_prefilter(m
     )
     assert len(calls) == 1
     receipt = context.manifest["structured_facts"]
+    assert receipt["direct_covered_kinds"] == ["instruction"]
     assert receipt["residual_retrieval"] is True
     assert receipt["residual_pre_filters"] == {
         "exclude_chunk_types": ["instruction"],
     }
 
+
+
+
+def test_covered_device_and_error_targets_prefilter_structured_owner_rows(monkeypatch):
+    _bundled_index()
+    import knowledge.retriever as retriever
+
+    targets = {
+        "version": "structured-facts-v2-contract-merged",
+        "instructions": [],
+        "devices": ["M8029"],
+        "errors": ["6105"],
+    }
+    query = KnowledgeQuery(
+        "M8029 6105 explain scan cycle",
+        precompiled=True,
+        metadata={"structured_fact_targets": targets},
+    )
+    calls = []
+
+    def broad_lookup(*args, **kwargs):
+        calls.append((args, kwargs))
+        assert kwargs.get("exclude_chunk_types") == ()
+        assert kwargs.get("exclude_structured_kinds") == ("device", "error")
+        return []
+
+    monkeypatch.setattr(retriever, "retrieve_knowledge", broad_lookup)
+    context = retriever.build_knowledge_context(
+        query, plc_model="FX3U", task_type="analysis", top_k=5, char_budget=10000,
+    )
+    assert len(calls) == 1
+    receipt = context.manifest["structured_facts"]
+    assert receipt["direct_covered_kinds"] == ["device", "error"]
+    assert receipt["residual_pre_filters"] == {
+        "exclude_structured_kinds": ["device", "error"],
+    }
+
+
+def test_unresolved_structured_targets_do_not_close_broad_candidate_lanes(monkeypatch):
+    import knowledge.retriever as retriever
+    import knowledge.structured_facts as facts
+
+    targets = {
+        "version": "structured-facts-v2-contract-merged",
+        "instructions": [{"opcode": "NOTREAL", "base_opcode": "NOTREAL"}],
+        "devices": ["M999999"],
+        "errors": ["FFFF"],
+    }
+    query = KnowledgeQuery(
+        "NOTREAL M999999 FFFF explain scan cycle",
+        precompiled=True,
+        metadata={"structured_fact_targets": targets},
+    )
+    monkeypatch.setattr(facts, "resolve_instruction_records", lambda *a, **k: [])
+    monkeypatch.setattr(facts, "resolve_device_records", lambda *a, **k: [])
+    monkeypatch.setattr(facts, "resolve_error_records", lambda *a, **k: [])
+    seen = []
+
+    def broad_lookup(*args, **kwargs):
+        seen.append(kwargs)
+        return []
+
+    monkeypatch.setattr(retriever, "retrieve_knowledge", broad_lookup)
+    context = retriever.build_knowledge_context(
+        query, plc_model="FX3U", task_type="analysis", top_k=5, char_budget=10000,
+    )
+    assert len(seen) == 1
+    assert seen[0].get("exclude_chunk_types") == ()
+    assert seen[0].get("exclude_structured_kinds") == ()
+    receipt = context.manifest["structured_facts"]
+    assert receipt["direct_covered_kinds"] == []
+    assert receipt["residual_pre_filters"] == {}
 
 
 def test_broad_retrieval_does_not_own_exact_plc_fact_tables():
