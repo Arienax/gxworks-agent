@@ -1,9 +1,10 @@
 """Opt-in, auditable policies for automatically injected PLC context.
 
 No model calls, file I/O, retrieval imports, or PLC semantics live here.
-``legacy`` is the release default. Other policies are experiments, not evidence
-that less context produces a better program. Explicit Agent/MCP tools are not
-blocked by these policies; this is not a document permission mechanism.
+Fresh workflows use the adaptive policy. ``legacy`` is accepted only for old
+snapshots and explicit compatibility tests; it is never the release default.
+Explicit Agent/MCP tools are not blocked by these policies; this is not a
+document permission mechanism.
 """
 from __future__ import annotations
 
@@ -18,6 +19,7 @@ from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Tuple
 
 POLICY_ENV = "GXWORKS_CONTEXT_POLICY"
 POLICY_VERSION = 1
+DEFAULT_POLICY = "adaptive"
 POLICY_NAMES = ("legacy", "minimal", "manual", "examples", "combined", "adaptive")
 
 
@@ -27,7 +29,7 @@ class ContextPolicyError(ValueError):
 
 @dataclass(frozen=True)
 class ContextPolicy:
-    name: str = "legacy"
+    name: str = DEFAULT_POLICY
 
     def __post_init__(self) -> None:
         if self.name not in POLICY_NAMES:
@@ -56,7 +58,7 @@ def resolve_context_policy(value: Any = None) -> ContextPolicy:
         active = _policy.get()
         if active is not None:
             return active
-        value = os.environ.get(POLICY_ENV, "legacy")
+        value = os.environ.get(POLICY_ENV, DEFAULT_POLICY)
     if isinstance(value, ContextPolicy):
         return value
     if isinstance(value, Mapping):
