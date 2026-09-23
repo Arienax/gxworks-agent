@@ -23,6 +23,8 @@ const words: Record<string, [string, string]> = {
   "检测模型能力后显示参数滑条。": ["Detect model capabilities to show parameter sliders.", "モデル機能を検出するとパラメーターのスライダーが表示されます。"],
   "条件支持": ["Conditional support", "条件付き対応"],
   "继承工作流与配置默认值": ["Inherit workflow and profile defaults", "ワークフローと設定の既定値を継承"],
+  "继承运行时默认": ["Inherit runtime default", "ランタイム既定値を継承"],
+  "供应商特有的可调参数应声明在能力合同中；这里仅保留显式 capability override。": ["Provider-specific tunable parameters must be declared in the capability contract; only explicit capability overrides remain here.", "プロバイダー固有の調整可能パラメータは能力コントラクトで宣言し、ここでは明示的な capability override のみを保持します。"],
   "旧配置迁移": ["Migrated legacy settings", "旧設定から移行"],
   "参数来源": ["Parameter source", "パラメーターの設定元"],
   "用户指定值": ["Explicit user value", "ユーザー指定値"],
