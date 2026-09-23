@@ -18,12 +18,13 @@ from typing import Any, Callable, Dict, Iterable, Iterator, Mapping, Optional, P
 from shared.i18n import get_language, normalize_language, response_language_instruction, translate
 from model_runtime.responses import ResponseContract, TEXT_RESPONSE, inspect_response, preserved_annotations
 from agent_runtime.messages import ToolCall, ToolResult
-from model_runtime.capabilities import parameter_error
 from model_runtime.contract import scoped_contract
 from model_runtime.request_policy import resolve_request, contract_capability_available
 from model_runtime.runtime_profile import materialize_runtime_profile
+from model_runtime.legacy_migration import detection_profile
 from model_runtime.transport_policy import (
     can_fallback_to_non_stream, is_explicit_stream_rejection, preferred_streaming,
+    parameter_error,
 )
 
 
@@ -685,23 +686,10 @@ class OpenAICompatibleProvider:
         return params
 
     def for_detection(self, *, parameters=None):
-        """Same transport and thinking extensions, without optional tuning."""
-        profile = copy.deepcopy(self.profile)
-        contract = scoped_contract(profile)
+        """Same transport extensions, with legacy tuning stripped in migration."""
+        contract = scoped_contract(self.profile)
         declared = {**(contract.parameters if contract else {}), **(parameters or {})}
-        profile.pop("parameterSupport", None)
-        profile.pop("capabilityContract", None)
-        profile.pop("userModelSettings", None)
-        optional = {"temperature", "reasoning_effort", "top_p", "response_format",
-                    "max_tokens", "max_completion_tokens", "stream_options"}
-        for group in ("generationDefaults", "requestOverrides"):
-            options = profile.setdefault(group, {})
-            for name, descriptor in declared.items():
-                descriptor.remove(options, name)
-            for key in optional:
-                options.pop(key, None)
-                if isinstance(options.get("extra_body"), dict):
-                    options["extra_body"].pop(key, None)
+        profile = detection_profile(self.profile, declared)
         return OpenAICompatibleProvider(profile, self.api_key, client=self._client)
 
     def probe_parameter(self, model, name=None, value=None, *, timeout=15.0, context=None):
