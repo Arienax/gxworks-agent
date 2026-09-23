@@ -77,16 +77,15 @@ def test_large_context_low_utilization_only_deduplicates():
     assert report["context_utilization"] < .35
     assert report["compression_mode"] == "dedupe_only"
     assert report["context_pressure"] == "low"
-    assert report["semantic_curator_invoked"] is False
+    assert report["checkpoint_compaction_required"] is False
 
 
-def test_small_context_high_utilization_stays_deterministic_and_flags_semantic_eligibility():
+def test_small_context_high_utilization_marks_checkpoint_compaction_required():
     compiled = compile(spec(note="工" * 110_000), window=128_000)
     report = compiled.budget_report
     assert report["context_utilization"] > .80
     assert report["compression_mode"] == "dedupe_only"
-    assert report["semantic_curator_eligible"] is True
-    assert report["semantic_curator_invoked"] is False
+    assert report["checkpoint_compaction_required"] is True
 
 
 def test_retrieval_priority_keeps_current_facts_ahead_of_old_requests_and_long_guide():
@@ -213,6 +212,7 @@ def test_known_zero_usable_budget_is_not_treated_as_unknown():
     assert report["pre_compaction_context_utilization"] is None
     assert report["context_utilization"] is None
     assert report["budget_exceeded_after_compaction"] is True
+    assert report["checkpoint_compaction_required"] is True
     assert compiled.retrieval_packet["query"] == ""
     assert compiled.retrieval_packet["estimated_tokens"] == 0
 
