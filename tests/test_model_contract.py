@@ -215,7 +215,7 @@ def test_settings_persist_contract_selections_and_invalidate_key_without_mutatin
         contract=p["capabilityContract"], user_settings=p["userModelSettings"])
     row = next(item for item in result["profiles"] if item["id"] == "v2")
     assert row["user_settings"]["parameters"]["new_budget"]["value"] == 8192
-    assert row["generation_defaults"] == {}
+    assert not {"generation_defaults", "request_overrides", "parameter_support", "capabilities"}.intersection(row)
     before = env.path.read_bytes()
     assert env.service.public_settings() == result
     assert env.path.read_bytes() == before
@@ -356,7 +356,10 @@ def test_application_effort_is_profile_owned_on_the_actual_wire(legacy, selectio
     assert result.message.content == "OK"
     assert "reasoning_effort" not in provider.request.options
     assert "reasoning_effort" not in provider.request.options.get("extra_body", {})
-    assert provider.params.get("reasoning_effort") == ("medium" if selection in {"medium", "advanced", "inherit"} else None)
+    expected = "medium" if (
+        selection == "medium" or legacy and selection in {"advanced", "inherit"}
+    ) else None
+    assert provider.params.get("reasoning_effort") == expected
     assert provider.params["extra_body"]["keep"] is True
     assert p == before and options == saved
 
