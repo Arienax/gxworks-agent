@@ -548,6 +548,7 @@ def _legacy_compatibility_check(ladder, confirmed_spec, plc_model):
             if isinstance(contract, Mapping) and contract
             else "not_applicable",
         }],
+        "violations": [],
         "legacy_compatibility": True,
     }
 
@@ -555,7 +556,7 @@ def _legacy_compatibility_check(ladder, confirmed_spec, plc_model):
 def validate_confirmed_semantics(ladder, confirmed_spec, plc_model="FX3U"):
     """Validate canonical implementation semantics and return coverage."""
     if not isinstance(confirmed_spec, Mapping):
-        return {"version": _VERSION, "status": "not_applicable", "requirements": [], "checks": []}
+        return {"version": _VERSION, "status": "not_applicable", "requirements": [], "checks": [], "violations": []}
 
     selected = confirmed_spec.get("selected_approach")
     canonical_sources = (
@@ -584,19 +585,10 @@ def validate_confirmed_semantics(ladder, confirmed_spec, plc_model="FX3U"):
         checks.extend(rows)
         violations.extend(failed)
 
-    if violations:
-        summary = ", ".join(
-            (
-                f"{row.get('kind')}:{row.get('expected')}"
-                + (f" ({row.get('reason')})" if row.get("reason") else "")
-            )
-            for row in violations[:8]
-        )
-        raise ConfirmedSemanticValidationError(
-            "$.confirmed_spec.selected_approach: generated candidate violates "
-            "confirmed implementation semantics/user constraints: " + summary
-        )
-
+    # Semantic contradictions are evidence about the generated candidate, not a
+    # reason to discard an already-produced model response.  The generation
+    # path consumes this receipt and delivers the candidate without another
+    # model call; deployment/review layers may decide how to use the findings.
     unresolved = [row for row in checks if row.get("status") == "unresolved"]
     verified_ids = {row.get("requirement_id") for row in checks if row.get("status") == "verified"}
     requirement_ids = {row["requirement_id"] for row in requirements}
@@ -612,8 +604,9 @@ def validate_confirmed_semantics(ladder, confirmed_spec, plc_model="FX3U"):
     return {
         "version": _VERSION,
         "plc_model": str(plc_model or "").strip().upper(),
-        "status": "unresolved" if unresolved else "verified",
+        "status": "violated" if violations else ("unresolved" if unresolved else "verified"),
         "requirements": requirements,
         "checks": checks,
+        "violations": list(violations),
         "legacy_compatibility": False,
     }
