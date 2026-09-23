@@ -278,7 +278,7 @@ def _normalize_profile(profile):
         if value is not None and not isinstance(value, dict):
             raise ValueError(f"模型 Profile {profile_id} 的 {key} 必须是对象。")
         normalized[key] = copy.deepcopy(value) if isinstance(value, dict) else {}
-    from model_runtime.capabilities import normalize_parameter_support
+    from model_runtime.legacy_migration import normalize_parameter_support
     normalized["parameterSupport"] = normalize_parameter_support(normalized["parameterSupport"])
     from model_runtime.contract import CapabilityContract, UserModelSettings, normalize_contract
     normalized["capabilityContract"] = normalize_contract(normalized["capabilityContract"])
