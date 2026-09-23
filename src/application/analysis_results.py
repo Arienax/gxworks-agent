@@ -196,46 +196,9 @@ def _extract_user_declared_io(user_text, plc_model):
 
 
 def _extract_user_declared_bindings(user_text, plc_model):
-    """Extract machine I/O metadata only from explicit address declarations."""
-    from plc.specification.bindings import canonical_signal_role, confirmed_input_levels
-
-    result = []
-    seen = set()
-    for statement in re.split(r"[\n;；。]+", str(user_text or "")):
-        match = _DECLARED_IO_LINE_RE.fullmatch(statement)
-        if match is None:
-            continue
-        address = canonical_device(re.sub(r"\s+", "", match.group(1)).upper())
-        raw_value = match.group(2).strip()
-        try:
-            parsed = parse_device_address(address, plc_model)
-        except (PLCJsonValidationError, ValueError, TypeError):
-            continue
-        if parsed is None:
-            continue
-        kind, _number = parsed
-        label = _INPUT_QUALIFIER_RE.split(raw_value, maxsplit=1)[0].strip() or raw_value
-        role = canonical_signal_role(label)
-        levels = confirmed_input_levels(raw_value) if kind == "X" else {}
-        if not role and not levels:
-            continue
-        binding_id = f"declared.{role or kind.casefold()}.{address}"
-        if binding_id in seen:
-            continue
-        seen.add(binding_id)
-        item = {
-            "binding_id": binding_id,
-            "kind": kind,
-            "address": address,
-            "label": label,
-            "name": label,
-            "source": "user_request",
-        }
-        if role:
-            item["role"] = role
-        item.update(levels)
-        result.append(item)
-    return result
+    """Application wrapper around Core-owned explicit I/O declaration parsing."""
+    from plc.specification.bindings import extract_declared_bindings
+    return extract_declared_bindings(user_text, plc_model)
 
 
 def _historical_declared_io(confirmed_spec, plc_model):
