@@ -563,14 +563,8 @@ def _save_history(history):
 
 def _build_clean_messages(conversation_history, system_prompt):
     """构建发送给模型的消息列表，仅保留用户可见正文。"""
-    messages = [{"role": "system", "content": system_prompt}]
-    for msg in conversation_history:
-        role = msg.get("role")
-        if role not in {"user", "assistant"}:
-            continue
-        clean = {"role": role, "content": str(msg.get("content", ""))}
-        messages.append(clean)
-    return messages
+    from application.generation_wire import render_wire_messages
+    return render_wire_messages(system_prompt, conversation_history)
 
 
 
@@ -646,6 +640,7 @@ def _prepare_api_call(
         confirmed_builder=_with_confirmed_context,
         on_context=on_generation_context,
         model_profile=bound_provider_profile(),
+        wire_history=conversation_history,
     )
     messages_to_send = _build_clean_messages(conversation_history, system_prompt)
     if image_attachments:
