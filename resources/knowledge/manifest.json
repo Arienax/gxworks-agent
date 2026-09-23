@@ -292,7 +292,7 @@
       "runtime": "numpy_lazy_local"
     },
     "entity_index": true,
-    "fusion": "structured_entity_bm25_vector_rrf",
+    "fusion": "metadata_entity_bm25_vector_rrf",
     "reranker": "deterministic_cross_signal_reranker",
     "vector_schema": true,
     "vector_status": "ready"
