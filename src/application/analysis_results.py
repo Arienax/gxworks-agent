@@ -3,7 +3,11 @@ import copy
 import json
 import re
 from shared.i18n import tr
-from plc.specification.approach import normalize_approach
+from plc.specification.approach import (
+    IMPLEMENTATION_SEMANTIC_STATUSES,
+    normalize_approach,
+    normalize_implementation_semantics,
+)
 from plc.validation import PLCJsonValidationError, parse_device_address
 from plc.device_identity import canonical_device
 from plc.hardware_profiles import ensure_hardware_questions
@@ -26,6 +30,126 @@ _STATE_NOT_PURPOSE_RE = re.compile(
     r"^(?:(?:ON|OFF|TRUE|FALSE)(?=$|[^A-Za-z0-9_])|[+-]?\d+(?:[.,]\d+)?(?=$|[\s~～<>=+\-]|时|時))",
     re.IGNORECASE,
 )
+
+
+_CURRENT_APPROACH_FORBIDDEN_FIELDS = frozenset({
+    "generation_contract",
+    "explicit_user_constraints",
+    "implementation_preferences",
+})
+_CURRENT_SEMANTIC_FORBIDDEN_FIELDS = frozenset({
+    "opcode",
+    "operands",
+    "device",
+    "instruction_instance",
+})
+
+
+class AnalysisProtocolError(ValueError):
+    """Fresh Agent-A JSON does not satisfy the current analysis wire protocol."""
+
+    def __init__(self, violations):
+        self.violations = tuple(str(item) for item in violations if str(item).strip())
+        super().__init__("; ".join(self.violations) or "analysis protocol violation")
+
+
+def current_analysis_protocol_violations(result):
+    """Validate only the current Agent-A wire shape, never PLC engineering behavior."""
+    if not isinstance(result, dict):
+        return ["$: analysis response must be a JSON object"]
+
+    approaches = result.get("approaches")
+    if not isinstance(approaches, list):
+        return ["$.approaches: current protocol requires an array"]
+
+    violations = []
+    for index, approach in enumerate(approaches):
+        path = f"$.approaches[{index}]"
+        if not isinstance(approach, dict):
+            violations.append(path + ": approach must be an object")
+            continue
+
+        forbidden = sorted(_CURRENT_APPROACH_FORBIDDEN_FIELDS.intersection(approach))
+        if forbidden:
+            violations.append(
+                path + ": model must not emit " + ", ".join(forbidden)
+            )
+
+        if "implementation_semantics" not in approach:
+            violations.append(
+                path + ".implementation_semantics: required current-protocol field is missing"
+            )
+            continue
+        semantics = approach.get("implementation_semantics")
+        if not isinstance(semantics, list):
+            violations.append(
+                path + ".implementation_semantics: must be an array (empty is allowed)"
+            )
+            continue
+
+        for semantic_index, item in enumerate(semantics):
+            semantic_path = (
+                path + f".implementation_semantics[{semantic_index}]"
+            )
+            if not isinstance(item, dict):
+                violations.append(semantic_path + ": semantic must be an object")
+                continue
+
+            forbidden_semantic = sorted(
+                _CURRENT_SEMANTIC_FORBIDDEN_FIELDS.intersection(item)
+            )
+            if forbidden_semantic:
+                violations.append(
+                    semantic_path + ": low-level fields are not Agent-A semantics: "
+                    + ", ".join(forbidden_semantic)
+                )
+
+            kind = str(item.get("kind") or "").strip().casefold()
+            status = str(item.get("status") or "").strip().casefold()
+            if kind != "structure":
+                violations.append(
+                    semantic_path + ".kind: only 'structure' is allowed"
+                )
+                continue
+            if status not in IMPLEMENTATION_SEMANTIC_STATUSES:
+                violations.append(
+                    semantic_path + ".status: expected required, forbidden, or any_of"
+                )
+                continue
+
+            if status == "any_of":
+                values = item.get("values")
+                if (
+                    not isinstance(values, list)
+                    or not values
+                    or any(not isinstance(value, str) or not value.strip() for value in values)
+                ):
+                    violations.append(
+                        semantic_path + ".values: any_of requires a non-empty string array"
+                    )
+                    continue
+            else:
+                value = item.get("value")
+                if not isinstance(value, str) or not value.strip():
+                    violations.append(
+                        semantic_path + ".value: required/forbidden requires a structure name"
+                    )
+                    continue
+
+            if not normalize_implementation_semantics([item]):
+                violations.append(
+                    semantic_path + ": structure value is outside the Core vocabulary"
+                )
+
+    return violations
+
+
+def validate_current_analysis_protocol(result):
+    """Raise an analysis-protocol error before normalization or PLC validation."""
+    violations = current_analysis_protocol_violations(result)
+    if violations:
+        raise AnalysisProtocolError(violations)
+    return result
 
 
 def _extract_user_declared_io(user_text, plc_model):
