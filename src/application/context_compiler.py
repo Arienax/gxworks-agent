@@ -330,13 +330,16 @@ def _pack_sections(sections, token_budget):
 
 
 def _generation_packet(runtime, value, evidence_text):
-    return {
+    packet = {
         "confirmed_spec": runtime,
         "generation_request": value.generation_request,
         "current_program": copy.deepcopy(value.current_program),
         "evidence": str(evidence_text or ""),
-        "context_checkpoint": str(value.context_checkpoint or ""),
     }
+    checkpoint = str(value.context_checkpoint or "").strip()
+    if checkpoint:
+        packet["context_checkpoint"] = checkpoint
+    return packet
 
 
 def _wire_packet(renderer, runtime, value, evidence_text):
