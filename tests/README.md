@@ -210,6 +210,7 @@ Owns model catalog/profile/capabilities, provider requests, detection/verificati
 | `tests/test_model_profile_config.py` | focused coverage for model profile config |
 | `tests/test_model_profile_deletion.py` | focused coverage for model profile deletion |
 | `tests/test_model_provider.py` | focused coverage for model provider |
+| `tests/test_model_runtime_profile.py` | persisted-profile → RuntimeModelProfile materialization, legacy capability promotion and direct resolver input |
 | `tests/test_model_stream_cancellation.py` | focused coverage for model stream cancellation |
 | `tests/test_model_verification.py` | focused coverage for model verification |
 
