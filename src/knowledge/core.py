@@ -1633,18 +1633,23 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
         scoped_candidates = filter_records(scoped_candidates, source_lanes)
     for candidate in scoped_candidates:
         signals = candidate.pop("_signals", [])
-        best_by_type = {}
+        best_by_channel = {}
         for signal in signals:
-            current = best_by_type.get(signal["type"])
+            channel = (
+                signal["type"]
+                if signal["type"] in {"entity", "bm25", "vector"}
+                else "structured"
+            )
+            current = best_by_channel.get(channel)
             if current is None or signal["rank"] < current["rank"]:
-                best_by_type[signal["type"]] = signal
+                best_by_channel[channel] = signal
         fused = sum(
             1.0 / (_RRF_K + signal["rank"] + 1.0)
-            for signal in best_by_type.values()
+            for signal in best_by_channel.values()
         )
         ordered_signals = sorted(
-            best_by_type.values(),
-            key=lambda signal: (signal["rank"], signal["type"]),
+            best_by_channel.values(),
+            key=lambda signal: signal["rank"],
         )
         candidate["retrieval_signals"] = [
             signal["type"] for signal in ordered_signals
@@ -1654,12 +1659,12 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
             best_signal = ordered_signals[0]
             candidate["match_type"] = best_signal["type"]
             candidate["matched_entity"] = best_signal.get("matched", "")
-        bm25_signal = best_by_type.get("bm25")
+        bm25_signal = best_by_channel.get("bm25")
         if bm25_signal:
             for key in ("bm25", "query_coverage", "matched_terms"):
                 if key in bm25_signal:
                     candidate[key] = bm25_signal[key]
-        vector_signal = best_by_type.get("vector")
+        vector_signal = best_by_channel.get("vector")
         if vector_signal:
             for key in ("vector_cosine", "vector_rank"):
                 if key in vector_signal:
