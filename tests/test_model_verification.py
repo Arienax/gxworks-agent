@@ -27,6 +27,21 @@ def scoped_provider(endpoint=None,**changes):
 
 
 @pytest.mark.parametrize('consent',[False,None,'true',1])
+def test_verification_has_no_pre_resolve_or_cleared_contract_bypass():
+    import inspect
+    import model_runtime.verification as verification
+
+    source = inspect.getsource(verification.verify_one)
+    helper = inspect.getsource(verification._probe_runtime)
+
+    assert "resolve_request(" not in source
+    assert "resolve_request(" not in helper
+    assert "'capabilityContract':{}" not in source.replace(" ", "")
+    assert '"capabilityContract":{}' not in source.replace(" ", "")
+    assert "materialize_runtime_profile(" in helper
+    assert "_runtime_profiles" in source
+
+
 def test_consent_is_required_before_any_client_request(consent):
     p=scoped_provider()
     with pytest.raises(ValueError):verify_one(p,p.profile['capabilityContract'],'temperature',value=.73,consent=consent)
@@ -95,3 +110,24 @@ def test_unsupported_verification_target_or_budget_is_rejected_without_cost(targ
     p=scoped_provider()
     with pytest.raises(ValueError):verify_one(p,p.profile['capabilityContract'],target,kind=kind,value=value,consent=True)
     assert p._client.calls==[]
+
+
+def test_verification_keeps_materialized_legacy_transport_capabilities():
+    p = scoped_provider(
+        capabilities={
+            "thinking_required": True,
+            "tool_stream": True,
+        }
+    )
+    result = verify_one(
+        p,
+        p.profile["capabilityContract"],
+        "tools",
+        kind="capability",
+        consent=True,
+    )
+
+    assert result["outcome"] == "observed"
+    wire = p._client.calls[0]
+    assert wire["extra_body"]["thinking"]["type"] == "enabled"
+    assert wire["extra_body"]["tool_stream"] is True
