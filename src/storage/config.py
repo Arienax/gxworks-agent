@@ -276,48 +276,19 @@ def _profile_from_legacy(config):
                 "adapter": "openai_compatible",
                 "baseUrl": base_url,
                 "model": model,
-                "capabilities": {},
-                "generationDefaults": {},
-                "requestOverrides": {},
                 "credentialTarget": credential_target_for_profile(profile_id),
             }
         )
     selected = next(item for item in profiles if item["id"] == profile_id)
     selected["baseUrl"] = base_url
     selected["model"] = model
-    # A legacy model name is not an explicit choice of the preset's effort.
-    # Keep other compatibility defaults, then restore only saved tuning below.
-    from model_runtime.request_policy import without_workflow_effort
-    for layer in ("generationDefaults", "requestOverrides"):
-        selected[layer] = without_workflow_effort(selected.get(layer))
 
-    template = config.get("request_template")
-    if isinstance(template, dict):
-        portable = {
-            "temperature",
-            "top_p",
-            "max_tokens",
-            "stop",
-            "response_format",
-            "seed",
-            "frequency_penalty",
-            "presence_penalty",
-        }
-        defaults = {}
-        overrides = {}
-        for key, value in template.items():
-            if key in {"model", "messages", "stream", "tools", "tool_choice"}:
-                continue
-            if value == "{effort}":
-                continue
-            if key == "extra_body" and isinstance(value, dict):
-                value = copy.deepcopy(value)
-                if value.get("reasoning_effort") == "{effort}":
-                    value.pop("reasoning_effort")
-            target = defaults if key in portable else overrides
-            target[key] = copy.deepcopy(value)
-        selected["generationDefaults"].update(defaults)
-        selected["requestOverrides"].update(overrides)
+    from model_runtime.legacy_migration import migrate_request_template
+    migrated = migrate_request_template(selected, config.get("request_template"))
+    profiles = [
+        migrated if item["id"] == profile_id else item
+        for item in profiles
+    ]
     return profile_id, [_normalize_profile(item) for item in profiles]
 
 
