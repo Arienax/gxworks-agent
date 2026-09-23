@@ -61,6 +61,7 @@ Owns prompt assembly, token/context budgeting, RAG query construction, retrieval
 | Test file | File-level focus |
 | --- | --- |
 | `tests/test_context_compiler.py` | model-aware budgets, intent/evidence projection and unconditional historical-audit exclusion |
+| `tests/test_context_compactor.py` | over-budget historical checkpoint selection, recent-tail preservation, model compaction fallback and wire shrink accounting |
 | `tests/test_context_refresh_runtime.py` | focused coverage for context refresh runtime |
 | `tests/test_fx3u_rag.py` | FX3U factual retrieval quality and routing |
 | `tests/test_gxw2_skill_import.py` | focused coverage for gxw2 skill import |
