@@ -65,10 +65,9 @@ class JobContext:
             excluded = [item for item in sections if isinstance(item, dict) and item.get("status") == "excluded"]
             retrieval = [item for item in sections if isinstance(item, dict)
                          and str(item.get("section") or "").startswith("manual_chunk:")]
-            policy = data.get("policy") if isinstance(data.get("policy"), dict) else {}
             messages = data.get("messages") if isinstance(data.get("messages"), list) else []
             diagnostics.emit(
-                "context_audit", stage="model_request", policy=policy.get("name"),
+                "context_audit", stage="model_request",
                 context_request_index=data.get("request_index"),
                 message_count=len(messages), message_chars=data.get("message_text_chars"),
                 context_section_count=len(sections), included_section_count=len(included),
