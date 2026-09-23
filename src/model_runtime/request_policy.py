@@ -13,6 +13,7 @@ from model_runtime.contract import (
     MISSING, CapabilityContract, ConstraintDescriptor, UserModelSettings,
     scoped_contract, legacy_contract, path_get,
 )
+from model_runtime.runtime_profile import RuntimeModelProfile
 
 
 def merge(base, overlay):
@@ -105,26 +106,35 @@ def constraints_for(contract, name, descriptor):
 def resolve_request(profile, hints=None, *, protocol=None, model=None, api_key=None, transport_defaults=None):
     """Resolve JSON options without mutating profile, hints or cached evidence.
 
-    requestOverrides remain explicit advanced user settings. UI selections are
-    separate and win over those duplicates. An absent selection inherits; an
-    explicit omit is a tombstone, not a request to use workflow defaults.
+    RuntimeModelProfile is the production input: its capability contract and
+    user selections are already materialized. Raw persisted profiles remain
+    accepted here only for settings/migration callers until that compatibility
+    surface is retired.
     """
     hints, protocol = hints or {}, protocol or {}
-    defaults = merge(profile.get("generationDefaults") or {}, transport_defaults or {})
-    overrides = profile.get("requestOverrides") or {}
-    contract = scoped_contract(profile, model, api_key)
-    raw_settings = profile.get("userModelSettings") or {}
-    if profile.get("capabilityContract") and contract is None:
-        # Never forward stale selections after a programmatic model/endpoint or
-        # context change. The UI/service clears them; direct callers must too.
-        if raw_settings.get("parameters"):
-            raise ValueError("Capability scope changed; reset selections or detect this model again")
-        return EffectiveRequest(merge(merge(merge(defaults, hints), overrides), protocol), {}, {})
-    if contract is None:
-        # Existing configurations keep their old merge semantics until the
-        # operator adopts the v2 contract. The v1 adapter is used for UI reads.
-        return EffectiveRequest(merge(merge(merge(defaults, hints), overrides), protocol), {}, {})
-    settings = UserModelSettings.from_dict(raw_settings, contract) if raw_settings else UserModelSettings(dict(contract.scope), {})
+    if isinstance(profile, RuntimeModelProfile):
+        if model not in (None, "", profile.model):
+            raise ValueError("Runtime model profile does not match the requested model")
+        defaults = merge(profile.defaults, transport_defaults or {})
+        overrides = profile.overrides
+        contract = profile.contract
+        settings = profile.settings
+    else:
+        defaults = merge(profile.get("generationDefaults") or {}, transport_defaults or {})
+        overrides = profile.get("requestOverrides") or {}
+        contract = scoped_contract(profile, model, api_key)
+        raw_settings = profile.get("userModelSettings") or {}
+        if profile.get("capabilityContract") and contract is None:
+            # Never forward stale selections after a programmatic model/endpoint or
+            # context change. The UI/service clears them; direct callers must too.
+            if raw_settings.get("parameters"):
+                raise ValueError("Capability scope changed; reset selections or detect this model again")
+            return EffectiveRequest(merge(merge(merge(defaults, hints), overrides), protocol), {}, {})
+        if contract is None:
+            # Raw legacy callers retain their old merge semantics outside the
+            # provider. Production provider requests materialize first.
+            return EffectiveRequest(merge(merge(merge(defaults, hints), overrides), protocol), {}, {})
+        settings = UserModelSettings.from_dict(raw_settings, contract) if raw_settings else UserModelSettings(dict(contract.scope), {})
     layers = [("profile_default", defaults), ("workflow_hint", hints), ("user_advanced", overrides)]
     options = merge(merge(defaults, hints), overrides)
     values, sources = {}, {}
@@ -179,13 +189,24 @@ def validate_capability_use(options, contract):
                 raise ValueError("structured_output: this mode has not been declared or observed")
 
 
+def contract_capability_available(contract, name, *, options=None):
+    """Read one capability from a materialized contract; no legacy fallback."""
+    desc = contract.capabilities.get(name)
+    if desc is None:
+        return False
+    return desc.status in {"supported", "conditional"} and all(
+        rule.satisfied(condition_values(options or {}, contract))
+        for rule in constraints_for(contract, name, desc)
+    )
+
+
 def capability_available(profile, name, *, model=None, api_key=None, options=None, legacy_name=None):
+    """Compatibility helper for non-provider callers using persisted profiles."""
+    if isinstance(profile, RuntimeModelProfile):
+        return contract_capability_available(profile.contract, name, options=options)
     contract = scoped_contract(profile, model, api_key)
-    if contract is not None:
-        desc = contract.capabilities.get(name)
-        if desc is not None:
-            return desc.status in {"supported", "conditional"} and all(c.satisfied(condition_values(options or {}, contract))
-                for c in constraints_for(contract, name, desc))
+    if contract is not None and name in contract.capabilities:
+        return contract_capability_available(contract, name, options=options)
     return bool((profile.get("capabilities") or {}).get(legacy_name or name))
 
 
