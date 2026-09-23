@@ -11,6 +11,7 @@ from model_runtime.contract import (
     contract_scope,
 )
 from model_runtime.runtime_profile import RuntimeModelProfile, materialize_runtime_profile
+from model_runtime.request_policy import resolve_request
 from test_model_capabilities import descriptor, profile
 
 
@@ -198,3 +199,25 @@ def test_runtime_settings_are_scoped_to_materialized_contract():
     assert isinstance(runtime.settings, UserModelSettings)
     assert runtime.settings.scope == runtime.contract.scope
     assert runtime.contract.capabilities["vision"].status == "unsupported"
+
+
+def test_materialized_runtime_is_a_direct_resolver_input_without_legacy_fields():
+    p = profile(
+        generationDefaults={"reasoning_effort": "high"},
+        capabilities={"tools": True, "multimodal": True},
+    )
+
+    runtime = materialize_runtime_profile(p, api_key="key")
+    resolved = resolve_request(
+        runtime,
+        {"reasoning_effort": "low"},
+        protocol={"stream": False},
+        model=runtime.model,
+        api_key="key",
+    )
+
+    assert resolved.options["reasoning_effort"] == "high"
+    assert runtime.contract.capabilities["tools"].status == "supported"
+    assert runtime.contract.capabilities["vision"].status == "supported"
+    assert not hasattr(runtime, "parameterSupport")
+    assert not hasattr(runtime, "capabilities")
