@@ -67,7 +67,7 @@
     "display_names": "shared.display_names",
     "runtime_diagnostics": "shared.diagnostics",
     "runtime_trace": "shared.tracing",
-    "prompt_context_policy": "shared.context_policy",
+    "context_audit": "shared.context_audit",
     "response_language": "model_runtime.responses",
     "workflow_response_contracts": "application.response_contracts",
     "ladder_display": "rendering.numbering"
