@@ -12,14 +12,14 @@ from urllib.parse import urlsplit, urlunsplit
 
 # Public service error shared with desktop/CLI model selection.
 from storage.config import ModelConfigurationRequiredError
-from model_runtime.capabilities import capability_scope, normalize_parameter_support
 from model_runtime.contract import CapabilityContract, UserModelSettings, scoped_contract, normalize_contract, credential_fingerprint
+from model_runtime.legacy_migration import clear_legacy_detection
 from model_runtime.request_policy import public_contract_settings
 
 
 _SETTINGS_LOCK = threading.RLock()
 _PROFILE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
-_PROFILE_FIELDS = {"id", "name", "model", "base_url", "capabilities", "generation_defaults", "request_overrides", "parameter_support", "contract", "user_settings", "capability_overrides"}
+_PROFILE_FIELDS = {"id", "name", "model", "base_url", "contract", "user_settings", "capability_overrides"}
 _SENSITIVE_NAMES = {"key", "accesskey", "auth", "bearer", "token", "headers", "extraheaders", "cookie", "cookies", "authentication", "proxyauth"}
 
 
@@ -126,15 +126,9 @@ class SettingsService:
                     "base_url": _base_url(profile["baseUrl"], strict=False),
                     "configured": bool(self._key(config, profile)),
                     "deletable": True,
-                    "capabilities": {key: value for key, value in profile["capabilities"].items()
-                                     if not _sensitive(key) and isinstance(value, bool)},
                     "contract": self._observations().decorate(CapabilityContract.from_dict(contract)).to_dict() if contract else {},
                     "capability_overrides": _safe_options(profile.get("capabilityOverrides") or {}),
                     "user_settings": user_settings,
-                    "generation_defaults": _safe_options(profile["generationDefaults"]),
-                    "request_overrides": _safe_options(profile["requestOverrides"]),
-                    "parameter_support": _safe_options(profile.get("parameterSupport") or {})
-                        if (profile.get("parameterSupport") or {}).get("scope") == capability_scope(profile) else {},
                 })
             return {"language": config["language"], "active_profile_id": config["activeModelProfileId"], "profiles": profiles}
 
@@ -144,7 +138,11 @@ class SettingsService:
             raise ValueError("Unknown model profile fields")
         if "id" in values and _profile_id(values["id"]) != chosen["id"]:
             raise ValueError("Cannot change model profile ID")
-        old_scope = capability_scope(chosen)
+
+        old_identity = (
+            str(chosen.get("baseUrl") or "").rstrip("/"),
+            str(chosen.get("model") or ""),
+        )
         for key in ("name", "model"):
             if key in values:
                 value = str(values[key]).strip()
@@ -153,42 +151,41 @@ class SettingsService:
                 chosen[key] = value
         if "base_url" in values:
             chosen["baseUrl"] = _base_url(values["base_url"], strict=True)
-        for key, stored in (("capabilities", "capabilities"), ("generation_defaults", "generationDefaults"),
-                            ("request_overrides", "requestOverrides"), ("capability_overrides", "capabilityOverrides")):
-            if key not in values:
-                continue
-            value = values[key]
+
+        if "capability_overrides" in values:
+            value = values["capability_overrides"]
             if not isinstance(value, dict) or len(json.dumps(value)) > 64000:
                 raise ValueError("Model option groups must be JSON objects smaller than 64 KiB")
-            value = _safe_options(value, strict=True)
-            if key == "capabilities" and any(not isinstance(item, bool) for item in value.values()):
-                raise ValueError("Capabilities must contain boolean values")
-            chosen[stored] = value
-        if "parameter_support" in values:
-            support = normalize_parameter_support(_safe_options(values["parameter_support"], strict=True))
-            if support and support["scope"] != capability_scope(chosen):
-                raise ValueError("Model, endpoint or thinking options changed; detect parameters again")
-            chosen["parameterSupport"] = support
-        elif old_scope != capability_scope(chosen):
-            chosen["parameterSupport"] = {}
+            chosen["capabilityOverrides"] = _safe_options(value, strict=True)
+
+        new_identity = (
+            str(chosen.get("baseUrl") or "").rstrip("/"),
+            str(chosen.get("model") or ""),
+        )
+        if old_identity != new_identity:
+            clear_legacy_detection(chosen)
 
         if "contract" in values:
-            chosen["capabilityContract"] = normalize_contract(_safe_options(values["contract"], strict=True))
+            chosen["capabilityContract"] = normalize_contract(
+                _safe_options(values["contract"], strict=True)
+            )
             if chosen["capabilityContract"] and scoped_contract(chosen) is None:
-                raise ValueError("Contract scope changed; detect this endpoint/model/context again")
-            # Observations and selections are never stored in defaults.
+                raise ValueError(
+                    "Contract scope changed; detect this endpoint/model/context again"
+                )
             chosen["userModelSettings"] = {}
-            if chosen["capabilityContract"]:
-                chosen["parameterSupport"] = {}
+            clear_legacy_detection(chosen)
         elif chosen.get("capabilityContract") and scoped_contract(chosen) is None:
             chosen["capabilityContract"] = {}
             chosen["userModelSettings"] = {}
+
         if "user_settings" in values and values["user_settings"]:
             if not chosen.get("capabilityContract"):
                 raise ValueError("User selections require a scoped contract")
             chosen["userModelSettings"] = UserModelSettings.from_dict(
                 _safe_options(values["user_settings"], strict=True),
-                CapabilityContract.from_dict(chosen["capabilityContract"])).to_dict()
+                CapabilityContract.from_dict(chosen["capabilityContract"]),
+            ).to_dict()
         elif "user_settings" in values:
             chosen["userModelSettings"] = {}
 
@@ -243,9 +240,8 @@ class SettingsService:
             skip_legacy = ()
             if api_key is not None:
                 selected = get_model_profile(config, (profile or {}).get("id") or active_profile_id)
-                if "parameter_support" not in (profile or {}):
-                    selected["parameterSupport"] = {}
-                    config["modelProfiles"] = [selected if p["id"] == selected["id"] else p for p in config["modelProfiles"]]
+                clear_legacy_detection(selected)
+                config["modelProfiles"] = [selected if p["id"] == selected["id"] else p for p in config["modelProfiles"]]
                 self._validate_binding(selected, api_key, explicit=bool((profile or {}).get("contract")))
                 config["modelProfiles"] = [selected if p["id"] == selected["id"] else p for p in config["modelProfiles"]]
                 write_api_key(api_key, selected["credentialTarget"])
@@ -300,7 +296,7 @@ class SettingsService:
             config = self.read_config()
             legacy = self._legacy_credential(config)
             profile = get_model_profile(config, _profile_id(profile_id))
-            profile["parameterSupport"] = {}
+            clear_legacy_detection(profile)
             profile["capabilityContract"] = {}
             profile["userModelSettings"] = {}
             config["modelProfiles"] = [profile if p["id"] == profile_id else p for p in config["modelProfiles"]]
