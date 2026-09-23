@@ -648,6 +648,37 @@ def _iter_nested_elements(elements):
                 yield from _iter_nested_elements(branch)
 
 
+def _contact_predicate(element):
+    if not isinstance(element, Mapping):
+        return None
+    kind = str(element.get("type") or "").strip().upper()
+    address = str(element.get("address") or "").strip().upper()
+    if kind not in {"NO", "NC"} or not address:
+        return None
+    return f"{kind} {address}"
+
+
+def _expand_contact_paths(elements):
+    """Expand contact-only paths for structure-instance inspection."""
+    paths = [set()]
+    for element in elements or ():
+        if not isinstance(element, Mapping):
+            continue
+        if str(element.get("type") or "").strip().casefold() == "parallel_block":
+            alternatives = []
+            for branch in element.get("branches") or ():
+                alternatives.extend(_expand_contact_paths(branch))
+            if not alternatives:
+                alternatives = [set()]
+            paths = [base | option for base in paths for option in alternatives]
+            continue
+        predicate = _contact_predicate(element)
+        if predicate:
+            for path in paths:
+                path.add(predicate)
+    return paths
+
+
 def _devices_in_value(value):
     return {item.upper() for item in _DEVICE_RE.findall(str(value or ""))}
 
@@ -656,6 +687,7 @@ def inspect_ladder_features(ladder):
     opcodes = set()
     devices = set()
     structures = set()
+    structure_instances = []
     state_compares = defaultdict(set)
     state_writes = defaultdict(set)
     set_devices = set()
@@ -681,7 +713,16 @@ def inspect_ladder_features(ladder):
         for branch in rung.get("branches") or []:
             if not isinstance(branch, Mapping):
                 continue
-            input_elements.extend(_iter_nested_elements(branch.get("inputs") or []))
+            branch_inputs = branch.get("inputs") or []
+            input_elements.extend(_iter_nested_elements(branch_inputs))
+            branch_conditions = [
+                rung.get("header_element"),
+                *(rung.get("shared_inputs", []) or []),
+                *branch_inputs,
+            ]
+            branch_paths = _expand_contact_paths(
+                item for item in branch_conditions if item is not None
+            )
             for output in branch.get("outputs") or []:
                 if not isinstance(output, Mapping):
                     continue
@@ -718,6 +759,16 @@ def inspect_ladder_features(ladder):
                     opcodes.update({"OUT", "COIL"})
                     if address:
                         rung_coils.add(address)
+                        feedback = f"NO {address}"
+                        if any(feedback in path for path in branch_paths):
+                            structure_instances.append({
+                                "selector": "feedback_coil",
+                                "rung_id": rung.get("rung_id"),
+                                "branch_id": branch.get("branch_id"),
+                                "target": address,
+                                "feedback_predicate": feedback,
+                                "paths": [sorted(path) for path in branch_paths],
+                            })
                 elif output_type:
                     opcodes.add(output_type)
 
@@ -824,6 +875,7 @@ def inspect_ladder_features(ladder):
         "opcodes": sorted(opcodes),
         "devices": sorted(devices),
         "structures": sorted(structures),
+        "structure_instances": structure_instances,
         "state_registers": sorted(register_state_registers),
         "state_bits": sorted(state_bits),
     }
