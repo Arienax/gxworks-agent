@@ -39,52 +39,6 @@ export const ENDPOINT_PRESETS = [
   { name: "Gemini / Google", url: "https://generativelanguage.googleapis.com/v1beta/openai" },
 ] as const;
 
-const own = (object: Options, key: string) => Object.hasOwn(object, key);
-function object(value: unknown): Options {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Options : {};
-}
-function read(input: Options, path: string[]): unknown {
-  let current: unknown = input;
-  for (const key of path) {
-    if (!own(object(current), key)) return undefined;
-    current = object(current)[key];
-  }
-  return current;
-}
-function remove(input: Options, path: string[]): void {
-  if (!path.length || !own(input, path[0])) return;
-  if (path.length === 1) delete input[path[0]];
-  else {
-    const child = object(input[path[0]]);
-    remove(child, path.slice(1));
-    if (!Object.keys(child).length) delete input[path[0]];
-  }
-}
-export function clearKnown(defaults: Options, overrides: Options, contract: CapabilityContract): [Options, Options] {
-  return [defaults, overrides].map(group => {
-    const next = structuredClone(group);
-    for (const [name, desc] of Object.entries(contract.parameters || {})) {
-      const path = desc.wire_path || [name];
-      for (const alias of [path, ["extra_body", ...path], [name], ["extra_body", name]]) remove(next, alias);
-    }
-    return next;
-  }) as [Options, Options];
-}
-function merged(base: Options, overlay: Options): Options {
-  const result = structuredClone(base);
-  for (const [key, value] of Object.entries(overlay)) {
-    if (["__proto__", "prototype", "constructor"].includes(key)) continue;
-    if (value === null) delete result[key];
-    else if (value && typeof value === "object" && !Array.isArray(value)) result[key] = merged(object(result[key]), object(value));
-    else result[key] = value;
-  }
-  return result;
-}
-export function effectiveValue(defaults: Options, overrides: Options, name: string, desc: Descriptor): unknown {
-  const options = merged(defaults, overrides), path = desc.wire_path || [name];
-  const extra = read(options, ["extra_body", ...path]);
-  return extra !== undefined ? extra : read(options, path) ?? read(options, ["extra_body", name]) ?? options[name];
-}
 /** Legacy probe samples are evidence, never a domain, even before migration. */
 export function hardDomain(desc: Descriptor): Domain {
   if (desc.domain) return desc.domain.enforcement === "hard" ? desc.domain : {};
@@ -136,13 +90,11 @@ export function validValue(desc: Descriptor, value: unknown): value is Scalar {
   }
   return true;
 }
-export function selectedValues(contract: CapabilityContract, settings: UserModelSettings,
-                               defaults: Options = {}, overrides: Options = {}): Options {
+export function selectedValues(contract: CapabilityContract, settings: UserModelSettings): Options {
   const result: Options = {};
-  for (const [name, desc] of Object.entries(contract.parameters || {})) {
+  for (const name of Object.keys(contract.parameters || {})) {
     const selection = settings.parameters?.[name];
-    result[name] = selection?.mode === "value" ? selection.value : selection?.mode === "omit" ? null :
-      effectiveValue(defaults, overrides, name, desc) ?? null;
+    result[name] = selection?.mode === "value" ? selection.value : null;
   }
   return result;
 }
@@ -161,28 +113,24 @@ export function parameterEnabled(name: string, contract: CapabilityContract, val
   });
   return conditionsMatch(known(descriptor), values) && conditionsMatch(known(contract.constraints?.[name]), values);
 }
-export function adoptSelections(contract: CapabilityContract, previous: UserModelSettings,
-                                defaults: Options, overrides: Options): UserModelSettings {
+export function adoptSelections(contract: CapabilityContract, previous: UserModelSettings): UserModelSettings {
   const parameters: Record<string, Selection> = {};
   for (const [name, desc] of Object.entries(contract.parameters || {})) {
     const old = previous.parameters?.[name];
-    const value = old?.mode === "value" ? old.value : effectiveValue(defaults, overrides, name, desc);
     if (old) parameters[name] = old;
     else if (["fixed", "unsupported"].includes(desc.status)) parameters[name] = { mode: "omit" };
-    else if (validValue(desc, value)) parameters[name] = { mode: "value", value };
     else parameters[name] = { mode: desc.default_mode || "omit" };
   }
-  return reconcileSelections(contract, { scope: contract.scope, parameters }, defaults, overrides);
+  return reconcileSelections(contract, { scope: contract.scope, parameters });
 }
-export function reconcileSelections(contract: CapabilityContract, settings: UserModelSettings,
-                                    _defaults: Options = {}, _overrides: Options = {}): UserModelSettings {
+export function reconcileSelections(contract: CapabilityContract, settings: UserModelSettings): UserModelSettings {
   // Keep an explicit invalid value visible. Save/request validation must explain
   // the conflict, not silently remove the user's settings after metadata changes.
   return { scope: contract.scope, parameters: Object.fromEntries(Object.entries(settings.parameters || {})
     .filter(([name]) => !!contract.parameters?.[name])) };
 }
 export function changeSelection(contract: CapabilityContract, settings: UserModelSettings, name: string,
-                                selection: Selection, _defaults: Options = {}, _overrides: Options = {}): UserModelSettings {
+                                selection: Selection): UserModelSettings {
   const desc = contract.parameters?.[name];
   if (!desc || selection.mode === "value" && !validValue(desc, selection.value)) throw new Error("Invalid parameter selection");
   return { scope: contract.scope, parameters: { ...settings.parameters, [name]: selection } };
