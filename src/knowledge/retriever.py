@@ -86,6 +86,7 @@ def retrieve_knowledge(
     top_k=5,
     char_budget=6000,
     source_lanes=None,
+    exclude_chunk_types=(),
 ):
     """Return ranked knowledge with scoped gxw2-skill supporting reranking."""
 
@@ -127,6 +128,7 @@ def retrieve_knowledge(
         top_k=candidate_top_k,
         char_budget=candidate_budget,
         **({"source_lanes": tuple(source_lanes)} if source_lanes is not None else {}),
+        exclude_chunk_types=exclude_chunk_types,
     )
     results = filter_records(results, source_lanes)
     if not results:
@@ -244,6 +246,7 @@ def retrieve_fact_aware_knowledge(
         top_k=min(_core._MAX_TOP_K, max(12, normalized_top_k * 3)),
         char_budget=sys.maxsize,
         source_lanes=lanes,
+        exclude_chunk_types=("instruction",) if targets.get("instructions") else (),
     ) if plan["facts"] and residual.strip() else []
     broad = filter_records(exclude_structured_target_hits(broad, targets), lanes)
 
@@ -407,6 +410,7 @@ def build_knowledge_context(
         residual_query, plc_model=plc_model, task_type=task,
         top_k=min(_core._MAX_TOP_K, max(12, fact_slots * 3)), char_budget=sys.maxsize,
         source_lanes=tuple(plan["source_lanes"]),
+        exclude_chunk_types=("instruction",) if instruction_targets else (),
     ) if should_retrieve_residual else []
     broad_results = exclude_structured_target_hits(broad_results, exact_targets)
     fact_results = filter_records([*direct_results, *broad_results], plan["source_lanes"])
@@ -420,6 +424,7 @@ def build_knowledge_context(
         },
         "record_ids": [str(item.get("id")) for item in direct_results if item.get("id")],
         "residual_retrieval": bool(should_retrieve_residual),
+        "residual_pre_filters": {"exclude_chunk_types": ["instruction"]} if instruction_targets else {},
         "residual_query_sha256": text_sha256(residual_query),
     }
     fact_token_budget = (available_tokens - design_used_tokens) if available_tokens is not None else None
