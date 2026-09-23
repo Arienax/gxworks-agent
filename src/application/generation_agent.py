@@ -47,6 +47,40 @@ _COMPACT_PROTOCOL = """# Agent B compact ladder protocol
 """ + compact_protocol_prompt()
 
 
+def _compact_wire_renderer(plc_model):
+    model = str(plc_model or "FX3U").strip().upper() or "FX3U"
+
+    def render(runtime_spec, evidence_text, generation_request, _current_program):
+        from application.generation_wire import render_wire_messages
+        from plc.specification.provenance import SOURCE_PRECEDENCE
+
+        confirmed = json.dumps(
+            runtime_spec, ensure_ascii=False, separators=(",", ":")
+        )
+        system_prompt = (
+            _COMPACT_PROTOCOL
+            + SOURCE_PRECEDENCE
+            + f"\n# Selected PLC\n{model}\n"
+            + "\n# Confirmed project specification\n"
+            + confirmed
+            + compact_capability_prompt(model, runtime_spec)
+            + str(evidence_text or "")
+            + generation_execution_prompt(
+                runtime_spec,
+                evidence_text=evidence_text,
+                task_type="generate",
+            )
+        )
+        return {
+            "messages": render_wire_messages(
+                system_prompt,
+                [{"role": "user", "content": generation_request}],
+            )
+        }
+
+    return render
+
+
 class _FirstJSONObjectStream:
     """Frame the first complete top-level JSON object without cutting transport."""
 
@@ -169,23 +203,28 @@ def _decode_generated_ladder(value, projected, plc_model):
 
 
 def _build_agent_b_prompt(projected, plc_model, *, context=None):
+    model = str(plc_model or "FX3U").strip().upper() or "FX3U"
     context = context or build_confirmed_generation_context(
-        projected, plc_model, knowledge_builder=_build_knowledge_context,
+        projected,
+        model,
+        knowledge_builder=_build_knowledge_context,
+        wire_renderer=_compact_wire_renderer(model),
     )
-    model = context.plc_model
-    evidence = context.knowledge_context
-    confirmed = json.dumps(context.confirmed_spec, ensure_ascii=False, separators=(",", ":"))
-    from plc.specification.provenance import SOURCE_PRECEDENCE
-    prompt = (
-        _COMPACT_PROTOCOL + SOURCE_PRECEDENCE
-        + f"\n# Selected PLC\n{model}\n"
-        + "\n# Confirmed project specification\n"
-        + confirmed
-        + compact_capability_prompt(model, context.confirmed_spec)
-        + evidence
-        + generation_execution_prompt(context.confirmed_spec, evidence_text=evidence)
+    packet = context.wire_packet
+    if not packet:
+        packet = _compact_wire_renderer(model)(
+            context.confirmed_spec,
+            context.knowledge_context,
+            context.generation_request,
+            context.current_program,
+        )
+    prompt = packet["messages"][0]["content"]
+    audit_section(
+        "system_prompt",
+        prompt,
+        reason="confirmed_spec_compact_generation",
+        source="application",
     )
-    audit_section("system_prompt", prompt, reason="confirmed_spec_compact_generation", source="application")
     return prompt
 
 
@@ -209,9 +248,12 @@ def generate_confirmed_ladder(
 
     base_provider = api.current_provider()
     context = build_confirmed_generation_context(
-        projected, model, knowledge_builder=_build_knowledge_context,
+        projected,
+        model,
+        knowledge_builder=_build_knowledge_context,
         model_profile=getattr(base_provider, "profile", {}),
         decision_receipt_id=decision_receipt_id,
+        wire_renderer=_compact_wire_renderer(model),
     )
     if on_context:
         on_context(context.to_dict()["handoff"])
@@ -228,10 +270,7 @@ def generate_confirmed_ladder(
     )
     with api.provider_scope(provider, model_name=model_name):
         response = api.request_model(
-            [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": _GENERATION_REQUEST},
-            ],
+            context.wire_packet["messages"],
             model_name=model_name,
             effort=None,
             stream=streaming,
