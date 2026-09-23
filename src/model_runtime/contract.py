@@ -89,7 +89,12 @@ def path_remove(options, path):
 
 def path_set(options, path, value):
     for key in path[:-1]:
-        if key in options and not isinstance(options[key], dict):
+        # A lower-priority null is a deletion tombstone, not permanent
+        # ownership of the path. An explicit higher-priority parameter value
+        # may recreate that object; non-null scalar collisions remain invalid.
+        if key in options and options[key] is None:
+            options[key] = {}
+        elif key in options and not isinstance(options[key], dict):
             raise ValueError("Parameter wire path collides with a scalar option")
         options = options.setdefault(key, {})
     options[path[-1]] = copy.deepcopy(value)
