@@ -921,7 +921,7 @@
       "category": "context",
       "state": "enforced",
       "owner": "application.context_compiler",
-      "summary": "Confirmed engineering state, retrieval query projection, and RAG evidence budgets are compiled from the selected model context contract without silently dropping current intent.",
+      "summary": "Confirmed engineering state, retrieval query projection and RAG evidence budgets are compiled from the selected model context contract. Generation budget/utilization is measured from the canonical application wire messages that the compact/full-wire adapters pass to request_model; provider-owned framing remains covered by protocol_overhead_tokens.",
       "checks": [
         {
           "kind": "python_symbol",
@@ -942,11 +942,42 @@
           "kind": "contains",
           "path": "tests/test_context_compiler.py",
           "text": "context"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/application/generation_wire.py",
+          "symbol": "render_wire_messages"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/context_compiler.py",
+          "text": "budget_basis = \"application_wire_messages\""
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/generation_agent.py",
+          "text": "context.wire_packet[\"messages\"]"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_context_compiler.py",
+          "text": "test_generation_budget_uses_the_application_wire_messages_when_renderer_is_bound"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_generation_agent_boundary.py",
+          "text": "test_compact_agent_sends_the_compiler_budgeted_application_wire"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_intent_evidence_handoff.py",
+          "text": "budget_basis\"] == \"application_wire_messages\""
         }
       ],
       "tests": [
         "tests/test_context_compiler.py",
-        "tests/test_intent_evidence_handoff.py"
+        "tests/test_intent_evidence_handoff.py",
+        "tests/test_generation_agent_boundary.py"
       ]
     }
   ]
