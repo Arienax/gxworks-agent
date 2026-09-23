@@ -520,16 +520,17 @@ class ContextCompiler:
             "estimated_tokens": retrieval_tokens,
             "sections": section_report,
         }
+        wire_hash = None
+        if wire_packet:
+            from application.generation_wire import wire_sha256
+            wire_hash = wire_sha256(wire_packet)
         plan = {
             "task_type": value.task_type,
             "plc_model": value.plc_model,
             "persistent_spec_sha256": _fingerprint(persistent),
             "runtime_spec_sha256": _fingerprint(compacted_runtime),
             "retrieval_query_sha256": hashlib.sha256(retrieval_query.encode("utf-8")).hexdigest(),
-            "wire_sha256": (
-                __import__("application.generation_wire", fromlist=["wire_sha256"]).wire_sha256(wire_packet)
-                if wire_packet else None
-            ),
+            "wire_sha256": wire_hash,
             "budget_report": report,
         }
         receipt = {
