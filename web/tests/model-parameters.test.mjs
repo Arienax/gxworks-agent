@@ -75,7 +75,14 @@ test('constraints use strict scalar identity and conjunctive requirements', () =
   assert.equal(conditionsMatch({ conflicts_with: ['a'] }, { a: false }), false);
 });
 test('presets contain endpoints, never model names or tuning defaults', () => {
-  for (const entry of ENDPOINT_PRESETS) assert.deepEqual(Object.keys(entry).sort(), ['name', 'url']);
+  for (const entry of ENDPOINT_PRESETS) assert.deepEqual(Object.keys(entry).sort(), ['name', 'source', 'url']);
+  // A preset is an address plus its provenance; duplicates would make the
+  // select ambiguous and a non-https entry would be a typo, not a preset.
+  assert.equal(new Set(ENDPOINT_PRESETS.map(entry => entry.url)).size, ENDPOINT_PRESETS.length);
+  for (const entry of ENDPOINT_PRESETS) {
+    assert.match(entry.url, /^https:\/\//);
+    assert.ok(['local', 'dsh'].includes(entry.source));
+  }
 });
 
 test('partial samples never invent a numeric range or imply a fixed parameter', () => {

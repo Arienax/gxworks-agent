@@ -83,8 +83,20 @@ async def run(web_dist, evidence, *, executable=None, component_fixture=False):
                         if not component_fixture:
                             await page.get_by_role('button',name='设置',exact=True).click()
                             await page.get_by_role('button',name='模型',exact=True).click()
+                    async def open_editor(name=None):
+                        # Saved providers render as collapsed rows and only one
+                        # editor card is open at a time. An empty profile list
+                        # already opens the create card.
+                        field=page.get_by_label('配置名称',exact=True)
+                        if await field.count() and await field.is_visible(): return
+                        if name is None:
+                            await page.get_by_role('button',name='新增配置',exact=True).click()
+                        else:
+                            await page.locator('.provider-row',has_text=name).get_by_role('button',name='编辑',exact=True).click()
+                        await expect(field).to_be_visible()
                     try:
                         await open_settings()
+                        await open_editor()
                         await page.get_by_label('配置名称',exact=True).fill('Catalog v3 审查')
                         await page.get_by_label('API URL',exact=True).fill('https://gateway.invalid/custom/v2/')
                         await page.locator('.settings-form input[type="password"]').fill('synthetic-only-key')
@@ -122,6 +134,7 @@ async def run(web_dist, evidence, *, executable=None, component_fixture=False):
                         assert wire['extra_body']['thinking']['budget_tokens']==8192
                         assert wire['enable_thinking'] is True and wire['verbosity']=='verbose'
                         await (mount_fixture() if component_fixture else page.reload());await open_settings()
+                        await open_editor('Catalog v3 审查')
                         await expect(page.get_by_label('temperature value',exact=True)).to_have_value('0.733')
                         await page.get_by_role('button',name='测试连接',exact=True).click()
                         await expect(page.locator('.settings-form p[role="status"]')).to_contain_text('没有发送生成请求')
