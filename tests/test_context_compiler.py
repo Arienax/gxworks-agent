@@ -234,6 +234,43 @@ def test_budget_estimate_covers_serialized_generation_packet():
     assert compiled.budget_report["estimated_input_tokens"] >= estimate_tokens(serialized)
 
 
+def test_generation_budget_uses_the_application_wire_messages_when_renderer_is_bound():
+    from application.generation_wire import (
+        render_wire_messages, wire_sha256, wire_token_estimate,
+    )
+
+    value = spec(note="保留当前工程事实")
+    compiler = ContextCompiler()
+    compiled = compiler.compile(ContextCompilerInput(
+        confirmed_spec=value,
+        intent_context=intent_context(value),
+        selected_approach=value["selected_approach"],
+        model_profile=profile(128_000),
+        plc_model="FX3U",
+        task_type="generate",
+        generation_request="Generate.",
+        wire_renderer=lambda runtime, evidence, request, _program: {
+            "messages": render_wire_messages(
+                "SYSTEM\n" + json.dumps(runtime, ensure_ascii=False, separators=(",", ":"))
+                + "\nEVIDENCE\n" + evidence,
+                [{"role": "user", "content": request}],
+            )
+        },
+    ), evidence_text="FACT")
+
+    assert compiled.budget_report["budget_basis"] == "application_wire_messages"
+    assert compiled.budget_report["compiled_budget_payload_tokens"] == wire_token_estimate(
+        compiled.wire_packet
+    )
+    assert compiled.provenance_receipt["wire_sha256"] == wire_sha256(
+        compiled.wire_packet
+    )
+    assert compiled.budget_report["estimated_input_tokens"] == (
+        wire_token_estimate(compiled.wire_packet)
+        + compiled.budget_report["protocol_overhead_tokens"]
+    )
+
+
 def test_evidence_dedup_preserves_knowledge_block_boundaries():
     a = (
         'Reference role: technical_reference\n'
