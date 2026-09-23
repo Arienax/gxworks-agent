@@ -34,7 +34,7 @@ def test_bundled_fx3u_index_is_complete_and_integral():
     assert manifest["structured"]["instructions"] >= 250
     assert manifest["structured"]["debug_cases"] == 26
     assert manifest["retrieval"]["dense_embeddings"] is True
-    assert manifest["retrieval"]["fusion"] == "structured_entity_bm25_vector_rrf"
+    assert manifest["retrieval"]["fusion"] == "metadata_entity_bm25_vector_rrf"
     assert manifest["retrieval"]["benchmark"]["cases"] == 220
     assert manifest["retrieval"]["benchmark"]["recall_at_10"] == 1.0
     assert Path(resource_path("knowledge/fx3u_dense_lsa.npz")).is_file()
