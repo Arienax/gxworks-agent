@@ -188,81 +188,19 @@ def _instruction_instance_coverage(ladder, requirements):
 
 
 
-def _contact_predicate(element):
-    if not isinstance(element, Mapping):
-        return None
-    kind = str(element.get("type") or "").strip().upper()
-    address = str(element.get("address") or "").strip().upper()
-    if kind not in {"NO", "NC"} or not address:
-        return None
-    return f"{kind} {address}"
+
+_SUPPORTED_INSTANCE_SELECTORS = frozenset({"feedback_coil"})
 
 
-def _expand_condition_paths(elements):
-    """Expand nested parallel contacts into candidate execution paths.
+def _structure_instances(ladder, selector_name):
+    from plc.specification.approach import inspect_ladder_features
 
-    Only contact predicates participate in binding checks. Other condition
-    elements remain outside this narrow obligation checker and continue to be
-    owned by ordinary PLC validation/review.
-    """
-    paths = [set()]
-    for element in elements or ():
-        if not isinstance(element, Mapping):
-            continue
-        if str(element.get("type") or "").strip().casefold() == "parallel_block":
-            alternatives = []
-            for branch in element.get("branches") or ():
-                alternatives.extend(_expand_condition_paths(branch))
-            if not alternatives:
-                alternatives = [set()]
-            paths = [base | option for base in paths for option in alternatives]
-            continue
-        predicate = _contact_predicate(element)
-        if predicate:
-            for path in paths:
-                path.add(predicate)
-    return paths
-
-
-def _feedback_coil_instances(ladder):
-    """Return generic coil-feedback topology instances with expanded paths."""
-    result = []
-    for rung in (ladder or {}).get("rungs", []) or []:
-        if not isinstance(rung, Mapping):
-            continue
-        for branch in rung.get("branches", []) or []:
-            if not isinstance(branch, Mapping):
-                continue
-            conditions = [
-                rung.get("header_element"),
-                *(rung.get("shared_inputs", []) or []),
-                *(branch.get("inputs", []) or []),
-            ]
-            conditions = [item for item in conditions if item is not None]
-            paths = _expand_condition_paths(conditions)
-            for output in branch.get("outputs", []) or []:
-                if not isinstance(output, Mapping):
-                    continue
-                if str(output.get("type") or "").strip().upper() != "COIL":
-                    continue
-                target = str(output.get("address") or "").strip().upper()
-                feedback = f"NO {target}" if target else ""
-                if not feedback or not any(feedback in path for path in paths):
-                    continue
-                result.append({
-                    "selector": "feedback_coil",
-                    "rung_id": rung.get("rung_id"),
-                    "branch_id": branch.get("branch_id"),
-                    "target": target,
-                    "feedback_predicate": feedback,
-                    "paths": paths,
-                })
-    return result
-
-
-_INSTANCE_SELECTORS = {
-    "feedback_coil": _feedback_coil_instances,
-}
+    features = inspect_ladder_features(ladder)
+    return [
+        row for row in features.get("structure_instances", []) or []
+        if isinstance(row, Mapping)
+        and str(row.get("selector") or "") == selector_name
+    ]
 
 
 def _binding_role_addresses(confirmed_spec):
@@ -444,8 +382,7 @@ def _structure_obligation_coverage(ladder, confirmed_spec, requirements):
         if blocked and not prepared:
             continue
 
-        selector = _INSTANCE_SELECTORS.get(selector_name)
-        if selector is None:
+        if selector_name not in _SUPPORTED_INSTANCE_SELECTORS:
             for requirement, expected in prepared:
                 row = {
                     "requirement_id": requirement["requirement_id"],
@@ -461,7 +398,7 @@ def _structure_obligation_coverage(ladder, confirmed_spec, requirements):
                 violations.append(row)
             continue
 
-        instances = selector(ladder)
+        instances = _structure_instances(ladder, selector_name)
         matched = next(
             (
                 instance
