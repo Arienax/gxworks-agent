@@ -34,6 +34,6 @@ Observation TTL, row limits and accepted value types are code-owned in `model_ru
 
 ## Compatibility and verification
 
-Legacy profiles are read into the current contract view. Old probe samples remain evidence; explicit values and omissions remain selections. Read/resolve operations do not silently rewrite configuration. Explicit saves use the current schema.
+Legacy profile fields are interpreted only by `model_runtime.legacy_migration` and projected into the current contract/settings view before runtime use. Old probe samples remain evidence; explicit values and omissions become canonical selections. `parameterSupport`, `generationDefaults`, `requestOverrides`, and the old boolean capability bag are no longer public settings/runtime APIs. Reading an old configuration does not rewrite it; changing endpoint/model drops its hidden legacy runtime state so it cannot leak to a new identity.
 
 [test_model_catalog_v3.py](../../tests/test_model_catalog_v3.py), [test_model_contract.py](../../tests/test_model_contract.py) and [test_model_verification.py](../../tests/test_model_verification.py) cover resolution, mapping and bounded verification. Earlier catalog/probe design is retained in the [process archive](../process/README.md).
