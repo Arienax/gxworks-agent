@@ -552,7 +552,9 @@ def test_inline_user_io_and_flat_analysis_reach_http_explorer_and_all_artifacts(
                 payload = {"summary": "停止优先起保停", "missing_info": [], "assumptions": [],
                     "suggested_io": {"X0": "启动按钮输入（按下为ON）", "X1": "停止按钮输入（按下为ON）", "Y0": "运行输出"},
                     "approaches": [{"approach_id": "direct", "name": "自保持", "description": "停止优先", "pros": "", "cons": "",
-                                    "generation_guide": "", "generation_contract": {"required_opcodes": []}}]}
+                                    "generation_guide": "", "implementation_semantics": [
+                                        {"kind": "structure", "status": "required", "value": "self_hold"}
+                                    ]}]}
             else:
                 prompt = next(m.content for m in request.messages if isinstance(m, SystemMessage))
                 spec, _ = json.JSONDecoder().raw_decode(prompt.split("# Confirmed project specification\n", 1)[1])
