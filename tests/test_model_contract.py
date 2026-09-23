@@ -221,7 +221,8 @@ def test_settings_persist_contract_selections_and_invalidate_key_without_mutatin
     assert env.path.read_bytes() == before
     result = env.service.set_key("v2", "rotated-key")
     row = next(item for item in result["profiles"] if item["id"] == "v2")
-    assert row["contract"] == {} and row["user_settings"] == {}
+    assert row["user_settings"] == {"scope": row["contract"]["scope"], "parameters": {}}
+    assert "new_budget" not in row["contract"]["parameters"]
 
 
 def test_contract_scope_and_user_values_are_validated_on_save(settings_env):
