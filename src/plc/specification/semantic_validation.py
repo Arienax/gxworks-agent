@@ -47,6 +47,17 @@ def semantic_requirements(confirmed_spec):
         structure = item.get("value")
         obligations = structure_obligations(structure)
         selector = str(obligations.get("instance_selector") or "").strip()
+        target_role = obligations.get("instance_target_role")
+        if isinstance(target_role, Mapping):
+            result.append({
+                "requirement_id": f"{requirement_id}.obligations.instance_target_role",
+                "kind": "instance_target_binding",
+                "status": "required",
+                "structure": structure,
+                "role": str(target_role.get("role") or ""),
+                "role_required": target_role.get("required") is True,
+                "instance_selector": selector,
+            })
 
         for role_index, role in enumerate(obligations.get("required_roles") or ()):
             result.append({
@@ -264,7 +275,12 @@ def _predicate_matches_instance(requirement, expected, instance):
 
 
 def _structure_obligation_coverage(ladder, confirmed_spec, requirements):
-    obligation_kinds = {"binding_role", "binding_relation", "binding_predicate"}
+    obligation_kinds = {
+        "binding_role",
+        "binding_relation",
+        "binding_predicate",
+        "instance_target_binding",
+    }
     scoped = [row for row in requirements if row.get("kind") in obligation_kinds]
     if not scoped:
         return [], []
@@ -324,6 +340,40 @@ def _structure_obligation_coverage(ladder, confirmed_spec, requirements):
                 violations.append(row)
         else:
             row.update(status="unresolved", reason="unknown_binding_relation")
+        rows.append(row)
+
+    target_constraints = {}
+    for requirement in scoped:
+        if requirement.get("kind") != "instance_target_binding":
+            continue
+        structure = str(requirement.get("structure") or "")
+        selector_name = str(requirement.get("instance_selector") or "")
+        role = str(requirement.get("role") or "").casefold()
+        addresses = roles.get(role, [])
+        key = (structure, selector_name)
+        row = {
+            "requirement_id": requirement["requirement_id"],
+            "check": "structure_instance_target",
+            "kind": "instance_target_binding",
+            "structure": structure,
+            "role": role,
+            "expected": role,
+        }
+        if len(addresses) == 1:
+            target = str(addresses[0]).upper()
+            target_constraints[key] = target
+            row.update(status="verified", expected=target)
+        elif not addresses and requirement.get("role_required") is not True:
+            # Optional target ownership is a conditional constraint: absence
+            # means there is nothing to bind, while a present canonical role
+            # must select the matching structure instance.
+            row.update(status="verified", reason="optional_role_absent")
+        else:
+            row.update(
+                status="violated",
+                reason="missing_roles" if not addresses else "ambiguous_roles",
+            )
+            violations.append(row)
         rows.append(row)
 
     groups = {}
@@ -399,6 +449,12 @@ def _structure_obligation_coverage(ladder, confirmed_spec, requirements):
             continue
 
         instances = _structure_instances(ladder, selector_name)
+        target = target_constraints.get((structure, selector_name))
+        if target:
+            instances = [
+                instance for instance in instances
+                if str(instance.get("target") or "").upper() == target
+            ]
         matched = next(
             (
                 instance
