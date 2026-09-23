@@ -49,7 +49,7 @@
       "category": "retrieval",
       "state": "enforced",
       "owner": "knowledge.core + knowledge.scope",
-      "summary": "Broad recall applies metadata pre-filters before candidate limits and fuses metadata/entity/BM25/dense ranks with unweighted reciprocal-rank fusion; PLC topics do not receive hand-tuned ranking boosts and exact PLC facts remain outside broad retrieval.",
+      "summary": "Broad recall applies candidate pre-filters before limits and fuses metadata/entity/BM25/dense ranks with unweighted reciprocal-rank fusion. Covered exact instruction/device/error facts retain structured ownership; unresolved exact targets leave broad recall open.",
       "checks": [
         {
           "kind": "contains",
@@ -60,11 +60,6 @@
           "kind": "contains",
           "path": "src/knowledge/core.py",
           "text": "1.0 / (_RRF_K + signal[\"rank\"] + 1.0)"
-        },
-        {
-          "kind": "contains",
-          "path": "src/knowledge/retriever.py",
-          "text": "exclude_chunk_types=(\"instruction\",) if instruction_targets else ()"
         },
         {
           "kind": "contains",
@@ -90,6 +85,31 @@
           "kind": "contains",
           "path": "tests/test_structured_fact_lookup.py",
           "text": "test_broad_retrieval_does_not_own_exact_plc_fact_tables"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/retriever.py",
+          "text": "covered_kinds = _covered_structured_kinds(exact_targets, eligible_direct_results)"
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/retriever.py",
+          "text": "\"exclude_structured_kinds\": tuple("
+        },
+        {
+          "kind": "contains",
+          "path": "src/knowledge/scope.py",
+          "text": "exclude_structured_kinds=()"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_covered_device_and_error_targets_prefilter_structured_owner_rows"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_structured_fact_lookup.py",
+          "text": "test_unresolved_structured_targets_do_not_close_broad_candidate_lanes"
         }
       ],
       "tests": [
