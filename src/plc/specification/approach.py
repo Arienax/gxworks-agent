@@ -57,6 +57,31 @@ STRUCTURE_LABELS = {
     "vfd_multi_speed": "变频器多段速端子控制",
 }
 
+# Structure semantics may declare machine-checkable obligations without giving
+# semantic_validation structure-specific code.  Selectors and coverage modes are
+# generic topology primitives owned by the validator; this table only states
+# what a confirmed structure requires from canonical I/O bindings.
+_STRUCTURE_OBLIGATIONS = {
+    "self_hold": {
+        "instance_selector": "feedback_coil",
+        "required_roles": ("start", "stop"),
+        "distinct_roles": (("start", "stop"),),
+        "predicates": (
+            {
+                "role": "start",
+                "predicate_key": "active_when",
+                "coverage": "any_non_feedback_path",
+                "independent_of_feedback": True,
+            },
+            {
+                "role": "stop",
+                "predicate_key": "run_permit_when",
+                "coverage": "all_paths",
+            },
+        ),
+    },
+}
+
 _DEVICE_RE = re.compile(
     r"(?<![A-Za-z0-9_])(?:SM|SD|TS|TC|CS|CC|[XYMSTCDRVZ])\d+(?![A-Za-z0-9_])",
     re.IGNORECASE,
@@ -162,6 +187,13 @@ def _structure_token(value):
         return folded
     labels = {label.casefold(): key for key, label in STRUCTURE_LABELS.items()}
     return labels.get(folded)
+
+
+def structure_obligations(value):
+    """Return declarative machine obligations for one canonical structure token."""
+    token = _structure_token(value)
+    return copy.deepcopy(_STRUCTURE_OBLIGATIONS.get(token) or {})
+
 
 
 def normalize_implementation_semantics(values):
@@ -931,5 +963,6 @@ __all__ = [
     "normalize_implementation_semantics",
     "normalize_instruction_instances",
     "project_semantics_to_generation_contract",
+    "structure_obligations",
     "validate_ladder_against_selected_approach",
 ]
