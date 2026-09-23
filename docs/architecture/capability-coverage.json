@@ -921,7 +921,7 @@
       "category": "context",
       "state": "enforced",
       "owner": "application.context_compiler",
-      "summary": "Confirmed engineering state, retrieval query projection and RAG evidence budgets are compiled from the selected model context contract. Generation budget/utilization is measured from the canonical application wire messages that the compact/full-wire adapters pass to request_model; provider-owned framing remains covered by protocol_overhead_tokens.",
+      "summary": "Generation context is budgeted from canonical application wire messages. If the final wire exceeds the usable input budget, Core retains protected confirmed facts and a recent verbatim tail, a dedicated Context Compactor summarizes only the selected older intent/history into a checkpoint, the old span is replaced locally, and the same wire is re-rendered and re-measured before Agent B.",
       "checks": [
         {
           "kind": "python_symbol",
@@ -972,12 +972,53 @@
           "kind": "contains",
           "path": "tests/test_intent_evidence_handoff.py",
           "text": "budget_basis\"] == \"application_wire_messages\""
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/application/context_compactor.py",
+          "symbol": "compact_if_needed"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/application/context_compactor.py",
+          "symbol": "select_compactable_context"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/context_compiler.py",
+          "text": "\"checkpoint_compaction_required\""
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/generation_wire.py",
+          "text": "# Compacted historical context"
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/confirmed_generation_context.py",
+          "text": "compact_if_needed("
+        },
+        {
+          "kind": "contains",
+          "path": "src/application/model_api.py",
+          "text": "compiled_wire = getattr(system_prompt, \"wire_packet\", None)"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_context_compactor.py",
+          "text": "test_over_budget_context_is_replaced_by_checkpoint_and_recent_tail"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_generation_agent_boundary.py",
+          "text": "test_over_budget_confirmed_generation_compacts_before_agent_b"
         }
       ],
       "tests": [
         "tests/test_context_compiler.py",
         "tests/test_intent_evidence_handoff.py",
-        "tests/test_generation_agent_boundary.py"
+        "tests/test_generation_agent_boundary.py",
+        "tests/test_context_compactor.py"
       ]
     }
   ]
