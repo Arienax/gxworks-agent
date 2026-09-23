@@ -4622,7 +4622,7 @@
             "required": false,
             "schema": {
               "default": 0,
-              "minimum": 0.0,
+              "minimum": 0,
               "title": "After",
               "type": "integer"
             }
