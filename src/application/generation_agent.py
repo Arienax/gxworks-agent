@@ -21,7 +21,7 @@ from application.compact_protocol import (
 
 from model_runtime.provider import TextDelta
 from application.generation_context import _build_knowledge_context
-from shared.context_policy import audit_section
+from shared.context_audit import audit_section
 from model_runtime.responses import ResponseContract
 
 
