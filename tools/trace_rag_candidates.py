@@ -53,7 +53,7 @@ def trace_case(case, database, candidate_budget=sys.maxsize):
         for name in ("_entity_references", "_fts_references", "_dense_references"):
             stack.enter_context(patch.object(core, name, capture(name, getattr(core, name))))
         stack.enter_context(patch.object(core, "_select_with_budget", capture_candidates))
-        before = core.retrieve_knowledge(
+        before = core._retrieve_knowledge(
             case["query"], plc_model=case.get("plc_model", "FX3U"),
             task_type=case.get("task_type", "analysis"), top_k=40, char_budget=candidate_budget,
         )
