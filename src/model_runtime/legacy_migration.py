@@ -59,6 +59,48 @@ def legacy_option_layers(profile):
     )
 
 
+def migrate_request_template(profile, template):
+    """Translate the retired flat request_template into legacy profile input.
+
+    This is persistence migration only. The resulting retired fields are later
+    materialized into the v3 runtime contract/settings and are never public API.
+    """
+    result = copy.deepcopy(dict(profile))
+    if not isinstance(template, Mapping):
+        return result
+
+    portable = {
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stop",
+        "response_format",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+    }
+    defaults = {}
+    overrides = {}
+    for key, value in template.items():
+        if key in {"model", "messages", "stream", "tools", "tool_choice"}:
+            continue
+        if value == "{effort}":
+            continue
+        if key == "extra_body" and isinstance(value, Mapping):
+            value = copy.deepcopy(dict(value))
+            if value.get("reasoning_effort") == "{effort}":
+                value.pop("reasoning_effort")
+            if not value:
+                continue
+        target = defaults if key in portable else overrides
+        target[key] = copy.deepcopy(value)
+    if defaults:
+        result["generationDefaults"] = defaults
+    if overrides:
+        result["requestOverrides"] = overrides
+    return result
+
+
 def legacy_boolean_capabilities(profile):
     raw = profile.get("capabilities") or {}
     if not isinstance(raw, Mapping):
