@@ -359,8 +359,7 @@ class JobManager:
             snapshot = initial.get("snapshot", {})
         with diagnostics.diagnostic_scope(self.state_dir, job_id,
                 kind=initial.get("kind"), project_id=snapshot.get("project_id"),
-                version_id=snapshot.get("version_id"),
-                policy=(snapshot.get("context_policy") or {}).get("name")) as capture:
+                version_id=snapshot.get("version_id")) as capture:
             try:
                 return self._run_recorded(job_id, worker)
             except BaseException as error:
