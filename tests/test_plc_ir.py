@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
+from application.generation import GenerationRequest, GenerationWorkflow, GenerationDependencies
 
 from rendering.ladder_svg import AdvancedSVGLadder
 from gxworks2.csv_export import generate_gx_works2_csv
@@ -320,10 +321,8 @@ def test_ir_st_renderer_fails_closed_on_unrepresentable_free_form_operand():
         render_plc_ir_to_st(program)
 
 
-def test_compiler_thread_persists_ir_and_all_legacy_artifacts(monkeypatch, tmp_path):
+def test_generation_workflow_persists_ir_and_all_interchange_artifacts(monkeypatch, tmp_path):
     import application.model_api as api
-    import ui.desktop.main_window as main_module
-    from ui.desktop.workers import CompilerThread
 
     ladder = sample_ladder()
     monkeypatch.setattr(
@@ -334,31 +333,12 @@ def test_compiler_thread_persists_ir_and_all_legacy_artifacts(monkeypatch, tmp_p
             json.dumps(ladder, ensure_ascii=False),
         ),
     )
-    succeeded = []
-    failed = []
     progress = []
-    worker = CompilerThread(
-        "task-ir",
-        "生成测试程序",
-        "high",
-        "ladder",
-        tmp_path,
-        plc_model="FX3U",
-        program_name="MAIN",
-        revision=23,
-    )
-    worker.success.connect(lambda task_id, result: succeeded.append((task_id, result)))
-    worker.failure.connect(lambda task_id, error: failed.append((task_id, error)))
-    worker.progress_updated.connect(
-        lambda task_id, payload: progress.append((task_id, payload))
-    )
+    request = GenerationRequest('生成测试程序', effort='high', target_mode='ladder', model_name='offline', plc_model='FX3U', program_name='MAIN', revision=23)
+    worker = GenerationWorkflow(request, tmp_path, on_event=lambda kind, payload: progress.append(("task-ir", payload)) if kind == "progress" else None)
 
-    worker.run()
+    result = worker.run()
 
-    assert failed == []
-    assert len(succeeded) == 1
-    task_id, result = succeeded[0]
-    assert task_id == "task-ir"
     assert result["revision"] == 23
     assert result["program_name"] == "MAIN"
     assert set(result["artifacts"]) == {
@@ -407,8 +387,6 @@ def test_compiler_does_not_repair_semantic_mismatch_after_confirmed_generation(
     monkeypatch, tmp_path
 ):
     import application.model_api as api
-    import ui.desktop.main_window as main
-    from ui.desktop.workers import CompilerThread
 
     level = {
         "device_comments": {"X0": "按钮", "D0": "计数"},
@@ -433,26 +411,11 @@ def test_compiler_does_not_repair_semantic_mismatch_after_confirmed_generation(
         repair_requests.append(user_input)
         return json.dumps(edge, ensure_ascii=False)
 
-    from ui.desktop import workers
-    monkeypatch.setattr(workers, "generate_model_json", fake_repair)
-    succeeded = []
-    failed = []
-    worker = CompilerThread(
-        "task-semantic-repair",
-        "每次按下 X0 一次，INC D0",
-        "high",
-        "ladder",
-        tmp_path,
-        plc_model="FX3U",
-        requirement_text="每次按下 X0 一次，INC D0",
-    )
-    worker.success.connect(lambda task_id, result: succeeded.append((task_id, result)))
-    worker.failure.connect(lambda task_id, error: failed.append((task_id, error)))
+    request = GenerationRequest('每次按下 X0 一次，INC D0', effort='high', target_mode='ladder', model_name='offline', plc_model='FX3U', requirement_text='每次按下 X0 一次，INC D0')
+    worker = GenerationWorkflow(request, tmp_path, dependencies=GenerationDependencies(generate_json=fake_repair, repair_response=fake_repair))
 
-    worker.run()
+    result = worker.run()
 
-    assert failed == []
-    assert len(succeeded) == 1
     # The requirement text is model context, not a second local semantic judge.
     # If the model returns LEVEL logic, direct generation publishes that
     # candidate instead of spending another model call to rewrite it.
@@ -467,7 +430,6 @@ def test_compiler_partial_edit_uses_ir_revision_and_preserves_other_networks(
     monkeypatch, tmp_path
 ):
     import application.model_api as api
-    from ui.desktop.workers import CompilerThread
 
     ladder = sample_ladder()
     base_ir = build_plc_ir(ladder, revision=23)
@@ -486,28 +448,11 @@ def test_compiler_partial_edit_uses_ir_revision_and_preserves_other_networks(
         "stream_model_response",
         lambda *args, **kwargs: ("", json.dumps(partial, ensure_ascii=False)),
     )
-    succeeded = []
-    failed = []
-    worker = CompilerThread(
-        "task-patch",
-        "把 X3 急停加进去",
-        "high",
-        "ladder",
-        tmp_path,
-        previous_json=ladder,
-        previous_ir=base_ir,
-        current_version_json=ladder,
-        plc_model="FX3U",
-        program_name="MAIN",
-        revision=24,
-    )
-    worker.success.connect(lambda task_id, result: succeeded.append((task_id, result)))
-    worker.failure.connect(lambda task_id, error: failed.append((task_id, error)))
+    request = GenerationRequest('把 X3 急停加进去', effort='high', target_mode='ladder', model_name='offline', previous_json=ladder, previous_ir=base_ir, current_version_json=ladder, plc_model='FX3U', program_name='MAIN', revision=24)
+    worker = GenerationWorkflow(request, tmp_path)
 
-    worker.run()
+    result = worker.run()
 
-    assert failed == []
-    assert len(succeeded) == 1
     program = json.loads((tmp_path / "program.ir.json").read_text(encoding="utf-8"))
     assert program["revision"] == 24
     assert program["networks"][0]["reads"] == ["X0", "X3"]
@@ -594,3 +539,31 @@ def test_session_store_never_overwrites_an_existing_future_ir(tmp_path):
     assert (version_dir / "future.ir.json").read_bytes() == original_future_bytes
     assert not (version_dir / "program.ir.json").exists()
     assert store.get_version(project["id"], version_id)["artifacts"]["ir"] == "future.ir.json"
+
+
+@pytest.mark.parametrize("platform,env_name,env_value,suffix", [
+    ("win32", "APPDATA", "roaming", ""),
+    ("linux", "XDG_DATA_HOME", "data", ""),
+    ("darwin", "HOME", "home", "Library/Application Support"),
+])
+def test_default_workspace_keeps_historical_identity_without_gui(monkeypatch, tmp_path, platform, env_name, env_value, suffix):
+    import storage.session as session
+    monkeypatch.setattr(session.sys, "platform", platform)
+    monkeypatch.setattr(session.Path, "home", classmethod(lambda cls: tmp_path / "home"))
+    monkeypatch.delenv("PLC_AI_WORKSPACE_DIR", raising=False)
+    root = tmp_path / env_value
+    monkeypatch.setenv(env_name, str(root))
+    if suffix:
+        root = root / suffix
+    expected = root / "PLC AI Studio" / "PLC AI Workbench" / "workspace"
+    assert session.SessionStore(create=False).base_dir == expected
+    assert not expected.exists()
+
+
+def test_explicit_workspace_and_override_do_not_migrate_old_projects(monkeypatch, tmp_path):
+    from storage.session import SessionStore
+    selected, override = tmp_path / "selected", tmp_path / "override"
+    monkeypatch.setenv("PLC_AI_WORKSPACE_DIR", str(override))
+    assert SessionStore(create=False).base_dir == override
+    assert SessionStore(selected, create=False).base_dir == selected
+    assert list(tmp_path.iterdir()) == []

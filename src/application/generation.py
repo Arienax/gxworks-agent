@@ -1,4 +1,4 @@
-"""Synchronous generation orchestration shared by desktop and local services.
+"""Synchronous headless generation orchestration shared by application clients.
 
 No GUI, workspace activation, GX automation or simulator operations belong here.
 Model response acceptance remains inside api/collect_response before callbacks,
@@ -49,11 +49,13 @@ class GenerationRequest:
     allowed_addresses: object = None
     repair_plan: object = None
     source_handoff: object = None
+    decision_receipt_id: Optional[str] = None
     image_attachments: object = None
     model_name: Optional[str] = None
     response_language: Optional[str] = None
 
     def __post_init__(self):
+        object.__setattr__(self, "effort", None)
         for item in fields(self):
             object.__setattr__(self, item.name, copy.deepcopy(getattr(self, item.name)))
         object.__setattr__(self, "response_language", self.response_language or get_language())
@@ -135,12 +137,13 @@ class GenerationWorkflow:
             return self._run()
 
     def _run(self):
-        """Generate one candidate and perform only transport/shape acceptance.
+        """Generate one candidate through the canonical acceptance boundary.
 
-        Once the user has confirmed the specification, this workflow does not
-        reinterpret that intent with approach heuristics, regex-derived semantic
-        requirements, or hidden model repair loops. Strong semantic/static
-        checks remain available to Review, simulator and GX execution paths.
+        Fresh confirmed Agent B output is checked only against transport/PLC
+        structure plus deterministic machine-readable confirmed semantics.
+        Broader engineering heuristics and style findings remain in Review,
+        simulator and GX execution paths; semantic mismatches never enter the
+        format-repair loop.
 
         A completed ladder response rejected *only* for invalid JSON syntax is
         treated differently from transport/language/schema-field rejection: its
@@ -243,7 +246,8 @@ class GenerationWorkflow:
             )
             from plc.specification.provenance import handoff_snapshot
             generation_handoff = handoff_snapshot(self.confirmed_context or {}, stage=(
-                "format_repair" if self.format_repair else "contract_repair" if self.repair_mode else self.task_type or "generate"))
+                "format_repair" if self.format_repair else "contract_repair" if self.repair_mode else self.task_type or "generate"),
+                decision_receipt_id=self.decision_receipt_id)
             if is_edit_mode or repair_call:
                 from application.generation_support import public_generation_value
                 generation_handoff["change_request"] = {
@@ -255,7 +259,7 @@ class GenerationWorkflow:
                     "receipt_sha256": canonical_sha256(self.source_handoff),
                     "projection_sha256": self.source_handoff.get("projection_sha256"),
                     "confirmed_spec_sha256": self.source_handoff.get("confirmed_spec_sha256"),
-                    "generation_evidence": copy.deepcopy(self.source_handoff.get("generation_evidence", {})),
+                    "decision_receipt_id": self.source_handoff.get("decision_receipt_id"),
                 }
             if repair_call:
                 generation_handoff["generation_evidence"] = {
@@ -263,6 +267,8 @@ class GenerationWorkflow:
                     "reason": "scoped_repair_no_fresh_rag", "records": [],
                 }
             generation_agent_metadata = None
+            prepared_candidate = None
+            direct_candidate = None
             repair_payload = None
             repair_kind = "format"
             deterministic_field_patch = False
@@ -351,15 +357,20 @@ class GenerationWorkflow:
                         generate_confirmed_ladder,
                         self.confirmed_context,
                         self.plc_model,
+                        decision_receipt_id=self.decision_receipt_id,
                         model_name=self.model_name,
-                        effort=self.effort,
+                        effort=None,
                         on_context=lambda value: generation_handoff.update(copy.deepcopy(value)),
                         on_stage=lambda stage, message: self._emit(
                             "progress", {"stage": stage, "message": message}
                         ),
                     )
+                    direct_candidate = result.get("ladder")
+                    if not isinstance(direct_candidate, dict):
+                        raise GenerationError(tr('独立生成 Agent 未返回梯形图候选'))
+                    direct_candidate = copy.deepcopy(direct_candidate)
                     full_content = json.dumps(
-                        result["ladder"], ensure_ascii=False, separators=(",", ":")
+                        direct_candidate, ensure_ascii=False, separators=(",", ":")
                     )
                     generation_handoff = copy.deepcopy(result.get("generation_handoff") or {})
                     generation_agent_metadata = {
@@ -439,28 +450,36 @@ class GenerationWorkflow:
 
             if repair_call and (not streaming_succeeded or not full_content):
                 raise GenerationError(tr('修复调用未返回候选 JSON'))
-            json_str = clean_json_text(full_content) if full_content else ""
 
-            if not json_str:
-                raise GenerationError(tr('大模型未返回合法数据'))
+            if direct_candidate is None:
+                json_str = clean_json_text(full_content) if full_content else ""
+                if not json_str:
+                    raise GenerationError(tr('大模型未返回合法数据'))
 
-            # Do not pay for another model call when the response is already one
-            # complete object plus a redundant terminal bracket/brace. Anything
-            # less obvious remains a failure and is offered to explicit repair.
-            json_str, local_tail_repair = trim_redundant_json_tail(json_str)
-            if local_tail_repair:
-                validation_messages.append(tr('已移除模型 JSON 末尾多余的闭合符号'))
-                self._emit("progress", {
-                    "stage": "format_recovered",
-                    "message": tr('已安全移除 JSON 末尾多余闭合符号；继续解析候选程序。'),
-                })
-
-            prepared_candidate = None
+                # Do not pay for another model call when the response is already one
+                # complete object plus a redundant terminal bracket/brace. Anything
+                # less obvious remains a failure and is offered to explicit repair.
+                json_str, local_tail_repair = trim_redundant_json_tail(json_str)
+                if local_tail_repair:
+                    validation_messages.append(tr('已移除模型 JSON 末尾多余的闭合符号'))
+                    self._emit("progress", {
+                        "stage": "format_recovered",
+                        "message": tr('已安全移除 JSON 末尾多余闭合符号；继续解析候选程序。'),
+                    })
+            else:
+                # Agent B already returned a Python ladder object. Keep one local
+                # serialization only for UI/rejected-candidate staging; acceptance
+                # consumes the object directly and never parses these bytes again.
+                json_str = full_content
 
             def parse_candidate(candidate):
                 nonlocal prepared_candidate
                 emit_parsing_progress(tr('正在解析模型输出：读取 JSON 结构'))
-                parsed = json.loads(candidate)
+                parsed = (
+                    copy.deepcopy(direct_candidate)
+                    if direct_candidate is not None
+                    else json.loads(candidate)
+                )
                 if not isinstance(parsed, dict):
                     raise PLCJsonValidationError("$: expected JSON object")
                 if self.target_mode == "ladder":
@@ -474,12 +493,18 @@ class GenerationWorkflow:
                             on_progress=emit_parsing_progress,
                         )
                     else:
+                        from plc.generation import CONFIRMED_AGENT_ORIGIN
                         prepared_candidate = self.candidates.prepare(
                             parsed, plc_model=self.plc_model, program_name=self.program_name,
                             revision=self.revision, confirmed_spec=self.confirmed_context,
                             previous_ladder=self.previous_json, repair_mode=self.repair_mode,
                             allowed_rung_ids=self.allowed_rung_ids,
                             allowed_addresses=self.allowed_addresses, task_type=self.task_type,
+                            candidate_origin=(
+                                CONFIRMED_AGENT_ORIGIN
+                                if direct_candidate is not None
+                                else "external"
+                            ),
                             on_progress=emit_parsing_progress,
                         )
                     validation_messages.extend(prepared_candidate["validation_messages"])
@@ -605,7 +630,8 @@ class GenerationWorkflow:
                     "repair_attempts": repair_attempts,
                     "first_pass_pipeline": generation_agent_metadata or {"mode": "direct"},
                     "generation_handoff": {**generation_handoff,
-                        "confirmed_spec_sha256": canonical_sha256(self.confirmed_context) if self.confirmed_context is not None else None},
+                        "confirmed_spec_sha256": canonical_sha256(self.confirmed_context) if self.confirmed_context is not None else None,
+                        "decision_receipt_id": self.decision_receipt_id},
                     "validation_profile": "generation_structural",
                     "program_name": self.program_name,
                     "revision": self.revision,
@@ -642,13 +668,15 @@ class GenerationWorkflow:
                     "width": rendered["width"],
                     "height": rendered["height"],
                     "normalization": prepared_candidate["normalization"],
+                    "semantic_validation": prepared_candidate.get("semantic_validation"),
+                    "candidate_origin": prepared_candidate.get("candidate_origin"),
                     "artifacts": artifacts,
                     "contract_mismatch": None,
                     "validation": {
                         "status": "candidate_ready",
                         "profile": "generation_structural",
                         "messages": validation_messages or [
-                            tr('候选结构可解析；需求一致性不在生成阶段重复判定')
+                            tr('候选结构与当前可机检的已确认语义已通过；其余工程检查保留给 Review')
                         ],
                     },
                 }

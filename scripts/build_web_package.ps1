@@ -137,6 +137,9 @@ if (-not (Test-Path -LiteralPath $mcpExecutable -PathType Leaf)) {
     throw "MCP product launcher was not produced: $mcpExecutable"
 }
 Copy-Item -LiteralPath (Join-Path $repositoryRoot "gxworks-agent-mcp.cmd") -Destination (Join-Path $packageDirectory "gxworks-agent-mcp.cmd") -Force
+# Stage the same source version's documentation and inert reference copies.
+& $Python (Join-Path $repositoryRoot "scripts/package_documentation.py") --root $repositoryRoot --destination $packageDirectory
+if ($LASTEXITCODE -ne 0) { throw "Documentation staging failed." }
 Write-Output $packageExecutable
 Write-Output $mcpExecutable
 if ($AllowWithoutGateway -and [string]::IsNullOrWhiteSpace($resolvedGateway)) {

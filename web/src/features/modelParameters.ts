@@ -29,62 +29,55 @@ export type CapabilityContract = {
 export type Selection = { mode: "omit" | "inherit" } | { mode: "value"; value: Scalar };
 export type UserModelSettings = { scope?: Scope; parameters?: Record<string, Selection> };
 
+/**
+ * Endpoint presets fill a base URL only; they never carry model names or tuning
+ * defaults. `source` says where the endpoint came from: `local` is an endpoint a
+ * bundled capability contract already matches, `dsh` is one whose vendor also
+ * appears in the DeepSeek Harness provider catalog.
+ *
+ * The one admission rule is the protocol this project implements: the endpoint
+ * must serve a Chat Completions–compatible API reachable with a stored API key.
+ * A vendor's *native* protocol does not disqualify it — Claude and Gemini are
+ * listed through their OpenAI compatibility layers, which is exactly what the
+ * bundled `anthropic-compat` contract describes. Vendors that authenticate by
+ * request signing or OAuth (Bedrock, Vertex), or whose base URL embeds the
+ * caller's own resource id (Azure OpenAI, Cloudflare), cannot be a fixed preset
+ * and must be typed by the user.
+ */
 export const ENDPOINT_PRESETS = [
-  { name: "OpenAI", url: "https://api.openai.com/v1" },
-  { name: "Qwen / 千问（北京）", url: "https://dashscope.aliyuncs.com/compatible-mode/v1" },
-  { name: "Qwen / 千问（新加坡）", url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1" },
-  { name: "Kimi / Moonshot（中国）", url: "https://api.moonshot.cn/v1" },
-  { name: "Kimi / Moonshot（国际）", url: "https://api.moonshot.ai/v1" },
-  { name: "Claude / Anthropic", url: "https://api.anthropic.com/v1" },
-  { name: "Gemini / Google", url: "https://generativelanguage.googleapis.com/v1beta/openai" },
+  { name: "OpenAI", url: "https://api.openai.com/v1", source: "local" },
+  { name: "DeepSeek", url: "https://api.deepseek.com", source: "local" },
+  { name: "智谱 GLM（开放平台）", url: "https://open.bigmodel.cn/api/paas/v4", source: "local" },
+  { name: "通义千问（北京）", url: "https://dashscope.aliyuncs.com/compatible-mode/v1", source: "local" },
+  { name: "通义千问（新加坡）", url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", source: "local" },
+  { name: "Kimi / Moonshot（国际）", url: "https://api.moonshot.ai/v1", source: "local" },
+  { name: "Kimi / Moonshot（中国）", url: "https://api.moonshot.cn/v1", source: "local" },
+  { name: "Claude / Anthropic（OpenAI 兼容层）", url: "https://api.anthropic.com/v1", source: "local" },
+  { name: "Gemini（OpenAI 兼容端点）", url: "https://generativelanguage.googleapis.com/v1beta/openai", source: "local" },
+  { name: "OpenRouter", url: "https://openrouter.ai/api/v1", source: "dsh" },
+  { name: "Groq", url: "https://api.groq.com/openai/v1", source: "dsh" },
+  { name: "Together", url: "https://api.together.ai/v1", source: "dsh" },
+  { name: "Fireworks", url: "https://api.fireworks.ai/inference/v1", source: "dsh" },
+  { name: "Cerebras", url: "https://api.cerebras.ai/v1", source: "dsh" },
+  { name: "Baseten", url: "https://inference.baseten.co/v1", source: "dsh" },
+  { name: "NVIDIA NIM", url: "https://integrate.api.nvidia.com/v1", source: "dsh" },
+  { name: "Hugging Face Router", url: "https://router.huggingface.co/v1", source: "dsh" },
+  { name: "Ant Ling", url: "https://api.ant-ling.com/v1", source: "dsh" },
+  { name: "Mistral", url: "https://api.mistral.ai/v1", source: "dsh" },
+  { name: "MiniMax（国际）", url: "https://api.minimax.io/v1", source: "dsh" },
+  { name: "MiniMax（中国）", url: "https://api.minimaxi.com/v1", source: "dsh" },
+  { name: "Vercel AI Gateway", url: "https://ai-gateway.vercel.sh/v1", source: "dsh" },
+  { name: "OpenCode Zen", url: "https://opencode.ai/zen/v1", source: "dsh" },
+  { name: "小米 MiMo", url: "https://api.xiaomimimo.com/v1", source: "dsh" },
+  { name: "Z.AI Coding", url: "https://api.z.ai/api/coding/paas/v4", source: "dsh" },
+  { name: "Z.AI Coding（中国）", url: "https://open.bigmodel.cn/api/coding/paas/v4", source: "dsh" },
+  { name: "通义千问 Token Plan（新加坡）", url: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1", source: "dsh" },
+  { name: "通义千问 Token Plan（北京）", url: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1", source: "dsh" },
+  { name: "小米 Token Plan（AMS）", url: "https://token-plan-ams.xiaomimimo.com/v1", source: "dsh" },
+  { name: "小米 Token Plan（中国）", url: "https://token-plan-cn.xiaomimimo.com/v1", source: "dsh" },
+  { name: "小米 Token Plan（新加坡）", url: "https://token-plan-sgp.xiaomimimo.com/v1", source: "dsh" },
 ] as const;
 
-const own = (object: Options, key: string) => Object.hasOwn(object, key);
-function object(value: unknown): Options {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Options : {};
-}
-function read(input: Options, path: string[]): unknown {
-  let current: unknown = input;
-  for (const key of path) {
-    if (!own(object(current), key)) return undefined;
-    current = object(current)[key];
-  }
-  return current;
-}
-function remove(input: Options, path: string[]): void {
-  if (!path.length || !own(input, path[0])) return;
-  if (path.length === 1) delete input[path[0]];
-  else {
-    const child = object(input[path[0]]);
-    remove(child, path.slice(1));
-    if (!Object.keys(child).length) delete input[path[0]];
-  }
-}
-export function clearKnown(defaults: Options, overrides: Options, contract: CapabilityContract): [Options, Options] {
-  return [defaults, overrides].map(group => {
-    const next = structuredClone(group);
-    for (const [name, desc] of Object.entries(contract.parameters || {})) {
-      const path = desc.wire_path || [name];
-      for (const alias of [path, ["extra_body", ...path], [name], ["extra_body", name]]) remove(next, alias);
-    }
-    return next;
-  }) as [Options, Options];
-}
-function merged(base: Options, overlay: Options): Options {
-  const result = structuredClone(base);
-  for (const [key, value] of Object.entries(overlay)) {
-    if (["__proto__", "prototype", "constructor"].includes(key)) continue;
-    if (value === null) delete result[key];
-    else if (value && typeof value === "object" && !Array.isArray(value)) result[key] = merged(object(result[key]), object(value));
-    else result[key] = value;
-  }
-  return result;
-}
-export function effectiveValue(defaults: Options, overrides: Options, name: string, desc: Descriptor): unknown {
-  const options = merged(defaults, overrides), path = desc.wire_path || [name];
-  const extra = read(options, ["extra_body", ...path]);
-  return extra !== undefined ? extra : read(options, path) ?? read(options, ["extra_body", name]) ?? options[name];
-}
 /** Legacy probe samples are evidence, never a domain, even before migration. */
 export function hardDomain(desc: Descriptor): Domain {
   if (desc.domain) return desc.domain.enforcement === "hard" ? desc.domain : {};
@@ -136,13 +129,11 @@ export function validValue(desc: Descriptor, value: unknown): value is Scalar {
   }
   return true;
 }
-export function selectedValues(contract: CapabilityContract, settings: UserModelSettings,
-                               defaults: Options = {}, overrides: Options = {}): Options {
+export function selectedValues(contract: CapabilityContract, settings: UserModelSettings): Options {
   const result: Options = {};
-  for (const [name, desc] of Object.entries(contract.parameters || {})) {
+  for (const name of Object.keys(contract.parameters || {})) {
     const selection = settings.parameters?.[name];
-    result[name] = selection?.mode === "value" ? selection.value : selection?.mode === "omit" ? null :
-      effectiveValue(defaults, overrides, name, desc) ?? null;
+    result[name] = selection?.mode === "value" ? selection.value : null;
   }
   return result;
 }
@@ -161,28 +152,24 @@ export function parameterEnabled(name: string, contract: CapabilityContract, val
   });
   return conditionsMatch(known(descriptor), values) && conditionsMatch(known(contract.constraints?.[name]), values);
 }
-export function adoptSelections(contract: CapabilityContract, previous: UserModelSettings,
-                                defaults: Options, overrides: Options): UserModelSettings {
+export function adoptSelections(contract: CapabilityContract, previous: UserModelSettings): UserModelSettings {
   const parameters: Record<string, Selection> = {};
   for (const [name, desc] of Object.entries(contract.parameters || {})) {
     const old = previous.parameters?.[name];
-    const value = old?.mode === "value" ? old.value : effectiveValue(defaults, overrides, name, desc);
     if (old) parameters[name] = old;
     else if (["fixed", "unsupported"].includes(desc.status)) parameters[name] = { mode: "omit" };
-    else if (validValue(desc, value)) parameters[name] = { mode: "value", value };
     else parameters[name] = { mode: desc.default_mode || "omit" };
   }
-  return reconcileSelections(contract, { scope: contract.scope, parameters }, defaults, overrides);
+  return reconcileSelections(contract, { scope: contract.scope, parameters });
 }
-export function reconcileSelections(contract: CapabilityContract, settings: UserModelSettings,
-                                    _defaults: Options = {}, _overrides: Options = {}): UserModelSettings {
+export function reconcileSelections(contract: CapabilityContract, settings: UserModelSettings): UserModelSettings {
   // Keep an explicit invalid value visible. Save/request validation must explain
   // the conflict, not silently remove the user's settings after metadata changes.
   return { scope: contract.scope, parameters: Object.fromEntries(Object.entries(settings.parameters || {})
     .filter(([name]) => !!contract.parameters?.[name])) };
 }
 export function changeSelection(contract: CapabilityContract, settings: UserModelSettings, name: string,
-                                selection: Selection, _defaults: Options = {}, _overrides: Options = {}): UserModelSettings {
+                                selection: Selection): UserModelSettings {
   const desc = contract.parameters?.[name];
   if (!desc || selection.mode === "value" && !validValue(desc, selection.value)) throw new Error("Invalid parameter selection");
   return { scope: contract.scope, parameters: { ...settings.parameters, [name]: selection } };

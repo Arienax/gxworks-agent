@@ -91,10 +91,27 @@ def _complete(client, service, response):
     return job_id, client.get("/api/jobs/" + job_id + "/output").json()
 
 
+def offline_runtime_profile(model="offline"):
+    """Canonical v3 runtime profile for a synthetic provider.
+
+    The model path reads ``provider.profile`` and materializes it through the v3
+    runtime contract, so a synthetic provider has to carry the same canonical
+    fields the real adapter requires: ``adapter``, ``baseUrl`` and ``model``.
+    The address is deliberately unroutable — the provider double supplies every
+    response and no request may leave the process.
+    """
+    return {
+        "adapter": "openai_compatible",
+        "baseUrl": "https://offline.invalid/v1",
+        "model": model,
+    }
+
+
 class _Provider:
     def __init__(self):
         self.requests = []
         self.wrong_language = False
+        self.profile = offline_runtime_profile()
 
     def stream(self, request):
         self.requests.append(request)
@@ -264,7 +281,7 @@ def test_schema_failures_never_echo_secret_inputs(tmp_path):
 def test_analysis_confirm_generate_preview_accept_and_replay_events(offline, tmp_path):
     provider = _Provider()
     workspace = tmp_path / "workspace"
-    service = WorkbenchService(workspace, tmp_path / "state", model_factory=lambda: (provider, {"model": "offline"}))
+    service = WorkbenchService(workspace, tmp_path / "state", model_factory=lambda: (provider, offline_runtime_profile()))
     with TestClient(_app(workspace, tmp_path / "state", service=service), base_url=ORIGIN) as client:
         headers = _login(client)
         created = client.post("/api/projects", json={"name": "Generated project"}, headers=headers)
@@ -406,7 +423,7 @@ def test_refresh_during_generation_reads_same_running_job_without_restart(offlin
     workspace = tmp_path / "workspace"
     store = SessionStore(base_dir=workspace, legacy_dir=tmp_path)
     project = store.create_project("Refresh during generation")["id"]
-    service = WorkbenchService(workspace, tmp_path / "state", model_factory=lambda: (provider, {"model": "offline"}))
+    service = WorkbenchService(workspace, tmp_path / "state", model_factory=lambda: (provider, offline_runtime_profile()))
     with TestClient(_app(workspace, tmp_path / "state", service=service), base_url=ORIGIN) as client:
         headers = _login(client)
         response = client.post("/api/jobs", json={
@@ -442,7 +459,7 @@ def test_live_activity_is_persisted_before_final_content_or_candidate_exists(off
             assert release.wait(10)
             yield TextDelta('启停控制","approaches":[],"missing_info":[]}')
     service = WorkbenchService(tmp_path / "workspace", tmp_path / "state",
-                              model_factory=lambda: (PausedProvider(), {"model": "offline"}))
+                              model_factory=lambda: (PausedProvider(), offline_runtime_profile()))
     with TestClient(_app(tmp_path / "workspace", tmp_path / "state", service=service), base_url=ORIGIN) as client:
         headers = _login(client)
         project = service.create_project(name="Live analysis")["id"]
@@ -471,7 +488,7 @@ def test_language_preference_does_not_block_a_valid_program_autosave(offline, tm
     provider = _Provider()
     provider.wrong_language = True
     before = _files(workspace)
-    service = WorkbenchService(workspace, tmp_path / "state", model_factory=lambda: (provider, {"model": "offline"}))
+    service = WorkbenchService(workspace, tmp_path / "state", model_factory=lambda: (provider, offline_runtime_profile()))
     with TestClient(_app(workspace, tmp_path / "state", service=service), base_url=ORIGIN) as client:
         headers = _login(client)
         response = client.post("/api/jobs", json={
@@ -501,7 +518,7 @@ def test_retry_uses_original_command_after_project_messages_change(offline, tmp_
     captures = []
     def snapshot():
         captures.append(True)
-        return provider, {"model": "offline"}
+        return provider, offline_runtime_profile()
     service = WorkbenchService(workspace, tmp_path / "state", model_factory=snapshot)
     with TestClient(_app(workspace, tmp_path / "state", service=service), base_url=ORIGIN) as client:
         headers = _login(client)

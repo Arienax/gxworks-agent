@@ -1,11 +1,8 @@
 import os
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtWidgets import QApplication, QPushButton, QTabWidget, QTextBrowser
 
 from simulator.reporting import build_simulator_report, render_simulator_report_text
-from ui.desktop.dialogs.simulator_report import SimulatorReportDialog
 
 
 def _workflow(result, *, message="仿真测试已结束。", run_id="sim_fixture"):
@@ -129,80 +126,3 @@ def test_report_exposes_environment_stage_and_exact_gateway_error():
     assert report["not_executed_count"] == 6
     assert "版本" in report["recommendations"][0] or "修复版" in report["recommendations"][0]
     assert "复位仿真 CPU" in text
-
-
-def test_report_dialog_is_fully_populated_before_it_is_shown():
-    app = QApplication.instance() or QApplication([])
-    result = {
-        "name": "fixture",
-        "status": "error",
-        "counts": {"passed": 0, "failed": 0, "error": 1, "unavailable": 0},
-        "test_count": 0,
-        "attempted_count": 0,
-        "executed_count": 0,
-        "not_executed_count": 0,
-        "error": "MX Component connection failed",
-        "results": [],
-    }
-    report = build_simulator_report(_workflow(result, message="仿真测试执行失败。"))
-
-    dialog = SimulatorReportDialog(report)
-    browser = dialog.findChild(QTextBrowser, "SimulatorReportBrowser")
-    technical = dialog.findChild(QTextBrowser, "SimulatorTechnicalDetails")
-
-    assert browser is not None
-    assert "MX Component connection failed" in browser.toPlainText()
-    assert technical is not None
-    assert "执行器返回信息" in technical.toPlainText()
-    dialog.close()
-    app.processEvents()
-
-
-def test_failed_report_offers_expectation_details_and_debug_action():
-    app = QApplication.instance() or QApplication([])
-    result = {
-        "name": "fixture",
-        "status": "failed",
-        "counts": {"passed": 0, "failed": 1, "error": 0, "unavailable": 0},
-        "test_count": 1,
-        "attempted_count": 1,
-        "executed_count": 1,
-        "not_executed_count": 0,
-        "results": [
-            {
-                "name": "fixture_case",
-                "status": "failed",
-                "setup_stage": "complete",
-                "execution_started": True,
-                "error": "",
-                "assertions": [
-                    {
-                        "step_id": "verify",
-                        "at_ms": 20,
-                        "address": "Y0",
-                        "passed": False,
-                        "detail": "actual=1, eq 0, tolerance=0.0",
-                    }
-                ],
-                "invariant_violations": [],
-            }
-        ],
-    }
-    report = build_simulator_report(_workflow(result, run_id="sim_failed"))
-    dialog = SimulatorReportDialog(report)
-    buttons = {button.text(): button for button in dialog.findChildren(QPushButton)}
-    tabs = dialog.findChild(QTabWidget, "SimulatorReportTabs")
-
-    assert "检查测试期望" in buttons
-    assert "进入故障调试" in buttons
-    buttons["检查测试期望"].click()
-    assert tabs.currentIndex() == 1
-    technical = dialog.findChild(QTextBrowser, "SimulatorTechnicalDetails")
-    technical_text = technical.toPlainText()
-    assert "fixture_case" not in technical_text
-    assert "sim_failed" not in technical_text
-    assert "verify" not in technical_text
-    buttons["进入故障调试"].click()
-    assert dialog.requested_action == "debug"
-    dialog.close()
-    app.processEvents()

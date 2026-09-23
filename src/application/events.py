@@ -14,8 +14,6 @@ def utc_now() -> str:
 
 def _public_context_audit(value) -> dict:
     """A dedicated metadata projection; never widen the generic event whitelist."""
-    from shared.context_policy import POLICY_NAMES, POLICY_VERSION
-
     def count(item):
         if type(item) is not int or not 0 <= item <= 2**53 - 1:
             raise ValueError("Invalid context audit count")
@@ -34,16 +32,11 @@ def _public_context_audit(value) -> dict:
     try:
         if not isinstance(value, dict) or type(value.get("schema_version")) is not int or value["schema_version"] != 1:
             raise ValueError("Invalid context audit schema")
-        policy = value["policy"]
-        if (not isinstance(policy, dict) or policy.get("name") not in POLICY_NAMES
-                or type(policy.get("version")) is not int or policy["version"] != POLICY_VERSION):
-            raise ValueError("Invalid context policy")
         messages, sections = value["messages"], value["sections"]
         if not isinstance(messages, list) or not isinstance(sections, list) or len(messages) > 4096 or len(sections) > 256:
             raise ValueError("Invalid context audit rows")
         result = {
             "schema_version": 1,
-            "policy": {"name": policy["name"], "version": POLICY_VERSION},
             "request_index": count(value["request_index"]),
             "message_text_chars": count(value["message_text_chars"]),
             "dropped_sections": count(value["dropped_sections"]),

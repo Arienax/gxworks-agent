@@ -1,121 +1,110 @@
 name: Confirmed Generation Compatibility
 
 on:
-  push:
-    branches: [feat/universal-api-capabilities]
-    paths:
-      - 'src/**'
-      - 'tests/**'
-      - 'web/**'
-      - 'resources/**'
-      - '.github/workflows/confirmed-generation.yml'
   pull_request:
+    branches: [main]
     paths:
-      - 'src/**'
-      - 'tests/**'
-      - 'web/**'
-      - 'resources/**'
+      - 'src/application/analysis_context.py'
+      - 'src/application/analysis_results.py'
+      - 'src/application/compact_protocol.py'
+      - 'src/application/confirmed_generation_context.py'
+      - 'src/application/context_compiler.py'
+      - 'src/application/generation_receipts.py'
+      - 'src/application/planning.py'
+      - 'src/application/prompts.py'
+      - 'src/application/request_intent.py'
+      - 'src/knowledge/**'
+      - 'src/plc/specification/**'
+      - 'tests/test_analysis_*.py'
+      - 'tests/test_confirmed_*.py'
+      - 'tests/test_context_compiler.py'
+      - 'tests/test_context_refresh_runtime.py'
+      - 'tests/test_instruction_fact_context.py'
+      - 'tests/test_intent_evidence_handoff.py'
+      - 'tests/test_optional_hardware_parameters.py'
+      - 'tests/test_spec_choice_metadata.py'
+      - 'tests/test_approach_contracts.py'
+      - 'tests/test_program_exploration.py'
       - '.github/workflows/confirmed-generation.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: confirmed-generation-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 12
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      HAYSTACK_TELEMETRY_ENABLED: 'false'
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
           lfs: true
-      - name: Archive exact tested source
-        run: git archive --format=zip --output=confirmed-generation-source.zip HEAD
-      - uses: actions/upload-artifact@v4
-        with:
-          name: confirmed-generation-source
-          path: confirmed-generation-source.zip
-          retention-days: 7
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Install test dependencies
-        run: python -m pip install -r requirements/web.txt pytest jsonschema
-      # Three Qt worker integration tests are outside this headless Web job.
-      # Core IR tests, native CSV fixtures and read-only legacy views still run.
-      - name: Test confirmation through saved ladder artifacts and shared boundaries
-        env:
-          PYTHONPATH: src
-        run: >-
-          python -m pytest -q
-          tests/test_generation_agent_boundary.py
-          tests/test_intent_evidence_handoff.py
-          tests/test_analysis_design_rag.py
-          tests/test_contract_repair_planner.py
-          tests/test_delivery_summary.py
-          tests/test_prompt_context_policy.py
-          tests/test_architecture_boundaries.py
-          tests/test_source_layout.py
-          tests/test_spec_choice_metadata.py
-          tests/test_confirmed_compatibility.py
-          tests/test_confirmed_reconfirmation.py
-          tests/test_hybrid_compact_recovery.py
-          tests/test_generation_delivery.py
-          tests/test_context_refresh_runtime.py
-          tests/test_approval_modes.py
-          tests/test_program_exploration.py
-          tests/test_confirmed_generation_regressions.py
-          tests/test_review_noise_regressions.py
-          tests/test_user_confirmed_generation_repair.py
-          tests/test_model_provider.py
-          tests/test_web_contract.py
-          tests/test_web_frontend_state_flow.py
-          tests/test_model_contract.py
-          tests/test_model_catalog_v3.py
-          tests/test_model_capabilities.py
-          tests/test_model_stream_cancellation.py
-          tests/test_model_presentation.py
-          tests/test_plc_core_boundary.py
-          tests/test_hardware_intent_boundary.py
-          tests/test_device_identity_delivery.py
-          tests/test_optional_hardware_parameters.py
-          tests/test_motion_control_regressions.py
-          tests/test_gxworks2_comment_export.py
-          tests/test_execution_read.py
-          tests/test_plc_condition_normalizer.py
-          tests/test_approach_contracts.py
-          tests/test_plc_ir.py
-          tests/test_plc_semantics.py
-          tests/test_plc_static_analysis.py
-          -k 'not test_compiler_thread_persists_ir_and_all_legacy_artifacts and not test_compiler_does_not_repair_semantic_mismatch_after_confirmed_generation and not test_compiler_partial_edit_uses_ir_revision_and_preserves_other_networks'
-          --junitxml=confirmed-generation-tests.xml
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: Validate generated types and build the actual Web UI
+      - name: Detect current-push confirmed-generation scope
+        id: scope
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          npm ci --prefix web
-          python scripts/export_web_schema.py
-          npm run types --prefix web
-          git diff --exit-code -- web/openapi.json web/src/api/generated.ts
-          node --experimental-strip-types --test web/tests/*.test.mjs | tee frontend-tests.tap
-          npm run build --prefix web | tee frontend-build.log
-      - uses: actions/upload-artifact@v4
-        if: always()
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          from="$BEFORE_SHA"
+          if [[ -z "$from" || "$from" == "null" || "$from" =~ ^0+$ ]]; then
+            from="$BASE_SHA"
+          fi
+          to="$HEAD_SHA"
+          if [[ -z "$to" || "$to" == "null" ]]; then
+            to=HEAD
+          fi
+          git diff --name-only "$from"..."$to" > changed-files.txt
+          if grep -Eq '^(src/(application/(analysis_context\.py|analysis_results\.py|compact_protocol\.py|confirmed_generation_context\.py|context_compiler\.py|generation_receipts\.py|planning\.py|prompts\.py|request_intent\.py)|knowledge/|plc/specification/)|tests/(test_analysis_.*\.py|test_confirmed_.*\.py|test_context_compiler\.py|test_context_refresh_runtime\.py|test_instruction_fact_context\.py|test_intent_evidence_handoff\.py|test_optional_hardware_parameters\.py|test_spec_choice_metadata\.py|test_approach_contracts\.py|test_program_exploration\.py)|\.github/workflows/confirmed-generation\.yml$)' changed-files.txt; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
         with:
-          name: confirmed-generation-web-results
-          path: |
-            frontend-tests.tap
-            frontend-build.log
-          retention-days: 7
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: confirmed-generation-results
-          path: confirmed-generation-tests.xml
-          retention-days: 7
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install test dependencies
+        if: steps.scope.outputs.run == 'true'
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip check
+      - name: Test analysis-to-confirmed-generation handoff
+        if: steps.scope.outputs.run == 'true'
+        run: >-
+          python -m pytest -q
+          tests/test_analysis_design_rag.py
+          tests/test_analysis_format_repair.py
+          tests/test_analysis_mode_jobs.py
+          tests/test_analysis_prompt_integration.py
+          tests/test_analysis_prompt_routing.py
+          tests/test_confirmed_input_protocol.py
+          tests/test_confirmed_compatibility.py
+          tests/test_confirmed_reconfirmation.py
+          tests/test_context_compiler.py
+          tests/test_context_refresh_runtime.py
+          tests/test_instruction_fact_context.py
+          tests/test_intent_evidence_handoff.py
+          tests/test_optional_hardware_parameters.py
+          tests/test_spec_choice_metadata.py
+          tests/test_approach_contracts.py
+          tests/test_program_exploration.py

@@ -85,3 +85,440 @@ def test_ir_consistency_can_be_checked_without_reinterpreting_ladder_semantics()
     assert validate_plc_ir(program, validate_ladder=False) is program
     with pytest.raises((PLCJsonValidationError, ValueError)):
         validate_plc_ir(program, validate_ladder=True)
+
+
+
+def test_semantic_requirement_registry_covers_structure_and_core_user_constraints():
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+
+    ladder = {
+        "device_comments": {"X0": "input", "D10": "data"},
+        "rungs": [{
+            "rung_id": 1, "header_element": None, "shared_inputs": [],
+            "branches": [{
+                "branch_id": 1, "y_offset_level": 0,
+                "inputs": [{"type": "NO", "address": "X0"}],
+                "outputs": [{"type": "APP_INSTR", "opcode": "MOV", "operands": ["K1", "D10"]}],
+            }],
+        }],
+    }
+    spec = {"selected_approach": {
+        "implementation_semantics": [
+            {"kind": "structure", "status": "required", "value": "direct_logic"},
+            {"kind": "structure", "status": "any_of", "values": ["direct_logic", "self_hold"]},
+        ],
+        "explicit_user_constraints": {
+            "required_opcodes": ["MOV"],
+            "required_devices": ["D10"],
+            "instruction_instances": [
+                {"opcode": "MOV", "operands": ["K1", "D10"]},
+            ],
+        },
+    }}
+    report = validate_confirmed_semantics(ladder, spec, "FX3U")
+    assert report["status"] == "verified"
+    assert len(report["requirements"]) == 5
+    assert all(row["status"] == "verified" for row in report["checks"])
+
+
+def test_explicit_user_constraint_violation_is_reported_without_discarding_candidate():
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+
+    spec = {"selected_approach": {
+        "implementation_semantics": [
+            {"kind": "structure", "status": "required", "value": "direct_logic"},
+        ],
+        "explicit_user_constraints": {"required_opcodes": ["MOV"]},
+    }}
+    report = validate_confirmed_semantics(_self_hold(), spec, "FX3U")
+    assert report["status"] == "violated"
+    assert any(
+        row.get("kind") == "opcode" and row.get("expected") == "MOV"
+        for row in report["violations"]
+    )
+
+
+def test_compact_agent_skips_legacy_candidate_normalizers(monkeypatch):
+    import plc.generation as generation
+    from plc.generation import prepare_ladder_candidate
+
+    def legacy_called(*_args, **_kwargs):
+        pytest.fail("fresh compact Agent B candidate entered a legacy normalizer")
+
+    monkeypatch.setattr(generation, "_normalize_legacy_blocks", legacy_called)
+    monkeypatch.setattr(generation, "normalize_legacy_counter_outputs", legacy_called)
+    monkeypatch.setattr(generation, "normalize_app_instr_out_outputs", legacy_called)
+
+    result = prepare_ladder_candidate(
+        _self_hold(),
+        plc_model="FX3U",
+        candidate_origin="compact_agent",
+    )
+    assert result["candidate_origin"] == "compact_agent"
+    assert result["semantic_validation"]["status"] == "not_applicable"
+
+
+def test_legacy_contract_without_implementation_semantics_remains_review_only():
+    from plc.generation import prepare_ladder_candidate
+
+    ladder = _self_hold()
+    spec = {
+        "selected_approach": {
+            "name": "必须使用 MOV",
+            "generation_contract": {
+                "required_opcodes": ["MOV"],
+                "enforce": True,
+            },
+        }
+    }
+    accepted_contract = prepare_ladder_candidate(
+        ladder,
+        plc_model="FX3U",
+        confirmed_spec=spec,
+        candidate_origin="compact_agent",
+    )
+    assert {
+        row["check"]: row["status"]
+        for row in accepted_contract["semantic_validation"]["checks"]
+    }["selected_approach_contract"] == "deferred_to_review"
+
+    duplicate = copy.deepcopy(ladder["rungs"][0])
+    duplicate["rung_id"] = 2
+    duplicate["branches"][0]["inputs"] = [{"type": "NO", "address": "X2"}]
+    ladder["device_comments"]["X2"] = "旁路"
+    ladder["rungs"].append(duplicate)
+    # Duplicate-coil style remains a full-review concern; it is not promoted
+    # back into confirmed-generation acceptance merely by this refactor.
+    accepted = prepare_ladder_candidate(
+        ladder,
+        plc_model="FX3U",
+        candidate_origin="compact_agent",
+    )
+    assert accepted["semantic_validation"]["status"] == "not_applicable"
+
+
+
+def test_confirmed_agent_origin_has_one_core_owner():
+    import inspect
+    import application.generation as generation_workflow
+    import application.generation_agent as generation_agent
+    import plc.generation as generation
+    from plc.generation import CONFIRMED_AGENT_ORIGIN
+
+    assert CONFIRMED_AGENT_ORIGIN == "compact_agent"
+    agent_source = inspect.getsource(generation_agent.generate_confirmed_ladder)
+    assert "CandidateService" not in agent_source
+    workflow_source = inspect.getsource(generation_workflow.GenerationWorkflow._run)
+    assert "CONFIRMED_AGENT_ORIGIN" in workflow_source
+    assert "direct_candidate is not None" in workflow_source
+    source = inspect.getsource(generation.prepare_ladder_candidate)
+    assert "candidate_origin == CONFIRMED_AGENT_ORIGIN" in source
+    assert "candidate_origin != CONFIRMED_AGENT_ORIGIN" in source
+
+
+
+def test_confirmed_generation_acceptance_capability_is_enforced():
+    from tools.audit_capability_coverage import audit_coverage
+
+    report = audit_coverage()
+    states = {row["id"]: row["state"] for row in report["capabilities"]}
+    assert states["confirmed_generation_acceptance"] == "enforced"
+
+
+
+def test_structure_obligation_checker_has_no_structure_specific_branch():
+    import inspect
+
+    import plc.specification.semantic_validation as semantic_validation
+    from plc.specification.approach import (
+        inspect_ladder_features,
+        structure_obligations,
+    )
+
+    obligations = structure_obligations("self_hold")
+    assert obligations["instance_selector"] == "feedback_coil"
+    assert obligations["instance_target_role"] == {"role": "output", "required": False}
+    assert tuple(obligations["required_roles"]) == ("start", "stop")
+    instances = inspect_ladder_features(_self_hold())["structure_instances"]
+    assert [
+        (row["selector"], row["target"])
+        for row in instances
+    ] == [("feedback_coil", "Y0")]
+    assert "self_hold" not in inspect.getsource(semantic_validation)
+
+
+def test_structure_obligation_requires_explicit_binding_roles_without_label_inference():
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+
+    spec = {
+        "io_bindings": [
+            {"role": "start", "kind": "X", "address": "X0", "active_level": 1},
+            {"kind": "X", "address": "X1", "active_level": 0, "label": "停止按钮"},
+            {"role": "output", "kind": "Y", "address": "Y0"},
+        ],
+        "io_table": [
+            {"kind": "X", "address": "X0", "label": "启动"},
+            {"kind": "X", "address": "X1", "label": "停止按钮"},
+            {"kind": "Y", "address": "Y0", "label": "电机"},
+        ],
+        "selected_approach": {
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+            ],
+        },
+    }
+    report = validate_confirmed_semantics(_self_hold(), spec, plc_model="FX3U")
+    assert report["status"] == "violated"
+    assert any(row.get("reason") == "missing_roles" for row in report["violations"])
+
+
+def test_structure_obligation_rejects_missing_confirmed_input_level():
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+
+    spec = {
+        "io_bindings": [
+            {"role": "start", "kind": "X", "address": "X0"},
+            {"role": "stop", "kind": "X", "address": "X1", "active_level": 1},
+        ],
+        "selected_approach": {
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+            ],
+        },
+    }
+    report = validate_confirmed_semantics(_self_hold(), spec, plc_model="FX3U")
+    assert report["status"] == "violated"
+    assert any(
+        row.get("reason") == "missing_input_levels"
+        for row in report["violations"]
+    )
+
+
+def test_structure_obligation_requires_distinct_binding_roles():
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+
+    spec = {
+        "io_bindings": [
+            {"role": "start", "kind": "X", "address": "X0", "active_level": 1},
+            {"role": "stop", "kind": "X", "address": "X0", "active_level": 0},
+        ],
+        "selected_approach": {
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+            ],
+        },
+    }
+    report = validate_confirmed_semantics(_self_hold(), spec, plc_model="FX3U")
+    assert report["status"] == "violated"
+    assert any(
+        row.get("reason") == "roles_not_distinct"
+        for row in report["violations"]
+    )
+
+
+def test_confirmed_semantic_findings_do_not_fail_candidate_preparation():
+    from plc.generation import prepare_ladder_candidate
+
+    spec = {
+        "io_bindings": [
+            {"role": "start", "kind": "X", "address": "X0", "active_level": 1},
+            {"role": "stop", "kind": "X", "address": "X1", "active_level": 0},
+        ],
+        "selected_approach": {
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+            ],
+        },
+    }
+
+    result = prepare_ladder_candidate(
+        _self_hold(),
+        plc_model="FX3U",
+        confirmed_spec=spec,
+        candidate_origin="compact_agent",
+    )
+    assert result["ladder"]["rungs"]
+    assert result["program_ir"]
+    assert result["semantic_validation"]["status"] == "violated"
+    assert result["semantic_validation"]["violations"]
+    assert any("未触发额外模型调用" in message for message in result["validation_messages"])
+
+
+def test_structure_binding_predicates_ignore_unrelated_program_scope():
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+
+    ladder = _self_hold()
+    ladder["rungs"][0]["branches"][0]["inputs"][1]["type"] = "NO"
+    ladder["rungs"].append({
+        "rung_id": 2,
+        "header_element": None,
+        "shared_inputs": [],
+        "branches": [{
+            "branch_id": 1,
+            "y_offset_level": 0,
+            "inputs": [{"type": "NO", "address": "Y0"}],
+            "outputs": [{"type": "COIL", "address": "M10"}],
+        }],
+    })
+    spec = {
+        "io_bindings": [
+            {"role": "start", "kind": "X", "address": "X0", "active_level": 1},
+            {"role": "stop", "kind": "X", "address": "X1", "active_level": 0},
+        ],
+        "io_table": [
+            {"kind": "X", "address": "X0", "label": "启动"},
+            {"kind": "X", "address": "X1", "label": "停止"},
+            {"kind": "Y", "address": "Y0", "label": "电机"},
+        ],
+        "parameters": [{"id": "unrelated_process_parameter", "value": "keep"}],
+        "selected_approach": {
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+            ],
+        },
+    }
+    report = validate_confirmed_semantics(ladder, spec, plc_model="FX3U")
+    assert report["status"] == "verified"
+    row = next(
+        item for item in report["checks"]
+        if item["check"] == "structure_binding_predicate"
+        and item.get("role") == "stop"
+    )
+    assert row["status"] == "verified"
+    assert row["expected"] == "NO X1"
+    assert row["rung_id"] == 1
+    assert row["target"] == "Y0"
+
+def test_confirmed_semantic_mismatch_is_not_a_format_repair_problem():
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+
+    spec = {
+        "io_bindings": [
+            {"role": "start", "kind": "X", "address": "X0", "active_level": 1},
+            {"role": "stop", "kind": "X", "address": "X1", "active_level": 0},
+            {"role": "output", "kind": "Y", "address": "Y0"},
+        ],
+        "io_table": [
+            {"kind": "X", "address": "X0", "label": "启动"},
+            {"kind": "X", "address": "X1", "label": "停止"},
+            {"kind": "Y", "address": "Y0", "label": "电机"},
+        ],
+        "selected_approach": {
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+            ],
+        },
+    }
+    report = validate_confirmed_semantics(_self_hold(), spec, plc_model="FX3U")
+    assert report["status"] == "violated"
+    assert any(
+        row.get("reason") == "binding_predicate_mismatch"
+        for row in report["violations"]
+    )
+
+
+def test_optional_structure_target_does_not_block_multiple_outputs():
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+
+    ladder = _self_hold()
+    ladder["rungs"][0]["branches"][0]["inputs"][1]["type"] = "NO"
+    spec = {
+        "io_bindings": [
+            {"role": "start", "kind": "X", "address": "X0", "active_level": 1},
+            {"role": "stop", "kind": "X", "address": "X1", "active_level": 0},
+            {"role": "output", "kind": "Y", "address": "Y0"},
+            {"role": "output", "kind": "Y", "address": "Y1"},
+        ],
+        "selected_approach": {
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+            ],
+        },
+    }
+
+    report = validate_confirmed_semantics(ladder, spec, plc_model="FX3U")
+    target = next(
+        row for row in report["checks"]
+        if row["check"] == "structure_instance_target"
+    )
+    assert target["status"] == "unresolved"
+    assert target["reason"] == "optional_role_ambiguous"
+    assert report["status"] == "unresolved"
+    assert all(
+        row["status"] == "verified"
+        for row in report["checks"]
+        if row["check"] == "structure_binding_predicate"
+    )
+
+
+def test_structure_binding_predicates_use_confirmed_output_instance():
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+
+    # Y0 is the confirmed output but has the wrong stop predicate for an
+    # active-low stop.  A second, unrelated M10 feedback loop is correct.  The
+    # checker must not use M10 to satisfy Y0's structure obligations.
+    ladder = _self_hold()
+    ladder["rungs"].append({
+        "rung_id": 2,
+        "header_element": None,
+        "shared_inputs": [],
+        "branches": [{
+            "branch_id": 1,
+            "y_offset_level": 0,
+            "inputs": [
+                {
+                    "type": "parallel_block",
+                    "branches": [
+                        [{"type": "NO", "address": "X0"}],
+                        [{"type": "NO", "address": "M10"}],
+                    ],
+                },
+                {"type": "NO", "address": "X1"},
+            ],
+            "outputs": [{"type": "COIL", "address": "M10"}],
+        }],
+    })
+    spec = {
+        "io_bindings": [
+            {"role": "start", "kind": "X", "address": "X0", "active_level": 1},
+            {"role": "stop", "kind": "X", "address": "X1", "active_level": 0},
+            {"role": "output", "kind": "Y", "address": "Y0"},
+        ],
+        "selected_approach": {
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+            ],
+        },
+    }
+
+    report = validate_confirmed_semantics(ladder, spec, plc_model="FX3U")
+    assert report["status"] == "violated"
+    assert any(
+        row.get("reason") == "binding_predicate_mismatch"
+        for row in report["violations"]
+    )
+
+
+def test_structure_binding_predicate_checks_start_active_polarity():
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+
+    ladder = _self_hold()
+    start = ladder["rungs"][0]["branches"][0]["inputs"][0]["branches"][0][0]
+    start["type"] = "NC"
+    spec = {
+        "io_bindings": [
+            {"role": "start", "kind": "X", "address": "X0", "active_level": 1},
+            {"role": "stop", "kind": "X", "address": "X1", "active_level": 1},
+        ],
+        "selected_approach": {
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+            ],
+        },
+    }
+    report = validate_confirmed_semantics(ladder, spec, plc_model="FX3U")
+    assert report["status"] == "violated"
+    assert any(
+        row.get("reason") == "binding_predicate_mismatch"
+        for row in report["violations"]
+    )

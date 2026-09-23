@@ -1542,5 +1542,14 @@
   "模型输出已解析为候选程序": "Model output parsed into a candidate program",
   "正在解析模型输出：构建 PLC IR": "Parsing model output: building PLC IR",
   "正在解析模型输出：检查结构与地址": "Parsing model output: checking structure and addresses",
-  "正在解析模型输出：规范化梯形图协议": "Parsing model output: normalizing the ladder protocol"
+  "正在解析模型输出：规范化梯形图协议": "Parsing model output: normalizing the ladder protocol",
+  "确定性字段修复计划无效": "The deterministic field-repair plan is invalid.",
+  "已根据唯一校验证据确定性修复字段；未调用模型。": "The field was repaired deterministically from unique validation evidence; no model call was made.",
+  "已由独立生成 Agent 根据确认规格一次生成完整 ladder_v1": "The independent generation agent generated the complete ladder_v1 once from the confirmed specification.",
+  "模型回复 JSON 格式验收失败；正在检查是否可安全恢复，否则保留候选供显式修复。": "The model response failed JSON format validation; checking for a safe recovery, otherwise preserving the candidate for explicit repair.",
+  "修复调用未返回候选 JSON": "The repair call did not return candidate JSON.",
+  "已移除模型 JSON 末尾多余的闭合符号": "Removed the extra closing delimiter at the end of the model JSON.",
+  "已安全移除 JSON 末尾多余闭合符号；继续解析候选程序。": "Safely removed the extra closing delimiter at the end of the JSON; continuing to parse the candidate program.",
+  "JSON 格式已恢复；正在对新暴露的字段错误执行一次精确修复。": "JSON format recovered; applying one precise repair to the newly exposed field error.",
+  "JSON 格式已恢复；正在对新暴露的局部结构错误执行一次有界修复。": "JSON format recovered; applying one bounded repair to the newly exposed local structural error."
 }

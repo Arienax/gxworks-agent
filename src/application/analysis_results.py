@@ -1,15 +1,239 @@
 """Analysis results."""
+import copy
 import json
 import re
 from shared.i18n import tr
-from plc.specification.approach import normalize_approach
+from plc.specification.approach import (
+    IMPLEMENTATION_SEMANTIC_STATUSES,
+    SUPPORTED_STRUCTURES,
+    normalize_approach,
+    normalize_implementation_semantics,
+)
 from plc.validation import PLCJsonValidationError, parse_device_address
+from plc.device_identity import canonical_device
 from plc.hardware_profiles import ensure_hardware_questions
 
-_ANALYSIS_IO_KINDS = {"X", "Y", "M", "D", "T", "C", "S", "SM", "SD"}
+_ANALYSIS_IO_KINDS = {"X", "Y", "M", "D", "T", "C", "S", "V", "Z", "SM", "SD"}
+_FLAT_IO_ADDRESS_RE = re.compile(r"(SM|SD|[XYMDTCSVZ])\d+", re.IGNORECASE)
 
 
 _ASSUMPTION_MARKERS = ("假设", "暂定", "待确认", "需确认", "unknown", "assume")
+_DECLARED_IO_LINE_RE = re.compile(
+    r"^\s*(?:[-*•]\s*|\d+[.)、]\s*)?((?:SM|SD|[XYMTCSDVZ])\s*\d+)"
+    r"\s*(?:[：:]|为|是|is\s+)\s*(.+?)\s*$",
+    re.IGNORECASE,
+)
+_INPUT_QUALIFIER_RE = re.compile(
+    r"[,，(（]\s*(?:按下|未按下|松开|释放|动作|未动作|常开|常闭|常開|常閉|normally\b|active\b)",
+    re.IGNORECASE,
+)
+_STATE_NOT_PURPOSE_RE = re.compile(
+    r"^(?:(?:ON|OFF|TRUE|FALSE)(?=$|[^A-Za-z0-9_])|[+-]?\d+(?:[.,]\d+)?(?=$|[\s~～<>=+\-]|时|時))",
+    re.IGNORECASE,
+)
+
+
+_CURRENT_APPROACH_FORBIDDEN_FIELDS = frozenset({
+    "generation_contract",
+    "explicit_user_constraints",
+    "implementation_preferences",
+})
+_CURRENT_SEMANTIC_FORBIDDEN_FIELDS = frozenset({
+    "opcode",
+    "operands",
+    "device",
+    "instruction_instance",
+})
+
+
+class AnalysisProtocolError(ValueError):
+    """Fresh Agent-A JSON does not satisfy the current analysis wire protocol."""
+
+    def __init__(self, violations):
+        self.violations = tuple(str(item) for item in violations if str(item).strip())
+        super().__init__("; ".join(self.violations) or "analysis protocol violation")
+
+
+def current_analysis_protocol_violations(result):
+    """Validate only the current Agent-A wire shape, never PLC engineering behavior."""
+    if not isinstance(result, dict):
+        return ["$: analysis response must be a JSON object"]
+
+    approaches = result.get("approaches")
+    if not isinstance(approaches, list):
+        return ["$.approaches: current protocol requires an array"]
+
+    violations = []
+    for index, approach in enumerate(approaches):
+        path = f"$.approaches[{index}]"
+        if not isinstance(approach, dict):
+            violations.append(path + ": approach must be an object")
+            continue
+
+        forbidden = sorted(_CURRENT_APPROACH_FORBIDDEN_FIELDS.intersection(approach))
+        if forbidden:
+            violations.append(
+                path + ": model must not emit " + ", ".join(forbidden)
+            )
+
+        if "implementation_semantics" not in approach:
+            violations.append(
+                path + ".implementation_semantics: required current-protocol field is missing"
+            )
+            continue
+        semantics = approach.get("implementation_semantics")
+        if not isinstance(semantics, list):
+            violations.append(
+                path + ".implementation_semantics: must be an array (empty is allowed)"
+            )
+            continue
+
+        for semantic_index, item in enumerate(semantics):
+            semantic_path = (
+                path + f".implementation_semantics[{semantic_index}]"
+            )
+            if not isinstance(item, dict):
+                violations.append(semantic_path + ": semantic must be an object")
+                continue
+
+            forbidden_semantic = sorted(
+                _CURRENT_SEMANTIC_FORBIDDEN_FIELDS.intersection(item)
+            )
+            if forbidden_semantic:
+                violations.append(
+                    semantic_path + ": low-level fields are not Agent-A semantics: "
+                    + ", ".join(forbidden_semantic)
+                )
+
+            kind = str(item.get("kind") or "").strip().casefold()
+            status = str(item.get("status") or "").strip().casefold()
+            if kind != "structure":
+                violations.append(
+                    semantic_path + ".kind: only 'structure' is allowed"
+                )
+                continue
+            if status not in IMPLEMENTATION_SEMANTIC_STATUSES:
+                violations.append(
+                    semantic_path + ".status: expected required, forbidden, or any_of"
+                )
+                continue
+
+            if status == "any_of":
+                values = item.get("values")
+                if (
+                    not isinstance(values, list)
+                    or not values
+                    or any(not isinstance(value, str) or not value.strip() for value in values)
+                ):
+                    violations.append(
+                        semantic_path + ".values: any_of requires a non-empty string array"
+                    )
+                    continue
+                if any(value.strip().casefold() not in SUPPORTED_STRUCTURES for value in values):
+                    violations.append(
+                        semantic_path + ".values: use canonical Core structure tokens only"
+                    )
+                    continue
+            else:
+                value = item.get("value")
+                if not isinstance(value, str) or not value.strip():
+                    violations.append(
+                        semantic_path + ".value: required/forbidden requires a structure name"
+                    )
+                    continue
+                if value.strip().casefold() not in SUPPORTED_STRUCTURES:
+                    violations.append(
+                        semantic_path + ".value: use a canonical Core structure token"
+                    )
+                    continue
+
+            if not normalize_implementation_semantics([item]):
+                violations.append(
+                    semantic_path + ": implementation semantic could not be normalized"
+                )
+
+    return violations
+
+
+def validate_current_analysis_protocol(result):
+    """Raise an analysis-protocol error before normalization or PLC validation."""
+    violations = current_analysis_protocol_violations(result)
+    if violations:
+        raise AnalysisProtocolError(violations)
+    return result
+
+
+def _extract_user_declared_io(user_text, plc_model):
+    """Preserve explicit device-purpose declarations, including inline clauses.
+
+    This bounded grammar is not intent inference: device: purpose, device 为/是
+    purpose, or device is purpose at a statement boundary. It never assigns a
+    purpose from an address number or parses instruction operands/conditions.
+    Electrical qualifiers stay in original intent, separate from the short label.
+    """
+    declared = {}
+    for statement in re.split(r"[\n;；。]+", str(user_text or "")):
+        match = _DECLARED_IO_LINE_RE.fullmatch(statement)
+        if match is None:
+            continue
+        address = canonical_device(re.sub(r"\s+", "", match.group(1)).upper())
+        raw_label = match.group(2).strip()
+        # A question or state comparison is not an explicit purpose declaration.
+        if "?" in raw_label or "？" in raw_label or _STATE_NOT_PURPOSE_RE.match(raw_label):
+            continue
+        label = _INPUT_QUALIFIER_RE.split(raw_label, maxsplit=1)[0].strip()
+        if not label:
+            continue
+        try:
+            parsed = parse_device_address(address, plc_model)
+        except (PLCJsonValidationError, ValueError, TypeError):
+            continue
+        if parsed is None:
+            continue
+        actual_kind, _number = parsed
+        declared.setdefault(actual_kind, {})[address] = label
+    return declared
+
+
+def _extract_user_declared_bindings(user_text, plc_model):
+    """Application wrapper around Core-owned explicit I/O declaration parsing."""
+    from plc.specification.bindings import extract_declared_bindings
+    return extract_declared_bindings(user_text, plc_model)
+
+
+def _historical_declared_io(confirmed_spec, plc_model):
+    """Return explicit I/O declarations already seen before this analysis turn."""
+    historical = {}
+    from plc.specification.provenance import intent_context
+    context = intent_context(confirmed_spec)
+    requests = context.get("requests", []) if isinstance(context, dict) else []
+    for item in requests or []:
+        text = item.get("text", "") if isinstance(item, dict) else ""
+        for category, values in _extract_user_declared_io(text, plc_model).items():
+            target = historical.setdefault(category, {})
+            for address, label in values.items():
+                target[(canonical_device(address), str(label).strip().casefold())] = True
+    return historical
+
+
+def _confirmed_io_addresses(confirmed_spec):
+    addresses = set()
+    rows = (confirmed_spec or {}).get("io_table", []) if isinstance(confirmed_spec, dict) else []
+    for row in rows or []:
+        if isinstance(row, dict) and row.get("address"):
+            addresses.add(canonical_device(str(row["address"]).strip().upper()))
+    return addresses
+
+
+def _removed_confirmed_io_addresses(confirmed_spec):
+    overrides = (confirmed_spec or {}).get("io_user_overrides") if isinstance(confirmed_spec, dict) else None
+    if not isinstance(overrides, dict):
+        return set()
+    return {
+        canonical_device(str(address).strip().upper())
+        for address in overrides.get("removed_addresses", []) or []
+        if str(address).strip()
+    }
 
 
 def _iter_analysis_text(value):
@@ -25,6 +249,80 @@ def _iter_analysis_text(value):
         yield str(value)
 
 
+
+def _selected_low_level_constraints(selected):
+    """Read confirmed low-level constraints without reconstructing them from prose."""
+    from plc.specification.explicit_constraints import normalize_explicit_user_constraints
+    if not isinstance(selected, dict):
+        return normalize_explicit_user_constraints({})
+    if isinstance(selected.get("explicit_user_constraints"), dict):
+        return normalize_explicit_user_constraints(selected["explicit_user_constraints"])
+    contract = selected.get("generation_contract")
+    if not isinstance(contract, dict):
+        return normalize_explicit_user_constraints({})
+    return normalize_explicit_user_constraints({
+        "required_opcodes": contract.get("required_opcodes", []),
+        "forbidden_opcodes": contract.get("forbidden_opcodes", []),
+        "required_devices": contract.get("required_devices", []),
+        "forbidden_devices": contract.get("forbidden_devices", []),
+        "instruction_instances": contract.get("instruction_instances", []),
+    })
+
+
+def _apply_explicit_user_constraints(result, user_text, plc_model, confirmed_spec=None):
+    """Merge caller-fixed low-level choices independently of Agent-A output."""
+    from plc.specification.explicit_constraints import (
+        extract_explicit_user_constraints,
+        merge_explicit_user_constraints,
+    )
+
+    update = extract_explicit_user_constraints(user_text, plc_model)
+    previous_selected = (
+        confirmed_spec.get("selected_approach")
+        if isinstance(confirmed_spec, dict)
+        else None
+    )
+    previous_id = str((previous_selected or {}).get("approach_id") or "").strip()
+    previous_constraints = _selected_low_level_constraints(previous_selected)
+
+    approaches = []
+    for raw in result.get("approaches", []) or []:
+        if not isinstance(raw, dict):
+            continue
+        approach = dict(raw)
+        same_plan = (
+            previous_id
+            and str(approach.get("approach_id") or "").strip() == previous_id
+        )
+        base = previous_constraints if same_plan else {}
+        merged = merge_explicit_user_constraints(
+            base,
+            update["constraints"],
+            clear_fields=update["clear_fields"],
+        )
+
+        if "implementation_semantics" in approach:
+            approach["explicit_user_constraints"] = merged
+            approach = normalize_approach(approach)
+        else:
+            # Non-provider compatibility only. Fresh provider responses are
+            # accepted by validate_current_analysis_protocol() before entering
+            # this normalizer; persisted old specs migrate in legacy_migration.
+            approach = normalize_approach(approach)
+            contract = dict(approach.get("generation_contract") or {})
+            for key in (
+                "required_opcodes", "forbidden_opcodes",
+                "required_devices", "forbidden_devices",
+                "instruction_instances",
+            ):
+                contract[key] = copy.deepcopy(merged[key])
+            approach["generation_contract"] = contract
+        approaches.append(approach)
+
+    result["approaches"] = approaches
+    return result
+
+
 def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed_spec=None):
     """Normalize phase-one AI JSON before the specification editor sees it.
 
@@ -35,13 +333,29 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     if not isinstance(result, dict):
         raise ValueError("Analysis response must be a JSON object")
 
+    fresh_semantics_protocol = any(
+        isinstance(item, dict) and "implementation_semantics" in item
+        for item in (result.get("approaches") or [])
+    )
     normalized = dict(result)
     # Only the application can attach user-derived hardware evidence. A model
     # cannot authenticate its own questions by emitting this metadata field.
     normalized.pop("hardware_intent", None)
     normalized.pop("engineering_context", None)
+    normalized.pop("intent_context", None)
+    normalized.pop("decision_receipt", None)
+    normalized.pop("declared_io_bindings", None)
+    # Legacy UI/classification fields are not part of the current model contract.
+    # Do not replay them into later model requests or migrate saved revisions.
+    normalized.pop("control_type", None)
+    normalized.pop("flowchart_steps", None)
     normalized["approaches"] = [
-        normalize_approach({key: value for key, value in item.items() if key != "implementation_preferences"})
+        normalize_approach({
+            key: value
+            for key, value in item.items()
+            if key not in {"implementation_preferences", "explicit_user_constraints"}
+            and not (key == "generation_contract" and "implementation_semantics" in item)
+        })
         for item in (normalized.get("approaches") or [])
         if isinstance(item, dict)
     ]
@@ -65,8 +379,8 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     else:
         assumptions = []
 
-    existing_diagnostics = normalized.get("format_diagnostics", [])
-    diagnostics = list(existing_diagnostics) if isinstance(existing_diagnostics, list) else []
+    # Only the normalizer may author format diagnostics, never the model.
+    diagnostics = []
     clean_io = {}
     unmapped = []
     metadata = {}
@@ -91,7 +405,8 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
         category_upper = category_text.upper()
         special_relays = category_lower == "special_relays"
         special_registers = category_lower == "special_registers"
-        is_device_category = category_upper in _ANALYSIS_IO_KINDS
+        flat_address = _FLAT_IO_ADDRESS_RE.fullmatch(category_upper) if isinstance(values, str) else None
+        is_device_category = category_upper in _ANALYSIS_IO_KINDS or flat_address is not None
 
         if not (is_device_category or special_relays or special_registers):
             key = re.sub(r"[^a-z0-9_]+", "_", category_lower).strip("_") or "metadata"
@@ -108,7 +423,12 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
             )
             continue
 
-        if isinstance(values, dict):
+        # Both {"X": {"X0": "name"}} and {"X0": "name"} carry an exact
+        # device-purpose pair. A full device key is not a hardware category.
+        # Do not recursively flatten arbitrary module/channel objects.
+        if flat_address is not None:
+            entries = [(category_text, values)]
+        elif isinstance(values, dict):
             entries = list(values.items())
         elif isinstance(values, list):
             if is_device_category:
@@ -131,8 +451,9 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
             continue
 
         for raw_address, raw_label in entries:
-            address = str(raw_address).strip().upper()
-            path = "suggested_io.%s.%s" % (category_text, address or "<empty>")
+            address = canonical_device(str(raw_address).strip().upper())
+            path = ("suggested_io.%s" % category_text if flat_address is not None
+                    else "suggested_io.%s.%s" % (category_text, address or "<empty>"))
             try:
                 parsed_address = parse_device_address(address, plc_model)
                 if parsed_address is None:
@@ -157,7 +478,7 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
             elif special_registers:
                 allowed_kinds = {"D", "SD"}
             elif is_device_category:
-                allowed_kinds = {category_upper}
+                allowed_kinds = {flat_address.group(1) if flat_address is not None else category_upper}
 
             if actual_kind not in allowed_kinds:
                 add_diagnostic(
@@ -206,7 +527,77 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
             hardware["unmapped_suggested_io"] = current_unmapped
         current_unmapped.extend(unmapped)
 
+    # User-declared wiring seeds the first draft deterministically, but once a
+    # specification has been confirmed its edited I/O table is authoritative.
+    # Old declarations from earlier requests must not resurrect a row that the
+    # operator changed or deleted in the specification editor.
+    declared_io = _extract_user_declared_io(user_text, plc_model)
+    historical = _historical_declared_io(confirmed_spec, plc_model)
+    confirmed_addresses = _confirmed_io_addresses(confirmed_spec)
+    removed_addresses = _removed_confirmed_io_addresses(confirmed_spec)
+    if fresh_semantics_protocol:
+        allowed_addresses = set(confirmed_addresses)
+        allowed_addresses.update(
+            canonical_device(address)
+            for values in declared_io.values()
+            for address in values
+        )
+        removed_model_allocations = []
+        for category, values in list(clean_io.items()):
+            if not isinstance(values, dict):
+                continue
+            for address in list(values):
+                identity = canonical_device(address)
+                if identity not in allowed_addresses:
+                    removed_model_allocations.append(identity)
+                    values.pop(address, None)
+            if not values:
+                clean_io.pop(category, None)
+        if removed_model_allocations:
+            add_diagnostic(
+                "model_internal_io_allocation_removed",
+                "suggested_io",
+                str(tr("模型分配的未声明内部软元件已移除；内部地址由生成阶段决定。")),
+                sorted(set(removed_model_allocations)),
+            )
+    historical_addresses = {
+        address for values in historical.values() for address, _label in values
+    }
+    if confirmed_spec:
+        for category, values in list(clean_io.items()):
+            if not isinstance(values, dict):
+                continue
+            for address in list(values):
+                identity = canonical_device(address)
+                if identity in removed_addresses or (
+                    identity in historical_addresses and identity not in confirmed_addresses
+                ):
+                    values.pop(address, None)
+            if not values:
+                clean_io.pop(category, None)
+
+    for category, values in declared_io.items():
+        target = clean_io.setdefault(category, {})
+        seen = historical.get(category, {})
+        for address, label in values.items():
+            identity = canonical_device(address)
+            # On a later analysis turn, only a genuinely new explicit
+            # declaration may seed a new suggestion. Replaying the original
+            # request cannot undo direct edits made in the confirmed spec.
+            if confirmed_spec and (
+                identity in removed_addresses
+                or (identity, str(label).strip().casefold()) in seen
+            ):
+                continue
+            for existing in list(target):
+                if canonical_device(existing) == identity:
+                    target.pop(existing, None)
+            target[identity] = label
+
     normalized["suggested_io"] = clean_io
+    normalized["declared_io_bindings"] = _extract_user_declared_bindings(
+        user_text, plc_model
+    )
     if hardware:
         normalized["hardware_config"] = hardware
     else:
@@ -231,45 +622,30 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
         inferred_semantics
     )
     normalized = ensure_hardware_questions(normalized, plc_model, user_text, confirmed_spec)
+    normalized = _apply_explicit_user_constraints(
+        normalized, user_text, plc_model, confirmed_spec
+    )
     from plc.specification.provenance import analysis_context
     from application.generation_support import public_generation_value
-    normalized["engineering_context"] = analysis_context(
+    normalized.update(analysis_context(
         public_generation_value(user_text), normalized.get("approaches", []), confirmed_spec,
-    )
+    ))
     return normalized
 
 
 
 def attach_analysis_evidence(result, analysis_evidence, *, plc_model="FX3U", knowledge_builder=None):
-    """Bind engine-produced evidence to candidate identities before user review.
+    """Audit evidence actually supplied to A. No post-candidate retrieval.
 
-    Candidate lookup is evidence collection, not a claim that the plan was verified.
-    No extra model request, hidden analysis text or inferred hard constraint is used.
+    The optional builder remains an API-compatible argument, not an operation.
+    Evidence discovered after a candidate was produced is not its reasoning basis.
     """
+    import copy
     from knowledge.evidence import context_manifest
     from plc.specification.provenance import evidence_snapshot
     from application.generation_support import public_generation_value
-    if knowledge_builder is None:
-        from application.generation_context import _build_knowledge_context
-        knowledge_builder = _build_knowledge_context
-    context = result["engineering_context"]
-    context["analysis_evidence"] = public_generation_value(evidence_snapshot(
+    result = copy.deepcopy(result)
+    receipt = result.setdefault("decision_receipt", {"schema_version": 1, "kind": "analysis"})
+    receipt["analysis_evidence"] = public_generation_value(evidence_snapshot(
         context_manifest(analysis_evidence, stage="analysis")))
-    by_id = {row.get("approach_id"): row for row in result.get("approaches", [])}
-    for index, record in enumerate(context.get("proposals", [])):
-        if index >= 3:
-            record["evidence"] = {"stage": "candidate", "status": "excluded",
-                                  "reason": "candidate_budget", "records": []}
-            continue
-        approach = by_id.get(record.get("approach_id"))
-        if not approach:
-            continue
-        try:
-            evidence = knowledge_builder("", plc_model=plc_model, task_type="generate",
-                                         confirmed_context={"selected_approach": approach})
-            manifest = context_manifest(evidence, stage="candidate")
-            manifest["stage"] = "candidate"
-        except Exception:
-            manifest = {"stage": "candidate", "status": "unavailable", "records": []}
-        record["evidence"] = public_generation_value(evidence_snapshot(manifest))
     return result

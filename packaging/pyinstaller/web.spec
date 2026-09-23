@@ -57,7 +57,8 @@ binaries, hiddenimports = [], [
     "uvicorn.logging", "uvicorn.loops.asyncio", "uvicorn.protocols.http.h11_impl",
     "uvicorn.lifespan.on", "anyio._backends._asyncio",
 ]
-for package in ("pydantic", "pydantic_core", "annotated_types", "typing_inspection", "jiter"):
+for package in ("pydantic", "pydantic_core", "annotated_types", "typing_inspection", "jiter",
+                "haystack", "haystack_experimental", "lazy_imports", "docstring_parser"):
     package_datas, package_binaries, package_hiddenimports = collect_all(package, on_error="warn once")
     datas.extend(package_datas)
     binaries.extend(package_binaries)

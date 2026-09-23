@@ -37,10 +37,7 @@ from application.generation_context import (
     _routing_text_with_selected_approach, _load_plc_models, _build_model_context,
     _confirmed_context_text, _with_confirmed_context, build_generation_instructions,
 )
-from shared.context_policy import (
-    audit_request, audit_section, context_policy_scope, manual_lookup_decision,
-    resolve_context_policy, select_base_prompt,
-)
+from shared.context_audit import audit_request, audit_section
 from plc.validation import PLCJsonValidationError, parse_device_address
 from plc.hardware_profiles import ensure_hardware_questions
 from plc.instructions import (
@@ -53,8 +50,15 @@ from knowledge.patterns import (
     build_workflow_prompt,
     classify_request,
 )
-from application.prompts import ANALYSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_DIAGNOSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_PATCH_SYSTEM_PROMPT, DEBUG_REPORT_SYSTEM_PROMPT, FIELD_PATCH_REPAIR_SYSTEM_PROMPT, FORMAT_LADDER_REPAIR_SYSTEM_PROMPT, INSPECTION_SYSTEM_PROMPT, MULTI_AGENT_SPECIALIST_PROMPTS, PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT, SIMULATOR_TEST_SUITE_SYSTEM_PROMPT
-from application.analysis_results import _ANALYSIS_IO_KINDS, _ASSUMPTION_MARKERS, _iter_analysis_text, _normalize_analysis_result
+from application.prompts import ANALYSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_DIAGNOSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_PATCH_SYSTEM_PROMPT, DEBUG_REPORT_SYSTEM_PROMPT, FIELD_PATCH_REPAIR_SYSTEM_PROMPT, INSPECTION_SYSTEM_PROMPT, MULTI_AGENT_SPECIALIST_PROMPTS, PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT, SIMULATOR_TEST_SUITE_SYSTEM_PROMPT
+from application.analysis_results import (
+    AnalysisProtocolError,
+    _ANALYSIS_IO_KINDS,
+    _ASSUMPTION_MARKERS,
+    _iter_analysis_text,
+    _normalize_analysis_result,
+    validate_current_analysis_protocol,
+)
 
 
 
@@ -76,8 +80,7 @@ def provider_scope(provider=None, *, model_name=None):
     token = _provider_session.set(session)
     model_token = _workflow_model.set(model_name or _workflow_model.get())
     try:
-        with context_policy_scope():
-            yield
+        yield
     finally:
         _workflow_model.reset(model_token)
         _provider_session.reset(token)
@@ -141,9 +144,14 @@ def _request_model(
 ):
     """Run one canonical request without exposing provider response shapes."""
 
-    request_options = dict(options or {})
-    if effort is not None:
-        request_options["reasoning_effort"] = effort
+    # Legacy effort arguments/options are not an application tuning source.
+    # Saved model settings are applied by the provider after this boundary.
+    from model_runtime.request_policy import without_workflow_effort
+    provider = _workflow_provider()
+    request_options = without_workflow_effort(
+        options, getattr(provider, "profile", {}), model=model_name,
+        api_key=getattr(provider, "api_key", None),
+    )
     # Format and transport are independent. Preserve an explicitly supplied
     # native schema on streaming requests as well as non-streaming requests.
     if response_contract.format == "text":
@@ -161,7 +169,7 @@ def _request_model(
     )
     audit_request(request.messages)
     return collect_response(
-        _workflow_provider(),
+        provider,
         request,
         on_reasoning_chunk=on_reasoning_chunk,
         on_content_chunk=on_content_chunk,
@@ -194,7 +202,7 @@ def request_model(
 ):
     """Public model gateway. Protocol decoding and acceptance stay in the runtime."""
     return _request_model(
-        messages, model_name=model_name, effort=effort, stream=stream, tools=tools,
+        messages, model_name=model_name, effort=None, stream=stream, tools=tools,
         request_timeout=request_timeout, max_retries=max_retries,
         on_reasoning_chunk=on_reasoning_chunk, on_content_chunk=on_content_chunk,
         on_event=on_event, fallback_to_non_stream=fallback_to_non_stream,
@@ -252,26 +260,42 @@ def _resolve_plc_model(user_input="", confirmed_context=None, explicit_model=Non
 
 
 
-def _parse_analysis_response(raw, plc_model="FX3U", user_text="", confirmed_spec=None):
+def _analysis_json_payload(raw):
     text = str(raw or "").strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[1] if "\n" in text else ""
     if text.endswith("```"):
         text = text.rsplit("\n", 1)[0]
-    result = json.loads(text.strip())
+    return json.loads(text.strip())
+
+
+def _validate_fresh_analysis_content(raw):
+    payload = _analysis_json_payload(raw)
+    validate_current_analysis_protocol(payload)
+    return payload
+
+
+def _parse_analysis_response(raw, plc_model="FX3U", user_text="", confirmed_spec=None):
+    result = _validate_fresh_analysis_content(raw)
     return _normalize_analysis_result(result, plc_model, user_text, confirmed_spec)
 
 
 def _request_analysis_response(messages, *, on_format_repair=None, **kwargs):
-    """Allow one syntax correction of an unconfirmed analysis draft only.
+    """Accept the current Agent-A protocol, with one bounded format repair.
 
-    Keep the shared collector strict. Language/field rejection, transport
-    errors and valid JSON with the wrong root type are not repair signals.
-    Neither attempt publishes content until its normal acceptance succeeds.
+    JSON syntax failures and current-protocol shape failures share the existing
+    single repair turn. Neither is a PLC validation error, and neither may
+    silently fall back to a legacy Agent-A protocol.
     """
     with provider_scope():
+        first_attempts = ()
+        rejected_message = None
+        correction = ""
+
         try:
-            return _request_model(messages, response_contract=ANALYSIS_RESPONSE, **kwargs)
+            first = _request_model(
+                messages, response_contract=ANALYSIS_RESPONSE, **kwargs
+            )
         except ResponseRejectedError as rejected:
             if [(v.path, v.reason) for v in rejected.violations] != [
                 ("content", "invalid_json_object")
@@ -285,27 +309,70 @@ def _request_analysis_response(messages, *, on_format_repair=None, **kwargs):
             try:
                 json.loads(raw)
             except json.JSONDecodeError as syntax_error:
-                location = f"line {syntax_error.lineno}, column {syntax_error.colno}"
+                location = (
+                    f"line {syntax_error.lineno}, column {syntax_error.colno}"
+                )
             else:
                 raise rejected
-            if on_format_repair is not None:
-                on_format_repair()
+            first_attempts = rejected.raw_attempts
+            rejected_message = rejected.raw_response.message
             correction = (
                 "Your previous analysis draft is not valid JSON (" + location + "). "
-                "Return the complete corrected JSON object only, using the analysis schema above. "
-                "Correct JSON syntax and missing schema keys only; preserve the requirement, "
-                "devices, alternatives and questions. Do not invent confirmed answers or generate PLC code. "
-                "Each flowchart_steps item has separate type and label keys, for example "
-                '{"type":"transition","label":"X0"}. No markdown or explanations.'
+                "Return the complete corrected JSON object only, using the current "
+                "analysis protocol above. Correct JSON syntax and missing protocol "
+                "keys only; preserve the requirement, devices, alternatives and "
+                "questions. Every approach must include implementation_semantics "
+                "as an array; an empty array is valid. Do not invent confirmed "
+                "answers or generate PLC code. No markdown or explanations."
             )
-            repair_messages = [*messages, rejected.raw_response.message,
-                               UserMessage(correction)]
+        else:
             try:
-                repaired = _request_model(repair_messages, response_contract=ANALYSIS_RESPONSE, **kwargs)
-            except ResponseRejectedError as error:
-                error.raw_attempts = (*rejected.raw_attempts, *error.raw_attempts)
-                raise
-            return replace(repaired, raw_attempts=(*rejected.raw_attempts, *repaired.raw_attempts))
+                _validate_fresh_analysis_content(first.message.content)
+            except AnalysisProtocolError as protocol_error:
+                first_attempts = first.raw_attempts
+                rejected_message = first.message
+                detail = " | ".join(protocol_error.violations[:8])
+                correction = (
+                    "Your previous analysis JSON is syntactically valid but does "
+                    "not satisfy the current Agent-A protocol: " + detail + ". "
+                    "Return the complete corrected JSON object only. Every approach "
+                    "must include implementation_semantics as an array; [] is valid "
+                    "when no architecture structure needs to be fixed. Each semantic "
+                    "may only describe kind=structure with status required, forbidden "
+                    "or any_of and Core structure vocabulary. Do not emit "
+                    "generation_contract, explicit_user_constraints, "
+                    "implementation_preferences, opcode, operands, device or "
+                    "instruction_instance fields. Preserve the user's requirement, "
+                    "alternatives and unanswered questions. Do not generate PLC code."
+                )
+            else:
+                return first
+
+        if on_format_repair is not None:
+            on_format_repair()
+        repair_messages = [
+            *messages,
+            rejected_message,
+            UserMessage(correction),
+        ]
+        try:
+            repaired = _request_model(
+                repair_messages,
+                response_contract=ANALYSIS_RESPONSE,
+                **kwargs,
+            )
+        except ResponseRejectedError as error:
+            error.raw_attempts = (*first_attempts, *error.raw_attempts)
+            raise
+
+        combined_attempts = (*first_attempts, *repaired.raw_attempts)
+        try:
+            _validate_fresh_analysis_content(repaired.message.content)
+        except AnalysisProtocolError as error:
+            error.raw_attempts = combined_attempts
+            error.raw_response = repaired.message
+            raise
+        return replace(repaired, raw_attempts=combined_attempts)
 
 
 
@@ -322,7 +389,7 @@ def analyze_requirement(
     analysis_mode="direct",
 ) -> dict:
     """
-    Phase 1: fast analysis with effort=low.
+    Phase 1: analysis using the selected model settings.
     Auto-detect PLC model from user input and inject special soft-element table.
     Returns: dict or None
     """
@@ -340,7 +407,7 @@ def analyze_requirement(
     )
     knowledge_ctx = analysis_prompt.knowledge_context
     sys_prompt = analysis_prompt.system_prompt
-    print(f"阶段1: 需求分析中... (effort=low, PLC={model})")
+    print(f"阶段1: 需求分析中... (PLC={model})")
 
     messages = _build_clean_messages(conversation_history or [], sys_prompt)
     messages.append(
@@ -350,7 +417,7 @@ def analyze_requirement(
     try:
         response = _request_analysis_response(
             messages,
-            effort="low",
+            effort=None,
             stream=False,
             on_format_repair=on_format_repair,
         )
@@ -412,7 +479,7 @@ def analyze_requirement_streaming(
     )
     knowledge_ctx = analysis_prompt.knowledge_context
     sys_prompt = analysis_prompt.system_prompt
-    print(f"阶段1(流式): 需求分析中... (effort=low, PLC={model})")
+    print(f"阶段1(流式): 需求分析中... (PLC={model})")
 
     messages = _build_clean_messages(conversation_history or [], sys_prompt)
     messages.append(
@@ -422,7 +489,7 @@ def analyze_requirement_streaming(
     try:
         response = _request_analysis_response(
             messages,
-            effort="low",
+            effort=None,
             stream=True,
             on_format_repair=on_format_repair,
             on_reasoning_chunk=on_reasoning_chunk,
@@ -492,14 +559,8 @@ def _save_history(history):
 
 def _build_clean_messages(conversation_history, system_prompt):
     """构建发送给模型的消息列表，仅保留用户可见正文。"""
-    messages = [{"role": "system", "content": system_prompt}]
-    for msg in conversation_history:
-        role = msg.get("role")
-        if role not in {"user", "assistant"}:
-            continue
-        clean = {"role": role, "content": str(msg.get("content", ""))}
-        messages.append(clean)
-    return messages
+    from application.generation_wire import render_wire_messages
+    return render_wire_messages(system_prompt, conversation_history)
 
 
 
@@ -575,8 +636,13 @@ def _prepare_api_call(
         confirmed_builder=_with_confirmed_context,
         on_context=on_generation_context,
         model_profile=bound_provider_profile(),
+        wire_history=conversation_history,
     )
-    messages_to_send = _build_clean_messages(conversation_history, system_prompt)
+    compiled_wire = getattr(system_prompt, "wire_packet", None)
+    if isinstance(compiled_wire, dict) and isinstance(compiled_wire.get("messages"), list):
+        messages_to_send = copy.deepcopy(compiled_wire["messages"])
+    else:
+        messages_to_send = _build_clean_messages(conversation_history, system_prompt)
     if image_attachments:
         messages_to_send[-1] = _user_message_with_images(
             user_requirement,
@@ -594,7 +660,7 @@ def debug_ladder(
     conversation_history=None,
     local_findings=None,
     model_name=None,
-    effort="high",
+    effort=None,
     request_timeout=120,
     raise_errors=False,
     plc_model="FX3U",
@@ -651,7 +717,7 @@ def debug_ladder(
         response = _request_model(
             messages,
             model_name=model_name,
-            effort=effort,
+            effort=None,
             stream=False,
             response_contract=DEBUG_RESPONSE,
             request_timeout=request_timeout,
@@ -692,7 +758,7 @@ def _call_debug_evidence_json(
     payload,
     *,
     model_name=None,
-    effort="high",
+    effort=None,
     request_timeout=120,
     raise_errors=False,
     on_reasoning_chunk=None,
@@ -719,7 +785,7 @@ def _call_debug_evidence_json(
         response = _request_model(
             messages,
             model_name=selected_model,
-            effort=effort,
+            effort=None,
             stream=wants_stream,
             response_contract=response_contract,
             preserved_annotations=source_annotations(payload),
@@ -759,7 +825,7 @@ def debug_evidence_diagnosis(
     evidence,
     *,
     model_name=None,
-    effort="high",
+    effort=None,
     request_timeout=120,
     raise_errors=False,
 ):
@@ -770,7 +836,7 @@ def debug_evidence_diagnosis(
         {"evidence": evidence},
         response_contract=DIAGNOSIS_RESPONSE,
         model_name=model_name,
-        effort=effort,
+        effort=None,
         request_timeout=request_timeout,
         raise_errors=raise_errors,
     )
@@ -782,7 +848,7 @@ def debug_evidence_patch(
     diagnosis,
     *,
     model_name=None,
-    effort="high",
+    effort=None,
     request_timeout=120,
     raise_errors=False,
 ):
@@ -793,7 +859,7 @@ def debug_evidence_patch(
         {"evidence": evidence, "diagnosis": diagnosis},
         response_contract=PATCH_RESPONSE,
         model_name=model_name,
-        effort=effort,
+        effort=None,
         request_timeout=request_timeout,
         raise_errors=raise_errors,
     )
@@ -806,7 +872,7 @@ def generate_simulator_test_suite(
     test_context,
     *,
     model_name=None,
-    effort="high",
+    effort=None,
     request_timeout=120,
     raise_errors=False,
     on_reasoning_chunk=None,
@@ -820,7 +886,7 @@ def generate_simulator_test_suite(
         {"context": test_context},
         response_contract=TEST_SUITE_RESPONSE,
         model_name=model_name,
-        effort=effort,
+        effort=None,
         request_timeout=request_timeout,
         raise_errors=raise_errors,
         on_reasoning_chunk=on_reasoning_chunk,
@@ -837,7 +903,7 @@ def run_multi_agent_specialist(
     payload,
     *,
     model_name=None,
-    effort="high",
+    effort=None,
     request_timeout=120,
     raise_errors=False,
 ):
@@ -872,7 +938,7 @@ def run_multi_agent_specialist(
         payload,
         response_contract=INSPECTION_RESPONSE,
         model_name=model_name,
-        effort=effort,
+        effort=None,
         request_timeout=request_timeout,
         raise_errors=raise_errors,
     )
@@ -925,7 +991,7 @@ def inspect_ladder(
     confirmed_spec=None,
     conversation_history=None,
     model_name=None,
-    effort="high",
+    effort=None,
     request_timeout=120,
     raise_errors=False,
 ):
@@ -987,7 +1053,7 @@ def inspect_ladder(
         response = _request_model(
             messages,
             model_name=model_name,
-            effort=effort,
+            effort=None,
             stream=False,
             request_timeout=request_timeout,
             max_retries=0 if request_timeout is not None else None,
@@ -1229,7 +1295,7 @@ def repair_ladder_response(repair_payload, model_name, effort, *, mode,
         # syntax-only before/after patch is requested and applied locally.
         from application.format_patch_repair import format_repair_response
         return format_repair_response(
-            repair_payload, model_name, effort,
+            repair_payload, model_name, None,
             on_reasoning_chunk=on_reasoning_chunk,
             on_content_chunk=on_content_chunk,
         )
@@ -1258,18 +1324,13 @@ def repair_ladder_response(repair_payload, model_name, effort, *, mode,
         system_prompt = PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT
         response_contract = LADDER_RESPONSE
         audit_reason = "explicit_local_repair"
-    else:
-        native_response_format = None
-        system_prompt = FORMAT_LADDER_REPAIR_SYSTEM_PROMPT
-        response_contract = LADDER_RESPONSE
-        audit_reason = "explicit_format_repair"
     audit_section("repair_system_prompt", system_prompt, reason=audit_reason, source="api")
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": json.dumps(repair_payload, ensure_ascii=False, separators=(",", ":"))},
     ]
     response = _request_model(
-        messages, model_name=model_name, effort=effort, stream=True,
+        messages, model_name=model_name, effort=None, stream=True,
         options={"response_format": native_response_format} if native_response_format else None,
         response_contract=response_contract,
         preserved_annotations=source_annotations(repair_payload),
@@ -1280,22 +1341,26 @@ def repair_ladder_response(repair_payload, model_name, effort, *, mode,
 
 
 def _native_ladder_generation_options(plc_model, *, allow_partial=False):
-    """Use the current ladder contract when the selected profile already uses native JSON Schema.
-
-    Profiles that use json_object/text keep their existing transport behavior.
-    This only replaces a persisted/native json_schema so its opcode enum cannot
-    drift behind the registry enforced by final PLC validation.
-    """
+    """Use native JSON Schema only when the v3 model contract declares it."""
     provider = _workflow_provider()
     profile = getattr(provider, "profile", None)
     if not isinstance(profile, dict):
         return None
-    response_format = None
-    for key in ("generationDefaults", "requestOverrides"):
-        source = profile.get(key)
-        if isinstance(source, dict) and "response_format" in source:
-            response_format = source.get("response_format")
-    if not (isinstance(response_format, dict) and response_format.get("type") == "json_schema"):
+    from model_runtime.runtime_profile import materialize_runtime_profile
+    try:
+        runtime = materialize_runtime_profile(
+            profile,
+            api_key=getattr(provider, "api_key", None),
+        )
+    except (TypeError, ValueError):
+        return None
+    capability = runtime.contract.capabilities.get("structured_output")
+    if not (
+        capability
+        and capability.status in {"supported", "conditional"}
+        and "json_schema" in capability.modes
+        and capability.source in {"metadata", "catalog", "manual", "legacy"}
+    ):
         return None
 
     selected_model = str(plc_model or "FX3U").strip().upper() or "FX3U"
@@ -1342,10 +1407,10 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
     返回:
         (full_reasoning: str, full_content: str)
     """
-    print(f"思考中(流式)... (当前模式: {effort}, 目标语言: {target_mode})")
+    print(f"思考中(流式)... (模型配置参数, 目标语言: {target_mode})")
 
     messages, conversation_history, should_persist = _prepare_api_call(
-        user_requirement, model_name, effort, target_mode,
+        user_requirement, model_name, None, target_mode,
         is_edit_mode=is_edit_mode,
         conversation_history=conversation_history,
         confirmed_context=confirmed_context,
@@ -1366,7 +1431,7 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
     response = _request_model(
         messages,
         model_name=model_name,
-        effort=effort,
+        effort=None,
         stream=True,
         max_retries=0,
         fallback_to_non_stream=True,
@@ -1407,10 +1472,10 @@ def generate_model_json(user_requirement: str, model_name: str, effort: str,
                                    current_version_json=None,
                                    plc_model=None,
                                    image_attachments=None) -> str:
-    print(f"思考中... (当前模式: {effort}, 目标语言: {target_mode})")
+    print(f"思考中... (模型配置参数, 目标语言: {target_mode})")
 
     messages, conversation_history, should_persist = _prepare_api_call(
-        user_requirement, model_name, effort, target_mode,
+        user_requirement, model_name, None, target_mode,
         is_edit_mode=is_edit_mode,
         conversation_history=conversation_history,
         confirmed_context=confirmed_context,
@@ -1431,7 +1496,7 @@ def generate_model_json(user_requirement: str, model_name: str, effort: str,
         response = _request_model(
             messages,
             model_name=model_name,
-            effort=effort,
+            effort=None,
             stream=False,
             options=native_options,
             request_timeout=request_timeout,

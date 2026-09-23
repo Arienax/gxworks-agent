@@ -2,13 +2,11 @@ from plc.specification.approach import (
     contract_definition_issues,
     normalize_generation_contract,
 )
+from plc.specification.legacy_migration import migrate_legacy_approach
 
 
 def test_explicit_required_opcode_overrides_inferred_forbidden_opcode():
-    contract = normalize_generation_contract(
-        {"required_opcodes": ["MOV"]},
-        approach={"generation_guide": "禁止 MOV，使用其他方式"},
-    )
+    contract = normalize_generation_contract({"required_opcodes": ["MOV"]})
 
     assert contract["required_opcodes"] == ["MOV"]
     assert "MOV" not in contract["forbidden_opcodes"]
@@ -17,10 +15,7 @@ def test_explicit_required_opcode_overrides_inferred_forbidden_opcode():
 
 
 def test_explicit_forbidden_opcode_overrides_inferred_required_opcode():
-    contract = normalize_generation_contract(
-        {"forbidden_opcodes": ["MOV"]},
-        approach={"generation_guide": "使用 MOV 完成状态转移"},
-    )
+    contract = normalize_generation_contract({"forbidden_opcodes": ["MOV"]})
 
     assert contract["forbidden_opcodes"] == ["MOV"]
     assert "MOV" not in contract["required_opcodes"]
@@ -41,14 +36,16 @@ def test_explicit_self_conflict_remains_a_hard_definition_error():
     assert any("同时被要求和禁止" in item and "MOV" in item for item in issues)
 
 
-def test_inferred_self_conflict_is_neutralized_instead_of_blocking_confirmation():
-    contract = normalize_generation_contract(
-        None,
-        approach={"generation_guide": "使用 MOV 完成转移；禁止 MOV"},
+def test_legacy_inferred_self_conflict_is_neutralized_in_migration_layer():
+    migrated = migrate_legacy_approach(
+        {"name": "旧方案", "generation_guide": "使用 MOV 完成转移；禁止 MOV"}
     )
+    contract = normalize_generation_contract(migrated["generation_contract"])
 
     assert "MOV" not in contract["required_opcodes"]
     assert "MOV" not in contract["forbidden_opcodes"]
+    assert "MOV" in contract["unverified_constraints"]["required_opcodes"]
+    assert "MOV" in contract["unverified_constraints"]["forbidden_opcodes"]
     assert any("已取消该歧义约束" in item for item in contract.get("normalization_warnings", []))
 
 
@@ -57,8 +54,7 @@ def test_any_of_group_prunes_explicitly_forbidden_candidates():
         {
             "forbidden_opcodes": ["SET"],
             "any_of_opcode_groups": [["SET", "RST", "MOV"]],
-        },
-        approach={"generation_guide": ""},
+        }
     )
 
     assert contract["any_of_opcode_groups"] == [["RST", "MOV"]]
@@ -69,8 +65,7 @@ def test_any_of_group_is_removed_when_separately_required_member_satisfies_it():
         {
             "required_opcodes": ["MOV"],
             "any_of_opcode_groups": [["MOV", "RST"]],
-        },
-        approach={"generation_guide": ""},
+        }
     )
 
     assert contract["any_of_opcode_groups"] == []
@@ -92,8 +87,7 @@ def test_explicit_any_of_group_fully_forbidden_is_unsatisfiable():
 
 def test_explicit_any_of_group_wins_when_only_inferred_forbids_make_it_impossible():
     contract = normalize_generation_contract(
-        {"any_of_opcode_groups": [["SET", "RST"]]},
-        approach={"generation_guide": "禁止 SET；禁止 RST"},
+        {"any_of_opcode_groups": [["SET", "RST"]]}
     )
 
     assert contract["any_of_opcode_groups"] == [["SET", "RST"]]
@@ -104,10 +98,7 @@ def test_explicit_any_of_group_wins_when_only_inferred_forbids_make_it_impossibl
 
 
 def test_explicit_fields_can_coexist_with_inference_for_omitted_dimensions():
-    contract = normalize_generation_contract(
-        {"forbidden_opcodes": ["SET"]},
-        approach={"generation_guide": "使用 D0 寄存器状态机并用 MOV 进行状态转移"},
-    )
+    contract = normalize_generation_contract({"forbidden_opcodes": ["SET"]})
 
     assert contract["forbidden_opcodes"] == ["SET"]
     # A present partial contract is authoritative. Missing dimensions remain
@@ -129,6 +120,7 @@ from plc.specification.confirmed import (
 )
 from plc.specification.repair import structured_contract_violations, build_contract_repair_plan
 from plc.generation_contract import generation_specification
+from application.generation_support import public_generation_specification
 from plc.hardware_profiles import ensure_hardware_questions, validate_hardware_spec
 
 _OPAQUE = "输出触点与启动触点并联自锁，停止触点串联断开输出"
@@ -202,15 +194,20 @@ def test_exact_structure_names_and_display_labels_share_canonical_vocabulary(spe
 
 
 @pytest.mark.parametrize("raw", [None, {}, {"source": "inferred", "required_opcodes": ["MOV"]}])
-def test_legacy_prose_inference_does_not_resurrect_hard_opcode_obligations(raw):
+def test_legacy_prose_migration_does_not_resurrect_hard_opcode_obligations(raw):
     spec = _gate_spec(raw, "直接逻辑；以前讨论过 MOV 或 SET/RST，并未指定必须使用")
-    selected = normalize_approach(spec["selected_approach"])
-    assert selected["generation_guide"] == spec["selected_approach"]["generation_guide"]
-    assert selected["generation_contract"]["required_opcodes"] == []
-    assert selected["generation_contract"].get("unverified_constraints")
+    fresh = normalize_approach(spec["selected_approach"])
+    assert fresh["generation_guide"] == spec["selected_approach"]["generation_guide"]
+    assert fresh["generation_contract"]["required_opcodes"] == []
+
+    migrated = normalize_approach(
+        migrate_legacy_approach(spec["selected_approach"])
+    )
+    assert migrated["generation_contract"]["required_opcodes"] == []
+    assert migrated["generation_contract"].get("unverified_constraints")
     assert not validate_ladder_against_selected_approach({"rungs": []}, spec)
     assert not structured_contract_violations({"rungs": []}, spec)
-    assert normalize_approach(selected) == selected
+    assert normalize_approach(migrated) == migrated
 
 
 def test_explicit_constraints_cannot_be_disabled_by_model_enforce_flag():
@@ -233,7 +230,7 @@ def test_opaque_only_contract_does_not_request_repair_or_claim_full_verification
 def test_direct_generation_of_old_snapshot_projects_unknown_semantics_without_mutation():
     spec = _gate_spec({"required_structures": [_OPAQUE]})
     original = copy.deepcopy(spec)
-    projected = generation_specification(spec)
+    projected = public_generation_specification(spec)
     contract = projected["selected_approach"]["generation_contract"]
     assert contract["required_structures"] == []
     assert contract["unverified_constraints"]["required_structures"] == [_OPAQUE]
@@ -243,7 +240,7 @@ def test_direct_generation_of_old_snapshot_projects_unknown_semantics_without_mu
 def test_unknown_metadata_does_not_open_the_generation_projection_allowlist():
     spec = _gate_spec({"required_structures": [_OPAQUE], "unverified_constraints": {
         "required_structures": ["AnotherOpaqueDetail"], "api_key": "DO_NOT_FORWARD"}})
-    projected = generation_specification(spec)
+    projected = public_generation_specification(spec)
     assert "DO_NOT_FORWARD" not in str(projected)
     assert projected["selected_approach"]["generation_contract"]["unverified_constraints"]["required_structures"] == ["AnotherOpaqueDetail", _OPAQUE]
 

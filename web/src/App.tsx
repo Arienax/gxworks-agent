@@ -695,7 +695,7 @@ export default function App() {
     const generateAfterSave = currentJob?.kind === "analysis" &&
       currentJob.status === "completed" && !!analysisOutput?.spec_draft &&
       jobId === currentJob.id;
-    const result = await api<{ valid: boolean; spec?: Spec; hash?: string; issues?: { errors?: { path: string; message: string }[] } }>(
+    const result = await api<{ valid: boolean; spec?: Spec; hash?: string; issues?: { errors?: { path: string; message: string }[]; warnings?: { message: string }[] } }>(
       `/projects/${pid}/spec`,
       "PUT",
       { spec: value, expected_hash: project?.confirmed_spec_hash ?? null },
@@ -720,7 +720,7 @@ export default function App() {
       : current);
     if (currentJob?.kind === "analysis") consumedDrafts.current.add(jobId);
     setAnalysisOutput(null);
-    setNotice(t("规格已确认"));
+    setNotice([t("规格已确认"), ...(result.issues?.warnings || []).map(issue => issue.message)].join("；"));
     setIntent("generation");
     setPanel("agent");
     if (generateAfterSave) await submitJob("generation");
@@ -1130,7 +1130,9 @@ export default function App() {
           {version && status(displayedVersionStatus)}
         </div>
         <ProjectToolbar pid={pid} vid={vid} artifacts={version?.artifacts || []}
-          exportable={!!version && !preview} canRead={canWrite && !!pid && !!operations.gx_inspect}
+          exportable={!!version && !preview}
+          diagnosticJobId={currentJob && !activeJob(currentJob) ? currentJob.id : ""}
+          canRead={canWrite && !!pid && !!operations.gx_inspect}
           canSend={canWrite && !preview && !jobs.some(activeJob) && !!operations.gx_import}
           canRefresh={!!session && !!pid && !busy && !loading && !jobs.some(activeJob)}
           refreshing={refreshingDrawing} onRead={() => void guarded(() => submitJob("gx_read"))}

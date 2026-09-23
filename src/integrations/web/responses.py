@@ -390,11 +390,7 @@ class ModelProfile(PublicResource):
     model: str | None = None
     base_url: str | None = None
     configured: bool
-    capabilities: dict[str, bool] = Field(default_factory=dict)
     deletable: bool = False
-    generation_defaults: JsonObject = Field(default_factory=dict)
-    request_overrides: JsonObject = Field(default_factory=dict)
-    parameter_support: JsonObject = Field(default_factory=dict)
     contract: JsonObject = Field(default_factory=dict)
     user_settings: JsonObject = Field(default_factory=dict)
     capability_overrides: JsonObject = Field(default_factory=dict)

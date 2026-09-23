@@ -137,11 +137,6 @@ def _requirements(path, seen=None):
     return names
 
 
-@pytest.mark.parametrize("manifest", ["requirements.txt", "requirements/win7.txt"])
-def test_optional_web_server_dependencies_do_not_enter_desktop_manifests(manifest):
-    web_only = {"fastapi", "uvicorn", "starlette", "sse-starlette", "httptools",
-                "watchfiles", "python-multipart", "pydantic-settings"}
-    assert not _requirements(ROOT / manifest).intersection(web_only)
 
 
 def test_web_runtime_has_its_own_manifest_without_qt():
@@ -154,15 +149,20 @@ def test_root_build_and_packaging_layout_is_explicit():
     assert (ROOT / "build-web.bat").is_file()
     assert (ROOT / "start-web.cmd").is_file()
     assert not (ROOT / "start.bat").exists()
+    assert not (SOURCE / "ui").exists()
+    assert not (SOURCE / "main.py").exists()
+    assert not (ROOT / "requirements/win7.txt").exists()
+    assert not (ROOT / "packaging/pyinstaller/desktop.spec").exists()
+    assert not (ROOT / "packaging/pyinstaller/desktop-win7.spec").exists()
+    assert not _requirements(ROOT / "requirements.txt").intersection({"pyqt5", "pyqt6", "pyside2", "pyside6", "qtpy"})
     for old_path in (
         "main.spec", "main_win7.spec", "web.spec", "requirements-web.txt",
         "requirements-mcp.txt", "requirements-win7.txt", "requirements-gxw-test.txt",
     ):
         assert not (ROOT / old_path).exists(), old_path
     for new_path in (
-        "packaging/pyinstaller/desktop.spec", "packaging/pyinstaller/desktop-win7.spec",
         "packaging/pyinstaller/web.spec", "requirements/web.txt", "requirements/mcp.txt",
-        "requirements/win7.txt", "requirements/gxw-test.txt",
+        "requirements/gxw-test.txt",
     ):
         assert (ROOT / new_path).is_file(), new_path
     build_script = (ROOT / "build-web.bat").read_text(encoding="utf-8")

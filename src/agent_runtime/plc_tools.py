@@ -3,7 +3,7 @@
 The language model never receives filesystem, mouse, keyboard, PLC write, or
 device-force primitives.  Every tool operates on an immutable snapshot of the
 currently selected project/version.  Candidate patches and GX synchronization
-only create confirmation requests; the Qt main thread owns every commit point.
+only create confirmation requests; application services own commit points.
 """
 
 from __future__ import annotations
@@ -289,8 +289,6 @@ def _get_generation_context(
         _build_knowledge_context, build_generation_instructions, generation_user_input,
         public_generation_ladder, public_generation_specification, public_generation_value,
     )
-    from shared.context_policy import context_policy_scope
-
     confirmed_spec = _confirmed_spec(context)
     from application.confirmed_generation_context import (
         CONFIRMED_GENERATION_REQUEST, project_confirmed_specification,
@@ -314,19 +312,21 @@ def _get_generation_context(
     generation_handoff = {}
     def capture_context(value):
         generation_handoff.update(value)
-    with context_policy_scope():
-        instructions = build_generation_instructions(
-            model_request,
-            plc_model=context.plc_model,
-            target_mode=target_mode,
-            is_edit_mode=is_edit_mode,
-            confirmed_context=public_spec,
-            current_version_json=current_ladder,
-            # Clean retrieved text before assembly; generic path matching must
-            # never rewrite application-owned schema patterns in the prompt.
-            knowledge_builder=_build_knowledge_context,
-            on_context=capture_context,
-        )
+    instructions = build_generation_instructions(
+        model_request,
+        plc_model=context.plc_model,
+        target_mode=target_mode,
+        is_edit_mode=is_edit_mode,
+        confirmed_context=public_spec,
+        current_version_json=current_ladder,
+        # Clean retrieved text before assembly; generic path matching must
+        # never rewrite application-owned schema patterns in the prompt.
+        knowledge_builder=_build_knowledge_context,
+        on_context=capture_context,
+    )
+    receipt_id = _decision_receipt_id(context)
+    if receipt_id:
+        generation_handoff["decision_receipt_id"] = receipt_id
     return {
         "project_id": context.project_id,
         "plc_model": context.plc_model,
@@ -365,6 +365,7 @@ def _create_program_candidate(
         from plc.specification.provenance import handoff_snapshot
         generation_handoff = handoff_snapshot(
             project_confirmed_specification(confirmed_spec), stage="external_generate",
+            decision_receipt_id=_decision_receipt_id(context),
             evidence={"stage": "external_generate", "status": "not_recorded", "records": [],
                       "reason": "external_context_not_correlated"},
         )
@@ -489,11 +490,11 @@ def _get_current_program_info(
 
 
 def _search_plc_manual(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
-    from knowledge.retriever import retrieve_knowledge
+    from knowledge.retriever import retrieve_fact_aware_knowledge
 
     query = str(arguments.get("query") or "").strip()
     top_k = int(arguments.get("top_k", 5))
-    rows = retrieve_knowledge(
+    rows = retrieve_fact_aware_knowledge(
         query,
         plc_model=context.plc_model,
         task_type="analysis",
@@ -593,6 +594,15 @@ def _require_program_ir(context: ToolContext) -> Mapping[str, Any]:
     if not isinstance(context.program_ir, Mapping):
         raise ValueError("当前没有可供 PLC Core 读取的程序 IR。")
     return context.program_ir
+
+
+def _decision_receipt_id(context: ToolContext):
+    # The same binding as _confirmed_spec: a historical version must never
+    # acquire the current project's newer decision merely because it lacks one.
+    if (context.version or {}).get("confirmed_spec_snapshot"):
+        handoff = (context.version or {}).get("generation_handoff") or {}
+        return handoff.get("decision_receipt_id") if isinstance(handoff, Mapping) else None
+    return context.project.get("confirmed_decision_receipt_id")
 
 
 def _confirmed_spec(context: ToolContext):

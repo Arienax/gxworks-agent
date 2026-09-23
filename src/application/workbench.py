@@ -18,7 +18,7 @@ from application.workspace import WorkspaceWriterLock, ConflictError, atomic_jso
 from agent_runtime.messages import ToolCall
 from agent_runtime.runtime import public_tool_result_data
 from plc.change_scope import ChangeScopeError
-from shared.context_policy import ContextAudit, context_policy_scope, resolve_context_policy
+from shared.context_audit import ContextAudit, context_audit_scope
 
 
 class WorkbenchService:
@@ -46,6 +46,8 @@ class WorkbenchService:
             from application.execution import GXExecutionCoordinator
             self.lock = WorkspaceWriterLock(self.store.base_dir).acquire()
             try:
+                with self.lock.thread_lock:
+                    self.spec_migration = self.store.migrate_confirmed_specs()
                 self.jobs = JobManager(self.state_dir, self.lock)
                 self.proposals = ProposalService(self.store, self.state_dir, self.lock)
                 self.execution = GXExecutionCoordinator(self.store)
@@ -144,7 +146,11 @@ class WorkbenchService:
             return self.projects.project(project_id)
 
     def set_spec(self, project_id, spec, expected_hash):
-        from plc.specification.confirmed import canonicalize_confirmed_spec, validate_spec_draft
+        from plc.specification.confirmed import (
+            canonicalize_confirmed_spec,
+            preserve_io_user_edits,
+            validate_spec_draft,
+        )
         from plc.ir import canonical_sha256
         self.writable()
 
@@ -158,18 +164,21 @@ class WorkbenchService:
         with self.lock.thread_lock:
             project = self.projects.raw_project(project_id)
             current = project.get("confirmed_spec")
-            if (canonical_sha256(current) if current is not None else None) != expected_hash:
+            from plc.specification.provenance import matches_migrated_spec_hash
+            if not matches_migrated_spec_hash(project, expected_hash):
                 raise ConflictError("确认规格已变化，请重新加载。")
-            issues = validate_spec_draft(spec, project.get("plc_model"))
+            candidate_spec = preserve_io_user_edits(current, spec)
+            issues = validate_spec_draft(candidate_spec, project.get("plc_model"))
             if issues.get("errors"):
                 return audited({"valid": False, "issues": public(issues)})
-            normalized = canonicalize_confirmed_spec(spec)
+            normalized = canonicalize_confirmed_spec(candidate_spec)
             issues = validate_spec_draft(normalized, project.get("plc_model"))
             if issues.get("errors"):
                 return audited({"valid": False, "issues": public(issues)})
             self.store.set_confirmed_spec(project_id, normalized)
             persisted = self.projects.raw_project(project_id)["confirmed_spec"]
-            return audited({"valid": True, "spec": public(persisted), "hash": canonical_sha256(persisted)})
+            return audited({"valid": True, "spec": public(persisted), "hash": canonical_sha256(persisted),
+                            **({"issues": public(issues)} if issues.get("warnings") else {})})
 
     def upload_attachment(self, project_id, filename, data_base64):
         from storage.session import detect_image_media_type
@@ -588,9 +597,6 @@ class WorkbenchService:
             provider, model = self.model_factory() if requires_model else (None, {})
             snapshot["model"] = model
             snapshot["approval_consent"] = self.approval.read()
-            repair_context = "minimal" if command.get("repair_mode") or command.get("format_repair") else None
-            policy_name = repair_context if repair_context else (None if requires_model else "legacy")
-            snapshot["context_policy"] = resolve_context_policy(policy_name).snapshot()
             if command["kind"] == "debug_plan":
                 snapshot["saved_run"] = self.projects.simulator_run(project_id, context.version_id, command.get("run_id"))
 
@@ -609,8 +615,7 @@ class WorkbenchService:
             model_context = ModelJobContext(ctx)
             model_progress = ModelProgressReporter(model_context)
             context_audit = ContextAudit(lambda report: ctx.emit("context_audit", report))
-            with language_context(snapshot["response_language"]), context_policy_scope(
-                    snapshot.get("context_policy", "legacy"), audit=context_audit), provider_scope(
+            with language_context(snapshot["response_language"]), context_audit_scope(context_audit), provider_scope(
                     provider, model_name=model.get("model")), response_policy_scope(
                     enforce_language=False, on_progress=model_progress, on_preview=model_progress.preview):
                 try:
@@ -690,9 +695,10 @@ class WorkbenchService:
                 else:
                     previous_json = ir_to_ladder(program) if program else None
                 request = GenerationRequest(
-                    user_input=scoped_text, effort=project.get("effort"), target_mode=project["target_mode"],
+                    user_input=scoped_text, effort=None, target_mode=project["target_mode"],
                     previous_json=previous_json, previous_ir=program,
                     confirmed_context=project.get("confirmed_spec"),
+                    decision_receipt_id=project.get("confirmed_decision_receipt_id"),
                     conversation_history=[] if (repair_mode or format_repair) else project.get("messages", []),
                     task_type=snapshot.get("task_type"),
                     plc_model=project.get("plc_model", "FX3U"), program_name=(program or {}).get("program_name", "MAIN"),
@@ -755,7 +761,7 @@ class WorkbenchService:
 
     def _plan_or_review(self, ctx, snapshot, provider):
         # Pure workflow services are imported only when requested. Their signatures
-        # are kept here, outside HTTP routes, to share them with the Qt adapters.
+        # are kept here, outside HTTP routes, for reuse by application clients.
         from application.review import InspectionWorkflow
         from application.planning import SimulatorTestPlanWorkflow, EvidenceDebugPlanWorkflow
         from plc.ir import ir_to_ladder
@@ -765,7 +771,7 @@ class WorkbenchService:
         project_id, version_id = project["id"], version["id"]
         common = {"on_event": ctx.emit, "response_language": snapshot["response_language"],
                   "provider": provider, "model_name": snapshot.get("model", {}).get("model"),
-                  "effort": project.get("effort"), "program_ir": program}
+                  "effort": None, "program_ir": program}
         def before_save():
             ctx.checkpoint()
             self._check_snapshot(snapshot)

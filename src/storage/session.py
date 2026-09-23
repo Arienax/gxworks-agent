@@ -3,6 +3,7 @@ import json
 import os
 import re
 import shutil
+import sys
 import uuid
 from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
@@ -17,7 +18,7 @@ def _utc_now():
 _PROJECT_DEFAULTS = {
     "plc_model": "FX3U",
     "target_mode": "ladder",
-    "effort": "high",
+    "effort": None,
     "workflow_mode": "generate",
     "messages": [],
     "confirmed_spec": None,
@@ -98,26 +99,34 @@ def detect_image_media_type(data):
     return ""
 
 
+def default_workspace_dir():
+    """Resolve the former Qt app-data workspace; never create or move files."""
+    override = os.environ.get("PLC_AI_WORKSPACE_DIR", "").strip()
+    if override:
+        return Path(override)
+    if sys.platform == "win32":
+        roaming = os.environ.get("APPDATA", "").strip()
+        root = Path(roaming) if roaming else Path.home() / "AppData" / "Roaming"
+    elif sys.platform == "darwin":
+        root = Path.home() / "Library" / "Application Support"
+    else:
+        data_home = os.environ.get("XDG_DATA_HOME", "").strip()
+        root = Path(data_home) if data_home and Path(data_home).is_absolute() else Path.home() / ".local" / "share"
+    return root / "PLC AI Studio" / "PLC AI Workbench" / "workspace"
+
+
 class SessionStore:
     """Persistent project, conversation, and generated-version storage."""
 
     def __init__(self, base_dir=None, legacy_dir=None, *, create=True):
-        """Open the existing format; ``create=False`` skips workspace creation.
+        """Open the existing format without importing a GUI or migrating paths.
 
-        Headless callers supply a base directory (or PLC_AI_WORKSPACE_DIR), so
-        only the desktop's default-location lookup needs Qt.
+        An explicit directory wins over PLC_AI_WORKSPACE_DIR. The default keeps
+        the former desktop application's organization/application path so that
+        retiring the UI does not silently create a different workspace.
         """
         if base_dir is None:
-            override = os.environ.get("PLC_AI_WORKSPACE_DIR", "").strip()
-            if override:
-                base_dir = Path(override)
-            else:
-                from ui.desktop.qt import QStandardPaths
-
-                app_data = QStandardPaths.writableLocation(
-                    QStandardPaths.StandardLocation.AppDataLocation
-                )
-                base_dir = Path(app_data) / "workspace"
+            base_dir = default_workspace_dir()
         self.base_dir = Path(base_dir)
         self.projects_dir = self.base_dir / "projects"
         self.index_path = self.base_dir / "index.json"
@@ -297,6 +306,19 @@ class SessionStore:
             normalized["messages"] = []
         if not isinstance(normalized.get("reports"), list):
             normalized["reports"] = []
+        spec = normalized.get("confirmed_spec")
+        from plc.specification.provenance import needs_spec_migration
+        if needs_spec_migration(spec):
+            from plc.specification.provenance import migrate_confirmed_spec
+            clean, receipt = migrate_confirmed_spec(spec)
+            old_history = normalized.get("decision_history")
+            history = copy.deepcopy(dict(old_history)) if isinstance(old_history, Mapping) else {}
+            history[receipt["receipt_id"]] = receipt
+            normalized["decision_history"] = history
+            normalized["confirmed_decision_receipt_id"] = receipt["receipt_id"]
+            normalized["confirmed_spec"] = clean
+        # This is an in-memory read adapter. A subsequent explicit save commits
+        # the pair via one existing atomic project write; versions stay intact.
         return normalized
 
     def list_projects(self):
@@ -315,7 +337,7 @@ class SessionStore:
         name="新项目",
         plc_model="FX3U",
         target_mode="ladder",
-        effort="high",
+        effort=None,
     ):
         project_id = uuid.uuid4().hex[:12]
         now = _utc_now()
@@ -326,7 +348,7 @@ class SessionStore:
             "updated_at": now,
             "plc_model": plc_model,
             "target_mode": target_mode,
-            "effort": effort,
+            "effort": None,
             "workflow_mode": "generate",
             "messages": [],
             "confirmed_spec": None,
@@ -392,7 +414,7 @@ class SessionStore:
         updates = {
             "plc_model": plc_model,
             "target_mode": target_mode,
-            "effort": effort,
+            "effort": None,
             "name": name,
             "workflow_mode": workflow_mode,
         }
@@ -406,12 +428,55 @@ class SessionStore:
         if project is None:
             raise KeyError(project_id)
         if confirmed_spec is not None:
-            from plc.specification.confirmed import canonicalize_confirmed_spec
-
-            from plc.specification.provenance import confirm_context
-            confirmed_spec = confirm_context(canonicalize_confirmed_spec(confirmed_spec))
+            from plc.specification.provenance import seal_confirmation
+            old_history = project.get("decision_history")
+            history = copy.deepcopy(dict(old_history)) if isinstance(old_history, Mapping) else {}
+            previous = history.get(project.get("confirmed_decision_receipt_id"))
+            confirmed_spec, receipt = seal_confirmation(confirmed_spec, previous_receipt=previous)
+            history[receipt["receipt_id"]] = receipt
+            project["decision_history"] = history
+            project["confirmed_decision_receipt_id"] = receipt["receipt_id"]
+        else:
+            project["confirmed_decision_receipt_id"] = None
         project["confirmed_spec"] = confirmed_spec
         return self.save_project(project)
+
+    def get_decision_receipt(self, project_id, receipt_id):
+        """Read a specific immutable receipt; never substitute the latest one."""
+        project = self.get_project(project_id)
+        history = project.get("decision_history") if isinstance(project, Mapping) else None
+        receipt = history.get(receipt_id) if isinstance(history, Mapping) and receipt_id else None
+        from plc.specification.provenance import receipt_is_intact
+        return copy.deepcopy(receipt) if receipt_is_intact(receipt, receipt_id) else None
+
+    def migrate_confirmed_specs(self):
+        """Explicit writer-only upgrade; retain timestamps and every version value.
+
+        The application owns the workspace lock. Each project is a single atomic
+        transaction: clean facts, archived legacy snapshot, and receipt reference.
+        A failed write leaves the previous project intact and is reported, not
+        converted into a generation/confirmation gate.
+        """
+        from plc.specification.provenance import needs_spec_migration
+        report = {"migrated": [], "failed": []}
+        for project_id in self._load_index().get("projects", []):
+            try:
+                self._validate_record_id(project_id, "project id")
+                path = self.project_path(project_id)
+                if not path.resolve().is_relative_to(self.projects_dir.resolve()):
+                    raise ValueError("Project path escaped workspace")
+                raw = self._read_json(path)
+                if not isinstance(raw, Mapping) or not needs_spec_migration(raw.get("confirmed_spec")):
+                    continue
+                upgraded = self._with_project_defaults(raw)
+                persisted = copy.deepcopy(raw)
+                for key in ("confirmed_spec", "decision_history", "confirmed_decision_receipt_id"):
+                    persisted[key] = upgraded[key]
+                self._write_json(path, persisted)
+                report["migrated"].append(project_id)
+            except (OSError, ValueError, TypeError, KeyError):
+                report["failed"].append(str(project_id))
+        return report
 
     def set_pending_review(self, project_id, pending_review):
         project = self.get_project(project_id)

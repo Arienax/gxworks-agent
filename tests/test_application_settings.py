@@ -61,7 +61,10 @@ def test_legacy_projection_and_model_snapshot_never_migrate(settings_env):
     result = env.service.public_settings()
     selected = _profile(result, result["active_profile_id"])
     assert selected["model"] == "old-model" and selected["configured"]
-    assert selected["generation_defaults"]["temperature"] == 0.8
+    assert selected["user_settings"]["parameters"]["temperature"] == {
+        "mode": "value", "value": 0.8
+    }
+    assert not {"capabilities", "generation_defaults", "request_overrides", "parameter_support"}.intersection(selected)
     provider, snapshot = env.service.model_snapshot()
     assert provider.api_key == "inline-old-secret"
     assert snapshot == {"profile_id": "custom-current", "model": "old-model", "response_language": "en"}
@@ -91,16 +94,18 @@ def test_explicit_save_migrates_legacy_key_to_original_profile_when_switching(se
 def test_create_update_sample_and_delete_profile_with_isolated_key(settings_env):
     from storage.credentials import credential_target_for_profile
     env = settings_env
-    created = env.service.create_profile(id="custom-two", name="Second", base_url="http://localhost:8080/v1",
-        model="other", api_key="second-key", capabilities={"tool_stream": True, "thinking_required": True},
-        generation_defaults={"temperature": 0.7, "top_p": 0.95, "reasoning_effort": "high"},
-        request_overrides={"extra_body": {"thinking": {"type": "enabled", "clear_thinking": False}}})
+    created = env.service.create_profile(
+        id="custom-two", name="Second", base_url="http://localhost:8080/v1",
+        model="other", api_key="second-key",
+    )
     assert _profile(created, "custom-two")["deletable"]
     assert env.keys[credential_target_for_profile("custom-two")] == "second-key"
     assert "second-key" not in json.dumps(created) and "credentialTarget" not in json.dumps(created)
-    changed = env.service.update(active_profile_id="custom-two", profile={"id": "custom-two", "name": "Renamed",
-        "generation_defaults": {}, "request_overrides": {}})
-    assert _profile(changed, "custom-two")["generation_defaults"] == {}
+    changed = env.service.update(
+        active_profile_id="custom-two",
+        profile={"id": "custom-two", "name": "Renamed"},
+    )
+    assert _profile(changed, "custom-two")["name"] == "Renamed"
     final = env.service.delete_profile("custom-two")
     assert not any(p["id"] == "custom-two" for p in final["profiles"])
     assert final["active_profile_id"] != "custom-two"
@@ -170,7 +175,8 @@ def test_public_advanced_values_strip_nested_credentials_and_url_credentials(set
     wire = json.dumps(public)
     for private in ("password", "url-secret", "header-secret", "nested-secret", "private-secret"):
         assert private not in wire
-    assert _profile(public)["capabilities"] == {"tool_stream": True, "thinking_required": True}
+    published = _profile(public)
+    assert not {"capabilities", "generation_defaults", "request_overrides", "parameter_support"}.intersection(published)
     assert env.path.read_bytes() == before
 
 
@@ -179,8 +185,10 @@ def test_test_connection_uses_unsaved_draft_and_key_without_any_mutation(setting
     env = settings_env
     monkeypatch.setattr(model_provider, "create_provider",
         lambda *args, **kwargs: pytest.fail("connection test must not run capability discovery"))
-    result = env.service.test_connection("fake", profile={"id": "fake", "model": "draft-model",
-        "generation_defaults": {"top_p": 0.3}}, api_key="temporary-secret")
+    result = env.service.test_connection(
+        "fake", profile={"id": "fake", "model": "draft-model"},
+        api_key="temporary-secret",
+    )
     assert result["status"] == "connected"
     assert result["message"] == "连接成功，API Key 和服务地址有效。"
     profile, key = env.calls[0]
@@ -205,7 +213,10 @@ def test_settings_change_does_not_modify_existing_provider_snapshot(settings_env
     env = settings_env
     env.keys["test-target"] = "key-a"
     provider, snapshot = env.service.model_snapshot()
-    env.service.update(profile={"id": "fake", "model": "model-b", "generation_defaults": {"temperature": 1.0}}, api_key="key-b", language="ja")
+    env.service.update(
+        profile={"id": "fake", "model": "model-b"},
+        api_key="key-b", language="ja",
+    )
     assert provider.profile["model"] == "model-a" and provider.profile["generationDefaults"]["temperature"] == 0.3
     assert provider.api_key == "key-a" and snapshot["response_language"] == "zh-CN"
     assert "key-a" not in json.dumps(snapshot)
@@ -241,7 +252,7 @@ def test_http_settings_commands_require_operator_and_csrf(settings_env, tmp_path
         assert result.status_code == 422 and "secret-target" not in result.text
         result = client.put("/api/settings", json={"profile": {"id": "fake", "request_overrides": {
             "extra_body": {"api_key": "nested-secret"}}}}, headers=headers)
-        assert result.status_code == 400 and "nested-secret" not in result.text
+        assert result.status_code == 422 and "nested-secret" not in result.text
 
 
 def test_read_only_server_rejects_even_explicit_connection_test(settings_env, tmp_path):
@@ -275,8 +286,10 @@ def test_browser_demo_uses_real_settings_with_only_temporary_io(tmp_path, monkey
     with isolated_demo_settings(tmp_path, lambda profile, key: SimpleNamespace(profile=profile, api_key=key)) as service:
         assert type(service) is SettingsService
         assert _profile(service.public_settings(), "offline")["configured"]
-        service.create_profile(id="demo-custom", name="Custom demo", model="demo-model", base_url="https://example.invalid",
-                               generation_defaults={"temperature": 0.8}, api_key="only-in-demo-memory")
+        service.create_profile(
+            id="demo-custom", name="Custom demo", model="demo-model",
+            base_url="https://example.invalid", api_key="only-in-demo-memory",
+        )
         service.update(active_profile_id="demo-custom")
         assert service.model_snapshot()[0].api_key == "only-in-demo-memory"
         assert service.test_connection("demo-custom")["status"] == "connected"
@@ -368,21 +381,30 @@ def test_detect_does_not_reuse_saved_key_for_changed_endpoint(settings_env):
     assert not env.calls and not env.path.exists()
 
 
-def test_parameter_contract_roundtrips_and_is_invalidated_on_model_or_key_change(settings_env):
-    from model_runtime.capabilities import capability_scope
+def test_legacy_parameter_support_is_read_only_migration_input(settings_env):
+    from model_runtime.legacy_migration import capability_scope
     env = settings_env
-    source = copy.deepcopy(env.config["modelProfiles"][0])
+    config = copy.deepcopy(env.config)
+    source = config["modelProfiles"][0]
     support = {"scope": capability_scope(source), "parameters": {
-        "reasoning_effort": {"status": "supported", "source": "probe", "values": ["low", "high"]}}}
-    result = env.service.update(profile={"id": "fake", "parameter_support": support})
-    assert _profile(result)["parameter_support"] == support
-    env.service.set_key("fake", "new-key")
-    assert not _profile(env.service.public_settings())["parameter_support"]
-    env.service.update(profile={"id": "fake", "parameter_support": support})
-    changed = env.service.update(profile={"id": "fake", "model": "different"})
-    assert not _profile(changed)["parameter_support"]
+        "reasoning_effort": {
+            "status": "supported", "source": "probe", "values": ["low", "high"]
+        }
+    }}
+    source["parameterSupport"] = support
+    env.persist(config)
+
+    published = _profile(env.service.public_settings())
+    assert "parameter_support" not in published
+    assert published["contract"]["parameters"]["reasoning_effort"]["source"] == "probe"
+
     with pytest.raises(ValueError):
         env.service.update(profile={"id": "fake", "parameter_support": support})
+
+    env.service.update(profile={"id": "fake", "model": "different"})
+    saved = json.loads(env.path.read_text(encoding="utf-8"))
+    stored = next(item for item in saved["modelProfiles"] if item["id"] == "fake")
+    assert not {"parameterSupport", "generationDefaults", "requestOverrides", "capabilities"}.intersection(stored)
 
 
 def test_discovery_http_requires_operator_csrf_and_accepts_an_unsaved_profile(settings_env, tmp_path, monkeypatch):

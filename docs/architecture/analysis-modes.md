@@ -1,74 +1,23 @@
-# Explicit analysis modes
+# Analysis modes
 
-`analysis_mode` is a per-analysis job input: `direct` (default) or `design`.
-It is not a PLC generation contract, an approval mode, or a complexity score.
-Only the submitted field enables architecture exploration. Request keywords,
-missing parameters, instruction names and the existence of a selected approach
-must never enable or disable Design on their own.
+`analysis_mode` is selected by the caller. Direct is the default; Design is enabled only by an explicit selection. Request complexity, keywords, missing parameters and a selected approach do not select Design.
 
-## Call path
+## Direct and Design
 
-The Web composer sends the selected mode with an analysis job. `JobCreate`
-defaults older clients to Direct. `WorkbenchService.submit` copies the command,
-resolves the default before hashing it, and the job snapshot freezes the value.
-Both analysis API functions pass it to the same prompt assembler. The output
-records the application-selected mode; model-authored mode metadata is ignored.
-Changing the picker affects the next submission, not a running job. A new
-project/page starts in Direct. Qt stays frozen; shared old callers get Direct.
+Direct asks Agent A for one concrete implementation and uses targeted factual retrieval. With an existing selected approach, the internal pinned/extract path preserves the implementation and processes the amendment. Approach-specific guidance is a delta, not a second copy of the specification.
 
-Direct assembles the common JSON/intent/missing-parameter contract, the compact
-Direct contract, relevant PLC facts and targeted fact evidence. It requests one
-concrete implementation. An existing `selected_approach` adds the internal
-pinned/extract delta, preserving unchanged implementation semantics and explicit
-constraints. No selected approach is needed to use Direct. Brief description
-and empty pros/cons are expected. The raw request and structured specification
-remain complete; `generation_guide` is only a delta for non-obvious
-approach-specific semantics that cannot be reconstructed from those fields.
-For ordinary direct/self-hold logic it should normally be empty.
+Design adds design evidence and asks for distinct candidate approaches. Existing confirmed I/O and parameters remain available during exploration. Candidate selection and required-parameter review precede generation.
 
-Design adds the Design contract and explicitly enables the design evidence lane,
-while preserving fact evidence. It offers 1–3 genuinely distinct candidates.
-An existing selected approach does not force pinned mode. Exploration does not
-clear confirmed I/O, parameters or unreleased user constraints, and does not
-replace the confirmed specification before normal review.
+The mode is analysis input, not a generation constraint or a model tuning setting. Agent B receives the confirmed implementation under the [generation execution policy](generation-execution-policy.md).
 
-The fact router still identifies devices, opcodes and hardware topics. Its
-internal `pinned` state only refines Direct. The application knowledge builder
-and the low-level retriever no longer infer a mode at all: omitted/None
-`include_design` is false. Curated design chunks remain excluded from the fact
-lane. Candidate-specific fact collection is retained and adds no model call.
+## Ownership
 
-## Confirmation and compatibility
+[JobCreate](../../src/integrations/web/schemas.py) defines the request field and default. [WorkbenchService](../../src/application/workbench.py) resolves and freezes it in the job before execution. [application.analysis_context](../../src/application/analysis_context.py) assembles the mode-specific prompt; [knowledge.scope](../../src/knowledge/scope.py) selects evidence lanes. A model-authored mode cannot replace the application choice.
 
-The existing Core review-draft builder already preselects the sole approach.
-Real required parameter questions stay unanswered until confirmed; suggested
-defaults are not answers. An unresolved address is not duplicated into
-`suggested_io`, and tightly coupled address/polarity facts may share one
-question. Direct single-state controls do not need a generated flowchart or
-generic PLC-behavior assumptions. No approach-count/description-length rejection gate,
-automatic regeneration or additional approval step is introduced. Counts and
-brevity are prompt requirements, not a promise of perfect model compliance.
+Agent A's output fields belong to [application.analysis_results](../../src/application/analysis_results.py) and its prompt contract. Normalization diagnostics and execution semantics are produced by Core, not delegated to a model-authored metadata field. Legacy display metadata remains readable in old snapshots but is excluded from new analysis context.
 
-Mode is not copied into the confirmed specification or `generation_contract`.
-Generation/other jobs ignore it. A retry must retain its original mode. For an
-old command record with no mode, a default-Direct retry may return the original
-job without reinterpreting it or issuing another request; an explicit Design
-request cannot reuse that request ID. Existing approval and native-operation
-boundaries are unchanged.
+## Review and retries
 
-## Regression checks
+The sole Direct approach can be preselected. Suggested parameter defaults are not confirmed answers; real missing required parameters remain unresolved. Mode changes affect the next submitted job, while retries retain the original mode and request identity.
 
-Run the affected suites in the repository environment:
-
-```sh
-python -m pytest -q tests/test_analysis_prompt_routing.py tests/test_analysis_prompt_integration.py tests/test_analysis_design_rag.py tests/test_analysis_mode_jobs.py tests/test_analysis_format_repair.py tests/test_confirmed_reconfirmation.py
-cd web
-npm run types
-npm run build
-```
-
-Cover default/explicit Direct, Design, selected/unselected baselines, both
-streaming APIs, no design retriever calls or design-as-fact leakage in Direct,
-separate queries and retained facts in Design, snapshot/retry identity, and
-required-parameter confirmation. No paid model or actual PLC operation is
-needed for the mocked cases; the bundled-RAG tests use the local knowledge DB.
+I/O question identity, polarity and labels are covered in [I/O purpose labels](io-binding-labels.md). Regression owners are [test_analysis_prompt_routing.py](../../tests/test_analysis_prompt_routing.py), [test_analysis_prompt_integration.py](../../tests/test_analysis_prompt_integration.py) and [test_analysis_mode_jobs.py](../../tests/test_analysis_mode_jobs.py).

@@ -176,6 +176,20 @@ def test_streaming_fragmented_multi_tool_calls_and_empty_chunks_are_normalized()
     assert events[-1] == Usage(20, 10, 30)
 
 
+def test_provider_request_path_has_no_legacy_parameter_or_capability_branch():
+    import inspect
+    from model_runtime.provider import OpenAICompatibleProvider
+
+    request_source = inspect.getsource(OpenAICompatibleProvider._request_params)
+    runtime_source = inspect.getsource(OpenAICompatibleProvider._runtime_profile)
+
+    assert "apply_parameter_contract" not in request_source
+    assert 'profile.get("capabilities")' not in request_source
+    assert "contract_capability_available(" in request_source
+    assert "resolve_request(" in request_source
+    assert "materialize_runtime_profile(" in runtime_source
+
+
 def test_parameter_precedence_and_capability_constraints_for_built_in_profiles():
     tool = {
         "type": "function",
@@ -184,15 +198,29 @@ def test_parameter_precedence_and_capability_constraints_for_built_in_profiles()
     deepseek = OpenAICompatibleProvider(
         _profile("deepseek-default"), "key", client=_Client([iter([])])
     )
+    # The catalog declares temperature incompatible with enabled thinking.
+    # The provider must now enforce that contract instead of falling through a
+    # legacy raw-parameter path.
+    with pytest.raises(ModelProviderError) as conflict:
+        deepseek._request_params(
+            ModelRequest(
+                (UserMessage("检查"),),
+                tools=(tool,),
+                options={"temperature": 0.2},
+                stream=True,
+            )
+        )
+    assert conflict.value.code == "invalid_request"
+
     deepseek_params = deepseek._request_params(
         ModelRequest(
             (UserMessage("检查"),),
             tools=(tool,),
-            options={"temperature": 0.2, "response_format": None, "tool_choice": "auto"},
+            options={"response_format": None, "tool_choice": "auto"},
             stream=True,
         )
     )
-    assert deepseek_params["temperature"] == 0.2
+    assert "temperature" not in deepseek_params
     assert "response_format" not in deepseek_params
     assert "tool_choice" not in deepseek_params
     assert deepseek_params["extra_body"]["thinking"]["type"] == "enabled"
@@ -208,13 +236,12 @@ def test_parameter_precedence_and_capability_constraints_for_built_in_profiles()
             stream=True,
         )
     )
+    # Fresh built-ins no longer carry legacy tuning defaults. Explicit
+    # low-level request values are validated by the catalog contract.
     assert glm_params["temperature"] == 0.15
-    assert glm_params["top_p"] == 0.95
+    assert "top_p" not in glm_params
     assert glm_params["reasoning_effort"] == "high"
-    assert glm_params["extra_body"]["thinking"] == {
-        "type": "enabled",
-        "clear_thinking": False,
-    }
+    assert glm_params["extra_body"]["thinking"] == {"type": "enabled"}
     assert glm_params["extra_body"]["tool_stream"] is True
 
 
@@ -266,14 +293,14 @@ def test_text_profiles_reject_images_before_calling_the_sdk(profile_id):
 
 
 @pytest.mark.parametrize(
-    ("profile_id", "effort"),
+    ("profile_id", "effort", "thinking_required"),
     [
-        ("zhipu-glm-5.3", "low"),
-        ("zhipu-glm-5.2", "high"),
+        ("zhipu-glm-5.3", "low", True),
+        ("zhipu-glm-5.2", "high", False),
     ],
 )
 def test_glm_text_profiles_use_the_shared_streaming_tool_adapter(
-    profile_id, effort
+    profile_id, effort, thinking_required
 ):
     tool = {
         "type": "function",
@@ -294,8 +321,12 @@ def test_glm_text_profiles_use_the_shared_streaming_tool_adapter(
 
     assert params["model"] == _profile(profile_id)["model"]
     assert params["reasoning_effort"] == effort
-    assert params["extra_body"]["thinking"]["type"] == "enabled"
-    assert params["extra_body"]["tool_stream"] is True
+    extra = params["extra_body"]
+    if thinking_required:
+        assert extra["thinking"]["type"] == "enabled"
+    else:
+        assert "thinking" not in extra
+    assert extra["tool_stream"] is True
 
 
 def test_assistant_reasoning_is_replayed_only_by_transport_adapter():
@@ -490,7 +521,7 @@ def test_deprecated_vendor_named_entrypoint_is_only_a_forwarding_alias(monkeypat
     assert alias.__deprecated__ is True
 
 
-@pytest.mark.parametrize("profile_id", ["deepseek-default", "zhipu-glm-5.3-flash"])
+@pytest.mark.parametrize("profile_id", ["zhipu-glm-5.3-flash"])
 @pytest.mark.parametrize("stream", [True, False])
 def test_real_request_parameters_keep_language_and_native_schema_before_acceptance(
     monkeypatch, profile_id, stream
@@ -503,7 +534,16 @@ def test_real_request_parameters_keep_language_and_native_schema_before_acceptan
         choices=[SimpleNamespace(message=SimpleNamespace(content=raw, tool_calls=[]))],
     )
     client = _Client([wire_response])
-    provider = OpenAICompatibleProvider(_profile(profile_id), "offline-key", client=client)
+    profile = _profile(profile_id)
+    profile["capabilityOverrides"] = {
+        "capabilities": {
+            "structured_output": {
+                "status": "supported",
+                "modes": ["json_schema"],
+            }
+        }
+    }
+    provider = OpenAICompatibleProvider(profile, "offline-key", client=client)
     monkeypatch.setattr(api, "get_active_provider", lambda: provider)
     native_format = {"type": "json_schema", "json_schema": {
         "name": "summary", "strict": True, "schema": {
@@ -532,18 +572,57 @@ def test_real_request_parameters_keep_language_and_native_schema_before_acceptan
     assert params["messages"][1]["content"] == "请分析 X0"
 
 
+@pytest.mark.parametrize("stream", [True, False])
+def test_deepseek_catalog_rejects_undeclared_json_schema_before_sdk(stream):
+    native_format = {"type": "json_schema", "json_schema": {
+        "name": "summary", "strict": True, "schema": {
+            "type": "object", "properties": {"summary": {"type": "string"}},
+            "required": ["summary"], "additionalProperties": False,
+        },
+    }}
+    client = _Client([])
+    provider = OpenAICompatibleProvider(_profile("deepseek-default"), "offline-key", client=client)
+
+    with pytest.raises(ModelProviderError) as error:
+        provider._request_params(
+            ModelRequest(
+                (UserMessage("fixture"),),
+                stream=stream,
+                options={"response_format": native_format},
+            )
+        )
+
+    assert error.value.code == "invalid_request"
+    assert client.completions.calls == []
+
+
 def test_ladder_generation_replaces_stale_native_schema_with_current_opcode_contract(monkeypatch):
     captured = {}
     profile = _profile("zhipu-glm-5.3-flash")
-    profile["requestOverrides"]["response_format"] = {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "stale_ladder",
-            "strict": True,
-            "schema": {"type": "object"},
-        },
+    from model_runtime.contract import (
+        CapabilityContract, CapabilityDescriptor, contract_scope,
+    )
+    capabilities = {
+        "structured_output": CapabilityDescriptor.from_dict({
+            "status": "supported",
+            "source": "manual",
+            "modes": ["json_schema"],
+        })
     }
-    monkeypatch.setattr(api, "_workflow_provider", lambda: SimpleNamespace(profile=profile))
+    contract = CapabilityContract(
+        contract_scope(profile, {}, api_key=None),
+        capabilities,
+        {},
+    )
+    profile["capabilityContract"] = contract.to_dict()
+    profile["userModelSettings"] = {
+        "scope": profile["capabilityContract"]["scope"],
+        "parameters": {},
+    }
+    monkeypatch.setattr(
+        api, "_workflow_provider",
+        lambda: SimpleNamespace(profile=profile, api_key=None),
+    )
     monkeypatch.setattr(
         api,
         "_prepare_api_call",
@@ -606,7 +685,15 @@ def test_workflow_response_format_overrides_stale_profile_request_override():
             "schema": {"type": "object"},
         },
     }
-    profile["requestOverrides"]["response_format"] = stale
+    profile.setdefault("requestOverrides", {})["response_format"] = stale
+    profile["capabilityOverrides"] = {
+        "capabilities": {
+            "structured_output": {
+                "status": "supported",
+                "modes": ["json_schema"],
+            }
+        }
+    }
     provider = OpenAICompatibleProvider(profile, "key", client=_Client([iter([])]))
     requested = {
         "type": "json_schema",

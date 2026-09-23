@@ -8,8 +8,9 @@ import pytest
 
 from model_runtime.contract import (
     CapabilityContract, CapabilityDescriptor, ConstraintDescriptor, ParameterDescriptor,
-    UserModelSettings, contract_scope, legacy_contract, metadata_contract_parts, normalize_contract,
+    UserModelSettings, contract_scope, metadata_contract_parts, normalize_contract,
 )
+from model_runtime.legacy_migration import legacy_contract
 from model_runtime.request_policy import resolve_request, public_contract_settings
 from model_runtime.provider import OpenAICompatibleProvider, ModelRequest, ModelProviderError, UserMessage
 from application.model_detection import inspect_openai_compatible
@@ -214,13 +215,14 @@ def test_settings_persist_contract_selections_and_invalidate_key_without_mutatin
         contract=p["capabilityContract"], user_settings=p["userModelSettings"])
     row = next(item for item in result["profiles"] if item["id"] == "v2")
     assert row["user_settings"]["parameters"]["new_budget"]["value"] == 8192
-    assert row["generation_defaults"] == {}
+    assert not {"generation_defaults", "request_overrides", "parameter_support", "capabilities"}.intersection(row)
     before = env.path.read_bytes()
     assert env.service.public_settings() == result
     assert env.path.read_bytes() == before
     result = env.service.set_key("v2", "rotated-key")
     row = next(item for item in result["profiles"] if item["id"] == "v2")
-    assert row["contract"] == {} and row["user_settings"] == {}
+    assert row["user_settings"] == {"scope": row["contract"]["scope"], "parameters": {}}
+    assert "new_budget" not in row["contract"]["parameters"]
 
 
 def test_contract_scope_and_user_values_are_validated_on_save(settings_env):
@@ -319,3 +321,76 @@ def test_conditional_vision_uses_effective_user_value():
     select(p, image_mode=False)
     with pytest.raises(ModelProviderError):
         OpenAICompatibleProvider(p, "key", client=Endpoint())._request_params(request)
+
+
+@pytest.mark.parametrize("legacy", [True, False])
+@pytest.mark.parametrize("selection", ["missing", "medium", "omit", "advanced", "inherit"])
+@pytest.mark.parametrize("hint", ["low", "high", None])
+def test_application_effort_is_profile_owned_on_the_actual_wire(legacy, selection, hint):
+    from application import model_api as api
+    from model_runtime.provider import TextDelta
+    p = profile() if legacy else make_profile({"reasoning_effort": {"type": "enum", "values": ["low", "medium", "high"]}})
+    if selection in {"medium", "inherit"}:
+        if legacy or selection == "inherit":
+            p["generationDefaults"] = {"reasoning_effort": "medium"}
+        else:
+            select(p, reasoning_effort="medium")
+    elif selection == "omit":
+        p["generationDefaults"] = {"reasoning_effort": "medium"}
+        if legacy:
+            p["requestOverrides"] = {"reasoning_effort": None}
+        else:
+            select(p, reasoning_effort=None)
+    elif selection == "advanced":
+        p["requestOverrides"] = {"reasoning_effort": "medium"}
+    before = copy.deepcopy(p)
+    class Capture(OpenAICompatibleProvider):
+        def stream(self, request):
+            self.request = request
+            self.params = self._request_params(request)
+            yield TextDelta("OK")
+    provider = Capture(p, "key", client=object())
+    options = {"reasoning_effort": hint, "extra_body": {"reasoning_effort": "high", "keep": True}}
+    saved = copy.deepcopy(options)
+    with api.provider_scope(provider):
+        result = api.request_model([{"role": "user", "content": "fixture"}], effort=hint, options=options, max_retries=0)
+    assert result.message.content == "OK"
+    assert "reasoning_effort" not in provider.request.options
+    assert "reasoning_effort" not in provider.request.options.get("extra_body", {})
+    expected = "medium" if (
+        selection == "medium" or legacy and selection in {"advanced", "inherit"}
+    ) else None
+    assert provider.params.get("reasoning_effort") == expected
+    assert provider.params["extra_body"]["keep"] is True
+    assert p == before and options == saved
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_workflow_effort_cannot_escape_via_nested_wire_alias(wrapped):
+    from model_runtime.request_policy import without_workflow_effort
+    p = make_profile({"reasoning_effort": {"type": "enum", "values": ["quiet", "max"],
+        "wire_location": "extra_body", "wire_path": ["reasoning", "effort"]}})
+    select(p, reasoning_effort="quiet")
+    hints = {"extra_body": {"reasoning": {"effort": "max", "keep": True}}}
+    clean = without_workflow_effort(hints, p, api_key=None if wrapped else "key")
+    assert clean == {"extra_body": {"reasoning": {"keep": True}}}
+    effective = resolve_request(p, clean, api_key="key")
+    assert effective.options["extra_body"]["reasoning"] == {"effort": "quiet", "keep": True}
+    assert hints["extra_body"]["reasoning"]["effort"] == "max"
+
+
+def test_stale_project_effort_is_inert_without_rewriting_history(tmp_path):
+    from storage.session import SessionStore
+    from application.generation import GenerationRequest
+    from application.projects import ProjectService
+    store = SessionStore(tmp_path)
+    project = store.create_project(effort="high")
+    assert project["effort"] is None
+    old = {**project, "effort": "high"}
+    store.save_project(old)
+    before = store.project_path(old["id"]).read_bytes()
+    assert store.get_project(old["id"])["effort"] == "high"
+    assert ProjectService(tmp_path).project(old["id"])["effort"] is None
+    assert store.project_path(old["id"]).read_bytes() == before
+    assert GenerationRequest("fixture", effort="high").effort is None
+    assert store.update_project_settings(old["id"], effort="low")["effort"] == "high"

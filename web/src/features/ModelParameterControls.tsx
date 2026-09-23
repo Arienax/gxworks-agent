@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../components/ui";
 import { changeSelection, controlValues, hardDomain, parameterEnabled, selectedValues, sliderRange, validValue } from "./modelParameters";
-import type { CapabilityContract, Descriptor, Options, Scalar, Selection, UserModelSettings } from "./modelParameters";
+import type { CapabilityContract, Descriptor, Scalar, Selection, UserModelSettings } from "./modelParameters";
 
 function ScalarInput({ name, desc, selection, disabled, onChange }: {
   name: string; desc: Descriptor; selection: Selection; disabled: boolean; onChange: (selection: Selection) => void;
@@ -27,19 +27,14 @@ function ScalarInput({ name, desc, selection, disabled, onChange }: {
     }} />{invalid && <p role="alert">该值不符合声明类型或范围，尚未应用。</p>}</>;
 }
 
-export function ModelParameters({ contract, settings, defaults, overrides, onChange, disabled, t, onVerify }: {
-  contract: CapabilityContract; settings: UserModelSettings; defaults: string; overrides: string;
+export function ModelParameters({ contract, settings, onChange, disabled, t, onVerify }: {
+  contract: CapabilityContract; settings: UserModelSettings;
   onChange: (settings: UserModelSettings) => void; disabled: boolean; t: (s: string) => string;
   onVerify?: (target: string, kind: "parameter" | "capability", value?: Scalar) => void;
 }) {
-  let groups: [Options, Options];
-  try {
-    groups = [JSON.parse(defaults), JSON.parse(overrides)];
-    if (groups.some(v => !v || typeof v !== "object" || Array.isArray(v))) return null;
-  } catch { return null; }
   if (!contract.scope) return <p className="muted">{t("选择模型后点击“加载能力配置”；只解析本地预设，不调用模型生成。")}</p>;
-  const values = selectedValues(contract, settings, ...groups);
-  const change = (name: string, selection: Selection) => onChange(changeSelection(contract, settings, name, selection, ...groups));
+  const values = selectedValues(contract, settings);
+  const change = (name: string, selection: Selection) => onChange(changeSelection(contract, settings, name, selection));
   const labels = {supported:"已声明支持",accepted:"仅确认接口接受，是否生效未知",unknown:"未验证，可手动设置",
     unsupported:"声明不支持",fixed:"固定值",conditional:"条件支持"};
   const sources: Record<string,string> = {catalog:"本地预设",metadata:"服务元数据",manual:"手动声明",generic:"通用参考模板",probe:"历史验证",observation:"使用记录",legacy:"旧配置"};
@@ -53,12 +48,12 @@ export function ModelParameters({ contract, settings, defaults, overrides, onCha
     const conflict = chosen && (!editable || !validValue(desc, selection.value) || !enabled);
     return <div className="parameter-control" key={name} data-parameter={name} data-invalid={conflict || undefined}>
       <div className="parameter-heading"><label htmlFor={`parameter-${name}`}>{desc.label || name}</label>
-        <output aria-live="polite">{chosen ? String(selection.value) : t(selection.mode === "omit" ? "服务默认值（不发送）" : "继承工作流与配置")}</output></div>
+        <output aria-live="polite">{chosen ? String(selection.value) : t(selection.mode === "omit" ? "服务默认值（不发送）" : "继承运行时默认")}</output></div>
       <p className="muted">{t(labels[desc.status])} · {t(sources[desc.source] || desc.source)}</p>
       {editable && <>
         <select aria-label={`${name} mode`} value={selection.mode} disabled={disabled}
           onChange={e => change(name,e.target.value === "value" ? {mode:"value",value:choices[0] ?? (desc.type === "boolean" ? false : ["number","integer"].includes(desc.type) ? range?.minimum ?? domain.minimum ?? 0 : "")} : {mode:e.target.value as "omit" | "inherit"})}>
-          <option value="omit">{t("服务默认值（不发送）")}</option><option value="inherit">{t("继承工作流与配置")}</option><option value="value">{t("用户指定值")}</option>
+          <option value="omit">{t("服务默认值（不发送）")}</option><option value="inherit">{t("继承运行时默认")}</option><option value="value">{t("用户指定值")}</option>
         </select>
         {desc.type === "boolean" ? <label><input id={`parameter-${name}`} role="switch" type="checkbox" aria-label={name}
           checked={value === true} disabled={disabled} onChange={e => change(name,{mode:"value",value:e.target.checked})} />{t("启用")}</label>
@@ -87,7 +82,6 @@ export function ModelParameters({ contract, settings, defaults, overrides, onCha
       {conflict && <p role="alert">{t("当前显式选择与能力声明冲突，未自动删除。请调整后再保存。")}</p>}
       {desc.status === "fixed" && <p>{t("固定值")}: {String(domain.values?.[0])}</p>}
       {(desc.requires || desc.conflicts_with) && <p className="muted mono">{JSON.stringify({requires:desc.requires,conflicts_with:desc.conflicts_with})}</p>}
-      {chosen && <Button variant="ghost" disabled={disabled} onClick={()=>change(name,{mode:"omit"})}>{t("恢复服务默认值")}</Button>}
     </div>;
   };
   const entries = Object.entries(contract.parameters || {});

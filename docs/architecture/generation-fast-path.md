@@ -1,152 +1,60 @@
-# Generation fast path: confirmed specification is the semantic authority
+# Generation path navigation
 
-## Decision
+The generation path is documented by responsibility:
 
-The existing Web/Qt API generation flow is the acceptance authority for both
-internal generation and external MCP candidates. Once the operator has confirmed
-the specification, the application does **not** reinterpret the request with a
-second set of heuristic semantic gates. MCP does not add stricter generation
-rules or cause those rules to flow back into the API.
+- [Call contracts](generation-call-contracts.md): request construction, transport and candidate acceptance.
+- [Execution policy](generation-execution-policy.md): settled choices and unresolved technical facts.
+- [Instruction facts](instruction-fact-delivery.md): evidence selection and budget receipts.
+- [Repair boundaries](generation-repair.md): local normalization and explicit repairs.
+- [Delivery](generation-delivery.md): version-bound artifacts and reports.
 
-The direct generation critical path is:
+Historical fast-path investigations are preserved in the [process index](../process/README.md). For measured latency and request counts, use the [diagnostic procedure](../guides/diagnostics.md) and record the exact version and model settings.
 
-1. confirmed specification and current project context,
-2. one model generation (stream transport may fall back once to non-stream transport),
-3. JSON/ST parsing, compatibility normalization and partial-edit assembly,
-4. structural/processability validation and conservative condition normalization,
-5. deterministic PLC IR construction and IR consistency validation,
-6. artifact rendering and local version save.
 
-There is no automatic semantic re-generation loop after step 2.
+## Confirmed Agent B acceptance path
 
-An external client supplies its own model response instead of step 2. It calls
-`create_program_candidate` for first creation or ordinary full/partial edits;
-the service does not call an internal model to generate a second answer. MCP is
-the engineering interface and has no client-skill installation dependency.
-Optional client guidance does not replace ToolRuntime, the project context,
-validation, persistence or approval.
+Fresh confirmed generation has one canonical acceptance path:
 
-## Shared implementation
+```
+compact_ladder/1.1
+    -> deterministic compact expansion
+    -> CandidateService.prepare(candidate_origin="compact_agent")
+    -> structural validation
+    -> confirmed semantic validation
+    -> PLC IR
+    -> artifact rendering
+```
 
-- `plc_generation_context.py` owns the existing API prompts, output discipline,
-  routing, selected-model profile, confirmed-context assembly and local RAG.
-  `get_generation_context` accepts optional `user_requirement` and returns
-  `generation_instructions` and `generation_request` from this same assembly.
-  Empty arguments remain valid. Engineering fields are projected before being
-  returned externally; credentials, private paths and conversation state stay
-  local. Retrieval retains the API policy, budget and full-profile fallback.
-- `plc_generation.py::prepare_ladder_candidate` performs compatibility
-  conversion, validates/materializes partial edits, checks candidate structure,
-  normalizes eligible conditions and constructs a consistent IR. Both
-  `GenerationWorkflow` and `PLCCore.create_program_candidate` call it.
-- `render_generation_artifacts` provides the same JSON, IR, SVG and ST outputs,
-  plus FX3U CSV artifacts, for the API and generated MCP candidates. It checks
-  IR consistency without invoking the historical full semantic validator.
+Agent B returns the lowered ladder object, not an already accepted candidate.
+The generation workflow passes that object directly to `CandidateService.prepare`
+exactly once. A local JSON serialization may still be retained for UI delivery
+and rejected-candidate staging, but those bytes are never parsed back into the
+acceptance path. Legacy BLOCK_OUTPUT/counter/OUT compatibility normalizers remain
+available for legacy, external, import, and repair inputs, but the fresh compact
+Agent B path does not enter them.
 
-The published response schema describes the recommended shape. The shared API
-parser is the acceptance authority; a separate MCP schema walker must not reject
-an API-compatible encoding before normalization. Project, CPU, specification,
-profile, revision, hashes and derived IR remain server-owned.
+[plc.specification.semantic_validation](../../src/plc/specification/semantic_validation.py)
+owns generation-time checks against machine-readable confirmed facts. It is
+deliberately narrower than `validate_ladder_full`: generic engineering style
+checks remain review concerns and are not promoted back into hard generation
+gates. A checker that cannot cover a broader engineering shape records
+`unresolved` coverage rather than inventing a prohibition. If an explicitly
+required semantic check cannot even run because its machine role or confirmed
+electrical level was lost in the handoff, generation fails closed as an internal
+semantic handoff error; human-readable labels are never used to guess that role.
 
-## Compatibility and condition normalization
 
-Unambiguous `APP_INSTR OUT` forms become dedicated coil/timer/counter outputs;
-legacy `TIMER` with a C address becomes `COUNTER`. `BLOCK_OUTPUT` expressions
-become typed outputs/application instructions before the same catalogue, CPU,
-operand and writable-target checks. Invalid instructions cannot bypass those
-checks through a textual encoding. Additional rung source fields accepted by
-the API remain source data and cannot overwrite computed IR.
+## Semantic requirement coverage
 
-Condition cleanup is conservative: it can remove repeated ordinary conditions,
-extract a common branch prefix and combine adjacent ordinary outputs with the
-same conditions. It does not move conditions across stateful/unknown operations
-or intervening writes to their operands. Edges, complex conditions, special
-devices, unknown layouts and repeated writes to the same coil are not treated
-as freely interchangeable Boolean expressions. It does not turn duplicate-coil
-writes into a single OR expression.
+For fresh confirmed specifications, generation acceptance derives structure
+requirements from `implementation_semantics` and caller-fixed low-level requirements
+from `explicit_user_constraints`. The same registry checks required/forbidden/any-of
+structures, required/forbidden opcodes and devices, and exact instruction instances.
+Capability-specific deterministic checks attach to that same coverage receipt instead
+of being called directly from Agent B.
 
-When a baseline exists, normalization is limited to submitted partial rungs or
-rungs changed by a full response. Untouched source bodies remain unchanged;
-partial additions and deletions use the existing API ordering rules. Explicit
-repair scope and the workbench's requested network/address scope remain binding.
-
-`normalization.changes` and `normalization.skipped` contain concise messages and
-network IDs. Proposals and saved versions retain these summaries. They explain
-what was changed or preserved; they are not executed simulation or native
-compiler evidence.
-
-## What can block direct generation
-
-`generation_structural` validation is deliberately narrow. It can reject a candidate when the application cannot safely represent or process it, including:
-
-- malformed JSON or wrong top-level response shape;
-- unsupported ladder element encoding;
-- invalid device/address syntax or out-of-range address;
-- an instruction absent from the verified instruction registry, unsupported by the selected CPU, or encoded with invalid arity;
-- writes to CPU-owned read-only targets;
-- duplicate/invalid rung identifiers;
-- an invalid partial-edit envelope or an explicit repair scope escape;
-- internally stale/inconsistent PLC IR.
-
-These are representation/tooling facts, not a second interpretation of user intent.
-
-## What no longer blocks direct generation
-
-The following remain useful for Review, diagnostics, simulator planning and GX/runtime evidence, but they do not reject a direct candidate after specification confirmation:
-
-- `selected_approach.generation_contract` conformance;
-- prose/regex-derived execution semantics;
-- inferred edge/first-scan/cyclic intent;
-- duplicate-coil style/ownership findings;
-- timer-oscillation style rules;
-- same-scan SET/RST toggle findings;
-- M8029 topology preferences;
-- confirmed hardware-family heuristics beyond the model-facing instruction/address contract.
-
-The application still computes IR analysis metadata. It does not turn those findings into a hidden model retry.
-
-CSV export preserves explicit project device comments. Per-contact/output labels
-only supply missing comments, and address aliases identify one device. Export
-does not mutate the input ladder or IR; comment precedence does not alter the
-instruction CSV or introduce another model call.
-
-## No hidden repair loop
-
-A structurally invalid model response fails once with diagnostics. Neither the
-API nor MCP starts an automatic semantic repair or repeated-submission loop.
-
-A streaming transport failure may make one ordinary non-streaming request for the same candidate. This is a transport fallback, not a code/semantic repair.
-
-Explicit Debug/patch/contract-repair tools keep their evidence and scope
-boundaries. They are separate workflows and do not silently run after normal
-generation. Ordinary edits use `create_program_candidate`; an explicitly
-requested scoped Debug patch uses the existing `read_network → patch_program`
-path and its strict checks.
-
-## Validation profiles
-
-- `generation_structural`: internal generation and external full/partial
-  generated candidates. The server carries it through temporary compilation,
-  proposal checks, first/child-version saving, reload and preview. It is not a
-  client-selectable bypass. Persisted versions retain this profile so reading
-  them does not retroactively apply semantic gates.
-- `strict`: existing Agent patch, Debug, review/execution-oriented validation unless that workflow explicitly chooses otherwise.
-
-This prevents a version that was intentionally accepted through the direct generation fast path from becoming unreadable merely because a later load path invokes the historical strict validator.
-
-Approval is independent of the validation profile. Direct workbench generation
-retains its local autosave behavior; connected Agent clients follow the current
-workspace approval policy. Standalone MCP returns `confirmation_required`
-without saving a version or granting approval. Project/version/specification
-bindings, hashes, scope checks and authentication remain in force.
-
-## Product responsibility boundary
-
-- Requirement meaning: model + operator during specification confirmation.
-- Candidate implementation: model using the confirmed specification.
-- Representation integrity: deterministic parser/schema/IR code.
-- Engineering quality findings: optional Review/static analysis.
-- Behavior correctness: simulator/Factory I/O/regression evidence.
-- Native legality: GX/compiler/runtime evidence.
-
-A review warning is not promoted to a generation failure merely because it can be expressed as a deterministic rule.
+A requirement violation blocks the candidate. A registered checker that cannot
+evaluate a broader representation records `unresolved`; loss of machine
+identity/electrical facts required by that checker remains a handoff error. Legacy
+specifications without the new canonical source fields retain the previous narrow
+compatibility validation.

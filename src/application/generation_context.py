@@ -13,8 +13,8 @@ import json
 import re
 import sys
 
-from knowledge.patterns import KNOWLEDGE_BUNDLES, classify_request, load_library
-from shared.context_policy import audit_section, manual_lookup_decision, resolve_context_policy
+from knowledge.patterns import KNOWLEDGE_BUNDLES, classify_request
+from shared.context_audit import audit_section
 
 from application.generation_support import _engineering_hardware_snapshot
 from application.generation_support import _build_knowledge_query
@@ -54,7 +54,7 @@ LADDER_SYSTEM_PROMPT = """# Role
 # Ladder semantic kernel
 - io_bindings.active_level 表示物理信号动作时的输入位值，不是程序触点类型。程序 NO 检查位=1，NC 检查位=0；停止 active_level=0 时，运行允许条件用 NO，反之用 NC。不得把物理常闭直接翻译成程序 NC。
 - 不得擅自新增 I/O、停止/急停、硬件、模块寄存器或未确认别名；用户明确给出的地址、NO/NC 极性和参数必须保持。
-- selected_approach.generation_contract 是硬约束；required_* 必须满足，forbidden_* 不得出现。
+- selected_approach.generation_contract 的结构化 required_* 必须满足，forbidden_* 不得出现；unverified_constraints 保留方案语义，但不升级为额外硬约束，也不覆盖当前参数/I/O。
 - 同一普通 Y/M 只保留一个 COIL owner；多条件合并到该输出的条件结构中。
 - `shared_inputs` 只放公共串联输入；局部 `parallel_block` 只放在 branch.inputs，且不得嵌套。
 - COMPARE 不做算术；先用 APP_INSTR 计算到寄存器再比较。
@@ -119,24 +119,6 @@ def _specialist_context(classification, *, target_mode, plc_model, char_budget=4
         if name in allowed:
             add(KNOWLEDGE_BUNDLES.get(name, ""))
 
-    policy = resolve_context_policy()
-    if policy.examples:
-        lib = load_library()
-        matched = set(classification.get("matched_ids") or ())
-        model = str(plc_model or "").upper()
-        candidates = []
-        for item in lib.get("examples", ()):
-            if item.get("id") not in matched or item.get("target_mode", "ladder") != target_mode:
-                continue
-            models = [str(value).upper() for value in item.get("plc_models", ["FX3U"])]
-            if model and model not in models:
-                continue
-            candidates.append(item)
-        candidates.sort(key=lambda item: (item.get("priority", 999), str(item.get("id", ""))))
-        if candidates:
-            item = candidates[0]
-            add("# Matched example\n" + str(item.get("header", "")).strip() + "\n" + str(item.get("content", "")).strip())
-
     result = "\n\n".join(parts)
     audit_section("dynamic_prompt", result, status="included" if result else "excluded",
                   reason="specialist_delta" if result else "no_specialist_delta", source="pattern_library")
@@ -165,9 +147,7 @@ def _select_system_prompt(target_mode, is_edit_mode=False, user_requirement="", 
                            separators=(",", ":")))
     else:
         base = _st_system_prompt_for_model(selected_vendor)
-    audit_section("base_prompt", base,
-                  reason="legacy" if resolve_context_policy().legacy else "controlled_baseline",
-                  source="base_prompt")
+    audit_section("base_prompt", base, reason="canonical_generation_base", source="base_prompt")
     dynamic = _specialist_context(classification, target_mode=target_mode, plc_model=selected_vendor)
     result = "\n\n".join(part for part in (base, dynamic) if part)
     audit_section("system_prompt", result, reason="compact_generation", source="api")
@@ -182,10 +162,10 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
 
     normalized_task = str(task_type or "generate").strip().casefold()
     # Retrieval executes the caller's choice. Omitted/None never means "infer".
-    def absent(status, reason):
+    def absent(status, reason, **metadata):
         audit_section("manual_context", status=status, reason=reason, source="manual_retriever")
         return KnowledgeContext("", {"stage": normalized_task, "status": status,
-                                     "reason": reason, "records": [], "plc_model": plc_model})
+                                     "reason": reason, "records": [], "plc_model": plc_model, **metadata})
     if normalized_task in {"contract_repair", "format_repair"}:
         return absent("excluded", "repair_scope_only")
     top_k, char_budget = _KNOWLEDGE_TASK_SETTINGS.get(normalized_task, _KNOWLEDGE_TASK_SETTINGS["generate"])
@@ -195,17 +175,27 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
     else:
         query = (_build_knowledge_query(engineering, primary_query, evidence) if normalized_task == "generate"
                  else _build_knowledge_query(primary_query, engineering, evidence))
-    should_lookup, lookup_reason = manual_lookup_decision(query)
-    if (not should_lookup and normalized_task == "analysis" and
-            resolve_context_policy().manuals == "adaptive" and query.strip()):
-        should_lookup = True
-        lookup_reason = "analysis_design_retrieval" if include_design else "analysis_fact_retrieval"
+    query_text = str(query or "").strip()
+    if normalized_task == "analysis":
+        should_lookup = bool(query_text)
+        lookup_reason = (
+            "analysis_design_retrieval" if include_design
+            else "analysis_fact_retrieval"
+        )
+    elif normalized_task in {"generate", "edit"}:
+        from knowledge.analysis_router import has_generation_fact_target
+        should_lookup = bool(query_text) and has_generation_fact_target(query)
+        lookup_reason = (
+            "generation_fact_retrieval"
+            if should_lookup else "no_specific_fact_target"
+        )
+    else:
+        should_lookup = bool(query_text)
+        lookup_reason = (
+            f"{normalized_task}_retrieval" if should_lookup else "empty_query"
+        )
     if not should_lookup:
         return absent("excluded", lookup_reason)
-    if normalized_task in {"generate", "edit"} and getattr(query, "precompiled", False):
-        from knowledge.analysis_router import has_generation_fact_target
-        if not has_generation_fact_target(query):
-            return absent("excluded", "no_specific_fact_target")
     try:
         from knowledge.retriever import build_knowledge_context as retrieve_context
         query_meta = getattr(query, "metadata", {}) if getattr(query, "precompiled", False) else {}
@@ -218,9 +208,13 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
         context = retrieve_context(query, plc_model=plc_model, task_type=normalized_task,
                                    top_k=top_k, char_budget=retrieval_char_budget,
                                    token_budget=token_budget, **analysis_options)
-    except Exception:
-        print("PLC knowledge retrieval unavailable", file=sys.stderr)
-        return absent("unavailable", "retrieval_failed")
+    except Exception as error:
+        from knowledge.evidence import retrieval_failure
+        from shared.diagnostics import emit
+        failure = retrieval_failure(error)
+        emit("retrieval_failed", stage="model_request", **failure)
+        print("PLC knowledge retrieval unavailable: " + json.dumps(failure, ensure_ascii=True), file=sys.stderr)
+        return absent("unavailable", "retrieval_failed", failure=failure)
     manifest = context_manifest(context, stage=normalized_task)
     manifest.update(query_truncated=bool(getattr(query, "truncated", False)),
                     query_sha256=text_sha256(query), plc_model=plc_model)
@@ -242,7 +236,7 @@ def _confirmed_context_text(confirmed_context):
         legacy_context = confirmed_context.get("legacy_context")
         if legacy_context:
             return str(legacy_context).strip()
-        clean = {key: value for key, value in confirmed_context.items() if not str(key).startswith("_")}
+        clean = public_generation_specification(confirmed_context)
         return json.dumps(clean, ensure_ascii=False, separators=(",", ":"))
     return str(confirmed_context).strip()
 
@@ -392,7 +386,7 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
                                   task_type=None, review_mode=None, confirmed_context=None,
                                   current_version_json=None, prompt_builder=None, knowledge_builder=None,
                                   profile_builder=None, confirmed_builder=None, on_context=None,
-                                  model_profile=None):
+                                  model_profile=None, wire_history=None):
     normalized_task = str(task_type or review_mode or ("edit" if is_edit_mode else "generate")).strip().casefold()
     if _is_format_repair(normalized_task, user_requirement):
         audit_section("model_profile", status="excluded", reason="format_repair", source="model_registry")
@@ -415,7 +409,7 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
     profile_builder = profile_builder or _build_model_context
     confirmed_builder = confirmed_builder or _with_confirmed_context
     from application.confirmed_generation_context import (
-        build_confirmed_generation_context, project_confirmed_specification,
+        build_confirmed_generation_context, project_confirmed_specification, generation_execution_prompt,
     )
     shared_confirmed = (target_mode == "ladder" and normalized_task in {"generate", "edit"}
                         and isinstance(confirmed_context, dict) and bool(confirmed_context))
@@ -427,17 +421,85 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
     if retrieval_evidence is None and current_version_json is not None:
         retrieval_evidence = current_version_json
     if shared_confirmed and confirmed_context:
+        from application.generation_wire import render_wire_messages
+        from plc.specification.provenance import SOURCE_PRECEDENCE
+
+        history = copy.deepcopy(wire_history) if isinstance(wire_history, list) else None
+
+        def confirmed_wire_renderer(
+            runtime_spec, evidence_text, generation_request, _current_program,
+            context_checkpoint, runtime_history,
+        ):
+            from application.generation_wire import render_context_checkpoint
+            selected = prompt_builder(
+                target_mode,
+                is_edit_mode=is_edit_mode,
+                user_requirement=generation_request,
+                task_type=task_type,
+                review_mode=review_mode,
+                plc_model=plc_model,
+                confirmed_context=runtime_spec,
+            )
+            system = confirmed_builder(
+                selected
+                + SOURCE_PRECEDENCE
+                + profile_builder(
+                    plc_model,
+                    runtime_spec,
+                    compact=bool(evidence_text),
+                )
+                + render_context_checkpoint(context_checkpoint)
+                + str(evidence_text or ""),
+                runtime_spec,
+            )
+            if current_context:
+                system += "\n\n" + current_context
+            system += generation_execution_prompt(
+                runtime_spec,
+                evidence_text=evidence_text,
+                task_type=normalized_task,
+            )
+            message_history = (
+                runtime_history
+                if isinstance(runtime_history, list)
+                else history
+                if history is not None
+                else [{"role": "user", "content": generation_request}]
+            )
+            return {"messages": render_wire_messages(system, message_history)}
+
         context = build_confirmed_generation_context(
-            confirmed_context, plc_model, user_requirement=user_requirement,
-            current_program=current_version_json, task_type=normalized_task,
-            evidence=retrieval_evidence, knowledge_builder=knowledge_builder,
+            confirmed_context,
+            plc_model,
+            user_requirement=user_requirement,
+            current_program=current_version_json,
+            task_type=normalized_task,
+            evidence=retrieval_evidence,
+            knowledge_builder=knowledge_builder,
             model_profile=model_profile,
+            wire_renderer=confirmed_wire_renderer,
+            wire_history=history or [],
         )
         confirmed_context = context.confirmed_spec
         user_requirement = context.generation_request
         knowledge_ctx = context.knowledge_context
         if on_context:
             on_context(copy.deepcopy(context.handoff))
+        if context.wire_packet:
+            system_prompt = context.wire_packet["messages"][0]["content"]
+            execution_prompt = generation_execution_prompt(
+                confirmed_context,
+                evidence_text=knowledge_ctx,
+                task_type=normalized_task,
+            )
+            audit_section(
+                "generation_execution_policy",
+                execution_prompt,
+                reason="settled_facts",
+                source="application",
+            )
+            from application.generation_wire import GenerationWirePrompt
+            return GenerationWirePrompt(system_prompt, context.wire_packet)
     else:
         knowledge_ctx = knowledge_builder(user_requirement, plc_model=plc_model, task_type=normalized_task,
                                           confirmed_context=confirmed_context, evidence=retrieval_evidence)
@@ -449,6 +511,14 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
         plc_model, confirmed_context, compact=bool(knowledge_ctx)) + knowledge_ctx, confirmed_context)
     if current_context:
         system_prompt += "\n\n" + current_context
+    if (target_mode == "ladder" and normalized_task in {"generate", "edit"}
+            and isinstance(confirmed_context, dict) and confirmed_context):
+        execution_prompt = generation_execution_prompt(
+            confirmed_context, evidence_text=knowledge_ctx, task_type=normalized_task,
+        )
+        system_prompt += execution_prompt
+        audit_section("generation_execution_policy", execution_prompt,
+                      reason="settled_facts", source="application")
     return system_prompt
 
 

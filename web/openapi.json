@@ -2225,13 +2225,6 @@
             ],
             "title": "Base Url"
           },
-          "capabilities": {
-            "additionalProperties": {
-              "type": "boolean"
-            },
-            "title": "Capabilities",
-            "type": "object"
-          },
           "capability_overrides": {
             "additionalProperties": {
               "$ref": "#/components/schemas/JsonValue"
@@ -2254,13 +2247,6 @@
             "default": false,
             "title": "Deletable",
             "type": "boolean"
-          },
-          "generation_defaults": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/JsonValue"
-            },
-            "title": "Generation Defaults",
-            "type": "object"
           },
           "id": {
             "title": "Id",
@@ -2287,20 +2273,6 @@
               }
             ],
             "title": "Name"
-          },
-          "parameter_support": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/JsonValue"
-            },
-            "title": "Parameter Support",
-            "type": "object"
-          },
-          "request_overrides": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/JsonValue"
-            },
-            "title": "Request Overrides",
-            "type": "object"
           },
           "user_settings": {
             "additionalProperties": {
@@ -2339,13 +2311,6 @@
             "title": "Base Url",
             "type": "string"
           },
-          "capabilities": {
-            "additionalProperties": {
-              "type": "boolean"
-            },
-            "title": "Capabilities",
-            "type": "object"
-          },
           "capability_overrides": {
             "additionalProperties": true,
             "title": "Capability Overrides",
@@ -2354,11 +2319,6 @@
           "contract": {
             "additionalProperties": true,
             "title": "Contract",
-            "type": "object"
-          },
-          "generation_defaults": {
-            "additionalProperties": true,
-            "title": "Generation Defaults",
             "type": "object"
           },
           "id": {
@@ -2384,16 +2344,6 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
-          },
-          "parameter_support": {
-            "additionalProperties": true,
-            "title": "Parameter Support",
-            "type": "object"
-          },
-          "request_overrides": {
-            "additionalProperties": true,
-            "title": "Request Overrides",
-            "type": "object"
           },
           "user_settings": {
             "additionalProperties": true,
@@ -2425,20 +2375,6 @@
             ],
             "title": "Base Url"
           },
-          "capabilities": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "type": "boolean"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Capabilities"
-          },
           "capability_overrides": {
             "anyOf": [
               {
@@ -2462,18 +2398,6 @@
               }
             ],
             "title": "Contract"
-          },
-          "generation_defaults": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Generation Defaults"
           },
           "id": {
             "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
@@ -2505,30 +2429,6 @@
               }
             ],
             "title": "Name"
-          },
-          "parameter_support": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parameter Support"
-          },
-          "request_overrides": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Request Overrides"
           },
           "user_settings": {
             "anyOf": [

@@ -25,7 +25,6 @@ from model_runtime.provider import (
     ModelProviderError, ModelRequest, ReasoningDelta, TextDelta, ToolCall,
     ToolCallEnd, ToolCallStart, Usage, UserMessage, collect_response,
 )
-from shared.context_policy import context_policy_scope
 from shared.i18n import language_context
 
 
@@ -92,13 +91,12 @@ def test_compact_and_mcp_adapters_share_confirmed_facts_and_retrieval(monkeypatc
     monkeypatch.setattr(retrieval, "build_knowledge_context", retrieve)
     spec = specification(model)
     original = copy.deepcopy(spec)
-    with context_policy_scope("legacy"):
-        compact_prompt = agent_b._build_agent_b_prompt(spec, model)
-        compact_calls = copy.deepcopy(calls)
-        calls.clear()
-        result = build_default_tool_registry().call("get_generation_context", {
-            "user_requirement": "PRIVATE_UNCONFIRMED_REQUEST: add a VFD and X9",
-        }, build_tool_context({"id": "semantics", "plc_model": model, "confirmed_spec": spec}))
+    compact_prompt = agent_b._build_agent_b_prompt(spec, model)
+    compact_calls = copy.deepcopy(calls)
+    calls.clear()
+    result = build_default_tool_registry().call("get_generation_context", {
+        "user_requirement": "PRIVATE_UNCONFIRMED_REQUEST: add a VFD and X9",
+    }, build_tool_context({"id": "semantics", "plc_model": model, "confirmed_spec": spec}))
     assert result["ok"], result
     data = result["data"]
     assert calls == compact_calls and len(calls) == 1
@@ -353,13 +351,3 @@ def test_explicit_bad_effort_is_not_silently_mapped_or_dropped():
                        provider=Provider([], p))
     assert sent == [] and p == before
 
-
-def test_parameterized_test_renames_do_not_hide_missing_cases():
-    import runpy
-    compare = runpy.run_path(str(Path(__file__).resolve().parents[1] / "scripts/source_layout_regression.py"))["compare_reports"]
-    old = "tests.test_provider_error_privacy.test_generation_injected_transport_error_is_safe_and_still_falls_back[True]"
-    new = "tests.test_provider_error_privacy.test_generation_injected_transport_error_is_safe_and_never_replayed[True]"
-    result = compare({old: {"status": "passed"}}, {new: {"status": "passed"}})
-    assert result["regression_gate_passed"] and result["reviewed_test_renames"] == {old: new}
-    assert not compare({old: {"status": "passed"}}, {})["regression_gate_passed"]
-    assert not compare({old: {"status": "passed"}}, {new: {"status": "failed", "message": "failure"}})["regression_gate_passed"]

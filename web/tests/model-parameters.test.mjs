@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { adoptSelections, changeSelection, clearKnown, conditionsMatch, controlValues, effectiveValue,
+import { adoptSelections, changeSelection, conditionsMatch, controlValues,
   parameterEnabled, selectedValues, validValue, sliderRange, ENDPOINT_PRESETS } from '../src/features/modelParameters.ts';
 
 const scope = { endpoint: 'https://test.invalid/v1', model: 'model-unknown', context: 'a'.repeat(64), binding: 'b'.repeat(64) };
@@ -22,16 +22,20 @@ test('arbitrary metadata controls, booleans and large integer ranges need no nam
   assert.deepEqual(controlValues(spec({ minimum: 0, maximum: 10000, step: .001 })), []);
   for (const status of ['unknown', 'accepted']) assert.equal(validValue(spec({ status, source:"generic" }), .733), true);
 });
-test('adoption separates observed schemas, defaults and selections', () => {
-  const defaults = { effort: 'off', temp: .5, extra_body: { thinking: { budget_tokens: 8192, type: 'enabled' } } };
-  const before = JSON.stringify([contract, defaults]);
-  const user = adoptSelections(contract, {}, defaults, {});
+test('adoption is driven only by canonical user selections and descriptor defaults', () => {
+  const before = JSON.stringify(contract);
+  const user = adoptSelections(contract, {
+    scope,
+    parameters: { budget: { mode: 'value', value: 8192 } },
+  });
   assert.deepEqual(user.parameters.budget, { mode: 'value', value: 8192 });
   assert.deepEqual(user.parameters.unseen_flag, { mode: 'omit' });
-  assert.equal(JSON.stringify([contract, defaults]), before);
+  assert.equal(JSON.stringify(contract), before);
 });
 test('changing a dependency preserves the explicit value and exposes its conflict', () => {
-  const user = adoptSelections(contract, {}, { effort: 'off', temp: .5 }, {});
+  const user = adoptSelections(contract, {scope, parameters:{
+    effort:{mode:'value',value:'off'}, temp:{mode:'value',value:.5}
+  }});
   const next = changeSelection(contract, user, 'effort', { mode: 'value', value: 'thorough' });
   assert.deepEqual(next.parameters.temp, { mode: 'value', value:.5 });
   assert.deepEqual(user.parameters.temp, { mode: 'value', value: .5 });
@@ -39,11 +43,11 @@ test('changing a dependency preserves the explicit value and exposes its conflic
   assert.deepEqual(contract.parameters.temp.requires, { effort: ['off'] });
 });
 test('explicit server default and inherit are separate states', () => {
-  const user = adoptSelections(contract, {}, {}, {});
+  const user = adoptSelections(contract, {});
   const next = changeSelection(contract, user, 'effort', { mode: 'omit' });
-  assert.equal(selectedValues(contract, next, { effort: 'thorough' }).effort, null);
+  assert.equal(selectedValues(contract, next).effort, null);
   next.parameters.effort = { mode: 'inherit' };
-  assert.equal(selectedValues(contract, next, { effort: 'thorough' }).effort, 'thorough');
+  assert.equal(selectedValues(contract, next).effort, null);
 });
 test('false is an explicit boolean value, never numeric zero or absence', () => {
   const user = changeSelection(contract, {}, 'unseen_flag', { mode: 'value', value: false });
@@ -58,24 +62,12 @@ test('only declared numeric enums constrain values; declared grids validate frac
   assert.equal(validValue(contract.parameters.budget, 8193), false);
   assert.equal(validValue(spec(), NaN), false);
 });
-test('scope switch clears every declared path but keeps unrelated extensions', () => {
-  const defaults = { effort: 'off', temp: 1, extra_body: { thinking: { budget_tokens: 4096, type: 'enabled' }, unrelated: true } };
-  const overrides = { budget: 1024 };
-  const [first, second] = clearKnown(defaults, overrides, contract);
-  assert.deepEqual(first, { extra_body: { thinking: { type: 'enabled' }, unrelated: true } });
-  assert.deepEqual(second, {});
-  assert.equal(defaults.extra_body.thinking.budget_tokens, 4096);
-});
 test('fixed and unsupported controls use server omission; unknown remains advanced', () => {
   const c = { ...contract, parameters: { fixed: spec({ status: 'fixed', values: [1] }), no: spec({ status: 'unsupported' }), unknown: spec({ status: 'unknown' }) } };
-  const user = adoptSelections(c, {}, { fixed: 1, no: 0 }, {});
+  const user = adoptSelections(c, {});
   assert.deepEqual(user.parameters.fixed, { mode: 'omit' });
   assert.deepEqual(user.parameters.no, { mode: 'omit' });
   assert.deepEqual(controlValues(c.parameters.unknown), []);
-});
-test('SDK extra-body precedence and deletion are preserved for legacy defaults', () => {
-  assert.equal(effectiveValue({ budget: 1024, extra_body: { thinking: { budget_tokens: 4096 } } }, {}, 'budget', contract.parameters.budget), 4096);
-  assert.equal(effectiveValue({ budget: 1024, extra_body: { thinking: { budget_tokens: 4096 } } }, { extra_body: null }, 'budget', contract.parameters.budget), 1024);
 });
 test('constraints use strict scalar identity and conjunctive requirements', () => {
   assert.equal(conditionsMatch({ requires: { a: [true] } }, { a: 1 }), false);
@@ -83,7 +75,14 @@ test('constraints use strict scalar identity and conjunctive requirements', () =
   assert.equal(conditionsMatch({ conflicts_with: ['a'] }, { a: false }), false);
 });
 test('presets contain endpoints, never model names or tuning defaults', () => {
-  for (const entry of ENDPOINT_PRESETS) assert.deepEqual(Object.keys(entry).sort(), ['name', 'url']);
+  for (const entry of ENDPOINT_PRESETS) assert.deepEqual(Object.keys(entry).sort(), ['name', 'source', 'url']);
+  // A preset is an address plus its provenance; duplicates would make the
+  // select ambiguous and a non-https entry would be a typo, not a preset.
+  assert.equal(new Set(ENDPOINT_PRESETS.map(entry => entry.url)).size, ENDPOINT_PRESETS.length);
+  for (const entry of ENDPOINT_PRESETS) {
+    assert.match(entry.url, /^https:\/\//);
+    assert.ok(['local', 'dsh'].includes(entry.source));
+  }
 });
 
 test('partial samples never invent a numeric range or imply a fixed parameter', () => {
@@ -98,7 +97,7 @@ test('extending a quick domain preserves explicit choices and omission', () => {
   const deep = { ...quick, parameters: { effort: spec({ type: 'enum', source: 'probe', values: ['off', 'economy', 'thorough'], scan: 'complete' }) } };
   for (const selection of [{ mode: 'value', value: 'economy' }, { mode: 'omit' }, { mode: 'inherit' }]) {
     const before = JSON.stringify(quick);
-    const user = adoptSelections(deep, { scope, parameters: { effort: selection } }, {}, {});
+    const user = adoptSelections(deep, { scope, parameters: { effort: selection } });
     assert.deepEqual(user.parameters.effort, selection);
     assert.equal(JSON.stringify(quick), before);
   }
@@ -127,7 +126,7 @@ test('unknown effort suggestions permit user-defined strings, without claiming a
 test('domain updates never silently erase an invalid explicit selection', () => {
   const c={...contract,parameters:{temp:spec({domain:{minimum:0,maximum:1,enforcement:'hard',source:'metadata'}})}};
   const previous={scope,parameters:{temp:{mode:'value',value:1.73}}};
-  const adopted=adoptSelections(c,previous,{},{});
+  const adopted=adoptSelections(c,previous);
   assert.deepEqual(adopted.parameters.temp,previous.parameters.temp);
   assert.equal(validValue(c.parameters.temp,1.73),false);
 });

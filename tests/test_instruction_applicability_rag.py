@@ -4,6 +4,7 @@ import sqlite3
 from pathlib import Path
 
 import knowledge.core as core
+from knowledge.structured_facts import resolve_instruction_records
 from shared.paths import resource_path
 
 
@@ -76,12 +77,10 @@ def test_structured_operand_rows_are_globally_well_formed():
 
 
 def test_structured_instruction_retrieval_surfaces_applicability_without_prompt_patch():
-    results = core.retrieve_knowledge(
-        "FX3U FMOV 指令的操作数、适用软元件和主要限制是什么？",
+    results = resolve_instruction_records(
+        [{"opcode": "FMOV", "base_opcode": "FMOV"}],
         plc_model="FX3U",
         task_type="generate",
-        top_k=5,
-        char_budget=9000,
     )
     assert results
     text = "\n".join(item["text"] for item in results[:3])

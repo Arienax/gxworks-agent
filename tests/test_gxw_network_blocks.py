@@ -194,6 +194,8 @@ def test_archived_native_evidence_hashes_are_complete(manifest_name):
     import zipfile
     root = Path(__file__).parents[1]
     manifest = json.loads((root / 'research/results/block-boundary-20260913' / manifest_name).read_text(encoding='utf-8'))
+    assert '\\' not in manifest['archive']
+    assert ':' not in manifest['archive'].split('/', 1)[0]
     archive = root / manifest['archive']
     assert hashlib.sha256(archive.read_bytes()).hexdigest() == manifest['archive_sha256']
     with zipfile.ZipFile(archive) as z:

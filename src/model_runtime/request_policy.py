@@ -11,8 +11,9 @@ from typing import Any, Mapping
 
 from model_runtime.contract import (
     MISSING, CapabilityContract, ConstraintDescriptor, UserModelSettings,
-    scoped_contract, legacy_contract, path_get,
+    path_get,
 )
+from model_runtime.runtime_profile import RuntimeModelProfile, materialize_runtime_profile
 
 
 def merge(base, overlay):
@@ -58,6 +59,30 @@ def parameter_override(layer, name, descriptor):
                 return None
     return MISSING
 
+def without_workflow_effort(options, profile=None, *, model=None, api_key=None):
+    """Remove workflow reasoning hints; saved model settings remain authoritative."""
+    result = copy.deepcopy(dict(options or {}))
+    from model_runtime.contract import path_remove
+    path_remove(result, ("reasoning_effort",))
+    path_remove(result, ("extra_body", "reasoning_effort"))
+    contract = None
+    if isinstance(profile, RuntimeModelProfile):
+        contract = profile.contract
+    elif isinstance(profile, Mapping) and profile:
+        try:
+            contract = materialize_runtime_profile(
+                profile, api_key=api_key, model=model
+            ).contract
+        except (TypeError, ValueError):
+            contract = None
+    descriptor = contract.parameters.get("reasoning_effort") if contract else None
+    if descriptor is not None:
+        descriptor.remove(result, "reasoning_effort")
+    if result.get("extra_body") == {}:
+        result.pop("extra_body")
+    return result
+
+
 def condition_values(options, contract):
     values = {name: (desc.value if desc.value is not None else True) if desc.status == "supported"
         else False if desc.status == "unsupported" else None for name, desc in contract.capabilities.items()}
@@ -79,26 +104,24 @@ def constraints_for(contract, name, descriptor):
 def resolve_request(profile, hints=None, *, protocol=None, model=None, api_key=None, transport_defaults=None):
     """Resolve JSON options without mutating profile, hints or cached evidence.
 
-    requestOverrides remain explicit advanced user settings. UI selections are
-    separate and win over those duplicates. An absent selection inherits; an
-    explicit omit is a tombstone, not a request to use workflow defaults.
+    RuntimeModelProfile is the production input: its capability contract and
+    user selections are already materialized. Raw persisted profiles remain
+    accepted here only for settings/migration callers until that compatibility
+    surface is retired.
     """
     hints, protocol = hints or {}, protocol or {}
-    defaults = merge(profile.get("generationDefaults") or {}, transport_defaults or {})
-    overrides = profile.get("requestOverrides") or {}
-    contract = scoped_contract(profile, model, api_key)
-    raw_settings = profile.get("userModelSettings") or {}
-    if profile.get("capabilityContract") and contract is None:
-        # Never forward stale selections after a programmatic model/endpoint or
-        # context change. The UI/service clears them; direct callers must too.
-        if raw_settings.get("parameters"):
-            raise ValueError("Capability scope changed; reset selections or detect this model again")
-        return EffectiveRequest(merge(merge(merge(defaults, hints), overrides), protocol), {}, {})
-    if contract is None:
-        # Existing configurations keep their old merge semantics until the
-        # operator adopts the v2 contract. The v1 adapter is used for UI reads.
-        return EffectiveRequest(merge(merge(merge(defaults, hints), overrides), protocol), {}, {})
-    settings = UserModelSettings.from_dict(raw_settings, contract) if raw_settings else UserModelSettings(dict(contract.scope), {})
+    if not isinstance(profile, RuntimeModelProfile):
+        if not isinstance(profile, Mapping):
+            raise TypeError("Request resolution requires a model profile")
+        profile = materialize_runtime_profile(
+            profile, api_key=api_key, model=model
+        )
+    if model not in (None, "", profile.model):
+        raise ValueError("Runtime model profile does not match the requested model")
+    defaults = merge(profile.defaults, transport_defaults or {})
+    overrides = profile.overrides
+    contract = profile.contract
+    settings = profile.settings
     layers = [("profile_default", defaults), ("workflow_hint", hints), ("user_advanced", overrides)]
     options = merge(merge(defaults, hints), overrides)
     values, sources = {}, {}
@@ -153,26 +176,36 @@ def validate_capability_use(options, contract):
                 raise ValueError("structured_output: this mode has not been declared or observed")
 
 
+def contract_capability_available(contract, name, *, options=None):
+    """Read one capability from a materialized contract; no legacy fallback."""
+    desc = contract.capabilities.get(name)
+    if desc is None:
+        return False
+    return desc.status in {"supported", "conditional"} and all(
+        rule.satisfied(condition_values(options or {}, contract))
+        for rule in constraints_for(contract, name, desc)
+    )
+
+
 def capability_available(profile, name, *, model=None, api_key=None, options=None, legacy_name=None):
-    contract = scoped_contract(profile, model, api_key)
-    if contract is not None:
-        desc = contract.capabilities.get(name)
-        if desc is not None:
-            return desc.status in {"supported", "conditional"} and all(c.satisfied(condition_values(options or {}, contract))
-                for c in constraints_for(contract, name, desc))
-    return bool((profile.get("capabilities") or {}).get(legacy_name or name))
+    """Compatibility entry that still resolves through the materialized contract."""
+    if not isinstance(profile, RuntimeModelProfile):
+        try:
+            profile = materialize_runtime_profile(
+                profile, api_key=api_key, model=model
+            )
+        except (TypeError, ValueError):
+            return False
+    return contract_capability_available(profile.contract, name, options=options)
 
 
 def public_contract_settings(profile, api_key=None):
-    """Project persisted v2 or a read-only v1 migration for the settings API."""
-    contract = scoped_contract(profile, api_key=api_key)
-    if contract is not None:
-        raw = profile.get("userModelSettings") or {"scope": dict(contract.scope), "parameters": {}}
-        return contract.to_dict(), UserModelSettings.from_dict(raw, contract).to_dict()
-    if profile.get("capabilityContract"):
+    """Project any persisted profile through the canonical runtime materializer."""
+    try:
+        runtime = materialize_runtime_profile(profile, api_key=api_key)
+    except (TypeError, ValueError):
         return {}, {}
-    contract, settings = legacy_contract(profile, api_key)
-    return (contract.to_dict(), settings) if contract else ({}, {})
+    return runtime.contract.to_dict(), runtime.settings.to_dict()
 
 
 def adopt_contract(profile, raw_contract, selections=None):
@@ -185,5 +218,4 @@ def adopt_contract(profile, raw_contract, selections=None):
     result = copy.deepcopy(profile)
     result["capabilityContract"] = contract.to_dict()
     result["userModelSettings"] = settings.to_dict()
-    result["parameterSupport"] = {}
     return result

@@ -57,6 +57,36 @@ STRUCTURE_LABELS = {
     "vfd_multi_speed": "变频器多段速端子控制",
 }
 
+# Structure semantics may declare machine-checkable obligations without giving
+# semantic_validation structure-specific code.  Selectors and coverage modes are
+# generic topology primitives owned by the validator; this table only states
+# what a confirmed structure requires from canonical I/O bindings.
+_STRUCTURE_OBLIGATIONS = {
+    "self_hold": {
+        "instance_selector": "feedback_coil",
+        # If a canonical output role exists, bind the inspected structure
+        # instance to that target.  The role stays optional for legacy/current
+        # specs that confirm start/stop semantics without a separate output
+        # binding.
+        "instance_target_role": {"role": "output", "required": False},
+        "required_roles": ("start", "stop"),
+        "distinct_roles": (("start", "stop"),),
+        "predicates": (
+            {
+                "role": "start",
+                "predicate_key": "active_when",
+                "coverage": "any_non_feedback_path",
+                "independent_of_feedback": True,
+            },
+            {
+                "role": "stop",
+                "predicate_key": "run_permit_when",
+                "coverage": "all_paths",
+            },
+        ),
+    },
+}
+
 _DEVICE_RE = re.compile(
     r"(?<![A-Za-z0-9_])(?:SM|SD|TS|TC|CS|CC|[XYMSTCDRVZ])\d+(?![A-Za-z0-9_])",
     re.IGNORECASE,
@@ -66,56 +96,6 @@ _STATE_COMPARE_RE = re.compile(
     re.IGNORECASE,
 )
 _CONSTANT_RE = re.compile(r"^K([+-]?\d+)$", re.IGNORECASE)
-_NEGATION_RE = re.compile(r"(?:不(?:使用|采用|用|设)|禁止|不得|无需|不要)")
-
-# Used only for deterministic inference from legacy generation_guide text.
-# Explicit contracts may contain any opcode token and are not limited to this
-# list; the generated program still has to contain the exact requested token.
-_KNOWN_OPCODE_HINTS = {
-    "MOV",
-    "DMOV",
-    "INC",
-    "DEC",
-    "CMP",
-    "DCMP",
-    "SET",
-    "RST",
-    "ALT",
-    "ALTP",
-    "SFTL",
-    "SFTLP",
-    "PLS",
-    "PLF",
-    "PLSY",
-    "PLSV",
-    "DRVI",
-    "DRVA",
-    "ZRN",
-    "DSZR",
-    "DVIT",
-    "TO",
-    "FROM",
-    "RS",
-    "RS2",
-    "ADPRW",
-    "PID",
-    "DECO",
-    "ENCO",
-    "BCD",
-    "BIN",
-    "ADD",
-    "SUB",
-    "MUL",
-    "DIV",
-    "WAND",
-    "WOR",
-    "WXOR",
-    "ROL",
-    "ROR",
-    "STL",
-    "RET",
-}
-
 _FIELD_ALIASES = {
     "required_instructions": "required_opcodes",
     "forbidden_instructions": "forbidden_opcodes",
@@ -163,141 +143,135 @@ def _normalize_groups(values, *, upper=False, lower=False):
             result.append(normalized)
     return result
 
+def normalize_instruction_instances(values):
+    """Normalize exact opcode+operand calls without inferring or rewriting operands."""
+    if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+        return []
+    result = []
+    seen = set()
+    for item in values:
+        if not isinstance(item, Mapping):
+            continue
+        opcode = str(item.get("opcode") or "").strip().upper()
+        operands = item.get("operands")
+        if not re.fullmatch(r"[$A-Z][A-Z0-9_.$@+<>!=\-]{0,63}", opcode):
+            continue
+        if not isinstance(operands, Sequence) or isinstance(operands, (str, bytes)):
+            continue
+        normalized_operands = []
+        valid = True
+        for operand in operands:
+            if not isinstance(operand, str):
+                valid = False
+                break
+            token = operand.strip()
+            if not token or len(token) > 256:
+                valid = False
+                break
+            normalized_operands.append(token)
+        if not valid:
+            continue
+        marker = (opcode, tuple(normalized_operands))
+        if marker in seen:
+            continue
+        seen.add(marker)
+        result.append({"opcode": opcode, "operands": normalized_operands})
+    return result
 
-def _opcode_mentions(text):
-    mentions = []
-    value = str(text or "")
-    for opcode in sorted(_KNOWN_OPCODE_HINTS, key=lambda item: (-len(item), item)):
-        for match in re.finditer(
-            rf"(?<![A-Za-z0-9_]){re.escape(opcode)}(?![A-Za-z0-9_])",
-            value,
-            re.IGNORECASE,
-        ):
-            mentions.append((match.start(), match.end(), opcode))
-    return sorted(mentions)
+
+IMPLEMENTATION_SEMANTIC_KINDS = frozenset({"structure"})
+IMPLEMENTATION_SEMANTIC_STATUSES = frozenset({"required", "forbidden", "any_of"})
 
 
-def _infer_contract_from_guide(approach):
-    guide = str((approach or {}).get("generation_guide") or "").strip()
-    name = str((approach or {}).get("name") or "").strip()
-    description = str((approach or {}).get("description") or "").strip()
-    text = "\n".join(item for item in (name, description, guide) if item)
-    lower = text.casefold()
-    guide_lower = guide.casefold()
+def _structure_token(value):
+    text = str(value or "").strip()
+    if not text:
+        return None
+    folded = text.casefold()
+    if folded in SUPPORTED_STRUCTURES:
+        return folded
+    labels = {label.casefold(): key for key, label in STRUCTURE_LABELS.items()}
+    return labels.get(folded)
 
-    required_opcodes = []
-    forbidden_opcodes = []
-    any_opcode_groups = []
-    mentions = _opcode_mentions(guide)
-    for start, _end, opcode in mentions:
-        prefix = guide[max(0, start - 12) : start]
-        target = forbidden_opcodes if _NEGATION_RE.search(prefix) else required_opcodes
-        if opcode not in target:
-            target.append(opcode)
 
-    # A legacy guide sometimes writes "SET/RST或MOV". Preserve its stated
-    # alternative instead of accidentally requiring all three opcodes.
-    for sentence in re.split(r"[；;。\n]", guide):
-        sentence_mentions = [item[2] for item in _opcode_mentions(sentence)]
-        sentence_mentions = list(dict.fromkeys(sentence_mentions))
-        if len(sentence_mentions) >= 2 and re.search(r"或|任选|二选一|之一", sentence):
-            any_opcode_groups.append(sentence_mentions)
-            required_opcodes = [
-                item for item in required_opcodes if item not in sentence_mentions
-            ]
+def structure_obligations(value):
+    """Return declarative machine obligations for one canonical structure token."""
+    token = _structure_token(value)
+    return copy.deepcopy(_STRUCTURE_OBLIGATIONS.get(token) or {})
 
-    required_structures = []
-    forbidden_structures = []
-    any_structure_groups = []
 
-    state_forbidden = bool(
-        re.search(r"(?:不设|不用|不采用|禁止|不得使用).{0,6}状态机", lower)
-    )
-    register_state = bool(
-        re.search(r"(?:寄存器|D\d+).{0,20}(?:状态机|步进|状态)", text, re.I)
-        or (
-            "状态机" in lower
-            and "MOV" in {item[2] for item in mentions}
-            and bool(re.search(r"D\d+", text, re.I))
-        )
-        or "block_input" in lower
-    )
-    bit_state = bool(
-        re.search(r"(?:M|S)状态位|位状态机|状态继电器", text, re.I)
-        or (
-            "状态机" in lower
-            and bool(re.search(r"M\d+", text, re.I))
-            and ({"SET", "RST"} & {item[2] for item in mentions})
-        )
-    )
-    generic_state = "状态机" in lower or "步进状态" in lower
-    if state_forbidden:
-        forbidden_structures.extend(
-            ["register_state_machine", "bit_state_machine"]
-        )
-        required_structures.append("direct_logic")
-    elif register_state:
-        required_structures.extend(
-            [
-                "register_state_machine",
-                "state_initialization",
-                "state_comparison",
-                "state_transition",
-            ]
-        )
-    elif bit_state:
-        required_structures.extend(
-            ["bit_state_machine", "state_initialization", "state_transition"]
-        )
-    elif generic_state:
-        any_structure_groups.append(
-            ["register_state_machine", "bit_state_machine"]
-        )
 
-    if any(term in lower for term in ("直接逻辑", "独立梯级")) and not generic_state:
-        required_structures.append("direct_logic")
-    if any(term in lower for term in ("自保持", "自锁")):
-        required_structures.append("self_hold")
-    if any(term in lower for term in ("硬件计数器", "内置计数器")) or re.search(
-        r"OUT\s+C\d+", text, re.I
-    ):
-        required_structures.append("hardware_counter")
-    if "INC" in {item[2] for item in mentions} and re.search(r"D\d+", guide, re.I):
-        required_structures.append("data_register_counter")
-    if any(term in lower for term in ("上升沿", "下降沿", "边沿")):
-        required_structures.append("edge_trigger")
-    if {"PLSY", "PLSV", "DRVI", "DRVA", "ZRN", "DSZR", "DVIT"} & {
-        item[2] for item in mentions
-    }:
-        required_structures.append("pulse_positioning")
-    if any(term in lower for term in ("模拟量", "0-10v", "4-20ma")):
-        required_structures.append("analog_control")
-    if any(term in lower for term in ("rs485", "modbus", "串行通讯", "串行通信")):
-        required_structures.append("serial_communication")
-    if "pid" in lower:
-        required_structures.append("pid_control")
-    if any(term in lower for term in ("多段速", "stf", "rh", "rm", "rl")):
-        required_structures.append("vfd_multi_speed")
+def normalize_implementation_semantics(values):
+    """Normalize Agent-A architecture choices only; low-level choices belong to Core/B."""
+    if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+        return []
+    result = []
+    seen = set()
+    for raw in values:
+        if not isinstance(raw, Mapping):
+            continue
+        kind = str(raw.get("kind") or "").strip().casefold()
+        status = str(raw.get("status") or "required").strip().casefold()
+        if kind != "structure" or status not in IMPLEMENTATION_SEMANTIC_STATUSES:
+            continue
+        if status == "any_of":
+            source = raw.get("values")
+            if isinstance(source, str):
+                source = [source]
+            if not isinstance(source, Sequence):
+                continue
+            values = []
+            for value in source:
+                token = _structure_token(value)
+                if token and token not in values:
+                    values.append(token)
+            if not values:
+                continue
+            item = {"kind": "structure", "status": status, "values": values}
+            marker = ("structure", status, tuple(values))
+        else:
+            value = _structure_token(raw.get("value"))
+            if not value:
+                continue
+            item = {"kind": "structure", "status": status, "value": value}
+            marker = ("structure", status, value)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        result.append(item)
+    return result
 
-    # Legacy guides commonly describe a scheme with example allocations such
-    # as "M1/M2/M3 represent three states".  Those addresses were never a
-    # separately confirmed user decision, so treating every mentioned device
-    # as mandatory retroactively invalidates otherwise correct saved versions.
-    # Exact addresses are enforced only when the analysis result supplies them
-    # in an explicit generation_contract.
-    required_devices = []
 
-    return {
-        "required_opcodes": required_opcodes,
-        "forbidden_opcodes": forbidden_opcodes,
-        "required_devices": required_devices,
-        "forbidden_devices": [],
-        "required_structures": list(dict.fromkeys(required_structures)),
-        "forbidden_structures": list(dict.fromkeys(forbidden_structures)),
-        "any_of_opcode_groups": any_opcode_groups,
-        "any_of_structure_groups": any_structure_groups,
-        "source": "inferred",
+def project_semantics_to_generation_contract(
+    values, *, explicit_user_constraints=None, source="analysis_semantics"
+):
+    """Project architecture semantics plus Core-owned user constraints."""
+    semantics = normalize_implementation_semantics(values)
+    from plc.specification.explicit_constraints import normalize_explicit_user_constraints
+    explicit = normalize_explicit_user_constraints(explicit_user_constraints)
+    contract = {
+        "schema_version": CONTRACT_SCHEMA_VERSION,
+        "required_opcodes": list(explicit["required_opcodes"]),
+        "forbidden_opcodes": list(explicit["forbidden_opcodes"]),
+        "required_devices": list(explicit["required_devices"]),
+        "forbidden_devices": list(explicit["forbidden_devices"]),
+        "required_structures": [],
+        "forbidden_structures": [],
+        "any_of_opcode_groups": [],
+        "any_of_structure_groups": [],
+        "instruction_instances": copy.deepcopy(explicit["instruction_instances"]),
+        "enforce": True,
+        "source": source,
     }
+    for item in semantics:
+        status = item["status"]
+        if status == "any_of":
+            contract["any_of_structure_groups"].append(list(item["values"]))
+            continue
+        key = "required_structures" if status == "required" else "forbidden_structures"
+        if item["value"] not in contract[key]:
+            contract[key].append(item["value"])
+    return contract
 
 
 _CONTRACT_VALUE_FIELDS = (
@@ -473,17 +447,17 @@ def _merge_unverified(target, source):
                 target[key].append(copy.deepcopy(value))
 
 
-def normalize_generation_contract(contract=None, *, approach=None):
+def normalize_generation_contract(contract=None):
+    """Normalize an already-structured contract without reading approach prose."""
     raw = dict(contract) if isinstance(contract, Mapping) else {}
     for alias, canonical in _FIELD_ALIASES.items():
         if canonical not in raw and alias in raw:
             raw[canonical] = raw[alias]
 
     explicit_fields = _explicit_contract_fields(raw)
-    inferred = {} if isinstance(contract, Mapping) and contract else _infer_contract_from_guide(approach or {})
 
     def value_source(key):
-        return raw.get(key) if key in explicit_fields else inferred.get(key)
+        return raw.get(key)
 
     normalized = {
         "schema_version": CONTRACT_SCHEMA_VERSION,
@@ -497,9 +471,14 @@ def normalize_generation_contract(contract=None, *, approach=None):
         "any_of_structure_groups": _normalize_groups(value_source("any_of_structure_groups")),
         # Explicit constraints cannot be disabled by model-authored enforce=false.
         "enforce": True,
-        "source": raw.get("source") if raw.get("source") in {"explicit", "inferred", "analysis_sanitized"} else (
-            "explicit" if isinstance(contract, Mapping) and contract else inferred.get("source", "inferred")),
+        "source": raw.get("source") if raw.get("source") in {"explicit", "inferred", "analysis_sanitized", "analysis_semantics"} else "explicit",
     }
+    # Exact instruction calls are optional but lossless when explicitly present.
+    # Absence means "not supplied"; an explicit [] means "clear the prior instances".
+    if "instruction_instances" in raw:
+        normalized["instruction_instances"] = normalize_instruction_instances(
+            raw.get("instruction_instances")
+        )
     unverified = _constraint_values(raw.get("unverified_constraints"))
     if normalized["source"] == "inferred":
         # The chosen prose still reaches the generator. Historical keyword
@@ -585,10 +564,23 @@ def normalize_approach(approach):
         approach_id = f"approach_{digest}"
     normalized["approach_id"] = approach_id
     normalized.pop("id", None)
-    normalized["generation_contract"] = normalize_generation_contract(
-        normalized.get("generation_contract"),
-        approach=normalized,
-    )
+    if "implementation_semantics" in normalized or "explicit_user_constraints" in normalized:
+        normalized["implementation_semantics"] = normalize_implementation_semantics(
+            normalized.get("implementation_semantics")
+        )
+        from plc.specification.explicit_constraints import normalize_explicit_user_constraints
+        normalized["explicit_user_constraints"] = normalize_explicit_user_constraints(
+            normalized.get("explicit_user_constraints")
+        )
+        normalized["generation_contract"] = project_semantics_to_generation_contract(
+            normalized["implementation_semantics"],
+            explicit_user_constraints=normalized["explicit_user_constraints"],
+            source="analysis_semantics",
+        )
+    else:
+        normalized["generation_contract"] = normalize_generation_contract(
+            normalized.get("generation_contract")
+        )
     return normalized
 
 
@@ -638,6 +630,7 @@ def generation_contract_signature(approach):
             "forbidden_structures",
             "any_of_opcode_groups",
             "any_of_structure_groups",
+            "instruction_instances",
         )
     }
     return hashlib.sha256(
@@ -660,6 +653,37 @@ def _iter_nested_elements(elements):
                 yield from _iter_nested_elements(branch)
 
 
+def _contact_predicate(element):
+    if not isinstance(element, Mapping):
+        return None
+    kind = str(element.get("type") or "").strip().upper()
+    address = str(element.get("address") or "").strip().upper()
+    if kind not in {"NO", "NC"} or not address:
+        return None
+    return f"{kind} {address}"
+
+
+def _expand_contact_paths(elements):
+    """Expand contact-only paths for structure-instance inspection."""
+    paths = [set()]
+    for element in elements or ():
+        if not isinstance(element, Mapping):
+            continue
+        if str(element.get("type") or "").strip().casefold() == "parallel_block":
+            alternatives = []
+            for branch in element.get("branches") or ():
+                alternatives.extend(_expand_contact_paths(branch))
+            if not alternatives:
+                alternatives = [set()]
+            paths = [base | option for base in paths for option in alternatives]
+            continue
+        predicate = _contact_predicate(element)
+        if predicate:
+            for path in paths:
+                path.add(predicate)
+    return paths
+
+
 def _devices_in_value(value):
     return {item.upper() for item in _DEVICE_RE.findall(str(value or ""))}
 
@@ -668,6 +692,7 @@ def inspect_ladder_features(ladder):
     opcodes = set()
     devices = set()
     structures = set()
+    structure_instances = []
     state_compares = defaultdict(set)
     state_writes = defaultdict(set)
     set_devices = set()
@@ -693,7 +718,16 @@ def inspect_ladder_features(ladder):
         for branch in rung.get("branches") or []:
             if not isinstance(branch, Mapping):
                 continue
-            input_elements.extend(_iter_nested_elements(branch.get("inputs") or []))
+            branch_inputs = branch.get("inputs") or []
+            input_elements.extend(_iter_nested_elements(branch_inputs))
+            branch_conditions = [
+                rung.get("header_element"),
+                *(rung.get("shared_inputs", []) or []),
+                *branch_inputs,
+            ]
+            branch_paths = _expand_contact_paths(
+                item for item in branch_conditions if item is not None
+            )
             for output in branch.get("outputs") or []:
                 if not isinstance(output, Mapping):
                     continue
@@ -730,6 +764,16 @@ def inspect_ladder_features(ladder):
                     opcodes.update({"OUT", "COIL"})
                     if address:
                         rung_coils.add(address)
+                        feedback = f"NO {address}"
+                        if any(feedback in path for path in branch_paths):
+                            structure_instances.append({
+                                "selector": "feedback_coil",
+                                "rung_id": rung.get("rung_id"),
+                                "branch_id": branch.get("branch_id"),
+                                "target": address,
+                                "feedback_predicate": feedback,
+                                "paths": [sorted(path) for path in branch_paths],
+                            })
                 elif output_type:
                     opcodes.add(output_type)
 
@@ -836,6 +880,7 @@ def inspect_ladder_features(ladder):
         "opcodes": sorted(opcodes),
         "devices": sorted(devices),
         "structures": sorted(structures),
+        "structure_instances": structure_instances,
         "state_registers": sorted(register_state_registers),
         "state_bits": sorted(state_bits),
     }
@@ -940,6 +985,23 @@ def format_contract_summary(approach, *, localized=False):
         )
     if contract.get("required_devices"):
         parts.append(label("指定软元件 ") + label("/").join(contract["required_devices"]))
+    if contract.get("instruction_instances"):
+        instances = [
+            " ".join([item["opcode"], *item["operands"]]).strip()
+            for item in contract["instruction_instances"]
+            if isinstance(item, Mapping)
+        ]
+        if instances:
+            parts.append(label("固定指令实例 ") + label(" / ").join(instances))
+    preferences = normalized.get("implementation_preferences")
+    preferences = preferences if isinstance(preferences, Mapping) else {}
+    if preferences.get("instruction_instances"):
+        instances = [
+            " ".join([item["opcode"], *item["operands"]]).strip()
+            for item in normalize_instruction_instances(preferences.get("instruction_instances"))
+        ]
+        if instances:
+            parts.append(label("方案指令实例 ") + label(" / ").join(instances))
     if contract.get("unverified_constraints"):
         parts.append(label("另有保留的未机检方案语义"))
     return label("；").join(parts)
@@ -955,5 +1017,9 @@ __all__ = [
     "inspect_ladder_features",
     "normalize_approach",
     "normalize_generation_contract",
+    "normalize_implementation_semantics",
+    "normalize_instruction_instances",
+    "project_semantics_to_generation_contract",
+    "structure_obligations",
     "validate_ladder_against_selected_approach",
 ]

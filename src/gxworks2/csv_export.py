@@ -1,10 +1,23 @@
 """Canonical GX Works2 CSV export, native step widths, and export-only lowering."""
 import csv
-import json
-from pathlib import Path
+import logging
 from gxworks2.csv_manager import CSVManager
 from gxworks2.native_export import GXNativeLoweringError, lower_large_parallel_blocks_for_gxworks2
 from plc.ir import ir_to_ladder, is_plc_ir
+from plc.instruction_steps import StepCursor, instruction_step_width
+
+def _step_width_model(payload, override):
+    """Keep an explicit CPU through IR-to-ladder projection; default legacy FX."""
+    if override is not None:
+        return str(override)
+    if isinstance(payload, dict):
+        plc = payload.get("plc")
+        if isinstance(plc, dict) and plc.get("cpu"):
+            return str(plc["cpu"])
+        if payload.get("plc_model"):
+            return str(payload["plc_model"])
+    return "FX3U"
+
 
 def _write_program_csv(
     json_data,
@@ -12,10 +25,13 @@ def _write_program_csv(
     output_comment_csv="COMMENT.csv",
     *,
     infer_device_comments=True,
+    plc_model=None,
+    step_diagnostics=None,
 ):
     import csv
     import re
 
+    plc_model = _step_width_model(json_data, plc_model)
     if is_plc_ir(json_data):
         json_data = ir_to_ladder(json_data)
 
@@ -67,7 +83,7 @@ def _write_program_csv(
                         addr = parts[1] if parts[0] in ["=", ">", "<", "<=", ">=", "<>"] else parts[0]
                         if re.fullmatch(r'[A-Za-z]+\d+', addr):
                             add_missing_comment(addr, header["label"])
-                        
+
             for branch in rung.get("branches", []):
                 for elem in branch.get("inputs", []):
                     if elem.get("type") == "parallel_block":
@@ -104,8 +120,9 @@ def _write_program_csv(
         ["PLC信息:", "三菱 GX Works2 兼容"],
         ["步号", "行间声明", "指令", "I/O(软元件)", "空白栏", "PI声明", "注解"]
     ]
-    
-    current_step = 0
+
+    cursor = StepCursor()
+    width_findings = []
 
     def get_operands(elem):
         t, expr = elem.get("type", ""), elem.get("expression", "").strip()
@@ -117,48 +134,39 @@ def _write_program_csv(
             return parts
         return [elem.get("address", "")]
 
-    def get_step_size(inst, operands):
-        inst_up = inst.upper()
-        if inst_up in ["LDP", "LDF", "ANDP", "ANDF", "ORP", "ORF"]: return 2
-        if inst_up in ["LD", "LDI", "AND", "ANI", "OR", "ORI", "SET", "MPS", "MRD", "MPP", "ANB", "ORB"]: return 1
-        if inst_up == "RST": return 2 if operands and any(operands[0].upper().startswith(x) for x in ["T", "C", "D", "V", "Z"]) else 1
-        if inst_up == "OUT": return 3 if operands and operands[0].upper().startswith(("T", "C")) else 1
-        if any(inst_up.startswith(x) for x in ["LD=", "AND=", "OR=", "LD>", "AND>", "OR>", "LD<", "AND<"]): return 5
-        if inst_up in ["MOV", "ZRST"]: return 5
-        if inst_up == "PID": return 9
-        return 1
-
     def add_instruction(inst, operands, comment=""):
-        nonlocal current_step
-        step_size = get_step_size(inst, operands)
-        
+        width = instruction_step_width(inst, operands, plc_model=plc_model)
+        if not width.known:
+            width_findings.append({"opcode": inst, "operands": list(operands),
+                                   "step": cursor.step, "reason": width.reason})
+
         formatted_ops = [format_device(op) for op in operands if op]
-        
+
         inst_up = inst.upper()
         is_contact = inst_up.startswith(("LD", "AN", "OR")) and inst_up not in ["ORB", "ANB"]
         is_sys_block = inst_up in ["MPS", "MRD", "MPP", "ORB", "ANB", "END"]
-        
+
         valid_note = comment if comment != "null" else ""
         if is_contact or is_sys_block:
             valid_note = ""
-            
+
         combined_ops = " ".join(formatted_ops)
-        
+
         # 当前指令行，注解列强制留空
-        rows.append([str(current_step), "", inst, combined_ops, "", "", ""])
-        
-        current_step += step_size
-        
+        rows.append([cursor.label, "", inst, combined_ops, "", "", ""])
+
+        cursor.advance(width)
+
         if valid_note:
             rows.append(["", "", "", "", "", "", valid_note])
-    
+
     def get_input_inst(elem, is_first, is_sub=False):
         t, expr = elem.get("type", ""), elem.get("expression", "").strip()
         if t == "COMPARE" or re.search(r'[<=>]', expr):
             sym = re.search(r'([<=>]+)', expr)
             sym = sym.group(1) if sym else "="
             return f"LD{sym}" if is_first else (f"OR{sym}" if is_sub else f"AND{sym}")
-            
+
         if is_first:
             return "LDI" if t == "NC" else "LDP" if t in ["P", "RISING"] else "LDF" if t in ["F", "FALLING"] else "LD"
         elif is_sub:
@@ -169,11 +177,11 @@ def _write_program_csv(
     def parse_input_list(inputs, is_first_input):
         for i, elem in enumerate(inputs):
             is_first = (is_first_input and i == 0)
-            
+
             if elem.get("type") == "parallel_block":
                 valid_branches = [b for b in elem.get("branches", []) if b]
                 if not valid_branches: continue
-                
+
                 if len(valid_branches) == 1:
                     for k, sub_elem in enumerate(valid_branches[0]):
                         inst = get_input_inst(sub_elem, is_first=(is_first and k==0))
@@ -209,7 +217,7 @@ def _write_program_csv(
         line_statement = rung.get("debug_note", "")
         if line_statement and line_statement != "null":
             rows.append([
-                str(current_step),
+                cursor.label,
                 CSVManager.truncate_statement(line_statement),
                 "", "", "", "", "",
             ])
@@ -218,7 +226,7 @@ def _write_program_csv(
         shared_inputs = rung.get("shared_inputs", [])
         branches = rung.get("branches", [])
         has_prefix = False
-        
+
         if header:
             inst = get_input_inst(header, is_first=True)
             add_instruction(inst, get_operands(header), header.get("label", ""))
@@ -227,9 +235,9 @@ def _write_program_csv(
         if shared_inputs:
             parse_input_list(shared_inputs, is_first_input=not has_prefix)
             has_prefix = True
-        
+
         if not branches: continue
-        
+
         if len(branches) == 1:
             parse_input_list(branches[0].get("inputs", []), is_first_input=not has_prefix)
             parse_outputs(branches[0].get("outputs", []))
@@ -241,7 +249,7 @@ def _write_program_csv(
                         add_instruction("MRD", [])
                     elif b_idx == len(branches) - 1:
                         add_instruction("MPP", [])
-                    
+
                     parse_input_list(branch.get("inputs", []), is_first_input=False)
                     parse_outputs(branch.get("outputs", []))
             else:
@@ -250,6 +258,15 @@ def _write_program_csv(
                     parse_outputs(branch.get("outputs", []))
 
     add_instruction("END", [])
+
+    if step_diagnostics is not None:
+        step_diagnostics.extend(width_findings)
+    if width_findings:
+        logging.getLogger(__name__).warning(
+            "GX Works2 CSV: %d unresolved instruction widths; subsequent step labels "
+            "are blank, instructions are preserved. First: %s",
+            len(width_findings), width_findings[0],
+        )
 
     try:
         with open(output_program_csv, mode="w", newline="", encoding="utf-16") as f_prog:
@@ -261,64 +278,24 @@ def _write_program_csv(
         return False
 
 
-_NATIVE_STEP_DELTA_AFTER = {
-    # The legacy exporter counted these as one program step. GX Works2/FX3U
-    # counts PLS/PLF as two and INC/INCP as three.
-    "PLS": 1,
-    "PLF": 1,
-    "INC": 2,
-    "INCP": 2,
-}
-
-_NATIVE_STEP_DELTA_AFTER.update({"SFTL": 8, "SFTLP": 8})
-
-def _repair_gxworks2_step_numbers(program_csv_path):
-    """Adjust legacy CSV step labels to the native FX3U instruction widths."""
-    path = Path(program_csv_path)
-    with path.open("r", encoding="utf-16", newline="") as handle:
-        rows = list(csv.reader(handle, delimiter="\t"))
-
-    offset = 0
-    for row in rows[3:]:
-        while len(row) < 7:
-            row.append("")
-        raw_step = str(row[0] or "").strip()
-        if raw_step.isdigit():
-            row[0] = str(int(raw_step) + offset)
-        opcode = str(row[2] or "").strip().upper()
-        offset += _NATIVE_STEP_DELTA_AFTER.get(opcode, 0)
-
-    with path.open("w", encoding="utf-16", newline="") as handle:
-        csv.writer(
-            handle,
-            delimiter="\t",
-            quoting=csv.QUOTE_ALL,
-            lineterminator="\r\n",
-        ).writerows(rows)
-
-
 def _generate_native_wrapped_csv(
     json_data,
     output_program_csv="MAIN.csv",
     output_comment_csv="COMMENT.csv",
     *,
     infer_device_comments=True,
+    plc_model=None,
+    step_diagnostics=None,
 ):
-    """Generate GX Works2 CSV, then normalize native FX3U program step labels."""
-    success = _write_program_csv(
+    """Compatibility wrapper; steps are assigned once from the Core catalogue."""
+    return _write_program_csv(
         json_data,
         output_program_csv,
         output_comment_csv,
         infer_device_comments=infer_device_comments,
+        plc_model=plc_model,
+        step_diagnostics=step_diagnostics,
     )
-    if not success:
-        return False
-    try:
-        _repair_gxworks2_step_numbers(output_program_csv)
-    except Exception as exc:
-        print(f"GX Works2步号修正失败: {exc}")
-        return False
-    return True
 
 
 def generate_gx_works2_csv(
@@ -327,14 +304,20 @@ def generate_gx_works2_csv(
     output_comment_csv="COMMENT.csv",
     *,
     infer_device_comments=True,
+    plc_model=None,
+    step_diagnostics=None,
 ):
     """Generate GX Works2 CSV with native step widths and <=24-row OR blocks.
 
     The canonical ladder/IR is not changed. Oversized top-level parallel
-    networks are lowered only for the GX Works2 CSV artifact.
+    networks are lowered only for the GX Works2 CSV artifact. Unknown widths
+    leave later step labels blank and produce diagnostics, never a model retry
+    or a new rejection of the user's program. Native import of such an unresolved
+    listing still needs verification; a successful export is not a compile claim.
     """
     from plc.ir import ir_to_ladder, is_plc_ir
     from plc.device_identity import canonical_ladder_devices
+    plc_model = _step_width_model(json_data, plc_model)
     if is_plc_ir(json_data):
         json_data = ir_to_ladder(json_data)
     if isinstance(json_data, dict):
@@ -350,5 +333,7 @@ def generate_gx_works2_csv(
         output_program_csv,
         output_comment_csv,
         infer_device_comments=infer_device_comments,
+        plc_model=plc_model,
+        step_diagnostics=step_diagnostics,
     )
 

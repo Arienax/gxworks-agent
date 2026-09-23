@@ -21,6 +21,59 @@ _QUESTION_ALIASES = {
     "stop_signal": ("stop", "X"), "stop_address": ("stop", "X"),
     "output_device": ("output", "Y"),
 }
+_IO_ATTRIBUTE_RE = re.compile(
+    r"常[开闭閉]|normally\s+(?:open|closed)|\b(?:NO|NC)\b|上升沿|下降沿|rising|falling|edge",
+    re.IGNORECASE,
+)
+
+_DECLARED_IO_LINE_RE = re.compile(
+    r"^\s*(?:[-*•]\s*|\d+[.)、]\s*)?((?:SM|SD|[XYMTCSDVZ])\s*\d+)"
+    r"\s*(?:[：:]|为|是|is\s+)\s*(.+?)\s*$",
+    re.IGNORECASE,
+)
+_INPUT_QUALIFIER_RE = re.compile(
+    r"[,，(（]\s*(?:按下|未按下|松开|释放|动作|未动作|常开|常闭|常開|常閉|normally\b|active\b)",
+    re.IGNORECASE,
+)
+
+
+def _is_io_attribute_answer(value):
+    return bool(_IO_ATTRIBUTE_RE.search(str(value or "")) or confirmed_input_levels(value))
+
+
+def _is_plain_address_answer(value, kind=None):
+    """Accept a bare address/default label, not arbitrary device-related prose."""
+    text = str(value or "").strip()
+    address = single_address(text, kind)
+    if address is None:
+        return False
+    remainder = _DEVICE.sub("", text, count=1)
+    remainder = re.sub(
+        r"[\s，,。；;：:（）()［］\[\]【】<>《》_-]+|建议|推薦|recommended|default",
+        "", remainder, flags=re.IGNORECASE,
+    )
+    return not remainder
+
+
+def parameter_uses_bound_address(parameter):
+    """Whether this answer is actually selecting or qualifying one device address.
+
+    io_binding identifies which device a question is about; it does not mean
+    every answer must itself be an address. Register semantics such as
+    "D0=0 means no material" remain ordinary confirmed parameters.
+    """
+    hint = binding_hint(parameter)
+    if hint is None:
+        return False
+    name = str(parameter.get("name") or parameter.get("question") or "")
+    value = parameter.get("value", "")
+    return (
+        _question_is_address(name)
+        or (hint["kind"] in {"X", "M", "S", "SM"} and _is_io_attribute_answer(value))
+        or _is_plain_address_answer(value, hint["kind"])
+    )
+
+
 _ROLE_LABELS = {
     "start": {"启动", "启动按钮", "启动信号", "起动", "起动按钮", "start", "startbutton", "startsignal", "起動", "起動ボタン"},
     "stop": {"停止", "停止按钮", "停止信号", "stop", "stopbutton", "stopsignal", "停止ボタン"},
@@ -31,6 +84,104 @@ _ORDER = {k: i for i, k in enumerate(("X", "Y", "M", "T", "C", "D", "S", "V", "Z
 
 def label_key(value):
     return re.sub(r"[\W_]+", "", str(value), flags=re.UNICODE).casefold()
+
+
+def canonical_signal_role(label):
+    """Return one exact canonical signal role; never fuzzy-match prose."""
+    key = label_key(label)
+    if not key:
+        return ""
+    matches = [
+        role for role, aliases in _ROLE_LABELS.items()
+        if key in {label_key(alias) for alias in aliases}
+    ]
+    return matches[0] if len(matches) == 1 else ""
+
+
+def extract_declared_bindings(user_text, plc_model=None):
+    """Extract explicit device-purpose declarations into generic binding identities.
+
+    Every explicit declaration is retained as an identity/address/purpose fact.
+    Optional role and active-level metadata are added only when deterministically
+    known; their absence never causes the binding itself to be discarded.
+    """
+    model = str(plc_model or "").strip().upper()
+    result = []
+    seen = set()
+    for statement in re.split(r"[\n;；。]+", str(user_text or "")):
+        match = _DECLARED_IO_LINE_RE.fullmatch(statement)
+        if match is None:
+            continue
+        address = canonical_device(re.sub(r"\s+", "", match.group(1)).upper())
+        kind_match = re.match(r"[A-Z]+", address)
+        if kind_match is None:
+            continue
+        kind = kind_match.group()
+        digits = address[len(kind):]
+        if model == "FX3U" and kind in {"X", "Y"} and any(char not in "01234567" for char in digits):
+            continue
+        raw_value = match.group(2).strip()
+        label = _INPUT_QUALIFIER_RE.split(raw_value, maxsplit=1)[0].strip() or raw_value
+        role = canonical_signal_role(label)
+        identity = f"declared.{role or kind.casefold()}.{address}"
+        if identity in seen:
+            continue
+        seen.add(identity)
+        item = {
+            "binding_id": identity,
+            "kind": kind,
+            "address": address,
+            "label": label,
+            "name": label,
+            "source": "user_request",
+        }
+        if role:
+            item["role"] = role
+        if kind == "X":
+            item.update(confirmed_input_levels(raw_value))
+        result.append(item)
+    return result
+
+
+def merge_declared_bindings(rows, existing=(), declared=()):
+    """Merge Core-extracted declaration bindings against active I/O rows."""
+    active = {
+        canonical_device(str(row.get("address") or "").strip().upper())
+        for row in (rows or ())
+        if isinstance(row, dict) and row.get("address")
+    }
+    result = {}
+    for source in (existing or ()):
+        if not isinstance(source, dict) or not source.get("binding_id"):
+            continue
+        item = copy.deepcopy(source)
+        item["address"] = canonical_device(str(item.get("address") or "").strip().upper())
+        if item["address"] in active:
+            result[str(item["binding_id"])] = item
+
+    for source in (declared or ()):
+        if not isinstance(source, dict) or not source.get("binding_id"):
+            continue
+        item = copy.deepcopy(source)
+        item["address"] = canonical_device(str(item.get("address") or "").strip().upper())
+        if item["address"] not in active:
+            continue
+        same_role = [
+            key for key, value in result.items()
+            if item.get("role")
+            and value.get("role") == item.get("role")
+            and value.get("address") == item["address"]
+        ]
+        if len(same_role) == 1:
+            key = same_role[0]
+            merged = result[key]
+            for field in ("active_level", "inactive_level", "label", "name", "source"):
+                if field in item:
+                    merged[field] = copy.deepcopy(item[field])
+            result[key] = merged
+            continue
+        result[str(item["binding_id"])] = item
+    return [result[key] for key in sorted(result)]
 
 
 def binding_hint(parameter):
@@ -50,6 +201,11 @@ def binding_hint(parameter):
                 value = raw.get(key)
                 if isinstance(value, str) and 0 < len(value) <= 128:
                     result[key] = value
+            if "role" not in result:
+                identifier = str(parameter.get("id") or "").strip().casefold()
+                legacy = _ALIASES.get(identifier) or _QUESTION_ALIASES.get(identifier)
+                if legacy and legacy[1] == kind:
+                    result["role"] = legacy[0]
             return result
     identifier = str(parameter.get("id") or "").strip().casefold()
     if identifier in _ALIASES:
@@ -58,6 +214,17 @@ def binding_hint(parameter):
     if identifier in _QUESTION_ALIASES:
         role, kind = _QUESTION_ALIASES[identifier]
         return {"binding_id": "question_" + identifier, "role": role, "kind": kind}
+    # Read old polarity-only questions that predate typed bindings. A single
+    # explicit input reference identifies the point the user is qualifying;
+    # no purpose or input polarity is guessed from the question's wording.
+    name = str(parameter.get("name") or parameter.get("question") or "")
+    if re.search(r"极性|polarity|常[开開闭閉]|normally[ _-]+(?:open|closed)", name, re.I):
+        address = single_address(name, "X")
+        if address is not None:
+            identity = identifier or hashlib.sha256(name.encode("utf-8")).hexdigest()[:16]
+            if len(identity) > 110:
+                identity = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
+            return {"binding_id": "question_" + identity, "kind": "X"}
     return None
 
 
@@ -80,8 +247,25 @@ def confirmed_input_levels(value):
     """
     text = str(value or "").casefold()
     explicit = set()
-    for match in re.finditer(r"(?<!未)(?<!没)(?<!不)(?:按下|动作|有信号|押下)(?:时|時)?\s*(?:为|為|是|=|:|：)?\s*(on|off|1|0|接通|断开)(?![a-z0-9])", text):
-        explicit.add(1 if match[1] in {"on", "1", "接通"} else 0)
+    # Parse event-level statements for any input, not just a start/stop button.
+    # Negative states contribute the inverse level; contradictory statements
+    # stay unresolved rather than falling back to the physical-contact label.
+    state = (r"按下|动作|有信号|押下|到达[^，,。；;:：=\n]{0,20}?|"
+             r"检测到[^，,。；;:：=\n]{0,20}?|触发|报警|故障|信号有效|输入有效|复位")
+    pattern = (r"(?P<negative>没有|未曾|未|没|不|无)?(?P<state>" + state + r")"
+               r"(?:时|時)?\s*(?:信号|输入)?\s*(?:为|為|是|=|:|：)?\s*"
+               r"(?P<level>on|off|1|0|接通|断开)(?![a-z0-9])")
+    inactive = re.compile(r"(?:松开|松開|释放|解除报警|报警解除|无信号)(?:时|時)?\s*(?:为|為|是|=|:|：)?\s*(on|off|1|0|接通|断开)(?![a-z0-9])")
+    for match in inactive.finditer(text):
+        explicit.add(0 if match[1] in {"on", "1", "接通"} else 1)
+    # Don't parse the "报警" substring of "解除报警" a second time.
+    event_text = inactive.sub(" ", text)
+    for match in re.finditer(pattern, event_text):
+        level = 1 if match['level'] in {"on", "1", "接通"} else 0
+        explicit.add(1 - level if match['negative'] else level)
+    for match in re.finditer(r"\b(active|inactive|triggered|released)\s*(?:is|=|:)?\s*(on|off|1|0)\b", text):
+        level = 1 if match[2] in {"on", "1"} else 0
+        explicit.add(1 - level if match[1] in {"inactive", "released"} else level)
     for match in re.finditer(r"(?<![a-z])(?:active|level)[_ -](high|low)(?![a-z])", text):
         explicit.add(1 if match[1] == "high" else 0)
     if explicit:
@@ -152,6 +336,111 @@ def _bound_row(rows, identity, binding):
     return matches[0] if len(matches) == 1 else None
 
 
+def _saved_parameter_binding(parameter, bindings):
+    """An explicit binding identity wins over a legacy question-id fallback."""
+    hint = binding_hint(parameter)
+    saved = [item for item in (bindings or ()) if isinstance(item, dict)]
+    # Public generation parameters intentionally omit io_binding. Their stable
+    # source_parameter_id must still recover the existing owner, not produce a
+    # fresh question_<id> binding on every projection.
+    matches = [item for item in saved if hint and item.get("binding_id") == hint["binding_id"]]
+    if not matches:
+        identifier = str(parameter.get("id") or "").strip()
+        matches = [item for item in saved if identifier and item.get("source_parameter_id") == identifier]
+    return matches[0] if len(matches) == 1 else None
+
+
+def bound_parameter_is_removed(parameter, rows, bindings=()):
+    """Ignore retained answers for an explicitly removed, previously owned row.
+
+    A new explicit address is an edit, not a stale answer. This is shared by
+    validation and binding so deleting a row cannot either resurrect it or
+    leave a polarity-only answer blocking confirmation.
+    """
+    hint = binding_hint(parameter)
+    prior = _saved_parameter_binding(parameter, bindings)
+    if hint is None or prior is None or _bound_row(rows, hint["binding_id"], prior) is not None:
+        return False
+    value = str(parameter.get("value") or "")
+    if not _DEVICE.search(value):
+        return _is_io_attribute_answer(value)
+    address = single_address(value, hint["kind"])
+    old_address = single_address(prior.get("value", ""), hint["kind"]) or single_address(prior.get("address", ""), hint["kind"])
+    return address is not None and address == old_address
+
+
+def resolve_parameter_address(parameter, rows, bindings=()):
+    """Resolve an answer against its existing owner, not a model's default.
+
+    Address+polarity answers may allocate/edit an address. Polarity-only
+    answers reuse their current row or the one point named in the question.
+    Ambiguous/wrong-kind explicit addresses
+    cannot silently fall back to question wording or another row's label.
+    """
+    hint = binding_hint(parameter)
+    if hint is None or not parameter_uses_bound_address(parameter):
+        return None
+    value = str(parameter.get("value") or "")
+    if _DEVICE.search(value):
+        return single_address(value, hint["kind"])
+    if not _is_io_attribute_answer(value):
+        return None
+    rows = [row for row in (rows or ()) if isinstance(row, dict)]
+    saved = _saved_parameter_binding(parameter, bindings)
+    if saved is not None:
+        row = _bound_row(rows, hint["binding_id"], saved)
+        return single_address(canonical_device(row.get("address")), hint["kind"]) if row else None
+
+    owner = hint.get("row_id") or hint["binding_id"]
+    owned = [row for row in rows if row.get("binding_id") == owner or row.get("row_id") == owner]
+    if owned or hint.get("row_id"):
+        return single_address(canonical_device(owned[0].get("address")), hint["kind"]) if len(owned) == 1 else None
+
+    name = str(parameter.get("name") or parameter.get("question") or "")
+    if _DEVICE.search(name):
+        address = single_address(name, hint["kind"])
+        # This is a displayed, single-point confirmation question, not a
+        # suggestion from options/defaults. A saved owner above always wins.
+        return address
+    else:
+        matches = [row for row in rows
+                   if str(row.get("kind") or re.sub(r"\d+$", "", str(row.get("address") or ""))).upper() in {hint["kind"], "特殊"}
+                   and _row_matches(row, hint, name)]
+    if len(matches) != 1:
+        return None
+    return single_address(canonical_device(matches[0].get("address")), hint["kind"])
+
+
+
+def bind_known_question_rows(rows, parameters):
+    """Anchor a displayed one-point polarity question before the first answer.
+
+    This records identity only: no value/default is accepted, no I/O is added,
+    and no label or address is changed. A subsequent edit of the review table
+    can therefore keep its owner even before the first specification save.
+    """
+    rows, parameters = copy.deepcopy(rows), copy.deepcopy(parameters)
+    for parameter in parameters:
+        hint = binding_hint(parameter)
+        if hint is None or hint["kind"] != "X" or hint.get("row_id"):
+            continue
+        name = str(parameter.get("name") or "")
+        if not re.search(r"极性|polarity|常[开開闭閉]|normally[ _-]+(?:open|closed)", name, re.I):
+            continue
+        address = single_address(name, hint["kind"])
+        matches = [row for row in rows if isinstance(row, dict)
+                   and address is not None and canonical_device(row.get("address")) == address]
+        if len(matches) != 1:
+            continue
+        row = matches[0]
+        owner = row.get("binding_id") or hint["binding_id"]
+        row.setdefault("binding_id", owner)
+        if owner != hint["binding_id"]:
+            hint["row_id"] = owner
+        parameter["io_binding"] = hint
+    return rows, parameters
+
+
 def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
     """Bind confirmed answers on a copy; return rows, remaining params, provenance.
 
@@ -180,13 +469,33 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
         if not isinstance(item, dict):
             remaining.append(item)
             continue
+        from plc.specification.parameters import parameter_is_applicable
+        if not parameter_is_applicable(item, parameters):
+            remaining.append(item)
+            continue
         name = str(item.get("name") or "").strip()
         identifier = str(item.get("id") or "").strip()
         hint = binding_hint(item)
+        if not isinstance(item.get("io_binding"), dict):
+            # A generation projection drops parameter metadata but retains
+            # binding provenance. Recover that identity before using the
+            # legacy question fallback; never create a second binding for it.
+            saved = _saved_parameter_binding(item, previous.values())
+            restored_hint = binding_hint({"io_binding": saved}) if saved else None
+            if restored_hint is not None:
+                item["io_binding"] = restored_hint
+                hint = restored_hint
         if identifier in protected_ids or not name or (hint is None and not _question_is_address(name)):
             remaining.append(item)
             continue
-        address = single_address(item.get("value", ""), hint.get("kind") if hint else None)
+        if hint is not None and not parameter_uses_bound_address(item):
+            # Device-associated semantic choices stay as confirmed parameters;
+            # they are not I/O-address edits and must never be consumed here.
+            remaining.append(item)
+            continue
+        if hint is not None and bound_parameter_is_removed(item, original_rows, previous.values()):
+            continue
+        address = resolve_parameter_address(item, original_rows, previous.values()) if hint else single_address(item.get("value", ""))
         if address is None:
             remaining.append(item)
             continue
@@ -198,7 +507,8 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
         item["value"] = _DEVICE.sub(lambda _m: address, str(item["value"]), count=1)
         prior = previous.get(hint["binding_id"])
         if prior:
-            prior_address = single_address(prior.get("value", ""), hint["kind"])
+            prior_address = (single_address(prior.get("value", ""), hint["kind"])
+                             or single_address(prior.get("address", ""), hint["kind"]))
             linked_row = _bound_row(original_rows, hint["binding_id"], prior)
             if address == prior_address and linked_row is not None:
                 # A combined answer such as "X1，常闭" remains editable for its
@@ -214,7 +524,10 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
                 # operator audit, not in the active generation specification.
                 continue
         pending.append((hint, item, address))
-        if re.search(r"常[开闭閉]|normally\s+(?:open|closed)|\b(?:NO|NC)\b|上升沿|下降沿|rising|falling|edge", str(item.get("value")), re.I):
+        if _is_io_attribute_answer(item.get("value")) or isinstance(item.get("required_when"), dict):
+            # Preserve an exact recovered identity through reanalysis even if
+            # the next question's display wording no longer contains an address.
+            item.setdefault("io_binding", copy.deepcopy(hint))
             remaining.append(item)
 
     claimed = set()
@@ -253,12 +566,15 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
             # Existing labels (including an intentionally empty one) belong to
             # the I/O table. Reconfirmation must not restore a model's label.
             row.setdefault("label", _purpose_label(hint))
+        owns_purpose = row.get("binding_id") == identity or bool(explicit_row)
+        purpose = (str(row.get("label") or "").strip() if owns_purpose else
+                   str(hint.get("label", (previous.get(identity) or {}).get("label", ""))).strip())
         if isinstance(item.get("io_binding"), dict):
-            item["io_binding"]["label"] = str(row.get("label") or "").strip()
+            item["io_binding"]["label"] = purpose
         claimed.add(index)
         previous[identity] = {**hint, "address": address,
                               "source_parameter_id": str(item.get("id") or ""),
-                              "name": name, "label": str(row.get("label") or "").strip(),
+                              "name": name, "label": purpose,
                               "value": str(item.get("value") or ""),
                               "source": item.get("source") or "user",
                               "row_binding_id": row.get("binding_id") or identity}
@@ -278,7 +594,11 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
         if row is not None:
             binding["address"] = str(row.get("address") or "").strip().upper()
             binding["row_binding_id"] = row.get("binding_id") or identity
-            binding["label"] = str(row.get("label") or "").strip()
+            # Several semantic owners can reference one physical point. Only
+            # the actual owner or an explicitly linked row inherits its label.
+            # An accidental address collision must not rename another signal.
+            if row.get("binding_id") == identity or binding.get("row_id"):
+                binding["label"] = str(row.get("label") or "").strip()
             hint = binding_hint({"id": binding.get("source_parameter_id")})
             if not binding.get("role") and hint and hint["kind"] == binding.get("kind"):
                 binding["role"] = hint["role"]
@@ -317,12 +637,18 @@ def restore_bound_choices(questions, rows, bindings):
             continue
         value = str(binding.get("value") or "")
         address = str(row.get("address") or "").strip().upper()
-        if not single_address(value) or not single_address(address):
+        if not single_address(address):
             continue
-        question["value"] = _DEVICE.sub(lambda _m: address, value, count=1)
+        if single_address(value):
+            question["value"] = _DEVICE.sub(lambda _m: address, value, count=1)
+        elif _is_io_attribute_answer(value):
+            question["value"] = value
+        else:
+            continue
         question["source"] = binding.get("source") or "previous"
         if isinstance(question.get("io_binding"), dict):
-            question["io_binding"]["label"] = str(row.get("label") or "").strip()
+            owns_row = row.get("binding_id") == binding["binding_id"] or binding.get("row_id")
+            question["io_binding"]["label"] = str((row if owns_row else binding).get("label") or "").strip()
     return result
 
 
@@ -338,6 +664,16 @@ def generation_io_snapshot(spec, *, protected_ids=()):
         return result
     parameters = result.get("parameters")
     bindings = result.get("io_bindings")
+    if isinstance(parameters, list):
+        from plc.specification.parameters import parameter_is_applicable
+        disabled = {p.get("id") for p in parameters if isinstance(p, dict)
+                    and p.get("id") and not parameter_is_applicable(p, parameters)}
+        parameters = [p for p in parameters if not isinstance(p, dict) or p.get("id") not in disabled]
+        if isinstance(bindings, list):
+            bindings = [b for b in bindings if not isinstance(b, dict) or b.get("source_parameter_id") not in disabled]
+        referenced = {b.get("address") for b in (bindings or []) if isinstance(b, dict)}
+        result["io_table"] = [r for r in result["io_table"] if not isinstance(r, dict)
+                              or r.get("source_parameter_id") not in disabled or r.get("address") in referenced]
     rows, remaining, bindings, _ = bind_answers(
         result["io_table"], parameters if isinstance(parameters, list) else [],
         bindings if isinstance(bindings, list) else [], protected_ids=protected_ids,

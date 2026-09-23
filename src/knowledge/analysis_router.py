@@ -5,9 +5,11 @@ from dataclasses import dataclass
 import re
 from collections.abc import Mapping
 from typing import Callable
+from plc.device_identity import DEVICE_TOKEN_RE, device_tokens
 
 _TOKEN = re.compile(r"(?<![A-Za-z0-9_])[A-Za-z][A-Za-z0-9_]*(?![A-Za-z0-9_])")
-_DEVICE = re.compile(r"(?<![A-Za-z0-9_])(?:SM|SD|[XYMDTCSVZ])\d+(?![A-Za-z0-9_])", re.I)
+
+_DEVICE = DEVICE_TOKEN_RE
 _NEGATED = re.compile(
     r"(?:不要|不用|不使用|不采用|没有(?!(?:[^，,。；;\n]{0,24})(?:型号|参数|地址|信息))|无需|不需要|不涉及|不包含|不是|不比较|不讨论|禁止|without\b|do not\b|don't\b|no\b)"
     r"(?:(?!改用|改为|改成|而是|但是|\bbut\b|\binstead\b)[^，,。；;\n])*", re.I,
@@ -109,11 +111,11 @@ def route_analysis_request(user_request, confirmed_context=None, *, analysis_mod
         topics.append("analog")
     if re.search(r"高速计数|\bHSC\b|\bDHS(?:CS|CR|Z)\b", text, re.I):
         topics.append("hsc")
-    if re.search(r"(?:多|三|两|二|四|\d+)泵|泵[^。\n]{0,12}轮换|\bpump\s+(?:rotation|alternation)\b", text, re.I):
+    if re.search(r"泵[^。\n]{0,12}(?:轮换|交替)|(?:轮换|交替)[^。\n]{0,12}泵|\bpump\s+(?:rotation|alternation)\b", text, re.I):
         topics.append("pump")
     return AnalysisRoute(
         mode, reason, tuple(topics), families, tuple(opcodes),
-        tuple(dict.fromkeys(item.upper() for item in _DEVICE.findall(text))), text,
+        tuple(dict.fromkeys(device_tokens(text))), text,
     )
 
 

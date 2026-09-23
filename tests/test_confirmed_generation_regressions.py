@@ -10,7 +10,7 @@ from application.generation_agent import (
     _strict_generation_projection,
 )
 from plc.specification.confirmed import build_review_draft
-from model_runtime.provider import ModelRequest, TextDelta, UserMessage
+from model_runtime.provider import ModelRequest, TextDelta, Usage, UserMessage
 from plc.validation import validate_ladder_candidate_structure
 
 
@@ -25,7 +25,8 @@ class _DuplicateJsonProvider:
             yield TextDelta(' {"first":{"text":"a } brace"},"items":[1,')
             yield TextDelta('2]} {"second":"full rewrite"}')
             self.reached_tail = True
-            yield TextDelta('{"third":"must never be consumed"}')
+            yield TextDelta('{"third":"must never become the candidate"}')
+            yield Usage(10, 20, 30, 12)
         finally:
             self.closed = True
 
@@ -64,7 +65,92 @@ def _bad_analysis():
     }
 
 
-def test_agent_b_stream_stops_after_first_complete_json_object():
+def test_implementation_semantics_are_structure_only_and_core_projects_user_constraints():
+    from plc.specification.approach import normalize_approach
+
+    selected = normalize_approach({
+        "approach_id": "semantic_contract",
+        "name": "structured plan",
+        "implementation_semantics": [
+            {"kind": "structure", "status": "required", "value": "direct_logic"},
+            {"kind": "structure", "status": "forbidden", "value": "set_reset_latch"},
+            # Low-level model output is outside Agent-A's semantic vocabulary.
+            {"kind": "opcode", "status": "required", "value": "MOV"},
+            {"kind": "device", "status": "required", "value": "D99"},
+        ],
+        "explicit_user_constraints": {
+            "required_opcodes": ["DMOV"],
+            "required_devices": ["D10"],
+            "instruction_instances": [
+                {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]},
+            ],
+        },
+    })
+    assert selected["implementation_semantics"] == [
+        {"kind": "structure", "status": "required", "value": "direct_logic"},
+        {"kind": "structure", "status": "forbidden", "value": "set_reset_latch"},
+    ]
+    contract = selected["generation_contract"]
+    assert contract["required_structures"] == ["direct_logic"]
+    assert contract["forbidden_structures"] == ["set_reset_latch"]
+    assert contract["required_opcodes"] == ["DMOV"]
+    assert contract["required_devices"] == ["D10"]
+    assert contract["instruction_instances"] == [
+        {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
+    ]
+
+
+def test_core_extracts_low_level_constraints_without_agent_a_repeating_them():
+    raw = {
+        "summary": "structured plan",
+        "approaches": [{
+            "approach_id": "a1",
+            "name": "one plan",
+            "generation_guide": "",
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "direct_logic"},
+                {"kind": "opcode", "status": "required", "value": "MOV"},
+                {"kind": "device", "status": "required", "value": "D99"},
+                {"kind": "instruction_instance", "status": "required",
+                 "opcode": "MOV", "operands": ["K1", "D99"]},
+            ],
+        }],
+        "missing_info": [], "suggested_io": {}, "hardware_config": {}, "assumptions": [],
+    }
+    normalized = _normalize_analysis_result(
+        raw,
+        plc_model="FX3U",
+        user_text=(
+            "明确使用 SFTL M10 M100 K8 K1。"
+            "指定 D10 作为状态寄存器。"
+        ),
+    )
+    selected = normalized["approaches"][0]
+    assert selected["implementation_semantics"] == [
+        {"kind": "structure", "status": "required", "value": "direct_logic"},
+    ]
+    contract = selected["generation_contract"]
+    assert contract["required_opcodes"] == ["SFTL"]
+    assert contract["required_devices"] == ["D10"]
+    assert contract["instruction_instances"] == [
+        {"opcode": "SFTL", "operands": ["M10", "M100", "K8", "K1"]}
+    ]
+    assert "MOV" not in contract["required_opcodes"]
+    assert "D99" not in contract["required_devices"]
+
+
+def test_comparison_text_does_not_become_a_fixed_instruction_instance():
+    from plc.specification.explicit_constraints import extract_explicit_user_constraints
+
+    result = extract_explicit_user_constraints(
+        "比较 SFTL M10 M100 K8 K1 和 WSFL 方案，暂未指定具体指令。",
+        "FX3U",
+    )
+    assert result["constraints"]["instruction_instances"] == []
+    assert result["constraints"]["required_opcodes"] == []
+
+
+def test_agent_b_frames_first_json_but_consumes_trailing_usage():
     base = _DuplicateJsonProvider()
     provider = _FirstJSONObjectProvider(base)
     request = ModelRequest.from_messages([UserMessage("json")], stream=True)
@@ -75,7 +161,9 @@ def test_agent_b_stream_stops_after_first_complete_json_object():
     assert json.loads(content) == {"first": {"text": "a } brace"}, "items": [1, 2]}
     assert "second" not in content
     assert base.closed is True
-    assert base.reached_tail is False
+    assert base.reached_tail is True
+    assert "third" not in content
+    assert [event.reasoning_tokens for event in events if isinstance(event, Usage)] == [12]
 
 
 def test_agent_b_prompt_makes_input_or_and_single_json_rules_explicit():
@@ -174,7 +262,8 @@ def test_agent_b_prompt_is_confirmed_spec_scoped_not_generic_model_dump(monkeypa
     }
     prompt = _build_agent_b_prompt(projected, "FX3U")
 
-    assert json.dumps(projected, ensure_ascii=False, separators=(",", ":")) in prompt
+    actual, _ = json.JSONDecoder().raw_decode(prompt.split("# Confirmed project specification\n", 1)[1])
+    assert actual == {**projected, "schema_version": 4}
     assert "FX3U-4DA" not in prompt
     assert "FX3U-2HSY-ADP" not in prompt
     assert "Machine-readable output schema" not in prompt
@@ -188,15 +277,17 @@ def test_agent_a_cannot_drop_verbatim_classification_or_promote_guessed_contract
     )
     draft = build_review_draft(normalized)
 
-    assert draft["engineering_context"]["requests"][0]["text"] == requirement
+    assert draft["intent_context"]["requests"][0]["text"] == requirement
     assert "【当前用户明确要求（逐字保留）】" not in draft["summary"]
 
     contract = draft["selected_approach"]["generation_contract"]
     assert contract["required_opcodes"] == []
     assert contract["required_devices"] == []
-    assert "hardware_counter" not in contract["required_structures"]
+    # Structures are selected-approach semantics and all follow the same
+    # provenance policy. Counter structures no longer have a keyword-only
+    # exception that silently strips them from Agent A's selected plan.
     assert "data_register_counter" not in contract["required_structures"]
-    assert contract["required_structures"] == ["direct_logic"]
+    assert contract["required_structures"] == ["hardware_counter", "direct_logic"]
 
 
 def test_agent_b_receives_structured_approach_contract_but_not_agent_a_prose():
@@ -211,13 +302,17 @@ def test_agent_b_receives_structured_approach_contract_but_not_agent_a_prose():
     selected = projected["selected_approach"]
 
     assert selected["approach_id"] == "model_guess"
-    assert selected["generation_contract"]["required_structures"] == ["direct_logic"]
+    assert selected["generation_contract"]["required_structures"] == [
+        "hardware_counter",
+        "direct_logic",
+    ]
     assert selected["name"] == draft["selected_approach"]["name"]
     assert selected["description"] == draft["selected_approach"]["description"]
     assert selected["generation_guide"] == draft["selected_approach"]["generation_guide"]
     assert selected["implementation_preferences"]["enforce"] is False
     assert "reasoning_content" not in selected
-    assert projected["engineering_context"]["proposals"][0]["source"] == "model_proposal"
+    assert "engineering_context" not in projected
+    assert "decision_receipt" not in projected
 
 
 def test_agent_a_low_level_opcode_survives_only_when_user_explicitly_names_it():
@@ -243,3 +338,165 @@ def test_counter_structure_is_kept_when_request_really_is_counter_control():
     contract = draft["selected_approach"]["generation_contract"]
 
     assert "hardware_counter" in contract["required_structures"]
+
+
+def _structure_only_analysis():
+    return {
+        "summary": "固定方案",
+        "approaches": [{
+            "approach_id": "fixed_shift",
+            "name": "固定结构",
+            "description": "按确认结构实现",
+            "pros": "",
+            "cons": "",
+            "generation_guide": "",
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "direct_logic"},
+            ],
+        }],
+        "missing_info": [],
+        "suggested_io": {},
+        "hardware_config": {},
+        "assumptions": [],
+    }
+
+
+def _legacy_instruction_instance_analysis(instances):
+    return {
+        "summary": "legacy fixed instruction",
+        "approaches": [{
+            "approach_id": "legacy_fixed_shift",
+            "name": "legacy fixed shift",
+            "description": "legacy compatibility",
+            "pros": "",
+            "cons": "",
+            "generation_guide": "",
+            "generation_contract": {
+                "required_opcodes": ["SFTL"],
+                "instruction_instances": instances,
+            },
+        }],
+        "missing_info": [],
+        "suggested_io": {},
+        "hardware_config": {},
+        "assumptions": [],
+    }
+
+
+def test_exact_instruction_instance_survives_agent_a_confirmation_to_agent_b():
+    from application.confirmed_generation_context import build_confirmed_generation_context
+    from knowledge.structured_facts import structured_fact_targets
+    from plc.specification.approach import format_contract_summary
+    from plc.specification.provenance import confirm_context
+
+    instance = {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
+    normalized = _normalize_analysis_result(
+        _structure_only_analysis(),
+        plc_model="FX3U",
+        user_text="明确使用 SFTL M10 M100 K128 K1 实现移位。",
+    )
+    draft = build_review_draft(normalized)
+    assert draft["selected_approach"]["generation_contract"]["instruction_instances"] == [instance]
+    assert "SFTL M10 M100 K128 K1" in format_contract_summary(draft["selected_approach"])
+
+    confirmed = confirm_context(draft)
+    projected = _strict_generation_projection(confirmed)
+    assert projected["selected_approach"]["generation_contract"]["instruction_instances"] == [instance]
+
+    context = build_confirmed_generation_context(
+        confirmed, "FX3U", knowledge_builder=lambda *args, **kwargs: "",
+    )
+    assert context.confirmed_spec["selected_approach"]["generation_contract"]["instruction_instances"] == [instance]
+
+    targets = structured_fact_targets("", context.confirmed_spec)
+    exact = next(row for row in targets["instructions"] if row["opcode"] == "SFTL")
+    assert exact["operands"] == instance["operands"]
+    assert exact["instance_source"] == "generation_contract"
+
+    prompt = _build_agent_b_prompt(projected, "FX3U", context=context)
+    payload, _ = json.JSONDecoder().raw_decode(
+        prompt.split("# Confirmed project specification\n", 1)[1]
+    )
+    assert payload["selected_approach"]["generation_contract"]["instruction_instances"] == [instance]
+    assert "opcode 与 operands 必须逐项原样使用" in prompt
+
+
+def test_pinned_reanalysis_preserves_instances_until_explicitly_cleared():
+    from plc.specification.provenance import confirm_context
+
+    instance = {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
+    first = _normalize_analysis_result(
+        _structure_only_analysis(),
+        plc_model="FX3U",
+        user_text="明确使用 SFTL M10 M100 K128 K1。",
+    )
+    previous = confirm_context(build_review_draft(first))
+
+    omitted = _structure_only_analysis()
+    normalized = _normalize_analysis_result(
+        omitted, plc_model="FX3U", user_text="只修改停止保持参数。", confirmed_spec=previous,
+    )
+    draft = build_review_draft(normalized, previous)
+    assert draft["selected_approach"]["generation_contract"]["instruction_instances"] == [instance]
+
+    cleared = _structure_only_analysis()
+    normalized_clear = _normalize_analysis_result(
+        cleared, plc_model="FX3U", user_text="清除原固定指令实例，重新开放具体调用。", confirmed_spec=previous,
+    )
+    cleared_draft = build_review_draft(normalized_clear, previous)
+    assert cleared_draft["selected_approach"]["generation_contract"]["instruction_instances"] == []
+
+
+def test_model_proposed_instruction_instance_stays_exact_as_selected_preference():
+    from application.confirmed_generation_context import build_confirmed_generation_context
+    from knowledge.structured_facts import structured_fact_targets
+    from plc.specification.approach import format_contract_summary
+    from plc.specification.provenance import confirm_context
+
+    instance = {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
+    normalized = _normalize_analysis_result(
+        _legacy_instruction_instance_analysis([instance]),
+        plc_model="FX3U",
+        user_text="做一个三路移位方案，具体调用由方案确定。",
+    )
+    draft = build_review_draft(normalized)
+
+    # Agent-A implementation detail is not silently promoted to a user-authored
+    # hard constraint, but the selected implementation still retains it exactly.
+    assert draft["selected_approach"]["generation_contract"]["instruction_instances"] == []
+    assert draft["selected_approach"]["implementation_preferences"]["instruction_instances"] == [instance]
+    summary = format_contract_summary(draft["selected_approach"])
+    assert "方案指令实例" in summary
+    assert "SFTL M10 M100 K128 K1" in summary
+
+    confirmed = confirm_context(draft)
+    projected = _strict_generation_projection(confirmed)
+    assert projected["selected_approach"]["implementation_preferences"]["instruction_instances"] == [instance]
+
+    context = build_confirmed_generation_context(
+        confirmed, "FX3U", knowledge_builder=lambda *args, **kwargs: "",
+    )
+    targets = structured_fact_targets("", context.confirmed_spec)
+    exact = next(row for row in targets["instructions"] if row["opcode"] == "SFTL")
+    assert exact["operands"] == instance["operands"]
+    assert exact["instance_source"] == "implementation_preferences"
+
+    prompt = _build_agent_b_prompt(projected, "FX3U", context=context)
+    payload, _ = json.JSONDecoder().raw_decode(
+        prompt.split("# Confirmed project specification\n", 1)[1]
+    )
+    assert payload["selected_approach"]["implementation_preferences"]["instruction_instances"] == [instance]
+
+
+def test_compact_prompt_does_not_duplicate_instruction_contract_lane():
+    from application.compact_protocol import compact_capability_prompt
+
+    spec = {
+        "selected_approach": {
+            "generation_contract": {
+                "required_opcodes": ["MOV"],
+                "instruction_instances": [{"opcode": "MOV", "operands": ["K1", "D0"]}],
+            }
+        }
+    }
+    assert compact_capability_prompt("FX3U", spec) == ""

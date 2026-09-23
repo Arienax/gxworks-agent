@@ -248,7 +248,7 @@ def format_repair_response(
                 {"role": "user", "content": json.dumps(request, ensure_ascii=False, separators=(",", ":"))},
             ],
             model_name=model_name,
-            effort=effort,
+            effort=None,
             stream=True,
             max_retries=0,
             options={"response_format": _patch_schema(base_sha)},

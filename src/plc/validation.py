@@ -184,22 +184,6 @@ APP_INSTR_EXACT_OPERAND_COUNTS = {
 }
 APP_INSTR_OPCODE_RE = re.compile(APP_INSTR_OPCODE_PATTERN, re.IGNORECASE)
 
-# Operand layouts that can be checked without guessing run-time register
-# values.  Each value is (frequency operand indexes, pulse-output index,
-# optional direction-output index).
-FX3U_PULSE_INSTRUCTION_LAYOUTS = {
-    "PLSY": ((0,), 2, None),
-    "DPLSY": ((0,), 2, None),
-    "PLSR": ((0,), 3, None),
-    "DPLSR": ((0,), 3, None),
-    "PLSV": ((0,), 1, None),
-    "DRVI": ((1,), 2, 3),
-    "DDRVI": ((1,), 2, 3),
-    "DRVA": ((1,), 2, 3),
-    "DDRVA": ((1,), 2, 3),
-    "ZRN": ((0,), 3, None),
-    "DSZR": ((), 2, 3),
-}
 FX3U_BUILTIN_PULSE_OUTPUT_MAX_HZ = {
     0: 100_000,
     1: 100_000,
@@ -426,7 +410,7 @@ def _validate_writable_device(value, path, plc_model="FX3U"):
 def _validate_app_instruction_write_targets(
     opcode, operands, path, plc_model="FX3U"
 ):
-    spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode)
+    spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu=normalize_plc_model(plc_model))
     indexes = spec.write_indexes if spec is not None else ()
     for operand_idx in indexes:
         if operand_idx >= len(operands):
@@ -490,33 +474,83 @@ def _parse_k_value(value):
     return int(match.group(1)) if match else None
 
 
-def _validate_shift_operands(opcode, operands, path, plc_model="FX3U"):
-    if opcode not in {"SFTL", "SFTLP"} or len(operands) < 4:
+def _validate_instruction_boundaries(spec, operands, path, plc_model="FX3U"):
+    """Enforce source-verified operand boundaries from the instruction contract."""
+
+    if spec is None:
         return
-    if normalize_plc_model(plc_model) != "FX3U":
-        return
-    source = _parse_bit_device(operands[0], plc_model)
-    destination = _parse_bit_device(operands[1], plc_model)
-    destination_length = _parse_k_value(operands[2])
-    source_length = _parse_k_value(operands[3])
-    if not all((source, destination, destination_length, source_length)):
-        return
-    if source[0] != destination[0]:
+    coverage = spec.contract_coverage()
+    if coverage.get("numeric_and_memory_boundaries") != "source_verified":
         return
 
-    source_range = range(source[1], source[1] + source_length)
-    destination_range = range(
-        destination[1], destination[1] + destination_length
-    )
-    if set(source_range) & set(destination_range):
-        _fail(
-            f"{path}.operands",
-            f"{opcode} source range overlaps its shift destination range. "
-            "On FX3U/FX3UC this causes operation error K6710. Use a "
-            "non-overlapping source buffer or, for cyclic pump rotation, "
-            "use an integer state pointer instead",
+    for rule in spec.disjoint_bit_ranges:
+        indexes = (
+            rule.source_operand_index,
+            rule.destination_operand_index,
+            rule.destination_length_operand_index,
+            rule.source_length_operand_index,
         )
+        if any(index >= len(operands) for index in indexes):
+            continue
+        source = _parse_bit_device(operands[rule.source_operand_index], plc_model)
+        destination = _parse_bit_device(
+            operands[rule.destination_operand_index], plc_model
+        )
+        destination_length = _parse_k_value(
+            operands[rule.destination_length_operand_index]
+        )
+        source_length = _parse_k_value(
+            operands[rule.source_length_operand_index]
+        )
+        if not all((source, destination, destination_length, source_length)):
+            continue
+        if rule.same_device_prefix_only and source[0] != destination[0]:
+            continue
+        source_range = range(source[1], source[1] + source_length)
+        destination_range = range(
+            destination[1], destination[1] + destination_length
+        )
+        if set(source_range) & set(destination_range):
+            error_suffix = (
+                f" This causes operation error {rule.error_code}."
+                if rule.error_code else ""
+            )
+            _fail(
+                f"{path}.operands",
+                f"{spec.mnemonic} source range overlaps its destination range."
+                f"{error_suffix} Use non-overlapping bit ranges.",
+            )
 
+    for rule in spec.numeric_operand_boundaries:
+        if rule.operand_index >= len(operands):
+            continue
+        value = operands[rule.operand_index]
+        if not isinstance(value, str):
+            continue
+        match = re.fullmatch(r"K([+-]?\d+)", value.strip(), re.IGNORECASE)
+        if match is None:
+            continue
+        number = int(match.group(1))
+        checked = abs(number) if rule.absolute else number
+        if rule.minimum is not None and checked < rule.minimum:
+            invalid = True
+        elif rule.maximum is not None and checked > rule.maximum:
+            invalid = True
+        else:
+            invalid = False
+        if not invalid:
+            continue
+        if rule.minimum is not None and rule.maximum is not None:
+            limit = f"between {rule.minimum} and {rule.maximum}"
+        elif rule.minimum is not None:
+            limit = f">= {rule.minimum}"
+        else:
+            limit = f"<= {rule.maximum}"
+        unit = f" {rule.unit}" if rule.unit else ""
+        _fail(
+            f"{path}.operands[{rule.operand_index}]",
+            f"{spec.mnemonic} {rule.label} constant must be {limit}{unit}",
+        )
 
 def _validate_comments(comments, path, plc_model="FX3U"):
     _require_dict(comments, path)
@@ -651,7 +685,7 @@ def _validate_element(
                 "be encoded as APP_INSTR",
             )
 
-        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode)
+        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu=normalize_plc_model(plc_model))
         if spec is None:
             if require_catalogued_instructions:
                 fail_opcode(
@@ -666,13 +700,10 @@ def _validate_element(
                 )
             model = normalize_plc_model(plc_model)
             if not spec.supports_cpu(model):
-                if model == "FX5U" and opcode == "ZRN":
-                    fail_opcode("ZRN is not supported by FX5U; use DSZR")
-                if model == "FX3U" and (
-                    opcode in {"DRVTBL", "DRVMUL"} or opcode.startswith("MC_")
-                ):
+                replacement = spec.replacement_for_cpu(model)
+                if replacement:
                     fail_opcode(
-                        f"{opcode} is an FX5U instruction and is not supported by FX3U",
+                        f"{opcode} is not supported by {model}; use {replacement}"
                     )
                 supported = ", ".join(sorted(spec.cpu_support)) or "another CPU family"
                 fail_opcode(
@@ -682,7 +713,7 @@ def _validate_element(
                 _fail(f"{path}.operands", _app_instr_arity_error(spec, len(operands)))
 
         model = normalize_plc_model(plc_model)
-        _validate_shift_operands(opcode, operands, path, plc_model)
+        _validate_instruction_boundaries(spec, operands, path, plc_model)
         for operand_idx, operand in enumerate(operands):
             if not isinstance(operand, str):
                 continue
@@ -809,97 +840,119 @@ def _validate_rung(
             )
 
 
-def _validate_m8029_placement(rungs, plc_model="FX3U"):
+def _verified_completion_semantics(output, plc_model):
+    if not isinstance(output, dict) or output.get("type") != "APP_INSTR":
+        return None
+    opcode = str(output.get("opcode", "") or "").strip().upper()
+    spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(
+        opcode, cpu=normalize_plc_model(plc_model)
+    )
+    if (
+        spec is None
+        or spec.completion is None
+        or spec.contract_coverage().get("completion_ownership")
+        != "source_verified"
+    ):
+        return None
+    return spec.completion
+
+
+def _completion_owners(rung, plc_model):
+    owners = {}
+    for branch_idx, branch in enumerate(rung.get("branches", []) or []):
+        outputs = branch.get("outputs", []) or []
+        for output_idx, output in enumerate(outputs):
+            completion = _verified_completion_semantics(output, plc_model)
+            if completion is None:
+                continue
+            owners.setdefault(completion.device, []).append(
+                {
+                    "branch_idx": branch_idx,
+                    "output_idx": output_idx,
+                    "output_count": len(outputs),
+                }
+            )
+    return owners
+
+
+def _validate_instruction_completion_placement(rungs, plc_model="FX3U"):
+    """Validate placement using verified per-instruction completion ownership."""
+
     model = normalize_plc_model(plc_model)
-    completion_device = "M8029" if model == "FX3U" else "SM8029"
-    motion_opcodes = {
-        "PLSY", "DPLSY", "PLSV", "DRVI", "DDRVI",
-        "DRVA", "DDRVA", "DVIT", "ZRN", "DSZR",
-    }
     for rung_idx, rung in enumerate(rungs):
-        branches = rung.get("branches", [])
-        motion_branch_indexes = {
-            branch_idx
-            for branch_idx, branch in enumerate(branches)
-            if any(
-                output.get("type") == "APP_INSTR"
-                and str(output.get("opcode", "")).upper() in motion_opcodes
-                for output in branch.get("outputs", [])
-            )
-        }
-        m8029_branch_indexes = {
-            branch_idx
-            for branch_idx, branch in enumerate(branches)
-            if any(
-                str(item.get("address", "")).upper() == completion_device
-                for item in branch.get("inputs", [])
-            )
-        }
-        if not m8029_branch_indexes:
-            continue
-        path = f"$.rungs[{rung_idx}]"
-        if not motion_branch_indexes:
-            previous = rungs[rung_idx - 1] if rung_idx else {}
-            previous_has_motion = any(
-                output.get("type") == "APP_INSTR"
-                and str(output.get("opcode", "")).upper() in motion_opcodes
-                for branch in previous.get("branches", [])
-                for output in branch.get("outputs", [])
-            )
-            if previous_has_motion:
+        branches = rung.get("branches", []) or []
+        owners_by_device = _completion_owners(rung, model)
+        previous_owners = (
+            _completion_owners(rungs[rung_idx - 1], model)
+            if rung_idx else {}
+        )
+        candidate_devices = set(owners_by_device) | set(previous_owners)
+        for completion_device in sorted(candidate_devices):
+            completion_branch_indexes = {
+                branch_idx
+                for branch_idx, branch in enumerate(branches)
+                if any(
+                    str(item.get("address", "")).upper() == completion_device
+                    for item in branch.get("inputs", [])
+                )
+            }
+            if not completion_branch_indexes:
+                continue
+            path = f"$.rungs[{rung_idx}]"
+            owners = owners_by_device.get(completion_device, [])
+            if not owners:
+                if previous_owners.get(completion_device):
+                    _fail(
+                        f"{path}.branches",
+                        f"{completion_device} completion handling must be a "
+                        "parallel branch in the same rung as its owning "
+                        "application instruction",
+                    )
+                continue
+
+            owner_branch_indexes = {
+                item["branch_idx"] for item in owners
+            }
+            if owner_branch_indexes & completion_branch_indexes:
                 _fail(
                     f"{path}.branches",
-                    f"{completion_device} completion handling must be a parallel branch in "
-                    "the same rung as the immediately preceding application "
-                    "instruction",
+                    f"{completion_device} must be a parallel completion branch, "
+                    "not a series contact in its owning instruction branch",
                 )
-            continue
-        if motion_branch_indexes & m8029_branch_indexes:
-            _fail(
-                f"{path}.branches",
-                f"{completion_device} must be a parallel completion branch, not a series "
-                "contact in the application-instruction branch",
-            )
-        for branch_idx in motion_branch_indexes:
-            outputs = branches[branch_idx].get("outputs", [])
-            motion_positions = [
-                output_idx
-                for output_idx, output in enumerate(outputs)
-                if output.get("type") == "APP_INSTR"
-                and str(output.get("opcode", "")).upper() in motion_opcodes
-            ]
-            if motion_positions and motion_positions[-1] != len(outputs) - 1:
-                _fail(
-                    f"{path}.branches[{branch_idx}].outputs",
-                    "the motion instruction must be the final output in its "
-                    "branch so the parallel M8029 check immediately follows it",
-                )
-        motion_inputs = {
-            json.dumps(
-                {key: value for key, value in item.items() if key != "label"},
-                ensure_ascii=False,
-                sort_keys=True,
-            )
-            for branch_idx in motion_branch_indexes
-            for item in branches[branch_idx].get("inputs", [])
-        }
-        duplicated_inputs = {
-            json.dumps(
-                {key: value for key, value in item.items() if key != "label"},
-                ensure_ascii=False,
-                sort_keys=True,
-            )
-            for branch_idx in m8029_branch_indexes
-            for item in branches[branch_idx].get("inputs", [])
-            if str(item.get("address", "")).upper() != completion_device
-        } & motion_inputs
-        if duplicated_inputs:
-            _fail(
-                f"{path}.shared_inputs",
-                f"{completion_device} completion handling must branch after shared enable "
-                "contacts; move the common contacts to shared_inputs",
-            )
 
+            for owner in owners:
+                if owner["output_idx"] != owner["output_count"] - 1:
+                    _fail(
+                        f"{path}.branches[{owner['branch_idx']}].outputs",
+                        "an instruction with same-rung completion semantics must "
+                        "be the final output in its branch",
+                    )
+
+            owner_inputs = {
+                json.dumps(
+                    {key: value for key, value in item.items() if key != "label"},
+                    ensure_ascii=False,
+                    sort_keys=True,
+                )
+                for branch_idx in owner_branch_indexes
+                for item in branches[branch_idx].get("inputs", [])
+            }
+            duplicated_inputs = {
+                json.dumps(
+                    {key: value for key, value in item.items() if key != "label"},
+                    ensure_ascii=False,
+                    sort_keys=True,
+                )
+                for branch_idx in completion_branch_indexes
+                for item in branches[branch_idx].get("inputs", [])
+                if str(item.get("address", "")).upper() != completion_device
+            } & owner_inputs
+            if duplicated_inputs:
+                _fail(
+                    f"{path}.shared_inputs",
+                    f"{completion_device} completion handling must branch after "
+                    "shared enable contacts; move common contacts to shared_inputs",
+                )
 
 def _flatten_input_elements(elements):
     for element in elements or []:
@@ -1198,15 +1251,24 @@ def _validate_fx3u_pulse_hardware(rungs, confirmed_spec):
                 if output.get("type") != "APP_INSTR":
                     continue
                 opcode = str(output.get("opcode", "") or "").strip().upper()
-                layout = FX3U_PULSE_INSTRUCTION_LAYOUTS.get(opcode)
-                if layout is None:
+                spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu="FX3U")
+                capability = (
+                    spec.pulse_output
+                    if spec is not None
+                    and spec.contract_coverage().get("hardware_applicability")
+                    == "source_verified"
+                    else None
+                )
+                if capability is None:
                     continue
                 path = (
                     f"$.rungs[{rung_idx}].branches[{branch_idx}]"
                     f".outputs[{output_idx}]"
                 )
                 operands = output.get("operands", [])
-                frequency_indexes, pulse_output_index, direction_output_index = layout
+                frequency_indexes = capability.frequency_operand_indexes
+                pulse_output_index = capability.pulse_output_operand_index
+                direction_output_index = capability.direction_output_operand_index
                 required_index = max(
                     (pulse_output_index,)
                     + frequency_indexes
@@ -1312,14 +1374,6 @@ def _validate_fx3u_pulse_hardware(rungs, confirmed_spec):
                             f"{opcode} constant frequency {frequency} Hz "
                             f"exceeds the confirmed Y{pulse_index} "
                             f"range (absolute value <= {max_hz} Hz)",
-                        )
-                if opcode == "ZRN":
-                    creep_speed = _parse_decimal_k_constant(operands[1])
-                    if creep_speed is not None and not 10 <= abs(creep_speed) <= 32_767:
-                        _fail(
-                            f"{path}.operands[1]",
-                            "ZRN creep speed constant must be between 10 and "
-                            "32767 Hz",
                         )
 
 
@@ -1555,7 +1609,7 @@ def validate_ladder_full(
     _validate_unique_coils(data["rungs"])
     _validate_timer_semantics(data, plc_model)
     _validate_same_scan_set_reset_toggle(data["rungs"])
-    _validate_m8029_placement(data["rungs"], plc_model)
+    _validate_instruction_completion_placement(data["rungs"], plc_model)
     if plc_model == "FX3U":
         _validate_fx3u_pulse_hardware(data["rungs"], confirmed_spec)
         _validate_fx3u_analog_instruction_hardware(data["rungs"], confirmed_spec)

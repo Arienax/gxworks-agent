@@ -34,6 +34,12 @@ def main(argv=None):
         parser.error("Use a port from 1024 to 65535")
     from .app import create_app
     import uvicorn
+    from knowledge.scope import runtime_status
+    knowledge = runtime_status()
+    if knowledge["status"] != "available":
+        import json
+        print("PLC knowledge unavailable in this Web runtime: " + json.dumps(knowledge, ensure_ascii=True), file=sys.stderr)
+        print("Run build-web.bat to update the source .venv, or rebuild the packaged application. Runtime: " + sys.executable, file=sys.stderr)
     token = os.environ.get("PLC_WEB_OPERATOR_TOKEN") or secrets.token_urlsafe(32)
     agent_token = os.environ.get("PLC_WEB_AGENT_TOKEN") or secrets.token_urlsafe(32)
     origin = "http://127.0.0.1:" + str(args.port)

@@ -2,8 +2,7 @@ import copy
 import json
 
 import application.model_api as api
-import agent_runtime.agent as plc_agent
-from ui.desktop.workers import SimulatorTestPlanThread, ToolAgentThread
+from application.planning import SimulatorTestPlanWorkflow
 from model_runtime.provider import ReasoningDelta, TextDelta
 from plc.ir import build_plc_ir
 
@@ -101,7 +100,7 @@ def test_simulator_test_suite_api_streams_reasoning_and_json(monkeypatch):
     assert progress[-1] == "正在解析模型输出：清理并校验 JSON 结构"
 
 
-def test_simulator_test_plan_thread_forwards_all_streams(monkeypatch):
+def test_simulator_test_plan_workflow_forwards_all_streams(monkeypatch):
     suite = _suite()
 
     def fake_generate(_context, **kwargs):
@@ -131,81 +130,15 @@ def test_simulator_test_plan_thread_forwards_all_streams(monkeypatch):
             return {"suite": normalized, "source": source}
 
     store = Store()
-    worker = SimulatorTestPlanThread("task-plan", store, "p1", "v1")
-    reasoning = []
-    content = []
-    progress = []
-    completed = []
-    failed = []
-    worker.thinking_updated.connect(
-        lambda task_id, token: reasoning.append((task_id, token))
-    )
-    worker.content_updated.connect(
-        lambda task_id, token: content.append((task_id, token))
-    )
-    worker.progress_updated.connect(
-        lambda task_id, message: progress.append((task_id, message))
-    )
-    worker.completed.connect(
-        lambda task_id, result: completed.append((task_id, result))
-    )
-    worker.failed.connect(lambda task_id, error: failed.append((task_id, error)))
-
-    worker.run()
-
-    assert failed == []
-    assert reasoning == [("task-plan", "正在选择关键路径。")]
-    assert content == [("task-plan", '{"schema_version":1}')]
-    messages = [message for task_id, message in progress if task_id == "task-plan"]
+    events = []
+    worker = SimulatorTestPlanWorkflow("task-plan", store, "p1", "v1", on_event=lambda kind, payload: events.append((kind, payload)))
+    result = worker.run()
+    assert [(kind, data["text"]) for kind, data in events if kind == "reasoning"] == [("reasoning", "正在选择关键路径。")]
+    assert [(kind, data["text"]) for kind, data in events if kind == "content"] == [("content", '{"schema_version":1}')]
+    messages = [data["message"] for kind, data in events if kind == "progress"]
     assert "AI 正在生成仿真测试方案（流式）" in messages
     assert "正在解析模型输出：清理并校验 JSON 结构" in messages
     assert "正在解析模型输出：规范化测试步骤与时间约束" in messages
     assert "正在解析模型输出：保存版本绑定测试方案" in messages
-    assert len(completed) == 1
+    assert result["suite"] == store.saved
     assert store.saved["tests"][0]["name"] == "启动输出"
-
-
-def test_tool_agent_thread_forwards_reasoning_content_and_progress(monkeypatch):
-    def fake_run(_text, **kwargs):
-        kwargs["on_progress"]("AI 正在判断需要使用的工具（第 1 轮）")
-        kwargs["on_reasoning_chunk"]("需要读取当前版本。")
-        kwargs["on_progress"]("正在执行工具：get_current_program_info")
-        kwargs["on_content_chunk"]("当前版本为 v1。")
-        return plc_agent.AgentRunResult(
-            content="当前版本为 v1。",
-            rounds=1,
-        )
-
-    monkeypatch.setattr(plc_agent, "run_tool_agent", fake_run)
-    worker = ToolAgentThread("task-tool", "当前版本？", context={})
-    reasoning = []
-    content = []
-    progress = []
-    completed = []
-    failed = []
-    worker.thinking_updated.connect(
-        lambda task_id, token: reasoning.append((task_id, token))
-    )
-    worker.content_updated.connect(
-        lambda task_id, token: content.append((task_id, token))
-    )
-    worker.progress_updated.connect(
-        lambda task_id, message: progress.append((task_id, message))
-    )
-    worker.agent_done.connect(
-        lambda task_id, payload: completed.append((task_id, payload))
-    )
-    worker.agent_failed.connect(
-        lambda task_id, error: failed.append((task_id, error))
-    )
-
-    worker.run()
-
-    assert failed == []
-    assert reasoning == [("task-tool", "需要读取当前版本。")]
-    assert content == [("task-tool", "当前版本为 v1。")]
-    assert [message for _task_id, message in progress] == [
-        "AI 正在判断需要使用的工具（第 1 轮）",
-        "正在执行工具：get_current_program_info",
-    ]
-    assert completed[0][1]["content"] == "当前版本为 v1。"

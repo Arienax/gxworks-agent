@@ -1,0 +1,277 @@
+{
+  "schema_version": 1,
+  "vendor": "mitsubishi",
+  "entries": [
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "SFTL",
+        "SFTLP"
+      ],
+      "disjoint_bit_ranges": [
+        {
+          "source_operand_index": 0,
+          "destination_operand_index": 1,
+          "destination_length_operand_index": 2,
+          "source_length_operand_index": 3,
+          "same_device_prefix_only": true,
+          "error_code": "K6710"
+        }
+      ],
+      "verified_fields": [
+        "numeric_and_memory_boundaries"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "reference": "SFTL/SFTLP source/destination bit ranges must not overlap; operation error K6710"
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "PLSY",
+        "DPLSY"
+      ],
+      "completion": {
+        "device": "M8029",
+        "placement": "same_rung_parallel_branch"
+      },
+      "pulse_output": {
+        "frequency_operand_indexes": [
+          0
+        ],
+        "pulse_output_operand_index": 2
+      },
+      "verified_fields": [
+        "completion_ownership",
+        "hardware_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_positioning_k",
+          "reference": "positioning completion M8029 and PLSY pulse-output operand table"
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "PLSR",
+        "DPLSR"
+      ],
+      "completion": {
+        "device": "M8029",
+        "placement": "same_rung_parallel_branch"
+      },
+      "pulse_output": {
+        "frequency_operand_indexes": [
+          0
+        ],
+        "pulse_output_operand_index": 3
+      },
+      "verified_fields": [
+        "completion_ownership",
+        "hardware_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_positioning_k",
+          "reference": "positioning completion M8029 and PLSR pulse-output operand table"
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "PLSV"
+      ],
+      "completion": {
+        "device": "M8029",
+        "placement": "same_rung_parallel_branch"
+      },
+      "pulse_output": {
+        "frequency_operand_indexes": [
+          0
+        ],
+        "pulse_output_operand_index": 1
+      },
+      "verified_fields": [
+        "completion_ownership",
+        "hardware_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_positioning_k",
+          "reference": "positioning completion M8029 and PLSV pulse-output operand table"
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "DRVI",
+        "DDRVI"
+      ],
+      "completion": {
+        "device": "M8029",
+        "placement": "same_rung_parallel_branch"
+      },
+      "pulse_output": {
+        "frequency_operand_indexes": [
+          1
+        ],
+        "pulse_output_operand_index": 2,
+        "direction_output_operand_index": 3
+      },
+      "verified_fields": [
+        "completion_ownership",
+        "hardware_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_positioning_k",
+          "reference": "positioning completion M8029 and DRVI pulse/direction operand table"
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "DRVA",
+        "DDRVA"
+      ],
+      "completion": {
+        "device": "M8029",
+        "placement": "same_rung_parallel_branch"
+      },
+      "pulse_output": {
+        "frequency_operand_indexes": [
+          1
+        ],
+        "pulse_output_operand_index": 2,
+        "direction_output_operand_index": 3
+      },
+      "verified_fields": [
+        "completion_ownership",
+        "hardware_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_positioning_k",
+          "reference": "positioning completion M8029 and DRVA pulse/direction operand table"
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "DVIT"
+      ],
+      "completion": {
+        "device": "M8029",
+        "placement": "same_rung_parallel_branch"
+      },
+      "verified_fields": [
+        "completion_ownership"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_positioning_k",
+          "reference": "M8029 completion semantics for positioning instructions"
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ZRN"
+      ],
+      "completion": {
+        "device": "M8029",
+        "placement": "same_rung_parallel_branch"
+      },
+      "pulse_output": {
+        "frequency_operand_indexes": [
+          0
+        ],
+        "pulse_output_operand_index": 3
+      },
+      "numeric_operand_boundaries": [
+        {
+          "operand_index": 1,
+          "minimum": 10,
+          "maximum": 32767,
+          "absolute": true,
+          "unit": "Hz",
+          "label": "creep speed"
+        }
+      ],
+      "verified_fields": [
+        "completion_ownership",
+        "hardware_applicability",
+        "numeric_and_memory_boundaries"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_positioning_k",
+          "reference": "section 6.3.1 B-110 ZRN operands; section 4.7.4 B-81..83 M8029 completion"
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "DSZR"
+      ],
+      "completion": {
+        "device": "M8029",
+        "placement": "same_rung_parallel_branch"
+      },
+      "pulse_output": {
+        "frequency_operand_indexes": [],
+        "pulse_output_operand_index": 2,
+        "direction_output_operand_index": 3
+      },
+      "verified_fields": [
+        "completion_ownership",
+        "hardware_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_positioning_k",
+          "reference": "DSZR positioning operand table and M8029 completion semantics"
+        }
+      ]
+    },
+    {
+      "cpu": "FX5U",
+      "forms": [
+        "ZRN"
+      ],
+      "unsupported_replacement": "DSZR",
+      "sources": [
+        {
+          "reference": "ZRN is FX3U-only in the instruction catalogue; DSZR is the iQ-F homing form used by the existing validator"
+        }
+      ]
+    },
+    {
+      "cpu": "FX5U",
+      "forms": [
+        "DRVTBL",
+        "DRVMUL"
+      ],
+      "completion": {
+        "device": "SM8029",
+        "placement": "same_rung_parallel_branch"
+      },
+      "sources": [
+        {
+          "reference": "existing iQ-F review rule migrated as advisory capability metadata"
+        }
+      ]
+    }
+  ]
+}

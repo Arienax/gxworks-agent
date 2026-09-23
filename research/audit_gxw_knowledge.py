@@ -20,6 +20,22 @@ def digest(raw):
     return {"size": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
 
 
+def _manifest_path(value, *, base=ROOT, label="evidence"):
+    """Resolve a repository-contained POSIX manifest path on every host OS."""
+    if not isinstance(value, str) or not value or "\\" in value:
+        raise ValueError(f"{label} path must be repository-relative POSIX syntax")
+    relative = Path(value)
+    first = relative.parts[0] if relative.parts else ""
+    if relative.is_absolute() or ":" in first:
+        raise ValueError(f"{label} path must not be absolute or drive-qualified")
+    resolved = (Path(base) / relative).resolve()
+    try:
+        resolved.relative_to(ROOT.resolve())
+    except ValueError as error:
+        raise ValueError(f"{label} path escapes the repository") from error
+    return resolved
+
+
 def verify_evidence_manifests():
     """Verify all nested legacy/current manifests, including separate screenshots."""
     reports = []
@@ -30,9 +46,12 @@ def verify_evidence_manifests():
         if not archive_ref or "files" not in manifest:
             continue
         archive_name = archive_ref["path"] if isinstance(archive_ref, dict) else archive_ref
-        archive_path = ROOT / archive_name
+        try:
+            archive_path = _manifest_path(archive_name, label="archive")
+        except ValueError:
+            archive_path = _manifest_path(archive_name, base=path.parent, label="archive")
         if not archive_path.is_file():
-            archive_path = path.parent / archive_name
+            archive_path = _manifest_path(archive_name, base=path.parent, label="archive")
         archive_hash = digest(archive_path.read_bytes())["sha256"]
         expected_hash = archive_ref.get("sha256") if isinstance(archive_ref, dict) else manifest.get("archive_sha256")
         if expected_hash and archive_hash != expected_hash:

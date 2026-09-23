@@ -72,6 +72,7 @@ class ProjectService:
         project = self.raw_project(project_id)
         keys = ("id", "name", "created_at", "updated_at", "plc_model", "target_mode", "effort", "active_version_id")
         result = {k: project.get(k) for k in keys}
+        result["effort"] = None  # retired project field; preserve stored history
         result["version_count"] = len(project["versions"])
         if detail:
             result["confirmed_spec"] = public(project.get("confirmed_spec"))

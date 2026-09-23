@@ -170,7 +170,7 @@ def structural_repair_response(repair_payload, model_name, effort, *, mode="part
     response = api._request_model(
         messages,
         model_name=model_name,
-        effort=effort,
+        effort=None,
         stream=True,
         options={"response_format": native},
         response_contract=api.LADDER_RESPONSE,

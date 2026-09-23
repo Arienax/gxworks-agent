@@ -44,7 +44,7 @@ class InspectionWorkflow(Workflow):
         self.program_ir = copy.deepcopy(program_ir) if isinstance(program_ir, dict) else None
         self.confirmed_spec = copy.deepcopy(confirmed_spec)
         self.conversation_history = copy.deepcopy(conversation_history or [])
-        self.effort = effort
+        self.effort = None  # retired workflow preference
         self.deep = bool(deep)
 
     @staticmethod
@@ -115,7 +115,7 @@ class InspectionWorkflow(Workflow):
                     return model_call(run_multi_agent_specialist,
                         role,
                         payload,
-                        effort=self.effort,
+                        effort=None,
                         raise_errors=True,
                     )
 

@@ -10,6 +10,7 @@ from plc.specification.approach import (
     validate_ladder_against_selected_approach,
 )
 from plc.specification.confirmed import build_review_draft, canonicalize_confirmed_spec, validate_spec_draft
+from plc.specification.legacy_migration import migrate_legacy_approach
 from knowledge.patterns import classify_request
 from plc.validation import PLCJsonValidationError, validate_ladder_full
 
@@ -398,13 +399,19 @@ def test_legacy_prose_scheme_does_not_retroactively_invalidate_saved_version():
         ),
     }
 
-    inferred = normalize_approach(legacy_approach)["generation_contract"]
+    fresh = normalize_approach(legacy_approach)["generation_contract"]
+    assert fresh["required_structures"] == []
+    assert not fresh.get("unverified_constraints")
+
+    inferred = normalize_approach(
+        migrate_legacy_approach(legacy_approach)
+    )["generation_contract"]
     assert inferred["required_structures"] == []
     assert "bit_state_machine" in inferred["unverified_constraints"]["required_structures"]
     assert inferred["required_devices"] == []
 
-    # Historical confirmed specs did not persist generation_contract.  They
-    # remain readable even if their old generated ladder used other state bits.
+    # Historical confirmed specs remain readable; prose alone never becomes a
+    # hard validation gate in the fresh validation path.
     assert validate_ladder_full(
         _direct_logic(),
         "FX3U",
@@ -501,12 +508,11 @@ def test_selected_approach_participates_in_pattern_routing():
     assert "pattern_c" in classification["matched_ids"]
 
 
-def test_legacy_m_bit_state_plan_detects_substituted_state_device():
-    selected = _approach(
-        "状态机法",
-        "用M1待机、M2运行、M3满料；状态转移用SET/RST",
-        {},
-    )
+def test_legacy_m_bit_state_plan_requires_explicit_migration_for_prose_recovery():
+    selected = {
+        "name": "状态机法",
+        "generation_guide": "用M1待机、M2运行、M3满料；状态转移用SET/RST",
+    }
     ladder = _register_state_machine()
     features = inspect_ladder_features(ladder)
 
@@ -514,14 +520,19 @@ def test_legacy_m_bit_state_plan_detects_substituted_state_device():
     issues = validate_ladder_against_selected_approach(
         ladder, {"selected_approach": selected}
     )
-    # Legacy prose alone remains visible but cannot fabricate a hard gate.
     assert issues == []
-    normalized = normalize_approach(selected)
-    assert "bit_state_machine" in normalized["generation_contract"]["unverified_constraints"]["required_structures"]
-    assert normalized["generation_guide"] == selected["generation_guide"]
+
+    fresh = normalize_approach(selected)
+    assert not fresh["generation_contract"].get("unverified_constraints")
+    migrated = normalize_approach(migrate_legacy_approach(selected))
+    assert "bit_state_machine" in migrated["generation_contract"]["unverified_constraints"]["required_structures"]
+    assert migrated["generation_guide"] == selected["generation_guide"]
+
     # The same choice, explicitly recorded as a structure, is still enforced.
     selected["generation_contract"] = {"required_structures": ["bit_state_machine"]}
-    issues = validate_ladder_against_selected_approach(ladder, {"selected_approach": selected})
+    issues = validate_ladder_against_selected_approach(
+        ladder, {"selected_approach": selected}
+    )
     assert any("M/S位状态机" in item for item in issues)
 
 

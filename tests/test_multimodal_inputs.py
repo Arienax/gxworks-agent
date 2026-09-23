@@ -1,16 +1,12 @@
 import base64
 import os
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import application.model_api as api
-import ui.desktop.main_window as main
 from model_runtime.provider import ImageAttachment, UserMessage
-from ui.desktop.qt import QApplication
 from storage.session import SessionStore
 
 
-_APPLICATION = QApplication.instance() or QApplication([])
 _PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 )
@@ -70,39 +66,3 @@ def test_generation_preparation_attaches_images_only_to_current_user_message(
     assert messages[0]["role"] == "system"
     assert isinstance(history[-1]["content"], str)
     assert "images" not in history[-1]
-
-
-def test_workbench_shows_and_persists_selected_image(monkeypatch, tmp_path):
-    workspace = tmp_path / "workspace"
-    real_store = SessionStore(base_dir=workspace, legacy_dir=tmp_path)
-    project = real_store.create_project("视觉需求")
-    monkeypatch.setattr(
-        main,
-        "SessionStore",
-        lambda *args, **kwargs: SessionStore(
-            base_dir=workspace,
-            legacy_dir=tmp_path,
-        ),
-    )
-    monkeypatch.setattr(
-        main,
-        "get_model_profile",
-        lambda *_args, **_kwargs: {
-            "model": "deepseek-v4-flash-vision-exp",
-            "capabilities": {"multimodal": True},
-        },
-    )
-    source = tmp_path / "控制柜.png"
-    source.write_bytes(_PNG_BYTES)
-
-    window = main._IndustrialWorkbenchUI()
-    window._refresh_projects(project["id"])
-    assert window._add_composer_image_paths([source]) is True
-    assert not window.image_attachment_scroll.isHidden()
-
-    records, images = window._persist_composer_images(project["id"])
-
-    assert records[0]["filename"] == "控制柜.png"
-    assert images[0].media_type == "image/png"
-    assert images[0].data == _PNG_BYTES
-    window.close()

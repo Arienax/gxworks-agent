@@ -9,7 +9,6 @@ import application.analysis_results as analysis_results
 import application.generation_context as generation_context
 import knowledge.retriever as retriever
 from knowledge.evidence import context_manifest
-from shared.context_policy import context_policy_scope
 
 
 @pytest.mark.parametrize("streaming", [False, True])
@@ -95,12 +94,19 @@ def test_open_retrieval_uses_separate_query_and_preserves_fact_lane(monkeypatch)
 
 
 def test_generation_does_not_gain_design_retrieval(monkeypatch):
+    import knowledge.structured_facts as structured_facts
+
     def unexpected(*args, **kwargs):
         raise AssertionError("Generation must not retrieve designs")
     monkeypatch.setattr(retriever, "retrieve_design_knowledge", unexpected)
     monkeypatch.setattr(retriever, "retrieve_knowledge", lambda *args, **kwargs: [_fact()])
+    monkeypatch.setattr(
+        structured_facts, "structured_fact_targets",
+        lambda *args, **kwargs: {"version": "test", "instructions": [], "devices": [], "errors": []},
+    )
     monkeypatch.setattr(retriever._core, "_format_result_block", lambda item: item["text"])
-    assert "SFTL fact" in retriever.build_knowledge_context("SFTL", task_type="generate", include_design=True)
+    assert "SFTL fact" in retriever.build_knowledge_context(
+        "generic generation fact", task_type="generate", include_design=True)
 
 
 def test_application_passes_analysis_policy_to_retriever(monkeypatch):
@@ -109,9 +115,8 @@ def test_application_passes_analysis_policy_to_retriever(monkeypatch):
         seen.append(kwargs)
         return "FACT_EVIDENCE"
     monkeypatch.setattr(retriever, "build_knowledge_context", capture)
-    with context_policy_scope("adaptive"):
-        context = generation_context._build_knowledge_context(
-            "FX3U SFTL M8012", task_type="analysis", include_design=False)
+    context = generation_context._build_knowledge_context(
+        "FX3U SFTL M8012", task_type="analysis", include_design=False)
     assert "FACT_EVIDENCE" in context
     assert seen[0]["include_design"] is False
     assert seen[0]["design_query"] is None
@@ -124,7 +129,6 @@ def test_analysis_knowledge_defaults_never_infer_design(monkeypatch, options):
         seen.append(kwargs)
         return "FACT_EVIDENCE"
     monkeypatch.setattr(retriever, "build_knowledge_context", capture)
-    with context_policy_scope("adaptive"):
-        generation_context._build_knowledge_context(
-            "FX3U 比较 SFTL 和 WSFL，其他结构由你设计", task_type="analysis", **options)
+    generation_context._build_knowledge_context(
+        "FX3U 比较 SFTL 和 WSFL，其他结构由你设计", task_type="analysis", **options)
     assert seen[0]["include_design"] is False

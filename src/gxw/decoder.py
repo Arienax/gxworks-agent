@@ -72,7 +72,11 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         default=None,
         help="logical *.Program.pou name",
     )
+    parser.add_argument("--list-programs", action="store_true", help="List program bodies without modifying the project")
     args = parser.parse_args(list(argv) if argv is not None else None)
+    if args.list_programs:
+        print("\n".join(GXWProjectResolver.from_file(args.gxw).program_pou_names()))
+        return 0
     program = read_structured_program(args.gxw, logical_name=args.program)
     print("\n".join(describe_program(program)))
     return 0

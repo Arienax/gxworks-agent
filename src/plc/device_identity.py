@@ -11,8 +11,24 @@ import copy
 import re
 from collections.abc import Mapping
 
-_SIMPLE = re.compile(r"(SM|SD|[XYMDTCSVZ])(\d+)", re.I)
+DEVICE_PREFIXES = (
+    "ER", "SM", "SD", "TS", "TC", "CS", "CC",
+    "X", "Y", "M", "S", "T", "C", "D", "R", "V", "Z", "P", "I",
+)
+_DEVICE_PREFIX_PATTERN = "(?:" + "|".join(DEVICE_PREFIXES) + ")"
+DEVICE_TOKEN_RE = re.compile(
+    r"(?<![A-Za-z0-9_])" + _DEVICE_PREFIX_PATTERN
+    + r"\d+(?:\.\d+)?(?![A-Za-z0-9_])",
+    re.I,
+)
+_SIMPLE = re.compile("(" + _DEVICE_PREFIX_PATTERN + r")(\d+)", re.I)
 _INDEXED = re.compile(r"((?:SM|SD|[XYMDTCS])\d+)([VZ]\d+)", re.I)
+
+
+def device_tokens(value):
+    """Return explicit Mitsubishi device tokens in source order."""
+    text = str(value or "")
+    return tuple(match.group(0).upper() for match in DEVICE_TOKEN_RE.finditer(text))
 
 
 def canonical_device(value):

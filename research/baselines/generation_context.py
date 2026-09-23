@@ -14,7 +14,7 @@ import sys
 from plc.specification.approach import normalize_approach
 from shared.paths import resource_path
 from knowledge.patterns import assemble_prompt, build_workflow_prompt, classify_request
-from shared.context_policy import (
+from research.baselines.context_policy import (
     audit_section, manual_lookup_decision, resolve_context_policy, select_base_prompt,
 )
 

@@ -1,7 +1,6 @@
 """One analysis prompt assembler shared by streaming and non-streaming calls."""
 from __future__ import annotations
 
-import copy
 import json
 import re
 from collections.abc import Mapping
@@ -11,16 +10,16 @@ from knowledge.analysis_router import AnalysisRoute, route_analysis_request
 from application.prompts import (
     ANALYSIS_SYSTEM_PROMPT, ANALYSIS_DIRECT_PROMPT, ANALYSIS_PINNED_PROMPT, ANALYSIS_DESIGN_PROMPT,
     ANALYSIS_VFD_PROMPT, ANALYSIS_MOTION_PROMPT, ANALYSIS_MOTION_FAMILY_PROMPTS,
-    ANALYSIS_PUMP_PROMPT,
 )
 
 _DEVICE = re.compile(r"(?<![A-Za-z0-9_])(?:SM|SD|[XYMDTCSVZ])\d+(?![A-Za-z0-9_])", re.I)
-_PRIVATE = {"reasoning_content", "raw_response", "raw_attempts", "_provider_reasoning", "_provider_fields"}
 
 # Transport metadata for the shared Core binding, not an inferred PLC rule.
 _IO_BINDING_PROMPT = """# I/O purpose metadata
-每个地址确认问题另带 io_binding，例如 {"binding_id":"device.start","kind":"X","label":"启动按钮"}；binding_id 稳定且区分不同控制对象，沿用已有绑定。kind 是地址类别，不在此预填未知地址。
-label 是独立的简短用途名称，不是 question：不含提问、选项、触点极性推导或实现解释；用途未知可省略或留空，不为注释新增确认问题。question 保留完整确认问题，实际地址/极性仍由用户回答。已有 I/O 用途以用户编辑的值为准；suggested_io 中的说明也只写用途名称。"""
+地址或输入极性确认问题用 io_binding 标识同一物理点：binding_id 为稳定标识，kind 为地址类别，label 为独立用途名称；已有 row_id 时沿用。已知地址只确认极性时，答案不必重复地址；仅涉及寄存器数值含义的参数不当作地址选择。
+当控制语义明确时同时写 role，使用稳定机器语义而不是 label 推断，例如 start、stop、output、interlock；同一 binding 在后续轮次沿用已有 role。role 是控制语义身份，label 只是人类可读用途/注释，两者不得互相替代。未知 role 不猜测。
+label 是独立的简短用途名称，不是 question：不含提问、选项、触点极性推导或实现解释；用途未知可省略或留空，不为注释新增确认问题。question 保留完整确认问题，只询问尚未提供的地址或极性。已有 I/O 用途以用户编辑的值为准；suggested_io 中的说明也只写用途名称。
+参数可另带 semantic_key（例如 transport.mode）、value_kind（text/choice/number/boolean）和 unit；id 是稳定问题标识，不由问题措辞改名。硬件参数用 hardware.<Core参数ID>，普通工艺参数使用自身命名空间；省略元数据仍保留原参数。"""
 
 
 def _address_notes(value, requested, result):
@@ -71,12 +70,8 @@ def _baseline_for_analysis(value):
     """Remove presentation/retrieval duplication, not engineering decisions."""
     if not isinstance(value, Mapping):
         return str(value or "").strip()
-    baseline = {key: copy.deepcopy(child) for key, child in value.items()
-                if key not in _PRIVATE | {"approaches"} and not str(key).startswith("_")}
-    context = baseline.get("engineering_context")
-    if isinstance(context, dict):
-        context.pop("proposals", None)
-        context.pop("analysis_evidence", None)
+    from plc.specification.provenance import confirmed_spec_fields
+    baseline = confirmed_spec_fields(value)
     return json.dumps(baseline, ensure_ascii=False, separators=(",", ":"))
 
 
@@ -102,6 +97,7 @@ def assemble_analysis_prompt(user_request, *, plc_model, confirmed_context=None,
             spec = getattr(resolution, "spec", None)
             if spec is None:
                 continue
+            from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, InstructionResolution
             instruction_facts[opcode] = {
                 "base_mnemonic": getattr(resolution, "base_mnemonic", opcode),
                 "min_operands": spec.min_operands,
@@ -110,6 +106,8 @@ def assemble_analysis_prompt(user_request, *, plc_model, confirmed_context=None,
                 "cpu_support": sorted(spec.cpu_support),
                 "notes": spec.notes,
             }
+            if isinstance(resolution, InstructionResolution) and DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode) is spec:
+                instruction_facts[opcode].update(DEFAULT_INSTRUCTION_REGISTRY.describe_contract(opcode, cpu=plc_model))
     if instruction_facts:
         profile["instruction_facts"] = instruction_facts
     targets = [*route.opcodes, *profile.get("special_devices", {})]
@@ -126,8 +124,6 @@ def assemble_analysis_prompt(user_request, *, plc_model, confirmed_context=None,
         deltas.append(ANALYSIS_MOTION_PROMPT)
         deltas.extend(ANALYSIS_MOTION_FAMILY_PROMPTS[name] for name in route.motion_families
                       if name in ANALYSIS_MOTION_FAMILY_PROMPTS)
-    if "pump" in route.topics:
-        deltas.append(ANALYSIS_PUMP_PROMPT)
     mode_prompt = ANALYSIS_DESIGN_PROMPT if route.include_design else ANALYSIS_DIRECT_PROMPT
     if route.mode == "pinned":
         mode_prompt += "\n\n" + ANALYSIS_PINNED_PROMPT

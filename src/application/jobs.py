@@ -65,10 +65,9 @@ class JobContext:
             excluded = [item for item in sections if isinstance(item, dict) and item.get("status") == "excluded"]
             retrieval = [item for item in sections if isinstance(item, dict)
                          and str(item.get("section") or "").startswith("manual_chunk:")]
-            policy = data.get("policy") if isinstance(data.get("policy"), dict) else {}
             messages = data.get("messages") if isinstance(data.get("messages"), list) else []
             diagnostics.emit(
-                "context_audit", stage="model_request", policy=policy.get("name"),
+                "context_audit", stage="model_request",
                 context_request_index=data.get("request_index"),
                 message_count=len(messages), message_chars=data.get("message_text_chars"),
                 context_section_count=len(sections), included_section_count=len(included),
@@ -255,6 +254,7 @@ class JobManager:
             from plc.specification.provenance import handoff_snapshot
             generation_handoff = handoff_snapshot(
                 project_confirmed_specification(confirmed_spec), stage="generate",
+                decision_receipt_id=project_snapshot.get("confirmed_decision_receipt_id"),
                 evidence={"stage": "generate", "status": "not_recorded", "records": []},
             )
         generation_handoff["confirmed_spec_sha256"] = (
@@ -359,8 +359,7 @@ class JobManager:
             snapshot = initial.get("snapshot", {})
         with diagnostics.diagnostic_scope(self.state_dir, job_id,
                 kind=initial.get("kind"), project_id=snapshot.get("project_id"),
-                version_id=snapshot.get("version_id"),
-                policy=(snapshot.get("context_policy") or {}).get("name")) as capture:
+                version_id=snapshot.get("version_id")) as capture:
             try:
                 return self._run_recorded(job_id, worker)
             except BaseException as error:

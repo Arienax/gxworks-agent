@@ -31,6 +31,22 @@ from gxw.structured_pou_writer import serialize_structured_pou
 from gxw.project_writer import write_new_file
 
 
+def _manifest_path(base: Path, value: str, label: str) -> Path:
+    """Resolve only repository-contained POSIX paths stored in corpus manifests."""
+    if not isinstance(value, str) or not value or "\\" in value:
+        raise ValueError(f"{label} path must use repository-relative POSIX syntax")
+    relative = Path(value)
+    first = relative.parts[0] if relative.parts else ""
+    if relative.is_absolute() or ":" in first:
+        raise ValueError(f"{label} path must not be absolute or drive-qualified")
+    resolved = (base / relative).resolve()
+    try:
+        resolved.relative_to(ROOT.resolve())
+    except ValueError as error:
+        raise ValueError(f"{label} path escapes the repository") from error
+    return resolved
+
+
 def independent_cfb(raw: bytes) -> dict:
     """olefile has its own FAT/MiniFAT/tree reader; it imports no gxw code.
 
@@ -269,7 +285,7 @@ def inputs(paths):
             base = (path.parent / manifest.get("base", ".")).resolve()
             for case in manifest["cases"]:
                 source = case["source"]
-                source_path = base / source["path"]
+                source_path = _manifest_path(base, source["path"], "corpus source")
                 if "member" in source:
                     with zipfile.ZipFile(source_path) as archive:
                         raw = archive.read(source["member"])
@@ -285,7 +301,7 @@ def inputs(paths):
                     location["member"] = source["member"]
                 # Verify attestation bytes too; do not trust an unbound narrative.
                 for observation in location["recorded_observations"]:
-                    evidence = (base / observation["path"]).read_bytes()
+                    evidence = _manifest_path(base, observation["path"], "native observation").read_bytes()
                     if sha256(evidence) != observation["sha256"]:
                         raise ValueError("native attestation hash mismatch")
                 yield location, raw

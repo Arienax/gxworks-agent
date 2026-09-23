@@ -3,7 +3,6 @@ import os
 import sys
 import json
 import copy
-import shutil
 import tempfile
 
 from storage.credentials import (
@@ -24,31 +23,38 @@ class ModelConfigurationRequiredError(ValueError):
 
 
 def get_config_path():
-    """获取 config.json 的路径（兼容 PyInstaller 打包）"""
-    if getattr(sys, 'frozen', False):
-        base_dir = os.path.dirname(sys.executable)
-    else:
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base_dir, "config.json")
+    """Resolve stable user paths without file or credential access."""
+    from storage.user_data import config_path
+    return str(config_path())
+
+
+def _legacy_config_paths():
+    from pathlib import Path
+    if getattr(sys, "frozen", False):
+        return [Path(sys.executable).parent / "config.json"]
+    source = Path(__file__).resolve().parents[1]
+    return [source / "config.json", source.parent / "config.json"]
+
+
+def migrate_user_settings(*, create_default=False):
+    """Copy settings locations only; never normalize source profiles or keys."""
+    from pathlib import Path
+    from storage.user_data import config_path, prepare
+    target = Path(get_config_path())
+    sources = (_legacy_config_paths() if not os.environ.get("PLC_AI_CONFIG_PATH", "").strip()
+               and target.resolve() == config_path().resolve() else ())
+    return str(prepare(target, sources, template=resource_path("config.default.json"), create_default=create_default))
 
 
 def ensure_config_file():
-    """Create the editable external config from the bundled safe template."""
-    config_path = get_config_path()
-    if os.path.isfile(config_path):
-        return config_path
+    return migrate_user_settings(create_default=True)
 
-    template_path = resource_path("config.default.json")
-    if not template_path.is_file():
-        raise FileNotFoundError(f"找不到配置文件或默认模板: {config_path}")
 
-    try:
-        shutil.copyfile(str(template_path), config_path)
-    except OSError as error:
-        raise OSError(
-            f"无法在程序目录创建 config.json，请检查目录写入权限: {config_path}"
-        ) from error
-    return config_path
+def get_observations_path():
+    from pathlib import Path
+    from storage.user_data import OBSERVATIONS
+    migrate_user_settings()
+    return Path(get_config_path()).parent / OBSERVATIONS
 
 
 def _is_legacy_api_key(value):
@@ -60,24 +66,21 @@ def _is_legacy_api_key(value):
 
 
 def _write_json_atomic(config_path, config):
-    directory = os.path.dirname(config_path)
-    os.makedirs(directory, exist_ok=True)
-    handle, temporary_path = tempfile.mkstemp(
-        prefix="config-",
-        suffix=".tmp",
-        dir=directory,
-        text=True,
-    )
-    try:
-        with os.fdopen(handle, "w", encoding="utf-8") as stream:
-            json.dump(config, stream, ensure_ascii=False, indent=4)
-        os.replace(temporary_path, config_path)
-    except Exception:
+    from pathlib import Path
+    from storage.user_data import settings_lock, _fsync_directory, _resume
+    with settings_lock(config_path):
+        _resume(Path(config_path))
+        directory = str(Path(config_path).parent)
+        handle, temporary_path = tempfile.mkstemp(prefix="config-", suffix=".tmp", dir=directory)
         try:
-            os.unlink(temporary_path)
-        except OSError:
-            pass
-        raise
+            with os.fdopen(handle, "w", encoding="utf-8") as stream:
+                json.dump(config, stream, ensure_ascii=False, indent=4)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary_path, config_path)
+            _fsync_directory(directory)
+        finally:
+            Path(temporary_path).unlink(missing_ok=True)
 
 
 DEEPSEEK_PROFILE_ID = "deepseek-default"
@@ -105,18 +108,6 @@ DEFAULT_MODEL_PROFILES = (
         "adapter": "openai_compatible",
         "baseUrl": "https://api.deepseek.com",
         "model": "deepseek-v4-pro",
-        "capabilities": {
-            "reasoning": True,
-            "tools": True,
-            "structured_output": True,
-            "disable_tool_choice_with_thinking": True,
-        },
-        "generationDefaults": {
-            "response_format": {"type": "json_object"},
-        },
-        "requestOverrides": {
-            "extra_body": {"thinking": {"type": "enabled"}},
-        },
         "credentialTarget": credential_target_for_profile(DEEPSEEK_PROFILE_ID),
     },
     {
@@ -125,18 +116,6 @@ DEFAULT_MODEL_PROFILES = (
         "adapter": "openai_compatible",
         "baseUrl": "https://api.deepseek.com",
         "model": "deepseek-v4-flash",
-        "capabilities": {
-            "reasoning": True,
-            "tools": True,
-            "structured_output": True,
-            "disable_tool_choice_with_thinking": True,
-        },
-        "generationDefaults": {
-            "response_format": {"type": "json_object"},
-        },
-        "requestOverrides": {
-            "extra_body": {"thinking": {"type": "enabled"}},
-        },
         "credentialTarget": credential_target_for_profile(
             DEEPSEEK_V4_FLASH_PROFILE_ID
         ),
@@ -147,19 +126,6 @@ DEFAULT_MODEL_PROFILES = (
         "adapter": "openai_compatible",
         "baseUrl": "https://api.deepseek.com",
         "model": "deepseek-v4-flash-vision-exp",
-        "capabilities": {
-            "reasoning": True,
-            "tools": True,
-            "structured_output": True,
-            "multimodal": True,
-            "disable_tool_choice_with_thinking": True,
-        },
-        "generationDefaults": {
-            "response_format": {"type": "json_object"},
-        },
-        "requestOverrides": {
-            "extra_body": {"thinking": {"type": "enabled"}},
-        },
         "credentialTarget": credential_target_for_profile(
             DEEPSEEK_V4_FLASH_VISION_PROFILE_ID
         ),
@@ -170,25 +136,6 @@ DEFAULT_MODEL_PROFILES = (
         "adapter": "openai_compatible",
         "baseUrl": "https://open.bigmodel.cn/api/paas/v4/",
         "model": "glm-5.3-flash",
-        "capabilities": {
-            "reasoning": True,
-            "tools": True,
-            "tool_stream": True,
-            "structured_output": True,
-            "multimodal": True,
-            "thinking_required": True,
-        },
-        "generationDefaults": {
-            "temperature": 1.0,
-            "top_p": 0.95,
-            "reasoning_effort": "max",
-            "response_format": {"type": "json_object"},
-        },
-        "requestOverrides": {
-            "extra_body": {
-                "thinking": {"type": "enabled", "clear_thinking": False}
-            },
-        },
         "credentialTarget": credential_target_for_profile(ZHIPU_PROFILE_ID),
     },
     {
@@ -197,21 +144,6 @@ DEFAULT_MODEL_PROFILES = (
         "adapter": "openai_compatible",
         "baseUrl": "https://open.bigmodel.cn/api/paas/v4/",
         "model": "glm-5.3",
-        "capabilities": {
-            "reasoning": True,
-            "tools": True,
-            "tool_stream": True,
-            "structured_output": True,
-            "thinking_required": True,
-        },
-        "generationDefaults": {
-            "temperature": 1.0,
-            "reasoning_effort": "max",
-            "response_format": {"type": "json_object"},
-        },
-        "requestOverrides": {
-            "extra_body": {"thinking": {"type": "enabled"}},
-        },
         "credentialTarget": credential_target_for_profile(
             ZHIPU_GLM_53_PROFILE_ID
         ),
@@ -222,22 +154,6 @@ DEFAULT_MODEL_PROFILES = (
         "adapter": "openai_compatible",
         "baseUrl": "https://open.bigmodel.cn/api/paas/v4/",
         "model": "glm-5.2",
-        "capabilities": {
-            "reasoning": True,
-            "tools": True,
-            "tool_stream": True,
-            "structured_output": True,
-        },
-        "generationDefaults": {
-            "temperature": 1.0,
-            "reasoning_effort": "max",
-            "response_format": {"type": "json_object"},
-        },
-        "requestOverrides": {
-            "extra_body": {
-                "thinking": {"type": "enabled", "clear_thinking": False}
-            },
-        },
         "credentialTarget": credential_target_for_profile(
             ZHIPU_GLM_52_PROFILE_ID
         ),
@@ -269,13 +185,21 @@ def _normalize_profile(profile):
         raise ValueError(f"模型 Profile {profile_id} 缺少 baseUrl。")
     if not normalized["model"]:
         raise ValueError(f"模型 Profile {profile_id} 缺少 model。")
-    for key in ("capabilities", "generationDefaults", "requestOverrides", "parameterSupport", "capabilityContract", "userModelSettings", "capabilityOverrides"):
+    retired = ("capabilities", "generationDefaults", "requestOverrides", "parameterSupport")
+    canonical = ("capabilityContract", "userModelSettings", "capabilityOverrides")
+    for key in (*retired, *canonical):
         value = normalized.get(key)
         if value is not None and not isinstance(value, dict):
             raise ValueError(f"模型 Profile {profile_id} 的 {key} 必须是对象。")
-        normalized[key] = copy.deepcopy(value) if isinstance(value, dict) else {}
-    from model_runtime.capabilities import normalize_parameter_support
-    normalized["parameterSupport"] = normalize_parameter_support(normalized["parameterSupport"])
+        if key in canonical:
+            normalized[key] = copy.deepcopy(value) if isinstance(value, dict) else {}
+        elif isinstance(value, dict):
+            normalized[key] = copy.deepcopy(value)
+        else:
+            normalized.pop(key, None)
+    from model_runtime.legacy_migration import normalize_parameter_support
+    if "parameterSupport" in normalized:
+        normalized["parameterSupport"] = normalize_parameter_support(normalized["parameterSupport"])
     from model_runtime.contract import CapabilityContract, UserModelSettings, normalize_contract
     normalized["capabilityContract"] = normalize_contract(normalized["capabilityContract"])
     if normalized["userModelSettings"]:
@@ -352,9 +276,6 @@ def _profile_from_legacy(config):
                 "adapter": "openai_compatible",
                 "baseUrl": base_url,
                 "model": model,
-                "capabilities": {},
-                "generationDefaults": {},
-                "requestOverrides": {},
                 "credentialTarget": credential_target_for_profile(profile_id),
             }
         )
@@ -362,29 +283,12 @@ def _profile_from_legacy(config):
     selected["baseUrl"] = base_url
     selected["model"] = model
 
-    template = config.get("request_template")
-    if isinstance(template, dict):
-        portable = {
-            "temperature",
-            "top_p",
-            "max_tokens",
-            "stop",
-            "response_format",
-            "seed",
-            "frequency_penalty",
-            "presence_penalty",
-        }
-        defaults = {}
-        overrides = {}
-        for key, value in template.items():
-            if key in {"model", "messages", "stream", "tools", "tool_choice"}:
-                continue
-            if value == "{effort}":
-                continue
-            target = defaults if key in portable else overrides
-            target[key] = copy.deepcopy(value)
-        selected["generationDefaults"].update(defaults)
-        selected["requestOverrides"].update(overrides)
+    from model_runtime.legacy_migration import migrate_request_template
+    migrated = migrate_request_template(selected, config.get("request_template"))
+    profiles = [
+        migrated if item["id"] == profile_id else item
+        for item in profiles
+    ]
     return profile_id, [_normalize_profile(item) for item in profiles]
 
 
@@ -430,7 +334,7 @@ def load_full_config():
     """Load and, when necessary, atomically migrate the external config."""
     config_path = ensure_config_file()
 
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path, "r", encoding="utf-8-sig") as f:
         config = json.load(f)
 
     return _migrate_configuration(config_path, config)
@@ -452,6 +356,7 @@ def save_config(config: dict):
     if (profiles or active) and active not in {item["id"] for item in sanitized["modelProfiles"]}:
         raise ValueError("activeModelProfileId 未指向有效的模型 Profile。")
     sanitized["activeModelProfileId"] = active
+    migrate_user_settings(create_default=True)
     _write_json_atomic(config_path, sanitized)
 
 
