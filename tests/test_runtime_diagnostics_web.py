@@ -7,11 +7,13 @@ import application.model_api as api
 from fastapi.testclient import TestClient
 from application.workbench import WorkbenchService
 from model_runtime.provider import TextDelta
-from test_web_api import ORIGIN, AGENT, _app, _login
+from test_web_api import ORIGIN, AGENT, _app, _login, offline_runtime_profile
 
 
 class InvalidProvider:
-    def __init__(self): self.calls=0
+    def __init__(self):
+        self.calls = 0
+        self.profile = offline_runtime_profile('offline-diagnostics')
     def stream(self,request):
         self.calls+=1
         yield TextDelta('{"rungs": [PRIVATE_INCOMPLETE')
@@ -22,7 +24,7 @@ def test_failed_job_export_contains_user_and_model_timeline(tmp_path, monkeypatc
     monkeypatch.setattr(api, 'get_active_provider', lambda: pytest.fail('Live provider is forbidden'))
     p = InvalidProvider()
     service = WorkbenchService(tmp_path/'workspace', tmp_path/'state',
-        model_factory=lambda:(p,{'model':'offline-diagnostics'}))
+        model_factory=lambda:(p, p.profile))
     with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as c:
         headers = _login(c)
         pid = c.post('/api/projects', json={'name':'Diagnostics'}, headers=headers).json()['id']
@@ -31,7 +33,7 @@ def test_failed_job_export_contains_user_and_model_timeline(tmp_path, monkeypatc
                       json={'spec':spec,'expected_hash':None})
         assert saved.status_code == 200 and saved.json()['valid'] is True
         result = c.post('/api/jobs', headers=headers, json={
-            'project_id':pid,'kind':'generation','request_id':'diagnostic-export-'+policy,
+            'project_id':pid,'kind':'generation','request_id':'diagnostic-export',
             'text':'operator requirement text','response_language':'en'
         })
         assert result.status_code == 202
@@ -113,7 +115,7 @@ def test_analysis_confirmation_generation_export_keep_audit_out_of_model_context
             'records': [{'id': marker, 'manual_type': 'programming'}]})
 
     class Provider:
-        profile = {}
+        profile = offline_runtime_profile('offline-context-boundary')
         def __init__(self):
             self.requests = []
         def stream(self, request):
@@ -125,7 +127,9 @@ def test_analysis_confirmation_generation_export_keep_audit_out_of_model_context
                         {'approach_id': 'plan_'+choice, 'name': 'PLAN_'+choice,
                          'description': 'One output circuit.', 'pros': '', 'cons': '',
                          'generation_guide': 'PLAN_'+choice+'_DETAILS',
-                         'generation_contract': {'required_opcodes': []}}
+                         # Core derives generation_contract from implementation_semantics;
+                         # a model response carrying either the wrong one or neither is rejected.
+                         'implementation_semantics': []}
                         for choice in ('A', 'B', 'C')],
                     # A model cannot forge an application-owned audit or user origin.
                     'decision_receipt': {'id': 'FORGED_AUDIT'},
@@ -138,7 +142,7 @@ def test_analysis_confirmation_generation_export_keep_audit_out_of_model_context
     monkeypatch.setattr(generation_agent, '_build_knowledge_context', evidence)
     provider = Provider()
     service = WorkbenchService(tmp_path/'workspace', tmp_path/'state',
-                               model_factory=lambda: (provider, {'model': 'offline-context-boundary'}))
+                               model_factory=lambda: (provider, provider.profile))
     with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
         headers = _login(client)
         pid = client.post('/api/projects', headers=headers, json={'name': 'Lifecycle'}).json()['id']
