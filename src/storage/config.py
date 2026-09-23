@@ -273,13 +273,21 @@ def _normalize_profile(profile):
         raise ValueError(f"模型 Profile {profile_id} 缺少 baseUrl。")
     if not normalized["model"]:
         raise ValueError(f"模型 Profile {profile_id} 缺少 model。")
-    for key in ("capabilities", "generationDefaults", "requestOverrides", "parameterSupport", "capabilityContract", "userModelSettings", "capabilityOverrides"):
+    retired = ("capabilities", "generationDefaults", "requestOverrides", "parameterSupport")
+    canonical = ("capabilityContract", "userModelSettings", "capabilityOverrides")
+    for key in (*retired, *canonical):
         value = normalized.get(key)
         if value is not None and not isinstance(value, dict):
             raise ValueError(f"模型 Profile {profile_id} 的 {key} 必须是对象。")
-        normalized[key] = copy.deepcopy(value) if isinstance(value, dict) else {}
+        if key in canonical:
+            normalized[key] = copy.deepcopy(value) if isinstance(value, dict) else {}
+        elif isinstance(value, dict):
+            normalized[key] = copy.deepcopy(value)
+        else:
+            normalized.pop(key, None)
     from model_runtime.legacy_migration import normalize_parameter_support
-    normalized["parameterSupport"] = normalize_parameter_support(normalized["parameterSupport"])
+    if "parameterSupport" in normalized:
+        normalized["parameterSupport"] = normalize_parameter_support(normalized["parameterSupport"])
     from model_runtime.contract import CapabilityContract, UserModelSettings, normalize_contract
     normalized["capabilityContract"] = normalize_contract(normalized["capabilityContract"])
     if normalized["userModelSettings"]:
