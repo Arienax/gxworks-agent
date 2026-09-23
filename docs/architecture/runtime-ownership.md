@@ -4,7 +4,7 @@
 
 The saved model profile owns tuning. Project/workflow `effort` is a retired compatibility field; accepted legacy arguments do not set request parameters. Direct and Design select analysis behavior only.
 
-[without_workflow_effort](../../src/model_runtime/request_policy.py) removes workflow reasoning hints before provider resolution. [resolve_request](../../src/model_runtime/request_policy.py) applies the profile's saved value, omit and inherit state. Legacy flat-config migration in [storage.config](../../src/storage/config.py) retains explicit saved values and discards retired placeholders rather than restoring a preset maximum. Explicit capability probes use their trial profiles.
+[without_workflow_effort](../../src/model_runtime/request_policy.py) removes workflow reasoning hints before provider resolution. `RuntimeModelProfile` is the request-policy input; [resolve_request](../../src/model_runtime/request_policy.py) applies its v3 contract and canonical user selections. [model_runtime.legacy_migration](../../src/model_runtime/legacy_migration.py) is the only interpreter for retired profile fields, while [storage.config](../../src/storage/config.py) may preserve them as backward-compatible on-disk input. Provider, application, agent-runtime and integration code must not read those fields directly.
 
 User-facing configuration and storage instructions are in [model settings](../guides/model-settings.md). Capability schema ownership is in [capability contracts](../integrations/capability-contract-v3.md).
 
