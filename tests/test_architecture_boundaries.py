@@ -244,3 +244,78 @@ def test_capability_coverage_manifest_is_current():
         report["counts"]["enforced"] + report["counts"]["tracked_gap"]
         == report["counts"]["total"]
     )
+
+
+def _literal_mapping_accesses(path, fields):
+    """Return literal mapping-field reads/writes that bypass a schema boundary."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if node.func.attr in {"get", "pop", "setdefault"} and node.args:
+                key = node.args[0]
+                if isinstance(key, ast.Constant) and key.value in fields:
+                    found.append((node.lineno, str(key.value)))
+        elif isinstance(node, ast.Subscript):
+            key = node.slice
+            if isinstance(key, ast.Constant) and key.value in fields:
+                found.append((node.lineno, str(key.value)))
+    return found
+
+
+def test_legacy_model_profile_schema_is_confined_to_migration_boundary():
+    retired = {"parameterSupport", "generationDefaults", "requestOverrides"}
+    allowed = SOURCE_ROOT / "model_runtime" / "legacy_migration.py"
+    violations = []
+    for package in ("model_runtime", "application", "agent_runtime", "integrations"):
+        for path in (SOURCE_ROOT / package).rglob("*.py"):
+            if path == allowed:
+                continue
+            for line, field in _literal_mapping_accesses(path, retired):
+                violations.append(
+                    f"{path.relative_to(ROOT)}:{line} reads retired field {field}"
+                )
+    assert not violations, "\n".join(violations)
+
+
+def test_retired_model_capabilities_module_cannot_reenter_production():
+    retired = SOURCE_ROOT / "model_runtime" / "capabilities.py"
+    assert not retired.exists()
+    violations = []
+    for package in ("model_runtime", "application", "agent_runtime", "integrations"):
+        for path in (SOURCE_ROOT / package).rglob("*.py"):
+            for imported in _imports(path):
+                if imported == "model_runtime.capabilities" or imported.startswith(
+                    "model_runtime.capabilities."
+                ):
+                    violations.append(
+                        f"{path.relative_to(ROOT)} -> {imported}"
+                    )
+    assert not violations, "\n".join(violations)
+
+
+def test_provider_and_application_cannot_restore_raw_profile_capability_fallbacks():
+    violations = []
+    for package in ("model_runtime", "application", "agent_runtime", "integrations"):
+        for path in (SOURCE_ROOT / package).rglob("*.py"):
+            if path == SOURCE_ROOT / "model_runtime" / "legacy_migration.py":
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if not (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "get"
+                    and node.args
+                    and isinstance(node.args[0], ast.Constant)
+                    and node.args[0].value == "capabilities"
+                ):
+                    continue
+                owner = node.func.value
+                if isinstance(owner, ast.Name) and owner.id in {
+                    "profile", "source", "selected", "chosen"
+                }:
+                    violations.append(
+                        f"{path.relative_to(ROOT)}:{node.lineno} raw profile capabilities"
+                    )
+    assert not violations, "\n".join(violations)
