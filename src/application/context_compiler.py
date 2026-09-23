@@ -544,8 +544,9 @@ class ContextCompiler:
                         "duplicate_evidence_blocks": duplicate_evidence,
                         "provenance_tokens": provenance_saved},
             "compression_mode": mode,
-            "semantic_curator_eligible": pressure == "critical",
-            "semantic_curator_invoked": False,
+            "checkpoint_compaction_required": bool(
+                usable is not None and compiled_estimated > usable
+            ),
             "retrieval_sections": section_report,
             "token_estimate": "deterministic_heuristic_estimate",
         }
