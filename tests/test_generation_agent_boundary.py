@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 from application.generation import GenerationDependencies, GenerationRequest, GenerationWorkflow
 from model_runtime.provider import TextDelta
@@ -92,6 +93,37 @@ def test_confirmed_generation_uses_one_isolated_agent_call(tmp_path):
     assert provider.requests[0].response_contract.name == "compact_ladder"
     assert metadata["first_pass_pipeline"] == {"mode": "confirmed_spec", "model_calls": 1}
     assert metadata["validation"]["status"] == "candidate_ready"
+
+
+def test_compact_agent_sends_the_compiler_budgeted_application_wire(monkeypatch):
+    import application.generation_agent as agent_b
+    import application.model_api as api
+    from application.generation_wire import wire_sha256, wire_token_estimate
+
+    provider = OneShotProvider()
+    captured = {}
+    monkeypatch.setattr(agent_b, "_build_knowledge_context", lambda *a, **k: "")
+
+    def request_model(messages, **kwargs):
+        captured["messages"] = messages
+        return SimpleNamespace(message=SimpleNamespace(
+            content=json.dumps(
+                {"r": [{"h": None, "s": [], "b": [{"i": ["NO X0"], "o": ["COIL Y0"]}]}]},
+                ensure_ascii=False,
+            )
+        ))
+
+    monkeypatch.setattr(api, "request_model", request_model)
+    with api.provider_scope(provider, model_name="offline-one-shot"):
+        result = agent_b.generate_confirmed_ladder(
+            _spec(), "FX3U", model_name="offline-one-shot"
+        )
+
+    actual = {"messages": captured["messages"]}
+    handoff = result["generation_handoff"]
+    assert handoff["wire_sha256"] == wire_sha256(actual)
+    assert handoff["budget_report"]["budget_basis"] == "application_wire_messages"
+    assert handoff["budget_report"]["compiled_budget_payload_tokens"] == wire_token_estimate(actual)
 
 
 def test_injected_direct_generator_remains_one_call(tmp_path):
