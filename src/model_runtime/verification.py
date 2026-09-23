@@ -104,23 +104,29 @@ def _probe_runtime(provider, contract, target, kind, value):
         api_key=provider.api_key,
         model=profile["model"],
     )
+    runtime_contract = runtime.contract
     selections = copy.deepcopy(dict(runtime.settings.parameters))
 
     if kind == "parameter":
-        if target not in contract.parameters:
+        if target not in runtime_contract.parameters:
             raise ValueError("Unknown parameter")
-        contract.parameters[target].validate(value)
+        runtime_contract.parameters[target].validate(value)
         selections[target] = {"mode": "value", "value": copy.deepcopy(value)}
 
     if (
         kind == "parameter"
-        and (target == "n" or contract.parameters[target].wire_path[-1] == "n")
+        and (
+            target == "n"
+            or runtime_contract.parameters[target].wire_path[-1] == "n"
+        )
         and value != 1
     ):
         raise ValueError("Single verification cannot generate multiple choices")
 
-    output_limit = _probe_output_limit(contract, target, kind, value)
-    limit = contract.parameters.get("max_completion_tokens")
+    output_limit = _probe_output_limit(
+        runtime_contract, target, kind, value
+    )
+    limit = runtime_contract.parameters.get("max_completion_tokens")
     request_options = {}
     if limit is not None:
         if limit.status in {"unsupported", "fixed"}:
@@ -135,15 +141,14 @@ def _probe_runtime(provider, contract, target, kind, value):
         request_options["max_completion_tokens"] = output_limit
 
     settings = UserModelSettings.from_dict(
-        {"scope": dict(contract.scope), "parameters": selections},
-        contract,
+        {"scope": dict(runtime_contract.scope), "parameters": selections},
+        runtime_contract,
     )
     runtime = replace(
         runtime,
-        contract=contract,
         settings=settings,
-        defaults=_strip_probe_controls(runtime.defaults, contract),
-        overrides=_strip_probe_controls(runtime.overrides, contract),
+        defaults=_strip_probe_controls(runtime.defaults, runtime_contract),
+        overrides=_strip_probe_controls(runtime.overrides, runtime_contract),
     )
     return profile, runtime, request_options
 
