@@ -28,17 +28,29 @@ def _bundled_index():
 def test_broad_retrieval_uses_unweighted_rrf_without_plc_topic_boosts():
     import knowledge.core as knowledge_core
 
+    source = inspect.getsource(knowledge_core)
     broad = inspect.getsource(knowledge_core._retrieve_uncached)
-    structured = inspect.getsource(knowledge_core._structured_references)
+    metadata = inspect.getsource(knowledge_core._broad_metadata_references)
+    tree = ast.parse(source)
 
+    named_score_assignments = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if any(isinstance(target, ast.Name) and target.id == "score" for target in targets):
+                named_score_assignments.append(getattr(node, "lineno", 0))
+
+    assert named_score_assignments == []
     assert "_RRF_K" in broad
     assert "1.0 / (_RRF_K + signal[\"rank\"] + 1.0)" in broad
     for legacy in (
         "positioning_query", "timer_query", "timer_device_section",
-        "task_boost", "alias_scores", "_base_score", "score +=", "score -=",
+        "task_boost", "alias_scores", "_base_score", "base_score",
+        "score +=", "score -=", "_query_is_timer_semantics",
+        "_timer_debug_case_matches_query",
     ):
-        assert legacy not in broad
-        assert legacy not in structured
+        assert legacy not in source
+        assert legacy not in metadata
 
 
 def test_direct_fact_module_has_no_broad_retriever_calls():
@@ -725,36 +737,6 @@ def test_exact_instruction_residual_broad_retrieval_uses_instruction_prefilter(m
     assert receipt["residual_pre_filters"] == {
         "exclude_chunk_types": ["instruction"],
     }
-
-
-
-def test_retrieval_scorers_have_no_hand_tuned_score_accumulators():
-    import ast
-    import inspect
-    import knowledge.core as knowledge_core
-
-    source = inspect.getsource(knowledge_core)
-    tree = ast.parse(source)
-
-    named_score_assignments = []
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
-            targets = []
-            if isinstance(node, ast.Assign):
-                targets = node.targets
-            else:
-                targets = [node.target]
-            if any(isinstance(target, ast.Name) and target.id == "score" for target in targets):
-                named_score_assignments.append(getattr(node, "lineno", 0))
-
-    assert named_score_assignments == []
-    assert "base_score" not in source
-    assert "score +=" not in source and "score -=" not in source
-    assert "_query_is_timer_semantics" not in source
-    assert "_timer_debug_case_matches_query" not in source
-    assert "positioning_query" not in source
-    assert "timer_query" not in source
-    assert "_RRF_K" in source
 
 
 
