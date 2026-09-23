@@ -17,23 +17,76 @@ class ConfirmedSemanticValidationError(PLCJsonValidationError):
 
 
 def semantic_requirements(confirmed_spec):
-    """Return generic requirements from structure semantics and Core user constraints."""
+    """Return canonical semantics plus declarative structure obligations."""
     if not isinstance(confirmed_spec, Mapping):
         return []
     selected = confirmed_spec.get("selected_approach")
     if not isinstance(selected, Mapping):
         return []
 
-    from plc.specification.approach import normalize_implementation_semantics
+    from plc.specification.approach import (
+        normalize_implementation_semantics,
+        structure_obligations,
+    )
     from plc.specification.explicit_constraints import normalize_explicit_user_constraints
 
     result = []
     for index, item in enumerate(
         normalize_implementation_semantics(selected.get("implementation_semantics"))
     ):
+        requirement_id = f"implementation_semantics[{index}]"
         row = dict(item)
-        row["requirement_id"] = f"implementation_semantics[{index}]"
+        row["requirement_id"] = requirement_id
         result.append(row)
+
+        # A forbidden structure has no positive runtime obligations.  For
+        # any_of, the selected implementation is intentionally not fixed to one
+        # member, so member-specific obligations must not become a hidden gate.
+        if item.get("status") != "required":
+            continue
+        structure = item.get("value")
+        obligations = structure_obligations(structure)
+        selector = str(obligations.get("instance_selector") or "").strip()
+
+        for role_index, role in enumerate(obligations.get("required_roles") or ()):
+            result.append({
+                "requirement_id": (
+                    f"{requirement_id}.obligations.binding_roles[{role_index}]"
+                ),
+                "kind": "binding_role",
+                "status": "required",
+                "structure": structure,
+                "role": str(role),
+            })
+
+        for relation_index, roles in enumerate(obligations.get("distinct_roles") or ()):
+            result.append({
+                "requirement_id": (
+                    f"{requirement_id}.obligations.distinct_roles[{relation_index}]"
+                ),
+                "kind": "binding_relation",
+                "status": "required",
+                "structure": structure,
+                "relation": "distinct_roles",
+                "roles": [str(role) for role in roles],
+            })
+
+        for predicate_index, predicate in enumerate(obligations.get("predicates") or ()):
+            if not isinstance(predicate, Mapping):
+                continue
+            result.append({
+                "requirement_id": (
+                    f"{requirement_id}.obligations.predicates[{predicate_index}]"
+                ),
+                "kind": "binding_predicate",
+                "status": "required",
+                "structure": structure,
+                "role": str(predicate.get("role") or ""),
+                "predicate_key": str(predicate.get("predicate_key") or ""),
+                "coverage": str(predicate.get("coverage") or "any_path"),
+                "independent_of_feedback": predicate.get("independent_of_feedback") is True,
+                "instance_selector": selector,
+            })
 
     explicit = normalize_explicit_user_constraints(
         selected.get("explicit_user_constraints")
@@ -60,7 +113,6 @@ def semantic_requirements(confirmed_spec):
             "operands": list(item["operands"]),
         })
     return result
-
 
 def _ladder_instruction_instances(ladder):
     result = set()
@@ -135,6 +187,321 @@ def _instruction_instance_coverage(ladder, requirements):
     return rows, violations
 
 
+
+def _contact_predicate(element):
+    if not isinstance(element, Mapping):
+        return None
+    kind = str(element.get("type") or "").strip().upper()
+    address = str(element.get("address") or "").strip().upper()
+    if kind not in {"NO", "NC"} or not address:
+        return None
+    return f"{kind} {address}"
+
+
+def _expand_condition_paths(elements):
+    """Expand nested parallel contacts into candidate execution paths.
+
+    Only contact predicates participate in binding checks. Other condition
+    elements remain outside this narrow obligation checker and continue to be
+    owned by ordinary PLC validation/review.
+    """
+    paths = [set()]
+    for element in elements or ():
+        if not isinstance(element, Mapping):
+            continue
+        if str(element.get("type") or "").strip().casefold() == "parallel_block":
+            alternatives = []
+            for branch in element.get("branches") or ():
+                alternatives.extend(_expand_condition_paths(branch))
+            if not alternatives:
+                alternatives = [set()]
+            paths = [base | option for base in paths for option in alternatives]
+            continue
+        predicate = _contact_predicate(element)
+        if predicate:
+            for path in paths:
+                path.add(predicate)
+    return paths
+
+
+def _feedback_coil_instances(ladder):
+    """Return generic coil-feedback topology instances with expanded paths."""
+    result = []
+    for rung in (ladder or {}).get("rungs", []) or []:
+        if not isinstance(rung, Mapping):
+            continue
+        for branch in rung.get("branches", []) or []:
+            if not isinstance(branch, Mapping):
+                continue
+            conditions = [
+                rung.get("header_element"),
+                *(rung.get("shared_inputs", []) or []),
+                *(branch.get("inputs", []) or []),
+            ]
+            conditions = [item for item in conditions if item is not None]
+            paths = _expand_condition_paths(conditions)
+            for output in branch.get("outputs", []) or []:
+                if not isinstance(output, Mapping):
+                    continue
+                if str(output.get("type") or "").strip().upper() != "COIL":
+                    continue
+                target = str(output.get("address") or "").strip().upper()
+                feedback = f"NO {target}" if target else ""
+                if not feedback or not any(feedback in path for path in paths):
+                    continue
+                result.append({
+                    "selector": "feedback_coil",
+                    "rung_id": rung.get("rung_id"),
+                    "branch_id": branch.get("branch_id"),
+                    "target": target,
+                    "feedback_predicate": feedback,
+                    "paths": paths,
+                })
+    return result
+
+
+_INSTANCE_SELECTORS = {
+    "feedback_coil": _feedback_coil_instances,
+}
+
+
+def _binding_role_addresses(confirmed_spec):
+    from plc.device_identity import canonical_device
+
+    result = {}
+    for row in (confirmed_spec or {}).get("io_bindings", []) or []:
+        if not isinstance(row, Mapping):
+            continue
+        role = str(row.get("role") or "").strip().casefold()
+        raw_address = str(row.get("address") or "").strip()
+        if not role or not raw_address:
+            continue
+        address = canonical_device(raw_address)
+        values = result.setdefault(role, [])
+        if address not in values:
+            values.append(address)
+    return result
+
+
+def _binding_predicate_facts(confirmed_spec):
+    from plc.specification.conditions import generation_input_conditions
+
+    facts = generation_input_conditions(
+        (confirmed_spec or {}).get("io_bindings")
+        if isinstance(confirmed_spec, Mapping)
+        else None
+    )
+    indexed = {}
+    for row in facts.get("level_predicates", []) or []:
+        if not isinstance(row, Mapping):
+            continue
+        role = str(row.get("role") or "").strip().casefold()
+        address = str(row.get("address") or "").strip().upper()
+        if role and address:
+            indexed[(role, address)] = row
+    return indexed, facts
+
+
+def _predicate_matches_instance(requirement, expected, instance):
+    paths = list(instance.get("paths") or [])
+    feedback = str(instance.get("feedback_predicate") or "")
+    coverage = str(requirement.get("coverage") or "any_path")
+
+    if coverage == "all_paths":
+        matched = bool(paths) and all(expected in path for path in paths)
+    elif coverage == "any_non_feedback_path":
+        non_feedback = [path for path in paths if feedback not in path]
+        matched = any(expected in path for path in non_feedback)
+    elif coverage == "any_path":
+        matched = any(expected in path for path in paths)
+    else:
+        return False
+
+    if matched and requirement.get("independent_of_feedback") is True:
+        feedback_paths = [path for path in paths if feedback in path]
+        matched = bool(feedback_paths) and any(
+            expected not in path for path in feedback_paths
+        )
+    return matched
+
+
+def _structure_obligation_coverage(ladder, confirmed_spec, requirements):
+    obligation_kinds = {"binding_role", "binding_relation", "binding_predicate"}
+    scoped = [row for row in requirements if row.get("kind") in obligation_kinds]
+    if not scoped:
+        return [], []
+
+    roles = _binding_role_addresses(confirmed_spec)
+    predicate_facts, _raw_predicate_facts = _binding_predicate_facts(confirmed_spec)
+    rows, violations = [], []
+
+    for requirement in scoped:
+        if requirement.get("kind") != "binding_role":
+            continue
+        role = str(requirement.get("role") or "").casefold()
+        addresses = roles.get(role, [])
+        if len(addresses) == 1:
+            status, reason = "verified", None
+        elif not addresses:
+            status, reason = "violated", "missing_roles"
+        else:
+            status, reason = "violated", "ambiguous_roles"
+        row = {
+            "requirement_id": requirement["requirement_id"],
+            "check": "structure_binding_role",
+            "kind": "binding_role",
+            "structure": requirement.get("structure"),
+            "role": role,
+            "expected": role,
+            "status": status,
+        }
+        if reason:
+            row["reason"] = reason
+        rows.append(row)
+        if status == "violated":
+            violations.append(row)
+
+    for requirement in scoped:
+        if requirement.get("kind") != "binding_relation":
+            continue
+        relation = requirement.get("relation")
+        relation_roles = [str(role).casefold() for role in requirement.get("roles") or []]
+        addresses = [roles.get(role, []) for role in relation_roles]
+        row = {
+            "requirement_id": requirement["requirement_id"],
+            "check": "structure_binding_relation",
+            "kind": "binding_relation",
+            "structure": requirement.get("structure"),
+            "relation": relation,
+            "expected": relation_roles,
+        }
+        if any(len(values) != 1 for values in addresses):
+            row.update(status="unresolved", reason="role_resolution_failed")
+        elif relation == "distinct_roles":
+            resolved = [values[0] for values in addresses]
+            if len(set(resolved)) == len(resolved):
+                row["status"] = "verified"
+            else:
+                row.update(status="violated", reason="roles_not_distinct")
+                violations.append(row)
+        else:
+            row.update(status="unresolved", reason="unknown_binding_relation")
+        rows.append(row)
+
+    groups = {}
+    for requirement in scoped:
+        if requirement.get("kind") != "binding_predicate":
+            continue
+        key = (
+            str(requirement.get("structure") or ""),
+            str(requirement.get("instance_selector") or ""),
+        )
+        groups.setdefault(key, []).append(requirement)
+
+    for (structure, selector_name), group in groups.items():
+        prepared = []
+        blocked = False
+        for requirement in group:
+            role = str(requirement.get("role") or "").casefold()
+            addresses = roles.get(role, [])
+            if len(addresses) != 1:
+                rows.append({
+                    "requirement_id": requirement["requirement_id"],
+                    "check": "structure_binding_predicate",
+                    "kind": "binding_predicate",
+                    "structure": structure,
+                    "role": role,
+                    "expected": requirement.get("predicate_key"),
+                    "status": "unresolved",
+                    "reason": (
+                        "missing_roles" if not addresses else "ambiguous_roles"
+                    ),
+                })
+                blocked = True
+                continue
+
+            address = str(addresses[0]).upper()
+            fact = predicate_facts.get((role, address))
+            predicate_key = str(requirement.get("predicate_key") or "")
+            expected = fact.get(predicate_key) if isinstance(fact, Mapping) else None
+            if not expected:
+                row = {
+                    "requirement_id": requirement["requirement_id"],
+                    "check": "structure_binding_predicate",
+                    "kind": "binding_predicate",
+                    "structure": structure,
+                    "role": role,
+                    "expected": f"{predicate_key}:{address}",
+                    "status": "violated",
+                    "reason": "missing_input_levels",
+                }
+                rows.append(row)
+                violations.append(row)
+                blocked = True
+                continue
+            prepared.append((requirement, str(expected)))
+
+        if blocked and not prepared:
+            continue
+
+        selector = _INSTANCE_SELECTORS.get(selector_name)
+        if selector is None:
+            for requirement, expected in prepared:
+                row = {
+                    "requirement_id": requirement["requirement_id"],
+                    "check": "structure_binding_predicate",
+                    "kind": "binding_predicate",
+                    "structure": structure,
+                    "role": requirement.get("role"),
+                    "expected": expected,
+                    "status": "violated",
+                    "reason": "unknown_instance_selector",
+                }
+                rows.append(row)
+                violations.append(row)
+            continue
+
+        instances = selector(ladder)
+        matched = next(
+            (
+                instance
+                for instance in instances
+                if all(
+                    _predicate_matches_instance(requirement, expected, instance)
+                    for requirement, expected in prepared
+                )
+            ),
+            None,
+        )
+        reason = (
+            None
+            if matched is not None
+            else "structure_instance_not_found"
+            if not instances
+            else "binding_predicate_mismatch"
+        )
+        for requirement, expected in prepared:
+            row = {
+                "requirement_id": requirement["requirement_id"],
+                "check": "structure_binding_predicate",
+                "kind": "binding_predicate",
+                "structure": structure,
+                "role": requirement.get("role"),
+                "predicate_key": requirement.get("predicate_key"),
+                "expected": expected,
+                "status": "verified" if matched is not None else "violated",
+            }
+            if matched is not None:
+                row["rung_id"] = matched.get("rung_id")
+                row["target"] = matched.get("target")
+            else:
+                row["reason"] = reason
+                violations.append(row)
+            rows.append(row)
+
+    return rows, violations
+
+
 def _feature_checker(ladder, _confirmed_spec, requirements):
     return _feature_coverage(ladder, requirements)
 
@@ -143,9 +510,14 @@ def _instruction_instance_checker(ladder, _confirmed_spec, requirements):
     return _instruction_instance_coverage(ladder, requirements)
 
 
+def _structure_obligation_checker(ladder, confirmed_spec, requirements):
+    return _structure_obligation_coverage(ladder, confirmed_spec, requirements)
+
+
 _CHECKER_REGISTRY = (
     ("contract_features", _feature_checker),
     ("instruction_instances", _instruction_instance_checker),
+    ("structure_obligations", _structure_obligation_checker),
 )
 
 
@@ -202,7 +574,11 @@ def validate_confirmed_semantics(ladder, confirmed_spec, plc_model="FX3U"):
 
     if violations:
         summary = ", ".join(
-            f"{row.get('kind')}:{row.get('expected')}" for row in violations[:8]
+            (
+                f"{row.get('kind')}:{row.get('expected')}"
+                + (f" ({row.get('reason')})" if row.get("reason") else "")
+            )
+            for row in violations[:8]
         )
         raise ConfirmedSemanticValidationError(
             "$.confirmed_spec.selected_approach: generated candidate violates "
