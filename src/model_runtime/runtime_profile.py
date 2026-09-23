@@ -74,6 +74,34 @@ def _merge_evidence(primary, secondary):
     return result
 
 
+def _legacy_wire_locations(profile, parameters):
+    """Preserve explicit legacy wire placement when no authoritative mapping exists.
+
+    Old request templates could place an otherwise generic scalar directly under
+    extra_body. That placement is configuration evidence, not a provider/model
+    special case. Catalog/metadata/manual wire mappings remain authoritative.
+    """
+    result = dict(parameters)
+    for name, descriptor in parameters.items():
+        if (
+            descriptor.source not in {"generic", "probe", "legacy"}
+            or descriptor.wire_path != (name,)
+        ):
+            continue
+        nested = False
+        for group in ("generationDefaults", "requestOverrides"):
+            layer = profile.get(group) or {}
+            if path_get(layer, ("extra_body", name)) is not MISSING:
+                nested = True
+        if nested:
+            result[name] = replace(
+                descriptor,
+                wire_location="extra_body",
+                wire_path=(name,),
+            )
+    return result
+
+
 def _legacy_capabilities(profile):
     raw = profile.get("capabilities") or {}
     if not isinstance(raw, Mapping):
@@ -131,6 +159,7 @@ def _merge_legacy_contract(profile, base, *, api_key, model):
         if current is None or current.source == "generic":
             capabilities[name] = old
 
+    parameters = _legacy_wire_locations(profile, parameters)
     scope = contract_scope(profile, parameters, model=model, api_key=api_key)
     return CapabilityContract.from_dict(
         CapabilityContract(scope, capabilities, parameters, constraints).to_dict()
