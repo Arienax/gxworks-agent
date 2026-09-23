@@ -396,7 +396,7 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
                                   task_type=None, review_mode=None, confirmed_context=None,
                                   current_version_json=None, prompt_builder=None, knowledge_builder=None,
                                   profile_builder=None, confirmed_builder=None, on_context=None,
-                                  model_profile=None):
+                                  model_profile=None, wire_history=None):
     normalized_task = str(task_type or review_mode or ("edit" if is_edit_mode else "generate")).strip().casefold()
     if _is_format_repair(normalized_task, user_requirement):
         audit_section("model_profile", status="excluded", reason="format_repair", source="model_registry")
@@ -431,17 +431,76 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
     if retrieval_evidence is None and current_version_json is not None:
         retrieval_evidence = current_version_json
     if shared_confirmed and confirmed_context:
+        from application.generation_wire import render_wire_messages
+        from plc.specification.provenance import SOURCE_PRECEDENCE
+
+        history = copy.deepcopy(wire_history) if isinstance(wire_history, list) else None
+
+        def confirmed_wire_renderer(runtime_spec, evidence_text, generation_request, _current_program):
+            selected = prompt_builder(
+                target_mode,
+                is_edit_mode=is_edit_mode,
+                user_requirement=generation_request,
+                task_type=task_type,
+                review_mode=review_mode,
+                plc_model=plc_model,
+                confirmed_context=runtime_spec,
+            )
+            system = confirmed_builder(
+                selected
+                + SOURCE_PRECEDENCE
+                + profile_builder(
+                    plc_model,
+                    runtime_spec,
+                    compact=bool(evidence_text),
+                )
+                + str(evidence_text or ""),
+                runtime_spec,
+            )
+            if current_context:
+                system += "\n\n" + current_context
+            system += generation_execution_prompt(
+                runtime_spec,
+                evidence_text=evidence_text,
+                task_type=normalized_task,
+            )
+            message_history = (
+                history
+                if history is not None
+                else [{"role": "user", "content": generation_request}]
+            )
+            return {"messages": render_wire_messages(system, message_history)}
+
         context = build_confirmed_generation_context(
-            confirmed_context, plc_model, user_requirement=user_requirement,
-            current_program=current_version_json, task_type=normalized_task,
-            evidence=retrieval_evidence, knowledge_builder=knowledge_builder,
+            confirmed_context,
+            plc_model,
+            user_requirement=user_requirement,
+            current_program=current_version_json,
+            task_type=normalized_task,
+            evidence=retrieval_evidence,
+            knowledge_builder=knowledge_builder,
             model_profile=model_profile,
+            wire_renderer=confirmed_wire_renderer,
         )
         confirmed_context = context.confirmed_spec
         user_requirement = context.generation_request
         knowledge_ctx = context.knowledge_context
         if on_context:
             on_context(copy.deepcopy(context.handoff))
+        if context.wire_packet:
+            system_prompt = context.wire_packet["messages"][0]["content"]
+            execution_prompt = generation_execution_prompt(
+                confirmed_context,
+                evidence_text=knowledge_ctx,
+                task_type=normalized_task,
+            )
+            audit_section(
+                "generation_execution_policy",
+                execution_prompt,
+                reason="settled_facts",
+                source="application",
+            )
+            return system_prompt
     else:
         knowledge_ctx = knowledge_builder(user_requirement, plc_model=plc_model, task_type=normalized_task,
                                           confirmed_context=confirmed_context, evidence=retrieval_evidence)
