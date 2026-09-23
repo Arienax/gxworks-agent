@@ -1,5 +1,7 @@
 # GX Works2 supporting RAG 修复与验证
 
+> 当前实现已退役 phase2c 手工 boost/reranker。以下内容保留为历史验证记录；现行 broad retrieval 使用 metadata pre-filter + structured exact lookup + unweighted RRF，GX Works2 skill concept 只扩大候选召回，不再修改分数或强插结果位置。
+
 > 历史记录。来源文档冻结于 `f2f1781a846c9f7073724b4cca485082d57f414c`；实验日期、样本和被测版本按正文记录。代码路径、命令和未完成事项描述当时环境。当前操作从[文档索引](../README.md)进入。
 
 本报告记录 `feat/gxw2-skill-rag` 在本地完成路由修复时的诊断快照；该阶段没有新建分支、提交、推送或合并。基线代码为 `7352c33`，开始时已有的数据、dense 和发布元数据改动已留存快照并保留。
@@ -203,7 +205,7 @@ category=st_rule；task_type=st；expected chunk_type=st_rule；expected manual_
 
 ```powershell
 python tools/tune_gxw2_skill_ranking.py
-python -m pytest tests/test_gxw2_skill_import.py tests/test_gxw2_skill_ranking.py tests/test_gxw2_skill_reranker.py tests/test_fx3u_rag.py -v
+python -m pytest tests/test_gxw2_skill_import.py tests/test_gxw2_skill_ranking.py tests/test_fx3u_rag.py -v
 python -m pytest -q -rs
 python tools/evaluate_rag_benchmark.py --benchmark benchmarks/gxw2_skill_rag_benchmark.jsonl --output benchmarks/gxw2_skill_rag_benchmark_report.json --fail-under-recall-10 0.90
 python tools/evaluate_rag_benchmark.py --benchmark benchmarks/fx3u_rag_benchmark_pre_skill.jsonl --output benchmarks/fx3u_rag_benchmark_pre_skill_report.json --fail-under-recall-10 0.98
