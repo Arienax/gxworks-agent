@@ -37,10 +37,7 @@ from application.generation_context import (
     _routing_text_with_selected_approach, _load_plc_models, _build_model_context,
     _confirmed_context_text, _with_confirmed_context, build_generation_instructions,
 )
-from shared.context_policy import (
-    audit_request, audit_section, context_policy_scope, manual_lookup_decision,
-    resolve_context_policy, select_base_prompt,
-)
+from shared.context_audit import audit_request, audit_section
 from plc.validation import PLCJsonValidationError, parse_device_address
 from plc.hardware_profiles import ensure_hardware_questions
 from plc.instructions import (
@@ -83,8 +80,7 @@ def provider_scope(provider=None, *, model_name=None):
     token = _provider_session.set(session)
     model_token = _workflow_model.set(model_name or _workflow_model.get())
     try:
-        with context_policy_scope():
-            yield
+        yield
     finally:
         _workflow_model.reset(model_token)
         _provider_session.reset(token)
