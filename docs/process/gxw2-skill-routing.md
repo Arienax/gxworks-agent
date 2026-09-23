@@ -1,6 +1,6 @@
 # GX Works2 supporting RAG 修复与验证
 
-> 当前实现已退役 phase2c 手工 boost/reranker。以下内容保留为历史验证记录；现行 broad retrieval 使用 metadata pre-filter + structured exact lookup + unweighted RRF，GX Works2 skill concept 只扩大候选召回，不再修改分数或强插结果位置。
+> 当前实现已退役 phase2c 手工 boost/reranker。以下内容保留为历史验证记录；现行检索将 structured exact fact lane 与 broad retrieval 分离，broad 仅使用 metadata pre-filter + metadata/entity/BM25/dense unweighted RRF，GX Works2 skill concept 只扩大候选召回，不再修改分数或强插结果位置。
 
 > 历史记录。来源文档冻结于 `f2f1781a846c9f7073724b4cca485082d57f414c`；实验日期、样本和被测版本按正文记录。代码路径、命令和未完成事项描述当时环境。当前操作从[文档索引](../README.md)进入。
 
