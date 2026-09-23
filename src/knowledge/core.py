@@ -1766,26 +1766,22 @@ def _retrieve_design_uncached(path, identity, query, plc_model, task_type, top_k
         bigram_coverage = len(overlap) / len(query_bigrams) if query_bigrams else 0.0
         if len(matched) < 2 and bigram_coverage < 0.06:
             continue
-        score = (
-            300.0
-            + 28.0 * len(matched)
-            + 900.0 * bigram_coverage
-            + min(100, int(result.get("manual_priority", 0) or 0)) * 0.5
-        )
-        result["score"] = round(score, 4)
         result["match_type"] = "curated_design"
         result["matched_entity"] = ""
         result["retrieval_signals"] = ["curated_design"]
         result["query_coverage"] = round(bigram_coverage, 4)
+        result["_design_rank_key"] = (
+            -len(matched),
+            -bigram_coverage,
+            -int(result.get("manual_priority", 0) or 0),
+            str(result.get("id", "")),
+        )
         candidates.append(result)
 
-    candidates.sort(
-        key=lambda item: (
-            -float(item.get("score", 0.0)),
-            -int(item.get("manual_priority", 0) or 0),
-            str(item.get("id", "")),
-        )
-    )
+    candidates.sort(key=lambda item: item["_design_rank_key"])
+    for rank, candidate in enumerate(candidates):
+        candidate.pop("_design_rank_key", None)
+        candidate["score"] = round(1.0 / (_RRF_K + rank + 1.0), 8)
     return _select_with_budget(candidates, top_k, char_budget)
 
 
