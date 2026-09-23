@@ -227,11 +227,19 @@ def test_structure_obligation_checker_has_no_structure_specific_branch():
     import inspect
 
     import plc.specification.semantic_validation as semantic_validation
-    from plc.specification.approach import structure_obligations
+    from plc.specification.approach import (
+        inspect_ladder_features,
+        structure_obligations,
+    )
 
     obligations = structure_obligations("self_hold")
     assert obligations["instance_selector"] == "feedback_coil"
     assert tuple(obligations["required_roles"]) == ("start", "stop")
+    instances = inspect_ladder_features(_self_hold())["structure_instances"]
+    assert [
+        (row["selector"], row["target"])
+        for row in instances
+    ] == [("feedback_coil", "Y0")]
     assert "self_hold" not in inspect.getsource(semantic_validation)
 
 
