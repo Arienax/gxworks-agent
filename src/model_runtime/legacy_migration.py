@@ -447,6 +447,28 @@ def runtime_option_layers(profile, contract, *, promote):
     return settings, defaults, overrides
 
 
+def detection_profile(profile, parameters=()):
+    """Build a legacy-compatible probe profile without optional tuning controls."""
+    result = copy.deepcopy(dict(profile))
+    declared = dict(parameters or {})
+    result.pop("parameterSupport", None)
+    result.pop("capabilityContract", None)
+    result.pop("userModelSettings", None)
+    optional = {
+        "temperature", "reasoning_effort", "top_p", "response_format",
+        "max_tokens", "max_completion_tokens", "stream_options",
+    }
+    for group in ("generationDefaults", "requestOverrides"):
+        options = result.setdefault(group, {})
+        for name, descriptor in declared.items():
+            descriptor.remove(options, name)
+        for key in optional:
+            options.pop(key, None)
+            if isinstance(options.get("extra_body"), dict):
+                options["extra_body"].pop(key, None)
+    return result
+
+
 def clear_legacy_detection(profile):
     """Clear retired detection evidence after identity/credential changes."""
     profile.pop("parameterSupport", None)
