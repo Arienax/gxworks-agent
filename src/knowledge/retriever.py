@@ -1,9 +1,8 @@
-"""GX Works2 knowledge retrieval with a scoped supporting-source reranker.
+"""Scoped knowledge retrieval over the shared broad RRF engine.
 
-The original hybrid retrieval engine lives in ``knowledge_retriever_core``.
-This thin facade preserves its public/private compatibility while applying the
-phase-2c gxw2-skill boost only after broad candidate retrieval. Mitsubishi
-structured evidence remains authoritative in the core scorer.
+The broad engine lives in :mod:`knowledge.core`. This facade owns task/source
+scope, exact structured-fact handoff, and bounded candidate expansion for
+qualified GX Works2 skill concepts. It does not apply a second scoring layer.
 """
 
 from __future__ import annotations
@@ -14,12 +13,6 @@ from shared.context_policy import audit_retrieval_fragment
 from knowledge.gxworks2_concepts import CONTEXT_RE as _GXW2_CONTEXT_RE, query_skill_concepts
 
 import knowledge.core as _core
-from knowledge.supporting_reranker import (
-    rerank as _rerank_gxw2_supporting,
-    supporting_boost as _supporting_boost,
-)
-
-
 # Compatibility aliases used by the benchmark harness and existing tests.
 # Several tests monkeypatch these helpers directly on knowledge_retriever, so
 # the facade mirrors the current facade values back into the core per request.
@@ -38,12 +31,6 @@ _SYNCED_CORE_HOOKS = (
     "_entity_references",
     "_fts_references",
 )
-
-
-def _gxw2_supporting_boost(candidate, task_type):
-    """Return the narrow phase-2c boost for one already-retrieved candidate."""
-
-    return _supporting_boost(candidate, task_type)
 
 
 def _query_has_gxw2_skill_concept(query, task_type="generate"):
@@ -150,8 +137,9 @@ def retrieve_knowledge(
     if not results or not expand:
         return results[:normalized_top_k]
 
-    ranked = _rerank_gxw2_supporting(results, task)
-    return _core._select_with_budget(ranked, normalized_top_k, normalized_budget)
+    # Skill-concept routing may widen recall, but final ordering remains the
+    # same generic RRF score produced by knowledge.core.
+    return _core._select_with_budget(results, normalized_top_k, normalized_budget)
 
 
 def retrieve_design_knowledge(
