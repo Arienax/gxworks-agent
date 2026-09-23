@@ -471,7 +471,7 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
             )
             message_history = (
                 runtime_history
-                if isinstance(runtime_history, list) and runtime_history
+                if isinstance(runtime_history, list)
                 else history
                 if history is not None
                 else [{"role": "user", "content": generation_request}]
