@@ -223,6 +223,18 @@ def test_confirmed_generation_acceptance_capability_is_enforced():
 
 
 
+def test_structure_obligation_checker_has_no_structure_specific_branch():
+    import inspect
+
+    import plc.specification.semantic_validation as semantic_validation
+    from plc.specification.approach import structure_obligations
+
+    obligations = structure_obligations("self_hold")
+    assert obligations["instance_selector"] == "feedback_coil"
+    assert tuple(obligations["required_roles"]) == ("start", "stop")
+    assert "self_hold" not in inspect.getsource(semantic_validation)
+
+
 def test_structure_obligation_requires_explicit_binding_roles_without_label_inference():
     from plc.specification.semantic_validation import (
         ConfirmedSemanticValidationError,
