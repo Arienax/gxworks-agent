@@ -363,11 +363,19 @@ def _structure_obligation_coverage(ladder, confirmed_spec, requirements):
             target = str(addresses[0]).upper()
             target_constraints[key] = target
             row.update(status="verified", expected=target)
-        elif not addresses and requirement.get("role_required") is not True:
-            # Optional target ownership is a conditional constraint: absence
-            # means there is nothing to bind, while a present canonical role
-            # must select the matching structure instance.
-            row.update(status="verified", reason="optional_role_absent")
+        elif requirement.get("role_required") is not True:
+            # Optional target ownership narrows an instance only when the role
+            # is unique.  No target role is vacuously satisfied; several
+            # generic outputs are legitimate and therefore make only the target
+            # scope unresolved, never the confirmed start/stop predicates.
+            if not addresses:
+                row.update(status="verified", reason="optional_role_absent")
+            else:
+                row.update(
+                    status="unresolved",
+                    reason="optional_role_ambiguous",
+                    observed=list(addresses),
+                )
         else:
             row.update(
                 status="violated",
