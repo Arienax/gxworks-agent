@@ -194,7 +194,7 @@ def materialize_runtime_profile(
 ) -> RuntimeModelProfile:
     """Return a detached runtime profile with one capability representation.
 
-    A valid scoped canonical contract is preserved. Otherwise capability information is
+    A valid scoped v3 contract is preserved. Otherwise capability information is
     resolved locally from the catalog/manual overrides and enriched with scoped
     v1 parameter evidence plus legacy boolean capabilities. No generation,
     metadata fetch, persistence, or profile mutation occurs here.
