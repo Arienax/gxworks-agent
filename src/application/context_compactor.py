@@ -198,6 +198,7 @@ def compact_if_needed(compiler, compiler_input, compiled, *, evidence_text=""):
         return compiled, compiler_input
 
     import application.model_api as api
+    from model_runtime.provider import response_policy_scope
 
     payload = {
         "version": COMPACTION_VERSION,
@@ -206,18 +207,19 @@ def compact_if_needed(compiler, compiler_input, compiled, *, evidence_text=""):
         "recent_tail": selection["recent_tail"],
     }
     try:
-        response = api.request_model(
-            [
-                {"role": "system", "content": _COMPACTOR_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(
-                    payload, ensure_ascii=False, separators=(",", ":")
-                )},
-            ],
-            effort=None,
-            stream=False,
-            max_retries=0,
-            response_contract=_CONTEXT_CHECKPOINT_RESPONSE,
-        )
+        with response_policy_scope(enforce_language=False):
+            response = api.request_model(
+                [
+                    {"role": "system", "content": _COMPACTOR_SYSTEM_PROMPT},
+                    {"role": "user", "content": json.dumps(
+                        payload, ensure_ascii=False, separators=(",", ":")
+                    )},
+                ],
+                effort=None,
+                stream=False,
+                max_retries=0,
+                response_contract=_CONTEXT_CHECKPOINT_RESPONSE,
+            )
         checkpoint = _checkpoint_from_response(response.message.content)
     except (ModelProviderError, ValueError, TypeError, json.JSONDecodeError):
         report = copy.deepcopy(compiled.budget_report)
