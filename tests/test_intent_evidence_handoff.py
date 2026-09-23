@@ -289,7 +289,17 @@ def test_full_wire_and_mcp_share_projection_and_do_not_truncate_tool_json(monkey
     payload = json.loads(result.content)
     data = payload.get("data", payload)
     assert data["confirmed_spec"] == project_confirmed_specification(spec)
-    assert data["generation_handoff"] == receipts[0]
+    # Engineering provenance is shared, while wire/budget receipts are specific
+    # to the actual caller-visible message envelope. Full-wire has a concrete
+    # conversation tail; the MCP context tool does not.
+    wire_specific = {"wire_sha256", "context_plan_sha256", "budget_report"}
+    assert {
+        key: value for key, value in data["generation_handoff"].items()
+        if key not in wire_specific
+    } == {
+        key: value for key, value in receipts[0].items()
+        if key not in wire_specific
+    }
     assert "ALTERNATIVE_ONLY" not in result.content
 
 
