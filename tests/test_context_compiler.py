@@ -217,12 +217,22 @@ def test_known_zero_usable_budget_is_not_treated_as_unknown():
     assert compiled.retrieval_packet["estimated_tokens"] == 0
 
 
-def test_request_override_controls_reserved_output_tokens():
+def test_user_selection_controls_reserved_output_tokens():
+    """The saved user selection owns the output reservation.
+
+    `generationDefaults` / `requestOverrides` are retired fields: they are read
+    only by the legacy migration layer, so a profile carrying them must not
+    change the reservation. Only a canonical v3 user selection does.
+    """
     model = profile(128_000, output=32_768)
     model["generationDefaults"] = {"max_completion_tokens": 4096}
     model["requestOverrides"] = {"max_completion_tokens": 8192}
-    budget = model_budget(model)
-    assert budget["reserved_output_tokens"] == 8192
+    assert model_budget(model)["reserved_output_tokens"] == 32_768
+
+    model["userModelSettings"] = {
+        "parameters": {"max_completion_tokens": {"mode": "value", "value": 8192}},
+    }
+    assert model_budget(model)["reserved_output_tokens"] == 8192
 
 
 def test_budget_estimate_covers_serialized_generation_packet():

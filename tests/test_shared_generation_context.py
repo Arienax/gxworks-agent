@@ -13,7 +13,6 @@ import knowledge.retriever as knowledge_retriever
 from agent_runtime.plc_tools import build_default_tool_registry, build_tool_context
 from application.generation_context import generation_user_input, public_generation_ladder
 from application.confirmed_generation_context import CONFIRMED_GENERATION_REQUEST
-from shared.context_policy import POLICY_NAMES, context_policy_scope
 
 
 def _ladder():
@@ -30,9 +29,8 @@ def _ladder():
     }
 
 
-@pytest.mark.parametrize("policy", POLICY_NAMES)
 @pytest.mark.parametrize("editing", [False, True])
-def test_api_and_external_context_have_identical_generation_instructions(monkeypatch, policy, editing):
+def test_api_and_external_context_have_identical_generation_instructions(monkeypatch, editing):
     calls = []
 
     def retrieve(query, **kwargs):
@@ -53,15 +51,14 @@ def test_api_and_external_context_have_identical_generation_instructions(monkeyp
         ladder=ladder,
     )
     model_request = generation_user_input(requirement, is_edit_mode=editing)
-    with context_policy_scope(policy):
-        messages, history, persist = api._prepare_api_call(
-            model_request, "offline", "high", "ladder", plc_model="FX3U",
-            is_edit_mode=editing, confirmed_spec=spec, current_version_json=ladder,
-            conversation_history=[{"role": "assistant", "content": "Private old conversation"}],
-        )
-        api_calls = copy.deepcopy(calls)
-        calls.clear()
-        result = build_default_tool_registry().call("get_generation_context", {"user_requirement": requirement}, context)
+    messages, history, persist = api._prepare_api_call(
+        model_request, "offline", "high", "ladder", plc_model="FX3U",
+        is_edit_mode=editing, confirmed_spec=spec, current_version_json=ladder,
+        conversation_history=[{"role": "assistant", "content": "Private old conversation"}],
+    )
+    api_calls = copy.deepcopy(calls)
+    calls.clear()
+    result = build_default_tool_registry().call("get_generation_context", {"user_requirement": requirement}, context)
     assert result["ok"], result
     data = result["data"]
     assert data["generation_instructions"] == messages[0]["content"]
@@ -89,8 +86,7 @@ def test_empty_arguments_use_bound_model_and_api_retrieval_failure_fallback(monk
 
     monkeypatch.setattr(knowledge_retriever, "build_knowledge_context", unavailable)
     context = build_tool_context({"id": "empty", "plc_model": model, "target_mode": target_mode})
-    with context_policy_scope("legacy"):
-        result = build_default_tool_registry().call("get_generation_context", {}, context)
+    result = build_default_tool_registry().call("get_generation_context", {}, context)
     assert result["ok"]
     data = result["data"]
     assert data["plc_model"] == model
@@ -157,7 +153,7 @@ def test_optional_requirement_does_not_open_server_owned_context(arguments):
 def test_context_can_run_in_a_process_with_provider_config_and_desktop_imports_blocked(tmp_path):
     script = "import importlib.abc, json, sys, types\nclass BlockPrivate(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if fullname.split('.')[0] in {'api', 'model_provider', 'openai', 'config_manager', 'credential_store',\n                                     'PyQt5', 'PyQt6', 'qt_compat', 'main', 'pywinauto', 'win32com'}:\n            raise AssertionError('Unexpected dependency: ' + fullname)\nsys.meta_path.insert(0, BlockPrivate())\nsys.modules['knowledge.retriever'] = types.SimpleNamespace(build_knowledge_context=lambda *a, **k: '')\nfrom agent_runtime.plc_tools import build_default_tool_registry, build_tool_context\nresult = build_default_tool_registry().call('get_generation_context', {'user_requirement': 'FX3U T1 K30'},\n    build_tool_context({'id': 'isolated', 'plc_model': 'FX3U'}))\nassert result['ok'], result\nassert result['data']['generation_instructions']\nprint(json.dumps({'ok': True}))\n"
     environment = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"),
-                   "GXWORKS_CONTEXT_POLICY": "legacy", "PYTHONDONTWRITEBYTECODE": "1"}
+                   "PYTHONDONTWRITEBYTECODE": "1"}
     result = subprocess.run([sys.executable, "-c", script], cwd=tmp_path, env=environment,
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr

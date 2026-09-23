@@ -266,7 +266,7 @@ def test_http_reconfirmation_after_address_edit_outputs_the_new_wiring(tmp_path,
     from integrations.web.app import create_app
     from application.workbench import WorkbenchService
     from model_runtime.provider import OpenAICompatibleProvider
-    from test_web_api import ORIGIN, OPERATOR, _login, _complete
+    from test_web_api import ORIGIN, OPERATOR, _login, _complete, offline_runtime_profile
     from test_spec_choice_metadata import _analysis
     from plc.ir import ir_to_ladder
     calls = []
@@ -364,7 +364,7 @@ def test_http_known_address_polarity_survives_save_edit_and_generation(tmp_path)
     from integrations.web.app import create_app
     from application.workbench import WorkbenchService
     from model_runtime.provider import TextDelta, SystemMessage
-    from test_web_api import ORIGIN, OPERATOR, _login, _complete
+    from test_web_api import ORIGIN, OPERATOR, _login, _complete, offline_runtime_profile
     from plc.ir import ir_to_ladder
 
     declarations = """FX3U。这里只验证启停输入与保持输出的绑定，其他行是已声明接口。
@@ -386,7 +386,7 @@ Y010：Sorter 3 belt
     }
 
     class Provider:
-        profile = {}
+        profile = offline_runtime_profile("offline-binding-fixture")
 
         def __init__(self):
             self.requests = []
@@ -417,7 +417,10 @@ Y010：Sorter 3 belt
                 assert len(rows) == 11
                 assert {"X1", "X5", "Y10", "D0"} <= rows.keys() and "X3" not in rows
                 assert rows["X5"] == "停机输入" and rows["Y10"] == "Sorter 3 belt"
-                bindings = {b["role"]: b for b in projected["io_bindings"]}
+                # role is optional: a binding the model declared without a role hint
+                # keeps its identity but carries no role, so only role-bearing rows
+                # take part in the projection the assertions below check.
+                bindings = {b["role"]: b for b in projected["io_bindings"] if b.get("role")}
                 assert bindings["start"]["address"] == "X1" and bindings["start"]["active_level"] == 1
                 assert bindings["stop"]["address"] == "X5" and bindings["stop"]["active_level"] == 0
                 assert {p["id"]: p["value"] for p in projected["parameters"]} == answers
@@ -427,7 +430,7 @@ Y010：Sorter 3 belt
 
     provider = Provider()
     service = WorkbenchService(tmp_path / "workspace", tmp_path / "state",
-                               model_factory=lambda: (provider, {"model": "offline-binding-fixture"}))
+                               model_factory=lambda: (provider, provider.profile))
     app = create_app(service.store.base_dir, state_dir=service.state_dir, service=service,
                      origin=ORIGIN, operator_token=OPERATOR)
     with TestClient(app, base_url=ORIGIN) as client:

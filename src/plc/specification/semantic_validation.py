@@ -544,7 +544,7 @@ def _legacy_compatibility_check(ladder, confirmed_spec, plc_model):
         "requirements": [],
         "checks": [{
             "check": "selected_approach_contract",
-            "status": "deferred_to_ladder_validation"
+            "status": "deferred_to_review"
             if isinstance(contract, Mapping) and contract
             else "not_applicable",
         }],

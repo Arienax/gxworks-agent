@@ -11,6 +11,7 @@ from application.compact_protocol import CompactProtocolError, expand_compact_la
 from application.confirmed_generation_context import build_confirmed_generation_context, project_confirmed_specification
 from application.context_compiler import ContextCompiler, ContextCompilerInput
 from plc.specification.bindings import confirmed_input_levels
+from test_web_api import offline_runtime_profile
 
 
 OPAQUE = "输出触点与启动触点并联自锁，停止触点串联断开输出"
@@ -262,8 +263,8 @@ def test_model_window_does_not_override_task_evidence_allowance(monkeypatch):
 
 
 class OneResponse:
-    profile = {"id": "offline-input-regression", "adapter": "openai_compatible", "model": "offline-input-regression",
-               "capabilities": {"structured_output": True}}
+    profile = offline_runtime_profile("offline-input-regression")
+
     def __init__(self, payload):
         self.payload = payload
         self.requests = []

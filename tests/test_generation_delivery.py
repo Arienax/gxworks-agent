@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from application.workbench import WorkbenchService
 from application.workspace import ConflictError
 from model_runtime.provider import TextDelta
-from test_web_api import ORIGIN, _Provider, _app, _complete, _login, offline, _ladder
+from test_web_api import ORIGIN, _Provider, _app, _complete, _login, offline, _ladder, offline_runtime_profile
 
 
 def prepared(tmp_path, blocked=False):
@@ -151,7 +151,7 @@ def test_version_redraw_in_readonly_session_does_not_migrate(offline, tmp_path):
 class BrokenCompactProvider:
     def __init__(self):
         self.requests = []
-        self.profile = {"capabilities": {}}
+        self.profile = offline_runtime_profile()
 
     def stream(self, request):
         self.requests.append(request)

@@ -69,7 +69,6 @@ Owns prompt assembly, token/context budgeting, RAG query construction, retrieval
 | `tests/test_instruction_fact_context.py` | task-directed instruction evidence assembly, source integrity and final-budget receipts; no behavioral certification |
 | `tests/test_instruction_applicability_rag.py` | focused coverage for instruction applicability rag |
 | `tests/test_prompt_context_budget.py` | focused coverage for prompt context budget |
-| `tests/test_prompt_context_policy.py` | focused coverage for prompt context policy |
 | `tests/test_prompt_slim_generation.py` | focused coverage for prompt slim generation |
 | `tests/test_rag_instruction_recall.py` | focused coverage for rag instruction recall |
 | `tests/test_rag_natural_language_recall.py` | focused coverage for rag natural language recall |
@@ -275,6 +274,7 @@ Owns source/import ownership, architecture constraints, issue-to-test linkage, W
 | Test file | File-level focus |
 | --- | --- |
 | `tests/test_architecture_boundaries.py` | focused coverage for architecture boundaries |
+| `tests/test_architecture_boundary_cleanup.py` | retired runtime control surfaces stay retired: no context-policy import, no workflow reasoning-effort defaults, no dedicated self-hold checker module |
 | `tests/test_issue_test_links.py` | focused coverage for issue test links |
 | `tests/test_source_layout.py` | source/import ownership plus completeness of this test-boundary registry |
 | `tests/test_windows_credentials.py` | focused coverage for windows credentials |

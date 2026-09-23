@@ -17,9 +17,7 @@ class InvalidProvider:
         yield TextDelta('{"rungs": [PRIVATE_INCOMPLETE')
 
 
-@pytest.mark.parametrize('policy',['legacy','adaptive'])
-def test_failed_job_export_contains_user_and_model_timeline(tmp_path, monkeypatch, policy):
-    monkeypatch.setenv('GXWORKS_CONTEXT_POLICY', policy)
+def test_failed_job_export_contains_user_and_model_timeline(tmp_path, monkeypatch):
     monkeypatch.setattr(api, 'load_full_config', lambda: {})
     monkeypatch.setattr(api, 'get_active_provider', lambda: pytest.fail('Live provider is forbidden'))
     p = InvalidProvider()
