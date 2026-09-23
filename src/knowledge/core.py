@@ -747,7 +747,7 @@ def _entity_references(connection, schema, terms, plc_model, task_type, source_l
         _MAX_ENTITY_ROWS_PER_TERM,
     )
     scope_values = []
-    if source_lanes is not None and chunks_table:
+    if chunks_table and (source_lanes is not None or exclude_chunk_types or exclude_structured_kinds):
         from knowledge.scope import source_subquery
         subquery, scope_values = source_subquery(
             connection, schema, source_lanes,
@@ -1040,7 +1040,7 @@ def _fts_references(connection, schema, expression, candidate_limit, source_lane
         "FROM {name} WHERE {name} MATCH ? ORDER BY _bm25 LIMIT ?"
     ).format(name=table_name)
     params = [expression]
-    if source_lanes is not None and schema.get("chunks"):
+    if schema.get("chunks") and (source_lanes is not None or exclude_chunk_types or exclude_structured_kinds):
         from knowledge.scope import source_subquery
         fts_id = _first_column(table["columns"], _CHUNK_ID_COLUMNS)
         subquery, values = source_subquery(
@@ -1140,7 +1140,7 @@ def _dense_references(connection, schema, query, candidate_limit, structured_ref
         from knowledge.dense import dense_search
 
         options = {}
-        if source_lanes is not None:
+        if source_lanes is not None or exclude_chunk_types or exclude_structured_kinds:
             from knowledge.scope import source_subquery
             sql, values = source_subquery(
                 connection, schema, source_lanes,
