@@ -249,7 +249,7 @@ def test_generation_budget_uses_the_application_wire_messages_when_renderer_is_b
         plc_model="FX3U",
         task_type="generate",
         generation_request="Generate.",
-        wire_renderer=lambda runtime, evidence, request, _program: {
+        wire_renderer=lambda runtime, evidence, request, _program, _checkpoint, _history: {
             "messages": render_wire_messages(
                 "SYSTEM\n" + json.dumps(runtime, ensure_ascii=False, separators=(",", ":"))
                 + "\nEVIDENCE\n" + evidence,
