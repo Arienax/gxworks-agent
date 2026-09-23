@@ -438,7 +438,7 @@
       "category": "retrieval",
       "state": "enforced",
       "owner": "knowledge.source_authority + resources/instructions/mitsubishi/instruction_source_authority.json",
-      "summary": "Duplicate official instruction records use one data-backed CPU/opcode-to-manual authority contract shared by direct structured lookup and broad retrieval compatibility.",
+      "summary": "Duplicate official instruction records use one data-backed CPU/opcode-to-manual authority contract owned by direct structured instruction resolution; broad retrieval does not apply instruction-source precedence.",
       "checks": [
         {
           "kind": "file",
@@ -461,18 +461,13 @@
         },
         {
           "kind": "contains",
-          "path": "src/knowledge/core.py",
-          "text": "authoritative_instruction_manual(opcode, plc_model)"
-        },
-        {
-          "kind": "contains",
           "path": "tests/test_structured_fact_lookup.py",
           "text": "test_instruction_source_authority_contract_is_data_backed"
         },
         {
           "kind": "contains",
           "path": "tests/test_structured_fact_lookup.py",
-          "text": "test_broad_and_direct_instruction_lookup_share_source_authority_owner"
+          "text": "test_instruction_source_authority_is_owned_only_by_structured_facts"
         }
       ],
       "tests": [
