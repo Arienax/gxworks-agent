@@ -126,6 +126,58 @@ def test_compact_agent_sends_the_compiler_budgeted_application_wire(monkeypatch)
     assert handoff["budget_report"]["compiled_budget_payload_tokens"] == wire_token_estimate(actual)
 
 
+def test_over_budget_confirmed_generation_compacts_before_agent_b(monkeypatch):
+    import application.generation_agent as agent_b
+    import application.model_api as api
+
+    provider = OneShotProvider()
+    provider.profile["context_window"] = 24_000
+    provider.profile["generationDefaults"] = {"max_completion_tokens": 2_048}
+    specification = _spec()
+    specification["intent_context"] = {
+        "schema_version": 1,
+        "requests": [
+            {
+                "id": f"r{i}",
+                "source": "user_request",
+                "text": f"OLD_CONTEXT_{i} X{i} K{i} " + ("历史上下文" * 350),
+            }
+            for i in range(10)
+        ],
+    }
+    monkeypatch.setattr(agent_b, "_build_knowledge_context", lambda *a, **k: "")
+    calls = []
+
+    def request_model(messages, **kwargs):
+        name = kwargs["response_contract"].name
+        calls.append((name, copy.deepcopy(messages)))
+        if name == "context_checkpoint":
+            return SimpleNamespace(message=SimpleNamespace(content=json.dumps({
+                "checkpoint": "Older intent checkpoint; preserve prior X/K references only for continuity."
+            })))
+        assert name == "compact_ladder"
+        return SimpleNamespace(message=SimpleNamespace(content=json.dumps({
+            "r": [{"h": None, "s": [], "b": [{"i": ["NO X0"], "o": ["COIL Y0"]}]}]
+        })))
+
+    monkeypatch.setattr(api, "request_model", request_model)
+    with api.provider_scope(provider, model_name="offline-one-shot"):
+        result = agent_b.generate_confirmed_ladder(
+            specification, "FX3U", model_name="offline-one-shot"
+        )
+
+    assert [name for name, _ in calls] == ["context_checkpoint", "compact_ladder"]
+    sent = json.dumps(calls[-1][1], ensure_ascii=False)
+    assert "# Compacted historical context" in sent
+    assert "Older intent checkpoint" in sent
+    assert "OLD_CONTEXT_0" not in sent
+    assert "OLD_CONTEXT_9" in sent
+    assert result["model_calls"] == 2
+    compaction = result["generation_handoff"]["budget_report"]["context_compaction"]
+    assert compaction["status"] == "installed"
+    assert compaction["model_calls"] == 1
+
+
 def test_injected_direct_generator_remains_one_call(tmp_path):
     calls = []
 
