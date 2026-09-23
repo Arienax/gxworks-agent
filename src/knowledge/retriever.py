@@ -306,6 +306,8 @@ def retrieve_fact_aware_knowledge(
         compact_structured_fact_record(row)
         for row in filter_records(direct, lanes)
     ]
+    covered_kinds = _covered_structured_kinds(targets, direct)
+    prefilters = _residual_prefilters(covered_kinds)
 
     residual = without_structured_targets(query, targets)
     broad = retrieve_knowledge(
@@ -315,7 +317,7 @@ def retrieve_fact_aware_knowledge(
         top_k=min(_core._MAX_TOP_K, max(12, normalized_top_k * 3)),
         char_budget=sys.maxsize,
         source_lanes=lanes,
-        exclude_chunk_types=("instruction",) if targets.get("instructions") else (),
+        **prefilters,
     ) if plan["facts"] and residual.strip() else []
     broad = filter_records(exclude_structured_target_hits(broad, targets), lanes)
 
@@ -467,9 +469,15 @@ def build_knowledge_context(
             error_targets, plc_model=plc_model, task_type=task,
         ))
 
-    # The broad retriever sees only the residual prose. Exact PLC identities are
-    # owned by the structured tables above and are filtered from broad results
-    # even if a surrounding sentence still happens to mention the same section.
+    # Close a structured owner lane only after every explicit target of that
+    # kind actually produced eligible direct evidence. Unresolved direct lookup
+    # leaves broad recall available rather than failing closed on missing data.
+    eligible_direct_results = filter_records(direct_results, plan["source_lanes"])
+    covered_kinds = _covered_structured_kinds(exact_targets, eligible_direct_results)
+    prefilters = _residual_prefilters(covered_kinds)
+
+    # The broad retriever sees only the residual prose. Structured-owner rows
+    # covered above are removed before entity/BM25/dense candidate limits.
     residual_query = without_structured_targets(query, exact_targets)
     should_retrieve_residual = bool(plan["facts"] and residual_query.strip())
     if should_retrieve_residual and task in {"generate", "edit"} and getattr(query, "precompiled", False):
@@ -479,7 +487,7 @@ def build_knowledge_context(
         residual_query, plc_model=plc_model, task_type=task,
         top_k=min(_core._MAX_TOP_K, max(12, fact_slots * 3)), char_budget=sys.maxsize,
         source_lanes=tuple(plan["source_lanes"]),
-        exclude_chunk_types=("instruction",) if instruction_targets else (),
+        **prefilters,
     ) if should_retrieve_residual else []
     broad_results = exclude_structured_target_hits(broad_results, exact_targets)
     fact_results = filter_records([*direct_results, *broad_results], plan["source_lanes"])
@@ -492,8 +500,18 @@ def build_knowledge_context(
             "errors": error_targets,
         },
         "record_ids": [str(item.get("id")) for item in direct_results if item.get("id")],
+        "direct_covered_kinds": sorted(covered_kinds),
         "residual_retrieval": bool(should_retrieve_residual),
-        "residual_pre_filters": {"exclude_chunk_types": ["instruction"]} if instruction_targets else {},
+        "residual_pre_filters": {
+            **(
+                {"exclude_chunk_types": list(prefilters["exclude_chunk_types"])}
+                if prefilters["exclude_chunk_types"] else {}
+            ),
+            **(
+                {"exclude_structured_kinds": list(prefilters["exclude_structured_kinds"])}
+                if prefilters["exclude_structured_kinds"] else {}
+            ),
+        },
         "residual_query_sha256": text_sha256(residual_query),
     }
     fact_token_budget = (available_tokens - design_used_tokens) if available_tokens is not None else None
