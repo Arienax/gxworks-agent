@@ -852,74 +852,8 @@ def _instruction_heading_terms(section):
     return terms
 
 
-def _manual_instruction_references(connection, schema, terms, plc_model, task_type, structured_refs):
-    """Recall catalogued opcodes missing from the prebuilt instruction tables.
-
-    Cache only official chapter metadata in memory for this read-only database
-    connection. A chapter title must name the opcode (including abbreviated
-    comparison families), and the original body is checked after fetching it.
-    This narrow path does not relax the generic FTS/dense relevance gates.
-    """
-
-    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
-
-    known = DEFAULT_INSTRUCTION_REGISTRY.known_mnemonics()
-    structured_terms = {
-        _normalize_text(item["matched"]).upper()
-        for item in structured_refs
-        if item["match_type"] == "structured_instruction"
-    }
-    missing = [term for term in terms if term in known and term not in structured_terms]
-    if not missing:
-        return []
-    chunks = schema.get("chunks")
-    columns = chunks["columns"] if chunks else ()
-    id_column = _first_column(columns, _CHUNK_ID_COLUMNS)
-    section_column = _first_column(columns, _SECTION_COLUMNS)
-    if not id_column or not section_column or "manual_type" not in columns:
-        return []
-    index = getattr(_thread_state, "instruction_sections", None)
-    if index is None:
-        selected_columns = list(dict.fromkeys(
-            [id_column, section_column, "manual_type"]
-            + _matching_columns(columns, _MODEL_COLUMNS + _TASK_COLUMNS)
-        ))
-        rows = connection.execute(
-            "SELECT {} FROM {} WHERE manual_type IN ({})".format(
-                ",".join(_quote_identifier(column) for column in selected_columns),
-                _quote_identifier(chunks["name"]),
-                ",".join("?" for _ in _OFFICIAL_INSTRUCTION_MANUAL_TYPES),
-            ),
-            tuple(_OFFICIAL_INSTRUCTION_MANUAL_TYPES),
-        ).fetchall()
-        index = {}
-        for row in rows:
-            section = _normalize_text(row[section_column])
-            for term in _instruction_heading_terms(section).intersection(known):
-                index.setdefault(term, []).append(row)
-        _thread_state.instruction_sections = index
-    references = []
-    # Round-robin keeps one common opcode from exhausting the candidate limit.
-    groups = [
-        [(term, row) for row in index.get(term, []) if _row_in_scope(row, plc_model, task_type)]
-        for term in missing
-    ]
-    for depth in range(min(_MAX_ENTITY_ROWS_PER_TERM, max(map(len, groups), default=0))):
-        for group in groups:
-            if depth >= len(group):
-                continue
-            term, row = group[depth]
-            references.append({
-                "kind": "id", "value": row[id_column], "matched": term,
-                "match_type": "manual_instruction", "rank": len(references),
-            })
-            if len(references) >= _MAX_CANDIDATES:
-                return references
-    return references
-
-
-def _structured_references(connection, schema, query, terms, plc_model, task_type, source_lanes=None):
-    """Return exact/metadata candidates; final ordering is owned by RRF."""
+def _broad_metadata_references(connection, schema, query, terms, plc_model, task_type, source_lanes=None):
+    """Return broad metadata-routed candidates; exact PLC facts live elsewhere."""
 
     references = []
     seen = set()
@@ -1029,60 +963,6 @@ def _structured_references(connection, schema, query, terms, plc_model, task_typ
         for row in rows:
             if _row_in_scope(row, plc_model, task_type) and _timer_range_evidence(row["text"], plc_model):
                 add(row["id"], row["section"], "manual_section")
-
-    aliases = schema.get("instruction_aliases")
-    if aliases and {
-        "alias_norm",
-        "alias",
-        "alias_type",
-        "chunk_id",
-    }.issubset(set(aliases["columns"])):
-        rows = connection.execute(
-            "SELECT alias_norm,alias,alias_type,chunk_id "
-            "FROM {} WHERE chunk_id IS NOT NULL".format(
-                _quote_identifier(aliases["name"])
-            )
-        ).fetchall()
-        for row in rows:
-            alias = str(row["alias"] or "")
-            if _literal_instruction_word(query, alias) and _alias_occurs(query, alias):
-                add(row["chunk_id"], alias, "structured_instruction")
-
-    errors = schema.get("error_records")
-    error_terms = _error_terms(query)
-    if errors and error_terms and {
-        "error_code_norm",
-        "error_code",
-        "chunk_id",
-    }.issubset(set(errors["columns"])):
-        placeholders = ",".join("?" for _value in error_terms)
-        rows = connection.execute(
-            "SELECT error_code,chunk_id FROM {} "
-            "WHERE error_code_norm IN ({}) AND chunk_id IS NOT NULL".format(
-                _quote_identifier(errors["name"]), placeholders
-            ),
-            tuple(value.casefold() for value in error_terms),
-        ).fetchall()
-        for row in rows:
-            add(row["chunk_id"], row["error_code"], "structured_error")
-
-    devices = schema.get("device_records")
-    if devices and terms and {
-        "device_norm",
-        "device",
-        "chunk_id",
-    }.issubset(set(devices["columns"])):
-        device_terms = [term for term in terms if _DEVICE_RE.fullmatch(term)]
-        for term in device_terms:
-            rows = connection.execute(
-                "SELECT device,chunk_id FROM {} "
-                "WHERE device_norm=? AND chunk_id IS NOT NULL".format(
-                    _quote_identifier(devices["name"])
-                ),
-                (term.casefold(),),
-            ).fetchall()
-            for row in rows:
-                add(row["chunk_id"], row["device"], "structured_device")
 
     cases = schema.get("debug_cases") if source_lanes is None or "debug" in source_lanes else None
     if cases and {
@@ -1490,7 +1370,7 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
         }
 
     exact_terms = _exact_terms(query)
-    structured_refs = _structured_references(
+    metadata_refs = _broad_metadata_references(
         connection,
         schema,
         query,
@@ -1500,15 +1380,11 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
         **({"source_lanes": source_lanes} if source_lanes is not None else {}),
     )
     if allowed_prefilter_ids is not None:
-        structured_refs = [
-            reference for reference in structured_refs
+        metadata_refs = [
+            reference for reference in metadata_refs
             if reference.get("kind") != "id"
             or str(reference.get("value")) in allowed_prefilter_ids
         ]
-    if "instruction" not in exclude_chunk_types:
-        structured_refs.extend(_manual_instruction_references(
-            connection, schema, exact_terms, plc_model, task_type, structured_refs
-        ))
     # Qualified routes enter the same entity pipeline as native entities. They
     # do not change the original query, official structured lookup, or dense
     # text, and cannot be triggered by bare generic software words.
@@ -1531,14 +1407,14 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
         schema,
         query,
         dense_limit,
-        structured_refs,
+        metadata_refs,
         **({"source_lanes": source_lanes} if source_lanes is not None else {}),
         exclude_chunk_types=exclude_chunk_types,
     )
 
     all_refs = [
         (reference["kind"], reference["value"])
-        for reference in structured_refs
+        for reference in metadata_refs
     ]
     all_refs.extend((kind, value) for kind, value, _entity, _rank in exact_refs)
     all_refs.extend((kind, value) for kind, value, _rank, _score in fts_refs)
@@ -1567,15 +1443,9 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
             signal.update(details)
         candidate["_signals"].append(signal)
 
-    for fallback_rank, reference in enumerate(structured_refs):
+    for fallback_rank, reference in enumerate(metadata_refs):
         row = rows.get((reference["kind"], str(reference["value"])))
         result = _chunk_result(row, meta, path, plc_model, task_type)
-        if reference["match_type"] == "structured_instruction":
-            result = _augment_structured_instruction(connection, schema, result)
-        if reference["match_type"] == "manual_instruction" and (
-            result is None or not _alias_occurs(result["text"], reference["matched"])
-        ):
-            continue
         merge_candidate(
             result,
             reference["match_type"],
@@ -1638,7 +1508,7 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
             channel = (
                 signal["type"]
                 if signal["type"] in {"entity", "bm25", "vector"}
-                else "structured"
+                else "metadata"
             )
             current = best_by_channel.get(channel)
             if current is None or signal["rank"] < current["rank"]:
@@ -1680,43 +1550,6 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
         )
     )
 
-    query_term_set = {term.casefold() for term in exact_terms}
-    from knowledge.source_authority import authoritative_instruction_manual
-
-    source_authority = {
-        opcode: authoritative_instruction_manual(opcode, plc_model)
-        for opcode in query_term_set
-    }
-    source_authority = {
-        opcode: manual_id
-        for opcode, manual_id in source_authority.items()
-        if manual_id
-    }
-    if source_authority:
-        preferred = {}
-        for candidate in candidates:
-            opcode = _normalize_text(candidate.get("instruction_opcode", "")).casefold()
-            chunk_type = _normalize_text(candidate.get("chunk_type", "")).casefold()
-            if chunk_type != "instruction" or opcode not in query_term_set:
-                continue
-            expected_manual = source_authority.get(opcode)
-            if expected_manual and candidate.get("manual_id") == expected_manual and opcode not in preferred:
-                preferred[opcode] = candidate
-
-        if preferred:
-            deduped = []
-            emitted = set()
-            for candidate in candidates:
-                opcode = _normalize_text(candidate.get("instruction_opcode", "")).casefold()
-                chunk_type = _normalize_text(candidate.get("chunk_type", "")).casefold()
-                if opcode in preferred and chunk_type == "instruction":
-                    if opcode in emitted:
-                        continue
-                    deduped.append(preferred[opcode])
-                    emitted.add(opcode)
-                    continue
-                deduped.append(candidate)
-            candidates = deduped
 
     return _select_with_budget(candidates, top_k, char_budget)
 
