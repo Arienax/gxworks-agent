@@ -234,6 +234,7 @@ def test_structure_obligation_checker_has_no_structure_specific_branch():
 
     obligations = structure_obligations("self_hold")
     assert obligations["instance_selector"] == "feedback_coil"
+    assert obligations["instance_target_role"] == {"role": "output", "required": False}
     assert tuple(obligations["required_roles"]) == ("start", "stop")
     instances = inspect_ladder_features(_self_hold())["structure_instances"]
     assert [
@@ -342,6 +343,55 @@ def test_confirmed_semantic_mismatch_is_not_a_format_repair_problem():
         ConfirmedSemanticValidationError, match="binding_predicate_mismatch"
     ):
         validate_confirmed_semantics(_self_hold(), spec, plc_model="FX3U")
+
+
+def test_structure_binding_predicates_use_confirmed_output_instance():
+    from plc.specification.semantic_validation import (
+        ConfirmedSemanticValidationError,
+        validate_confirmed_semantics,
+    )
+
+    # Y0 is the confirmed output but has the wrong stop predicate for an
+    # active-low stop.  A second, unrelated M10 feedback loop is correct.  The
+    # checker must not use M10 to satisfy Y0's structure obligations.
+    ladder = _self_hold()
+    ladder["rungs"].append({
+        "rung_id": 2,
+        "header_element": None,
+        "shared_inputs": [],
+        "branches": [{
+            "branch_id": 1,
+            "y_offset_level": 0,
+            "inputs": [
+                {
+                    "type": "parallel_block",
+                    "branches": [
+                        [{"type": "NO", "address": "X0"}],
+                        [{"type": "NO", "address": "M10"}],
+                    ],
+                },
+                {"type": "NO", "address": "X1"},
+            ],
+            "outputs": [{"type": "COIL", "address": "M10"}],
+        }],
+    })
+    spec = {
+        "io_bindings": [
+            {"role": "start", "kind": "X", "address": "X0", "active_level": 1},
+            {"role": "stop", "kind": "X", "address": "X1", "active_level": 0},
+            {"role": "output", "kind": "Y", "address": "Y0"},
+        ],
+        "selected_approach": {
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+            ],
+        },
+    }
+
+    with pytest.raises(
+        ConfirmedSemanticValidationError, match="binding_predicate_mismatch"
+    ):
+        validate_confirmed_semantics(ladder, spec, plc_model="FX3U")
 
 
 def test_structure_binding_predicate_checks_start_active_polarity():
