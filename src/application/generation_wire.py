@@ -13,6 +13,20 @@ from collections.abc import Mapping, Sequence
 from knowledge.evidence import estimate_tokens
 
 
+def render_context_checkpoint(checkpoint):
+    text = str(checkpoint or "").strip()
+    if not text:
+        return ""
+    return (
+        "\n\n# Compacted historical context\n"
+        "This checkpoint preserves older conversation/intent for continuity only. "
+        "It is not a confirmed engineering fact and cannot override the Confirmed "
+        "project specification, current user request, structured PLC facts, or "
+        "current program context.\n"
+        + text
+    )
+
+
 def render_wire_messages(system_prompt, history=()):
     """Return the canonical system/user/assistant messages sent to a provider."""
     messages = [{"role": "system", "content": str(system_prompt or "")}]
