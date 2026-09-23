@@ -600,11 +600,8 @@ class GenerationWorkflow:
                 repair_attempts += 1
                 return prepared_candidate["ladder"]
 
-            from plc.specification.semantic_validation import ConfirmedSemanticValidationError
             try:
                 parsed_json = parse_candidate(json_str)
-            except ConfirmedSemanticValidationError as error:
-                raise GenerationError(str(error)) from error
             except validation_errors as error:
                 try:
                     parsed_json = cascade_format_repair(error)
