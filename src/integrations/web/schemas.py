@@ -85,10 +85,6 @@ class ModelProfileUpdate(Command):
     name: str | None = Field(default=None, min_length=1, max_length=256)
     model: str | None = Field(default=None, min_length=1, max_length=256)
     base_url: str | None = Field(default=None, min_length=1, max_length=2048)
-    capabilities: dict[str, bool] | None = None
-    generation_defaults: dict[str, Any] | None = None
-    request_overrides: dict[str, Any] | None = None
-    parameter_support: dict[str, Any] | None = None
     contract: dict[str, Any] | None = None
     user_settings: dict[str, Any] | None = None
     capability_overrides: dict[str, Any] | None = None
@@ -99,10 +95,6 @@ class ModelProfileCreate(Command):
     name: str = Field(min_length=1, max_length=256)
     model: str = Field(min_length=1, max_length=256)
     base_url: str = Field(min_length=1, max_length=2048)
-    capabilities: dict[str, bool] = Field(default_factory=dict)
-    generation_defaults: dict[str, Any] = Field(default_factory=dict)
-    request_overrides: dict[str, Any] = Field(default_factory=dict)
-    parameter_support: dict[str, Any] = Field(default_factory=dict)
     contract: dict[str, Any] = Field(default_factory=dict)
     user_settings: dict[str, Any] = Field(default_factory=dict)
     capability_overrides: dict[str, Any] = Field(default_factory=dict)
