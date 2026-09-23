@@ -13,6 +13,17 @@ from collections.abc import Mapping, Sequence
 from knowledge.evidence import estimate_tokens
 
 
+class GenerationWirePrompt(str):
+    """System-prompt compatible string carrying the exact application wire packet."""
+
+    def __new__(cls, system_prompt="", wire_packet=None):
+        result = super().__new__(cls, str(system_prompt or ""))
+        result.wire_packet = detached_wire_packet(wire_packet or {
+            "messages": [{"role": "system", "content": str(system_prompt or "")}]
+        })
+        return result
+
+
 def render_context_checkpoint(checkpoint):
     text = str(checkpoint or "").strip()
     if not text:
