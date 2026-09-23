@@ -221,3 +221,26 @@ def test_materialized_runtime_is_a_direct_resolver_input_without_legacy_fields()
     assert runtime.contract.capabilities["vision"].status == "supported"
     assert not hasattr(runtime, "parameterSupport")
     assert not hasattr(runtime, "capabilities")
+
+
+def test_legacy_extra_body_parameter_keeps_its_wire_location():
+    p = profile(
+        requestOverrides={
+            "extra_body": {
+                "reasoning_effort": "medium",
+                "fixture": True,
+            }
+        }
+    )
+
+    runtime = materialize_runtime_profile(p, api_key="key")
+    descriptor = runtime.contract.parameters["reasoning_effort"]
+    resolved = resolve_request(runtime, protocol={"stream": False}, model=runtime.model)
+
+    assert descriptor.wire_location == "extra_body"
+    assert descriptor.wire_path == ("reasoning_effort",)
+    assert resolved.options["extra_body"] == {
+        "reasoning_effort": "medium",
+        "fixture": True,
+    }
+    assert "reasoning_effort" not in resolved.options
