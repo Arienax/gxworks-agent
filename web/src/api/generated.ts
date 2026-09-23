@@ -1893,10 +1893,6 @@ export interface components {
             api_key?: string | null;
             /** Base Url */
             base_url: string;
-            /** Capabilities */
-            capabilities?: {
-                [key: string]: boolean;
-            };
             /** Capability Overrides */
             capability_overrides?: {
                 [key: string]: unknown;
