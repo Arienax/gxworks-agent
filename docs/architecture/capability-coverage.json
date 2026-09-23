@@ -764,14 +764,19 @@
           "text": "copy.deepcopy(direct_candidate)"
         },
         {
+          "kind": "python_symbol",
+          "path": "src/plc/specification/approach.py",
+          "symbol": "structure_obligations"
+        },
+        {
           "kind": "contains",
           "path": "src/plc/specification/semantic_validation.py",
-          "text": "_BLOCKING_HANDOFF_GAPS"
+          "text": "structure_binding_predicate"
         },
         {
           "kind": "contains",
           "path": "tests/test_generation_fast_path.py",
-          "text": "test_required_self_hold_missing_role_fails_closed_without_label_inference"
+          "text": "test_structure_obligation_requires_explicit_binding_roles_without_label_inference"
         },
         {
           "kind": "python_symbol",
