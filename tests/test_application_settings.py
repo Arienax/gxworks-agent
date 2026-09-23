@@ -369,7 +369,7 @@ def test_detect_does_not_reuse_saved_key_for_changed_endpoint(settings_env):
 
 
 def test_parameter_contract_roundtrips_and_is_invalidated_on_model_or_key_change(settings_env):
-    from model_runtime.capabilities import capability_scope
+    from model_runtime.legacy_migration import capability_scope
     env = settings_env
     source = copy.deepcopy(env.config["modelProfiles"][0])
     support = {"scope": capability_scope(source), "parameters": {
