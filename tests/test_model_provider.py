@@ -589,15 +589,30 @@ def test_deepseek_catalog_rejects_undeclared_json_schema_before_sdk(stream):
 def test_ladder_generation_replaces_stale_native_schema_with_current_opcode_contract(monkeypatch):
     captured = {}
     profile = _profile("zhipu-glm-5.3-flash")
-    profile["requestOverrides"]["response_format"] = {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "stale_ladder",
-            "strict": True,
-            "schema": {"type": "object"},
-        },
+    from model_runtime.contract import (
+        CapabilityContract, CapabilityDescriptor, contract_scope,
+    )
+    capabilities = {
+        "structured_output": CapabilityDescriptor.from_dict({
+            "status": "supported",
+            "source": "manual",
+            "modes": ["json_schema"],
+        })
     }
-    monkeypatch.setattr(api, "_workflow_provider", lambda: SimpleNamespace(profile=profile))
+    contract = CapabilityContract(
+        contract_scope(profile, {}, api_key=None),
+        capabilities,
+        {},
+    )
+    profile["capabilityContract"] = contract.to_dict()
+    profile["userModelSettings"] = {
+        "scope": profile["capabilityContract"]["scope"],
+        "parameters": {},
+    }
+    monkeypatch.setattr(
+        api, "_workflow_provider",
+        lambda: SimpleNamespace(profile=profile, api_key=None),
+    )
     monkeypatch.setattr(
         api,
         "_prepare_api_call",
