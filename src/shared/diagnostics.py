@@ -55,7 +55,6 @@ _ENUMS = {
     'status': {'completed', 'failed', 'cancelled', 'interrupted', 'running'},
     'kind': {'analysis', 'generation', 'agent', 'review', 'test_plan', 'debug_plan',
              'execution', 'gx_read', 'gx_inspect'},
-    'policy': {'legacy', 'minimal', 'manual', 'examples', 'combined', 'adaptive'},
     'format': {'text', 'json'},
     'response_format': {'text', 'json_object', 'json_schema', 'unspecified'},
     'content_type': {'str', 'list', 'dict', 'NoneType', 'int', 'bool'},
