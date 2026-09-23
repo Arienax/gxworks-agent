@@ -246,7 +246,7 @@ def generate_confirmed_ladder(
     on_context=None,
     decision_receipt_id=None,
 ):
-    """Make one streaming model call, then locally expand the compact plan."""
+    """Generate once after any optional pre-generation context compaction."""
     import application.model_api as api
 
     model = str(plc_model or "FX3U").strip().upper() or "FX3U"
@@ -296,8 +296,13 @@ def generate_confirmed_ladder(
             on_stage("compact_normalized", "已在本地兼容确定性的表示差异；正在展开梯形图，未增加模型请求")
     ladder, representation = _decode_generated_ladder(compact, projected, model)
     diagnostics.emit("generation_representation", stage="compact_protocol", representation=representation)
+    compaction = (
+        context.handoff.get("budget_report", {}).get("context_compaction", {})
+        if isinstance(context.handoff, dict) else {}
+    )
+    compaction_calls = int(compaction.get("model_calls") or 0)
     return {
         "ladder": ladder,
-        "model_calls": 1,
+        "model_calls": 1 + compaction_calls,
         "generation_handoff": context.to_dict()["handoff"],
     }
