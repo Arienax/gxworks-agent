@@ -711,7 +711,7 @@
       "category": "generation",
       "state": "enforced",
       "owner": "plc.generation.prepare_ladder_candidate + plc.specification.semantic_validation",
-      "summary": "Fresh confirmed Agent B output passes structural acceptance followed by one requirement registry. Structure requirements come from implementation_semantics; opcode/device/exact-instance requirements come from Core-owned explicit_user_constraints. Capability-specific deterministic checks attach to the same coverage receipt; legacy specs retain compatibility behavior.",
+      "summary": "Fresh confirmed Agent B output passes structural acceptance followed by one requirement registry. Structure requirements come from implementation_semantics; declarative structure obligations bind canonical I/O roles, electrical predicates and optional confirmed targets to one inspected structure instance. Opcode/device/exact-instance requirements come from Core-owned explicit_user_constraints; legacy specs retain compatibility behavior.",
       "checks": [
         {
           "kind": "python_symbol",
@@ -772,6 +772,16 @@
           "kind": "contains",
           "path": "src/plc/specification/semantic_validation.py",
           "text": "structure_binding_predicate"
+        },
+        {
+          "kind": "contains",
+          "path": "src/plc/specification/semantic_validation.py",
+          "text": "structure_instance_target"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_generation_fast_path.py",
+          "text": "test_structure_binding_predicates_use_confirmed_output_instance"
         },
         {
           "kind": "contains",
