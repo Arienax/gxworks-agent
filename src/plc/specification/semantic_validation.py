@@ -12,13 +12,6 @@ from collections.abc import Mapping
 from plc.validation import PLCJsonValidationError
 
 _VERSION = "confirmed-semantics-v2"
-_BLOCKING_HANDOFF_GAPS = frozenset({
-    "missing_roles",
-    "ambiguous_roles",
-    "missing_input_levels",
-})
-
-
 class ConfirmedSemanticValidationError(PLCJsonValidationError):
     """A candidate or semantic handoff contradicts confirmed machine facts."""
 
@@ -142,33 +135,6 @@ def _instruction_instance_coverage(ladder, requirements):
     return rows, violations
 
 
-def _self_hold_truth_table_coverage(ladder, confirmed_spec, requirements):
-    """Registered capability checker for a structure semantic, not text inference."""
-    targets = [row for row in requirements
-               if row.get("kind") == "structure"
-               and row.get("status") == "required"
-               and row.get("value") == "self_hold"]
-    if not targets:
-        return [], []
-    from plc.specification.checks import check_direct_self_hold
-    try:
-        result = check_direct_self_hold(ladder, confirmed_spec)
-    except PLCJsonValidationError as error:
-        raise ConfirmedSemanticValidationError(str(error)) from error
-    row = dict(result)
-    row["requirement_id"] = targets[0]["requirement_id"]
-    row["semantic_status"] = "required"
-    if row.get("status") == "not_covered":
-        row["status"] = "unresolved"
-        reason = str(row.get("reason") or "unknown")
-        if reason in _BLOCKING_HANDOFF_GAPS:
-            raise ConfirmedSemanticValidationError(
-                "$.confirmed_spec.io_bindings: required semantic handoff "
-                f"is incomplete ({reason})"
-            )
-    return [row], []
-
-
 def _feature_checker(ladder, _confirmed_spec, requirements):
     return _feature_coverage(ladder, requirements)
 
@@ -180,31 +146,24 @@ def _instruction_instance_checker(ladder, _confirmed_spec, requirements):
 _CHECKER_REGISTRY = (
     ("contract_features", _feature_checker),
     ("instruction_instances", _instruction_instance_checker),
-    ("self_hold_truth_table", _self_hold_truth_table_coverage),
 )
 
 
 def _legacy_compatibility_check(ladder, confirmed_spec, plc_model):
-    """Preserve old narrow behavior for saved specs without implementation_semantics."""
+    """Old snapshots remain readable; ladder_v1 validation owns old contracts."""
     selected = confirmed_spec.get("selected_approach") if isinstance(confirmed_spec, Mapping) else None
     contract = selected.get("generation_contract") if isinstance(selected, Mapping) else None
-    checks = [{
-        "check": "selected_approach_contract",
-        "status": "deferred_to_review" if isinstance(contract, Mapping) and contract else "not_applicable",
-    }]
-    from plc.specification.checks import check_direct_self_hold
-    try:
-        checks.append(check_direct_self_hold(ladder, confirmed_spec))
-    except PLCJsonValidationError as error:
-        raise ConfirmedSemanticValidationError(str(error)) from error
-    covered = [row for row in checks if row.get("status") == "verified"]
-    unresolved = [row for row in checks if row.get("status") in {"not_covered", "unresolved"}]
     return {
         "version": _VERSION,
         "plc_model": str(plc_model or "").strip().upper(),
-        "status": "verified" if covered and not unresolved else "partial" if covered else "not_applicable",
+        "status": "not_applicable",
         "requirements": [],
-        "checks": checks,
+        "checks": [{
+            "check": "selected_approach_contract",
+            "status": "deferred_to_ladder_validation"
+            if isinstance(contract, Mapping) and contract
+            else "not_applicable",
+        }],
         "legacy_compatibility": True,
     }
 
