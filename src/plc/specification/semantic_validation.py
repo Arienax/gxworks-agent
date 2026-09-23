@@ -11,7 +11,7 @@ from collections.abc import Mapping
 
 from plc.validation import PLCJsonValidationError
 
-_VERSION = "confirmed-semantics-v2"
+_VERSION = "confirmed-semantics-v3"
 class ConfirmedSemanticValidationError(PLCJsonValidationError):
     """A candidate or semantic handoff contradicts confirmed machine facts."""
 
@@ -473,14 +473,25 @@ def _structure_obligation_coverage(ladder, confirmed_spec, requirements):
             ),
             None,
         )
+        best = matched
+        if best is None and instances and prepared:
+            best = max(
+                instances,
+                key=lambda instance: sum(
+                    _predicate_matches_instance(requirement, expected, instance)
+                    for requirement, expected in prepared
+                ),
+            )
         reason = (
-            None
-            if matched is not None
-            else "structure_instance_not_found"
+            "structure_instance_not_found"
             if not instances
             else "binding_predicate_mismatch"
         )
         for requirement, expected in prepared:
+            predicate_ok = (
+                best is not None
+                and _predicate_matches_instance(requirement, expected, best)
+            )
             row = {
                 "requirement_id": requirement["requirement_id"],
                 "check": "structure_binding_predicate",
@@ -489,12 +500,12 @@ def _structure_obligation_coverage(ladder, confirmed_spec, requirements):
                 "role": requirement.get("role"),
                 "predicate_key": requirement.get("predicate_key"),
                 "expected": expected,
-                "status": "verified" if matched is not None else "violated",
+                "status": "verified" if predicate_ok else "violated",
             }
-            if matched is not None:
-                row["rung_id"] = matched.get("rung_id")
-                row["target"] = matched.get("target")
-            else:
+            if best is not None:
+                row["rung_id"] = best.get("rung_id")
+                row["target"] = best.get("target")
+            if not predicate_ok:
                 row["reason"] = reason
                 violations.append(row)
             rows.append(row)
