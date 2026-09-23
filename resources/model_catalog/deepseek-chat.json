@@ -99,6 +99,18 @@
       "modes": [
         "json_object"
       ]
+    },
+    "reasoning": {
+      "status": "supported",
+      "source": "catalog"
+    },
+    "thinking_required": {
+      "status": "supported",
+      "source": "catalog"
+    },
+    "disable_tool_choice_with_thinking": {
+      "status": "supported",
+      "source": "catalog"
     }
   },
   "references": [
