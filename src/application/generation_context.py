@@ -436,7 +436,11 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
 
         history = copy.deepcopy(wire_history) if isinstance(wire_history, list) else None
 
-        def confirmed_wire_renderer(runtime_spec, evidence_text, generation_request, _current_program):
+        def confirmed_wire_renderer(
+            runtime_spec, evidence_text, generation_request, _current_program,
+            context_checkpoint, runtime_history,
+        ):
+            from application.generation_wire import render_context_checkpoint
             selected = prompt_builder(
                 target_mode,
                 is_edit_mode=is_edit_mode,
@@ -454,6 +458,7 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
                     runtime_spec,
                     compact=bool(evidence_text),
                 )
+                + render_context_checkpoint(context_checkpoint)
                 + str(evidence_text or ""),
                 runtime_spec,
             )
@@ -465,7 +470,9 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
                 task_type=normalized_task,
             )
             message_history = (
-                history
+                runtime_history
+                if isinstance(runtime_history, list) and runtime_history
+                else history
                 if history is not None
                 else [{"role": "user", "content": generation_request}]
             )
@@ -481,6 +488,7 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
             knowledge_builder=knowledge_builder,
             model_profile=model_profile,
             wire_renderer=confirmed_wire_renderer,
+            wire_history=history or [],
         )
         confirmed_context = context.confirmed_spec
         user_requirement = context.generation_request
