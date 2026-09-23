@@ -127,15 +127,44 @@ def source_sql(connection, schema, lanes=None, *, exclude_chunk_types=()):
     return "(" + predicate + ")", [value for pair in accepted for value in pair]
 
 
-def source_subquery(connection, schema, lanes=None, *, rowid=False, exclude_chunk_types=()):
+def source_subquery(
+    connection, schema, lanes=None, *, rowid=False,
+    exclude_chunk_types=(), exclude_structured_kinds=(),
+):
     from knowledge.core import _first_column, _CHUNK_ID_COLUMNS, _quote_identifier
     table = schema["chunks"]
-    identifier = None if rowid else _first_column(table["columns"], _CHUNK_ID_COLUMNS)
+    chunk_id_column = _first_column(table["columns"], _CHUNK_ID_COLUMNS)
+    identifier = None if rowid else chunk_id_column
     identifier = _quote_identifier(identifier) if identifier else "rowid"
+    owner_identifier = (
+        _quote_identifier(chunk_id_column) if chunk_id_column else "rowid"
+    )
     predicate, values = source_sql(
         connection, schema, lanes, exclude_chunk_types=exclude_chunk_types,
     )
-    return f"SELECT {identifier} FROM {_quote_identifier(table['name'])} WHERE {predicate}", values
+    owner_tables = {
+        "device": "device_records",
+        "error": "error_records",
+    }
+    structured_clauses = []
+    for raw_kind in exclude_structured_kinds or ():
+        kind = str(raw_kind or "").strip().casefold()
+        owner_name = owner_tables.get(kind)
+        owner = schema.get(owner_name) if owner_name else None
+        if not owner or "chunk_id" not in owner["columns"]:
+            continue
+        structured_clauses.append(
+            f"{owner_identifier} NOT IN ("
+            f"SELECT {_quote_identifier('chunk_id')} "
+            f"FROM {_quote_identifier(owner['name'])} "
+            f"WHERE {_quote_identifier('chunk_id')} IS NOT NULL)"
+        )
+    if structured_clauses:
+        predicate = "(" + predicate + ") AND " + " AND ".join(structured_clauses)
+    return (
+        f"SELECT {identifier} FROM {_quote_identifier(table['name'])} WHERE {predicate}",
+        values,
+    )
 
 def runtime_status():
     """Probe the installed router and bundled index in THIS interpreter, offline."""
