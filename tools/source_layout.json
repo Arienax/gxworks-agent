@@ -20,7 +20,6 @@
     "api": "application.model_api",
     "knowledge_retriever": "knowledge.retriever",
     "knowledge_retriever_core": "knowledge.core",
-    "knowledge_retriever_phase2c": "knowledge.supporting_reranker",
     "dense_retriever": "knowledge.dense",
     "gxw2_skill_concepts": "knowledge.gxworks2_concepts",
     "pattern_library": "knowledge.patterns",
