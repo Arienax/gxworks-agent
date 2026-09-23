@@ -703,7 +703,7 @@ def _fts_match_quality(query, result, bm25_score=0.0):
     return (coverage if relevant else 0.0), matched
 
 
-def _entity_references(connection, schema, terms, plc_model, task_type, source_lanes=None, exclude_chunk_types=()):
+def _entity_references(connection, schema, terms, plc_model, task_type, source_lanes=None, exclude_chunk_types=(), exclude_structured_kinds=()):
     table = schema.get("entity_index")
     if not table or not terms:
         return []
@@ -750,7 +750,9 @@ def _entity_references(connection, schema, terms, plc_model, task_type, source_l
     if source_lanes is not None and chunks_table:
         from knowledge.scope import source_subquery
         subquery, scope_values = source_subquery(
-            connection, schema, source_lanes, exclude_chunk_types=exclude_chunk_types,
+            connection, schema, source_lanes,
+            exclude_chunk_types=exclude_chunk_types,
+            exclude_structured_kinds=exclude_structured_kinds,
         )
         scope_clause = f" AND e.{_quote_identifier(chunk_column)} IN ({subquery})"
         sql = sql.replace(" WHERE (" + term_clause + ")", " WHERE (" + term_clause + ")" + scope_clause)
@@ -1028,7 +1030,7 @@ def _broad_metadata_references(connection, schema, query, terms, plc_model, task
 
     return references[:_MAX_CANDIDATES]
 
-def _fts_references(connection, schema, expression, candidate_limit, source_lanes=None, exclude_chunk_types=()):
+def _fts_references(connection, schema, expression, candidate_limit, source_lanes=None, exclude_chunk_types=(), exclude_structured_kinds=()):
     table = schema.get("chunks_fts")
     if not table or not expression:
         return []
@@ -1044,6 +1046,7 @@ def _fts_references(connection, schema, expression, candidate_limit, source_lane
         subquery, values = source_subquery(
             connection, schema, source_lanes, rowid=not bool(fts_id),
             exclude_chunk_types=exclude_chunk_types,
+            exclude_structured_kinds=exclude_structured_kinds,
         )
         identifier = _quote_identifier(fts_id) if fts_id else "rowid"
         sql = sql.replace(" ORDER BY _bm25", f" AND {identifier} IN ({subquery}) ORDER BY _bm25")
@@ -1127,7 +1130,7 @@ def _dense_index_ready(connection, schema):
     return result
 
 
-def _dense_references(connection, schema, query, candidate_limit, structured_refs, source_lanes=None, exclude_chunk_types=()):
+def _dense_references(connection, schema, query, candidate_limit, structured_refs, source_lanes=None, exclude_chunk_types=(), exclude_structured_kinds=()):
     if not _query_has_dense_scope(query, structured_refs):
         return []
     state = _dense_index_ready(connection, schema)
@@ -1140,7 +1143,9 @@ def _dense_references(connection, schema, query, candidate_limit, structured_ref
         if source_lanes is not None:
             from knowledge.scope import source_subquery
             sql, values = source_subquery(
-                connection, schema, source_lanes, exclude_chunk_types=exclude_chunk_types,
+                connection, schema, source_lanes,
+                exclude_chunk_types=exclude_chunk_types,
+                exclude_structured_kinds=exclude_structured_kinds,
             )
             options["allowed_ids"] = {str(row[0]) for row in connection.execute(sql, values)}
         return dense_search(
@@ -1347,7 +1352,7 @@ def _select_with_budget(candidates, top_k, char_budget):
     return selected
 
 
-def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_budget, source_lanes=None, exclude_chunk_types=()):
+def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_budget, source_lanes=None, exclude_chunk_types=(), exclude_structured_kinds=()):
     connection = _connection(path, identity)
     schema = _schema(connection)
     if "chunks" not in schema:
@@ -1358,12 +1363,18 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
         for value in exclude_chunk_types or ()
         if str(value).strip()
     }))
+    exclude_structured_kinds = tuple(sorted({
+        str(value).strip().casefold()
+        for value in exclude_structured_kinds or ()
+        if str(value).strip()
+    }))
     allowed_prefilter_ids = None
-    if exclude_chunk_types:
+    if exclude_chunk_types or exclude_structured_kinds:
         from knowledge.scope import source_subquery
         sql, values = source_subquery(
             connection, schema, source_lanes,
             exclude_chunk_types=exclude_chunk_types,
+            exclude_structured_kinds=exclude_structured_kinds,
         )
         allowed_prefilter_ids = {
             str(row[0]) for row in connection.execute(sql, values).fetchall()
@@ -1394,12 +1405,14 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
         connection, schema, entity_terms, plc_model, task_type,
         **({"source_lanes": source_lanes} if source_lanes is not None else {}),
         exclude_chunk_types=exclude_chunk_types,
+        exclude_structured_kinds=exclude_structured_kinds,
     )
     fts_limit = min(_MAX_CANDIDATES, max(60, top_k * 12))
     fts_refs = _fts_references(
         connection, schema, _fts_expression(query), fts_limit,
         **({"source_lanes": source_lanes} if source_lanes is not None else {}),
         exclude_chunk_types=exclude_chunk_types,
+        exclude_structured_kinds=exclude_structured_kinds,
     )
     dense_limit = min(_MAX_CANDIDATES, max(80, top_k * 16))
     dense_refs = _dense_references(
@@ -1410,6 +1423,7 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
         metadata_refs,
         **({"source_lanes": source_lanes} if source_lanes is not None else {}),
         exclude_chunk_types=exclude_chunk_types,
+        exclude_structured_kinds=exclude_structured_kinds,
     )
 
     all_refs = [
@@ -1679,7 +1693,7 @@ def _freeze_results(results):
 
 
 @lru_cache(maxsize=_CACHE_SIZE)
-def _retrieve_cached(identity, query, plc_model, task_type, top_k, char_budget, source_lanes=None, exclude_chunk_types=()):
+def _retrieve_cached(identity, query, plc_model, task_type, top_k, char_budget, source_lanes=None, exclude_chunk_types=(), exclude_structured_kinds=()):
     if identity[0] == "missing":
         return "[]"
     path = Path(identity[0])
@@ -1693,6 +1707,7 @@ def _retrieve_cached(identity, query, plc_model, task_type, top_k, char_budget, 
         char_budget,
         **({"source_lanes": source_lanes} if source_lanes is not None else {}),
         exclude_chunk_types=exclude_chunk_types,
+        exclude_structured_kinds=exclude_structured_kinds,
     )
     return _freeze_results(results)
 
@@ -1705,6 +1720,7 @@ def _retrieve_knowledge(
     char_budget=6000,
     source_lanes=None,
     exclude_chunk_types=(),
+    exclude_structured_kinds=(),
 ):
     """Return ranked knowledge blocks without ever opening the index eagerly.
 
@@ -1732,6 +1748,11 @@ def _retrieve_knowledge(
         for value in exclude_chunk_types or ()
         if str(value).strip()
     }))
+    normalized_structured_excluded = tuple(sorted({
+        str(value).strip().casefold()
+        for value in exclude_structured_kinds or ()
+        if str(value).strip()
+    }))
     if _query_is_out_of_scope(normalized_query, normalized_model):
         return []
     path = _index_path()
@@ -1746,6 +1767,7 @@ def _retrieve_knowledge(
             normalized_budget,
             **({"source_lanes": tuple(sorted(source_lanes))} if source_lanes is not None else {}),
             exclude_chunk_types=normalized_excluded,
+            exclude_structured_kinds=normalized_structured_excluded,
         )
     except (OSError, sqlite3.Error, TypeError, ValueError, KeyError, IndexError):
         # Exceptions are intentionally handled outside the cached function so
