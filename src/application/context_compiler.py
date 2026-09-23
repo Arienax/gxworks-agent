@@ -338,6 +338,19 @@ def _generation_packet(runtime, value, evidence_text):
     }
 
 
+def _wire_packet(renderer, runtime, value, evidence_text):
+    if renderer is None:
+        return {}
+    from application.generation_wire import normalize_wire_packet
+    rendered = renderer(
+        copy.deepcopy(runtime),
+        str(evidence_text or ""),
+        str(value.generation_request or ""),
+        copy.deepcopy(value.current_program),
+    )
+    return normalize_wire_packet(rendered)
+
+
 def _pressure(utilization):
     if utilization is None:
         return "unknown"
@@ -361,6 +374,7 @@ class ContextCompilerInput:
     task_type: str = "generate"
     generation_request: str = ""
     current_program: object = None
+    wire_renderer: object = None
 
 
 @dataclass(frozen=True)
@@ -369,6 +383,7 @@ class CompiledContext:
     retrieval_packet: dict
     provenance_receipt: dict
     budget_report: dict
+    wire_packet: dict = field(default_factory=dict)
 
     def to_dict(self):
         return {item.name: copy.deepcopy(getattr(self, item.name)) for item in fields(self)}
@@ -424,7 +439,17 @@ class ContextCompiler:
         usable = budget["usable_input_tokens"]
         original_packet = _generation_packet(persistent, value, original_evidence_text)
         original_payload_tokens = _estimate(original_packet)
-        original_estimated = original_payload_tokens + budget["protocol_overhead_tokens"]
+        original_wire = _wire_packet(
+            value.wire_renderer, persistent, value, original_evidence_text,
+        )
+        if original_wire:
+            from application.generation_wire import wire_token_estimate
+            original_budget_payload_tokens = wire_token_estimate(original_wire)
+            budget_basis = "wire_messages"
+        else:
+            original_budget_payload_tokens = original_payload_tokens
+            budget_basis = "logical_generation_packet"
+        original_estimated = original_budget_payload_tokens + budget["protocol_overhead_tokens"]
         if usable is None:
             original_utilization = None
             pressure = "unknown"
@@ -439,7 +464,15 @@ class ContextCompiler:
         provenance_saved = max(0, _estimate(context) - _estimate(runtime_context))
         generation_packet = _generation_packet(compacted_runtime, value, evidence_text)
         compiled_payload_tokens = _estimate(generation_packet)
-        compiled_estimated = compiled_payload_tokens + budget["protocol_overhead_tokens"]
+        wire_packet = _wire_packet(
+            value.wire_renderer, compacted_runtime, value, evidence_text,
+        )
+        if wire_packet:
+            from application.generation_wire import wire_token_estimate
+            compiled_budget_payload_tokens = wire_token_estimate(wire_packet)
+        else:
+            compiled_budget_payload_tokens = compiled_payload_tokens
+        compiled_estimated = compiled_budget_payload_tokens + budget["protocol_overhead_tokens"]
         utilization = (compiled_estimated / usable) if usable is not None and usable > 0 else None
         # Pressure is telemetry, not permission to trim unknown engineering
         # intent. Report actual work rather than an "aggressive" no-op label.
@@ -456,7 +489,12 @@ class ContextCompiler:
             "estimated_input_tokens": compiled_estimated,
             "original_generation_payload_tokens": original_payload_tokens,
             "compiled_generation_payload_tokens": compiled_payload_tokens,
-            "compaction_saved_tokens": max(0, original_payload_tokens - compiled_payload_tokens),
+            "budget_basis": budget_basis,
+            "original_budget_payload_tokens": original_budget_payload_tokens,
+            "compiled_budget_payload_tokens": compiled_budget_payload_tokens,
+            "compaction_saved_tokens": max(
+                0, original_budget_payload_tokens - compiled_budget_payload_tokens
+            ),
             "context_pressure": pressure,
             "pre_compaction_context_utilization": (
                 round(original_utilization, 6) if original_utilization is not None else None
@@ -488,6 +526,10 @@ class ContextCompiler:
             "persistent_spec_sha256": _fingerprint(persistent),
             "runtime_spec_sha256": _fingerprint(compacted_runtime),
             "retrieval_query_sha256": hashlib.sha256(retrieval_query.encode("utf-8")).hexdigest(),
+            "wire_sha256": (
+                __import__("application.generation_wire", fromlist=["wire_sha256"]).wire_sha256(wire_packet)
+                if wire_packet else None
+            ),
             "budget_report": report,
         }
         receipt = {
@@ -495,8 +537,11 @@ class ContextCompiler:
             "persistent_spec_sha256": plan["persistent_spec_sha256"],
             "runtime_spec_sha256": plan["runtime_spec_sha256"],
             "retrieval_query_sha256": plan["retrieval_query_sha256"],
+            "wire_sha256": plan["wire_sha256"],
             "context_pressure": pressure,
             "compression_mode": mode,
             "audit_policy": "decision_receipt_reference_only",
         }
-        return CompiledContext(generation_packet, retrieval_packet, receipt, report)
+        return CompiledContext(
+            generation_packet, retrieval_packet, receipt, report, wire_packet,
+        )
