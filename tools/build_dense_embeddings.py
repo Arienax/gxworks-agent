@@ -254,7 +254,7 @@ def main():
             "dense_artifact": output.name,
             "dense_artifact_bytes": output.stat().st_size,
             "dense_artifact_sha256": sha256(output),
-            "fusion": "entity_bm25_vector_weighted_rrf",
+            "fusion": "structured_entity_bm25_vector_rrf",
             "reranker": "deterministic_cross_signal_reranker",
             "vector_status": "ready",
         }
