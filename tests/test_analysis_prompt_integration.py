@@ -9,7 +9,6 @@ import application.analysis_results as analysis_results
 import application.generation_context as generation_context
 import knowledge.retriever as retriever
 from knowledge.evidence import context_manifest
-from shared.context_policy import context_policy_scope
 
 
 @pytest.mark.parametrize("streaming", [False, True])
@@ -116,9 +115,8 @@ def test_application_passes_analysis_policy_to_retriever(monkeypatch):
         seen.append(kwargs)
         return "FACT_EVIDENCE"
     monkeypatch.setattr(retriever, "build_knowledge_context", capture)
-    with context_policy_scope("adaptive"):
-        context = generation_context._build_knowledge_context(
-            "FX3U SFTL M8012", task_type="analysis", include_design=False)
+    context = generation_context._build_knowledge_context(
+        "FX3U SFTL M8012", task_type="analysis", include_design=False)
     assert "FACT_EVIDENCE" in context
     assert seen[0]["include_design"] is False
     assert seen[0]["design_query"] is None
@@ -131,7 +129,6 @@ def test_analysis_knowledge_defaults_never_infer_design(monkeypatch, options):
         seen.append(kwargs)
         return "FACT_EVIDENCE"
     monkeypatch.setattr(retriever, "build_knowledge_context", capture)
-    with context_policy_scope("adaptive"):
-        generation_context._build_knowledge_context(
-            "FX3U 比较 SFTL 和 WSFL，其他结构由你设计", task_type="analysis", **options)
+    generation_context._build_knowledge_context(
+        "FX3U 比较 SFTL 和 WSFL，其他结构由你设计", task_type="analysis", **options)
     assert seen[0]["include_design"] is False
