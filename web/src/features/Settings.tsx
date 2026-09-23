@@ -4,13 +4,11 @@ import type { Json, ModelSettings } from "../api/client";
 import type { components } from "../api/generated";
 import { Button, Badge } from "../components/ui";
 import { ModelParameters } from "./ModelParameterControls";
-import { ENDPOINT_PRESETS, adoptSelections, clearKnown } from "./modelParameters";
+import { ENDPOINT_PRESETS, adoptSelections } from "./modelParameters";
 import type { CapabilityContract, UserModelSettings, DiscoveryMode, Scalar } from "./modelParameters";
 
 type Profile = NonNullable<ModelSettings["profiles"]>[number] & {
   deletable?: boolean;
-  generation_defaults?: Record<string, Json>;
-  request_overrides?: Record<string, Json>;
   contract?: Record<string, Json>;
   user_settings?: Record<string, Json>;
   capability_overrides?: Record<string, Json>;
@@ -233,11 +231,7 @@ export function Settings({
   const [name, setName] = useState(""),
     [model, setModel] = useState(""),
     [baseUrl, setBaseUrl] = useState("");
-  const [secret, setSecret] = useState(""),
-    [capabilities, setCapabilities] = useState<Record<string, boolean>>({});
-  const [defaults, setDefaults] = useState("{}"),
-    [overrides, setOverrides] = useState("{}");
-  const [compatibilityText, setCompatibilityText] = useState("{}");
+  const [secret, setSecret] = useState("");
   const [error, setError] = useState(""),
     [message, setMessage] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -262,15 +256,8 @@ export function Settings({
     setMessage("");
     if (clearModels) setDiscoveredModels([]);
   };
-  const clearParameterValues = () => {
-    try {
-      const [nextDefaults, nextOverrides] = clearKnown(JSON.parse(defaults), JSON.parse(overrides), contract);
-      setDefaults(JSON.stringify(nextDefaults, null, 2));
-      setOverrides(JSON.stringify(nextOverrides, null, 2));
-    } catch { /* Keep invalid advanced JSON for the user to repair. */ }
-  };
   const changeModel = (next: string) => {
-    if (next !== model) { setManualOverrides("{}"); invalidate(); setCapabilities({}); setCompatibilityText("{}"); clearParameterValues(); }
+    if (next !== model) { setManualOverrides("{}"); invalidate(); }
     setModel(next);
   };
   useEffect(() => () => { draftRevision.current += 1; }, []);
@@ -284,13 +271,9 @@ export function Settings({
     setModel(profile?.model || "");
     setBaseUrl(profile?.base_url || "");
     setSecret("");
-    setCapabilities(profile?.capabilities || {});
-    setCompatibilityText(JSON.stringify(profile?.capabilities || {}, null, 2));
     setContract((profile?.contract || {}) as CapabilityContract);
     setUserSettings((profile?.user_settings || {}) as UserModelSettings);
     setManualOverrides(JSON.stringify(profile?.capability_overrides || {}, null, 2));
-    setDefaults(JSON.stringify(profile?.generation_defaults || {}, null, 2));
-    setOverrides(JSON.stringify(profile?.request_overrides || {}, null, 2));
     setDeleting(false);
     setDiscoveredModels([]);
     // Background job refreshes must preserve in-progress fields and secrets.
@@ -312,9 +295,6 @@ export function Settings({
     name,
     model,
     base_url: baseUrl,
-    capabilities: parse(compatibilityText),
-    generation_defaults: parse(defaults),
-    request_overrides: parse(overrides),
     contract,
     user_settings: contract.scope ? userSettings : {},
     capability_overrides: parse(manualOverrides),
@@ -344,8 +324,7 @@ export function Settings({
         ...(creating ? {} : { id: selected }),
         name: name.trim() || "Custom API",
         model: model.trim() || "__discover__",
-        base_url: baseUrl, capabilities,
-        generation_defaults: parse(defaults), request_overrides: parse(overrides),
+        base_url: baseUrl,
         contract, user_settings: contract.scope ? userSettings : {}, capability_overrides: parse(manualOverrides),
         ...(secret ? { api_key: secret } : {}),
       };
@@ -360,7 +339,7 @@ export function Settings({
       // Listing is read-only for the selected model and its current contract.
       if (discovery.contract && discovery.mode !== "list") {
         setContract(discovery.contract);
-        setUserSettings(adoptSelections(discovery.contract, userSettings, parse(defaults), parse(overrides)));
+        setUserSettings(adoptSelections(discovery.contract, userSettings));
       }
       const timing = discovery.elapsed_ms == null ? "" : ` · ${t("耗时")} ${(discovery.elapsed_ms / 1000).toFixed(1)} s`;
       setMessage((discovery.note || t("能力配置已加载（无生成请求）")) + timing +
@@ -377,10 +356,7 @@ export function Settings({
     setModel("");
     setBaseUrl("");
     setSecret("");
-    setCapabilities({}); setCompatibilityText("{}");
     invalidate(true);
-    setDefaults("{}");
-    setOverrides("{}");
     setManualOverrides("{}");
     setDiscoveredModels([]);
     setError("");
@@ -411,7 +387,7 @@ export function Settings({
       if (result.status === "failed") throw new Error(result.message);
       if (result.discovery?.contract) {
         setContract(result.discovery.contract);
-        setUserSettings(adoptSelections(result.discovery.contract, userSettings, parse(defaults), parse(overrides)));
+        setUserSettings(adoptSelections(result.discovery.contract, userSettings));
       }
       setMessage(result.message);
     });
@@ -471,7 +447,7 @@ export function Settings({
           API URL
           <input
             value={baseUrl}
-            onChange={(e) => { setBaseUrl(e.target.value); setManualOverrides("{}"); invalidate(true); setCapabilities({}); setCompatibilityText("{}"); clearParameterValues(); }}
+            onChange={(e) => { setBaseUrl(e.target.value); setManualOverrides("{}"); invalidate(true); }}
             placeholder="https://api.example.com/v1"
           />
         </label>
@@ -511,7 +487,7 @@ export function Settings({
           </datalist>
         </label>
         <p className="muted">{t("仅“验证”按钮会发送固定测试文本并可能计费；不发送工程内容，不进行全档位扫描。")}</p>
-        <ModelParameters contract={contract} settings={userSettings} defaults={defaults} overrides={overrides}
+        <ModelParameters contract={contract} settings={userSettings}
           disabled={busy || disabled} t={t} onVerify={verify} onChange={(next) => {
             draftRevision.current += 1;
             setUserSettings(next);
@@ -526,38 +502,9 @@ export function Settings({
           <Button disabled={busy || disabled || !model.trim() || !contract.scope}
             onClick={()=>verify("chat","chat")}>{t("验证模型可生成（1 次请求）")}</Button>
           <p className="muted">
-            {t("如供应商要求特定参数，可在此调整模型能力、生成参数和请求覆盖参数。")}
+            {t("供应商特有的可调参数应声明在能力合同中；这里仅保留显式 capability override。")}
           </p>
-          <label>
-            {t("旧版协议兼容选项")}
-            <textarea className="mono" aria-label={t("旧版协议兼容选项")}
-              value={compatibilityText}
-              onChange={e => { setCompatibilityText(e.target.value); invalidate();
-                try { const next = parse(e.target.value);
-                  if (Object.values(next).every(v => typeof v === "boolean")) setCapabilities(next);
-                } catch { /* Keep invalid JSON editable; the save command validates it. */ }
-              }} />
-          </label>
           {contract.scope && <details><summary>{t("查看能力合同")}</summary><pre className="mono">{JSON.stringify(contract, null, 2)}</pre></details>}
-          <label>
-            {t("生成默认参数")}
-            <textarea
-              className="mono"
-              aria-label={t("生成默认参数")}
-              value={defaults}
-              onChange={(e) => { setDefaults(e.target.value); invalidate(); }}
-            />
-          </label>
-          <p className="muted">temperature · top_p · max_tokens</p>
-          <label>
-            {t("请求覆盖参数")}
-            <textarea
-              className="mono"
-              aria-label={t("请求覆盖参数")}
-              value={overrides}
-              onChange={(e) => { setOverrides(e.target.value); invalidate(); }}
-            />
-          </label>
         </details>
         {error && (
           <p role="alert" className="error-text">
