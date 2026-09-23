@@ -323,7 +323,6 @@ class _Manager:
 
 def test_context_audit_is_mirrored_as_bounded_diagnostic_metadata(tmp_path):
     report = {
-        "policy": {"name": "legacy", "version": 1},
         "request_index": 1,
         "message_text_chars": 66000,
         "messages": [
@@ -337,7 +336,7 @@ def test_context_audit_is_mirrored_as_bounded_diagnostic_metadata(tmp_path):
         ],
         "dropped_sections": 0,
     }
-    with d.diagnostic_scope(tmp_path, "job_test", kind="generation", policy="legacy"):
+    with d.diagnostic_scope(tmp_path, "job_test", kind="generation"):
         JobContext(_Manager(), "job_test").emit("context_audit", report)
 
     rows = [
@@ -345,7 +344,7 @@ def test_context_audit_is_mirrored_as_bounded_diagnostic_metadata(tmp_path):
         for line in (tmp_path / "diagnostics" / "job_test.jsonl").read_text(encoding="utf-8").splitlines()
     ]
     event = next(row for row in rows if row["event"] == "context_audit")
-    assert event["policy"] == "legacy"
+    assert "policy" not in event
     assert event["message_chars"] == 66000
     assert event["context_section_count"] == 3
     assert event["included_section_count"] == 2
