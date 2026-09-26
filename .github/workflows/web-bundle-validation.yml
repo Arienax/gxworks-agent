@@ -31,10 +31,16 @@ jobs:
           subprocess.run(['git', 'apply', '--check', '-'], input=patch, check=True)
           subprocess.run(['git', 'apply', '-'], input=patch, check=True)
           path = Path('scripts/web_generation_e2e.py')
-          before = path.read_text()
-          old = "page.get_by_label('本版本运行记录', exact=True).select_option"
-          assert before.count(old) == 1
-          path.write_text(before.replace(old, "page.get_by_role('combobox', name='本版本运行记录', exact=True).select_option"))
+          text = path.read_text()
+          replacements = {
+              "page.get_by_label('本版本运行记录', exact=True).select_option": "page.get_by_role('combobox', name='本版本运行记录', exact=True).select_option",
+              "            await page.wait_for_function('Number(window.__replayCursor.value)>0')": "            await expect(cursor).not_to_have_value('0')",
+              "            await page.wait_for_function('(old) => Number(window.__replayCursor.value)>Number(old)', arg=paused)": "            await expect(cursor).not_to_have_value(paused)\n            assert int(await cursor.input_value()) > int(paused), 'Resuming replay reset its cursor'",
+          }
+          for old, new in replacements.items():
+              assert text.count(old) == 1
+              text = text.replace(old, new)
+          path.write_text(text)
           path = Path('scripts/web_model_settings_e2e.py')
           before = path.read_text()
           old = "                        field=page.get_by_label('配置名称',exact=True)\n                        if await field.count()"
@@ -86,20 +92,26 @@ jobs:
           cd web
           node --input-type=module <<'JS' > ../evidence/production-profile.log 2>&1
           import { build } from 'vite';
-          import { writeFileSync } from 'node:fs';
+          import { readFileSync, writeFileSync } from 'node:fs';
           import { gzipSync } from 'node:zlib';
           const root=process.cwd()+'/';
           await build({build:{write:false},plugins:[{name:'measure-production',generateBundle(_options,bundle){
-            const chunks=Object.values(bundle).filter(item=>item.type==='chunk').map(chunk=>({
-              file:chunk.fileName,entry:chunk.isEntry,bytes:Buffer.byteLength(chunk.code),gzipBytes:gzipSync(chunk.code).length,
-              imports:chunk.imports,dynamicImports:chunk.dynamicImports,
-              modules:Object.entries(chunk.modules).map(([id,info])=>({id:id.replace(root,''),renderedLength:info.renderedLength}))
-                .sort((a,b)=>(b.renderedLength||0)-(a.renderedLength||0))
-            }));
+            const chunks=Object.values(bundle).filter(item=>item.type==='chunk').map(chunk=>{
+              // Module ownership is available here, but Vite can still inject
+              // preload helpers later. Measure the already-written real build.
+              const code=readFileSync('dist/'+chunk.fileName);
+              return {
+                file:chunk.fileName,entry:chunk.isEntry,bytes:code.length,gzipBytes:gzipSync(code).length,
+                imports:chunk.imports,dynamicImports:chunk.dynamicImports,
+                modules:Object.entries(chunk.modules).map(([id,info])=>({id:id.replace(root,''),renderedLength:info.renderedLength}))
+                  .sort((a,b)=>(b.renderedLength||0)-(a.renderedLength||0))
+              };
+            });
             const byName=new Map(chunks.map(chunk=>[chunk.file,chunk])),initial=new Set();
             function visit(name){if(initial.has(name))return;initial.add(name);byName.get(name).imports.forEach(visit);}
             chunks.filter(chunk=>chunk.entry).forEach(chunk=>visit(chunk.file));
-            const report={initial:[...initial],initialBytes:[...initial].reduce((sum,name)=>sum+byName.get(name).bytes,0),
+            const report={measurement:'written production dist; module ownership from profiling build',
+              initial:[...initial],initialBytes:[...initial].reduce((sum,name)=>sum+byName.get(name).bytes,0),
               initialGzipBytes:[...initial].reduce((sum,name)=>sum+byName.get(name).gzipBytes,0),chunks};
             writeFileSync('../evidence/production-modules.json',JSON.stringify(report,null,2));
             console.log(JSON.stringify(report,null,2));
@@ -111,6 +123,15 @@ jobs:
         run: |
           set -o pipefail
           python -m pytest -q tests/test_source_layout.py tests/test_architecture_boundaries.py tests/test_web_architecture.py tests/test_web_source_entrypoints.py tests/test_web_fbd.py tests/test_simulation_workbench.py tests/test_program_exploration.py --junitxml=evidence/python-junit.xml 2>&1 | tee evidence/python-tests.log
+      - name: Lifecycle browser regression
+        if: ${{ !cancelled() && steps.web.outcome == 'success' }}
+        shell: bash
+        env:
+          GX_DELIVERY_EVIDENCE_DIR: ${{ github.workspace }}/evidence/lifecycle-repeat
+        run: |
+          set -o pipefail
+          mkdir -p evidence/lifecycle-repeat
+          python scripts/web_generation_e2e.py --lifecycle-only --web-dist web/dist --report evidence/lifecycle-repeat/report.json 2>&1 | tee evidence/lifecycle-repeat/run.log
       - name: Production generation and retained lifecycle browser regressions
         if: ${{ !cancelled() && steps.web.outcome == 'success' }}
         shell: bash
@@ -120,15 +141,6 @@ jobs:
           set -o pipefail
           mkdir -p evidence/browser
           python scripts/web_generation_e2e.py --web-dist web/dist --report evidence/browser/generation-report.json 2>&1 | tee evidence/browser/generation.log
-      - name: Repeat lifecycle browser regression on the same production commit
-        if: ${{ !cancelled() && steps.web.outcome == 'success' }}
-        shell: bash
-        env:
-          GX_DELIVERY_EVIDENCE_DIR: ${{ github.workspace }}/evidence/lifecycle-repeat
-        run: |
-          set -o pipefail
-          mkdir -p evidence/lifecycle-repeat
-          python scripts/web_generation_e2e.py --lifecycle-only --web-dist web/dist --report evidence/lifecycle-repeat/report.json 2>&1 | tee evidence/lifecycle-repeat/run.log
       - name: Production model settings browser regressions
         if: ${{ !cancelled() && steps.web.outcome == 'success' }}
         shell: bash
