@@ -14,13 +14,13 @@ export function useGenerationResult(job: Job | undefined, retry: number) {
   }>({ id: "" });
   const id = job?.kind === "generation" && job.status === "completed" ? job.id : "";
   useEffect(() => {
-    let stopped = false;
-    setResult({ id });
-    if (id) void api<Output>(`/jobs/${encodeURIComponent(id)}/output`).then(
-      (value) => { if (!stopped) setResult({ id, value }); },
-      (error: Error) => { if (!stopped) setResult({ id, error: error.message }); },
+    const controller = new AbortController();
+    setResult(old => old.id === id ? old : { id });
+    if (id) void api<Output>(`/jobs/${encodeURIComponent(id)}/output`, "GET", undefined, { signal: controller.signal }).then(
+      (value) => { if (!controller.signal.aborted) setResult({ id, value }); },
+      (error: Error) => { if (!controller.signal.aborted) setResult({ id, error: error.message }); },
     );
-    return () => { stopped = true; };
+    return () => controller.abort();
   }, [id, retry]);
   const value = result.id === id ? result.value : undefined;
   const metadata = value?.generation && typeof value.generation === "object" && !Array.isArray(value.generation)

@@ -128,7 +128,7 @@ def test_saved_confirmed_project_uses_explicit_edit_regenerate_route():
 
 
 def test_composer_route_is_resynchronized_when_same_project_matures():
-    initial_load = _between('api<Project>(`/projects/${pid}`)', '.catch((e) => setError(e.message))')
+    initial_load = _between('api<Project>(`/projects/${pid}`', '}, [pid, session]);')
     silent_reload = _between("async function reloadProjectSilently(", "async function refreshDrawing(")
     saved_version = _between("async function openSavedVersion(", "async function redrawVersion(")
 

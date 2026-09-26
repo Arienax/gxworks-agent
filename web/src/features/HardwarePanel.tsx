@@ -1,3 +1,4 @@
+import { usePanelVisible } from "../lifecycle/visibility";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { Button } from "../components/ui";
@@ -22,7 +23,8 @@ export function HardwarePanel({pid,vid,readOnly,t}:{pid:string;vid:string;readOn
     api<State>(path).then(value=>{if(stamp===epoch.current)setData(value);}).catch(error=>{if(stamp===epoch.current)setError(errorText(error));});
     return()=>{epoch.current++;};
   },[path]);
-  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[]);
+  const visible=usePanelVisible();
+  useEffect(()=>{if(!visible)return;const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[visible]);
   async function act(action:()=>Promise<unknown>, onResult?:(value:unknown)=>void) {
     if(busy||readOnly)return;
     const stamp=epoch.current;setBusy(true);setError("");

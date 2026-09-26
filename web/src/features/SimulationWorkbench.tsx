@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Play, Plus, Save, Trash2 } from "lucide-react";
 import { api } from "../api/client";
+import { usePanelVisible } from "../lifecycle/visibility";
+import { useResource } from "../lifecycle/useResource";
 import { Button } from "../components/ui";
 import "./simulation.css";
 
@@ -28,7 +30,9 @@ const encode = encodeURIComponent;
 
 export function SimulationWorkbench({ pid, vid, readOnly, t, onExecute, onDebug, onSaved, issueContext, initialPlanId, refreshKey }: Props) {
   const path = `/projects/${encode(pid)}/versions/${encode(vid)}/simulation-workbench`;
-  const [data, setData] = useState<Workbench | null>(null), [suite, setSuite] = useState<Suite | null>(null);
+  const [localRevision,setLocalRevision]=useState(0);
+  const {value:data,error:readError}=useResource<Workbench>(path, `${refreshKey ?? ""}:${localRevision}`);
+  const [suite, setSuite] = useState<Suite | null>(null);
   const [source, setSource] = useState(""), [testIndex, setTestIndex] = useState(0), [links, setLinks] = useState<Record<string, string[]>>({});
   const [issues, setIssues] = useState<string[]>([]), [savedDraft, setSavedDraft] = useState("");
   const [tab, setTab] = useState("editor"), [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
@@ -43,24 +47,24 @@ export function SimulationWorkbench({ pid, vid, readOnly, t, onExecute, onDebug,
     setIssues(plan.issue_ids); setTestIndex(0); setNotice("");
     setSavedDraft(JSON.stringify({ suite: plan.suite, links: plan.requirement_links, issues: plan.issue_ids }));
   }
+  const initialized = useRef("");
   useEffect(() => {
-    let active = true; request.current++; setBusy(false); setError(""); setNotice(""); setData(null); setSuite(null); setReplay(null); setRunId(""); setSource(""); setIssues([]); setLinks({}); setSavedDraft("");
-    api<Workbench>(path).then(value => {
-      if (!active) return;
-      setData(value);
-      const requested = initialPlanId ? value.plans.find(plan => plan.binding.plan_id === initialPlanId && plan.binding.version_id === vid) : value.plans[0];
-      if (requested) { loadPlan(requested); if (initialPlanId) setTab("editor"); }
-      else if (initialPlanId) setNotice(t("关联的方案不存在或已失效，请重新选择。"));
-      else setSuite({ ...structuredClone(value.editor.empty_suite), name: t(value.editor.empty_suite.name) });
-    }).catch(e => { if (active) setError(message(e)); });
-    return () => { active = false; request.current++; };
-  }, [path, initialPlanId]); // Explicit navigation reloads; run refreshes preserve drafts.
+    request.current++;
+    initialized.current="";
+    setBusy(false); setError(""); setNotice(""); setSuite(null); setReplay(null); setRunId(""); setSource(""); setIssues([]); setLinks({}); setSavedDraft("");
+    return () => { request.current++; };
+  }, [path, initialPlanId]);
   useEffect(() => {
-    let active = true;
-    const generation = request.current;
-    if (refreshKey !== undefined) api<Workbench>(path).then(value => { if (active && request.current === generation) setData(value); }).catch(e => { if (active && request.current === generation) setError(message(e)); });
-    return () => { active = false; };
-  }, [path, refreshKey]);
+    if (!data) return;
+    const identity = `${path}:${initialPlanId || ""}`;
+    if (initialized.current === identity) return;
+    initialized.current = identity;
+    const requested = initialPlanId ? data.plans.find(plan => plan.binding.plan_id === initialPlanId && plan.binding.version_id === vid) : data.plans[0];
+    if (requested) { loadPlan(requested); if (initialPlanId) setTab("editor"); }
+    else if (initialPlanId) setNotice(t("关联的方案不存在或已失效，请重新选择。"));
+    else setSuite({ ...structuredClone(data.editor.empty_suite), name: t(data.editor.empty_suite.name) });
+  }, [data, path, initialPlanId, vid]);
+  useEffect(() => { if (readError) setError(readError); }, [readError]);
   useEffect(() => { if (issueContext) { setTab("editor"); setNotice(""); } }, [issueContext]);
   useEffect(() => {
     let active = true; setReplay(null);
@@ -89,27 +93,30 @@ export function SimulationWorkbench({ pid, vid, readOnly, t, onExecute, onDebug,
   function addTest() { void editCommand({ action: "add_test", name_prefix: t("测试") }); }
   function addStep() { void editCommand({ action: "add_step", test_index: testIndex }); }
   async function save() {
-    if (!data || !suite) return;
+    if (!data || !suite || disabled || draftPending.current) return;
+    draftPending.current = true;
     const generation = request.current; setBusy(true); setError("");
     try {
       const value = await api<Plan>(`${path}/plans`, "POST", { suite, requirement_links: links, issue_ids: activeIssues,
         source_plan_id: source || null, expected_ir_sha256: data.ir_sha256 });
       if (request.current !== generation) return;
       loadPlan(value); setNotice(t("已保存新方案。请检查保存后的步骤，执行遵循工作区审批设置。"));
-      const refreshed = await api<Workbench>(path);
-      if (request.current !== generation) return;
-      setData(refreshed); onSaved?.();
+      // One owner refreshes server evidence; saving never remounts this draft.
+      if (onSaved) onSaved(); else setLocalRevision(n => n + 1);
     } catch (e) { if (request.current === generation) setError(message(e)); }
-    finally { if (request.current === generation) setBusy(false); }
+    finally { draftPending.current = false; if (request.current === generation) setBusy(false); }
   }
   async function execute() {
+    if (disabled || draftPending.current) return;
+    draftPending.current = true;
     setBusy(true); setError("");
-    try { await onExecute(source); } catch (e) { setError(message(e)); } finally { setBusy(false); }
+    try { await onExecute(source); } catch (e) { setError(message(e)); } finally { draftPending.current = false; setBusy(false); }
   }
   async function debug() {
-    if (!onDebug || !runId) return;
+    if (!onDebug || !runId || disabled || draftPending.current) return;
+    draftPending.current = true;
     setBusy(true); setError("");
-    try { await onDebug(runId); } catch (e) { setError(message(e)); } finally { setBusy(false); }
+    try { await onDebug(runId); } catch (e) { setError(message(e)); } finally { draftPending.current = false; setBusy(false); }
   }
   function openRun(run: RequirementRun) { setRunId(run.run_id); setRunTest(run.test_name); setTab("replay"); }
   function newPlan() { setSource(""); setSuite({ ...structuredClone(data!.editor.empty_suite), name: t(data!.editor.empty_suite.name) }); setLinks({}); setIssues([]); setSavedDraft(""); setNotice(""); }
@@ -172,11 +179,12 @@ function Expectations({ values, addresses, onChange, metadata, t }: { metadata: 
 }
 
 function WaveformReplay({ replay, initialTestName, t }: { replay: Replay; initialTestName?: string; t: (s: string) => string }) {
+  const visible=usePanelVisible();
   const [caseIndex, setCaseIndex] = useState(0), [cursor, setCursor] = useState(0), [playing, setPlaying] = useState(false);
   const current = replay.cases[caseIndex], samples = current?.observations || [];
   useEffect(() => { setCaseIndex(Math.max(0, replay.cases.findIndex(c => c.name === initialTestName))); setCursor(0); setPlaying(false); }, [replay.run_id, initialTestName]);
   useEffect(() => { setCursor(0); setPlaying(false); }, [caseIndex]);
-  useEffect(() => { if (!playing) return; const timer = window.setInterval(() => setCursor(old => { if (old >= samples.length - 1) { setPlaying(false); return old; } return old + 1; }), 200); return () => window.clearInterval(timer); }, [playing, samples.length]);
+  useEffect(() => { if (!playing || !visible) return; const timer = window.setInterval(() => setCursor(old => { if (old >= samples.length - 1) { setPlaying(false); return old; } return old + 1; }), 200); return () => window.clearInterval(timer); }, [playing, samples.length, visible]);
   const selected = samples[cursor], end = Math.max(samples.at(-1)?.at_ms || 1, 1);
   const graphs = useMemo(() => [...new Set(samples.flatMap(row => Object.keys(row.values)))].map(address => {
     const numeric = samples.map(s => s.values[address]).filter(v => typeof v === "number") as number[];

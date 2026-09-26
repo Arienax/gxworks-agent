@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { components } from "../api/generated";
 import { Button } from "../components/ui";
@@ -22,8 +22,10 @@ export function ApprovalSettingsPanel({ value, onChange, disabled, t }: {
   const [error, setError] = useState("");
   useEffect(() => { setMode(value.mode); setConsent(false); }, [value.mode, value.revision]);
   const needsConsent = mode === "full" && value.mode !== "full";
+  const pending = useRef(false);
   async function save() {
-    if (saving) return;
+    if (pending.current || disabled) return;
+    pending.current = true;
     setSaving(true); setError(""); setMessage("");
     try {
       const next = await api<ApprovalSettings>("/settings/approval", "PUT", {
@@ -31,7 +33,7 @@ export function ApprovalSettingsPanel({ value, onChange, disabled, t }: {
       });
       onChange(next); setMessage(t("审批模式已保存，仅影响后续请求。"));
     } catch (error) { setError((error as Error).message); }
-    finally { setSaving(false); }
+    finally { pending.current = false; setSaving(false); }
   }
   return <section className="approval-settings">
     <h3>{t("操作审批")}</h3>
