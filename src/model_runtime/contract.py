@@ -89,7 +89,12 @@ def path_remove(options, path):
 
 def path_set(options, path, value):
     for key in path[:-1]:
-        if key in options and not isinstance(options[key], dict):
+        # A lower-priority null is a deletion tombstone, not permanent
+        # ownership of the path. An explicit higher-priority parameter value
+        # may recreate that object; non-null scalar collisions remain invalid.
+        if key in options and options[key] is None:
+            options[key] = {}
+        elif key in options and not isinstance(options[key], dict):
             raise ValueError("Parameter wire path collides with a scalar option")
         options = options.setdefault(key, {})
     options[path[-1]] = copy.deepcopy(value)
@@ -366,18 +371,9 @@ def credential_fingerprint(key):
 
 
 def contract_scope(profile, parameters, model=None, api_key=None):
-    context = {}
-    for group in ("generationDefaults", "requestOverrides"):
-        options = copy.deepcopy(profile.get(group) or {})
-        for name, desc in parameters.items():
-            desc.remove(options, name)
-        context[group] = options
-    # These legacy switches affect the actual request shape, unlike detected
-    # capability observations. They remain part of the context identity.
-    if profile.get("capabilityOverrides"):
-        context["manual_overrides"] = profile["capabilityOverrides"]
-    context["transport_flags"] = {k: v for k, v in (profile.get("capabilities") or {}).items()
-        if k in {"thinking_required", "tool_stream", "disable_tool_choice_with_thinking"}}
+    # Retired profile fields are interpreted only by the legacy migration layer.
+    from model_runtime.legacy_migration import legacy_scope_context
+    context = legacy_scope_context(profile, parameters)
     return {"endpoint": str(profile.get("baseUrl") or "").strip().rstrip("/"),
         "model": str(model if model is not None else profile.get("model") or "").strip(),
         "context": hashlib.sha256(json.dumps(context, sort_keys=True, ensure_ascii=True, allow_nan=False).encode()).hexdigest(),
@@ -436,39 +432,6 @@ class UserModelSettings:
     def to_dict(self):
         return {"scope": dict(self.scope), "parameters": copy.deepcopy(dict(self.parameters))}
 
-
-def legacy_contract(profile, api_key=None):
-    """Read-only v1 migration. Never invent observations for an unscoped model."""
-    from model_runtime.capabilities import scoped_parameters, effective_parameter
-    legacy = scoped_parameters(profile)
-    if not legacy:
-        return None, {}
-    parameters = {}
-    for name, raw in legacy.items():
-        item = {k: copy.deepcopy(v) for k, v in raw.items() if k != "reasoning_effort"}
-        item["type"] = "number" if name == "temperature" else "enum"
-        if "reasoning_effort" in raw:
-            item["requires"] = {"reasoning_effort": [raw["reasoning_effort"]]}
-        parameters[name] = ParameterDescriptor.from_dict(name, item)
-    # A legacy temperature-only document can depend on a manually set effort.
-    for desc in tuple(parameters.values()):
-        for name in desc.constraints.requires:
-            parameters.setdefault(name, ParameterDescriptor.from_dict(name, {"type": "enum", "status": "unknown", "source": "legacy"}))
-    capabilities = {}
-    for name, value in (profile.get("capabilities") or {}).items():
-        try:
-            identifier(name)
-            if isinstance(value, bool):
-                capabilities[name] = CapabilityDescriptor("supported" if value else "unsupported", "legacy")
-        except ValueError:
-            continue
-    contract = CapabilityContract(contract_scope(profile, parameters, api_key=api_key), capabilities, parameters)
-    selections = {}
-    for name, desc in parameters.items():
-        value = effective_parameter(profile, name)
-        if desc.status in {"supported", "accepted", "unknown", "fixed", "unsupported"}:
-            selections[name] = {"mode": "omit"} if value is None or desc.status in {"fixed", "unsupported"} else {"mode": "value", "value": value}
-    return contract, UserModelSettings(dict(contract.scope), selections).to_dict()
 
 
 def metadata_contract_parts(metadata):

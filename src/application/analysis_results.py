@@ -3,7 +3,12 @@ import copy
 import json
 import re
 from shared.i18n import tr
-from plc.specification.approach import normalize_approach
+from plc.specification.approach import (
+    IMPLEMENTATION_SEMANTIC_STATUSES,
+    SUPPORTED_STRUCTURES,
+    normalize_approach,
+    normalize_implementation_semantics,
+)
 from plc.validation import PLCJsonValidationError, parse_device_address
 from plc.device_identity import canonical_device
 from plc.hardware_profiles import ensure_hardware_questions
@@ -26,6 +31,136 @@ _STATE_NOT_PURPOSE_RE = re.compile(
     r"^(?:(?:ON|OFF|TRUE|FALSE)(?=$|[^A-Za-z0-9_])|[+-]?\d+(?:[.,]\d+)?(?=$|[\s~～<>=+\-]|时|時))",
     re.IGNORECASE,
 )
+
+
+_CURRENT_APPROACH_FORBIDDEN_FIELDS = frozenset({
+    "generation_contract",
+    "explicit_user_constraints",
+    "implementation_preferences",
+})
+_CURRENT_SEMANTIC_FORBIDDEN_FIELDS = frozenset({
+    "opcode",
+    "operands",
+    "device",
+    "instruction_instance",
+})
+
+
+class AnalysisProtocolError(ValueError):
+    """Fresh Agent-A JSON does not satisfy the current analysis wire protocol."""
+
+    def __init__(self, violations):
+        self.violations = tuple(str(item) for item in violations if str(item).strip())
+        super().__init__("; ".join(self.violations) or "analysis protocol violation")
+
+
+def current_analysis_protocol_violations(result):
+    """Validate only the current Agent-A wire shape, never PLC engineering behavior."""
+    if not isinstance(result, dict):
+        return ["$: analysis response must be a JSON object"]
+
+    approaches = result.get("approaches")
+    if not isinstance(approaches, list):
+        return ["$.approaches: current protocol requires an array"]
+
+    violations = []
+    for index, approach in enumerate(approaches):
+        path = f"$.approaches[{index}]"
+        if not isinstance(approach, dict):
+            violations.append(path + ": approach must be an object")
+            continue
+
+        forbidden = sorted(_CURRENT_APPROACH_FORBIDDEN_FIELDS.intersection(approach))
+        if forbidden:
+            violations.append(
+                path + ": model must not emit " + ", ".join(forbidden)
+            )
+
+        if "implementation_semantics" not in approach:
+            violations.append(
+                path + ".implementation_semantics: required current-protocol field is missing"
+            )
+            continue
+        semantics = approach.get("implementation_semantics")
+        if not isinstance(semantics, list):
+            violations.append(
+                path + ".implementation_semantics: must be an array (empty is allowed)"
+            )
+            continue
+
+        for semantic_index, item in enumerate(semantics):
+            semantic_path = (
+                path + f".implementation_semantics[{semantic_index}]"
+            )
+            if not isinstance(item, dict):
+                violations.append(semantic_path + ": semantic must be an object")
+                continue
+
+            forbidden_semantic = sorted(
+                _CURRENT_SEMANTIC_FORBIDDEN_FIELDS.intersection(item)
+            )
+            if forbidden_semantic:
+                violations.append(
+                    semantic_path + ": low-level fields are not Agent-A semantics: "
+                    + ", ".join(forbidden_semantic)
+                )
+
+            kind = str(item.get("kind") or "").strip().casefold()
+            status = str(item.get("status") or "").strip().casefold()
+            if kind != "structure":
+                violations.append(
+                    semantic_path + ".kind: only 'structure' is allowed"
+                )
+                continue
+            if status not in IMPLEMENTATION_SEMANTIC_STATUSES:
+                violations.append(
+                    semantic_path + ".status: expected required, forbidden, or any_of"
+                )
+                continue
+
+            if status == "any_of":
+                values = item.get("values")
+                if (
+                    not isinstance(values, list)
+                    or not values
+                    or any(not isinstance(value, str) or not value.strip() for value in values)
+                ):
+                    violations.append(
+                        semantic_path + ".values: any_of requires a non-empty string array"
+                    )
+                    continue
+                if any(value.strip().casefold() not in SUPPORTED_STRUCTURES for value in values):
+                    violations.append(
+                        semantic_path + ".values: use canonical Core structure tokens only"
+                    )
+                    continue
+            else:
+                value = item.get("value")
+                if not isinstance(value, str) or not value.strip():
+                    violations.append(
+                        semantic_path + ".value: required/forbidden requires a structure name"
+                    )
+                    continue
+                if value.strip().casefold() not in SUPPORTED_STRUCTURES:
+                    violations.append(
+                        semantic_path + ".value: use a canonical Core structure token"
+                    )
+                    continue
+
+            if not normalize_implementation_semantics([item]):
+                violations.append(
+                    semantic_path + ": implementation semantic could not be normalized"
+                )
+
+    return violations
+
+
+def validate_current_analysis_protocol(result):
+    """Raise an analysis-protocol error before normalization or PLC validation."""
+    violations = current_analysis_protocol_violations(result)
+    if violations:
+        raise AnalysisProtocolError(violations)
+    return result
 
 
 def _extract_user_declared_io(user_text, plc_model):
@@ -61,46 +196,9 @@ def _extract_user_declared_io(user_text, plc_model):
 
 
 def _extract_user_declared_bindings(user_text, plc_model):
-    """Extract machine I/O metadata only from explicit address declarations."""
-    from plc.specification.bindings import canonical_signal_role, confirmed_input_levels
-
-    result = []
-    seen = set()
-    for statement in re.split(r"[\n;；。]+", str(user_text or "")):
-        match = _DECLARED_IO_LINE_RE.fullmatch(statement)
-        if match is None:
-            continue
-        address = canonical_device(re.sub(r"\s+", "", match.group(1)).upper())
-        raw_value = match.group(2).strip()
-        try:
-            parsed = parse_device_address(address, plc_model)
-        except (PLCJsonValidationError, ValueError, TypeError):
-            continue
-        if parsed is None:
-            continue
-        kind, _number = parsed
-        label = _INPUT_QUALIFIER_RE.split(raw_value, maxsplit=1)[0].strip() or raw_value
-        role = canonical_signal_role(label)
-        levels = confirmed_input_levels(raw_value) if kind == "X" else {}
-        if not role and not levels:
-            continue
-        binding_id = f"declared.{role or kind.casefold()}.{address}"
-        if binding_id in seen:
-            continue
-        seen.add(binding_id)
-        item = {
-            "binding_id": binding_id,
-            "kind": kind,
-            "address": address,
-            "label": label,
-            "name": label,
-            "source": "user_request",
-        }
-        if role:
-            item["role"] = role
-        item.update(levels)
-        result.append(item)
-    return result
+    """Application wrapper around Core-owned explicit I/O declaration parsing."""
+    from plc.specification.bindings import extract_declared_bindings
+    return extract_declared_bindings(user_text, plc_model)
 
 
 def _historical_declared_io(confirmed_spec, plc_model):
@@ -207,7 +305,9 @@ def _apply_explicit_user_constraints(result, user_text, plc_model, confirmed_spe
             approach["explicit_user_constraints"] = merged
             approach = normalize_approach(approach)
         else:
-            # Compatibility for old Agent-A response fixtures/saved protocol.
+            # Non-provider compatibility only. Fresh provider responses are
+            # accepted by validate_current_analysis_protocol() before entering
+            # this normalizer; persisted old specs migrate in legacy_migration.
             approach = normalize_approach(approach)
             contract = dict(approach.get("generation_contract") or {})
             for key in (

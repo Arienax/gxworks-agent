@@ -61,15 +61,14 @@ Owns prompt assembly, token/context budgeting, RAG query construction, retrieval
 | Test file | File-level focus |
 | --- | --- |
 | `tests/test_context_compiler.py` | model-aware budgets, intent/evidence projection and unconditional historical-audit exclusion |
+| `tests/test_context_compactor.py` | over-budget historical checkpoint selection, recent-tail preservation, model compaction fallback and wire shrink accounting |
 | `tests/test_context_refresh_runtime.py` | focused coverage for context refresh runtime |
 | `tests/test_fx3u_rag.py` | FX3U factual retrieval quality and routing |
 | `tests/test_gxw2_skill_import.py` | focused coverage for gxw2 skill import |
-| `tests/test_gxw2_skill_ranking.py` | focused coverage for gxw2 skill ranking |
-| `tests/test_gxw2_skill_reranker.py` | focused coverage for gxw2 skill reranker |
+| `tests/test_gxw2_skill_ranking.py` | GX Works2 skill routing, candidate expansion and unified RRF boundary |
 | `tests/test_instruction_fact_context.py` | task-directed instruction evidence assembly, source integrity and final-budget receipts; no behavioral certification |
 | `tests/test_instruction_applicability_rag.py` | focused coverage for instruction applicability rag |
 | `tests/test_prompt_context_budget.py` | focused coverage for prompt context budget |
-| `tests/test_prompt_context_policy.py` | focused coverage for prompt context policy |
 | `tests/test_prompt_slim_generation.py` | focused coverage for prompt slim generation |
 | `tests/test_rag_instruction_recall.py` | focused coverage for rag instruction recall |
 | `tests/test_rag_natural_language_recall.py` | focused coverage for rag natural language recall |
@@ -111,6 +110,7 @@ Owns confirmed-spec to Agent B generation, selected-approach contracts, candidat
 | `tests/test_rejected_generation_delivery.py` | focused coverage for rejected generation delivery |
 | `tests/test_repair_responsibility_simplification.py` | focused coverage for repair responsibility simplification |
 | `tests/test_review_noise_regressions.py` | focused coverage for review noise regressions |
+| `tests/test_semantic_contract_architecture.py` | provenance, structured repair scope, legacy migration separation, and instruction capability ownership |
 | `tests/test_user_confirmed_generation_repair.py` | focused coverage for user confirmed generation repair |
 
 ### Deterministic PLC Core and instruction semantics
@@ -209,6 +209,7 @@ Owns model catalog/profile/capabilities, provider requests, detection/verificati
 | `tests/test_model_profile_config.py` | focused coverage for model profile config |
 | `tests/test_model_profile_deletion.py` | focused coverage for model profile deletion |
 | `tests/test_model_provider.py` | focused coverage for model provider |
+| `tests/test_model_runtime_profile.py` | persisted-profile → RuntimeModelProfile materialization, legacy capability promotion and direct resolver input |
 | `tests/test_model_stream_cancellation.py` | focused coverage for model stream cancellation |
 | `tests/test_model_verification.py` | focused coverage for model verification |
 
@@ -273,6 +274,7 @@ Owns source/import ownership, architecture constraints, issue-to-test linkage, W
 | Test file | File-level focus |
 | --- | --- |
 | `tests/test_architecture_boundaries.py` | focused coverage for architecture boundaries |
+| `tests/test_architecture_boundary_cleanup.py` | retired runtime control surfaces stay retired: no context-policy import, no workflow reasoning-effort defaults, no dedicated self-hold checker module |
 | `tests/test_issue_test_links.py` | focused coverage for issue test links |
 | `tests/test_source_layout.py` | source/import ownership plus completeness of this test-boundary registry |
 | `tests/test_windows_credentials.py` | focused coverage for windows credentials |

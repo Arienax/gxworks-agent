@@ -21,7 +21,7 @@ from application.compact_protocol import (
 
 from model_runtime.provider import TextDelta
 from application.generation_context import _build_knowledge_context
-from shared.context_policy import audit_section
+from shared.context_audit import audit_section
 from model_runtime.responses import ResponseContract
 
 
@@ -45,6 +45,46 @@ _COMPACT_PROTOCOL = """# Agent B compact ladder protocol
 - TIMER 使用 T，COUNTER 使用 C；普通定时器须有可变为 FALSE 的使能/复位路径。
 - 一次事件使用 P/F 边沿，持续条件使用电平；两者不互换。
 """ + compact_protocol_prompt()
+
+
+def _compact_wire_renderer(plc_model):
+    model = str(plc_model or "FX3U").strip().upper() or "FX3U"
+
+    def render(
+        runtime_spec, evidence_text, generation_request, _current_program,
+        context_checkpoint, _wire_history,
+    ):
+        from application.generation_wire import (
+            render_context_checkpoint, render_wire_messages,
+        )
+        from plc.specification.provenance import SOURCE_PRECEDENCE
+
+        confirmed = json.dumps(
+            runtime_spec, ensure_ascii=False, separators=(",", ":")
+        )
+        system_prompt = (
+            _COMPACT_PROTOCOL
+            + SOURCE_PRECEDENCE
+            + f"\n# Selected PLC\n{model}\n"
+            + "\n# Confirmed project specification\n"
+            + confirmed
+            + compact_capability_prompt(model, runtime_spec)
+            + render_context_checkpoint(context_checkpoint)
+            + str(evidence_text or "")
+            + generation_execution_prompt(
+                runtime_spec,
+                evidence_text=evidence_text,
+                task_type="generate",
+            )
+        )
+        return {
+            "messages": render_wire_messages(
+                system_prompt,
+                [{"role": "user", "content": generation_request}],
+            )
+        }
+
+    return render
 
 
 class _FirstJSONObjectStream:
@@ -169,23 +209,30 @@ def _decode_generated_ladder(value, projected, plc_model):
 
 
 def _build_agent_b_prompt(projected, plc_model, *, context=None):
+    model = str(plc_model or "FX3U").strip().upper() or "FX3U"
     context = context or build_confirmed_generation_context(
-        projected, plc_model, knowledge_builder=_build_knowledge_context,
+        projected,
+        model,
+        knowledge_builder=_build_knowledge_context,
+        wire_renderer=_compact_wire_renderer(model),
     )
-    model = context.plc_model
-    evidence = context.knowledge_context
-    confirmed = json.dumps(context.confirmed_spec, ensure_ascii=False, separators=(",", ":"))
-    from plc.specification.provenance import SOURCE_PRECEDENCE
-    prompt = (
-        _COMPACT_PROTOCOL + SOURCE_PRECEDENCE
-        + f"\n# Selected PLC\n{model}\n"
-        + "\n# Confirmed project specification\n"
-        + confirmed
-        + compact_capability_prompt(model, context.confirmed_spec)
-        + evidence
-        + generation_execution_prompt(context.confirmed_spec, evidence_text=evidence)
+    packet = context.wire_packet
+    if not packet:
+        packet = _compact_wire_renderer(model)(
+            context.confirmed_spec,
+            context.knowledge_context,
+            context.generation_request,
+            context.current_program,
+            "",
+            [],
+        )
+    prompt = packet["messages"][0]["content"]
+    audit_section(
+        "system_prompt",
+        prompt,
+        reason="confirmed_spec_compact_generation",
+        source="application",
     )
-    audit_section("system_prompt", prompt, reason="confirmed_spec_compact_generation", source="application")
     return prompt
 
 
@@ -199,7 +246,7 @@ def generate_confirmed_ladder(
     on_context=None,
     decision_receipt_id=None,
 ):
-    """Make one streaming model call, then locally expand the compact plan."""
+    """Generate once after any optional pre-generation context compaction."""
     import application.model_api as api
 
     model = str(plc_model or "FX3U").strip().upper() or "FX3U"
@@ -209,9 +256,12 @@ def generate_confirmed_ladder(
 
     base_provider = api.current_provider()
     context = build_confirmed_generation_context(
-        projected, model, knowledge_builder=_build_knowledge_context,
+        projected,
+        model,
+        knowledge_builder=_build_knowledge_context,
         model_profile=getattr(base_provider, "profile", {}),
         decision_receipt_id=decision_receipt_id,
+        wire_renderer=_compact_wire_renderer(model),
     )
     if on_context:
         on_context(context.to_dict()["handoff"])
@@ -228,10 +278,7 @@ def generate_confirmed_ladder(
     )
     with api.provider_scope(provider, model_name=model_name):
         response = api.request_model(
-            [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": _GENERATION_REQUEST},
-            ],
+            context.wire_packet["messages"],
             model_name=model_name,
             effort=None,
             stream=streaming,
@@ -249,8 +296,13 @@ def generate_confirmed_ladder(
             on_stage("compact_normalized", "已在本地兼容确定性的表示差异；正在展开梯形图，未增加模型请求")
     ladder, representation = _decode_generated_ladder(compact, projected, model)
     diagnostics.emit("generation_representation", stage="compact_protocol", representation=representation)
+    compaction = (
+        context.handoff.get("budget_report", {}).get("context_compaction", {})
+        if isinstance(context.handoff, dict) else {}
+    )
+    compaction_calls = int(compaction.get("model_calls") or 0)
     return {
         "ladder": ladder,
-        "model_calls": 1,
+        "model_calls": 1 + compaction_calls,
         "generation_handoff": context.to_dict()["handoff"],
     }

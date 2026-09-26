@@ -34,13 +34,13 @@ def test_instruction_aliases_match_whole_mnemonics(query, alias, expected):
      ("FX3U 普通梯形图中 MPS MRD MPP 指令如何保存和恢复分支逻辑", "7.8")],
 )
 def test_bundled_official_instruction_recall(query, section):
-    # This is the actual search_plc_manual budget, including complete citations.
-    results = retriever.retrieve_knowledge(query, top_k=4, char_budget=6500)
+    # Explicit instruction identities use the fact-aware path used by manual search.
+    results = retriever.retrieve_fact_aware_knowledge(query, top_k=4, char_budget=6500)
     assert results
     first = results[0]
     assert first["manual_number"] == "JY997D16601"
     assert first["section"].split(" > ")[-1].startswith(section + " ")
-    assert first["match_type"] == "manual_instruction"
+    assert first["match_type"] == "structured_direct"
     if section == "7.8":
         assert "7.8 MPS" in first["text"]
     else:
@@ -79,16 +79,16 @@ def small_instruction_index(tmp_path, monkeypatch):
     retriever._sync_core_hooks()
 
 
-def test_section_recall_needs_no_structured_or_fts_instruction_rows(small_instruction_index):
-    results = retriever.retrieve_knowledge("AND<>", char_budget=6500)
-    assert [item["id"] for item in results] == ["909"]
-    results = retriever.retrieve_knowledge("MPS MRD MPP", char_budget=6500)
-    assert [item["id"] for item in results] == ["507"]
+def test_broad_retrieval_does_not_use_instruction_alias_table_as_fact_owner(small_instruction_index):
+    # With no FTS/entity/dense index, instruction_aliases alone must not turn the
+    # broad retriever into an exact instruction resolver.
+    assert retriever.retrieve_knowledge("AND<>", char_budget=6500) == []
+    assert retriever.retrieve_knowledge("MPS MRD MPP", char_budget=6500) == []
 
 
-def test_section_recall_preserves_model_task_noise_and_budget(small_instruction_index):
+def test_broad_retrieval_still_respects_scope_noise_and_budget(small_instruction_index):
     assert retriever.retrieve_knowledge("MPS", task_type="review") == []
-    assert retriever.retrieve_knowledge("MPS", plc_model="FX3G")[0]["id"] == "508"
+    assert retriever.retrieve_knowledge("MPS", plc_model="FX3G") == []
     assert retriever.retrieve_knowledge("MPS", char_budget=1) == []
     for query in ["MPSuffix", "MPS_history", "please revise this program", "weather tomorrow"]:
         assert retriever.retrieve_knowledge(query) == []

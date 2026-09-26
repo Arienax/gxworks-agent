@@ -18,11 +18,13 @@ from typing import Any, Callable, Dict, Iterable, Iterator, Mapping, Optional, P
 from shared.i18n import get_language, normalize_language, response_language_instruction, translate
 from model_runtime.responses import ResponseContract, TEXT_RESPONSE, inspect_response, preserved_annotations
 from agent_runtime.messages import ToolCall, ToolResult
-from model_runtime.capabilities import apply_parameter_contract, parameter_error
 from model_runtime.contract import scoped_contract
-from model_runtime.request_policy import resolve_request, capability_available
+from model_runtime.request_policy import resolve_request, contract_capability_available
+from model_runtime.runtime_profile import materialize_runtime_profile
+from model_runtime.legacy_migration import detection_profile
 from model_runtime.transport_policy import (
     can_fallback_to_non_stream, is_explicit_stream_rejection, preferred_streaming,
+    parameter_error,
 )
 
 
@@ -346,18 +348,6 @@ def strip_legacy_provider_fields(value: Mapping[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _deep_merge(base: Mapping[str, Any], overlay: Mapping[str, Any]) -> Dict[str, Any]:
-    result = copy.deepcopy(dict(base))
-    for key, value in overlay.items():
-        if value is None:
-            result.pop(key, None)
-        elif isinstance(value, Mapping) and isinstance(result.get(key), Mapping):
-            result[key] = _deep_merge(result[key], value)
-        else:
-            result[key] = copy.deepcopy(value)
-    return result
-
-
 def _wire_arguments(arguments: Any) -> str:
     if isinstance(arguments, str):
         return arguments
@@ -544,6 +534,7 @@ class OpenAICompatibleProvider:
             raise ValueError("未配置当前模型 Profile 的 API Key。")
         self._client = client or self._create_client()
         self.observation_sink = None
+        self._runtime_profiles = {}
 
     def _create_client(self):
         from openai import OpenAI
@@ -553,33 +544,34 @@ class OpenAICompatibleProvider:
             base_url=str(self.profile.get("baseUrl") or "").strip(),
         )
 
+    def _runtime_profile(self, model=None):
+        selected = str(model or self.profile.get("model") or "").strip()
+        runtime = self._runtime_profiles.get(selected)
+        if runtime is None:
+            runtime = materialize_runtime_profile(
+                self.profile,
+                api_key=self.api_key,
+                model=selected,
+            )
+            self._runtime_profiles[selected] = runtime
+        return runtime
+
     def _request_params(self, request: ModelRequest) -> Dict[str, Any]:
         if not request._synthetic_probe:
             request = with_response_language(request)
-        response_format_unset = object()
-        explicit_response_format = (
-            copy.deepcopy(request.options["response_format"])
-            if "response_format" in request.options
-            else response_format_unset
-        )
-        params = _deep_merge(
-            self.profile.get("generationDefaults") or {},
-            request.options or {},
-        )
-        capabilities = self.profile.get("capabilities") or {}
+
+        selected_model = str(request.model or self.profile.get("model") or "").strip()
+        try:
+            runtime = self._runtime_profile(selected_model)
+        except ValueError as error:
+            raise ModelProviderError(str(error), code="invalid_request") from error
+
         image_attachments = [
             image
             for message in request.messages
             if isinstance(message, UserMessage)
             for image in message.images
         ]
-        if image_attachments and not self.profile.get("capabilityContract") and not capability_available(self.profile, "vision", model=request.model,
-                api_key=self.api_key, options=params, legacy_name="multimodal"):
-            model = str(request.model or self.profile.get("model") or "当前模型")
-            raise ModelProviderError(
-                f"模型 {model} 不支持图片输入，请切换到带视觉能力的模型。",
-                code="image_not_supported",
-            )
         encoded_bytes = sum(
             4 * ((len(image.data) + 2) // 3) for image in image_attachments
         )
@@ -588,66 +580,81 @@ class OpenAICompatibleProvider:
                 "图片编码后的请求体过大，请减少图片数量或压缩图片。",
                 code="image_payload_too_large",
             )
-        extra_body = copy.deepcopy(params.get("extra_body") or {})
-        if capabilities.get("thinking_required"):
-            thinking = copy.deepcopy(extra_body.get("thinking") or {})
-            thinking["type"] = "enabled"
-            extra_body["thinking"] = thinking
-        if capabilities.get("tool_stream") and request.stream and request.tools:
-            extra_body["tool_stream"] = True
-        if extra_body:
-            params["extra_body"] = extra_body
-        params = _deep_merge(params, self.profile.get("requestOverrides") or {})
-        # A workflow-specific response contract must beat a persisted/profile-level
-        # response_format. Otherwise an old native schema can accept values that
-        # the current PLC validator rejects after the model response is accepted.
-        if explicit_response_format is not response_format_unset:
-            if explicit_response_format is None:
-                params.pop("response_format", None)
-            else:
-                params["response_format"] = explicit_response_format
 
-        params["model"] = request.model or str(self.profile.get("model") or "")
-        params["messages"] = [_wire_message(item, self._origin(params["model"])) for item in request.messages]
-        params["stream"] = bool(request.stream)
-        if request.tools:
-            params["tools"] = copy.deepcopy(list(request.tools))
-            params.setdefault("tool_choice", "auto")
-        else:
-            params.pop("tools", None)
-            params.pop("tool_choice", None)
-        thinking = (params.get("extra_body") or {}).get("thinking") or {}
-        if (
-            request.tools
-            and capabilities.get("disable_tool_choice_with_thinking")
-            and str(thinking.get("type") or "").lower() == "enabled"
-        ):
-            params.pop("tool_choice", None)
-        # SDK extra_body is merged last on the wire. It must not replace the
-        # application's canonical context, tools or response contract.
+        # Protocol ownership stays with the application/provider. Capability and
+        # parameter semantics come only from the materialized v3 contract.
         reserved = {"model", "messages", "tools", "tool_choice", "stream", "response_format"}
-        if reserved.intersection(params.get("extra_body") or {}):
-            raise ModelProviderError("extra_body cannot override protocol fields", code="invalid_request")
+        protocol = {
+            "model": selected_model,
+            "messages": [
+                _wire_message(item, self._origin(selected_model))
+                for item in request.messages
+            ],
+            "stream": bool(request.stream),
+        }
+        if request.tools:
+            protocol["tools"] = copy.deepcopy(list(request.tools))
+            protocol["tool_choice"] = copy.deepcopy(
+                request.options.get("tool_choice", "auto")
+            )
+        else:
+            protocol["tools"] = None
+            protocol["tool_choice"] = None
+        if "response_format" in request.options:
+            protocol["response_format"] = copy.deepcopy(
+                request.options["response_format"]
+            )
+
+        transport_defaults = {}
+        if contract_capability_available(
+            runtime.contract, "thinking_required", options=protocol
+        ):
+            transport_defaults.setdefault("extra_body", {})["thinking"] = {
+                "type": "enabled"
+            }
+        if (
+            request.stream
+            and request.tools
+            and contract_capability_available(
+                runtime.contract, "tool_stream", options=protocol
+            )
+        ):
+            transport_defaults.setdefault("extra_body", {})["tool_stream"] = True
+
         try:
-            if self.profile.get("capabilityContract"):
-                # Canonical protocol fields were finalized above and cannot be
-                # owned by metadata or user selections. Legacy transport flags
-                # remain profile-controlled outside the generic tuning policy.
-                protocol = {k: params.get(k) for k in reserved}
-                transport_defaults = {}
-                if capabilities.get("thinking_required"):
-                    transport_defaults.setdefault("extra_body", {})["thinking"] = {"type": "enabled"}
-                if capabilities.get("tool_stream") and request.stream and request.tools:
-                    transport_defaults.setdefault("extra_body", {})["tool_stream"] = True
-                resolved = dict(resolve_request(self.profile, request.options, protocol=protocol,
-                    model=request.model, api_key=self.api_key, transport_defaults=transport_defaults).options)
-                if reserved.intersection(resolved.get("extra_body") or {}):
-                    raise ValueError("extra_body cannot override protocol fields")
-                if image_attachments and not capability_available(self.profile, "vision", model=request.model,
-                        api_key=self.api_key, options=resolved, legacy_name="multimodal"):
-                    raise ModelProviderError("当前模型或参数组合不支持图片输入。", code="image_not_supported")
-                return resolved
-            return apply_parameter_contract(params, self.profile, request.model)
+            resolved = dict(
+                resolve_request(
+                    runtime,
+                    request.options,
+                    protocol=protocol,
+                    model=selected_model,
+                    api_key=self.api_key,
+                    transport_defaults=transport_defaults,
+                ).options
+            )
+            if reserved.intersection(resolved.get("extra_body") or {}):
+                raise ValueError("extra_body cannot override protocol fields")
+
+            thinking = (resolved.get("extra_body") or {}).get("thinking") or {}
+            if (
+                request.tools
+                and str(thinking.get("type") or "").lower() == "enabled"
+                and contract_capability_available(
+                    runtime.contract,
+                    "disable_tool_choice_with_thinking",
+                    options=resolved,
+                )
+            ):
+                resolved.pop("tool_choice", None)
+
+            if image_attachments and not contract_capability_available(
+                runtime.contract, "vision", options=resolved
+            ):
+                raise ModelProviderError(
+                    "当前模型或参数组合不支持图片输入。",
+                    code="image_not_supported",
+                )
+            return resolved
         except ValueError as error:
             raise ModelProviderError(str(error), code="invalid_request") from error
 
@@ -679,23 +686,10 @@ class OpenAICompatibleProvider:
         return params
 
     def for_detection(self, *, parameters=None):
-        """Same transport and thinking extensions, without optional tuning."""
-        profile = copy.deepcopy(self.profile)
-        contract = scoped_contract(profile)
+        """Same transport extensions, with legacy tuning stripped in migration."""
+        contract = scoped_contract(self.profile)
         declared = {**(contract.parameters if contract else {}), **(parameters or {})}
-        profile.pop("parameterSupport", None)
-        profile.pop("capabilityContract", None)
-        profile.pop("userModelSettings", None)
-        optional = {"temperature", "reasoning_effort", "top_p", "response_format",
-                    "max_tokens", "max_completion_tokens", "stream_options"}
-        for group in ("generationDefaults", "requestOverrides"):
-            options = profile.setdefault(group, {})
-            for name, descriptor in declared.items():
-                descriptor.remove(options, name)
-            for key in optional:
-                options.pop(key, None)
-                if isinstance(options.get("extra_body"), dict):
-                    options["extra_body"].pop(key, None)
+        profile = detection_profile(self.profile, declared)
         return OpenAICompatibleProvider(profile, self.api_key, client=self._client)
 
     def probe_parameter(self, model, name=None, value=None, *, timeout=15.0, context=None):

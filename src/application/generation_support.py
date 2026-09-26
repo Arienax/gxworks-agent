@@ -20,12 +20,7 @@ from plc.specification.approach import normalize_approach, normalize_generation_
 from shared.paths import resource_path
 
 
-from knowledge.patterns import assemble_prompt, build_workflow_prompt, classify_request
-
-
-from shared.context_policy import (
-    audit_section, manual_lookup_decision, resolve_context_policy, select_base_prompt,
-)
+from shared.context_audit import audit_section
 
 
 def _engineering_hardware_snapshot(value):
@@ -146,11 +141,9 @@ def _build_model_context(model: str, confirmed_context=None, compact=False) -> s
     profile is retained, so the offline index is an enhancement rather than a
     new point of failure.
     """
-    policy = resolve_context_policy()
-    if not policy.legacy:
-        # All controlled arms keep the SAME full target profile. Disabling RAG
-        # must not silently alter special-device facts supplied to the model.
-        compact = False
+    # Runtime profile delivery is canonical and independent of prompt/RAG modes.
+    # Retrieval must never toggle the authoritative target profile.
+    compact = False
     models = _load_plc_models()
     m = models.get(model, models.get("FX3U", {}))
     if not m:
@@ -197,7 +190,7 @@ def _build_model_context(model: str, confirmed_context=None, compact=False) -> s
         + json.dumps(profile, ensure_ascii=False, indent=2)
         + "\n"
     )
-    audit_section("model_profile", result, reason="legacy_auto" if policy.legacy else "fixed_full",
+    audit_section("model_profile", result, reason="canonical_full_profile",
                   source="model_registry")
     return result
 
@@ -293,11 +286,13 @@ def public_generation_specification(specification):
     """
     from plc.generation_contract import generation_specification
     from plc.specification.parameters import generation_parameter_view
+    from plc.specification.legacy_migration import migrate_legacy_approach
 
     normalized = generation_parameter_view(specification)
     if isinstance(normalized, dict) and isinstance(normalized.get("selected_approach"), dict):
-        selected = normalized["selected_approach"]
-        contract = normalize_generation_contract(selected.get("generation_contract"), approach=selected)
+        selected = migrate_legacy_approach(normalized["selected_approach"])
+        normalized["selected_approach"] = selected
+        contract = normalize_generation_contract(selected.get("generation_contract"))
         if contract.get("unverified_constraints"):
             selected["generation_contract"] = contract
 

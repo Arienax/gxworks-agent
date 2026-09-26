@@ -83,9 +83,28 @@ async def run(web_dist, evidence, *, executable=None, component_fixture=False):
                         if not component_fixture:
                             await page.get_by_role('button',name='设置',exact=True).click()
                             await page.get_by_role('button',name='模型',exact=True).click()
+                    async def open_editor(name=None):
+                        # Saved providers render as collapsed rows and only one
+                        # editor card is open at a time. An empty profile list
+                        # already opens the create card.
+                        field=page.get_by_label('配置名称',exact=True)
+                        if await field.count() and await field.is_visible(): return
+                        if name is None:
+                            await page.get_by_role('button',name='新增配置',exact=True).click()
+                        else:
+                            await page.locator('.provider-row',has_text=name).get_by_role('button',name='编辑',exact=True).click()
+                        await expect(field).to_be_visible()
                     try:
                         await open_settings()
-                        await page.get_by_label('配置名称',exact=True).fill('Catalog v3 审查')
+                        await open_editor()
+                        name_field=page.get_by_label('配置名称',exact=True)
+                        service_field=page.get_by_role('combobox',name='服务',exact=True)
+                        await name_field.fill(' ')
+                        await service_field.select_option('https://api.deepseek.com')
+                        await expect(name_field).to_have_value('DeepSeek')
+                        await name_field.fill('Catalog v3 审查')
+                        await service_field.select_option('https://api.openai.com/v1')
+                        await expect(name_field).to_have_value('Catalog v3 审查')
                         await page.get_by_label('API URL',exact=True).fill('https://gateway.invalid/custom/v2/')
                         await page.locator('.settings-form input[type="password"]').fill('synthetic-only-key')
                         listing=page.get_by_role('button',name='获取模型列表',exact=True)
@@ -114,7 +133,7 @@ async def run(web_dist, evidence, *, executable=None, component_fixture=False):
                         assert saved['contract']['schema_version']==3
                         assert saved['user_settings']['parameters']['temperature']['value']==.733
                         assert saved['user_settings']['parameters']['reasoning_effort']['value']=='high'
-                        assert not saved['generation_defaults']
+                        assert 'generation_defaults' not in saved
                         assert 'synthetic-only-key' not in json.dumps(settings.public_settings())
                         model,_=settings.model_snapshot()
                         wire=model._request_params(ModelRequest((UserMessage('synthetic validation'),),stream=False))
@@ -122,6 +141,7 @@ async def run(web_dist, evidence, *, executable=None, component_fixture=False):
                         assert wire['extra_body']['thinking']['budget_tokens']==8192
                         assert wire['enable_thinking'] is True and wire['verbosity']=='verbose'
                         await (mount_fixture() if component_fixture else page.reload());await open_settings()
+                        await open_editor('Catalog v3 审查')
                         await expect(page.get_by_label('temperature value',exact=True)).to_have_value('0.733')
                         await page.get_by_role('button',name='测试连接',exact=True).click()
                         await expect(page.locator('.settings-form p[role="status"]')).to_contain_text('没有发送生成请求')
@@ -162,6 +182,45 @@ async def run(web_dist, evidence, *, executable=None, component_fixture=False):
                         assert saved['user_settings']['parameters']['custom_flag']['value'] is False
                         assert saved['user_settings']['parameters']['temperature']['value']==.37
                         assert requests()==1
+                        # A refreshed non-editable descriptor preserves the stale
+                        # explicit choice, but must still let the operator clear it.
+                        save=page.get_by_role('button',name='保存并使用',exact=True)
+                        for status in ('unsupported','fixed'):
+                            manual['parameters']['temperature']={
+                                'type':'number','status':status,
+                                **({'domain':{'values':[.25]}} if status=='fixed' else {}),
+                            }
+                            await page.get_by_label('手动能力覆盖 JSON',exact=True).fill(json.dumps(manual))
+                            await resolve.click()
+                            control=page.locator('[data-parameter="temperature"]')
+                            await expect(control).to_have_attribute('data-invalid','true')
+                            if not await control.is_visible():
+                                await page.locator('.model-parameters > details > summary').click()
+                            await expect(control.get_by_role('combobox',name='temperature mode',exact=True)).to_have_count(0)
+                            await save.click()
+                            await expect(page.locator('.settings-form > p[role="alert"]')).to_contain_text('请先修正参数类型、范围或关联条件冲突。')
+                            persisted=settings.public_settings()['profiles'][0]['user_settings']['parameters']
+                            assert persisted['temperature']=={'mode':'value','value':.37}
+                            await control.get_by_role('button',name='恢复服务默认值',exact=True).click()
+                            await expect(control).not_to_have_attribute('data-invalid','true')
+                            await save.click()
+                            await expect(page.get_by_text('设置已保存',exact=True)).to_be_visible()
+                            persisted=settings.public_settings()['profiles'][0]['user_settings']['parameters']
+                            assert persisted['temperature']=={'mode':'omit'}
+                            assert persisted['custom_flag']=={'mode':'value','value':False}
+                            model,_=settings.model_snapshot()
+                            wire=model._request_params(ModelRequest((UserMessage('synthetic validation'),),stream=False))
+                            assert 'temperature' not in wire and requests()==1
+                            # Restore an editable explicit value for the next case.
+                            manual['parameters']['temperature']={
+                                'type':'number','status':'supported',
+                                'domain':{'minimum':0,'maximum':.5},'ui_hint':{'step':.01},
+                            }
+                            await page.get_by_label('手动能力覆盖 JSON',exact=True).fill(json.dumps(manual))
+                            await resolve.click()
+                            await page.get_by_label('temperature value',exact=True).fill('0.37')
+                            await save.click()
+                            await expect(page.get_by_text('设置已保存',exact=True)).to_be_visible()
                         await page.screenshot(path=str(evidence/'settings-v3.png'),full_page=True)
                         await page.get_by_label('模型',exact=True).fill('never-seen-model')
                         await expect(page.locator('.model-parameters')).to_have_count(0)
@@ -170,11 +229,14 @@ async def run(web_dist, evidence, *, executable=None, component_fixture=False):
                         report={'status':'passed','contract_version':3,
                             'browser_mode':'component-fixture-in-process-ASGI' if component_fixture else 'production-web-dist',
                             'synthetic_model_requests':requests(),'configuration_generation_requests':0,
-                            'checks':['list-no-auto-selection','local-resolve-zero-generation','unknown-parameter-editable',
+                            'checks':['preset-empty-name-filled','preset-keeps-draft-name',
+                                'list-no-auto-selection','local-resolve-zero-generation','unknown-parameter-editable',
                                 'temperature-0.733-wire-precision','metadata-bool-and-nested-budget','persist-reload',
                                 'connection-no-generations','verification-consent-cancel','explicit-single-verification',
                                 'observation-is-evidence','user-omit-beats-workflow','manual-JSON-override',
-                                'invalid-explicit-choice-preserved','boolean-false-saved','model-scope-invalidation','credential-redaction']}
+                                'invalid-explicit-choice-preserved','boolean-false-saved',
+                                'unsupported-explicit-choice-cleared','fixed-explicit-choice-cleared',
+                                'model-scope-invalidation','credential-redaction']}
                         (evidence/'report.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
                         print(json.dumps(report),flush=True)
                     except BaseException:

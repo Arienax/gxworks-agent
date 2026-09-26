@@ -2,7 +2,6 @@ import json
 
 import application.generation_context as compact
 import research.baselines.generation_context as legacy
-from shared.context_policy import context_policy_scope
 
 
 def _without_knowledge(*_args, **_kwargs):
@@ -52,18 +51,16 @@ def _instructions(module, request, *, mode="ladder", edit=False, current=None):
 
 
 def test_normal_ladder_context_is_less_than_half_of_legacy_without_external_context():
-    with context_policy_scope("legacy"):
-        before = _instructions(legacy, "X0 启动 Y0，X1 停止")
-        after = _instructions(compact, "X0 启动 Y0，X1 停止")
+    before = _instructions(legacy, "X0 启动 Y0，X1 停止")
+    after = _instructions(compact, "X0 启动 Y0，X1 停止")
     assert len(after) < len(before) * 0.50
     assert "经典多模范例" in before
     assert "经典多模范例" not in after
 
 
 def test_normal_st_context_is_less_than_half_of_legacy_without_external_context():
-    with context_policy_scope("legacy"):
-        before = _instructions(legacy, "X0 启动 Y0，X1 停止", mode="st")
-        after = _instructions(compact, "X0 启动 Y0，X1 停止", mode="st")
+    before = _instructions(legacy, "X0 启动 Y0，X1 停止", mode="st")
+    after = _instructions(compact, "X0 启动 Y0，X1 停止", mode="st")
     assert len(after) < len(before) * 0.50
     assert "工业常识模式库" in before
     assert "工业常识模式库" not in after
@@ -72,9 +69,8 @@ def test_normal_st_context_is_less_than_half_of_legacy_without_external_context(
 def test_large_local_edit_no_longer_replays_the_full_pretty_printed_program():
     baseline = _program()
     request = "只修改 Y12 对应梯级，把 X12 改成常闭"
-    with context_policy_scope("minimal"):
-        before = _instructions(legacy, request, edit=True, current=baseline)
-        after = _instructions(compact, request, edit=True, current=baseline)
+    before = _instructions(legacy, request, edit=True, current=baseline)
+    after = _instructions(compact, request, edit=True, current=baseline)
     assert len(after) < len(before) * 0.55
     assert "DETAIL_12_" in after
     assert "DETAIL_11_" in after and "DETAIL_13_" in after

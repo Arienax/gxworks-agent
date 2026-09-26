@@ -9,6 +9,7 @@ import json
 import re
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
+from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
 from plc.validation import normalize_plc_model, parse_device_address
 
 
@@ -69,11 +70,6 @@ CYCLIC_TIMER_RE = re.compile(
     r"blink|flash|oscillat|clock|square\s*wave|toggle",
     re.IGNORECASE,
 )
-MOTION_OPCODES = {
-    "PLSY", "DPLSY", "PLSR", "PLSV", "DRVI", "DDRVI",
-    "DRVA", "DDRVA", "DVIT", "ZRN", "DSZR", "DRVTBL", "DRVMUL",
-}
-
 CATEGORY_LABELS = {
     "model_compatibility": "型号与地址兼容",
     "confirmed_io": "确认 I/O 一致性",
@@ -121,7 +117,7 @@ def review_ladder(data, confirmed_spec=None, plc_model="FX3U", request=None):
     findings.extend(_review_same_scan_set_reset_toggle(rungs))
     findings.extend(_review_state_machine(data, model))
     findings.extend(_review_timer_and_counter_paths(data))
-    findings.extend(_review_motion_completion(rungs, model))
+    findings.extend(_review_instruction_completion(rungs, model))
     findings.extend(_review_alarm_logic(data, confirmed_spec))
     findings.extend(_review_online_observations(data, request))
     return _deduplicate_findings(findings)
@@ -213,20 +209,28 @@ def _review_model_compatibility(data, plc_model):
                     evidence=[f"{path} 使用 {address}"],
                 )
             )
-        opcode = str(element.get("opcode", "")).upper()
-        if plc_model == "FX5U" and opcode == "ZRN":
-            findings.append(
-                ReviewFinding(
-                    severity="warning",
-                    category="model_compatibility",
-                    address=None,
-                    json_path=path,
-                    rung_ids=[rung.get("rung_id")],
-                    message="FX5U 不支持 ZRN 指令。",
-                    suggestion="使用 FX5U 的 DSZR 并重新核对原点输入参数。",
-                    evidence=[f"{path}.opcode = ZRN"],
+        opcode = str(element.get("opcode", "")).strip().upper()
+        if opcode:
+            spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu=plc_model)
+            if spec is not None and not spec.supports_cpu(plc_model):
+                replacement = spec.replacement_for_cpu(plc_model)
+                suggestion = (
+                    f"使用 {plc_model} 的 {replacement} 并重新核对操作数。"
+                    if replacement
+                    else f"改用 instruction capability contract 中支持 {plc_model} 的指令。"
                 )
-            )
+                findings.append(
+                    ReviewFinding(
+                        severity="warning",
+                        category="model_compatibility",
+                        address=None,
+                        json_path=path,
+                        rung_ids=[rung.get("rung_id")],
+                        message=f"{plc_model} 不支持 {opcode} 指令。",
+                        suggestion=suggestion,
+                        evidence=[f"{path}.opcode = {opcode}"],
+                    )
+                )
     return findings
 
 
@@ -815,61 +819,86 @@ def _review_timer_and_counter_paths(data):
     return findings
 
 
-def _review_motion_completion(rungs, plc_model):
-    completion = "M8029" if plc_model == "FX3U" else "SM8029"
+def _declared_completion_semantics(output, plc_model):
+    if not isinstance(output, Mapping) or output.get("type") != "APP_INSTR":
+        return None
+    opcode = str(output.get("opcode", "") or "").strip().upper()
+    spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu=plc_model)
+    return spec.completion if spec is not None else None
+
+
+def _review_instruction_completion(rungs, plc_model):
+    """Review placement from per-instruction completion ownership metadata."""
+
     findings = []
     for rung_idx, rung in enumerate(rungs):
         branches = rung.get("branches", []) or []
-        motion_paths = []
-        motion_branches = set()
-        completion_paths = []
+        owners = {}
         for branch_idx, branch in enumerate(branches):
             for output_idx, output in enumerate(branch.get("outputs", []) or []):
-                opcode, _ = _output_descriptor(output)
-                if opcode in MOTION_OPCODES or opcode.startswith("MC_MOVE"):
-                    motion_branches.add(branch_idx)
-                    motion_paths.append(
-                        f"$.rungs[{rung_idx}].branches[{branch_idx}].outputs[{output_idx}]"
+                completion = _declared_completion_semantics(output, plc_model)
+                if completion is None:
+                    continue
+                owners.setdefault(completion.device, []).append(
+                    (
+                        branch_idx,
+                        f"$.rungs[{rung_idx}].branches[{branch_idx}]"
+                        f".outputs[{output_idx}]",
                     )
-            for input_idx, element in enumerate(branch.get("inputs", []) or []):
-                if str(element.get("address", "")).upper() == completion:
-                    completion_paths.append(
-                        (
-                            branch_idx,
-                            f"$.rungs[{rung_idx}].branches[{branch_idx}].inputs[{input_idx}]",
-                        )
-                    )
-        invalid_paths = [
-            path for branch_idx, path in completion_paths if branch_idx in motion_branches
-        ]
-        for shared_idx, element in enumerate(rung.get("shared_inputs", []) or []):
-            if str(element.get("address", "")).upper() == completion:
-                invalid_paths.append(f"$.rungs[{rung_idx}].shared_inputs[{shared_idx}]")
-        header = rung.get("header_element")
-        if isinstance(header, Mapping) and str(header.get("address", "")).upper() == completion:
-            invalid_paths.append(f"$.rungs[{rung_idx}].header_element")
-        if motion_paths and invalid_paths:
-            findings.append(
-                ReviewFinding(
-                    severity="warning",
-                    category="motion_completion",
-                    address=completion,
-                    json_path=invalid_paths[0],
-                    rung_ids=(
-                        [rung.get("rung_id")]
-                        if isinstance(rung.get("rung_id"), int)
-                        else []
-                    ),
-                    message=f"{completion} 与运动指令串联或放在公共使能位置。",
-                    suggestion=(
-                        "若使用该完成标志，应放在同一梯级的独立并联完成分支；"
-                        "若采用 BUSY/DONE、外部到位或无需等待的策略，则无需添加它。"
-                    ),
-                    evidence=motion_paths + invalid_paths,
                 )
-            )
-    return findings
 
+        for completion_device, owner_rows in sorted(owners.items()):
+            owner_branches = {branch_idx for branch_idx, _ in owner_rows}
+            owner_paths = [path for _, path in owner_rows]
+            invalid_paths = []
+
+            for branch_idx, branch in enumerate(branches):
+                if branch_idx not in owner_branches:
+                    continue
+                for input_idx, element in enumerate(branch.get("inputs", []) or []):
+                    if str(element.get("address", "")).upper() == completion_device:
+                        invalid_paths.append(
+                            f"$.rungs[{rung_idx}].branches[{branch_idx}]"
+                            f".inputs[{input_idx}]"
+                        )
+
+            for shared_idx, element in enumerate(rung.get("shared_inputs", []) or []):
+                if str(element.get("address", "")).upper() == completion_device:
+                    invalid_paths.append(
+                        f"$.rungs[{rung_idx}].shared_inputs[{shared_idx}]"
+                    )
+            header = rung.get("header_element")
+            if (
+                isinstance(header, Mapping)
+                and str(header.get("address", "")).upper() == completion_device
+            ):
+                invalid_paths.append(f"$.rungs[{rung_idx}].header_element")
+
+            if invalid_paths:
+                findings.append(
+                    ReviewFinding(
+                        severity="warning",
+                        category="motion_completion",
+                        address=completion_device,
+                        json_path=invalid_paths[0],
+                        rung_ids=(
+                            [rung.get("rung_id")]
+                            if isinstance(rung.get("rung_id"), int)
+                            else []
+                        ),
+                        message=(
+                            f"{completion_device} 与其 owning instruction 串联"
+                            "或放在公共使能位置。"
+                        ),
+                        suggestion=(
+                            "若使用该 completion flag，应按 capability contract "
+                            "放在同一梯级的独立并联完成分支；若已确认采用其他完成"
+                            "策略，则不要添加该 flag。"
+                        ),
+                        evidence=owner_paths + invalid_paths,
+                    )
+                )
+    return findings
 
 def _review_alarm_logic(data, confirmed_spec):
     used = _all_used_devices(data)

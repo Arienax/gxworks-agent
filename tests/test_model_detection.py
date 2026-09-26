@@ -60,14 +60,17 @@ def test_changed_explicit_value_needs_no_new_probe_or_domain_expansion(name,valu
     endpoint = Endpoint()
     p = provider(endpoint)
     p.profile['capabilityContract'] = inspect_openai_compatible(p,'tenant-alias')['contract']
+    p.profile['userModelSettings'] = {
+        'scope': p.profile['capabilityContract']['scope'],
+        'parameters': {name: {'mode':'value','value':value}},
+    }
     before = copy.deepcopy(p.profile)
-    p.profile['generationDefaults'][name] = value
     result = inspect_openai_compatible(p,'tenant-alias')
     p.profile['capabilityContract'] = result['contract']
     assert resolve_request(p.profile,{},api_key=p.api_key).options[name] == value
     assert endpoint.calls == [] and endpoint.options == []
     assert not result['contract']['parameters'][name].get('evidence')
-    assert before['generationDefaults'] == {}
+    assert p.profile['userModelSettings'] == before['userModelSettings']
 
 
 def test_metadata_cache_is_scoped_to_exact_endpoint_and_credentials():

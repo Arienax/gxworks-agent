@@ -11,8 +11,7 @@ from application.compact_protocol import CompactProtocolError, expand_compact_la
 from application.confirmed_generation_context import build_confirmed_generation_context, project_confirmed_specification
 from application.context_compiler import ContextCompiler, ContextCompilerInput
 from plc.specification.bindings import confirmed_input_levels
-from plc.specification.checks import check_direct_self_hold
-from plc.validation import PLCJsonValidationError
+from model_profile_fixtures import offline_runtime_profile
 
 
 OPAQUE = "输出触点与启动触点并联自锁，停止触点串联断开输出"
@@ -57,6 +56,24 @@ def compact(start=1, stop=0, wrapped=False, wrong=False):
     return {"r": [{"h": None, "s": [], "b": [{"i": [inputs] if wrapped else inputs, "o": ["COIL Y0"]}]}]}
 
 
+@pytest.mark.parametrize(("mnemonic", "expected"), [
+    ("LD", "NO"), ("AND", "NO"), ("OR", "NO"),
+    ("LDI", "NC"), ("ANI", "NC"), ("ORI", "NC"),
+    ("LDP", "P"), ("ANDP", "P"), ("ORP", "P"),
+    ("LDF", "F"), ("ANDF", "F"), ("ORF", "F"),
+])
+def test_mitsubishi_contact_mnemonics_are_canonicalized_at_compact_boundary(mnemonic, expected):
+    value = {"r": [{"h": f"{mnemonic} M8002", "s": [], "b": [{"i": [], "o": ["COIL Y0"]}]}]}
+    header = expand_compact_ladder(value)["rungs"][0]["header_element"]
+    assert header == {"type": expected, "address": "M8002"}
+
+
+def test_unknown_contact_mnemonic_is_still_rejected():
+    value = {"r": [{"h": "LDX M8002", "s": [], "b": [{"i": [], "o": ["COIL Y0"]}]}]}
+    with pytest.raises(CompactProtocolError):
+        expand_compact_ladder(value)
+
+
 def test_single_wrapper_is_representation_only_and_idempotent():
     source = compact(wrapped=True, wrong=True)
     original = copy.deepcopy(source)
@@ -91,9 +108,11 @@ def test_confirmed_electrical_answers_are_not_ladder_contacts(text, active):
     assert confirmed_input_levels(text) == ({} if active is None else {"active_level": active, "inactive_level": 1-active})
 
 
-def test_declared_io_builds_bindings_and_drops_agent_a_internal_allocations():
+def test_declared_io_survives_analysis_draft_v4_and_runtime_without_special_checker():
     from application.model_api import _normalize_analysis_result
     from plc.specification.confirmed import build_review_draft, canonicalize_confirmed_spec
+    from plc.specification.provenance import build_confirmed_spec
+    from plc.specification.semantic_validation import validate_confirmed_semantics
 
     raw = {
         "summary": "declared I/O",
@@ -125,49 +144,50 @@ def test_declared_io_builds_bindings_and_drops_agent_a_internal_allocations():
     assert "M0" not in json.dumps(normalized["suggested_io"], ensure_ascii=False)
     assert "T1" not in json.dumps(normalized["suggested_io"], ensure_ascii=False)
 
-    spec = canonicalize_confirmed_spec(build_review_draft(normalized))
-    bindings = {row.get("role"): row for row in spec["io_bindings"] if row.get("role")}
-    assert bindings["start"]["address"] == "X0"
-    assert bindings["start"]["active_level"] == 1
-    assert bindings["stop"]["address"] == "X1"
-    assert bindings["stop"]["active_level"] == 0
+    draft = build_review_draft(normalized)
+    spec = canonicalize_confirmed_spec(draft)
+    bindings = {row["address"]: row for row in spec["io_bindings"]}
+    assert set(bindings) == {"X0", "X1", "Y0"}
+    assert bindings["X0"]["role"] == "start" and bindings["X0"]["active_level"] == 1
+    assert bindings["X1"]["role"] == "stop" and bindings["X1"]["active_level"] == 0
+    assert bindings["Y0"]["label"] == "主输送带"
+
+    v4 = build_confirmed_spec(spec)
+    assert v4["schema_version"] == 4
+    projected = project_confirmed_specification(v4)
+    runtime = ContextCompiler().compile(
+        ContextCompilerInput(confirmed_spec=projected)
+    ).generation_packet["confirmed_spec"]
+    assert runtime["io_bindings"] == projected["io_bindings"]
+    assert {row["address"] for row in runtime["io_bindings"]} == {"X0", "X1", "Y0"}
 
     ladder = {
         "device_comments": {},
-        "rungs": [
-            {
-                "rung_id": 1, "header_element": None, "shared_inputs": [],
-                "branches": [{
-                    "branch_id": 1, "y_offset_level": 0,
-                    "inputs": [
-                        {"type": "parallel_block", "branches": [
-                            [{"type": "NO", "address": "X0"}],
-                            [{"type": "NO", "address": "M0"}],
-                        ]},
-                        {"type": "NO", "address": "X1"},
-                        {"type": "NC", "address": "M3"},
-                    ],
-                    "outputs": [{"type": "COIL", "address": "M0"}],
-                }],
-            },
-            {
-                "rung_id": 2, "header_element": None, "shared_inputs": [],
-                "branches": [{
-                    "branch_id": 1, "y_offset_level": 0,
-                    "inputs": [{"type": "NO", "address": "M0"}],
-                    "outputs": [{"type": "COIL", "address": "Y0"}],
-                }],
-            },
-        ],
+        "rungs": [{
+            "rung_id": 1,
+            "header_element": None,
+            "shared_inputs": [],
+            "branches": [{
+                "branch_id": 1,
+                "y_offset_level": 0,
+                "inputs": [
+                    {"type": "parallel_block", "branches": [
+                        [{"type": "NO", "address": "X0"}],
+                        [{"type": "NO", "address": "M0"}],
+                    ]},
+                    {"type": "NO", "address": "X1"},
+                ],
+                "outputs": [{"type": "COIL", "address": "M0"}],
+            }],
+        }],
     }
-    result = check_direct_self_hold(ladder, spec)
-    assert result["status"] == "verified"
-    assert result["held_address"] == "M0"
-
-    wrong = copy.deepcopy(ladder)
-    wrong["rungs"][0]["branches"][0]["inputs"][1]["type"] = "NC"
-    with pytest.raises(PLCJsonValidationError, match="stop/run-permit polarity"):
-        check_direct_self_hold(wrong, spec)
+    report = validate_confirmed_semantics(ladder, runtime, plc_model="FX3U")
+    self_hold = next(
+        row for row in report["checks"]
+        if row.get("kind") == "structure" and row.get("expected") == "self_hold"
+    )
+    assert self_hold["check"] == "contract_feature"
+    assert self_hold["status"] == "verified"
 
 
 def test_old_snapshot_recovers_output_and_input_facts_without_mutating_storage():
@@ -195,27 +215,6 @@ def test_editing_or_deleting_bound_io_does_not_resurrect_old_answers():
     result = project_confirmed_specification(spec)
     assert all(r["address"] != "Y0" for r in result["io_table"])
     assert all(r.get("role") != "output" for r in result["io_bindings"])
-
-
-@pytest.mark.parametrize("start", [0, 1])
-@pytest.mark.parametrize("stop", [0, 1])
-def test_confirmed_levels_check_all_states_and_never_flip_generated_logic(start, stop):
-    spec = project_confirmed_specification(old_confirmed_spec(start, stop))
-    result = check_direct_self_hold(expand_compact_ladder(compact(start, stop)), spec)
-    assert result["status"] == "verified" and result["states"] == 8
-    wrong = expand_compact_ladder(compact(start, stop, wrong=True))
-    before = copy.deepcopy(wrong)
-    with pytest.raises(PLCJsonValidationError, match="stop/run-permit polarity"):
-        check_direct_self_hold(wrong, spec)
-    assert wrong == before
-
-
-def test_missing_or_edge_semantics_are_not_claimed_verified():
-    spec = old_confirmed_spec()
-    spec["parameters"][0]["value"] = "X0 常开，上升沿启动"
-    result = project_confirmed_specification(spec)
-    assert any("上升沿" in p["value"] for p in result["parameters"])
-    assert check_direct_self_hold(expand_compact_ladder(compact()), result)["status"] == "not_covered"
 
 
 def test_query_excludes_form_options_and_paths_but_generation_keeps_confirmed_facts():
@@ -264,8 +263,8 @@ def test_model_window_does_not_override_task_evidence_allowance(monkeypatch):
 
 
 class OneResponse:
-    profile = {"id": "offline-input-regression", "adapter": "openai_compatible", "model": "offline-input-regression",
-               "capabilities": {"structured_output": True}}
+    profile = offline_runtime_profile("offline-input-regression")
+
     def __init__(self, payload):
         self.payload = payload
         self.requests = []
@@ -276,8 +275,9 @@ class OneResponse:
         yield TextDelta(json.dumps(self.payload))
 
 
-@pytest.mark.parametrize("wrong", [False, True])
-def test_real_http_confirmation_and_generation_have_one_call_and_no_wrong_artifact(tmp_path, wrong, monkeypatch):
+def test_real_http_confirmation_and_generation_have_one_call(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi", reason="HTTP acceptance requires Web dependencies")
+    pytest.importorskip("httpx", reason="HTTP acceptance requires Web dependencies")
     from fastapi.testclient import TestClient
     from application.workbench import WorkbenchService
     from integrations.web.app import create_app
@@ -291,7 +291,7 @@ def test_real_http_confirmation_and_generation_have_one_call_and_no_wrong_artifa
         return original_prepare(self, *args, **kwargs)
 
     monkeypatch.setattr(CandidateService, "prepare", counted_prepare)
-    provider = OneResponse(compact(wrapped=True, wrong=wrong))
+    provider = OneResponse(compact(wrapped=True))
     service = WorkbenchService(tmp_path/"workspace", tmp_path/"state",
                                model_factory=lambda: (provider, {"model": provider.profile["model"]}))
     app = create_app(service.store.base_dir, service=service, origin=ORIGIN, operator_token=OPERATOR)
@@ -315,17 +315,13 @@ def test_real_http_confirmation_and_generation_have_one_call_and_no_wrong_artifa
         assert "# Retrieved PLC evidence" not in sent
         assert sent.count("# Generation execution policy") == 1
         assert '"run_permit_when":"NO X1"' in sent
-        if wrong:
-            assert state["status"] == "failed", state
-            assert not service.projects.project(pid).get("versions")
-        else:
-            assert state["status"] == "completed", state
-            result = client.get(f"/api/jobs/{jid}/output").json()
-            assert result["status"] == "saved", result
-            for artifact in ("json", "ir", "svg", "program_csv", "comment_csv"):
-                assert service.projects.artifact(pid, result["version_id"], artifact).stat().st_size > 0
-            saved = json.loads(service.projects.artifact(pid, result["version_id"], "json").read_text(encoding="utf-8"))
-            assert "Y0" in saved["device_comments"]
+        assert state["status"] == "completed", state
+        result = client.get(f"/api/jobs/{jid}/output").json()
+        assert result["status"] == "saved", result
+        for artifact in ("json", "ir", "svg", "program_csv", "comment_csv"):
+            assert service.projects.artifact(pid, result["version_id"], artifact).stat().st_size > 0
+        saved = json.loads(service.projects.artifact(pid, result["version_id"], "json").read_text(encoding="utf-8"))
+        assert "Y0" in saved["device_comments"]
 
 
 def test_distinct_typed_machine_bindings_are_not_merged():
@@ -360,7 +356,11 @@ def test_form_options_never_supply_unanswered_physical_polarity():
         parameter["options"] = ["X0 常开（按下为 ON）", "X1 常闭（按下为 OFF）"]
     result = project_confirmed_specification(spec)
     assert all("active_level" not in row for row in result["io_bindings"])
-    assert check_direct_self_hold(expand_compact_ladder(compact()), result)["status"] == "not_covered"
+    from plc.specification.conditions import generation_input_conditions
+    assert generation_input_conditions(result["io_bindings"]) == {
+        "level_predicates": [],
+        "unresolved_input_bindings": [],
+    }
 
 
 def test_compact_and_ladder_v1_prompts_distinguish_physical_polarity():
@@ -481,7 +481,7 @@ def test_execution_predicates_recompute_after_confirmed_io_edits_and_deletion():
     assert next(row for row in before if row["role"] == "stop")["address"] == "X1"
 
 
-def test_execution_compact_and_full_share_one_policy_and_keep_evidence(monkeypatch):
+def test_execution_compact_and_full_share_one_execution_contract_and_keep_evidence(monkeypatch):
     from application.confirmed_generation_context import GENERATION_EXECUTION_POLICY, generation_execution_prompt
     from application.generation_agent import _build_agent_b_prompt
     from application.generation_context import build_generation_instructions

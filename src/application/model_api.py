@@ -37,10 +37,7 @@ from application.generation_context import (
     _routing_text_with_selected_approach, _load_plc_models, _build_model_context,
     _confirmed_context_text, _with_confirmed_context, build_generation_instructions,
 )
-from shared.context_policy import (
-    audit_request, audit_section, context_policy_scope, manual_lookup_decision,
-    resolve_context_policy, select_base_prompt,
-)
+from shared.context_audit import audit_request, audit_section
 from plc.validation import PLCJsonValidationError, parse_device_address
 from plc.hardware_profiles import ensure_hardware_questions
 from plc.instructions import (
@@ -54,7 +51,14 @@ from knowledge.patterns import (
     classify_request,
 )
 from application.prompts import ANALYSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_DIAGNOSIS_SYSTEM_PROMPT, DEBUG_EVIDENCE_PATCH_SYSTEM_PROMPT, DEBUG_REPORT_SYSTEM_PROMPT, FIELD_PATCH_REPAIR_SYSTEM_PROMPT, INSPECTION_SYSTEM_PROMPT, MULTI_AGENT_SPECIALIST_PROMPTS, PARTIAL_LADDER_REPAIR_SYSTEM_PROMPT, SIMULATOR_TEST_SUITE_SYSTEM_PROMPT
-from application.analysis_results import _ANALYSIS_IO_KINDS, _ASSUMPTION_MARKERS, _iter_analysis_text, _normalize_analysis_result
+from application.analysis_results import (
+    AnalysisProtocolError,
+    _ANALYSIS_IO_KINDS,
+    _ASSUMPTION_MARKERS,
+    _iter_analysis_text,
+    _normalize_analysis_result,
+    validate_current_analysis_protocol,
+)
 
 
 
@@ -76,8 +80,7 @@ def provider_scope(provider=None, *, model_name=None):
     token = _provider_session.set(session)
     model_token = _workflow_model.set(model_name or _workflow_model.get())
     try:
-        with context_policy_scope():
-            yield
+        yield
     finally:
         _workflow_model.reset(model_token)
         _provider_session.reset(token)
@@ -257,26 +260,42 @@ def _resolve_plc_model(user_input="", confirmed_context=None, explicit_model=Non
 
 
 
-def _parse_analysis_response(raw, plc_model="FX3U", user_text="", confirmed_spec=None):
+def _analysis_json_payload(raw):
     text = str(raw or "").strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[1] if "\n" in text else ""
     if text.endswith("```"):
         text = text.rsplit("\n", 1)[0]
-    result = json.loads(text.strip())
+    return json.loads(text.strip())
+
+
+def _validate_fresh_analysis_content(raw):
+    payload = _analysis_json_payload(raw)
+    validate_current_analysis_protocol(payload)
+    return payload
+
+
+def _parse_analysis_response(raw, plc_model="FX3U", user_text="", confirmed_spec=None):
+    result = _validate_fresh_analysis_content(raw)
     return _normalize_analysis_result(result, plc_model, user_text, confirmed_spec)
 
 
 def _request_analysis_response(messages, *, on_format_repair=None, **kwargs):
-    """Allow one syntax correction of an unconfirmed analysis draft only.
+    """Accept the current Agent-A protocol, with one bounded format repair.
 
-    Keep the shared collector strict. Language/field rejection, transport
-    errors and valid JSON with the wrong root type are not repair signals.
-    Neither attempt publishes content until its normal acceptance succeeds.
+    JSON syntax failures and current-protocol shape failures share the existing
+    single repair turn. Neither is a PLC validation error, and neither may
+    silently fall back to a legacy Agent-A protocol.
     """
     with provider_scope():
+        first_attempts = ()
+        rejected_message = None
+        correction = ""
+
         try:
-            return _request_model(messages, response_contract=ANALYSIS_RESPONSE, **kwargs)
+            first = _request_model(
+                messages, response_contract=ANALYSIS_RESPONSE, **kwargs
+            )
         except ResponseRejectedError as rejected:
             if [(v.path, v.reason) for v in rejected.violations] != [
                 ("content", "invalid_json_object")
@@ -290,26 +309,70 @@ def _request_analysis_response(messages, *, on_format_repair=None, **kwargs):
             try:
                 json.loads(raw)
             except json.JSONDecodeError as syntax_error:
-                location = f"line {syntax_error.lineno}, column {syntax_error.colno}"
+                location = (
+                    f"line {syntax_error.lineno}, column {syntax_error.colno}"
+                )
             else:
                 raise rejected
-            if on_format_repair is not None:
-                on_format_repair()
+            first_attempts = rejected.raw_attempts
+            rejected_message = rejected.raw_response.message
             correction = (
                 "Your previous analysis draft is not valid JSON (" + location + "). "
-                "Return the complete corrected JSON object only, using the analysis schema above. "
-                "Correct JSON syntax and missing schema keys only; preserve the requirement, "
-                "devices, alternatives and questions. Do not invent confirmed answers or generate PLC code. "
-                "Use separate property names and values. No markdown or explanations."
+                "Return the complete corrected JSON object only, using the current "
+                "analysis protocol above. Correct JSON syntax and missing protocol "
+                "keys only; preserve the requirement, devices, alternatives and "
+                "questions. Every approach must include implementation_semantics "
+                "as an array; an empty array is valid. Do not invent confirmed "
+                "answers or generate PLC code. No markdown or explanations."
             )
-            repair_messages = [*messages, rejected.raw_response.message,
-                               UserMessage(correction)]
+        else:
             try:
-                repaired = _request_model(repair_messages, response_contract=ANALYSIS_RESPONSE, **kwargs)
-            except ResponseRejectedError as error:
-                error.raw_attempts = (*rejected.raw_attempts, *error.raw_attempts)
-                raise
-            return replace(repaired, raw_attempts=(*rejected.raw_attempts, *repaired.raw_attempts))
+                _validate_fresh_analysis_content(first.message.content)
+            except AnalysisProtocolError as protocol_error:
+                first_attempts = first.raw_attempts
+                rejected_message = first.message
+                detail = " | ".join(protocol_error.violations[:8])
+                correction = (
+                    "Your previous analysis JSON is syntactically valid but does "
+                    "not satisfy the current Agent-A protocol: " + detail + ". "
+                    "Return the complete corrected JSON object only. Every approach "
+                    "must include implementation_semantics as an array; [] is valid "
+                    "when no architecture structure needs to be fixed. Each semantic "
+                    "may only describe kind=structure with status required, forbidden "
+                    "or any_of and Core structure vocabulary. Do not emit "
+                    "generation_contract, explicit_user_constraints, "
+                    "implementation_preferences, opcode, operands, device or "
+                    "instruction_instance fields. Preserve the user's requirement, "
+                    "alternatives and unanswered questions. Do not generate PLC code."
+                )
+            else:
+                return first
+
+        if on_format_repair is not None:
+            on_format_repair()
+        repair_messages = [
+            *messages,
+            rejected_message,
+            UserMessage(correction),
+        ]
+        try:
+            repaired = _request_model(
+                repair_messages,
+                response_contract=ANALYSIS_RESPONSE,
+                **kwargs,
+            )
+        except ResponseRejectedError as error:
+            error.raw_attempts = (*first_attempts, *error.raw_attempts)
+            raise
+
+        combined_attempts = (*first_attempts, *repaired.raw_attempts)
+        try:
+            _validate_fresh_analysis_content(repaired.message.content)
+        except AnalysisProtocolError as error:
+            error.raw_attempts = combined_attempts
+            error.raw_response = repaired.message
+            raise
+        return replace(repaired, raw_attempts=combined_attempts)
 
 
 
@@ -496,14 +559,8 @@ def _save_history(history):
 
 def _build_clean_messages(conversation_history, system_prompt):
     """构建发送给模型的消息列表，仅保留用户可见正文。"""
-    messages = [{"role": "system", "content": system_prompt}]
-    for msg in conversation_history:
-        role = msg.get("role")
-        if role not in {"user", "assistant"}:
-            continue
-        clean = {"role": role, "content": str(msg.get("content", ""))}
-        messages.append(clean)
-    return messages
+    from application.generation_wire import render_wire_messages
+    return render_wire_messages(system_prompt, conversation_history)
 
 
 
@@ -579,8 +636,13 @@ def _prepare_api_call(
         confirmed_builder=_with_confirmed_context,
         on_context=on_generation_context,
         model_profile=bound_provider_profile(),
+        wire_history=conversation_history,
     )
-    messages_to_send = _build_clean_messages(conversation_history, system_prompt)
+    compiled_wire = getattr(system_prompt, "wire_packet", None)
+    if isinstance(compiled_wire, dict) and isinstance(compiled_wire.get("messages"), list):
+        messages_to_send = copy.deepcopy(compiled_wire["messages"])
+    else:
+        messages_to_send = _build_clean_messages(conversation_history, system_prompt)
     if image_attachments:
         messages_to_send[-1] = _user_message_with_images(
             user_requirement,
@@ -1279,22 +1341,26 @@ def repair_ladder_response(repair_payload, model_name, effort, *, mode,
 
 
 def _native_ladder_generation_options(plc_model, *, allow_partial=False):
-    """Use the current ladder contract when the selected profile already uses native JSON Schema.
-
-    Profiles that use json_object/text keep their existing transport behavior.
-    This only replaces a persisted/native json_schema so its opcode enum cannot
-    drift behind the registry enforced by final PLC validation.
-    """
+    """Use native JSON Schema only when the v3 model contract declares it."""
     provider = _workflow_provider()
     profile = getattr(provider, "profile", None)
     if not isinstance(profile, dict):
         return None
-    response_format = None
-    for key in ("generationDefaults", "requestOverrides"):
-        source = profile.get(key)
-        if isinstance(source, dict) and "response_format" in source:
-            response_format = source.get("response_format")
-    if not (isinstance(response_format, dict) and response_format.get("type") == "json_schema"):
+    from model_runtime.runtime_profile import materialize_runtime_profile
+    try:
+        runtime = materialize_runtime_profile(
+            profile,
+            api_key=getattr(provider, "api_key", None),
+        )
+    except (TypeError, ValueError):
+        return None
+    capability = runtime.contract.capabilities.get("structured_output")
+    if not (
+        capability
+        and capability.status in {"supported", "conditional"}
+        and "json_schema" in capability.modes
+        and capability.source in {"metadata", "catalog", "manual", "legacy"}
+    ):
         return None
 
     selected_model = str(plc_model or "FX3U").strip().upper() or "FX3U"

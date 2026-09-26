@@ -110,11 +110,15 @@ def test_real_job_events_and_connected_proposal_obey_read_contracts(tmp_path):
         service.close()
 
 
-def test_model_settings_contract_keeps_capability_flags_without_credentials():
+def test_model_settings_contract_keeps_canonical_contract_without_credentials():
     settings = {
         "language": "en", "active_profile_id": "offline", "profiles": [{
             "id": "offline", "name": "Offline", "model": "test-model", "base_url": "http://127.0.0.1:9000/v1",
-            "configured": False, "capabilities": {"tools": True, "multimodal": False},
+            "configured": False,
+            "contract": {"schema_version": 3, "capabilities": {
+                "tools": {"status": "supported", "source": "catalog"},
+                "vision": {"status": "unsupported", "source": "catalog"},
+            }},
         }],
     }
     _roundtrip(ModelSettings, settings)

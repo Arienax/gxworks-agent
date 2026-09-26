@@ -26,6 +26,16 @@ _IO_ATTRIBUTE_RE = re.compile(
     re.IGNORECASE,
 )
 
+_DECLARED_IO_LINE_RE = re.compile(
+    r"^\s*(?:[-*•]\s*|\d+[.)、]\s*)?((?:SM|SD|[XYMTCSDVZ])\s*\d+)"
+    r"\s*(?:[：:]|为|是|is\s+)\s*(.+?)\s*$",
+    re.IGNORECASE,
+)
+_INPUT_QUALIFIER_RE = re.compile(
+    r"[,，(（]\s*(?:按下|未按下|松开|释放|动作|未动作|常开|常闭|常開|常閉|normally\b|active\b)",
+    re.IGNORECASE,
+)
+
 
 def _is_io_attribute_answer(value):
     return bool(_IO_ATTRIBUTE_RE.search(str(value or "")) or confirmed_input_levels(value))
@@ -86,6 +96,51 @@ def canonical_signal_role(label):
         if key in {label_key(alias) for alias in aliases}
     ]
     return matches[0] if len(matches) == 1 else ""
+
+
+def extract_declared_bindings(user_text, plc_model=None):
+    """Extract explicit device-purpose declarations into generic binding identities.
+
+    Every explicit declaration is retained as an identity/address/purpose fact.
+    Optional role and active-level metadata are added only when deterministically
+    known; their absence never causes the binding itself to be discarded.
+    """
+    model = str(plc_model or "").strip().upper()
+    result = []
+    seen = set()
+    for statement in re.split(r"[\n;；。]+", str(user_text or "")):
+        match = _DECLARED_IO_LINE_RE.fullmatch(statement)
+        if match is None:
+            continue
+        address = canonical_device(re.sub(r"\s+", "", match.group(1)).upper())
+        kind_match = re.match(r"[A-Z]+", address)
+        if kind_match is None:
+            continue
+        kind = kind_match.group()
+        digits = address[len(kind):]
+        if model == "FX3U" and kind in {"X", "Y"} and any(char not in "01234567" for char in digits):
+            continue
+        raw_value = match.group(2).strip()
+        label = _INPUT_QUALIFIER_RE.split(raw_value, maxsplit=1)[0].strip() or raw_value
+        role = canonical_signal_role(label)
+        identity = f"declared.{role or kind.casefold()}.{address}"
+        if identity in seen:
+            continue
+        seen.add(identity)
+        item = {
+            "binding_id": identity,
+            "kind": kind,
+            "address": address,
+            "label": label,
+            "name": label,
+            "source": "user_request",
+        }
+        if role:
+            item["role"] = role
+        if kind == "X":
+            item.update(confirmed_input_levels(raw_value))
+        result.append(item)
+    return result
 
 
 def merge_declared_bindings(rows, existing=(), declared=()):

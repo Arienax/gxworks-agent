@@ -396,10 +396,10 @@ def test_io_purpose_http_save_generate_and_export_keep_only_device_names(tmp_pat
     from integrations.web.app import create_app
     from model_runtime.provider import TextDelta, SystemMessage
     from plc.ir import ir_to_ladder
-    from test_web_api import ORIGIN, OPERATOR, _login, _complete
+    from test_web_api import ORIGIN, OPERATOR, _login, _complete, offline_runtime_profile
 
     class Provider:
-        profile = {}
+        profile = offline_runtime_profile("label-fixture")
 
         def __init__(self):
             self.requests = []
@@ -537,13 +537,13 @@ def test_inline_user_io_and_flat_analysis_reach_http_explorer_and_all_artifacts(
     from application.workbench import WorkbenchService
     from model_runtime.provider import TextDelta, SystemMessage
     from plc.ir import ir_to_ladder
-    from test_web_api import ORIGIN, _app, _login, _complete
+    from test_web_api import ORIGIN, _app, _login, _complete, offline_runtime_profile
 
     text = ("X0 为启动按钮，按下时 ON；X1 为停止按钮，按下时 ON；Y0 为运行输出。\n"
             "实现停止优先的普通起保停自锁控制。")
     expected = {"X0": "启动按钮", "X1": "停止按钮", "Y0": "运行输出"}
     class Provider:
-        profile = {}
+        profile = offline_runtime_profile("offline-io-labels")
         def __init__(self):
             self.requests = []
         def stream(self, request):
@@ -552,7 +552,7 @@ def test_inline_user_io_and_flat_analysis_reach_http_explorer_and_all_artifacts(
                 payload = {"summary": "停止优先起保停", "missing_info": [], "assumptions": [],
                     "suggested_io": {"X0": "启动按钮输入（按下为ON）", "X1": "停止按钮输入（按下为ON）", "Y0": "运行输出"},
                     "approaches": [{"approach_id": "direct", "name": "自保持", "description": "停止优先", "pros": "", "cons": "",
-                                    "generation_guide": "", "generation_contract": {"required_opcodes": []}}]}
+                                    "generation_guide": "", "implementation_semantics": []}]}
             else:
                 prompt = next(m.content for m in request.messages if isinstance(m, SystemMessage))
                 spec, _ = json.JSONDecoder().raw_decode(prompt.split("# Confirmed project specification\n", 1)[1])

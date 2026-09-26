@@ -5,6 +5,7 @@ import pytest
 
 import storage.config as config_manager
 from storage.credentials import CREDENTIAL_TARGET, credential_target_for_profile
+from model_runtime.runtime_profile import materialize_runtime_profile
 
 
 def _credential_fakes(monkeypatch, initial=None):
@@ -62,7 +63,10 @@ def test_legacy_config_migrates_idempotently_and_copies_but_keeps_credential(
         migrated
     )
     deepseek = config_manager.get_model_profile(migrated)
-    assert deepseek["generationDefaults"]["temperature"] == 0.25
+    runtime = materialize_runtime_profile(deepseek, api_key="sk-legacy")
+    assert runtime.settings.parameters["temperature"] == {
+        "mode": "value", "value": 0.25
+    }
     assert credentials[CREDENTIAL_TARGET] == "sk-legacy"
     assert credentials[deepseek["credentialTarget"]] == "sk-legacy"
     assert writes.count((CREDENTIAL_TARGET, "sk-legacy")) == 1
@@ -85,10 +89,11 @@ def test_glm_legacy_config_selects_glm_profile_and_keeps_required_defaults(
 
     profile = config_manager.get_model_profile(migrated)
     assert profile["id"] == "zhipu-glm-5.3-flash"
-    assert profile["capabilities"]["thinking_required"] is True
-    assert profile["capabilities"]["tool_stream"] is True
-    assert "reasoning_effort" not in profile["generationDefaults"]
-    assert profile["requestOverrides"]["extra_body"]["thinking"]["type"] == "enabled"
+    runtime = materialize_runtime_profile(profile, api_key="glm-key")
+    assert runtime.contract.capabilities["thinking_required"].status == "supported"
+    assert runtime.contract.capabilities["tool_stream"].status == "supported"
+    assert runtime.contract.capabilities["vision"].status == "supported"
+    assert "reasoning_effort" not in runtime.settings.parameters
 
 
 @pytest.mark.parametrize(
@@ -114,9 +119,11 @@ def test_glm_legacy_config_selects_matching_official_profile(
     profile = config_manager.get_model_profile(migrated)
     assert profile["id"] == expected_profile_id
     assert profile["model"] == model
-    assert profile["capabilities"]["tool_stream"] is True
-    assert "reasoning_effort" not in profile["generationDefaults"]
-    assert profile["requestOverrides"]["extra_body"]["thinking"]["type"] == "enabled"
+    runtime = materialize_runtime_profile(profile, api_key="")
+    assert runtime.contract.capabilities["tool_stream"].status == "supported"
+    assert "reasoning_effort" not in runtime.settings.parameters
+    if model == "glm-5.3":
+        assert runtime.contract.capabilities["thinking_required"].status == "supported"
 
 
 @pytest.mark.parametrize(
@@ -146,7 +153,9 @@ def test_deepseek_legacy_config_selects_matching_official_profile(
     profile = config_manager.get_model_profile(migrated)
     assert profile["id"] == expected_profile_id
     assert profile["model"] == model
-    assert bool(profile["capabilities"].get("multimodal")) is multimodal
+    runtime = materialize_runtime_profile(profile, api_key="")
+    vision = runtime.contract.capabilities.get("vision")
+    assert bool(vision and vision.status == "supported") is multimodal
 
 
 def test_existing_profile_config_keeps_user_list_without_adding_builtins(
@@ -261,16 +270,27 @@ def test_default_config_file_uses_only_profile_schema():
     profiles = {item["id"]: item for item in payload["modelProfiles"]}
     assert set(config_manager.BUILTIN_MODEL_PROFILE_IDS).issubset(profiles)
     assert profiles["zhipu-glm-5.3"]["model"] == "glm-5.3"
-    assert profiles["zhipu-glm-5.3"]["capabilities"]["thinking_required"] is True
     assert profiles["zhipu-glm-5.2"]["model"] == "glm-5.2"
     assert profiles["deepseek-v4-flash"]["model"] == "deepseek-v4-flash"
-    assert not profiles["deepseek-v4-flash"]["capabilities"].get("multimodal")
     assert (
         profiles["deepseek-v4-flash-vision-exp"]["model"]
         == "deepseek-v4-flash-vision-exp"
     )
-    assert profiles["deepseek-v4-flash-vision-exp"]["capabilities"]["multimodal"] is True
-    assert profiles["zhipu-glm-5.3-flash"]["capabilities"]["multimodal"] is True
+    retired = {"capabilities", "generationDefaults", "requestOverrides", "parameterSupport"}
+    assert all(not retired.intersection(item) for item in profiles.values())
+
+    glm = materialize_runtime_profile(
+        config_manager._normalize_profile(profiles["zhipu-glm-5.3"]), api_key=""
+    )
+    flash = materialize_runtime_profile(
+        config_manager._normalize_profile(profiles["zhipu-glm-5.3-flash"]), api_key=""
+    )
+    deepseek_vision = materialize_runtime_profile(
+        config_manager._normalize_profile(profiles["deepseek-v4-flash-vision-exp"]), api_key=""
+    )
+    assert glm.contract.capabilities["thinking_required"].status == "supported"
+    assert flash.contract.capabilities["vision"].status == "supported"
+    assert deepseek_vision.contract.capabilities["vision"].status == "supported"
     assert not {"api_key", "base_url", "default_model", "request_template"}.intersection(
         payload
     )
@@ -591,3 +611,36 @@ def test_flat_legacy_config_never_inherits_preset_effort(model, template, expect
     if nested:
         assert params["extra_body"]["fixture"] is True
     assert config == before and config_manager._default_profiles() == defaults
+
+
+
+def test_flat_request_template_is_translated_only_as_legacy_migration_input():
+    from model_runtime.legacy_migration import migrate_request_template
+
+    base = {
+        "id": "legacy-template",
+        "name": "Legacy template",
+        "adapter": "openai_compatible",
+        "baseUrl": "https://models.example.invalid/v1",
+        "model": "example-model",
+    }
+    migrated = migrate_request_template(base, {
+        "temperature": 0.4,
+        "reasoning_effort": "{effort}",
+        "vendor_flag": True,
+        "extra_body": {"reasoning_effort": "{effort}", "vendor_mode": "x"},
+    })
+    assert migrated["generationDefaults"] == {"temperature": 0.4}
+    assert migrated["requestOverrides"] == {
+        "vendor_flag": True,
+        "extra_body": {"vendor_mode": "x"},
+    }
+
+    runtime = materialize_runtime_profile(migrated, api_key="")
+    assert runtime.settings.parameters["temperature"] == {
+        "mode": "value", "value": 0.4
+    }
+    assert runtime.overrides == {
+        "vendor_flag": True,
+        "extra_body": {"vendor_mode": "x"},
+    }

@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "id": "zhipu-glm-common",
+  "extends": "generic-openai-compatible",
+  "capabilities": {
+    "reasoning": {
+      "status": "supported",
+      "source": "catalog"
+    },
+    "tools": {
+      "status": "supported",
+      "source": "catalog"
+    },
+    "streaming": {
+      "status": "supported",
+      "source": "catalog"
+    },
+    "tool_stream": {
+      "status": "supported",
+      "source": "catalog"
+    },
+    "structured_output": {
+      "status": "supported",
+      "source": "catalog",
+      "modes": [
+        "json_object"
+      ]
+    }
+  },
+  "references": [
+    "https://huggingface.co/zai-org/GLM-5.3"
+  ],
+  "reviewed_at": "2026-09-23"
+}

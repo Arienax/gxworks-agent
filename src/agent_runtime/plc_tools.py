@@ -289,8 +289,6 @@ def _get_generation_context(
         _build_knowledge_context, build_generation_instructions, generation_user_input,
         public_generation_ladder, public_generation_specification, public_generation_value,
     )
-    from shared.context_policy import context_policy_scope
-
     confirmed_spec = _confirmed_spec(context)
     from application.confirmed_generation_context import (
         CONFIRMED_GENERATION_REQUEST, project_confirmed_specification,
@@ -314,19 +312,18 @@ def _get_generation_context(
     generation_handoff = {}
     def capture_context(value):
         generation_handoff.update(value)
-    with context_policy_scope():
-        instructions = build_generation_instructions(
-            model_request,
-            plc_model=context.plc_model,
-            target_mode=target_mode,
-            is_edit_mode=is_edit_mode,
-            confirmed_context=public_spec,
-            current_version_json=current_ladder,
-            # Clean retrieved text before assembly; generic path matching must
-            # never rewrite application-owned schema patterns in the prompt.
-            knowledge_builder=_build_knowledge_context,
-            on_context=capture_context,
-        )
+    instructions = build_generation_instructions(
+        model_request,
+        plc_model=context.plc_model,
+        target_mode=target_mode,
+        is_edit_mode=is_edit_mode,
+        confirmed_context=public_spec,
+        current_version_json=current_ladder,
+        # Clean retrieved text before assembly; generic path matching must
+        # never rewrite application-owned schema patterns in the prompt.
+        knowledge_builder=_build_knowledge_context,
+        on_context=capture_context,
+    )
     receipt_id = _decision_receipt_id(context)
     if receipt_id:
         generation_handoff["decision_receipt_id"] = receipt_id

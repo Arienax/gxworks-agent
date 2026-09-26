@@ -1,4 +1,4 @@
-"""Context policy + actual refresh backend; only model replies are fixed."""
+"""Context audit + actual refresh backend; only model replies are fixed."""
 import copy
 import json
 import pytest
@@ -7,30 +7,31 @@ from fastapi.testclient import TestClient
 from application.workbench import WorkbenchService
 from application.events import append_event, _public_context_audit
 from application.workspace import public_payload
-from shared.context_policy import POLICY_NAMES, context_policy_scope, ContextAudit, audit_section
+from shared.context_audit import ContextAudit, audit_section, context_audit_scope
 from test_web_api import ORIGIN, _Provider, _app, _complete, _login
 
 
-@pytest.mark.parametrize("name", POLICY_NAMES)
-def test_actual_backend_policy_audit_autosave_and_refresh(tmp_path, monkeypatch, name):
-    monkeypatch.setenv("GXWORKS_CONTEXT_POLICY", name)
+def test_actual_backend_audit_autosave_and_refresh(tmp_path, monkeypatch):
     # Keep prompt construction and local retrieval real; forbid remote fallback.
     monkeypatch.setattr(api, "load_full_config", lambda: {})
     monkeypatch.setattr(api, "get_active_provider", lambda: pytest.fail("Unexpected live provider"))
     provider = _Provider()
-    service = WorkbenchService(tmp_path / "workspace", tmp_path / "state",
-        model_factory=lambda: (provider, {"model": "offline-policy-check"}))
+    service = WorkbenchService(
+        tmp_path / "workspace", tmp_path / "state",
+        model_factory=lambda: (provider, {"model": "offline-audit-check"}),
+    )
     with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
         headers = _login(client)
-        pid = client.post("/api/projects", json={"name": "Policy " + name}, headers=headers).json()["id"]
+        pid = client.post("/api/projects", json={"name": "Audit"}, headers=headers).json()["id"]
         service.store.set_confirmed_spec(pid, {"summary": "X0 controls Y0", "io_table": [], "parameters": []})
         jid, output = _complete(client, service, client.post("/api/jobs", headers=headers, json={
-            "project_id": pid, "kind": "generation", "request_id": "context_" + name,
+            "project_id": pid, "kind": "generation", "request_id": "context_audit",
             "text": "X0 controls Y0", "response_language": "en"}))
         assert output.get("version_id") and output.get("proposal_id")
         assert len(provider.requests) == 1
         audit_events = [e for e in service.jobs.events(jid) if e["event_type"] == "context_audit"]
-        assert audit_events and all(e["payload"]["policy"]["name"] == name for e in audit_events)
+        assert audit_events
+        assert all("policy" not in e["payload"] for e in audit_events)
         assert all(e["payload"]["message_text_chars"] > 0 for e in audit_events)
         metadata = json.dumps(audit_events)
         assert "X0 controls Y0" not in metadata
@@ -47,24 +48,23 @@ def test_actual_backend_policy_audit_autosave_and_refresh(tmp_path, monkeypatch,
 
 
 @pytest.mark.parametrize("mode", ["ladder", "st"])
-def test_actual_prompt_markers_and_fixed_profiles_across_arms(mode):
+def test_actual_prompt_markers_and_fixed_profile_are_canonical(mode):
     spec = {"summary": "Only compare declared values", "io_table": [], "parameters": []}
-    profiles = []
-    for name in ("minimal", "manual", "examples", "combined", "adaptive"):
-        audit = ContextAudit()
-        with context_policy_scope(name, audit=audit):
-            messages, _, _ = api._prepare_api_call("X0 controls Y0", "offline", "high", mode,
-                confirmed_spec=copy.deepcopy(spec), plc_model="FX3U", persist_history=False)
-        assert messages[0]["content"]
-        sections = audit.snapshot()["pending_sections"]
-        profiles.append(next(s["sha256"] for s in sections if s["section"] == "model_profile"))
-        assert any(s["section"] == "base_prompt" and s["reason"] == "controlled_baseline" for s in sections)
-    assert len(set(profiles)) == 1
+    audit = ContextAudit()
+    with context_audit_scope(audit):
+        messages, _, _ = api._prepare_api_call(
+            "X0 controls Y0", "offline", "high", mode,
+            confirmed_spec=copy.deepcopy(spec), plc_model="FX3U", persist_history=False,
+        )
+    assert messages[0]["content"]
+    sections = audit.snapshot()["pending_sections"]
+    assert any(s["section"] == "model_profile" and s["reason"] == "canonical_full_profile" for s in sections)
+    assert any(s["section"] == "base_prompt" and s["reason"] == "canonical_generation_base" for s in sections)
 
 
 def _audit_report():
     collector = ContextAudit()
-    with context_policy_scope('adaptive', audit=collector):
+    with context_audit_scope(collector):
         audit_section('base_prompt', 'PRIVATE_PROMPT_TEXT', source='api')
         return collector.request([{'role': 'user', 'content': 'PRIVATE_USER_TEXT'}])
 
@@ -73,22 +73,18 @@ def test_typed_event_preserves_only_metadata_without_broadening_generic_whitelis
     value = _audit_report()
     value['api_key'] = 'secret-example'
     value['prompt'] = 'secret-prompt'
-    value['policy']['secret'] = 'secret-policy'
     value['messages'][0]['content'] = 'secret-content'
     value['sections'][0]['text'] = 'secret-section'
     event = append_event({'id': 'job_test', 'snapshot': {}}, 'context_audit', value)
     assert event['payload'] == _audit_report()
     assert 'secret' not in json.dumps(event)
     assert 'PRIVATE_' not in json.dumps(event)
-    assert 'policy' not in public_payload(value)
     ordinary = append_event({'id': 'job_test', 'snapshot': {}}, 'progress', value)
-    assert 'policy' not in ordinary['payload']
 
 
 @pytest.mark.parametrize('field,value', [
     ('schema_version', True), ('schema_version', 2), ('messages', 'secret'),
-    ('sections', [None]), ('policy', {'name':'secret','version':1}),
-    ('policy', {'name':'adaptive','version':True}), ('request_index', -1),
+    ('sections', [None]), ('request_index', -1),
     ('message_text_chars', float('nan')), ('dropped_sections', '1'),
 ])
 def test_malformed_audit_is_not_serialized(field, value):

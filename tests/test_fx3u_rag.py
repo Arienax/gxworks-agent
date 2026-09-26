@@ -8,7 +8,7 @@ import application.model_api as api
 import knowledge.dense as dense_retriever
 import knowledge.retriever as knowledge_retriever
 import pytest
-from knowledge.retriever import build_knowledge_context, retrieve_knowledge
+from knowledge.retriever import build_knowledge_context, retrieve_fact_aware_knowledge, retrieve_knowledge
 from shared.paths import resource_path
 
 
@@ -34,7 +34,7 @@ def test_bundled_fx3u_index_is_complete_and_integral():
     assert manifest["structured"]["instructions"] >= 250
     assert manifest["structured"]["debug_cases"] == 26
     assert manifest["retrieval"]["dense_embeddings"] is True
-    assert manifest["retrieval"]["fusion"] == "entity_bm25_vector_weighted_rrf"
+    assert manifest["retrieval"]["fusion"] == "metadata_entity_bm25_vector_rrf"
     assert manifest["retrieval"]["benchmark"]["cases"] == 220
     assert manifest["retrieval"]["benchmark"]["recall_at_10"] == 1.0
     assert Path(resource_path("knowledge/fx3u_dense_lsa.npz")).is_file()
@@ -147,7 +147,7 @@ def test_direction_assignment_route_does_not_capture_plain_y_address_queries():
 
 
 def test_plsy_and_completion_flag_retrieve_detailed_manual_pages_first():
-    results = retrieve_knowledge(
+    results = retrieve_fact_aware_knowledge(
         "FX3U PLSY K1000 K0 Y000 M8029 脉冲输出完成",
         plc_model="FX3U",
         task_type="generate",
@@ -156,7 +156,7 @@ def test_plsy_and_completion_flag_retrieve_detailed_manual_pages_first():
     )
 
     assert results
-    assert results[0]["match_type"] == "structured_instruction"
+    assert results[0]["match_type"] == "structured_direct"
     assert "PLSY" in results[0]["section"].upper()
     assert 377 <= int(results[0]["pdf_page"]) <= 381
     assert any("M8029" in "".join(item["text"].split()) for item in results)

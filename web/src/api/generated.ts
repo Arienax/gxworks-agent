@@ -1861,10 +1861,6 @@ export interface components {
         ModelProfile: {
             /** Base Url */
             base_url?: string | null;
-            /** Capabilities */
-            capabilities?: {
-                [key: string]: boolean;
-            };
             /** Capability Overrides */
             capability_overrides?: {
                 [key: string]: components["schemas"]["JsonValue"];
@@ -1880,24 +1876,12 @@ export interface components {
              * @default false
              */
             deletable: boolean;
-            /** Generation Defaults */
-            generation_defaults?: {
-                [key: string]: components["schemas"]["JsonValue"];
-            };
             /** Id */
             id: string;
             /** Model */
             model?: string | null;
             /** Name */
             name?: string | null;
-            /** Parameter Support */
-            parameter_support?: {
-                [key: string]: components["schemas"]["JsonValue"];
-            };
-            /** Request Overrides */
-            request_overrides?: {
-                [key: string]: components["schemas"]["JsonValue"];
-            };
             /** User Settings */
             user_settings?: {
                 [key: string]: components["schemas"]["JsonValue"];
@@ -1909,10 +1893,6 @@ export interface components {
             api_key?: string | null;
             /** Base Url */
             base_url: string;
-            /** Capabilities */
-            capabilities?: {
-                [key: string]: boolean;
-            };
             /** Capability Overrides */
             capability_overrides?: {
                 [key: string]: unknown;
@@ -1921,24 +1901,12 @@ export interface components {
             contract?: {
                 [key: string]: unknown;
             };
-            /** Generation Defaults */
-            generation_defaults?: {
-                [key: string]: unknown;
-            };
             /** Id */
             id?: string | null;
             /** Model */
             model: string;
             /** Name */
             name: string;
-            /** Parameter Support */
-            parameter_support?: {
-                [key: string]: unknown;
-            };
-            /** Request Overrides */
-            request_overrides?: {
-                [key: string]: unknown;
-            };
             /** User Settings */
             user_settings?: {
                 [key: string]: unknown;
@@ -1948,10 +1916,6 @@ export interface components {
         ModelProfileUpdate: {
             /** Base Url */
             base_url?: string | null;
-            /** Capabilities */
-            capabilities?: {
-                [key: string]: boolean;
-            } | null;
             /** Capability Overrides */
             capability_overrides?: {
                 [key: string]: unknown;
@@ -1960,24 +1924,12 @@ export interface components {
             contract?: {
                 [key: string]: unknown;
             } | null;
-            /** Generation Defaults */
-            generation_defaults?: {
-                [key: string]: unknown;
-            } | null;
             /** Id */
             id: string;
             /** Model */
             model?: string | null;
             /** Name */
             name?: string | null;
-            /** Parameter Support */
-            parameter_support?: {
-                [key: string]: unknown;
-            } | null;
-            /** Request Overrides */
-            request_overrides?: {
-                [key: string]: unknown;
-            } | null;
             /** User Settings */
             user_settings?: {
                 [key: string]: unknown;

@@ -1785,6 +1785,18 @@ pre {
 
 /* Shared capability-driven controls; follow the current workbench theme. */
 fieldset.settings-form { border: 0; padding: 0; min-width: 0; }
+/* One row per saved provider; a single card is open at a time (see Settings.tsx). */
+.provider-list { display: grid; gap: 12px; }
+.provider-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.provider-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+.provider-identity { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.provider-name { font-weight: 600; overflow-wrap: anywhere; }
+.provider-actions { display: flex; gap: 8px; }
+.provider-add { width: 100%; }
+.editor-heading { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+/* How the service is chosen: adopt a known endpoint or declare a custom one. */
+.mode-switch { display: flex; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
 .model-parameters { display: grid; gap: 12px; }
 .parameter-control { padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
 .parameter-heading, .parameter-scale { display: flex; gap: 12px; justify-content: space-between; align-items: center; }

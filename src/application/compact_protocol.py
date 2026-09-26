@@ -114,6 +114,14 @@ def normalize_compact(value):
 
 
 _CONTACT_TYPES = frozenset({"NO", "NC", "P", "F", "RISING", "FALLING"})
+# Native Mitsubishi instruction-list contact spellings carry the same predicate
+# semantics; compact topology owns whether that predicate is first/series/parallel.
+_MITSUBISHI_CONTACT_ALIASES = {
+    "LD": "NO", "AND": "NO", "OR": "NO",
+    "LDI": "NC", "ANI": "NC", "ORI": "NC",
+    "LDP": "P", "ANDP": "P", "ORP": "P",
+    "LDF": "F", "ANDF": "F", "ORF": "F",
+}
 _COMPARE_PREFIXES = frozenset({"=", "==", "<>", ">=", "<=", ">", "<"})
 _TYPED_OUTPUTS = frozenset({"COIL", "PLS", "PLF", "TIMER", "COUNTER"})
 
@@ -211,6 +219,7 @@ def _simple_input(value, path):
     token = value.strip()
     head, *tail = token.split(maxsplit=1)
     kind = head.upper()
+    kind = _MITSUBISHI_CONTACT_ALIASES.get(kind, kind)
     if kind in _CONTACT_TYPES:
         if not tail or not tail[0] or any(char.isspace() for char in tail[0]):
             raise CompactProtocolError(f"{path}: contact requires one address")
@@ -342,7 +351,9 @@ def compact_protocol_prompt():
         + "统一表示：h 无首触点时为 null；s 无公共串联输入时为 []；i 无分支输入时为 []。这些字段不省略。\n"
         + "r 是梯级数组，b 是输出分支数组，i 本身是一维串联列表，o 是非空输出字符串数组。\n"
         + "结构示例（不是本项目地址分配）：" + json.dumps(canonical_compact_example(), separators=(",", ":")) + "\n"
-        + "简单输入写 NO/NC/P/F 加地址；比较写前缀表达式，例如 >= D0 K1。\n"
+        + "简单输入优先写 NO/NC/P/F 加地址；等价 Mitsubishi 触点助记符 "
+        + "/".join(_MITSUBISHI_CONTACT_ALIASES)
+        + " 也合法并由本地按触点语义归一化；比较写前缀表达式，例如 >= D0 K1。\n"
         + 'OR 只在 i 内用 {"or":[[简单输入,...],[简单输入,...]]}；子数组是串联支路，不嵌套 OR。\n'
         + "标准输出：" + ", ".join(sorted(_TYPED_OUTPUTS)) + "；COIL/PLS/PLF 后接地址，TIMER/COUNTER 后接地址和设定值。\n"
         + "其他输出直接写 opcode 与空格分隔的 operands，例如 MOV K1 D0。\n"

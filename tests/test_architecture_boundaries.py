@@ -244,3 +244,147 @@ def test_capability_coverage_manifest_is_current():
         report["counts"]["enforced"] + report["counts"]["tracked_gap"]
         == report["counts"]["total"]
     )
+
+
+def _literal_mapping_accesses(path, fields):
+    """Return literal mapping-field reads/writes that bypass a schema boundary."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if node.func.attr in {"get", "pop", "setdefault"} and node.args:
+                key = node.args[0]
+                if isinstance(key, ast.Constant) and key.value in fields:
+                    found.append((node.lineno, str(key.value)))
+        elif isinstance(node, ast.Subscript):
+            key = node.slice
+            if isinstance(key, ast.Constant) and key.value in fields:
+                found.append((node.lineno, str(key.value)))
+    return found
+
+
+def test_legacy_model_profile_schema_is_confined_to_migration_boundary():
+    retired = {"parameterSupport", "generationDefaults", "requestOverrides"}
+    allowed = SOURCE_ROOT / "model_runtime" / "legacy_migration.py"
+    violations = []
+    for package in ("model_runtime", "application", "agent_runtime", "integrations"):
+        for path in (SOURCE_ROOT / package).rglob("*.py"):
+            if path == allowed:
+                continue
+            for line, field in _literal_mapping_accesses(path, retired):
+                violations.append(
+                    f"{path.relative_to(ROOT)}:{line} reads retired field {field}"
+                )
+    assert not violations, "\n".join(violations)
+
+
+def test_retired_model_capabilities_module_cannot_reenter_production():
+    retired = SOURCE_ROOT / "model_runtime" / "capabilities.py"
+    assert not retired.exists()
+    violations = []
+    for package in ("model_runtime", "application", "agent_runtime", "integrations"):
+        for path in (SOURCE_ROOT / package).rglob("*.py"):
+            for imported in _imports(path):
+                if imported == "model_runtime.capabilities" or imported.startswith(
+                    "model_runtime.capabilities."
+                ):
+                    violations.append(
+                        f"{path.relative_to(ROOT)} -> {imported}"
+                    )
+    assert not violations, "\n".join(violations)
+
+
+def test_provider_and_application_cannot_restore_raw_profile_capability_fallbacks():
+    violations = []
+    for package in ("model_runtime", "application", "agent_runtime", "integrations"):
+        for path in (SOURCE_ROOT / package).rglob("*.py"):
+            if path == SOURCE_ROOT / "model_runtime" / "legacy_migration.py":
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if not (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "get"
+                    and node.args
+                    and isinstance(node.args[0], ast.Constant)
+                    and node.args[0].value == "capabilities"
+                ):
+                    continue
+                owner = node.func.value
+                if isinstance(owner, ast.Name) and owner.id in {
+                    "profile", "source", "selected", "chosen"
+                }:
+                    violations.append(
+                        f"{path.relative_to(ROOT)}:{node.lineno} raw profile capabilities"
+                    )
+    assert not violations, "\n".join(violations)
+
+
+
+def test_fresh_builtin_model_profiles_do_not_seed_legacy_runtime_fields():
+    import json
+    from storage.config import DEFAULT_MODEL_PROFILES
+
+    retired = {
+        "capabilities", "parameterSupport", "generationDefaults", "requestOverrides"
+    }
+    assert all(not retired.intersection(profile) for profile in DEFAULT_MODEL_PROFILES)
+
+    payload = json.loads(
+        (ROOT / "resources" / "config.default.json").read_text(encoding="utf-8")
+    )
+    assert all(
+        not retired.intersection(profile)
+        for profile in payload.get("modelProfiles", [])
+    )
+
+
+
+def test_storage_preserves_but_does_not_interpret_retired_model_profile_fields():
+    path = SOURCE_ROOT / "storage" / "config.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    retired = {
+        "capabilities", "parameterSupport", "generationDefaults", "requestOverrides"
+    }
+    violations = []
+    for node in tree.body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.name == "_normalize_profile":
+            continue
+        for child in ast.walk(node):
+            if isinstance(child, ast.Call) and isinstance(child.func, ast.Attribute):
+                if child.func.attr in {"get", "pop", "setdefault"} and child.args:
+                    key = child.args[0]
+                    if isinstance(key, ast.Constant) and key.value in retired:
+                        violations.append((node.name, child.lineno, key.value))
+            elif isinstance(child, ast.Subscript):
+                key = child.slice
+                if isinstance(key, ast.Constant) and key.value in retired:
+                    violations.append((node.name, child.lineno, key.value))
+    assert not violations, violations
+
+
+def test_fresh_builtin_model_profiles_never_seed_legacy_runtime_fields():
+    import json
+    from storage.config import DEFAULT_MODEL_PROFILES
+
+    retired = {
+        "capabilities",
+        "parameterSupport",
+        "generationDefaults",
+        "requestOverrides",
+    }
+    assert all(
+        not retired.intersection(profile)
+        for profile in DEFAULT_MODEL_PROFILES
+    )
+
+    payload = json.loads(
+        (ROOT / "resources" / "config.default.json").read_text(encoding="utf-8")
+    )
+    assert all(
+        not retired.intersection(profile)
+        for profile in payload.get("modelProfiles", [])
+    )

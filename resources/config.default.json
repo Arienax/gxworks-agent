@@ -8,24 +8,6 @@
             "adapter": "openai_compatible",
             "baseUrl": "https://api.deepseek.com",
             "model": "deepseek-v4-pro",
-            "capabilities": {
-                "reasoning": true,
-                "tools": true,
-                "structured_output": true,
-                "disable_tool_choice_with_thinking": true
-            },
-            "generationDefaults": {
-                "response_format": {
-                    "type": "json_object"
-                }
-            },
-            "requestOverrides": {
-                "extra_body": {
-                    "thinking": {
-                        "type": "enabled"
-                    }
-                }
-            },
             "credentialTarget": "PLC-AI-Studio/model-profile/deepseek-default"
         },
         {
@@ -34,24 +16,6 @@
             "adapter": "openai_compatible",
             "baseUrl": "https://api.deepseek.com",
             "model": "deepseek-v4-flash",
-            "capabilities": {
-                "reasoning": true,
-                "tools": true,
-                "structured_output": true,
-                "disable_tool_choice_with_thinking": true
-            },
-            "generationDefaults": {
-                "response_format": {
-                    "type": "json_object"
-                }
-            },
-            "requestOverrides": {
-                "extra_body": {
-                    "thinking": {
-                        "type": "enabled"
-                    }
-                }
-            },
             "credentialTarget": "PLC-AI-Studio/model-profile/deepseek-v4-flash"
         },
         {
@@ -60,25 +24,6 @@
             "adapter": "openai_compatible",
             "baseUrl": "https://api.deepseek.com",
             "model": "deepseek-v4-flash-vision-exp",
-            "capabilities": {
-                "reasoning": true,
-                "tools": true,
-                "structured_output": true,
-                "multimodal": true,
-                "disable_tool_choice_with_thinking": true
-            },
-            "generationDefaults": {
-                "response_format": {
-                    "type": "json_object"
-                }
-            },
-            "requestOverrides": {
-                "extra_body": {
-                    "thinking": {
-                        "type": "enabled"
-                    }
-                }
-            },
             "credentialTarget": "PLC-AI-Studio/model-profile/deepseek-v4-flash-vision-exp"
         },
         {
@@ -87,30 +32,6 @@
             "adapter": "openai_compatible",
             "baseUrl": "https://open.bigmodel.cn/api/paas/v4/",
             "model": "glm-5.3-flash",
-            "capabilities": {
-                "reasoning": true,
-                "tools": true,
-                "tool_stream": true,
-                "structured_output": true,
-                "multimodal": true,
-                "thinking_required": true
-            },
-            "generationDefaults": {
-                "temperature": 1.0,
-                "top_p": 0.95,
-                "reasoning_effort": "max",
-                "response_format": {
-                    "type": "json_object"
-                }
-            },
-            "requestOverrides": {
-                "extra_body": {
-                    "thinking": {
-                        "type": "enabled",
-                        "clear_thinking": false
-                    }
-                }
-            },
             "credentialTarget": "PLC-AI-Studio/model-profile/zhipu-glm-5.3-flash"
         },
         {
@@ -119,27 +40,6 @@
             "adapter": "openai_compatible",
             "baseUrl": "https://open.bigmodel.cn/api/paas/v4/",
             "model": "glm-5.3",
-            "capabilities": {
-                "reasoning": true,
-                "tools": true,
-                "tool_stream": true,
-                "structured_output": true,
-                "thinking_required": true
-            },
-            "generationDefaults": {
-                "temperature": 1.0,
-                "reasoning_effort": "max",
-                "response_format": {
-                    "type": "json_object"
-                }
-            },
-            "requestOverrides": {
-                "extra_body": {
-                    "thinking": {
-                        "type": "enabled"
-                    }
-                }
-            },
             "credentialTarget": "PLC-AI-Studio/model-profile/zhipu-glm-5.3"
         },
         {
@@ -148,27 +48,6 @@
             "adapter": "openai_compatible",
             "baseUrl": "https://open.bigmodel.cn/api/paas/v4/",
             "model": "glm-5.2",
-            "capabilities": {
-                "reasoning": true,
-                "tools": true,
-                "tool_stream": true,
-                "structured_output": true
-            },
-            "generationDefaults": {
-                "temperature": 1.0,
-                "reasoning_effort": "max",
-                "response_format": {
-                    "type": "json_object"
-                }
-            },
-            "requestOverrides": {
-                "extra_body": {
-                    "thinking": {
-                        "type": "enabled",
-                        "clear_thinking": false
-                    }
-                }
-            },
             "credentialTarget": "PLC-AI-Studio/model-profile/zhipu-glm-5.2"
         }
     ],

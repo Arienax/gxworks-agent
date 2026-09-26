@@ -25,7 +25,6 @@ from model_runtime.provider import (
     ModelProviderError, ModelRequest, ReasoningDelta, TextDelta, ToolCall,
     ToolCallEnd, ToolCallStart, Usage, UserMessage, collect_response,
 )
-from shared.context_policy import context_policy_scope
 from shared.i18n import language_context
 
 
@@ -92,13 +91,12 @@ def test_compact_and_mcp_adapters_share_confirmed_facts_and_retrieval(monkeypatc
     monkeypatch.setattr(retrieval, "build_knowledge_context", retrieve)
     spec = specification(model)
     original = copy.deepcopy(spec)
-    with context_policy_scope("legacy"):
-        compact_prompt = agent_b._build_agent_b_prompt(spec, model)
-        compact_calls = copy.deepcopy(calls)
-        calls.clear()
-        result = build_default_tool_registry().call("get_generation_context", {
-            "user_requirement": "PRIVATE_UNCONFIRMED_REQUEST: add a VFD and X9",
-        }, build_tool_context({"id": "semantics", "plc_model": model, "confirmed_spec": spec}))
+    compact_prompt = agent_b._build_agent_b_prompt(spec, model)
+    compact_calls = copy.deepcopy(calls)
+    calls.clear()
+    result = build_default_tool_registry().call("get_generation_context", {
+        "user_requirement": "PRIVATE_UNCONFIRMED_REQUEST: add a VFD and X9",
+    }, build_tool_context({"id": "semantics", "plc_model": model, "confirmed_spec": spec}))
     assert result["ok"], result
     data = result["data"]
     assert calls == compact_calls and len(calls) == 1

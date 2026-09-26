@@ -14,8 +14,8 @@ from application.generation_support import _build_knowledge_query
 from knowledge.evidence import KnowledgeContext, context_manifest, evidence_record
 from plc.specification.approach import normalize_approach, normalize_generation_contract
 from plc.specification.confirmed import build_review_draft, canonicalize_confirmed_spec
+from plc.specification.legacy_migration import migrate_legacy_approach
 from plc.specification.provenance import confirm_context, fingerprint, retrieval_projection, seal_confirmation
-from shared.context_policy import context_policy_scope
 
 CASES = json.loads((Path(__file__).parent / "fixtures/call_chain/intent_cases.json").read_text())["cases"]
 
@@ -107,23 +107,39 @@ def test_representation_intent_survives_without_becoming_an_opcode_constraint(ca
 
 @pytest.mark.parametrize("case", CASES, ids=lambda c: c["id"])
 def test_explicit_partial_contract_never_fills_omitted_fields_from_guide(case):
-    contract = normalize_generation_contract({"required_devices": case["required_devices"]},
-                                            approach={"generation_guide": case["guide"]})
+    contract = normalize_generation_contract(
+        {"required_devices": case["required_devices"]}
+    )
     assert contract["required_opcodes"] == []
     assert contract["forbidden_opcodes"] == []
     assert contract["required_structures"] == []
-    assert normalize_generation_contract(contract, approach={"generation_guide": "INC D90"}) == contract
+    assert normalize_generation_contract(contract) == contract
 
 
-def test_legacy_inference_stays_compatible_and_keeps_inferred_origin():
-    approach = normalize_approach({"name": "旧方案", "generation_guide": "MOV K1 D0 更新状态"})
+def test_fresh_normalization_is_prose_free_and_legacy_migration_is_explicit():
+    raw = {"name": "旧方案", "generation_guide": "MOV K1 D0 更新状态"}
+
+    fresh = normalize_approach(raw)
+    assert fresh["generation_contract"]["required_opcodes"] == []
+    assert not fresh["generation_contract"].get("unverified_constraints")
+
+    approach = normalize_approach(migrate_legacy_approach(raw))
     assert approach["generation_contract"]["required_opcodes"] == []
     assert "MOV" in approach["generation_contract"]["unverified_constraints"]["required_opcodes"]
     assert approach["generation_guide"] == "MOV K1 D0 更新状态"
     assert approach["generation_contract"]["source"] == "inferred"
     assert normalize_approach(approach)["generation_contract"]["source"] == "inferred"
-    legacy = build_confirmed_generation_context({"summary": "legacy", "selected_approach": approach}, "FX3U",
-                                              knowledge_builder=lambda *a, **kw: "")
+
+    # Public generation is one of the explicit persisted-snapshot migration
+    # boundaries; a raw historical shape remains readable without making the
+    # recovered prose a hard obligation.
+    legacy = build_confirmed_generation_context(
+        {"summary": "legacy", "selected_approach": raw},
+        "FX3U",
+        knowledge_builder=lambda *a, **kw: "",
+    )
+    assert legacy.generation_contract["required_opcodes"] == []
+    assert "MOV" in legacy.generation_contract["unverified_constraints"]["required_opcodes"]
     assert legacy.handoff["origin_status"] == "legacy_unrecorded"
     assert legacy.handoff["request_ids"] == []
 
@@ -259,6 +275,11 @@ def test_full_wire_and_mcp_share_projection_and_do_not_truncate_tool_json(monkey
     messages, _, _ = api._prepare_api_call("LOOSE_RAW_TEXT", None, None, "ladder", confirmed_context=spec,
         conversation_history=[{"role": "assistant", "content": "PRIVATE_ANALYSIS"}], on_generation_context=receipts.append)
     assert "PRIVATE_ANALYSIS" not in json.dumps(messages) and "LOOSE_RAW_TEXT" not in json.dumps(messages)
+    from application.generation_wire import wire_sha256, wire_token_estimate
+    actual_wire = {"messages": messages}
+    assert receipts[0]["wire_sha256"] == wire_sha256(actual_wire)
+    assert receipts[0]["budget_report"]["budget_basis"] == "application_wire_messages"
+    assert receipts[0]["budget_report"]["compiled_budget_payload_tokens"] == wire_token_estimate(actual_wire)
     context = build_tool_context({"id": "fixture", "plc_model": "FX3U", "target_mode": "ladder", "confirmed_spec": spec})
     result = InProcessToolRuntime(build_default_tool_registry()).invoke(
         ToolCall(id="context", name="get_generation_context", arguments={}), context)
@@ -267,7 +288,17 @@ def test_full_wire_and_mcp_share_projection_and_do_not_truncate_tool_json(monkey
     payload = json.loads(result.content)
     data = payload.get("data", payload)
     assert data["confirmed_spec"] == project_confirmed_specification(spec)
-    assert data["generation_handoff"] == receipts[0]
+    # Engineering provenance is shared, while wire/budget receipts are specific
+    # to the actual caller-visible message envelope. Full-wire has a concrete
+    # conversation tail; the MCP context tool does not.
+    wire_specific = {"wire_sha256", "context_plan_sha256", "budget_report"}
+    assert {
+        key: value for key, value in data["generation_handoff"].items()
+        if key not in wire_specific
+    } == {
+        key: value for key, value in receipts[0].items()
+        if key not in wire_specific
+    }
     assert "ALTERNATIVE_ONLY" not in result.content
 
 

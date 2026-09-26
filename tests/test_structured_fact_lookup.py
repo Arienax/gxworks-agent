@@ -25,6 +25,34 @@ def _bundled_index():
     return path
 
 
+def test_broad_retrieval_uses_unweighted_rrf_without_plc_topic_boosts():
+    import knowledge.core as knowledge_core
+
+    source = inspect.getsource(knowledge_core)
+    broad = inspect.getsource(knowledge_core._retrieve_uncached)
+    metadata = inspect.getsource(knowledge_core._broad_metadata_references)
+    tree = ast.parse(source)
+
+    named_score_assignments = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if any(isinstance(target, ast.Name) and target.id == "score" for target in targets):
+                named_score_assignments.append(getattr(node, "lineno", 0))
+
+    assert named_score_assignments == []
+    assert "_RRF_K" in broad
+    assert "1.0 / (_RRF_K + signal[\"rank\"] + 1.0)" in broad
+    for legacy in (
+        "positioning_query", "timer_query", "timer_device_section",
+        "task_boost", "alias_scores", "_base_score", "base_score",
+        "score +=", "score -=", "_query_is_timer_semantics",
+        "_timer_debug_case_matches_query",
+    ):
+        assert legacy not in source
+        assert legacy not in metadata
+
+
 def test_direct_fact_module_has_no_broad_retriever_calls():
     import knowledge.structured_facts as facts
 
@@ -243,12 +271,15 @@ def test_instruction_source_authority_contract_is_data_backed(opcode, manual_id)
     } == {"authoritative"}
 
 
-def test_broad_and_direct_instruction_lookup_share_source_authority_owner():
+def test_instruction_source_authority_is_owned_only_by_structured_facts():
     import knowledge.core as knowledge_core
+    import knowledge.structured_facts as structured_facts
 
-    source_text = inspect.getsource(knowledge_core)
-    assert "audited_instruction_precedence" not in source_text
-    assert "authoritative_instruction_manual" in source_text
+    broad_source = inspect.getsource(knowledge_core._retrieve_uncached)
+    direct_source = inspect.getsource(structured_facts.resolve_instruction_records)
+    assert "authoritative_instruction_manual" not in broad_source
+    assert "instruction_source_authority" not in broad_source
+    assert "instruction_source_authority" in direct_source
 
 
 def test_instruction_source_authority_capability_is_enforced():
@@ -633,3 +664,188 @@ def test_instruction_contract_delivery_has_one_structured_owner():
         "FX3U",
         {"selected_approach": {"generation_contract": {"required_opcodes": ["MOV"]}}},
     ) == ""
+
+
+
+def test_source_subquery_prefilters_instruction_chunks_before_candidate_limit():
+    from knowledge.scope import source_subquery
+
+    connection = sqlite3.connect(":memory:")
+    try:
+        connection.execute(
+            "CREATE TABLE chunks (id TEXT, manual_type TEXT, chunk_type TEXT, manual_id TEXT)"
+        )
+        connection.execute("CREATE TABLE device_records (chunk_id TEXT)")
+        connection.execute("CREATE TABLE error_records (chunk_id TEXT)")
+        connection.executemany(
+            "INSERT INTO chunks VALUES (?,?,?,?)",
+            [
+                ("or", "programming", "instruction", "manual"),
+                ("device-owner", "structured_device", "prose", "device-manual"),
+                ("error-owner", "programming", "error", "error-manual"),
+                ("general", "programming", "prose", "manual"),
+            ],
+        )
+        connection.execute("INSERT INTO device_records VALUES ('device-owner')")
+        connection.execute("INSERT INTO error_records VALUES ('error-owner')")
+        schema = {
+            "chunks": {
+                "name": "chunks",
+                "columns": ("id", "manual_type", "chunk_type", "manual_id"),
+            },
+            "device_records": {
+                "name": "device_records",
+                "columns": ("chunk_id",),
+            },
+            "error_records": {
+                "name": "error_records",
+                "columns": ("chunk_id",),
+            },
+        }
+
+        sql, values = source_subquery(connection, schema, ("fact",))
+        assert {row[0] for row in connection.execute(sql, values)} == {
+            "or", "device-owner", "error-owner", "general",
+        }
+
+        sql, values = source_subquery(
+            connection, schema, ("fact",),
+            exclude_chunk_types=("instruction",),
+            exclude_structured_kinds=("device", "error"),
+        )
+        assert [row[0] for row in connection.execute(sql, values)] == ["general"]
+    finally:
+        connection.close()
+
+
+def test_exact_instruction_residual_broad_retrieval_uses_instruction_prefilter(monkeypatch):
+    _bundled_index()
+    import knowledge.retriever as retriever
+
+    targets = {
+        "version": "structured-facts-v2-contract-merged",
+        "instructions": [{
+            "opcode": "SFTL",
+            "base_opcode": "SFTL",
+            "operands": ["M100", "M200", "K20", "K1"],
+            "instance_source": "generation_contract",
+        }],
+        "devices": [],
+        "errors": [],
+    }
+    query = KnowledgeQuery(
+        "SFTL M100 M200 K20 K1 timer scan cycle",
+        precompiled=True,
+        metadata={"structured_fact_targets": targets},
+    )
+    calls = []
+
+    def broad_lookup(*args, **kwargs):
+        calls.append((args, kwargs))
+        assert kwargs.get("exclude_chunk_types") == ("instruction",)
+        assert kwargs.get("exclude_structured_kinds") == ()
+        return []
+
+    monkeypatch.setattr(retriever, "retrieve_knowledge", broad_lookup)
+    context = retriever.build_knowledge_context(
+        query, plc_model="FX3U", task_type="generate", top_k=5, char_budget=7000,
+    )
+    assert len(calls) == 1
+    receipt = context.manifest["structured_facts"]
+    assert receipt["direct_covered_kinds"] == ["instruction"]
+    assert receipt["residual_retrieval"] is True
+    assert receipt["residual_pre_filters"] == {
+        "exclude_chunk_types": ["instruction"],
+    }
+
+
+
+
+def test_covered_device_and_error_targets_prefilter_structured_owner_rows(monkeypatch):
+    _bundled_index()
+    import knowledge.retriever as retriever
+
+    targets = {
+        "version": "structured-facts-v2-contract-merged",
+        "instructions": [],
+        "devices": ["M8029"],
+        "errors": ["6105"],
+    }
+    query = KnowledgeQuery(
+        "M8029 6105 explain scan cycle",
+        precompiled=True,
+        metadata={"structured_fact_targets": targets},
+    )
+    calls = []
+
+    def broad_lookup(*args, **kwargs):
+        calls.append((args, kwargs))
+        assert kwargs.get("exclude_chunk_types") == ()
+        assert kwargs.get("exclude_structured_kinds") == ("device", "error")
+        return []
+
+    monkeypatch.setattr(retriever, "retrieve_knowledge", broad_lookup)
+    context = retriever.build_knowledge_context(
+        query, plc_model="FX3U", task_type="analysis", top_k=5, char_budget=10000,
+    )
+    assert len(calls) == 1
+    receipt = context.manifest["structured_facts"]
+    assert receipt["direct_covered_kinds"] == ["device", "error"]
+    assert receipt["residual_pre_filters"] == {
+        "exclude_structured_kinds": ["device", "error"],
+    }
+
+
+def test_unresolved_structured_targets_do_not_close_broad_candidate_lanes(monkeypatch):
+    import knowledge.retriever as retriever
+    import knowledge.structured_facts as facts
+
+    targets = {
+        "version": "structured-facts-v2-contract-merged",
+        "instructions": [{"opcode": "NOTREAL", "base_opcode": "NOTREAL"}],
+        "devices": ["M999999"],
+        "errors": ["FFFF"],
+    }
+    query = KnowledgeQuery(
+        "NOTREAL M999999 FFFF explain scan cycle",
+        precompiled=True,
+        metadata={"structured_fact_targets": targets},
+    )
+    monkeypatch.setattr(facts, "resolve_instruction_records", lambda *a, **k: [])
+    monkeypatch.setattr(facts, "resolve_device_records", lambda *a, **k: [])
+    monkeypatch.setattr(facts, "resolve_error_records", lambda *a, **k: [])
+    seen = []
+
+    def broad_lookup(*args, **kwargs):
+        seen.append(kwargs)
+        return []
+
+    monkeypatch.setattr(retriever, "retrieve_knowledge", broad_lookup)
+    context = retriever.build_knowledge_context(
+        query, plc_model="FX3U", task_type="analysis", top_k=5, char_budget=10000,
+    )
+    assert len(seen) == 1
+    assert seen[0].get("exclude_chunk_types") == ()
+    assert seen[0].get("exclude_structured_kinds") == ()
+    receipt = context.manifest["structured_facts"]
+    assert receipt["direct_covered_kinds"] == []
+    assert receipt["residual_pre_filters"] == {}
+
+
+def test_broad_retrieval_does_not_own_exact_plc_fact_tables():
+    import inspect
+    import knowledge.core as knowledge_core
+
+    broad = inspect.getsource(knowledge_core._retrieve_uncached)
+    routed = inspect.getsource(knowledge_core._broad_metadata_references)
+    for forbidden in (
+        "instruction_aliases",
+        "error_records",
+        "device_records",
+        "_manual_instruction_references",
+        "authoritative_instruction_manual",
+        "structured_instruction",
+        "structured_error",
+    ):
+        assert forbidden not in broad
+        assert forbidden not in routed

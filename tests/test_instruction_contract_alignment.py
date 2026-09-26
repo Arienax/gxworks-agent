@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-import knowledge.core as core
+from knowledge.structured_facts import resolve_instruction_records
 from application.generation_context import _select_system_prompt
 from plc.generation_contract import ladder_response_schema
 from plc.ir import build_plc_ir
@@ -130,19 +130,11 @@ def test_known_extraction_aliases_stay_quarantined():
 
 
 def _opcode_instruction_results(opcode):
-    return [
-        item for item in core.retrieve_knowledge(
-            f"FX3U {opcode} 指令的操作数和适用软元件是什么？",
-            plc_model="FX3U",
-            task_type="generate",
-            top_k=8,
-            char_budget=12000,
-        )
-        if (
-            str(item.get("instruction_opcode") or "").upper() == opcode
-            and item.get("chunk_type") == "instruction"
-        )
-    ]
+    return resolve_instruction_records(
+        [{"opcode": opcode, "base_opcode": opcode}],
+        plc_model="FX3U",
+        task_type="generate",
+    )
 
 
 def test_exact_opcode_retrieval_uses_audited_manual_precedence():
@@ -275,7 +267,15 @@ def test_selected_model_structured_contracts_expose_verified_syntax_and_real_gap
     assert rows["WSFL"]["native_operand_order"] == ["S", "D", "N1", "N2"]
     assert rows["MOV"]["min_operands"] == 2
     assert all(row["contract_level"] == "signature_verified" for row in rows.values())
-    assert all("completion_ownership" in row["unverified_fields"] for row in rows.values())
+    assert rows["DRVA"]["completion"] == {
+        "device": "M8029",
+        "placement": "same_rung_parallel_branch",
+    }
+    assert "completion_ownership" in rows["DRVA"]["verified_fields"]
+    assert all(
+        "completion_ownership" in rows[opcode]["unverified_fields"]
+        for opcode in ("WSFL", "MOV")
+    )
 
 
 def test_instruction_template_icon_is_not_an_executable_mnemonic():

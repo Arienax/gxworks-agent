@@ -108,18 +108,6 @@ DEFAULT_MODEL_PROFILES = (
         "adapter": "openai_compatible",
         "baseUrl": "https://api.deepseek.com",
         "model": "deepseek-v4-pro",
-        "capabilities": {
-            "reasoning": True,
-            "tools": True,
-            "structured_output": True,
-            "disable_tool_choice_with_thinking": True,
-        },
-        "generationDefaults": {
-            "response_format": {"type": "json_object"},
-        },
-        "requestOverrides": {
-            "extra_body": {"thinking": {"type": "enabled"}},
-        },
         "credentialTarget": credential_target_for_profile(DEEPSEEK_PROFILE_ID),
     },
     {
@@ -128,18 +116,6 @@ DEFAULT_MODEL_PROFILES = (
         "adapter": "openai_compatible",
         "baseUrl": "https://api.deepseek.com",
         "model": "deepseek-v4-flash",
-        "capabilities": {
-            "reasoning": True,
-            "tools": True,
-            "structured_output": True,
-            "disable_tool_choice_with_thinking": True,
-        },
-        "generationDefaults": {
-            "response_format": {"type": "json_object"},
-        },
-        "requestOverrides": {
-            "extra_body": {"thinking": {"type": "enabled"}},
-        },
         "credentialTarget": credential_target_for_profile(
             DEEPSEEK_V4_FLASH_PROFILE_ID
         ),
@@ -150,19 +126,6 @@ DEFAULT_MODEL_PROFILES = (
         "adapter": "openai_compatible",
         "baseUrl": "https://api.deepseek.com",
         "model": "deepseek-v4-flash-vision-exp",
-        "capabilities": {
-            "reasoning": True,
-            "tools": True,
-            "structured_output": True,
-            "multimodal": True,
-            "disable_tool_choice_with_thinking": True,
-        },
-        "generationDefaults": {
-            "response_format": {"type": "json_object"},
-        },
-        "requestOverrides": {
-            "extra_body": {"thinking": {"type": "enabled"}},
-        },
         "credentialTarget": credential_target_for_profile(
             DEEPSEEK_V4_FLASH_VISION_PROFILE_ID
         ),
@@ -173,25 +136,6 @@ DEFAULT_MODEL_PROFILES = (
         "adapter": "openai_compatible",
         "baseUrl": "https://open.bigmodel.cn/api/paas/v4/",
         "model": "glm-5.3-flash",
-        "capabilities": {
-            "reasoning": True,
-            "tools": True,
-            "tool_stream": True,
-            "structured_output": True,
-            "multimodal": True,
-            "thinking_required": True,
-        },
-        "generationDefaults": {
-            "temperature": 1.0,
-            "top_p": 0.95,
-            "reasoning_effort": "max",
-            "response_format": {"type": "json_object"},
-        },
-        "requestOverrides": {
-            "extra_body": {
-                "thinking": {"type": "enabled", "clear_thinking": False}
-            },
-        },
         "credentialTarget": credential_target_for_profile(ZHIPU_PROFILE_ID),
     },
     {
@@ -200,21 +144,6 @@ DEFAULT_MODEL_PROFILES = (
         "adapter": "openai_compatible",
         "baseUrl": "https://open.bigmodel.cn/api/paas/v4/",
         "model": "glm-5.3",
-        "capabilities": {
-            "reasoning": True,
-            "tools": True,
-            "tool_stream": True,
-            "structured_output": True,
-            "thinking_required": True,
-        },
-        "generationDefaults": {
-            "temperature": 1.0,
-            "reasoning_effort": "max",
-            "response_format": {"type": "json_object"},
-        },
-        "requestOverrides": {
-            "extra_body": {"thinking": {"type": "enabled"}},
-        },
         "credentialTarget": credential_target_for_profile(
             ZHIPU_GLM_53_PROFILE_ID
         ),
@@ -225,28 +154,11 @@ DEFAULT_MODEL_PROFILES = (
         "adapter": "openai_compatible",
         "baseUrl": "https://open.bigmodel.cn/api/paas/v4/",
         "model": "glm-5.2",
-        "capabilities": {
-            "reasoning": True,
-            "tools": True,
-            "tool_stream": True,
-            "structured_output": True,
-        },
-        "generationDefaults": {
-            "temperature": 1.0,
-            "reasoning_effort": "max",
-            "response_format": {"type": "json_object"},
-        },
-        "requestOverrides": {
-            "extra_body": {
-                "thinking": {"type": "enabled", "clear_thinking": False}
-            },
-        },
         "credentialTarget": credential_target_for_profile(
             ZHIPU_GLM_52_PROFILE_ID
         ),
     },
 )
-
 
 
 def _default_profiles():
@@ -273,13 +185,21 @@ def _normalize_profile(profile):
         raise ValueError(f"模型 Profile {profile_id} 缺少 baseUrl。")
     if not normalized["model"]:
         raise ValueError(f"模型 Profile {profile_id} 缺少 model。")
-    for key in ("capabilities", "generationDefaults", "requestOverrides", "parameterSupport", "capabilityContract", "userModelSettings", "capabilityOverrides"):
+    retired = ("capabilities", "generationDefaults", "requestOverrides", "parameterSupport")
+    canonical = ("capabilityContract", "userModelSettings", "capabilityOverrides")
+    for key in (*retired, *canonical):
         value = normalized.get(key)
         if value is not None and not isinstance(value, dict):
             raise ValueError(f"模型 Profile {profile_id} 的 {key} 必须是对象。")
-        normalized[key] = copy.deepcopy(value) if isinstance(value, dict) else {}
-    from model_runtime.capabilities import normalize_parameter_support
-    normalized["parameterSupport"] = normalize_parameter_support(normalized["parameterSupport"])
+        if key in canonical:
+            normalized[key] = copy.deepcopy(value) if isinstance(value, dict) else {}
+        elif isinstance(value, dict):
+            normalized[key] = copy.deepcopy(value)
+        else:
+            normalized.pop(key, None)
+    from model_runtime.legacy_migration import normalize_parameter_support
+    if "parameterSupport" in normalized:
+        normalized["parameterSupport"] = normalize_parameter_support(normalized["parameterSupport"])
     from model_runtime.contract import CapabilityContract, UserModelSettings, normalize_contract
     normalized["capabilityContract"] = normalize_contract(normalized["capabilityContract"])
     if normalized["userModelSettings"]:
@@ -356,48 +276,19 @@ def _profile_from_legacy(config):
                 "adapter": "openai_compatible",
                 "baseUrl": base_url,
                 "model": model,
-                "capabilities": {},
-                "generationDefaults": {},
-                "requestOverrides": {},
                 "credentialTarget": credential_target_for_profile(profile_id),
             }
         )
     selected = next(item for item in profiles if item["id"] == profile_id)
     selected["baseUrl"] = base_url
     selected["model"] = model
-    # A legacy model name is not an explicit choice of the preset's effort.
-    # Keep other compatibility defaults, then restore only saved tuning below.
-    from model_runtime.request_policy import without_workflow_effort
-    for layer in ("generationDefaults", "requestOverrides"):
-        selected[layer] = without_workflow_effort(selected.get(layer))
 
-    template = config.get("request_template")
-    if isinstance(template, dict):
-        portable = {
-            "temperature",
-            "top_p",
-            "max_tokens",
-            "stop",
-            "response_format",
-            "seed",
-            "frequency_penalty",
-            "presence_penalty",
-        }
-        defaults = {}
-        overrides = {}
-        for key, value in template.items():
-            if key in {"model", "messages", "stream", "tools", "tool_choice"}:
-                continue
-            if value == "{effort}":
-                continue
-            if key == "extra_body" and isinstance(value, dict):
-                value = copy.deepcopy(value)
-                if value.get("reasoning_effort") == "{effort}":
-                    value.pop("reasoning_effort")
-            target = defaults if key in portable else overrides
-            target[key] = copy.deepcopy(value)
-        selected["generationDefaults"].update(defaults)
-        selected["requestOverrides"].update(overrides)
+    from model_runtime.legacy_migration import migrate_request_template
+    migrated = migrate_request_template(selected, config.get("request_template"))
+    profiles = [
+        migrated if item["id"] == profile_id else item
+        for item in profiles
+    ]
     return profile_id, [_normalize_profile(item) for item in profiles]
 
 

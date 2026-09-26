@@ -7,10 +7,11 @@ from types import SimpleNamespace
 import pytest
 
 from application.model_detection import inspect_openai_compatible
-from model_runtime.capabilities import (
+from model_runtime.legacy_migration import (
     apply_parameter_contract, capability_scope, metadata_parameters,
-    normalize_parameter_support, parameter_error, scoped_parameters,
+    normalize_parameter_support, scoped_parameters,
 )
+from model_runtime.transport_policy import parameter_error
 from model_runtime.provider import (
     AssistantMessage, ModelProviderError, ModelRequest, OpenAICompatibleProvider,
     ToolCall, UserMessage, collect_response, coerce_message, strip_legacy_provider_fields,
@@ -283,7 +284,7 @@ def test_falsy_nonobject_contract_is_rejected(invalid):
 
 
 def test_effective_parameter_matches_sdk_extra_body_precedence_and_deletion():
-    from model_runtime.capabilities import effective_parameter
+    from model_runtime.legacy_migration import effective_parameter
     p = profile(generationDefaults={"reasoning_effort": "low", "extra_body": {"reasoning_effort": "high"}},
                 requestOverrides={"reasoning_effort": "max"})
     assert effective_parameter(p, "reasoning_effort") == "high"

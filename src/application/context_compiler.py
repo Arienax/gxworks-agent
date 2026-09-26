@@ -13,7 +13,6 @@ from dataclasses import dataclass, field, fields
 from collections.abc import Mapping
 
 from knowledge.evidence import estimate_tokens
-from model_runtime.capabilities import effective_parameter
 
 
 def _contract_value(profile, name):
@@ -21,18 +20,15 @@ def _contract_value(profile, name):
     direct = profile.get(name)
     if isinstance(direct, (int, float)) and direct > 0:
         return int(direct)
-    capabilities = profile.get("capabilities")
-    if isinstance(capabilities, Mapping):
-        raw = capabilities.get(name)
-        if isinstance(raw, (int, float)) and raw > 0:
-            return int(raw)
-        if isinstance(raw, Mapping) and isinstance(raw.get("value"), (int, float)) and raw["value"] > 0:
-            return int(raw["value"])
     contract = profile.get("capabilityContract")
     if isinstance(contract, Mapping):
         caps = contract.get("capabilities")
         raw = caps.get(name) if isinstance(caps, Mapping) else None
-        if isinstance(raw, Mapping) and isinstance(raw.get("value"), (int, float)) and raw["value"] > 0:
+        if (
+            isinstance(raw, Mapping)
+            and isinstance(raw.get("value"), (int, float))
+            and raw["value"] > 0
+        ):
             return int(raw["value"])
     return None
 
@@ -42,18 +38,21 @@ def _positive_int(value):
 
 
 def _output_limit(profile):
-    """Resolve the effective requested output reserve from the model runtime contract."""
+    """Resolve output reserve from canonical user settings, then contract bounds."""
     profile = profile if isinstance(profile, Mapping) else {}
-    # Reuse the provider's precedence: requestOverrides > generationDefaults,
-    # including extra_body. If both aliases are present, reserve the larger
-    # value rather than claiming input space that either wire field may consume.
-    requested = [
-        _positive_int(effective_parameter(profile, name))
-        for name in ("max_completion_tokens", "max_tokens")
-    ]
-    requested = [value for value in requested if value is not None]
-    if requested:
-        return max(requested)
+    settings = profile.get("userModelSettings")
+    selected = []
+    if isinstance(settings, Mapping):
+        parameters = settings.get("parameters")
+        if isinstance(parameters, Mapping):
+            for key in ("max_completion_tokens", "max_tokens"):
+                choice = parameters.get(key)
+                if isinstance(choice, Mapping) and choice.get("mode") == "value":
+                    value = _positive_int(choice.get("value"))
+                    if value is not None:
+                        selected.append(value)
+    if selected:
+        return max(selected)
 
     contract = profile.get("capabilityContract")
     maxima = []
@@ -65,7 +64,9 @@ def _output_limit(profile):
                 if not isinstance(raw, Mapping):
                     continue
                 domain = raw.get("domain") if isinstance(raw.get("domain"), Mapping) else raw
-                value = _positive_int(domain.get("maximum") if isinstance(domain, Mapping) else None)
+                value = _positive_int(
+                    domain.get("maximum") if isinstance(domain, Mapping) else None
+                )
                 if value is not None:
                     maxima.append(value)
     return max(maxima) if maxima else None
@@ -330,12 +331,31 @@ def _pack_sections(sections, token_budget):
 
 
 def _generation_packet(runtime, value, evidence_text):
-    return {
+    packet = {
         "confirmed_spec": runtime,
         "generation_request": value.generation_request,
         "current_program": copy.deepcopy(value.current_program),
         "evidence": str(evidence_text or ""),
     }
+    checkpoint = str(value.context_checkpoint or "").strip()
+    if checkpoint:
+        packet["context_checkpoint"] = checkpoint
+    return packet
+
+
+def _wire_packet(renderer, runtime, value, evidence_text):
+    if renderer is None:
+        return {}
+    from application.generation_wire import normalize_wire_packet
+    rendered = renderer(
+        copy.deepcopy(runtime),
+        str(evidence_text or ""),
+        str(value.generation_request or ""),
+        copy.deepcopy(value.current_program),
+        str(value.context_checkpoint or ""),
+        copy.deepcopy(value.wire_history),
+    )
+    return normalize_wire_packet(rendered)
 
 
 def _pressure(utilization):
@@ -361,6 +381,10 @@ class ContextCompilerInput:
     task_type: str = "generate"
     generation_request: str = ""
     current_program: object = None
+    wire_renderer: object = None
+    wire_history: list = field(default_factory=list)
+    context_checkpoint: str = ""
+    compacted_request_ids: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -369,6 +393,7 @@ class CompiledContext:
     retrieval_packet: dict
     provenance_receipt: dict
     budget_report: dict
+    wire_packet: dict = field(default_factory=dict)
 
     def to_dict(self):
         return {item.name: copy.deepcopy(getattr(self, item.name)) for item in fields(self)}
@@ -385,6 +410,24 @@ class ContextCompiler:
                    if value.intent_context is not None else intent_context(runtime))
         original_evidence_text = str(evidence_text or "")
         runtime_context, duplicate_requests, superseded = _clean_request_rows(context)
+        compacted_ids = {
+            str(item) for item in (value.compacted_request_ids or ())
+            if str(item)
+        }
+        checkpoint_compacted_requests = 0
+        if compacted_ids and isinstance(runtime_context.get("requests"), list):
+            for row in runtime_context["requests"]:
+                if not isinstance(row, dict) or str(row.get("id") or "") not in compacted_ids:
+                    continue
+                text = str(row.get("text") or "")
+                if text:
+                    row.pop("text", None)
+                    row.setdefault(
+                        "text_sha256",
+                        hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                    )
+                    row["runtime_text_status"] = "compacted_checkpoint"
+                    checkpoint_compacted_requests += 1
         if runtime_context or "intent_context" in runtime or value.intent_context is not None:
             runtime["intent_context"] = runtime_context
 
@@ -420,11 +463,23 @@ class ContextCompiler:
             "generation_contract": _estimate(selected.get("generation_contract", {})),
             "rag_evidence": estimate_tokens(evidence_text),
             "current_program": _estimate(value.current_program) if value.current_program is not None else 0,
+            "context_checkpoint": estimate_tokens(value.context_checkpoint),
+            "wire_history": _estimate(value.wire_history),
         }
         usable = budget["usable_input_tokens"]
         original_packet = _generation_packet(persistent, value, original_evidence_text)
         original_payload_tokens = _estimate(original_packet)
-        original_estimated = original_payload_tokens + budget["protocol_overhead_tokens"]
+        original_wire = _wire_packet(
+            value.wire_renderer, persistent, value, original_evidence_text,
+        )
+        if original_wire:
+            from application.generation_wire import wire_token_estimate
+            original_budget_payload_tokens = wire_token_estimate(original_wire)
+            budget_basis = "application_wire_messages"
+        else:
+            original_budget_payload_tokens = original_payload_tokens
+            budget_basis = "logical_generation_packet"
+        original_estimated = original_budget_payload_tokens + budget["protocol_overhead_tokens"]
         if usable is None:
             original_utilization = None
             pressure = "unknown"
@@ -439,11 +494,23 @@ class ContextCompiler:
         provenance_saved = max(0, _estimate(context) - _estimate(runtime_context))
         generation_packet = _generation_packet(compacted_runtime, value, evidence_text)
         compiled_payload_tokens = _estimate(generation_packet)
-        compiled_estimated = compiled_payload_tokens + budget["protocol_overhead_tokens"]
+        wire_packet = _wire_packet(
+            value.wire_renderer, compacted_runtime, value, evidence_text,
+        )
+        if wire_packet:
+            from application.generation_wire import wire_token_estimate
+            compiled_budget_payload_tokens = wire_token_estimate(wire_packet)
+        else:
+            compiled_budget_payload_tokens = compiled_payload_tokens
+        compiled_estimated = compiled_budget_payload_tokens + budget["protocol_overhead_tokens"]
         utilization = (compiled_estimated / usable) if usable is not None and usable > 0 else None
         # Pressure is telemetry, not permission to trim unknown engineering
         # intent. Report actual work rather than an "aggressive" no-op label.
-        mode = "priority_projection" if superseded else "dedupe_only"
+        mode = (
+            "checkpoint_compaction"
+            if str(value.context_checkpoint or "").strip()
+            else "priority_projection" if superseded else "dedupe_only"
+        )
         report = {
             "model_context_window": budget["context_window"],
             "budget_confidence": budget["budget_confidence"],
@@ -456,7 +523,12 @@ class ContextCompiler:
             "estimated_input_tokens": compiled_estimated,
             "original_generation_payload_tokens": original_payload_tokens,
             "compiled_generation_payload_tokens": compiled_payload_tokens,
-            "compaction_saved_tokens": max(0, original_payload_tokens - compiled_payload_tokens),
+            "budget_basis": budget_basis,
+            "original_budget_payload_tokens": original_budget_payload_tokens,
+            "compiled_budget_payload_tokens": compiled_budget_payload_tokens,
+            "compaction_saved_tokens": max(
+                0, original_budget_payload_tokens - compiled_budget_payload_tokens
+            ),
             "context_pressure": pressure,
             "pre_compaction_context_utilization": (
                 round(original_utilization, 6) if original_utilization is not None else None
@@ -469,11 +541,13 @@ class ContextCompiler:
             "source_tokens": source_tokens,
             "dropped": {"duplicate_requests": duplicate_requests,
                         "superseded_structured": superseded,
+                        "checkpoint_compacted_requests": checkpoint_compacted_requests,
                         "duplicate_evidence_blocks": duplicate_evidence,
                         "provenance_tokens": provenance_saved},
             "compression_mode": mode,
-            "semantic_curator_eligible": pressure == "critical",
-            "semantic_curator_invoked": False,
+            "checkpoint_compaction_required": bool(
+                usable is not None and compiled_estimated > usable
+            ),
             "retrieval_sections": section_report,
             "token_estimate": "deterministic_heuristic_estimate",
         }
@@ -482,12 +556,17 @@ class ContextCompiler:
             "estimated_tokens": retrieval_tokens,
             "sections": section_report,
         }
+        wire_hash = None
+        if wire_packet:
+            from application.generation_wire import wire_sha256
+            wire_hash = wire_sha256(wire_packet)
         plan = {
             "task_type": value.task_type,
             "plc_model": value.plc_model,
             "persistent_spec_sha256": _fingerprint(persistent),
             "runtime_spec_sha256": _fingerprint(compacted_runtime),
             "retrieval_query_sha256": hashlib.sha256(retrieval_query.encode("utf-8")).hexdigest(),
+            "wire_sha256": wire_hash,
             "budget_report": report,
         }
         receipt = {
@@ -495,8 +574,11 @@ class ContextCompiler:
             "persistent_spec_sha256": plan["persistent_spec_sha256"],
             "runtime_spec_sha256": plan["runtime_spec_sha256"],
             "retrieval_query_sha256": plan["retrieval_query_sha256"],
+            "wire_sha256": plan["wire_sha256"],
             "context_pressure": pressure,
             "compression_mode": mode,
             "audit_policy": "decision_receipt_reference_only",
         }
-        return CompiledContext(generation_packet, retrieval_packet, receipt, report)
+        return CompiledContext(
+            generation_packet, retrieval_packet, receipt, report, wire_packet,
+        )

@@ -8,8 +8,9 @@ import pytest
 
 from model_runtime.contract import (
     CapabilityContract, CapabilityDescriptor, ConstraintDescriptor, ParameterDescriptor,
-    UserModelSettings, contract_scope, legacy_contract, metadata_contract_parts, normalize_contract,
+    UserModelSettings, contract_scope, metadata_contract_parts, normalize_contract,
 )
+from model_runtime.legacy_migration import legacy_contract
 from model_runtime.request_policy import resolve_request, public_contract_settings
 from model_runtime.provider import OpenAICompatibleProvider, ModelRequest, ModelProviderError, UserMessage
 from application.model_detection import inspect_openai_compatible
@@ -214,13 +215,14 @@ def test_settings_persist_contract_selections_and_invalidate_key_without_mutatin
         contract=p["capabilityContract"], user_settings=p["userModelSettings"])
     row = next(item for item in result["profiles"] if item["id"] == "v2")
     assert row["user_settings"]["parameters"]["new_budget"]["value"] == 8192
-    assert row["generation_defaults"] == {}
+    assert not {"generation_defaults", "request_overrides", "parameter_support", "capabilities"}.intersection(row)
     before = env.path.read_bytes()
     assert env.service.public_settings() == result
     assert env.path.read_bytes() == before
     result = env.service.set_key("v2", "rotated-key")
     row = next(item for item in result["profiles"] if item["id"] == "v2")
-    assert row["contract"] == {} and row["user_settings"] == {}
+    assert row["user_settings"] == {"scope": row["contract"]["scope"], "parameters": {}}
+    assert "new_budget" not in row["contract"]["parameters"]
 
 
 def test_contract_scope_and_user_values_are_validated_on_save(settings_env):
@@ -355,7 +357,10 @@ def test_application_effort_is_profile_owned_on_the_actual_wire(legacy, selectio
     assert result.message.content == "OK"
     assert "reasoning_effort" not in provider.request.options
     assert "reasoning_effort" not in provider.request.options.get("extra_body", {})
-    assert provider.params.get("reasoning_effort") == ("medium" if selection in {"medium", "advanced", "inherit"} else None)
+    expected = "medium" if (
+        selection == "medium" or legacy and selection in {"advanced", "inherit"}
+    ) else None
+    assert provider.params.get("reasoning_effort") == expected
     assert provider.params["extra_body"]["keep"] is True
     assert p == before and options == saved
 

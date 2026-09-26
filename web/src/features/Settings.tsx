@@ -2,15 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { Json, ModelSettings } from "../api/client";
 import type { components } from "../api/generated";
-import { Button, Badge } from "../components/ui";
+import { Button, Badge, Modal } from "../components/ui";
 import { ModelParameters } from "./ModelParameterControls";
-import { ENDPOINT_PRESETS, adoptSelections, clearKnown } from "./modelParameters";
+import { ENDPOINT_PRESETS, adoptSelections } from "./modelParameters";
 import type { CapabilityContract, UserModelSettings, DiscoveryMode, Scalar } from "./modelParameters";
 
 type Profile = NonNullable<ModelSettings["profiles"]>[number] & {
   deletable?: boolean;
-  generation_defaults?: Record<string, Json>;
-  request_overrides?: Record<string, Json>;
   contract?: Record<string, Json>;
   user_settings?: Record<string, Json>;
   capability_overrides?: Record<string, Json>;
@@ -228,19 +226,23 @@ export function Settings({
 }) {
   const [page, setPage] = useState<"models" | "integrations">("models");
   const [selected, setSelected] = useState(value.active_profile_id || "");
-  const [creating, setCreating] = useState(!value.profiles?.length),
-    [busy, setBusy] = useState(false);
+  // One editor card at a time. A workspace with no saved profile starts with the
+  // create card open, so the first run needs no extra click.
+  const [cardOpen, setCardOpen] = useState(!value.profiles?.length);
+  const [creating, setCreating] = useState(!value.profiles?.length);
+  const [busy, setBusy] = useState(false);
   const [name, setName] = useState(""),
     [model, setModel] = useState(""),
     [baseUrl, setBaseUrl] = useState("");
-  const [secret, setSecret] = useState(""),
-    [capabilities, setCapabilities] = useState<Record<string, boolean>>({});
-  const [defaults, setDefaults] = useState("{}"),
-    [overrides, setOverrides] = useState("{}");
-  const [compatibilityText, setCompatibilityText] = useState("{}");
+  const [preset, setPreset] = useState("");
+  // How the address is chosen. DSH splits its add card the same way: adopt a
+  // service the tool already knows, or declare a custom one.
+  const [mode, setMode] = useState<"catalog" | "custom">("catalog");
+  const [secret, setSecret] = useState("");
   const [error, setError] = useState(""),
     [message, setMessage] = useState("");
-  const [deleting, setDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const [discoveredModels, setDiscoveredModels] = useState<string[]>([]);
   const [contract, setContract] = useState<CapabilityContract>({});
   const [userSettings, setUserSettings] = useState<UserModelSettings>({});
@@ -262,38 +264,51 @@ export function Settings({
     setMessage("");
     if (clearModels) setDiscoveredModels([]);
   };
-  const clearParameterValues = () => {
-    try {
-      const [nextDefaults, nextOverrides] = clearKnown(JSON.parse(defaults), JSON.parse(overrides), contract);
-      setDefaults(JSON.stringify(nextDefaults, null, 2));
-      setOverrides(JSON.stringify(nextOverrides, null, 2));
-    } catch { /* Keep invalid advanced JSON for the user to repair. */ }
-  };
   const changeModel = (next: string) => {
-    if (next !== model) { setManualOverrides("{}"); invalidate(); setCapabilities({}); setCompatibilityText("{}"); clearParameterValues(); }
+    if (next !== model) { setManualOverrides("{}"); invalidate(); }
     setModel(next);
   };
   useEffect(() => () => { draftRevision.current += 1; }, []);
   const profile = value.profiles?.find((p) => p.id === selected) as
     | Profile
     | undefined;
-  useEffect(() => {
+  const presetFor = (url: string) =>
+    ENDPOINT_PRESETS.find(item => item.url === url)?.url || "";
+  const presetSource = ENDPOINT_PRESETS.find(item => item.url === preset)?.source;
+  const loadFields = (target: Profile | undefined) => {
     draftRevision.current += 1;
-    if (creating) return;
-    setName(profile?.name || "");
-    setModel(profile?.model || "");
-    setBaseUrl(profile?.base_url || "");
+    setName(target?.name || "");
+    setModel(target?.model || "");
+    setBaseUrl(target?.base_url || "");
+    const matched = presetFor(target?.base_url || "");
+    setPreset(matched);
+    // A saved address that is not a known service is a custom declaration.
+    setMode(matched ? "catalog" : "custom");
     setSecret("");
-    setCapabilities(profile?.capabilities || {});
-    setCompatibilityText(JSON.stringify(profile?.capabilities || {}, null, 2));
-    setContract((profile?.contract || {}) as CapabilityContract);
-    setUserSettings((profile?.user_settings || {}) as UserModelSettings);
-    setManualOverrides(JSON.stringify(profile?.capability_overrides || {}, null, 2));
-    setDefaults(JSON.stringify(profile?.generation_defaults || {}, null, 2));
-    setOverrides(JSON.stringify(profile?.request_overrides || {}, null, 2));
-    setDeleting(false);
+    setContract((target?.contract || {}) as CapabilityContract);
+    setUserSettings((target?.user_settings || {}) as UserModelSettings);
+    setManualOverrides(JSON.stringify(target?.capability_overrides || {}, null, 2));
     setDiscoveredModels([]);
+  };
+  /**
+   * Apply one endpoint preset. This only fills the address and a starting name:
+   * presets never carry a model id or tuning values, and the chosen value stays
+   * visible in the select instead of snapping back to the placeholder.
+   */
+  const applyPreset = (url: string) => {
+    const found = ENDPOINT_PRESETS.find(item => item.url === url);
+    if (!found) { setPreset(""); return; }
+    setPreset(found.url);
+    // A preset names the service; it never renames a profile the user already named.
+    if (!name.trim()) setName(found.name);
+    setBaseUrl(found.url);
+    setManualOverrides("{}");
+    invalidate(true);
+  };
+  useEffect(() => {
     // Background job refreshes must preserve in-progress fields and secrets.
+    if (creating) { draftRevision.current += 1; return; }
+    loadFields(profile);
   }, [selected, creating]);
   const parse = (text: string) => {
     const result = JSON.parse(text);
@@ -312,9 +327,6 @@ export function Settings({
     name,
     model,
     base_url: baseUrl,
-    capabilities: parse(compatibilityText),
-    generation_defaults: parse(defaults),
-    request_overrides: parse(overrides),
     contract,
     user_settings: contract.scope ? userSettings : {},
     capability_overrides: parse(manualOverrides),
@@ -344,8 +356,7 @@ export function Settings({
         ...(creating ? {} : { id: selected }),
         name: name.trim() || "Custom API",
         model: model.trim() || "__discover__",
-        base_url: baseUrl, capabilities,
-        generation_defaults: parse(defaults), request_overrides: parse(overrides),
+        base_url: baseUrl,
         contract, user_settings: contract.scope ? userSettings : {}, capability_overrides: parse(manualOverrides),
         ...(secret ? { api_key: secret } : {}),
       };
@@ -360,7 +371,7 @@ export function Settings({
       // Listing is read-only for the selected model and its current contract.
       if (discovery.contract && discovery.mode !== "list") {
         setContract(discovery.contract);
-        setUserSettings(adoptSelections(discovery.contract, userSettings, parse(defaults), parse(overrides)));
+        setUserSettings(adoptSelections(discovery.contract, userSettings));
       }
       const timing = discovery.elapsed_ms == null ? "" : ` · ${t("耗时")} ${(discovery.elapsed_ms / 1000).toFixed(1)} s`;
       setMessage((discovery.note || t("能力配置已加载（无生成请求）")) + timing +
@@ -372,20 +383,38 @@ export function Settings({
     }
   });
   const beginCreate = () => {
+    draftRevision.current += 1;
+    setCardOpen(true);
     setCreating(true);
+    setSelected("");
     setName("");
     setModel("");
     setBaseUrl("");
+    setPreset("");
+    setMode("catalog");
     setSecret("");
-    setCapabilities({}); setCompatibilityText("{}");
-    invalidate(true);
-    setDefaults("{}");
-    setOverrides("{}");
+    setContract({});
+    setUserSettings({});
     setManualOverrides("{}");
     setDiscoveredModels([]);
     setError("");
     setMessage("");
-    setDeleting(false);
+  };
+  const openProfile = (target: Profile) => {
+    setCardOpen(true);
+    setCreating(false);
+    setSelected(target.id);
+    loadFields(target);
+    setError("");
+    setMessage("");
+  };
+  const closeCard = () => {
+    draftRevision.current += 1;
+    setCardOpen(false);
+    setCreating(false);
+    setError("");
+    setMessage("");
+    setScanMode(null);
   };
 
   if (page === "integrations") {
@@ -411,10 +440,28 @@ export function Settings({
       if (result.status === "failed") throw new Error(result.message);
       if (result.discovery?.contract) {
         setContract(result.discovery.contract);
-        setUserSettings(adoptSelections(result.discovery.contract, userSettings, parse(defaults), parse(overrides)));
+        setUserSettings(adoptSelections(result.discovery.contract, userSettings));
       }
       setMessage(result.message);
     });
+  };
+
+  const profiles = (value.profiles || []) as Profile[];
+  const confirmDelete = () => {
+    const target = deleteTarget;
+    if (!target || confirming) return;
+    setConfirming(true);
+    void run(async () => {
+      const result = await api<ModelSettings>(
+        `/settings/profiles/${encodeURIComponent(target.id)}`,
+        "DELETE",
+      );
+      onChange(result);
+      setDeleteTarget(null);
+      if (!result.profiles?.length) beginCreate();
+      else setSelected(result.active_profile_id || result.profiles[0]?.id || "");
+      setMessage(t("配置已删除"));
+    }).finally(() => setConfirming(false));
   };
 
   return (
@@ -423,46 +470,94 @@ export function Settings({
         <Button variant="primary">{t("模型 API")}</Button>
         <Button variant="ghost" onClick={() => setPage("integrations")}>Integrations / MCP</Button>
       </nav>
-      <fieldset className="form settings-form" disabled={busy || disabled}>
-        <div className="form-actions">
-          <label>
-            {t("选择模型配置")}
-            <select
-              disabled={busy}
-              value={creating ? "" : selected}
-              onChange={(e) => {
-                setCreating(false);
-                setSelected(e.target.value);
-                setError("");
-                setMessage("");
-              }}
-            >
-              {creating && <option value="">{t("新建配置")}</option>}
-              {value.profiles?.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
+      {!cardOpen && (
+        <section className="provider-list" aria-label={t("模型服务")}>
+          {profiles.length > 0 && (
+            <ul className="provider-rows">
+              {profiles.map((item) => (
+                <li key={item.id} className="provider-row">
+                  <span className="provider-identity">
+                    <span className="provider-name">{item.name}</span>
+                    <Badge tone={item.configured ? "good" : "warn"}>
+                      {t(item.configured ? "已配置密钥" : "未配置密钥")}
+                    </Badge>
+                  </span>
+                  <span className="provider-actions">
+                    <Button
+                      disabled={busy || disabled}
+                      onClick={() => openProfile(item)}
+                    >
+                      {t("编辑")}
+                    </Button>
+                    {item.deletable !== false && (
+                      <Button
+                        variant="danger"
+                        disabled={busy || disabled}
+                        onClick={() => setDeleteTarget(item)}
+                      >
+                        {t("删除")}
+                      </Button>
+                    )}
+                  </span>
+                </li>
               ))}
-            </select>
-          </label>
+            </ul>
+          )}
+          {error && <p role="alert" className="error-text">{error}</p>}
+          {message && <p role="status">{message}</p>}
           <Button
+            className="provider-add"
+            variant="primary"
             disabled={busy || disabled}
             onClick={beginCreate}
           >
-            {t("新建配置")}
+            {t("新增配置")}
           </Button>
+        </section>
+      )}
+      {cardOpen && (
+      <fieldset className="form settings-form" disabled={busy || disabled}>
+        <div className="editor-heading">
+          <strong>{t(creating ? "新建配置" : "编辑配置")}</strong>
+          <Button variant="ghost" disabled={busy} onClick={closeCard}>{t("取消")}</Button>
         </div>
-        <label>
-          {t("兼容服务预设")}
-          <select value="" onChange={event => {
-            const preset = ENDPOINT_PRESETS.find(item => item.url === event.target.value);
-            if (preset) { beginCreate(); setName(preset.name); setBaseUrl(preset.url); }
-          }}>
-            <option value="">{t("自定义 OpenAI-compatible 服务")}</option>
-            {ENDPOINT_PRESETS.map(item => <option key={item.url} value={item.url}>{item.name}</option>)}
-          </select>
-        </label>
-        <p className="muted">{t("预设只填写地址，不绑定模型或参数。可修改为区域、工作区或网关提供的兼容地址。Claude 原生 Messages 功能不等同于兼容接口功能。")}</p>
+        <nav className="mode-switch" aria-label={t("模型服务来源")}>
+          <Button
+            variant={mode === "catalog" ? "primary" : "ghost"}
+            disabled={busy}
+            onClick={() => setMode("catalog")}
+          >
+            {t("选择已知服务")}
+          </Button>
+          <Button
+            variant={mode === "custom" ? "primary" : "ghost"}
+            disabled={busy}
+            onClick={() => setMode("custom")}
+          >
+            {t("自定义模型 API")}
+          </Button>
+        </nav>
+        {mode === "catalog" ? (
+          <>
+            <label>
+              {t("服务")}
+              <select value={preset} onChange={event => applyPreset(event.target.value)}>
+                <option value="">{t("请选择服务")}</option>
+                {ENDPOINT_PRESETS.map(item =>
+                  <option key={item.url} value={item.url}>{item.name}</option>)}
+              </select>
+            </label>
+            <p className="muted">{t(
+              presetSource === "local"
+                ? "该端点有本地能力合同；加载能力配置后可直接使用已声明的参数。"
+                : presetSource === "dsh"
+                  ? "该端点使用通用模板；是否支持某项参数在验证前保持未确认。"
+                  : "选择服务后自动填写地址。地址不绑定模型 ID 或调优值，可以在下方改成区域、工作区或网关地址。",
+            )}</p>
+          </>
+        ) : (
+          <p className="muted">{t("手动填写服务地址。未收录能力合同的地址使用通用模板，是否支持某项参数在验证前保持未确认。")}</p>
+        )}
         <label>
           {t("配置名称")}
           <input value={name} onChange={(e) => setName(e.target.value)} />
@@ -471,7 +566,12 @@ export function Settings({
           API URL
           <input
             value={baseUrl}
-            onChange={(e) => { setBaseUrl(e.target.value); setManualOverrides("{}"); invalidate(true); setCapabilities({}); setCompatibilityText("{}"); clearParameterValues(); }}
+            onChange={(e) => {
+              setBaseUrl(e.target.value);
+              setPreset(presetFor(e.target.value));
+              setManualOverrides("{}");
+              invalidate(true);
+            }}
             placeholder="https://api.example.com/v1"
           />
         </label>
@@ -511,7 +611,7 @@ export function Settings({
           </datalist>
         </label>
         <p className="muted">{t("仅“验证”按钮会发送固定测试文本并可能计费；不发送工程内容，不进行全档位扫描。")}</p>
-        <ModelParameters contract={contract} settings={userSettings} defaults={defaults} overrides={overrides}
+        <ModelParameters contract={contract} settings={userSettings}
           disabled={busy || disabled} t={t} onVerify={verify} onChange={(next) => {
             draftRevision.current += 1;
             setUserSettings(next);
@@ -526,38 +626,9 @@ export function Settings({
           <Button disabled={busy || disabled || !model.trim() || !contract.scope}
             onClick={()=>verify("chat","chat")}>{t("验证模型可生成（1 次请求）")}</Button>
           <p className="muted">
-            {t("如供应商要求特定参数，可在此调整模型能力、生成参数和请求覆盖参数。")}
+            {t("供应商特有的可调参数应声明在能力合同中；这里仅保留显式 capability override。")}
           </p>
-          <label>
-            {t("旧版协议兼容选项")}
-            <textarea className="mono" aria-label={t("旧版协议兼容选项")}
-              value={compatibilityText}
-              onChange={e => { setCompatibilityText(e.target.value); invalidate();
-                try { const next = parse(e.target.value);
-                  if (Object.values(next).every(v => typeof v === "boolean")) setCapabilities(next);
-                } catch { /* Keep invalid JSON editable; the save command validates it. */ }
-              }} />
-          </label>
           {contract.scope && <details><summary>{t("查看能力合同")}</summary><pre className="mono">{JSON.stringify(contract, null, 2)}</pre></details>}
-          <label>
-            {t("生成默认参数")}
-            <textarea
-              className="mono"
-              aria-label={t("生成默认参数")}
-              value={defaults}
-              onChange={(e) => { setDefaults(e.target.value); invalidate(); }}
-            />
-          </label>
-          <p className="muted">temperature · top_p · max_tokens</p>
-          <label>
-            {t("请求覆盖参数")}
-            <textarea
-              className="mono"
-              aria-label={t("请求覆盖参数")}
-              value={overrides}
-              onChange={(e) => { setOverrides(e.target.value); invalidate(); }}
-            />
-          </label>
         </details>
         {error && (
           <p role="alert" className="error-text">
@@ -583,15 +654,18 @@ export function Settings({
                       ...(secret ? { api_key: secret } : {}),
                     });
                 onChange(result);
-                setSelected(
-                  creating
-                    ? result.profiles?.find((p) => !previous.has(p.id))?.id ||
-                        result.active_profile_id ||
-                        ""
-                    : selected,
-                );
+                const savedId = creating
+                  ? result.profiles?.find((p) => !previous.has(p.id))?.id ||
+                    result.active_profile_id ||
+                    ""
+                  : selected;
+                setSelected(savedId);
                 setCreating(false);
                 setSecret("");
+                const saved = result.profiles?.find((p) => p.id === savedId) as
+                  | Profile
+                  | undefined;
+                loadFields(saved);
                 setMessage(t("设置已保存"));
               })
             }
@@ -616,11 +690,11 @@ export function Settings({
             {t(busy ? "处理中…" : "测试连接")}
           </Button>
         </div>
-        {!creating && (
-          <div className="settings-danger">
+        {!creating && profile?.configured && (
+          <div className="form-actions">
             <Button
               variant="ghost"
-              disabled={busy || disabled || !profile?.configured}
+              disabled={busy || disabled}
               onClick={() =>
                 void run(async () => {
                   onChange(
@@ -637,47 +711,31 @@ export function Settings({
             >
               {t("清除已存密钥")}
             </Button>
-            {profile?.deletable && (
-              <Button
-                variant="ghost"
-                disabled={busy || disabled}
-                onClick={() => setDeleting((v) => !v)}
-              >
-                {t("删除配置")}
-              </Button>
-            )}
-            {deleting && (
-              <div className="notice">
-                <p>
-                  {t("删除此配置及其已存密钥？")} {profile?.name}
-                </p>
-                <Button
-                  disabled={busy}
-                  onClick={() =>
-                    void run(async () => {
-                      const result = await api<ModelSettings>(
-                        `/settings/profiles/${encodeURIComponent(selected)}`,
-                        "DELETE",
-                      );
-                      onChange(result);
-                      setSelected(
-                        result.active_profile_id ||
-                          result.profiles?.[0]?.id ||
-                          "",
-                      );
-                      if (!result.profiles?.length) beginCreate();
-                      setDeleting(false);
-                      setMessage(t("配置已删除"));
-                    })
-                  }
-                >
-                  {t("确认删除")}
-                </Button>
-              </div>
-            )}
           </div>
         )}
       </fieldset>
+      )}
+      <Modal
+        open={deleteTarget !== null}
+        onOpenChange={(next) => { if (!next && !confirming) setDeleteTarget(null); }}
+        title={t("删除配置")}
+        description={t("删除此配置及其已存密钥？")}
+      >
+        {deleteTarget && (
+          <>
+            <p className="mono">{deleteTarget.name}</p>
+            {error && <p role="alert" className="error-text">{error}</p>}
+            <div className="form-actions">
+              <Button disabled={confirming} onClick={() => setDeleteTarget(null)}>
+                {t("取消")}
+              </Button>
+              <Button variant="danger" disabled={confirming} onClick={confirmDelete}>
+                {t(confirming ? "处理中…" : "确认删除")}
+              </Button>
+            </div>
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

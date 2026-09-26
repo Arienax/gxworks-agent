@@ -5,7 +5,6 @@ import application.model_api as api
 import knowledge.retriever as knowledge_retriever
 from knowledge.patterns import build_workflow_prompt
 from application.prompts import ANALYSIS_DESIGN_PROMPT
-from shared.context_policy import context_policy_scope
 
 
 def test_phase_one_routes_as_analysis():
@@ -29,7 +28,7 @@ def test_analysis_prompt_has_meta_search_rules_only_in_design_delta():
     assert parsed["missing_info"] == []
     assert parsed["suggested_io"] == {}
 
-def test_adaptive_analysis_forces_sqlite_lookup_but_generic_generation_does_not(monkeypatch):
+def test_analysis_retrieves_context_but_generic_generation_requires_fact_target(monkeypatch):
     calls = []
 
     def fake_context(query, **kwargs):
@@ -37,22 +36,20 @@ def test_adaptive_analysis_forces_sqlite_lookup_but_generic_generation_does_not(
         return "# retrieved"
 
     monkeypatch.setattr(knowledge_retriever, "build_knowledge_context", fake_context)
-    with context_policy_scope("adaptive"):
-        result = api._build_knowledge_context(
-            "普通三工位顺序控制",
-            plc_model="FX3U",
-            task_type="analysis",
-        )
+    result = api._build_knowledge_context(
+        "普通三工位顺序控制",
+        plc_model="FX3U",
+        task_type="analysis",
+    )
     assert "# retrieved" in result
     assert calls and calls[-1][1]["task_type"] == "analysis"
 
     calls.clear()
-    with context_policy_scope("adaptive"):
-        result = api._build_knowledge_context(
-            "普通三工位顺序控制",
-            plc_model="FX3U",
-            task_type="generate",
-        )
+    result = api._build_knowledge_context(
+        "普通三工位顺序控制",
+        plc_model="FX3U",
+        task_type="generate",
+    )
     assert result == ""
     assert calls == []
 
@@ -70,14 +67,13 @@ def test_workflow_router_marks_analysis_without_embedding_architecture_catalog()
 
 def test_bundled_design_knowledge_is_injected_through_production_analysis_path():
     query = "FX3U 三个工位依次执行，包含多阶段顺序和延时，应该如何组织控制架构"
-    with context_policy_scope("adaptive"):
-        context = api._build_knowledge_context(
-            query,
-            plc_model="FX3U",
-            task_type="analysis",
-            include_design=True,
-            design_query=query,
-        )
+    context = api._build_knowledge_context(
+        query,
+        plc_model="FX3U",
+        task_type="analysis",
+        include_design=True,
+        design_query=query,
+    )
     assert "Curated PLC Control Architecture Design Knowledge" in context
     assert "CONTROL ARCHITECTURE:" in context
     assert "Retrieved-knowledge precedence" not in context
@@ -214,8 +210,7 @@ def test_retrieval_exception_is_visible_in_receipt_and_operator_export_without_r
         raise ModuleNotFoundError("PRIVATE requirement and secret must not leak", name="haystack")
     monkeypatch.setattr(knowledge_retriever, "build_knowledge_context", unavailable)
     with diagnostics.diagnostic_scope(tmp_path, "job_retrieval"):
-        with context_policy_scope("legacy"):
-            context = api._build_knowledge_context("ZRN", plc_model="FX3U", task_type="analysis")
+        context = api._build_knowledge_context("ZRN", plc_model="FX3U", task_type="analysis")
     assert not context
     manifest = context_manifest(context)
     assert manifest["status"] == "unavailable" and manifest["reason"] == "retrieval_failed"
@@ -246,10 +241,9 @@ def test_knowledge_runtime_health_is_nonblocking_and_reports_same_dependency(mon
 
 def test_bundled_motion_facts_use_structured_direct_manual_evidence():
     from knowledge.evidence import KnowledgeQuery
-    with context_policy_scope("legacy"):
-        context = api._build_knowledge_context(KnowledgeQuery(
-            "ZRN DRVA M8029 operands completion", precompiled=True,
-            metadata={"instruction_fact_mode":"targeted"}), plc_model="FX3U", task_type="generate")
+    context = api._build_knowledge_context(KnowledgeQuery(
+        "ZRN DRVA M8029 operands completion", precompiled=True,
+        metadata={"instruction_fact_mode":"targeted"}), plc_model="FX3U", task_type="generate")
     assert context and context.manifest["records"], context.manifest
     assert all(row.get("manual_type") != "debug_cases" for row in context.manifest["records"])
     assert "ZRN" in context and "DRVA" in context and "M8029" in context

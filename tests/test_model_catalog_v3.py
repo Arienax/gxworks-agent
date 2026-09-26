@@ -168,3 +168,41 @@ def test_profile_normalization_does_not_freeze_runtime_observations_past_ttl():
     normalized=normalize_contract(c)
     assert normalized['parameters']['temperature']['evidence']=={'accepted_values':[1]}
     assert c['parameters']['temperature']['evidence']['observations']
+
+
+
+def test_fresh_builtin_profiles_materialize_entirely_from_catalog():
+    from storage.config import DEFAULT_MODEL_PROFILES, _normalize_profile
+    from model_runtime.runtime_profile import materialize_runtime_profile
+
+    retired = {
+        "capabilities", "parameterSupport", "generationDefaults", "requestOverrides"
+    }
+    runtimes = {}
+    for raw in DEFAULT_MODEL_PROFILES:
+        assert not retired.intersection(raw)
+        profile = _normalize_profile(raw)
+        resolved = resolve_capabilities(profile)
+        assert resolved["matched"] is True
+        runtimes[profile["id"]] = materialize_runtime_profile(
+            profile, api_key=""
+        )
+
+    assert runtimes["deepseek-default"].contract.capabilities[
+        "thinking_required"
+    ].status == "supported"
+    assert runtimes["deepseek-default"].contract.capabilities[
+        "disable_tool_choice_with_thinking"
+    ].status == "supported"
+    assert runtimes["deepseek-v4-flash-vision-exp"].contract.capabilities[
+        "vision"
+    ].status == "supported"
+
+    glm53 = runtimes["zhipu-glm-5.3"]
+    glm53_flash = runtimes["zhipu-glm-5.3-flash"]
+    glm52 = runtimes["zhipu-glm-5.2"]
+    assert glm53.contract.capabilities["thinking_required"].status == "supported"
+    assert glm53.contract.capabilities["tool_stream"].status == "supported"
+    assert glm53_flash.contract.capabilities["vision"].status == "supported"
+    assert "thinking_required" not in glm52.contract.capabilities
+    assert glm52.contract.capabilities["tool_stream"].status == "supported"

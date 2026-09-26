@@ -267,7 +267,14 @@ def prepare_ladder_candidate(
             "status": "not_applied",
             "reason": "non_confirmed_agent_origin",
             "checks": [],
+            "violations": [],
         }
+
+    semantic_status = semantic_validation.get("status")
+    if semantic_status == "violated":
+        messages.append(tr('候选程序已保留；已确认语义检查发现不一致，未触发额外模型调用'))
+    elif semantic_status == "unresolved":
+        messages.append(tr('候选程序已保留；部分已确认语义无法由当前本地检查完整覆盖'))
 
     semantics = []
     if isinstance(confirmed_spec, dict) and isinstance(confirmed_spec.get("execution_semantics"), list):

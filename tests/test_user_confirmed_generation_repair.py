@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from application.generation import GenerationDependencies, GenerationRequest, GenerationWorkflow
 from application.workbench import WorkbenchService
 from model_runtime.provider import TextDelta
-from test_web_api import ORIGIN, _app, _ladder, _login, offline
+from test_web_api import ORIGIN, _app, _ladder, _login, offline, offline_runtime_profile
 
 
 def test_incremental_prompt_keeps_only_partial_edit_hint(tmp_path):
@@ -39,7 +39,7 @@ class DeterministicDmovTypoProvider:
 
     def __init__(self):
         self.requests = []
-        self.profile = {"capabilities": {}}
+        self.profile = offline_runtime_profile()
 
     def stream(self, request):
         self.requests.append(request)
@@ -56,7 +56,7 @@ def test_user_confirmed_deterministic_field_repair_uses_no_second_model_call(off
 
     def factory():
         factory_calls.append(1)
-        return provider, {"model": "offline"}
+        return provider, provider.profile
 
     service = WorkbenchService(
         tmp_path / "workspace", tmp_path / "state", model_factory=factory,
@@ -103,7 +103,6 @@ def test_user_confirmed_deterministic_field_repair_uses_no_second_model_call(off
         assert repair_snapshot["repair_plan"]["target"]["path"] == "/rungs/0/branches/0/outputs/0/opcode"
         assert repair_snapshot["repair_plan"]["target"]["deterministic_value"] == "DMOV"
         assert repair_snapshot["allowed_rung_ids"] == []
-        assert repair_snapshot["context_policy"]["name"] == "minimal"
         assert service.projects.project(project)["version_count"] == 2
 
         preview = client.get(f"/api/jobs/{repair_job}/preview")
@@ -114,7 +113,7 @@ def test_user_confirmed_deterministic_field_repair_uses_no_second_model_call(off
 class ModifierTypoProvider:
     def __init__(self):
         self.requests = []
-        self.profile = {"capabilities": {}}
+        self.profile = offline_runtime_profile()
 
     def stream(self, request):
         self.requests.append(request)
@@ -131,7 +130,7 @@ def test_user_confirmed_unique_opcode_repair_is_model_free(offline, tmp_path):
 
     def factory():
         factory_calls.append(1)
-        return provider, {"model": "offline"}
+        return provider, provider.profile
 
     service = WorkbenchService(
         tmp_path / "workspace", tmp_path / "state", model_factory=factory,
@@ -171,7 +170,7 @@ def test_user_confirmed_unique_opcode_repair_is_model_free(offline, tmp_path):
 class FormatRewriteProvider:
     def __init__(self):
         self.requests = []
-        self.profile = {"capabilities": {}}
+        self.profile = offline_runtime_profile()
 
     def stream(self, request):
         self.requests.append(request)

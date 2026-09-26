@@ -18,7 +18,7 @@ from application.workspace import WorkspaceWriterLock, ConflictError, atomic_jso
 from agent_runtime.messages import ToolCall
 from agent_runtime.runtime import public_tool_result_data
 from plc.change_scope import ChangeScopeError
-from shared.context_policy import ContextAudit, context_policy_scope, resolve_context_policy
+from shared.context_audit import ContextAudit, context_audit_scope
 
 
 class WorkbenchService:
@@ -597,9 +597,6 @@ class WorkbenchService:
             provider, model = self.model_factory() if requires_model else (None, {})
             snapshot["model"] = model
             snapshot["approval_consent"] = self.approval.read()
-            repair_context = "minimal" if command.get("repair_mode") or command.get("format_repair") else None
-            policy_name = repair_context if repair_context else (None if requires_model else "legacy")
-            snapshot["context_policy"] = resolve_context_policy(policy_name).snapshot()
             if command["kind"] == "debug_plan":
                 snapshot["saved_run"] = self.projects.simulator_run(project_id, context.version_id, command.get("run_id"))
 
@@ -618,8 +615,7 @@ class WorkbenchService:
             model_context = ModelJobContext(ctx)
             model_progress = ModelProgressReporter(model_context)
             context_audit = ContextAudit(lambda report: ctx.emit("context_audit", report))
-            with language_context(snapshot["response_language"]), context_policy_scope(
-                    snapshot.get("context_policy", "legacy"), audit=context_audit), provider_scope(
+            with language_context(snapshot["response_language"]), context_audit_scope(context_audit), provider_scope(
                     provider, model_name=model.get("model")), response_policy_scope(
                     enforce_language=False, on_progress=model_progress, on_preview=model_progress.preview):
                 try:

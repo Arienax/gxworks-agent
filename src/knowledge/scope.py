@@ -102,12 +102,12 @@ def _eligible_partitions(partitions, lanes):
     return tuple((r["manual_type"], r["chunk_type"], r["manual_id"]) for r in filter_records(records, lanes))
 
 
-def source_sql(connection, schema, lanes):
-    """Push Haystack-selected source partitions into SQLite, before top-k.
+def source_sql(connection, schema, lanes=None, *, exclude_chunk_types=()):
+    """Push metadata scope into SQLite before candidate limits and ranking.
 
-    This is not a second filter language: MetadataRouter evaluates every
-    distinct source partition. SQL is only an OR of those exact metadata pairs.
-    Older indexes without source columns remain unclassified, not 'official'.
+    MetadataRouter still owns source-lane selection. exclude_chunk_types is a
+    runtime pre-filter over the same indexed metadata when an exact structured
+    lookup already owns that candidate type.
     """
     from knowledge.core import _quote_identifier
     table = schema["chunks"]
@@ -116,21 +116,55 @@ def source_sql(connection, schema, lanes):
     expressions = [f"COALESCE({x}, '')" for x in expressions]
     partitions = tuple(tuple(row) for row in connection.execute(
         f"SELECT DISTINCT {', '.join(expressions)} FROM {_quote_identifier(table['name'])}").fetchall())
-    accepted = _eligible_partitions(partitions, tuple(sorted(lanes)))
+    accepted = (partitions if lanes is None
+                else _eligible_partitions(partitions, tuple(sorted(lanes))))
+    excluded = {str(value).strip().casefold() for value in exclude_chunk_types or () if str(value).strip()}
+    if excluded:
+        accepted = tuple(pair for pair in accepted if str(pair[1]).casefold() not in excluded)
     if not accepted:
         return "0", []
     predicate = " OR ".join("(" + " AND ".join(f"{expression}=?" for expression in expressions) + ")" for _ in accepted)
     return "(" + predicate + ")", [value for pair in accepted for value in pair]
 
 
-def source_subquery(connection, schema, lanes, *, rowid=False):
+def source_subquery(
+    connection, schema, lanes=None, *, rowid=False,
+    exclude_chunk_types=(), exclude_structured_kinds=(),
+):
     from knowledge.core import _first_column, _CHUNK_ID_COLUMNS, _quote_identifier
     table = schema["chunks"]
-    identifier = None if rowid else _first_column(table["columns"], _CHUNK_ID_COLUMNS)
+    chunk_id_column = _first_column(table["columns"], _CHUNK_ID_COLUMNS)
+    identifier = None if rowid else chunk_id_column
     identifier = _quote_identifier(identifier) if identifier else "rowid"
-    predicate, values = source_sql(connection, schema, lanes)
-    return f"SELECT {identifier} FROM {_quote_identifier(table['name'])} WHERE {predicate}", values
-
+    owner_identifier = (
+        _quote_identifier(chunk_id_column) if chunk_id_column else "rowid"
+    )
+    predicate, values = source_sql(
+        connection, schema, lanes, exclude_chunk_types=exclude_chunk_types,
+    )
+    owner_tables = {
+        "device": "device_records",
+        "error": "error_records",
+    }
+    structured_clauses = []
+    for raw_kind in exclude_structured_kinds or ():
+        kind = str(raw_kind or "").strip().casefold()
+        owner_name = owner_tables.get(kind)
+        owner = schema.get(owner_name) if owner_name else None
+        if not owner or "chunk_id" not in owner["columns"]:
+            continue
+        structured_clauses.append(
+            f"{owner_identifier} NOT IN ("
+            f"SELECT {_quote_identifier('chunk_id')} "
+            f"FROM {_quote_identifier(owner['name'])} "
+            f"WHERE {_quote_identifier('chunk_id')} IS NOT NULL)"
+        )
+    if structured_clauses:
+        predicate = "(" + predicate + ") AND " + " AND ".join(structured_clauses)
+    return (
+        f"SELECT {identifier} FROM {_quote_identifier(table['name'])} WHERE {predicate}",
+        values,
+    )
 
 def runtime_status():
     """Probe the installed router and bundled index in THIS interpreter, offline."""
