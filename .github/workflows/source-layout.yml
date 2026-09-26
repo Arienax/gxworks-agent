@@ -3,6 +3,7 @@ name: Source Layout Validation
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
       - 'src/**'
       - 'tests/**'
@@ -48,7 +49,7 @@ jobs:
       - name: Install headless test dependencies
         run: python -m pip install -r requirements.txt
       - name: Fast PR validation
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'full-validation')
         shell: bash
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -83,7 +84,7 @@ jobs:
           fi
           python scripts/mcp_smoke.py
       - name: Compile and run the complete suite
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-validation')
         shell: bash
         run: |
           set -euo pipefail
@@ -91,10 +92,32 @@ jobs:
           python -m compileall -q src
           python -m pytest -q --junitxml=validation/candidate.xml 2>&1 | tee validation/candidate.log
       - name: MCP real stdio smoke without credentials or model calls
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-validation')
         run: python scripts/mcp_smoke.py
+      - name: Preserve tracked source for failed full validation
+        if: failure() && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-validation'))
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import subprocess
+          import zipfile
+          Path('validation').mkdir(exist_ok=True)
+          # Include only tracked files, including checked-out LFS resources.
+          # Never archive user settings, the Git directory, or generated traces.
+          names = subprocess.check_output(['git', 'ls-files', '-z']).split(b'\0')
+          with zipfile.ZipFile('validation/tested-source.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
+              for name in names:
+                  if name:
+                      path = Path(os.fsdecode(name))
+                      if path.is_file() and not path.is_symlink():
+                          archive.write(path, path.as_posix())
+          PY
+          python -m pip freeze > validation/requirements.lock
+          python -m pip download --dest validation/wheels -r validation/requirements.lock
       - uses: actions/upload-artifact@v4
-        if: always() && github.event_name != 'pull_request'
+        if: always() && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-validation'))
         with:
           name: source-layout-full-suite-results
           path: validation
@@ -102,13 +125,14 @@ jobs:
 
   web:
     name: Web contract, browser tests and build
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-validation')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          lfs: true
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -121,7 +145,7 @@ jobs:
           cache-dependency-path: requirements/web.txt
       - name: Install dependencies
         run: |
-          python -m pip install -r requirements/web.txt playwright==1.55.0
+          python -m pip install -r requirements/web.txt pytest==9.1.1 playwright==1.55.0
           npm ci --prefix web
       - name: Verify schema, frontend and browser delivery
         run: |
@@ -144,7 +168,7 @@ jobs:
 
   web-package:
     name: Windows Web and MCP package smoke
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-validation')
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
@@ -190,7 +214,7 @@ jobs:
 
   context-replay:
     name: Typed context and offline promptfoo replay
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-validation')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:

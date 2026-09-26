@@ -27,7 +27,7 @@ def test_english_preposition_does_not_receive_exact_instruction_priority(query):
 @pytest.mark.parametrize("query", ["FOR", "for", "FX3U FOR NEXT loop instruction",
     "FX3U for instruction K10", "FX3U for/next loop", "FX3U `for` instruction", "FX3U for循环"])
 def test_explicit_loop_instruction_remains_discoverable(query):
-    results = retriever.retrieve_knowledge(query, top_k=4, char_budget=6500)
+    results = retriever.retrieve_fact_aware_knowledge(query, top_k=4, char_budget=6500)
     assert results
     assert results[0].get("instruction_opcode") in {"FOR", "NEXT"}
     assert results[0].get("manual_type") != "third_party_skill"
@@ -36,7 +36,7 @@ def test_explicit_loop_instruction_remains_discoverable(query):
 @pytest.mark.parametrize("query", [PROSE_QUERIES[0], PROSE_QUERIES[2], "FX3U T20 preset 2.5 seconds",
     "FX3U 定时器 T7 的 K 值和时间基准"])
 def test_timer_preset_question_includes_model_range_evidence_within_tool_budget(query):
-    results = retriever.retrieve_knowledge(query, plc_model="FX3U", top_k=4, char_budget=6500)
+    results = retriever.retrieve_fact_aware_knowledge(query, plc_model="FX3U", task_type="generate", top_k=4, char_budget=6500)
     assert results
     first = results[0]
     assert "Numbers of timers" in first["section"]
@@ -71,13 +71,12 @@ def timer_range_index(tmp_path, monkeypatch):
     with sqlite3.connect(path) as db:
         db.execute("CREATE TABLE chunks (id INTEGER PRIMARY KEY, section TEXT, text TEXT, manual_number TEXT, manual_type TEXT, plc_models TEXT, task_types TEXT)")
         db.executemany("INSERT INTO chunks VALUES (?,?,?,?,?,?,?)", rows)
-    monkeypatch.setattr(retriever, "_index_path", lambda: path)
+    monkeypatch.setattr(core, "_index_path", lambda: path)
     retriever._close_thread_connection()
     retriever._retrieve_cached.cache_clear()
     yield
     retriever._close_thread_connection()
     retriever._retrieve_cached.cache_clear()
-    retriever._sync_core_hooks()
 
 
 def test_range_recall_requires_evidence_body_and_preserves_model_task_budget(timer_range_index):
@@ -88,3 +87,21 @@ def test_range_recall_requires_evidence_body_and_preserves_model_task_budget(tim
     assert retriever.retrieve_knowledge(query, task_type="debug") == []
     assert retriever.retrieve_knowledge(query, char_budget=1) == []
     assert retriever.retrieve_knowledge("FX3U timer reset") == []
+
+
+def test_explicit_property_lookup_uses_scope_and_body_before_broad_recall(timer_range_index):
+    results = retriever.retrieve_fact_aware_knowledge("FX3U timer T20 K units", task_type="generate", char_budget=6500)
+    assert results and results[0]["manual_number"] == "OFFICIAL"
+    assert results[0]["device_lookup_basis"] == "official_property_section"
+    assert results[0]["fact_dimensions"] == ["range", "time_base"]
+    assert not retriever.retrieve_fact_aware_knowledge("FX3U timer T9999 K units", task_type="debug")
+    assert not retriever.retrieve_fact_aware_knowledge("FX3U timer T20 K units", task_type="generate", char_budget=1)
+
+
+def test_device_definition_lookup_does_not_prefer_incidental_instruction_mentions():
+    from knowledge.structured_facts import resolve_device_records
+
+    rows = resolve_device_records(["M8013"], plc_model="FX3U", task_type="generate")
+    assert rows and all(row["device_lookup_basis"] == "official_definition_heading" for row in rows)
+    assert all("Internal clock" in row["section"] for row in rows)
+    assert any("M8013" in row["text"] for row in rows)

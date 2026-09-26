@@ -134,16 +134,11 @@ def _load_plc_models():
 
 
 def _build_model_context(model: str, confirmed_context=None, compact=False) -> str:
-    """Build the generation-relevant profile for one PLC model.
+    """Build the authoritative target PLC profile independently of retrieval.
 
-    When retrieved manual evidence is available, the large generic M/D lookup
-    tables are omitted.  If retrieval is unavailable the complete legacy
-    profile is retained, so the offline index is an enhancement rather than a
-    new point of failure.
+    The compact argument is retained for caller compatibility, but no longer
+    switches profile contents or asserts that manual evidence was delivered.
     """
-    # Runtime profile delivery is canonical and independent of prompt/RAG modes.
-    # Retrieval must never toggle the authoritative target profile.
-    compact = False
     models = _load_plc_models()
     m = models.get(model, models.get("FX3U", {}))
     if not m:
@@ -162,11 +157,8 @@ def _build_model_context(model: str, confirmed_context=None, compact=False) -> s
         "high_speed_counter": m.get("hsc", {}),
         "notes": m.get("notes", ""),
     }
-    if compact:
-        profile["manual_evidence"] = "retrieved for the current request"
-    else:
-        profile["special_m"] = m.get("special_m", {})
-        profile["special_d"] = m.get("special_d", {})
+    profile["special_m"] = m.get("special_m", {})
+    profile["special_d"] = m.get("special_d", {})
     confirmed_hardware = None
     confirmed_hardware_context = None
     if isinstance(confirmed_context, dict):

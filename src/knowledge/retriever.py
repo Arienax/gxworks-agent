@@ -14,24 +14,6 @@ from shared.context_audit import audit_retrieval_fragment
 from knowledge.gxworks2_concepts import CONTEXT_RE as _GXW2_CONTEXT_RE, query_skill_concepts
 
 import knowledge.core as _core
-# Compatibility aliases used by the benchmark harness and existing tests.
-# Several tests monkeypatch these helpers directly on knowledge_retriever, so
-# the facade mirrors the current facade values back into the core per request.
-_index_path = _core._index_path
-_retrieve_cached = _core._retrieve_cached
-_close_thread_connection = _core._close_thread_connection
-_retrieve_uncached = _core._retrieve_uncached
-_load_meta = _core._load_meta
-_entity_references = _core._entity_references
-_fts_references = _core._fts_references
-
-_SYNCED_CORE_HOOKS = (
-    "_index_path",
-    "_retrieve_uncached",
-    "_load_meta",
-    "_entity_references",
-    "_fts_references",
-)
 
 
 def _query_has_gxw2_skill_concept(query, task_type="generate"):
@@ -59,12 +41,6 @@ def _query_has_plc_context(query):
     # domain-specific. Weak concepts only return True above when explicit
     # GX Works2/ST context is present.
     return _query_has_gxw2_skill_concept(query)
-
-
-def _sync_core_hooks():
-    for name in _SYNCED_CORE_HOOKS:
-        if name in globals():
-            setattr(_core, name, globals()[name])
 
 
 def _fact_identity(kind, value):
@@ -157,7 +133,6 @@ def retrieve_knowledge(
 ):
     """Return ranked knowledge with scoped gxw2-skill supporting reranking."""
 
-    _sync_core_hooks()
     try:
         normalized_top_k = max(0, min(_core._MAX_TOP_K, int(top_k)))
         normalized_budget = max(0, int(char_budget))
@@ -231,7 +206,6 @@ def retrieve_design_knowledge(
     char_budget=2400,
 ):
     """Return analysis-only curated design evidence from the SQLite index."""
-    _sync_core_hooks()
     return _core._retrieve_design_knowledge(
         query,
         plc_model=plc_model,
@@ -295,6 +269,7 @@ def retrieve_fact_aware_knowledge(
             targets.get("devices") or (),
             plc_model=plc_model,
             task_type=task,
+            query=query,
         ),
         *resolve_error_records(
             targets.get("errors") or (),
@@ -460,9 +435,9 @@ def build_knowledge_context(
             direct_results.extend(resolve_instruction_records(
                 instruction_targets, plc_model=plc_model, task_type=task,
             ))
-    if device_targets:
+    if plan["facts"]:
         direct_results.extend(resolve_device_records(
-            device_targets, plc_model=plc_model, task_type=task,
+            device_targets, plc_model=plc_model, task_type=task, query=query,
         ))
     if error_targets:
         direct_results.extend(resolve_error_records(

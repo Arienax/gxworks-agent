@@ -3,7 +3,7 @@ import re
 import sqlite3
 from pathlib import Path
 
-import knowledge.core as core
+from knowledge.retriever import retrieve_fact_aware_knowledge
 from knowledge.structured_facts import resolve_instruction_records
 from shared.paths import resource_path
 
@@ -88,7 +88,7 @@ def test_structured_instruction_retrieval_surfaces_applicability_without_prompt_
     assert "applicable=" in text
     assert "KnM" in text
 
-    reset_results = core.retrieve_knowledge(
+    reset_results = retrieve_fact_aware_knowledge(
         "FX3U 批量清零连续 M 软元件区间应该使用什么指令？",
         plc_model="FX3U",
         task_type="generate",

@@ -30,8 +30,6 @@ def brief(result):
 
 
 def trace_case(case, database, candidate_budget=sys.maxsize):
-    facade._index_path = lambda: database
-    facade._sync_core_hooks()
     core._retrieve_cached.cache_clear()
     core._close_thread_connection()
     captured = {}
@@ -49,18 +47,20 @@ def trace_case(case, database, candidate_budget=sys.maxsize):
         captured["scored"] = [dict(item) for item in candidates]
         return select(candidates, top_k, char_budget)
 
-    with ExitStack() as stack:
-        for name in ("_entity_references", "_fts_references", "_dense_references"):
-            stack.enter_context(patch.object(core, name, capture(name, getattr(core, name))))
-        stack.enter_context(patch.object(core, "_select_with_budget", capture_candidates))
-        before = core._retrieve_knowledge(
+    with patch.object(core, "_index_path", lambda: database):
+        with ExitStack() as stack:
+            for name in ("_entity_references", "_fts_references", "_dense_references"):
+                stack.enter_context(patch.object(core, name, capture(name, getattr(core, name))))
+            stack.enter_context(patch.object(core, "_select_with_budget", capture_candidates))
+            before = core._retrieve_knowledge(
+                case["query"], plc_model=case.get("plc_model", "FX3U"),
+                task_type=case.get("task_type", "analysis"), top_k=40, char_budget=candidate_budget,
+            )
+        # The facade call must not overwrite the captured pre-budget candidates.
+        actual = facade.retrieve_knowledge(
             case["query"], plc_model=case.get("plc_model", "FX3U"),
-            task_type=case.get("task_type", "analysis"), top_k=40, char_budget=candidate_budget,
+            task_type=case.get("task_type", "analysis"), top_k=10, char_budget=50000,
         )
-    actual = facade.retrieve_knowledge(
-        case["query"], plc_model=case.get("plc_model", "FX3U"),
-        task_type=case.get("task_type", "analysis"), top_k=10, char_budget=50000,
-    )
     with sqlite3.connect(database.as_uri() + "?mode=ro", uri=True) as connection:
         connection.row_factory = sqlite3.Row
         chunks = {str(row["id"]): dict(row) for row in connection.execute("SELECT * FROM chunks")}

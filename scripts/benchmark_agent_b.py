@@ -97,7 +97,7 @@ def run_case(case, arm, *, provider, model=None, effort=None, evaluator=None):
     from knowledge.core import _format_result_block
     from plc.ir import build_plc_ir, validate_plc_ir
     from plc.validation import validate_ladder_candidate_structure
-    from plc.specification.checks import check_direct_self_hold
+    from plc.specification.semantic_validation import validate_confirmed_semantics
 
     original_builder = agent._build_knowledge_context
     observed = ObservedProvider(provider)
@@ -150,8 +150,12 @@ def run_case(case, arm, *, provider, model=None, effort=None, evaluator=None):
         validate_ladder_candidate_structure(result["ladder"], plc_model=plc_model)
         validate_plc_ir(build_plc_ir(result["ladder"], plc_model=plc_model), validate_ladder=False)
         record["structural_valid"] = True
-        record["behavior"] = (evaluator(case, result) if evaluator else
-            check_direct_self_hold(result["ladder"], project_confirmed_specification(case["confirmed_spec"])))
+        record["semantic_validation"] = validate_confirmed_semantics(
+            result["ladder"], project_confirmed_specification(case["confirmed_spec"]), plc_model,
+        )
+        record["behavior"] = evaluator(case, result) if evaluator else {
+            "status": "not_covered", "reason": "no_behavior_evaluator",
+        }
         if not isinstance(record["behavior"], dict) or record["behavior"].get("status") not in {"verified", "failed", "not_covered"}:
             raise ValueError("Evaluator must report verified, failed or not_covered")
     except Exception as error:

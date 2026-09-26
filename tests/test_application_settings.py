@@ -301,7 +301,19 @@ def test_browser_demo_uses_real_settings_with_only_temporary_io(tmp_path, monkey
     assert "only-in-demo-memory" not in (tmp_path / "demo-config.json").read_text(encoding="utf-8")
 
 
-def test_browser_demo_main_analysis_confirm_generation_autosaves_with_private_audit(monkeypatch):
+@pytest.mark.parametrize("index_state", ["bundled", "missing", "lfs_pointer", "corrupt"])
+def test_browser_demo_main_analysis_confirm_generation_autosaves_with_private_audit(monkeypatch, tmp_path, index_state):
+    # Generation must remain usable when optional manual resources are absent
+    # or a source checkout still contains Git LFS pointers.
+    if index_state != "bundled":
+        import knowledge.core as knowledge_core
+        path = tmp_path / "manual.sqlite"
+        if index_state == "lfs_pointer":
+            path.write_text("version https://git-lfs.github.com/spec/v1\noid sha256:" + "0" * 64 + "\nsize 123456\n")
+        elif index_state == "corrupt":
+            path.write_bytes(b"SQLite format 3\0" + b"broken database page" * 32)
+        monkeypatch.setattr(knowledge_core, "_index_path", lambda: path)
+
     pytest.importorskip("fastapi")
     pytest.importorskip("httpx")
     import model_runtime.provider as model_provider

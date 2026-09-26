@@ -6,6 +6,7 @@ import time
 
 import application.model_api as api
 import knowledge.dense as dense_retriever
+import knowledge.core as knowledge_core
 import knowledge.retriever as knowledge_retriever
 import pytest
 from knowledge.retriever import build_knowledge_context, retrieve_fact_aware_knowledge, retrieve_knowledge
@@ -160,7 +161,10 @@ def test_plsy_and_completion_flag_retrieve_detailed_manual_pages_first():
     assert "PLSY" in results[0]["section"].upper()
     assert 377 <= int(results[0]["pdf_page"]) <= 381
     assert any("M8029" in "".join(item["text"].split()) for item in results)
-    assert all(item["source"] and item["page"] for item in results)
+    assert all(item["source"] for item in results)
+    official = [item for item in results if item.get("structured_lookup")]
+    assert official and all(item["page"] for item in official)
+    assert all(item["manual_number"] != "LOCAL-INSTRUCTION-FACT" for item in official)
 
 
 def test_plsy_operands_tables_and_ladder_fidelity_are_preserved():
@@ -224,7 +228,7 @@ def test_structured_errors_exclude_glyph_and_device_false_codes():
             "SELECT COUNT(*) FROM error_records WHERE error_code='6105'"
         ).fetchone()[0] >= 1
 
-    results = retrieve_knowledge(
+    results = retrieve_fact_aware_knowledge(
         "FX3U 错误码 6105 原因和处理方法",
         plc_model="FX3U",
         task_type="debug",
@@ -327,8 +331,11 @@ def test_timer_semantics_queries_retrieve_timer_manual_and_debug_cases():
     )
 
     assert results
-    assert any("Internal clock [M8011 to M8014]" in item["section"] for item in results)
     assert any("CASE_ID: timer_m8000_not_oscillator" in item["text"] for item in results)
+    # Troubleshooting recall and a cited device definition have separate owners.
+    clock = retrieve_fact_aware_knowledge("FX3U M8013 clock", task_type="debug", char_budget=12000)
+    assert any("Internal clock [M8011 to M8014]" in item["section"] for item in clock)
+    assert all(item["structured_lookup"] for item in clock if "Internal clock" in item["section"])
 
 
 def test_timer_time_base_query_prefers_ordinary_timer_device_section():
@@ -349,7 +356,7 @@ def test_timer_time_base_query_prefers_ordinary_timer_device_section():
 
 
 def test_m8013_clock_query_prefers_internal_clock_section():
-    results = retrieve_knowledge(
+    results = retrieve_fact_aware_knowledge(
         "FX3U M8013 clock relay 1 second flashing",
         plc_model="FX3U",
         task_type="generate",
@@ -362,7 +369,7 @@ def test_m8013_clock_query_prefers_internal_clock_section():
 
 
 def test_exact_opcode_prefers_its_instruction_section_over_reference_tables():
-    results = retrieve_knowledge(
+    results = retrieve_fact_aware_knowledge(
         "RS2 串行通信无协议发送接收",
         plc_model="FX3U",
         task_type="debug",
@@ -389,7 +396,7 @@ def test_fx3u_manual_is_not_injected_into_fx5u_requests():
 
 
 def test_context_budget_keeps_complete_database_chunks():
-    budget = 2600
+    budget = 16000
     context = build_knowledge_context(
         "PLSY M8029",
         plc_model="FX3U",
@@ -428,7 +435,7 @@ def test_warm_retrieval_cache_is_low_latency():
 
 
 def test_exact_entity_candidates_are_fair_across_multiple_query_terms():
-    results = retrieve_knowledge(
+    results = retrieve_fact_aware_knowledge(
         "X001 X000",
         plc_model="FX3U",
         task_type="generate",
@@ -436,9 +443,10 @@ def test_exact_entity_candidates_are_fair_across_multiple_query_terms():
         char_budget=12000,
     )
 
-    matched = [item.get("matched_entity") for item in results]
+    matched = [item.get("structured_fact_requested_target") for item in results]
     assert matched[0] == "X001"
     assert {"X001", "X000"}.issubset(set(matched))
+    assert {"X1", "X0"}.issubset({item.get("structured_fact_target") for item in results})
 
 
 @pytest.mark.parametrize(
@@ -475,7 +483,7 @@ def test_transient_retrieval_failure_is_retried_instead_of_cached(monkeypatch):
         return []
 
     knowledge_retriever._retrieve_cached.cache_clear()
-    monkeypatch.setattr(knowledge_retriever, "_retrieve_uncached", flaky_retrieve)
+    monkeypatch.setattr(knowledge_core, "_retrieve_uncached", flaky_retrieve)
     try:
         assert retrieve_knowledge("FX3U PLSY transient-test") == []
         assert retrieve_knowledge("FX3U PLSY transient-test") == []
@@ -489,7 +497,7 @@ def test_transient_retrieval_failure_is_retried_instead_of_cached(monkeypatch):
     ["_load_meta", "_entity_references", "_fts_references"],
 )
 def test_transient_subquery_failure_is_not_cached(monkeypatch, helper_name):
-    original = getattr(knowledge_retriever, helper_name)
+    original = getattr(knowledge_core, helper_name)
     calls = []
 
     def flaky_helper(*args, **kwargs):
@@ -499,7 +507,7 @@ def test_transient_subquery_failure_is_not_cached(monkeypatch, helper_name):
         return original(*args, **kwargs)
 
     knowledge_retriever._retrieve_cached.cache_clear()
-    monkeypatch.setattr(knowledge_retriever, helper_name, flaky_helper)
+    monkeypatch.setattr(knowledge_core, helper_name, flaky_helper)
     query = f"FX3U PLSY retry-{helper_name}"
     try:
         assert retrieve_knowledge(query) == []
@@ -544,14 +552,14 @@ def test_api_query_compaction_uses_values_not_json_field_names():
     assert "value" not in query
 
 
-def test_model_profile_keeps_full_fallback_when_retrieval_is_unavailable():
+def test_model_profile_is_authoritative_independently_of_retrieval_compaction():
     full = api._build_model_context("FX3U", compact=False)
     compact = api._build_model_context("FX3U", compact=True)
 
     assert '"special_m"' in full
     assert '"special_d"' in full
-    assert '"special_m"' not in compact
-    assert '"manual_evidence"' in compact
+    assert compact == full
+    assert '"manual_evidence"' not in compact
 
 
 def test_model_profile_keeps_confirmed_analog_hardware_and_access_rules():

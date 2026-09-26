@@ -56,7 +56,9 @@ def test_current_contract_materializes_without_reinterpreting_v3_inherit():
     assert runtime.model == "tenant-alias"
     assert runtime.contract.parameters["budget"].type == "integer"
     assert runtime.settings.parameters["budget"] == {"mode": "inherit"}
-    assert runtime.defaults == {"budget": 1024, "extra_body": {"keep": True}}
+    assert runtime.defaults == {"extra_body": {"keep": True}}
+    effective = resolve_request(runtime, {}, model=runtime.model, api_key="key")
+    assert "budget" not in effective.options
     assert runtime.overrides == {}
     assert p == before
 
@@ -159,7 +161,7 @@ def test_legacy_catalog_owned_values_are_promoted_and_removed_from_option_layers
         "extra_body": {"thinking": {"clear_thinking": False}}
     }
     assert runtime.contract.capabilities["tools"].source == "catalog"
-    assert runtime.contract.capabilities["disable_tool_choice_with_thinking"].source == "legacy"
+    assert runtime.contract.capabilities["disable_tool_choice_with_thinking"].source == "catalog"
     assert p == before
 
 
