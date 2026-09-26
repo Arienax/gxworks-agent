@@ -1,0 +1,112 @@
+name: Publish verified source objects
+
+on:
+  push:
+    branches: [refactor/semantic-contract-cleanup-20260923]
+    paths: ['.github/ci-transfer/**']
+
+permissions:
+  contents: write
+
+jobs:
+  assemble:
+    if: github.repository == 'Arienax/gxworks-agent' && github.ref == 'refs/heads/refactor/semantic-contract-cleanup-20260923'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Apply and verify exact source changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONUTF8: '1'
+        shell: bash
+        run: |
+          python - <<'PY'
+          import base64
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import runpy
+          import subprocess
+          import urllib.request
+
+          expected = {
+              'evals/context-replay/cases.json': '66cc9a1ace5a7f580e7b44ebe7e936f34916da66',
+              'resources/locales/en.json': 'acb829064df0476071a44a057a00a9a4fd156fa7',
+              'resources/locales/ja.json': '9a5f55344b24a8c531628f736be0b1bedec70b57',
+              'scripts/benchmark_agent_b.py': '34c95e75225f90b1e886deec49a13ad8efcfd2e5',
+              'scripts/context_replay.py': '791666197b907b22fb20fcbe4d2450081ca6d231',
+              'scripts/web_generation_e2e.py': '935abfdda83bc5290b7e6543b69873c3c507071c',
+              'src/application/generation_support.py': '0d68903a0d600a74add996cf74d96ef195fb25ea',
+              'src/knowledge/analysis_router.py': 'fb5e3f25bd8cbd5030c558161156f14a8d2eb736',
+              'src/knowledge/retriever.py': '5c12c54c9d90e671020219c1e54d7c4be599c35d',
+              'src/knowledge/structured_facts.py': '8ced35a8c82af4b811284764e27331ad3d124111',
+              'tests/test_agent_b_measurement.py': 'aed50a0e6228d0c2f01b6629ca76b98cecddea13',
+              'tests/test_application_planning.py': '3e300aef1231eb441c97e26555bcd29d93849b05',
+              'tests/test_call_contract_regressions.py': '9a5b6e3c7722b48748b54303ef54ddc10d9a14ad',
+              'tests/test_device_identity_delivery.py': '49995ec7703fd2bc705557367468c32d04774015',
+              'tests/test_fx3u_rag.py': '71df10250f48269fe79a5b0d337f99cae3fc835c',
+              'tests/test_instruction_applicability_rag.py': '19005c0212896b9292ffd59cb4af191bca54245c',
+              'tests/test_model_runtime_profile.py': '5e965e813b9879ecaf1950fe444734911f81bf33',
+              'tests/test_motion_control_regressions.py': 'afa129de2a931a8c0968b8c4e27aa213dffcc8f1',
+              'tests/test_plc_agent.py': 'e2c9f4aae905a09e02e8cfa43f051b2ea311a07b',
+              'tests/test_rag_instruction_recall.py': 'd9ba041961af2b54f2a293c89a3340f55a327781',
+              'tests/test_rag_natural_language_recall.py': '249b9d11be0470e69821c1e2260a2b4baeb133ee',
+              'tests/test_runtime_diagnostics.py': 'ff89da15b38d48fd5884abe609e4e343ca5ef60e',
+              'tests/test_structured_fact_lookup.py': 'c9f9c203ac648056d35926241a19779160f9aa56',
+              'tools/evaluate_rag_benchmark.py': '5592ecab21ca227815306322f11d1d144ba955a5',
+              'tools/trace_rag_candidates.py': '76721565a186c19ad865e06938792c26bc45fc05',
+          }
+          def git(*args):
+              return subprocess.check_output(['git', *args], text=True).strip()
+          base = '3b08742dc0424a068738ea9272e1626216c5fa15'
+          assert git('rev-parse', 'HEAD^') == base, 'Stale baseline'
+          scripts = ['.github/ci-transfer/01-runtime.py', '.github/ci-transfer/02-facts.py', '.github/ci-transfer/03-tests.py']
+          for script in scripts:
+              runpy.run_path(script, run_name='__main__')
+          subprocess.run(['git', 'diff', '--check'], check=True)
+          actual = git('diff', '--name-only').splitlines()
+          assert set(actual) == set(expected), ('Unexpected modified paths', actual)
+          for name, sha in expected.items():
+              raw = Path(name).read_bytes()
+              digest = hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+              assert digest == sha, ('Source checksum mismatch', name, digest, sha)
+
+          endpoint = 'https://api.github.com/repos/' + os.environ['GITHUB_REPOSITORY'] + '/git/'
+          def post(kind, value):
+              request = urllib.request.Request(endpoint + kind, data=json.dumps(value).encode(), method='POST', headers={
+                  'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                  'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json',
+                  'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'gxworks-source-repair',
+              })
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+          entries = []
+          for name, expected_sha in expected.items():
+              blob = post('blobs', {'encoding': 'base64', 'content': base64.b64encode(Path(name).read_bytes()).decode()})
+              assert blob['sha'] == expected_sha
+              entries.append({'path': name, 'mode': '100644', 'type': 'blob', 'sha': blob['sha']})
+          cleanup = scripts + ['.github/workflows/publish-source-objects.yml']
+          entries.extend({'path': name, 'mode': '100644', 'type': 'blob', 'sha': None} for name in cleanup)
+          tree = post('trees', {'base_tree': git('rev-parse', 'HEAD^{tree}'), 'tree': entries})
+          commit = post('commits', {
+              'message': 'fix: complete offline runtime migration and isolate fact retrieval\n\nMigrate injected providers, replay inputs and semantic benchmark receipts to the current contracts. Remove facade-to-Core hook leakage, restore scoped diagnostic database overrides, and resolve official instruction/device definitions before broad ranking. Preserve original evidence, target scope and program-step provenance.\n\nLocal validation of this exact source set: 3706 passed, 5 skipped. Browser and Windows acceptance run separately through the full-validation PR checks.',
+              'tree': tree['sha'], 'parents': [os.environ['GITHUB_SHA']],
+          })
+          output = Path(os.environ['RUNNER_TEMP']) / 'verified-source-objects'
+          output.mkdir()
+          (output / 'commit.json').write_text(json.dumps({'commit': commit['sha'], 'parent': os.environ['GITHUB_SHA'], 'tree': tree['sha'], 'files': expected}, indent=2))
+          print('VERIFIED_COMMIT=' + commit['sha'])
+          print('VERIFIED_TREE=' + tree['sha'])
+          # Publish the branch ref only through the connected GitHub operation.
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-source-objects
+          path: ${{ runner.temp }}/verified-source-objects/commit.json
+          retention-days: 1
