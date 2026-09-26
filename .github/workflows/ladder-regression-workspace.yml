@@ -5,6 +5,9 @@ on:
     paths: [.github/workflows/ladder-regression-workspace.yml]
 permissions:
   contents: write
+concurrency:
+  group: ladder-restoration-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   validate:
     if: github.ref == 'refs/heads/fix/web-lifecycle-performance-20260926'
@@ -28,25 +31,30 @@ jobs:
           python - <<'PY'
           import base64, gzip, hashlib, json, os, subprocess, urllib.request
           from pathlib import Path
-          url = 'https://api.github.com/repos/Arienax/gxworks-agent/git/blobs/1d83a364b25de0c42fba0350c795d36178f04dbc'
-          request = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
-          with urllib.request.urlopen(request, timeout=60) as response:
-              blob = json.load(response)
-          data = gzip.decompress(base64.b64decode(blob['content']))
-          assert hashlib.sha256(data).hexdigest() == '6788a1d650e9635bfb7574d2417faa629fecd0e91b8b88dd579d5808b0916577'
+          sources = [('1d83a364b25de0c42fba0350c795d36178f04dbc', '6788a1d650e9635bfb7574d2417faa629fecd0e91b8b88dd579d5808b0916577'), ('18882f65bbed7a6edea08d85b76ba037f26cc3d3', 'd0006d4025e342be4eb17e6d33a6075e414d83a8b568a5cb5cbd1710dd933dc2')]
           allowed = {'src/application/program_projection.py', 'src/plc/condition_normalizer.py', 'src/plc/generation.py', 'src/rendering/ladder_svg.py', 'tests/test_generation_repair_workflow.py', 'tests/test_gxworks2_csv_native_regressions.py', 'tests/test_plc_condition_normalizer.py', 'tests/test_program_exploration.py'}
-          manifest = json.loads(data)
-          assert {entry['path'] for entry in manifest} == allowed
-          for entry in manifest:
-              path = Path(entry['path'])
-              before = path.read_bytes()
-              assert hashlib.sha256(before).hexdigest() == entry['before'], path
-              lines = before.decode('utf-8').splitlines(keepends=True)
-              for start, end, replacement in reversed(entry['edits']):
-                  lines[start:end] = replacement
-              after = ''.join(lines).encode('utf-8')
-              assert hashlib.sha256(after).hexdigest() == entry['after'], path
-              path.write_bytes(after)
+          touched = set()
+          for blob_id, expected in sources:
+              url = 'https://api.github.com/repos/Arienax/gxworks-agent/git/blobs/' + blob_id
+              request = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  blob = json.load(response)
+              data = gzip.decompress(base64.b64decode(blob['content']))
+              assert hashlib.sha256(data).hexdigest() == expected
+              manifest = json.loads(data)
+              assert {entry['path'] for entry in manifest} <= allowed
+              for entry in manifest:
+                  path = Path(entry['path'])
+                  before = path.read_bytes()
+                  assert hashlib.sha256(before).hexdigest() == entry['before'], path
+                  lines = before.decode('utf-8').splitlines(keepends=True)
+                  for start, end, replacement in reversed(entry['edits']):
+                      lines[start:end] = replacement
+                  after = ''.join(lines).encode('utf-8')
+                  assert hashlib.sha256(after).hexdigest() == entry['after'], path
+                  path.write_bytes(after)
+                  touched.add(entry['path'])
+          assert touched == allowed
           subprocess.run(['git', 'add', '--', *sorted(allowed)], check=True)
           PY
           git rm .github/workflows/ladder-regression-workspace.yml
@@ -106,7 +114,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           tree=$(git write-tree)
-          commit=$(git commit-tree "$tree" -p "$GITHUB_SHA" -p 5e10fd3bf24c281aa500ed1603961c4f41473dfa -m 'fix(plc): restore shared guards and measured ladder layout' -m 'Factor adjacent safe predicates without reordering writes. Preserve branch-specific suffixes and notes, infer conservative write footprints from the Core catalogue, and retain scope barriers. Use one measured SVG layout for headers, shared contacts, parallel paths, applied-instruction boxes and wrapped device comments. Keep navigation anchors and native instruction step accounting independent and covered by scan and rendered-connectivity regressions.')
+          commit=$(git commit-tree "$tree" -p "$GITHUB_SHA" -p 5e10fd3bf24c281aa500ed1603961c4f41473dfa -m 'fix(plc): restore shared guards and measured ladder layout' -m 'Factor adjacent safe predicates without reordering writes. Preserve branch-specific suffixes and notes within the existing annotation contract, infer conservative write footprints from the Core catalogue, and retain scope barriers. Use one measured SVG layout for headers, shared contacts, parallel paths, applied-instruction boxes and wrapped device comments. Keep navigation anchors and native instruction step accounting independent and covered by scan and rendered-connectivity regressions.')
           printf '%s\n' "$commit" | tee validation/ladder/tested-commit.txt
           git push origin "$commit":refs/heads/fix/web-lifecycle-performance-20260926
       - uses: actions/upload-artifact@v4
