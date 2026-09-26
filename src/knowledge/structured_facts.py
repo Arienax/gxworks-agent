@@ -11,6 +11,7 @@ import copy
 import hashlib
 import json
 import re
+import sqlite3
 from collections.abc import Mapping
 
 _VERSION = "structured-facts-v2-contract-merged"
@@ -39,7 +40,16 @@ def structured_fact_targets(query, confirmed_spec=None):
     )
     instructions = instruction_fact_targets(query, spec)
     identified = {str(row.get("opcode") or "").upper() for row in instructions}
-    for target in _declared_instruction_alias_targets(route.query_text):
+    try:
+        alias_targets = _declared_instruction_alias_targets(route.query_text)
+    except (OSError, sqlite3.Error):
+        # Alias enrichment is optional during query planning. A missing,
+        # corrupt, or unhydrated index must not discard explicit identities or
+        # block generation. Evidence retrieval reports storage failures at its
+        # existing diagnostic boundary; it is not made successful here.
+        core._close_thread_connection()
+        alias_targets = []
+    for target in alias_targets:
         if target["opcode"] not in identified:
             instructions.append(target)
             identified.add(target["opcode"])

@@ -137,3 +137,54 @@ def test_section_fallback_keeps_manual_bytes_and_instance_step_facts():
     assert public["instruction_contract"]["opcode"] == "RST"
     with sqlite3.connect(resource_path("knowledge/fx3u_knowledge.sqlite").resolve().as_uri()+"?mode=ro", uri=True) as db:
         assert public["text"] == db.execute("SELECT text FROM chunks WHERE id=?", (full["original_id"],)).fetchone()[0]
+
+
+@pytest.mark.parametrize("index_state", ["missing", "lfs_pointer", "corrupt"])
+def test_explicit_targets_survive_unavailable_optional_alias_index(tmp_path, monkeypatch, index_state):
+    from knowledge.structured_facts import structured_fact_targets
+
+    query = "FX3U MOV D0 D1; M8013; error code 6706"
+    expected = structured_fact_targets(query)
+    path = tmp_path / "manual.sqlite"
+    if index_state == "lfs_pointer":
+        path.write_text("version https://git-lfs.github.com/spec/v1\noid sha256:" + "0" * 64 + "\nsize 123456\n")
+    elif index_state == "corrupt":
+        path.write_bytes(b"SQLite format 3\0" + b"broken database page" * 32)
+    with monkeypatch.context() as scoped:
+        scoped.setattr(core, "_index_path", lambda: path)
+        core._close_thread_connection()
+        try:
+            actual = structured_fact_targets(query)
+            assert actual == expected
+            assert any(row["opcode"] == "MOV" for row in actual["instructions"])
+            assert "M8013" in actual["devices"]
+            assert actual["errors"] == ["6706", "6706H"]
+            assert not structured_fact_targets("批量清零")["instructions"]
+        finally:
+            core._close_thread_connection()
+    # A failed optional lookup must not poison a later valid index lookup.
+    restored = structured_fact_targets("批量清零")
+    assert any(row["opcode"] == "ZRST" for row in restored["instructions"])
+
+
+@pytest.mark.parametrize("error", [PermissionError("denied"), sqlite3.OperationalError("unavailable")])
+def test_alias_enrichment_ignores_only_storage_failures(monkeypatch, error):
+    import knowledge.structured_facts as facts
+
+    def unavailable(query):
+        raise error
+
+    monkeypatch.setattr(facts, "_declared_instruction_alias_targets", unavailable)
+    targets = facts.structured_fact_targets("FX3U MOV D0 D1")
+    assert any(row["opcode"] == "MOV" for row in targets["instructions"])
+
+
+def test_alias_enrichment_does_not_hide_programming_errors(monkeypatch):
+    import knowledge.structured_facts as facts
+
+    def broken(query):
+        raise RuntimeError("invalid alias implementation")
+
+    monkeypatch.setattr(facts, "_declared_instruction_alias_targets", broken)
+    with pytest.raises(RuntimeError, match="invalid alias implementation"):
+        facts.structured_fact_targets("FX3U MOV D0 D1")
