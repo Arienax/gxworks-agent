@@ -93,3 +93,34 @@ def test_job_explorer_reuses_exact_saved_generation_and_refuses_corrupt_source(o
         assert client.get(version_route).status_code in (404, 409)
         for endpoint in ("issues", "simulation-workbench", "delivery"):
             assert client.get(f"/api/projects/{pid}/versions/{output['version_id']}/{endpoint}").status_code == 409
+
+
+def test_wrapped_contacts_and_wide_instructions_keep_measured_navigation_anchors():
+    import json
+    import xml.etree.ElementTree as ET
+    from plc.ir import canonical_sha256
+    ladder = {"device_comments": {"M0": "公共运行条件" * 20}, "rungs": [
+        {"rung_id": 42, "header_element": {"type": "NO", "address": "M0"},
+         "shared_inputs": [{"type": "NO", "address": f"M{i}"} for i in range(1, 13)],
+         "branches": [{"branch_id": 1, "y_offset_level": 0,
+                       "inputs": [{"type": "NO", "address": f"M{i}"} for i in range(13, 24)],
+                       "outputs": [{"type": "APP_INSTR", "opcode": "MOV", "operands": ["K32767", "D7999"]}]}]}
+    ]}
+    program = build_plc_ir(ladder)
+    before = json.dumps(program, sort_keys=True, ensure_ascii=False)
+    view = explore_program(program)
+    assert view["ir_sha256"] == canonical_sha256(program)
+    assert json.dumps(program, sort_keys=True, ensure_ascii=False) == before
+    bounds = view["networks"][0]["bounds"]
+    assert bounds["raw_rung_id"] == 42 and bounds["display_number"] == 1
+    root = ET.fromstring(view["svg"])
+    text = next(t for t in root.iter("{http://www.w3.org/2000/svg}text")
+                if t.text == "MOV K32767 D7999")
+    anchor = next(a for a in view["address_targets"] if a["address"] == "D7999")
+    # The operand is at the right end of a measured, centered instruction.
+    text_right = float(text.get("x")) + float(text.get("textLength")) / 2
+    assert abs(anchor["x"] + anchor["width"] - text_right - 3) < 0.01
+    assert {a["address"] for a in view["address_targets"]} == {f"M{i}" for i in range(24)} | {"D7999"}
+    assert all(0 <= a["x"] <= a["x"] + a["width"] <= view["width"]
+               and bounds["top"] <= a["y"] < a["y"] + a["height"] <= bounds["top"] + bounds["height"]
+               for a in view["address_targets"])

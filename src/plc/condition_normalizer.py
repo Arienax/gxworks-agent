@@ -3,11 +3,13 @@
 This is not a PLC validator or an intent repair. Unknown forms stay unchanged;
 the existing API validator remains responsible for accepting the candidate.
 Only direct ordinary contacts/comparisons are pure predicates here. Evaluation
-is never moved across stateful/unknown outputs or writes to predicate operands.
+is never moved across unknown effects or writes to predicate operands.
 """
 
 import copy
 import re
+
+from plc.generation_contract import MAX_LABEL_LEN
 
 
 _OPERATORS = frozenset({"=", "<>", "<", ">", "<=", ">="})
@@ -65,17 +67,66 @@ def _predicate(element):
     return None
 
 
-def _coil_writes(branch):
-    """None is an explicit barrier, never a guessed empty write set."""
+def _merged_annotation(values):
+    """Retain whole distinct notes without making a valid candidate invalid."""
+    text = "\n".join(dict.fromkeys(str(value) for value in values if value))
+    return text if len(text) <= MAX_LABEL_LEN else None
+
+
+def _writes_conflict(reads, writes):
+    return any(device in writes or device[0] + "*" in writes for device in reads)
+
+
+def _known_writes(branch):
+    """Conservative effects, using the Core catalogue rather than a new opcode list.
+
+    Typed outputs have exact destinations. Applied instructions may write a
+    range (including double words), so reserve their entire destination family.
+    Special/indirect operands, vendor operations and control flow remain barriers.
+    """
+    from plc.instructions import get_instruction_spec, InstructionCategory, SemanticKind, OperandRole
+
     writes = set()
     for output in branch["outputs"]:
-        if (output.get("type") != "COIL"
-                or set(output) - {"type", "address", "label"}):
+        kind = output.get("type")
+        if kind in {"COIL", "PLS", "PLF"} and not set(output) - {"type", "address", "label"}:
+            device = _device(output.get("address"))
+            if not device or not device.startswith(("M", "Y")):
+                return None
+            writes.add(device)
+            continue
+        if kind in {"TIMER", "COUNTER"} and not set(output) - {"type", "address", "value", "label"}:
+            family = "T" if kind == "TIMER" else "C"
+            if not re.fullmatch(family + r"\d+", str(output.get("address", ""))):
+                return None
+            writes.add(family + "*")
+            continue
+        if kind == "APP_INSTR" and not set(output) - {"type", "opcode", "operands", "label"}:
+            op, operands = output.get("opcode"), output.get("operands", [])
+        elif kind == "BLOCK_OUTPUT" and not set(output) - {"type", "expression", "label"}:
+            parts = str(output.get("expression", "")).split()
+            op, operands = (parts[0], parts[1:]) if parts else ("", [])
+        else:
             return None
-        device = _device(output.get("address"))
-        if not device or not device.startswith(("M", "Y")):
+        spec = get_instruction_spec(op)
+        if (spec is None or spec.category != InstructionCategory.ACTION
+                or spec.semantic_kind not in {SemanticKind.FUNCTION, SemanticKind.COIL, SemanticKind.COMPARISON}
+                or not isinstance(operands, list) or len(operands) != len(spec.operands)
+                or not spec.write_indexes):
             return None
-        writes.add(device)
+        for operand, contract in zip(operands, spec.operands):
+            token = str(operand).strip().upper()
+            if contract.role == OperandRole.CONTROL:
+                return None
+            # Indirect, packed-bit, string and special-register effects are not
+            # inferred from a base address. Even reads can select hidden state.
+            if not (_operand(token) or re.fullmatch(r"[TC]\d+", token)):
+                return None
+            if contract.role in {OperandRole.WRITE, OperandRole.READ_WRITE}:
+                match = re.fullmatch(r"([MYDTC])\d+", token)
+                if not match:
+                    return None
+                writes.add(match[1] + "*")
     return writes
 
 
@@ -156,7 +207,7 @@ def _normalize_rung(rung, summary):
     for index, branch in enumerate(rung["branches"]):
         safe_facts = {}
         for identity, reads in shared_facts.items():
-            if prior_writes is not None and not reads.intersection(prior_writes):
+            if prior_writes is not None and not _writes_conflict(reads, prior_writes):
                 safe_facts[identity] = reads
             elif any((_predicate(item) or (None,))[0] == identity for item in branch.get("inputs", [])):
                 summary.skip("stateful_or_unknown_output" if prior_writes is None else "read_after_write",
@@ -165,20 +216,19 @@ def _normalize_rung(rung, summary):
         cleaned = _deduplicate(inputs, safe_facts, summary, rung_id, f"branches[{index}].inputs")
         if cleaned != inputs:
             branch["inputs"] = cleaned
-        writes = _coil_writes(branch)
+        writes = _known_writes(branch)
         prior_writes = None if prior_writes is None or writes is None else prior_writes | writes
 
     branches = rung["branches"]
     if len(branches) < 2 or not all(branch.get("inputs") for branch in branches):
         return
-    # The first implementation does not factor through parallel/edge suffixes.
-    if (any(item is None for item in predicates)
-            or any(_predicate(item) is None for branch in branches for item in branch["inputs"])):
+    # Only the prefix is moved; branch-local parallel/edge suffixes stay put.
+    if any(item is None for item in predicates):
         summary.skip("non_pure_condition", [rung_id], "common_prefix")
         return
     writes_before_last = set()
     for branch in branches[:-1]:
-        writes = _coil_writes(branch)
+        writes = _known_writes(branch)
         if writes is None:
             summary.skip("stateful_or_unknown_output", [rung_id], "common_prefix")
             return
@@ -186,12 +236,19 @@ def _normalize_rung(rung, summary):
     common = []
     for items in zip(*(branch["inputs"] for branch in branches)):
         predicates = [_predicate(item) for item in items]
-        if any(item[0] != predicates[0][0] for item in predicates[1:]):
+        if any(item is None for item in predicates) or any(item[0] != predicates[0][0] for item in predicates[1:]):
             break
-        if predicates[0][1].intersection(writes_before_last):
+        if _writes_conflict(predicates[0][1], writes_before_last):
             summary.skip("read_after_write", [rung_id], "common_prefix")
             break
-        common.append(copy.deepcopy(items[0]))
+        shared = copy.deepcopy(items[0])
+        label = _merged_annotation(item.get("label") for item in items)
+        if label is None:
+            summary.skip("annotation_capacity", [rung_id], "common_prefix")
+            break
+        if label:
+            shared["label"] = label
+        common.append(shared)
     if common:
         rung["shared_inputs"] = rung.get("shared_inputs", []) + common
         removed = [copy.deepcopy(branch["inputs"][:len(common)]) for branch in branches]
@@ -201,29 +258,60 @@ def _normalize_rung(rung, summary):
                        removed_branch_conditions=removed)
 
 
-def _coil_group(rung):
+def _rung_group(rung):
     prefix = ([rung["header_element"]] if rung.get("header_element") is not None else []) + rung.get("shared_inputs", [])
-    expected = None
-    reads, writes = set(), set()
+    if any(_predicate(item) is None for item in prefix):
+        return None, "non_pure_condition"
+    paths, writes, coils = [], set(), set()
     for branch in rung["branches"]:
-        predicates = [_predicate(item) for item in prefix + branch.get("inputs", [])]
-        if not predicates or any(item is None for item in predicates):
-            return None, "non_pure_condition"
-        identities = tuple(item[0] for item in predicates)
-        if expected is not None and identities != expected:
-            return None, "different_branch_conditions"
-        expected = identities
-        for _, devices in predicates:
-            reads.update(devices)
-        branch_writes = _coil_writes(branch)
-        if branch_writes is None:
+        effects = _known_writes(branch)
+        if effects is None:
             return None, "stateful_or_unknown_output"
-        if len(branch_writes) != len(branch["outputs"]) or writes.intersection(branch_writes):
-            return None, "duplicate_coil_target"
-        writes.update(branch_writes)
-    if reads.intersection(writes):
-        return None, "read_after_write"
-    return (expected, reads, writes), None
+        for output in branch["outputs"]:
+            if output.get("type") == "COIL":
+                target = _device(output.get("address"))
+                if target in coils:
+                    return None, "duplicate_coil_target"
+                coils.add(target)
+        paths.append(prefix + branch.get("inputs", []))
+        writes.update(effects)
+    return {"prefix": prefix, "paths": paths, "writes": writes, "coils": coils}, None
+
+
+def _merged_prefix(groups):
+    common = []
+    paths = [path for group in groups for path in group["paths"]]
+    # Only earlier outputs may invalidate a later evaluation. A family-wide
+    # effect deliberately blocks both single- and multi-word range aliases.
+    writes = set().union(*(group["writes"] for group in groups))
+    reason = "non_pure_condition"
+    for items in zip(*paths):
+        predicates = [_predicate(item) for item in items]
+        if any(item is None for item in predicates):
+            break
+        if any(item[0] != predicates[0][0] for item in predicates[1:]):
+            reason = "different_branch_conditions"
+            break
+        if _writes_conflict(predicates[0][1], writes):
+            reason = "read_after_write"
+            break
+        shared = copy.deepcopy(items[0])
+        label = _merged_annotation(item.get("label") for item in items)
+        if label is None:
+            reason = "annotation_capacity"
+            break
+        if label:
+            shared["label"] = label
+        common.append(shared)
+    if not common:
+        return [], reason
+    # Re-homing a longer pre-existing shared suffix would evaluate it per
+    # branch. Do not do so when an earlier branch could change that predicate.
+    for group in groups:
+        for item in group["prefix"][len(common):]:
+            if _writes_conflict(_predicate(item)[1], group["writes"]):
+                return [], "read_after_write"
+    return common, None
 
 
 def normalize_shared_conditions(ladder, *, allowed_rung_ids=None):
@@ -277,40 +365,39 @@ def normalize_shared_conditions(ladder, *, allowed_rung_ids=None):
         if id(left) not in eligible or id(right) not in eligible:
             index += 1
             continue
-        left_group, left_reason = _coil_group(left)
-        right_group, right_reason = _coil_group(right)
+        left_group, left_reason = _rung_group(left)
+        right_group, right_reason = _rung_group(right)
         ids = [left["rung_id"], right["rung_id"]]
         reason = left_reason or right_reason
-        if not reason and left_group[0] != right_group[0]:
-            index += 1  # Different logic is not an attempted merge.
-            continue
-        if not reason and left_group[2].intersection(right_group[2]):
-            reason = "duplicate_coil_target"
-        if not reason and left.get("debug_note") and right.get("debug_note") and left["debug_note"] != right["debug_note"]:
-            reason = "distinct_network_notes"
+        note = _merged_annotation(source.get("debug_note") for source in (left, right))
+        if note is None:
+            reason = reason or "annotation_capacity"
+        common = []
+        if not reason:
+            if left_group["coils"].intersection(right_group["coils"]):
+                reason = "duplicate_coil_target"
+            else:
+                common, reason = _merged_prefix([left_group, right_group])
         if reason:
             summary.skip(reason, ids, "adjacent_networks")
             index += 1
             continue
-        # Existing left branches share the same full predicate sequence. Their
-        # branch-local remainder is evaluated once before the preserved writes.
-        removed_left_conditions = [
-            {"branch_id": branch.get("branch_id"), "inputs": copy.deepcopy(branch["inputs"])}
-            for branch in left["branches"] if branch.get("inputs")
-        ]
-        left["shared_inputs"] = left.get("shared_inputs", []) + copy.deepcopy(left["branches"][0].get("inputs", []))
-        for branch in left["branches"]:
-            branch["inputs"] = []
-        next_id = max((branch.get("branch_id", 0) for branch in left["branches"]), default=0) + 1
-        next_y = max((branch.get("y_offset_level", 0) for branch in left["branches"]), default=0) + 1
-        for offset, original in enumerate(right["branches"]):
-            branch = copy.deepcopy(original)
-            branch.update(inputs=[], branch_id=next_id + offset, y_offset_level=next_y + offset)
-            left["branches"].append(branch)
-        if not left.get("debug_note") and right.get("debug_note"):
-            left["debug_note"] = right["debug_note"]
-        summary.change("merge_adjacent_coils", ids, target_rung_id=left["rung_id"],
-                       removed_rung_id=right["rung_id"], source_rung=copy.deepcopy(right),
-                       removed_left_branch_conditions=removed_left_conditions)
+        source_left, source_right = copy.deepcopy(left), copy.deepcopy(right)
+        combined = []
+        for source, group in ((left, left_group), (right, right_group)):
+            for original, path in zip(source["branches"], group["paths"]):
+                branch = copy.deepcopy(original)
+                branch.update(inputs=copy.deepcopy(path[len(common):]),
+                              branch_id=len(combined) + 1, y_offset_level=len(combined))
+                combined.append(branch)
+        left["header_element"] = None
+        left["shared_inputs"] = common
+        left["branches"] = combined
+        if note:
+            left["debug_note"] = note
+        pure_coils = all(output.get("type") == "COIL" for branch in combined for output in branch["outputs"])
+        operation = "merge_adjacent_coils" if pure_coils else "merge_adjacent_branches"
+        summary.change(operation, ids, target_rung_id=left["rung_id"], removed_rung_id=right["rung_id"],
+                       source_rung=source_right, previous_target_rung=source_left)
         del rungs[index + 1]
     return normalized, summary.data

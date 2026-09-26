@@ -34,13 +34,12 @@ def explore_program(program, *, theme="dark"):
             size = kwargs.get("size", args[1] if len(args) > 1 else 13)
             anchor = kwargs.get("anchor", args[2] if len(args) > 2 else "middle")
             for line_index, line in enumerate(str(text).split("\n")):
-                char_width = size * .62
-                left = x if anchor == "start" else x - len(line) * char_width / (1 if anchor == "end" else 2)
+                left = x if anchor == "start" else x - self.text_width(line, size) / (1 if anchor == "end" else 2)
                 for match in re.finditer(r"(?<![A-Za-z0-9_])(?:[A-Za-z]+\d+)(?![A-Za-z0-9_])", line):
                     address = match.group().upper()
                     if address in program.get("devices", {}):
-                        self.address_targets.append({"address": address, "x": left + match.start() * char_width - 3,
-                            "y": y + line_index * 15 - size, "width": len(address) * char_width + 6, "height": size + 5})
+                        self.address_targets.append({"address": address, "x": left + self.text_width(line[:match.start()], size) - 3,
+                            "y": y + line_index * 15 - size, "width": self.text_width(address, size) + 6, "height": size + 5})
             return super().draw_text(x, y, text, *args, **kwargs)
 
     drawer = NavigationDrawer()

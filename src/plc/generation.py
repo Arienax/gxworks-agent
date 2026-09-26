@@ -151,9 +151,11 @@ def normalization_summary(report):
     operations = {
         "remove_duplicate_condition": "已删除重复触点或比较条件",
         "extract_common_prefix": "已提取分支公共条件",
+        "merge_adjacent_branches": "已提取相邻网络公共条件并保留分支执行顺序",
         "merge_adjacent_coils": "已合并公共条件相同的相邻输出网络",
     }
     reasons = {
+        "annotation_capacity": "合并会超过既有注释长度限制，保留原说明",
         "non_pure_condition": "含边沿或复杂条件，保留原求值位置",
         "stateful_or_unknown_output": "含状态指令或无法确认的副作用，保留原结构",
         "read_after_write": "条件可能在写入后变化，保留再次读取",
