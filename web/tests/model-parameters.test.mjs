@@ -147,3 +147,25 @@ test('range presentation respects zero-anchored multiples and exclusive bounds',
   assert.deepEqual(sliderRange(exclusive),{minimum:.01,maximum:1.99,step:.01});
   assert.equal(validValue(exclusive,1.999),true);
 });
+
+for (const status of ['unsupported', 'fixed']) {
+  test(`a stale explicit ${status} choice is preserved until explicitly cleared`, () => {
+    const c = { ...contract, parameters: {
+      temp: spec({ status, domain: { values: [.25], enforcement: 'hard', source: 'manual' } }),
+      flag: spec({ type: 'boolean' }),
+    } };
+    const previous = { scope, parameters: {
+      temp: { mode: 'value', value: .733 }, flag: { mode: 'value', value: false },
+    } };
+    const before = JSON.stringify(previous);
+    const adopted = adoptSelections(c, previous);
+    assert.deepEqual(adopted.parameters.temp, previous.parameters.temp);
+    const cleared = changeSelection(c, adopted, 'temp', { mode: 'omit' });
+    assert.deepEqual(cleared.parameters.temp, { mode: 'omit' });
+    assert.equal(selectedValues(c, cleared).temp, null);
+    assert.deepEqual(cleared.parameters.flag, { mode: 'value', value: false });
+    assert.deepEqual(adopted.parameters.temp, { mode: 'value', value: .733 });
+    assert.equal(JSON.stringify(previous), before);
+    assert.deepEqual(adoptSelections(c, cleared), cleared);
+  });
+}

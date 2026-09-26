@@ -82,6 +82,10 @@ export function ModelParameters({ contract, settings, onChange, disabled, t, onV
       {conflict && <p role="alert">{t("当前显式选择与能力声明冲突，未自动删除。请调整后再保存。")}</p>}
       {desc.status === "fixed" && <p>{t("固定值")}: {String(domain.values?.[0])}</p>}
       {(desc.requires || desc.conflicts_with) && <p className="muted mono">{JSON.stringify({requires:desc.requires,conflicts_with:desc.conflicts_with})}</p>}
+      {/* Non-editable descriptors have no mode selector, but stale explicit
+          selections must remain removable without erasing other parameters. */}
+      {chosen && !editable && <Button variant="ghost" disabled={disabled}
+        onClick={()=>change(name,{mode:"omit"})}>{t("恢复服务默认值")}</Button>}
     </div>;
   };
   const entries = Object.entries(contract.parameters || {});
