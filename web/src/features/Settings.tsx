@@ -300,7 +300,7 @@ export function Settings({
     if (!found) { setPreset(""); return; }
     setPreset(found.url);
     // A preset names the service; it never renames a profile the user already named.
-    if (creating || !name.trim()) setName(found.name);
+    if (!name.trim()) setName(found.name);
     setBaseUrl(found.url);
     setManualOverrides("{}");
     invalidate(true);

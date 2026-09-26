@@ -23,7 +23,7 @@
 | 参数支持度表达 | 无三态类型；用 per-route / per-model **compat 开关**声明端点行为，配 `Record<Key,true>` + `AssertNever` 编译期漂移门 | `status ∈ {supported, conditional, unsupported, fixed, unknown}` + `domain{type,range,enum,enforcement}` + `ui_hint` + `evidence`（[contract.py](../../../src/model_runtime/contract.py)） | 本项目**表达力更强**；缺的是 DSH 的**漂移门**思路 |
 | 未知网关的保守姿态 | 未声明协议默认按 `openai-completions` 探；未知 key 一律拒绝而非静默丢弃 | `status: unknown` + `domain.enforcement: hint` + `default_mode: omit`（[generic-openai-compatible.json](../../../resources/model_catalog/generic-openai-compatible.json)） | 已具备，同构 |
 | 凭据与配置分家 | settings 只存 `apiKeyEnv` 引用，值在独立凭据平面，每请求解析 | 配置存 `credentialTarget` 引用，值在 Windows 凭据库（[config.py](../../../src/storage/config.py#L210)、[credentials.py](../../../src/storage/credentials.py)） | 已具备 |
-| 草稿凭据不落地 | `LlmModelDiscoveryRequest` 把正在编辑的 baseURL/apiKey 随请求直传，从不存储；表单里的一次性 key 优先于存储 key | 模型检测走已保存 profile | **部分缺**。见 A4 |
+| 草稿凭据不落地 | `LlmModelDiscoveryRequest` 把正在编辑的 baseURL/apiKey 随请求直传，从不存储；表单里的一次性 key 优先于存储 key | `SettingsService._draft()` 支持未保存的配置；检测与单项验证复用该入口 | 已具备；入口区别及回归边界见 A4 |
 | 错误码按修复动作划分 | `INVALID_CREDENTIAL`（改一个坏值）与 `MISSING_CREDENTIAL`（补一个缺失值）语义与重试策略都不同 | `ModelProviderError.code` 有 `invalid_request`/`protocol`/`metadata_unavailable` 等 | **缺**这一区分维度 |
 | 拓扑变更原子性 | 整批候选集校验通过才生效，被拒的改动保留旧状态继续服务；统一用无载荷 `llm/adapters-updated` 通知 | `reset_model_provider` / `reload_model_provider` 整体重建缓存（[provider.py](../../../src/model_runtime/provider.py#L1142)） | 已具备，本项目更简单 |
 | 配置生效时机 | 下一个请求生效，无需重启；prepared call 绑定同一 adapter generation，避免 HMR 混代 | `get_active_provider` 以 profile + api key 为缓存键（[provider.py](../../../src/model_runtime/provider.py#L1122)） | 已具备 |
@@ -51,9 +51,10 @@ DSH 的目录让"可配置但未激活"的 provider 出现在界面上，且 `Ll
 
 **A4. 草稿端点勘察：一次性凭据不落地**
 DSH 在用户还没保存 provider 时，允许把正在编辑的 baseURL/apiKey 随发现请求直传，从不存储；表单里输入的一次性 key 优先于已存 key。
-本项目[模型设置](../../guides/model-settings.md#连接模型)要求先填服务地址和凭据再测试连接，即"先保存后验证"。这带来两个问题：未验证的凭据先落盘；以及"测试连接"与"生成能力验证"被明确分成两步，用户容易在前者通过后误以为后者也通过。
-采纳动作：让连接测试接受未保存的端点/凭据草稿，凭据只在该次请求内使用；保留现有的"列表可访问 ≠ 生成能力已验证"文案。
-成本：中高（需要新的一次性凭据传递路径，且不能违反[审批策略](../../architecture/approval-modes.md)与凭据存储约定）。风险：中高（涉及凭据处理，需单独设计）。
+本项目已具备这条路径：[settings.py](../../../src/application/settings.py) 的 `SettingsService._draft(id=None, api_key=..., **values)` 构造未保存的配置；`detect_profile()` 和 `verify_profile()` 都复用它。草稿 API Key 不会通过这些操作写入配置或凭据库。编辑已有配置时，显式提交的 key 优先；地址改变而未提交新 key 时，不复用原地址的已存密钥。
+[Settings.tsx](../../../web/src/features/Settings.tsx) 的 `discover()` 在新建状态下不传 profile ID，仍可获取模型列表或加载能力配置；`verify()` 使用相同草稿并要求单次验证确认。`test_connection(profile_id, ...)` 对应已保存配置的“测试连接”按钮，不能由该按钮要求已有 ID 推断全部操作都必须先保存。
+维护范围：复用现有入口，保留“模型列表可访问不等于生成能力已验证”的区分；回归覆盖未保存草稿、临时 key 优先、换址不泄露旧 key，以及取消验证不产生模型请求。不新增第二条凭据通道。相关服务测试见 [test_application_settings.py](../../../tests/test_application_settings.py)，浏览器流程见 [web_model_settings_e2e.py](../../../scripts/web_model_settings_e2e.py)。
+成本：低（现有流程的回归与入口说明）。风险：低；凭据持久化与验证审批边界保持不变。
 
 **A5. 一句话重申（无需改动）**
 本项目 `EffectiveRequest.sources` 与 DSH 的 `adapterDefaults` 是同一个想法，且本项目已经做对了。后续不要把 `sources` 简化掉。
@@ -74,6 +75,7 @@ DSH 的 `strict` 写入拒绝不可服务的配置，而读取时把诊断留在
 - 能力契约 v3 的 `status`/`domain`/`ui_hint`/`evidence` 四段式比 DSH 的布尔 compat 开关表达力更强，且已经覆盖"声明而非探测"的姿态。
 - `capability.source ∈ {metadata, catalog, manual, legacy}` 与 DSH 的 `declared` 标志同构。
 - `credentialTarget` 的配置/凭据分离与 DSH 等价。
+- 草稿发现与单项验证共用 `SettingsService._draft()`；已有临时凭据优先和换址隔离，维护范围见 A4。
 - [observations.py](../../../src/model_runtime/observations.py) 的有界遥测（`MAX_ROWS`/`MAX_AGE`、只保留标量与短标识符、不记录 prompt/路径/凭据）已经比 DSH 的对应约定更严格。
 - `None` 墓碑语义（显式删除沿 `extra_body` 嵌套路径传播）DSH 没有等价物。
 - "用户配置的输出上限"与"模型能力上限"分离：DSH 用 `configuredMaxTokens` vs `Model.maxTokens`，本项目由 [_output_limit](../../../src/application/context_compiler.py#L40) 先读用户选择再回退契约边界，同构。
@@ -218,7 +220,7 @@ DSH 把计量做成**无配置、无模型 profile** 的服务，阈值与保留
 | 3 | C10 压缩调用复用前缀 | 中高 | 中 | 前置是阶段 2 的触发点已经前移，否则收益不明显 |
 | 4 | A1 漂移门 + A2 错误码按修复动作划分 | 低-中 | 低-中 | 纯测试与错误语义，可独立验证 |
 | 5 | A3 + A7 休眠目录与读时诊断 + C12 压缩事务 + A6 写入乐观并发 | 中-高 | 中-高 | 触及设置界面、HTTP 契约、凭据与持久化 |
-| 6 | A4 草稿端点勘察 | 中-高 | 中-高 | 涉及凭据处理，需单独设计 |
+| 6 | A4 现有草稿流程的回归与入口说明 | 低 | 低 | 已有 `_draft()`、`detect_profile()`、`verify_profile()`；不新增凭据通道 |
 | 7 | C7 usage 锚点（先只用于报告） | 中 | 中 | 需先有阶段 1-3 的计价基线才谈得上对照 |
 | 8 | C13 测量与策略分离 | 中高 | 中 | 结构性调整，最后做，避免与前面阶段冲突 |
 | — | C6 in-history（需先实测端点） | 中 | 中 | 前置条件是端点事实，未验证不得实施 |

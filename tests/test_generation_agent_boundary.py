@@ -2,9 +2,11 @@ import copy
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from application.generation import GenerationDependencies, GenerationRequest, GenerationWorkflow
 from model_runtime.provider import TextDelta
-from test_web_api import offline_runtime_profile
+from model_profile_fixtures import offline_runtime_profile
 
 
 def _spec():
@@ -91,6 +93,48 @@ def test_confirmed_generation_uses_one_isolated_agent_call(tmp_path):
     assert provider.requests[0].response_contract.name == "compact_ladder"
     assert metadata["first_pass_pipeline"] == {"mode": "confirmed_spec", "model_calls": 1}
     assert metadata["validation"]["status"] == "candidate_ready"
+
+
+@pytest.mark.parametrize(("required_opcode", "expected_status"), [
+    ("OUT", "verified"), ("MOV", "violated"),
+])
+def test_fresh_semantic_receipt_survives_one_call_delivery(tmp_path, monkeypatch, required_opcode, expected_status):
+    import application.generation_agent as agent_b
+
+    # Keep the legacy snapshot above as a separate compatibility case. Fresh
+    # semantics must not pass only because an old contract was deferred.
+    specification = _spec()
+    selected = specification["selected_approach"]
+    selected.pop("generation_contract")
+    selected["implementation_semantics"] = []
+    selected["explicit_user_constraints"] = {"required_opcodes": [required_opcode]}
+    before = copy.deepcopy(specification)
+    monkeypatch.setattr(agent_b, "_build_knowledge_context", lambda *a, **k: "")
+    provider = OneShotProvider()
+    metadata = GenerationWorkflow(
+        GenerationRequest(user_input="Generate the confirmed program", confirmed_context=specification,
+                          plc_model="FX3U", model_name=provider.profile["model"]),
+        tmp_path,
+        dependencies=GenerationDependencies(provider=provider),
+    ).run()
+
+    assert specification == before
+    assert len(provider.requests) == 1
+    assert provider.requests[0].max_retries == 0
+    assert metadata["first_pass_pipeline"] == {"mode": "confirmed_spec", "model_calls": 1}
+    assert metadata["validation"]["status"] == "candidate_ready"
+    assert metadata["candidate_origin"] == "compact_agent"
+    receipt = metadata["semantic_validation"]
+    assert receipt["legacy_compatibility"] is False
+    assert receipt["status"] == expected_status
+    assert any(row.get("kind") == "opcode" and row.get("expected") == required_opcode
+               and row["status"] == expected_status for row in receipt["checks"])
+    assert bool(receipt["violations"]) == (expected_status == "violated")
+    if expected_status == "violated":
+        assert any(row.get("expected") == required_opcode for row in receipt["violations"])
+    ladder = json.loads((tmp_path / metadata["artifacts"]["json"]).read_text(encoding="utf-8"))
+    assert ladder["rungs"]
+    assert (tmp_path / metadata["artifacts"]["ir"]).is_file()
 
 
 def test_compact_agent_sends_the_compiler_budgeted_application_wire(monkeypatch):

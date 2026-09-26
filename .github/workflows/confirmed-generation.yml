@@ -49,12 +49,11 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
           lfs: true
-      - name: Detect current-push confirmed-generation scope
+      - name: Detect pull-request confirmed-generation scope
         id: scope
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BEFORE_SHA: ${{ github.event.before }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
@@ -63,14 +62,10 @@ jobs:
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          from="$BEFORE_SHA"
-          if [[ -z "$from" || "$from" == "null" || "$from" =~ ^0+$ ]]; then
-            from="$BASE_SHA"
-          fi
+          # Validate the whole PR, not only its most recent push. Rebased
+          # before SHAs may no longer be reachable in a fresh checkout.
+          from="$BASE_SHA"
           to="$HEAD_SHA"
-          if [[ -z "$to" || "$to" == "null" ]]; then
-            to=HEAD
-          fi
           git diff --name-only "$from"..."$to" > changed-files.txt
           if grep -Eq '^(src/(application/(analysis_context\.py|analysis_results\.py|compact_protocol\.py|confirmed_generation_context\.py|context_compiler\.py|generation_receipts\.py|planning\.py|prompts\.py|request_intent\.py)|knowledge/|plc/specification/)|tests/(test_analysis_.*\.py|test_confirmed_.*\.py|test_context_compiler\.py|test_context_refresh_runtime\.py|test_instruction_fact_context\.py|test_intent_evidence_handoff\.py|test_optional_hardware_parameters\.py|test_spec_choice_metadata\.py|test_approach_contracts\.py|test_program_exploration\.py)|\.github/workflows/confirmed-generation\.yml$)' changed-files.txt; then
             echo "run=true" >> "$GITHUB_OUTPUT"

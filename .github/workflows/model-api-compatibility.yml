@@ -45,12 +45,11 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      - name: Detect current-push model/API scope
+      - name: Detect pull-request model/API scope
         id: scope
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BEFORE_SHA: ${{ github.event.before }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
@@ -59,14 +58,10 @@ jobs:
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          from="$BEFORE_SHA"
-          if [[ -z "$from" || "$from" == "null" || "$from" =~ ^0+$ ]]; then
-            from="$BASE_SHA"
-          fi
+          # Validate the whole PR, not only its most recent push. Rebased
+          # before SHAs may no longer be reachable in a fresh checkout.
+          from="$BASE_SHA"
           to="$HEAD_SHA"
-          if [[ -z "$to" || "$to" == "null" ]]; then
-            to=HEAD
-          fi
           git diff --name-only "$from"..."$to" > changed-files.txt
           if grep -Eq '^(src/(model_runtime/|application/(settings\.py|model_detection\.py|model_api\.py)|storage/config\.py|integrations/web/)|resources/model_catalog/|tests/(test_model_.*\.py|test_application_settings\.py|test_web_contract\.py)|web/(src/api/generated\.ts|openapi\.json|src/features/(Settings\.tsx|ModelParameterControls\.tsx|modelParameters\.ts)|tests/(model-parameters|module-resolution)\.test\.mjs)|requirements/web\.txt|scripts/export_web_schema\.py|\.github/workflows/model-api-compatibility\.yml$)' changed-files.txt; then
             echo "run=true" >> "$GITHUB_OUTPUT"

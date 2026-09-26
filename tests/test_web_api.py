@@ -18,6 +18,7 @@ from application.workbench import WorkbenchService
 from rendering.ladder_svg import AdvancedSVGLadder
 from integrations.web.app import create_app
 from model_runtime.provider import TextDelta
+from model_profile_fixtures import offline_runtime_profile
 from storage.session import SessionStore
 
 
@@ -89,22 +90,6 @@ def _complete(client, service, response):
     assert current.status_code == 200, current.text
     assert current.json()["status"] == "completed", current.text
     return job_id, client.get("/api/jobs/" + job_id + "/output").json()
-
-
-def offline_runtime_profile(model="offline"):
-    """Canonical v3 runtime profile for a synthetic provider.
-
-    The model path reads ``provider.profile`` and materializes it through the v3
-    runtime contract, so a synthetic provider has to carry the same canonical
-    fields the real adapter requires: ``adapter``, ``baseUrl`` and ``model``.
-    The address is deliberately unroutable — the provider double supplies every
-    response and no request may leave the process.
-    """
-    return {
-        "adapter": "openai_compatible",
-        "baseUrl": "https://offline.invalid/v1",
-        "model": model,
-    }
 
 
 class _Provider:
