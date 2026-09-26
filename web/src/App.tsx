@@ -1,5 +1,5 @@
 import { ConditionNormalization } from "./features/ConditionNormalization";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import {
   Activity,
@@ -55,19 +55,23 @@ import type { AnalysisMode } from "./features/AnalysisModePicker";
 import { JobFailure } from "./features/JobFailure";
 import { GenerationResult, useGenerationResult } from "./features/GenerationResult";
 import { JobProgress } from "./features/JobProgress";
-import { Settings } from "./features/Settings";
 import { ApprovalSettingsPanel, approvalLabels } from "./features/ApprovalSettings";
 import type { ApprovalSettings } from "./features/ApprovalSettings";
 import { ProjectToolbar, artifactLabel } from "./features/ProjectToolbar";
 import { submitGXSend } from "./features/gxSend";
 import type { GXSendSelection } from "./features/gxSend";
-import { FBDPanel, FBDImport } from "./features/FBDPanel";
 import type { FBDModel } from "./features/FBDPanel";
 import { ProgramExplorer, IssueCards } from "./features/ProgramExplorer";
 import type { IssueContext } from "./features/ProgramExplorer";
-import { SimulationWorkbench } from "./features/SimulationWorkbench";
 import { FirstProjectGuide } from "./features/FirstProjectGuide";
 import { DeliverySummary } from "./features/DeliverySummary";
+
+// Stable module-level identities: RetainedPanel still owns when a view mounts
+// and how long its drafts survive. Loading code must not reset that lifetime.
+const Settings = lazy(() => import("./features/Settings").then(module => ({ default: module.Settings })));
+const SimulationWorkbench = lazy(() => import("./features/SimulationWorkbench").then(module => ({ default: module.SimulationWorkbench })));
+const FBDPanel = lazy(() => import("./features/FBDPanel").then(module => ({ default: module.FBDPanel })));
+const FBDImport = lazy(() => import("./features/FBDPanel").then(module => ({ default: module.FBDImport })));
 
 let bootstrapToken =
   new URLSearchParams(location.hash.slice(1)).get("token") || "";
@@ -1383,7 +1387,9 @@ export default function App() {
         <div className="editor-content">
           {["ladder", "fbd", "st", "diagnostics", "reports", "simulation", "delivery"].map(id => (
             <RetainedPanel key={`${pid}:${vid}:${selectedProposal?.id || diagnosticJobId || "version"}:${id}`} active={tab === id}>
-              {() => renderEditorTab(id)}
+              {() => <Suspense fallback={<p role="status">{t("正在读取…")}</p>}>
+                {renderEditorTab(id)}
+              </Suspense>}
             </RetainedPanel>
           ))}
         </div>
@@ -1931,7 +1937,9 @@ export default function App() {
         </form>
       </Modal>
       <Modal open={modal === "fbd-import"} onOpenChange={v => !v && setModal("")} title={t("导入 GXW 工程")}>
-        <FBDImport key={`${pid}:${vid}`} pid={pid} vid={vid} disabled={!canWrite} onProposal={showFBDProposal} t={t}/>
+        <Suspense fallback={<p role="status">{t("正在读取…")}</p>}>
+          <FBDImport key={`${pid}:${vid}`} pid={pid} vid={vid} disabled={!canWrite} onProposal={showFBDProposal} t={t}/>
+        </Suspense>
       </Modal>
       <Modal
         open={modal === "settings"}
@@ -1947,12 +1955,14 @@ export default function App() {
         {settingsTab === "general" && settingsError && <p role="alert" className="error-text">{settingsError}
           <Button onClick={() => setSettingsRetry((n) => n + 1)}>{t("重试")}</Button></p>}
         <RetainedPanel active={settingsTab === "model"}>{() => settings && (
-          <Settings
-            value={settings}
-            t={t}
-            disabled={!session || !!session.read_only}
-            onChange={value => { settingsRead.current.cancel(); setSettings(value); }}
-          />
+          <Suspense fallback={<p role="status">{t("正在读取设置")}</p>}>
+            <Settings
+              value={settings}
+              t={t}
+              disabled={!session || !!session.read_only}
+              onChange={value => { settingsRead.current.cancel(); setSettings(value); }}
+            />
+          </Suspense>
         )}</RetainedPanel>
       </Modal>
       <Modal

@@ -88,6 +88,9 @@ async def run(web_dist, evidence, *, executable=None, component_fixture=False):
                         # editor card is open at a time. An empty profile list
                         # already opens the create card.
                         field=page.get_by_label('配置名称',exact=True)
+                        # Wait for the lazy panel before deciding whether its
+                        # empty-profile create card is already open.
+                        await expect(field.or_(page.get_by_role('button',name='新增配置',exact=True))).to_be_visible()
                         if await field.count() and await field.is_visible(): return
                         if name is None:
                             await page.get_by_role('button',name='新增配置',exact=True).click()

@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import type { ReactNode } from "react";
 import { useResource } from "../lifecycle/useResource";
 import { Button } from "../components/ui";
-import { HardwarePanel } from "./HardwarePanel";
 import "./delivery.css";
+
+const HardwarePanel = lazy(() => import("./HardwarePanel").then(module => ({ default: module.HardwarePanel })));
 
 // The handoff writer emits headings, tables, lists and quoted evidence only.
 // Render that bounded format as React text; embedded HTML/images never execute.
@@ -59,6 +60,6 @@ export function DeliverySummary({pid,vid,t,refreshKey,readOnly}:{pid:string;vid:
   const markdown=value?.markdown||"";
   const [showHardware,setShowHardware]=useState(false);
   return <div className="document-view"><div className="content-heading"><h2>{t("工程交付摘要")}</h2><Button disabled={!markdown} onClick={()=>{const url=URL.createObjectURL(new Blob([markdown],{type:"text/markdown;charset=utf-8"}));const a=document.createElement("a");a.href=url;a.download=`${pid}-${vid}-handoff.md`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}}>{t("下载摘要")}</Button></div>
-    <details onToggle={event=>setShowHardware(event.currentTarget.open)} style={{marginBottom:20}}><summary>{t("高级维护：真实 PLC 只读接入")}</summary>{showHardware&&<HardwarePanel pid={pid} vid={vid} readOnly={readOnly} t={t}/>}</details>
+    <details onToggle={event=>setShowHardware(event.currentTarget.open)} style={{marginBottom:20}}><summary>{t("高级维护：真实 PLC 只读接入")}</summary>{showHardware&&<Suspense fallback={<p role="status">{t("正在读取本地授权状态…")}</p>}><HardwarePanel pid={pid} vid={vid} readOnly={readOnly} t={t}/></Suspense>}</details>
     {error&&<p role="alert">{error}</p>}{markdown?<DeliveryMarkdown text={markdown}/>:<p role="status">{t("正在核对交付证据")}</p>}</div>;
 }
