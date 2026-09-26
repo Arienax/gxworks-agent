@@ -250,7 +250,7 @@ Owns HTTP/Web contracts, presentation state, startup, FBD UI, workbench/applicat
 | `web/tests/requests.test.mjs` | read cancellation, serial polling, invalidation, visibility and structural sharing |
 | `web/tests/gx-send.test.mjs` | browser-side GX send interaction and presentation wiring |
 | `web/tests/model-parameters.test.mjs` | browser model-parameter UI behavior |
-| `web/tests/module-resolution.test.mjs` | frontend module resolution and packaging-sensitive imports |
+| `web/tests/module-resolution.test.mjs` | frontend module resolution, packaging-sensitive imports and production chunk boundaries |
 
 ### Runtime diagnostics, privacy and streaming
 

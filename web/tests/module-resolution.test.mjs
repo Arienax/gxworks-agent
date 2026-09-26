@@ -78,3 +78,38 @@ test('all relative frontend imports resolve identically with either filesystem p
   }
   assert.ok(checked > 0, 'The regression must inspect actual frontend imports.');
 });
+
+// Inspect Vite's real output graph, not import strings or a single entry file.
+// A vendor split alone must not disguise an oversized initial download.
+test('production chunks defer optional panels and respect the default size budget', async () => {
+  const { build } = await import('vite');
+  const result = await build({ root: webRoot, logLevel: 'silent', build: { write: false } });
+  const chunks = (Array.isArray(result) ? result : [result])
+    .flatMap(output => output.output).filter(output => output.type === 'chunk');
+  const byName = new Map(chunks.map(chunk => [chunk.fileName, chunk]));
+  const initial = new Set();
+  function visit(fileName) {
+    if (initial.has(fileName)) return;
+    const chunk = byName.get(fileName);
+    assert.ok(chunk, `Missing emitted static import: ${fileName}`);
+    initial.add(fileName);
+    chunk.imports.forEach(visit);
+  }
+  const entries = chunks.filter(chunk => chunk.isEntry);
+  assert.ok(entries.length, 'The real application entry must be present.');
+  entries.forEach(chunk => visit(chunk.fileName));
+  const bytes = chunk => Buffer.byteLength(chunk.code, 'utf8');
+  const initialBytes = [...initial].reduce((sum, name) => sum + bytes(byName.get(name)), 0);
+  assert.ok(initialBytes <= 500_000, `Initial JS including static dependencies is ${initialBytes} bytes.`);
+  for (const chunk of chunks) {
+    assert.ok(bytes(chunk) <= 500_000, `${chunk.fileName} exceeds Vite's default 500 kB warning budget.`);
+  }
+  const deferred = new Set(chunks.flatMap(chunk => chunk.dynamicImports));
+  for (const feature of ['Settings', 'SimulationWorkbench', 'FBDPanel', 'HardwarePanel']) {
+    const owners = chunks.filter(chunk => Object.keys(chunk.modules).some(id =>
+      id.replaceAll('\\', '/').endsWith(`/src/features/${feature}.tsx`)));
+    assert.ok(owners.length, `${feature} must remain in the production build.`);
+    assert.ok(owners.every(chunk => !initial.has(chunk.fileName)), `${feature} leaked into the initial graph.`);
+    assert.ok(owners.some(chunk => deferred.has(chunk.fileName)), `${feature} must have an on-demand entry.`);
+  }
+});

@@ -357,6 +357,7 @@ async def lifecycle_cases(browser, root, web_dist, results):
         saved = await wait_job(server, pid)
         vid = server.service.output(saved['id'])['version_id']
         version_path = f'/api/projects/{pid}/versions/{vid}'
+        server.service.create_project(name='Deferred FBD scope', plc_model='FX3U', target_mode='fbd')
         simulation = SimulationWorkbenchService(server.service)
         simulation.save(pid, vid, suite={'name': 'Lifecycle plan', 'plc_model': 'FX3U', 'tests': [{
             'name': 'input follows output', 'plc_model': 'FX3U', 'initial': {'X0': 0},
@@ -457,10 +458,173 @@ async def lifecycle_cases(browser, root, web_dist, results):
             await page.evaluate('window.__watch.disconnect()')
             return {'slow_poll_overlap': False, 'stale_snapshot_applied': False}
 
+        def feature_asset(feature):
+            assets = list((web_dist / 'assets').glob(f'{feature}-*.js'))
+            assert len(assets) == 1, f'Expected one deferred {feature} entry, found {assets}'
+            return assets[0].name
+
+        async def loaded_assets(page):
+            return await page.evaluate("performance.getEntriesByType('resource').map(e => new URL(e.name).pathname.split('/').pop())")
+
+        async def optional_panels_load_on_demand(page):
+            features = ['Settings', 'SimulationWorkbench', 'FBDPanel', 'HardwarePanel']
+            assets = {name: feature_asset(name) for name in features}
+            initial = await loaded_assets(page)
+            assert not set(assets.values()) & set(initial), 'Optional code was fetched on the initial view'
+            await page.get_by_role('button', name='设置', exact=True).click()
+            assert assets['Settings'] not in await loaded_assets(page), 'General settings loaded the model editor'
+            await page.get_by_role('button', name='模型', exact=True).click()
+            await page.get_by_role('button', name='新增配置', exact=True).click()
+            field = page.get_by_label('配置名称', exact=True)
+            await field.fill('Unsaved deferred settings')
+            await field.evaluate('el => window.__settingsField=el')
+            for _ in range(5):
+                await page.get_by_role('button', name='通用与审批', exact=True).click()
+                await page.get_by_role('button', name='模型', exact=True).click()
+            await expect(field).to_have_value('Unsaved deferred settings')
+            assert await field.evaluate('el => el===window.__settingsField'), 'Settings tabs remounted the draft'
+            await page.get_by_role('dialog').get_by_role('button', name='关闭', exact=True).click()
+            await tab(page, '工程交付摘要')
+            assert assets['HardwarePanel'] not in await loaded_assets(page), 'Collapsed hardware loaded code'
+            await page.get_by_text('高级维护：真实 PLC 只读接入', exact=True).click()
+            hardware = page.locator('.hardware-panel')
+            await expect(hardware).to_be_visible()
+            hardware_path = version_path + '/hardware'
+            await until(lambda: server.read_counts[hardware_path] and not server.inflight[hardware_path], 'Hardware status missing')
+            before = server.read_counts[hardware_path]
+            await hardware.evaluate('el => window.__hardwarePanel=el')
+            await tab(page, '梯形图'); await tab(page, '工程交付摘要')
+            assert await hardware.evaluate('el => el===window.__hardwarePanel'), 'Hardware main-tab switch remounted the panel'
+            assert server.read_counts[hardware_path] == before, 'Hardware main-tab switch refetched unchanged status'
+            # The import dialog shares FBD code but must not preload it.
+            assert assets['FBDPanel'] not in await loaded_assets(page)
+            await page.locator('.toolbar-menu').filter(has_text='导入 GXW').locator('summary').click()
+            await page.get_by_role('button', name='导入 GXW', exact=True).click()
+            await expect(page.get_by_label('选择 GXW 工程', exact=True)).to_be_visible()
+            await page.get_by_role('dialog').get_by_role('button', name='关闭', exact=True).click()
+            fetched = await loaded_assets(page)
+            assert all(fetched.count(assets[name]) == 1 for name in ['Settings', 'HardwarePanel', 'FBDPanel'])
+            assert assets['SimulationWorkbench'] not in fetched, 'Unvisited simulation fetched code'
+            return {'initial_optional_js_requests': 0, 'settings_draft_retained': True,
+                    'hardware_dom_retained': True, 'fbd_import_loaded_on_demand': True}
+
+        async def delayed_chunk_keeps_visibility_and_draft(page):
+            asset = feature_asset('SimulationWorkbench')
+            started, release = asyncio.Event(), asyncio.Event()
+            async def delay(route):
+                started.set()
+                await release.wait()
+                await route.continue_()
+            await page.route('**/assets/' + asset, delay)
+            explorer = page.locator('.program-explorer')
+            await explorer.get_by_label('搜索地址或注释', exact=True).fill('X0')
+            await explorer.get_by_role('button', name='+', exact=True).click()
+            await explorer.evaluate('el => window.__coldExplorer=el')
+            path = version_path + '/simulation-workbench'
+            before = server.read_counts[path]
+            try:
+                await tab(page, '仿真记录')
+                await asyncio.wait_for(started.wait(), 10)
+                await expect(page.locator('.editor-content').get_by_role('status')).to_have_text('正在读取…')
+                # A suspended view cannot blank or disable the rest of the shell.
+                await tab(page, '梯形图')
+                await expect(explorer.get_by_role('button', name='125%', exact=True)).to_be_visible()
+                assert await explorer.evaluate('el => el===window.__coldExplorer')
+                release.set()
+                workbench = page.locator('.simulation-workbench')
+                await workbench.wait_for(state='attached')
+                assert not await workbench.is_visible()
+                await asyncio.sleep(0.3)
+                assert server.read_counts[path] == before, 'A chunk resolving while hidden started a data read'
+                await tab(page, '仿真记录')
+                field = page.get_by_label('方案名称', exact=True)
+                await field.fill('Unsaved late-loaded draft')
+                await field.evaluate('el => window.__lateDraft=el')
+                await until(lambda: not server.inflight[path], 'Simulation read did not finish')
+                before = server.read_counts[path]
+                await tab(page, '梯形图')
+                await page.get_by_role('button', name='刷新结果 / 重绘梯形图', exact=True).click()
+                await expect(page.get_by_role('button', name='刷新结果 / 重绘梯形图', exact=True)).to_be_enabled()
+                await asyncio.sleep(0.3)
+                assert server.read_counts[path] == before, 'Hidden workbench fetched after result invalidation'
+                await tab(page, '仿真记录')
+                await until(lambda: server.read_counts[path] > before and not server.inflight[path], 'Visible workbench did not revalidate')
+                await expect(field).to_have_value('Unsaved late-loaded draft')
+                assert await field.evaluate('el => el===window.__lateDraft'), 'Revalidation remounted the draft'
+                assert (await loaded_assets(page)).count(asset) == 1, 'Repeated tab visits downloaded code again'
+                return {'late_hidden_reads': 0, 'hidden_refresh_reads': 0, 'draft_dom_retained': True}
+            finally:
+                release.set()
+                await page.unroute('**/assets/' + asset, delay)
+
+        async def fbd_draft_and_document_scope(page):
+            await page.locator('.project-item').filter(has_text='Deferred FBD scope').click()
+            panel = page.locator('.fbd-panel')
+            await expect(panel.get_by_role('button', name='+', exact=True)).to_be_visible()
+            await panel.get_by_role('button', name='+', exact=True).click()
+            await panel.locator('.fbd-sections').get_by_role('button', name='对象', exact=True).click()
+            await expect(panel.get_by_role('button', name='添加对象', exact=True)).to_be_enabled()
+            await panel.get_by_role('button', name='添加对象', exact=True).click()
+            await expect(panel.get_by_role('button', name='撤销草稿', exact=True)).to_be_visible()
+            await expect(panel.locator('.fbd-sheet tbody tr')).to_have_count(1)
+            await panel.evaluate('el => window.__fbdPanel=el')
+            before = server.read_counts['/api/fbd/catalog']
+            await tab(page, 'ST'); await tab(page, 'FBD')
+            assert await panel.evaluate('el => el===window.__fbdPanel'), 'FBD tab switch remounted the editor'
+            await expect(panel.locator('.fbd-sheet tbody tr')).to_have_count(1)
+            await panel.locator('.fbd-sections').get_by_role('button', name='图形', exact=True).click()
+            await expect(panel.get_by_role('button', name='125%', exact=True)).to_be_visible()
+            assert server.read_counts['/api/fbd/catalog'] == before
+            # Retention is document-scoped, never a cross-project singleton.
+            await page.locator('.project-item').filter(has_text='Lifecycle regression').click()
+            await tab(page, '梯形图')
+            await visible_svg(page)
+            assert not await page.evaluate('window.__fbdPanel.isConnected')
+            await page.locator('.project-item').filter(has_text='Deferred FBD scope').click()
+            await expect(panel.get_by_role('button', name='100%', exact=True)).to_be_visible()
+            assert await panel.evaluate('el => el!==window.__fbdPanel')
+            await expect(panel.get_by_role('button', name='撤销草稿', exact=True)).to_have_count(0)
+            return {'fbd_draft_retained': True, 'fbd_zoom_retained': True, 'old_document_disposed': True}
+
+        async def hidden_replay_pauses(page):
+            from simulator import InMemoryTestBackend, SimulatorRegressionService
+            # Persist observed test-backend reads through the real service. This
+            # is explicitly not a PLC emulator or a native simulation execution.
+            backend = InMemoryTestBackend(on_write=lambda state, _values: state.values.update(Y0=state.values.get('X0', 0)))
+            run = SimulatorRegressionService(server.service.store, backend=backend).run_version_suite(pid, vid, {
+                'name': 'Deferred replay fixture', 'plc_model': 'FX3U', 'tests': [{
+                    'name': 'recorded input', 'plc_model': 'FX3U', 'initial': {'X0': 0},
+                    'steps': [{'at_ms': 0, 'set': {'X0': 1}}, {'at_ms': 200, 'expect': {'Y0': 1}}],
+                    'sample_ms': 5, 'timeout_ms': 500}]})
+            await tab(page, '仿真记录')
+            await page.get_by_role('tab', name='波形回放', exact=True).click()
+            await page.get_by_role('combobox', name='本版本运行记录', exact=True).select_option(run['record']['run_id'])
+            cursor = page.get_by_label('回放采样位置', exact=True)
+            await expect(cursor).to_be_visible()
+            await cursor.evaluate('el => window.__replayCursor=el')
+            await page.locator('.sim-replay').get_by_role('button', name='播放', exact=True).click()
+            await expect(cursor).not_to_have_value('0')
+            await tab(page, '梯形图')
+            await asyncio.sleep(0.1)
+            paused = await cursor.input_value()
+            await asyncio.sleep(0.65)
+            assert await cursor.input_value() == paused, 'Hidden replay advanced its playback timer'
+            assert await cursor.evaluate('el => el===window.__replayCursor && el.isConnected')
+            await tab(page, '仿真记录')
+            await expect(cursor).not_to_have_value(paused)
+            assert int(await cursor.input_value()) > int(paused), 'Resuming replay reset its cursor'
+            await page.locator('.sim-replay').get_by_role('button', name='暂停', exact=True).click()
+            return {'hidden_playback_paused': True, 'cursor_retained': True,
+                    'backend_kind': 'test_memory_not_plc_simulator'}
+
         checks = [('tab-state-and-request-budget', preserve_tabs), ('redraw-keeps-dom', redraw_retains_dom),
                   ('plan-save-is-local-and-single-flight', save_plan_retains_editor),
                   ('diagnosis-autorefresh-without-SSE', completion_without_sse),
-                  ('slow-poll-and-stale-response', stale_poll_and_slow_reads)]
+                  ('slow-poll-and-stale-response', stale_poll_and_slow_reads),
+                  ('optional-panels-load-on-demand', optional_panels_load_on_demand),
+                  ('late-chunk-visibility-and-draft', delayed_chunk_keeps_visibility_and_draft),
+                  ('fbd-draft-and-document-scope', fbd_draft_and_document_scope),
+                  ('hidden-replay-pauses', hidden_replay_pauses)]
         for name, check in checks:
             print('START lifecycle:', name, flush=True)
             context, page, errors = await open_page(browser, server, pid)
