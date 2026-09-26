@@ -1,0 +1,30 @@
+name: Web audit workspace
+on:
+  push:
+    branches: [fix/web-lifecycle-performance-20260926]
+    paths: [.github/workflows/web-audit-workspace.yml]
+permissions:
+  contents: read
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare reproducible source and frontend dependencies
+        run: |
+          git archive HEAD | gzip > "$RUNNER_TEMP/source.tar.gz"
+          npm ci --prefix web --ignore-scripts
+          tar -czf "$RUNNER_TEMP/web-dependencies.tar.gz" web/node_modules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-audit-workspace
+          path: |
+            ${{ runner.temp }}/source.tar.gz
+            ${{ runner.temp }}/web-dependencies.tar.gz
+          retention-days: 1
