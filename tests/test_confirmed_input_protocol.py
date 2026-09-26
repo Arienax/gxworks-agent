@@ -11,7 +11,7 @@ from application.compact_protocol import CompactProtocolError, expand_compact_la
 from application.confirmed_generation_context import build_confirmed_generation_context, project_confirmed_specification
 from application.context_compiler import ContextCompiler, ContextCompilerInput
 from plc.specification.bindings import confirmed_input_levels
-from test_web_api import offline_runtime_profile
+from model_profile_fixtures import offline_runtime_profile
 
 
 OPAQUE = "输出触点与启动触点并联自锁，停止触点串联断开输出"
@@ -276,6 +276,8 @@ class OneResponse:
 
 
 def test_real_http_confirmation_and_generation_have_one_call(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi", reason="HTTP acceptance requires Web dependencies")
+    pytest.importorskip("httpx", reason="HTTP acceptance requires Web dependencies")
     from fastapi.testclient import TestClient
     from application.workbench import WorkbenchService
     from integrations.web.app import create_app
