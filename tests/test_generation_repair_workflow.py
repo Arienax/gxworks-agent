@@ -37,7 +37,18 @@ def test_structurally_valid_candidate_never_calls_remote_repair(tmp_path):
     assert result["validation"]["status"] == "candidate_ready"
     assert result["repair_attempts"] == 0
     assert calls == []
-    assert json.loads((tmp_path / "ladder.json").read_text(encoding="utf-8")) == candidate
+    saved = json.loads((tmp_path / "ladder.json").read_text(encoding="utf-8"))
+    # Deterministic prefix factoring is not a second model generation. Compare
+    # the complete ordered condition/action paths, not presentation grouping.
+    def paths(program):
+        return [(([r["header_element"]] if r.get("header_element") else [])
+                 + r.get("shared_inputs", []) + b["inputs"], b["outputs"])
+                for r in program["rungs"] for b in r["branches"]]
+    assert paths(saved) == paths(candidate)
+    assert saved["device_comments"] == candidate["device_comments"]
+    assert [r["rung_id"] for r in saved["rungs"]] == [1, 37, 38]
+    assert saved["rungs"][1] == candidate["rungs"][36]
+    assert candidate == ladder40(invalid=False)
 
 
 def test_semantic_style_problem_is_not_repaired_during_generation(tmp_path):

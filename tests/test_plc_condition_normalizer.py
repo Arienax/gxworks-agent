@@ -84,8 +84,7 @@ def test_merges_adjacent_equal_conditions_preserving_output_order_and_ids():
 
 
 @pytest.mark.parametrize("output", [app("SET", "M0"), app("RST", "M0"),
-    app("MOV", "K0", "D0"), app("UNKNOWN", "M0"),
-    {"type": "TIMER", "address": "T0", "value": "K10"},
+    app("UNKNOWN", "M0"), app("CALL", "P0"), app("MOV", "K0", "D0Z0"),
     {"type": "PLS", "address": "M0"}])
 def test_stateful_or_unknown_output_is_a_hoisting_barrier(output):
     source = ladder(rung(1, branch([], output), branch([contact("M0")], coil("Y0")), shared=[contact("M0")]))
@@ -136,14 +135,16 @@ def test_no_global_or_merge_or_nonadjacent_reordering():
         assert result == source
 
 
-def test_changed_notes_are_preserved_and_not_silently_merged():
+def test_different_network_notes_survive_common_condition_merge():
     source = ladder(rung(1, branch([contact("X0")], coil("Y0"))),
                     rung(2, branch([contact("X0")], coil("Y1"))))
     source["rungs"][0]["debug_note"] = "First purpose"
     source["rungs"][1]["debug_note"] = "Second purpose"
     result, summary = assert_idempotent(source)
-    assert result == source
-    assert any(item["reason"] == "distinct_network_notes" for item in summary["skipped"])
+    assert len(result["rungs"]) == 1
+    assert result["rungs"][0]["debug_note"] == "First purpose\nSecond purpose"
+    assert summary["changes"][-1]["source_rung"] == source["rungs"][1]
+    assert summary["changes"][-1]["previous_target_rung"] == source["rungs"][0]
 
 
 def test_ordinary_address_aliases_still_detect_write_after_read_dependencies():
@@ -288,3 +289,118 @@ def test_scan_oracle_detects_the_guard_and_last_write_counterexamples():
         [contact("X0")], [contact("X1")]]}], coil("Y0"))))
     assert scan(duplicate_writer, {"X0": 1, "X1": 0}, {})[0]["Y0"] == 0
     assert scan(wrongly_or_merged, {"X0": 1, "X1": 0}, {})[0]["Y0"] == 1
+
+
+@pytest.mark.parametrize("output", [app("MOV", "K0", "D0"),
+    {"type": "TIMER", "address": "T0", "value": "K2"},
+    {"type": "PLS", "address": "M2"}])
+def test_known_outputs_only_block_predicates_in_their_effect_footprint(output):
+    source = ladder(rung(1, branch([], output), branch([contact("M0")], coil("Y0")), shared=[contact("M0")]))
+    result, summary = assert_idempotent(source)
+    assert result["rungs"][0]["branches"][1]["inputs"] == []
+    assert result["rungs"][0]["branches"][0]["outputs"] == [output]
+    assert any(c["operation"] == "remove_duplicate_condition" for c in summary["changes"])
+
+
+def test_adjacent_common_prefix_retains_distinct_suffixes_and_effect_order():
+    source = ladder(rung(10, branch([contact("M0"), contact("X0")], coil("Y0"))),
+                    rung(20, branch([contact("X1", "NC")], app("MOV", "K7", "D10")), header=contact("M0")),
+                    rung(30, branch([contact("M0"), contact("X2")], coil("Y2"))))
+    result, summary = assert_idempotent(source)
+    assert len(result["rungs"]) == 1
+    merged = result["rungs"][0]
+    assert merged["shared_inputs"] == [contact("M0")]
+    assert [b["inputs"] for b in merged["branches"]] == [[contact("X0")], [contact("X1", "NC")], [contact("X2")]]
+    assert [b["outputs"] for b in merged["branches"]] == [r["branches"][0]["outputs"] for r in source["rungs"]]
+    assert any(c["operation"] == "merge_adjacent_branches" for c in summary["changes"])
+    validate_ladder_candidate_structure(result)
+
+
+def test_parallel_suffix_is_not_expanded_or_moved_ahead_of_shared_guard():
+    either = {"type": "parallel_block", "branches": [[contact("X1")], [contact("X2")]]}
+    source = ladder(rung(1, branch([contact("M0"), either], coil("Y0"))),
+                    rung(2, branch([contact("M0"), contact("X3")], coil("Y1"))))
+    result, _ = assert_idempotent(source)
+    assert result["rungs"][0]["shared_inputs"] == [contact("M0")]
+    assert result["rungs"][0]["branches"][0]["inputs"] == [either]
+    validate_ladder_candidate_structure(result)
+
+
+@pytest.mark.parametrize("output", [app("DMOV", "K1", "D9"), app("BMOV", "D20", "D8", "K8"),
+                                    app("FMOV", "K0", "D8", "K8"), app("ZRST", "D8", "D20")])
+def test_word_and_range_writes_cannot_hide_a_guard_dependency(output):
+    guard = {"type": "COMPARE", "expression": ">= D10 K1"}
+    source = ladder(rung(1, branch([guard], output)), rung(2, branch([guard], coil("Y0"))))
+    result, summary = assert_idempotent(source)
+    assert result == source
+    assert any(s["reason"] == "read_after_write" for s in summary["skipped"])
+
+
+def test_shrinking_an_existing_shared_prefix_does_not_duplicate_its_evaluation():
+    source = ladder(rung(1, branch([], coil("M1")), branch([], coil("Y0")), shared=[contact("M0"), contact("M1", "NC")]),
+                    rung(2, branch([contact("M0")], coil("Y1"))))
+    result, _ = assert_idempotent(source)
+    assert result == source
+    assert scan(result, {"M0": 1, "M1": 0}, {}) == scan(source, {"M0": 1, "M1": 0}, {})
+
+
+def test_general_prefix_merging_preserves_multiscan_state_and_write_trace():
+    parallel = {"type": "parallel_block", "branches": [[contact("X1")], [contact("X2", "NC")]]}
+    programs = [
+        ladder(rung(1, branch([contact("M0"), contact("X0")], coil("Y0"))),
+               rung(2, branch([contact("M0"), parallel], app("MOV", "K2", "D10"))),
+               rung(3, branch([contact("M0"), contact("Y0")], coil("Y1")))),
+        ladder(rung(1, branch([contact("M0")], {"type": "TIMER", "address": "T0", "value": "K2"})),
+               rung(2, branch([contact("M0"), contact("T0")], coil("Y1")))),
+        ladder(rung(1, branch([contact("X0"), contact("M0")], app("RST", "M0"))),
+               rung(2, branch([contact("X0"), contact("M0")], coil("Y0")))),
+    ]
+    for source in programs:
+        normalized, _ = assert_idempotent(source)
+        assert len(normalized["rungs"]) < len(source["rungs"])
+        for bits in itertools.product((0, 1), repeat=5):
+            left = dict(zip(("M0", "X0", "X1", "X2", "Y0"), bits))
+            right = dict(left)
+            lt, rt = {}, {}
+            for tick in range(8):
+                for state in (left, right):
+                    state.update(X0=(bits[1] + tick) % 2, X1=(bits[2] + tick // 2) % 2)
+                left, lt, lw = scan(source, left, lt)
+                right, rt, rw = scan(normalized, right, rt)
+                assert (left, lt, lw) == (right, rt, rw)
+
+
+def test_candidate_preparation_uses_shared_normalization_without_model_repair():
+    from plc.generation import prepare_ladder_candidate
+    source = ladder(rung(10, branch([contact("M0"), contact("X0")], coil("Y0"))),
+                    rung(20, branch([contact("M0"), contact("X1")], coil("Y1"))))
+    result = prepare_ladder_candidate(source, plc_model="FX3U")
+    assert len(result["ladder"]["rungs"]) == 1
+    assert len(result["program_ir"]["networks"]) == 1
+    assert result["normalization"]["changes"]
+
+
+@pytest.mark.parametrize("field", ["debug_note", "label"])
+def test_annotation_capacity_keeps_valid_candidates_valid_without_truncation(field):
+    from plc.generation_contract import MAX_LABEL_LEN
+    from plc.generation import prepare_ladder_candidate
+    source = ladder(rung(1, branch([contact("M0")], coil("Y0"))),
+                    rung(2, branch([contact("M0")], coil("Y1"))))
+    for index, network in enumerate(source["rungs"]):
+        text = ("A" if index == 0 else "B") * MAX_LABEL_LEN
+        if field == "label":
+            network["branches"][0]["inputs"][0]["label"] = text
+        else:
+            network[field] = text
+    result, summary = assert_idempotent(source)
+    assert result == source
+    assert any(item["reason"] == "annotation_capacity" for item in summary["skipped"])
+    assert prepare_ladder_candidate(source, plc_model="FX3U")["ladder"] == source
+
+
+def test_local_factoring_preserves_distinct_short_condition_annotations():
+    source = ladder(rung(1, branch([contact("M0") | {"label": "Run permit"}], coil("Y0")),
+                             branch([contact("M0") | {"label": "Conveyor enable"}], coil("Y1"))))
+    result, _ = assert_idempotent(source)
+    assert result["rungs"][0]["shared_inputs"][0]["label"] == "Run permit\nConveyor enable"
+    validate_ladder_candidate_structure(result)
