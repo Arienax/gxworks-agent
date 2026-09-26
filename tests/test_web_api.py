@@ -131,7 +131,7 @@ def test_legacy_workspace_http_reads_never_migrate_or_initialize_execution(tmp_p
                                model_factory=lambda: pytest.fail("Model initialized while browsing"))
     import simulator.runtime
     monkeypatch.setattr(simulator.runtime, "get_simulator_gateway_runtime",
-                        lambda *a: pytest.fail("Gateway initialized while browsing"))
+                        lambda *a, **k: pytest.fail("Gateway initialized while browsing"))
     with TestClient(_app(workspace, tmp_path / "state", service=service), base_url=ORIGIN) as client:
         _login(client)
         paths = ["/api/projects", "/api/projects/" + project,
