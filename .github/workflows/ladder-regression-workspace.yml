@@ -1,0 +1,23 @@
+name: Ladder regression workspace
+on:
+  push:
+    branches: [fix/web-lifecycle-performance-20260926]
+    paths: [.github/workflows/ladder-regression-workspace.yml]
+permissions:
+  contents: read
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Export source history without credentials or LFS payloads
+        run: git bundle create "$RUNNER_TEMP/ladder-source.bundle" --all
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ladder-regression-workspace
+          path: ${{ runner.temp }}/ladder-source.bundle
+          retention-days: 1
