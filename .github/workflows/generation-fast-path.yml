@@ -58,12 +58,11 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
           lfs: true
-      - name: Detect current-push generation scope
+      - name: Detect pull-request generation scope
         id: scope
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BEFORE_SHA: ${{ github.event.before }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
@@ -72,14 +71,10 @@ jobs:
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          from="$BEFORE_SHA"
-          if [[ -z "$from" || "$from" == "null" || "$from" =~ ^0+$ ]]; then
-            from="$BASE_SHA"
-          fi
+          # Validate the whole PR, not only its most recent push. Rebased
+          # before SHAs may no longer be reachable in a fresh checkout.
+          from="$BASE_SHA"
           to="$HEAD_SHA"
-          if [[ -z "$to" || "$to" == "null" ]]; then
-            to=HEAD
-          fi
           git diff --name-only "$from"..."$to" > changed-files.txt
           if grep -Eq '^(src/(application/(generation\.py|generation_agent\.py|generation_context\.py|generation_support\.py|field_repair\.py|format_patch_repair\.py|rejected_generation_preview\.py|repair_policy\.py|delivery\.py)|plc/(candidate_repair\.py|generation_contract\.py|validation\.py|instructions\.py|ir\.py|specification/(approach\.py|bindings\.py|conditions\.py|semantic_validation\.py))|agent_runtime/)|resources/instructions/|tools/(build_fx3u_verified_opcode_overlay|audit_fx3u_contracts)\.py|tests/(test_generation_.*\.py|test_field_patch_repair_protocol\.py|test_format_patch_repair\.py|test_hybrid_compact_recovery\.py|test_user_confirmed_generation_repair\.py|test_rejected_generation_delivery\.py|test_instruction_contract_alignment\.py|test_contract_repair_planner\.py)|\.github/workflows/generation-fast-path\.yml$)' changed-files.txt; then
             echo "run=true" >> "$GITHUB_OUTPUT"
