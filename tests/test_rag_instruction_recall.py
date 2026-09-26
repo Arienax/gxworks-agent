@@ -70,13 +70,12 @@ def small_instruction_index(tmp_path, monkeypatch):
             (510, "12. MPS, MRD, MPP", "unrelated body missing the requested opcode", "DAMAGED", "programming", "FX3U", "*"),
         ])
         db.execute("INSERT INTO instruction_aliases VALUES ('AND','AND','opcode',701)")
-    monkeypatch.setattr(retriever, "_index_path", lambda: path)
+    monkeypatch.setattr(core, "_index_path", lambda: path)
     retriever._close_thread_connection()
     retriever._retrieve_cached.cache_clear()
     yield path
     retriever._close_thread_connection()
     retriever._retrieve_cached.cache_clear()
-    retriever._sync_core_hooks()
 
 
 def test_broad_retrieval_does_not_use_instruction_alias_table_as_fact_owner(small_instruction_index):
@@ -96,3 +95,45 @@ def test_broad_retrieval_still_respects_scope_noise_and_budget(small_instruction
 
 def test_bundled_short_instruction_does_not_leak_into_other_plc_family():
     assert retriever.retrieve_knowledge("MPS MRD MPP", plc_model="FX5U", char_budget=6500) == []
+
+
+def test_scoped_index_override_does_not_leak_or_get_overwritten(tmp_path, monkeypatch):
+    from knowledge.structured_facts import resolve_instruction_records
+
+    original_path = core._index_path
+    database = tmp_path / "scoped.sqlite"
+    with sqlite3.connect(database) as db:
+        db.execute("CREATE TABLE chunks (id INTEGER PRIMARY KEY, text TEXT)")
+    with monkeypatch.context() as scoped:
+        scoped.setattr(core, "_index_path", lambda: database)
+        assert retriever.retrieve_knowledge("MPS", char_budget=6500) == []
+        # A facade must never mirror stale aliases over the configured Core.
+        assert core._index_path() == database
+    assert core._index_path is original_path
+    records = resolve_instruction_records(["MPS"], plc_model="FX3U")
+    assert any(row.get("manual_number") == "JY997D16601" for row in records)
+    assert all(row.get("structured_lookup") for row in records)
+
+
+def test_declared_natural_language_aliases_resolve_outside_broad_ranking():
+    from knowledge.structured_facts import structured_fact_targets
+
+    targets = structured_fact_targets("FX3U 批量清零连续 M 软元件区间应该使用什么指令？")
+    reset = next(row for row in targets["instructions"] if row["opcode"] == "ZRST")
+    assert reset["target_resolution"] == "declared_manual_alias"
+    assert reset["requested_alias"] == "批量清零"
+    assert all(row["opcode"] != "ZRST" for row in structured_fact_targets("FX3U 不需要批量清零。") ["instructions"])
+    assert structured_fact_targets("please revise this program")["instructions"] == []
+
+
+def test_section_fallback_keeps_manual_bytes_and_instance_step_facts():
+    from knowledge.structured_facts import resolve_instruction_records, compact_structured_fact_record
+
+    full = resolve_instruction_records([{"opcode": "RST", "operands": ["D10"]}])[0]
+    assert full["instruction_lookup_basis"] == "official_section_heading"
+    assert "STEP_WIDTH: 3 program step(s)" in full["text"]
+    public = compact_structured_fact_record(full)
+    assert public["instruction_step_width"]["steps"] == 3
+    assert public["instruction_contract"]["opcode"] == "RST"
+    with sqlite3.connect(resource_path("knowledge/fx3u_knowledge.sqlite").resolve().as_uri()+"?mode=ro", uri=True) as db:
+        assert public["text"] == db.execute("SELECT text FROM chunks WHERE id=?", (full["original_id"],)).fetchone()[0]

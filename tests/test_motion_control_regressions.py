@@ -388,9 +388,14 @@ def test_known_operand_count_is_checked_by_existing_registry_validation():
     bad["rungs"][0]["branches"][0]["outputs"][0]["operands"] = ["X0", "X0", "Y0", "K1000", "K200"]
     with pytest.raises(PLCJsonValidationError, match="exactly 4 operands"):
         validate_ladder_candidate_structure(bad, plc_model="FX3U")
-    snapshot = compact_capability_prompt("FX3U", {"selected_approach":{"description":"ZRN"}})
-    payload = json.loads(snapshot.split("# Selected instruction capability snapshot\n", 1)[1])
-    instruction = payload["instructions"][0]
+    from knowledge.structured_facts import resolve_instruction_contract
+    # Exact facts have one owner; the retired prompt snapshot must stay empty.
+    assert compact_capability_prompt("FX3U", {}) == ""
+    instruction = resolve_instruction_contract({"opcode": "ZRN"}, plc_model="FX3U")
     assert instruction["min_operands"] == instruction["max_operands"] == 4
-    assert [r["name"] for r in instruction["operands"]] == ["return_speed", "creep_speed", "zero_signal", "pulse_output"]
-    assert "M8029" in instruction["notes"] and payload["source"] == "current_python_catalogue"
+    assert instruction["native_operand_order"] == ["S1", "S2", "S3", "D"]
+    assert [r["name"] for r in instruction["operand_annotations"]] == [
+        "return_speed", "creep_speed", "zero_signal", "pulse_output"]
+    assert instruction["completion"]["device"] == "M8029"
+    assert instruction["completion"]["placement"] == "same_rung_parallel_branch"
+    assert instruction["sources"]

@@ -151,7 +151,10 @@ def test_instruction_instance_contract_keeps_exact_operands_and_source():
     assert {"arity", "operand_order", "form_identity"} <= set(contract["verified_fields"])
 
 
-def test_local_instruction_fallback_keeps_contract_and_step_width_provenance_separate():
+def test_local_instruction_fallback_keeps_contract_and_step_width_provenance_separate(tmp_path, monkeypatch):
+    # Exercise a genuinely unavailable manual index, not a particular mnemonic
+    # that happened to be missing from a prior catalogue revision.
+    monkeypatch.setattr(core, "_index_path", lambda: tmp_path / "not-installed.sqlite")
     rows = resolve_instruction_records(
         [{"opcode": "RST", "base_opcode": "RST", "operands": ["D10"]}],
         plc_model="FX3U",
@@ -198,8 +201,8 @@ def test_structured_step_width_uses_shared_owner_for_instruction_instance():
         assert fact["operands"] == operands
         assert f"STEP_WIDTH: {expected} program step(s)" in rows[0]["text"]
         if opcode == "RST":
-            assert rows[0]["manual_id"] == "structured_instruction_registry"
-            assert rows[0]["source"] == "local_structured_instruction_owners"
+            assert rows[0]["instruction_lookup_basis"] == "official_section_heading"
+            assert rows[0]["manual_number"] == "JY997D16601"
             assert rows[0]["instruction_contract"]["opcode"] == "RST"
 
 

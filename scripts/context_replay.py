@@ -128,7 +128,7 @@ def offline_environment():
 class RecordedProvider:
     """Transport fixture only. Responses pass the real application acceptance."""
     profile = {"id": "offline-replay", "adapter": "openai_compatible", "model": "offline-replay",
-               "capabilities": {"structured_output": True}}
+               "baseUrl": "https://offline.invalid/v1"}
 
     def __init__(self, completion):
         self.completion = completion if isinstance(completion, str) else json.dumps(completion, ensure_ascii=False)

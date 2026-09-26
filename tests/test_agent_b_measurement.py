@@ -5,6 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from model_profile_fixtures import offline_runtime_profile
+
 from application.compact_protocol import canonical_compact_example, compact_response_schema, compact_protocol_prompt
 from application.generation_agent import _FirstJSONObjectProvider
 from model_runtime.provider import ModelRequest, OpenAICompatibleProvider, ReasoningDelta, TextDelta, Usage, UserMessage, _usage_event
@@ -79,7 +81,7 @@ def test_runner_uses_real_single_call_path_without_changing_effort(monkeypatch, 
     import application.generation_agent as agent
     monkeypatch.setattr(agent, "_build_knowledge_context", lambda *a, **k: KnowledgeContext("", {"records": []}))
     class Provider:
-        profile = {"id": "offline", "adapter": "openai_compatible", "model": "offline", "capabilities": {"structured_output": True}}
+        profile = offline_runtime_profile()
         def __init__(self):
             self.requests = []
         def stream(self, request):
@@ -89,11 +91,38 @@ def test_runner_uses_real_single_call_path_without_changing_effort(monkeypatch, 
     provider = Provider()
     record = run_case({"case_id": "hold", "confirmed_spec": old_confirmed_spec()}, "automatic", provider=provider, effort="high")
     assert record["generation_status"] == "completed", record
-    assert record["behavior"]["status"] == "verified" and record["structural_valid"]
+    assert record["behavior"] == {"status": "not_covered", "reason": "no_behavior_evaluator"}
+    assert record["structural_valid"] and record["semantic_validation"]["legacy_compatibility"] is True
     assert record["model_calls"] == 1 and provider.requests[0].max_retries == 0
     assert "reasoning_effort" not in provider.requests[0].options
     assert record["attempts"][0]["usage"]["reasoning_tokens"] == 12
     assert agent._build_knowledge_context("fixture").manifest == {"records": []}
+
+
+@pytest.mark.parametrize("behavior_status", ["verified", "failed", "not_covered"])
+def test_benchmark_keeps_semantic_receipts_separate_from_behavior(monkeypatch, behavior_status):
+    from test_generation_agent_boundary import OneShotProvider, _spec
+    import application.generation_agent as agent
+    monkeypatch.setattr(agent, "_build_knowledge_context", lambda *a, **k: "")
+    specification = _spec()
+    specification["selected_approach"] = {
+        "approach_id": "direct", "name": "direct",
+        "implementation_semantics": [{"kind": "structure", "status": "required", "value": "direct_logic"}],
+        "explicit_user_constraints": {"required_opcodes": ["MOV"]},
+    }
+    inspected = []
+    def evaluate(case, result):
+        inspected.append(result["ladder"])
+        return {"status": behavior_status, "source": "offline_evaluator"}
+    provider = OneShotProvider()
+    record = run_case({"case_id": "semantic-receipt", "confirmed_spec": specification},
+                      "automatic", provider=provider, evaluator=evaluate)
+    assert record["generation_status"] == "completed", record
+    assert record["structural_valid"]
+    assert record["semantic_validation"]["status"] == "violated"
+    assert record["semantic_validation"]["violations"]
+    assert record["behavior"] == {"status": behavior_status, "source": "offline_evaluator"}
+    assert len(inspected) == len(provider.requests) == record["model_calls"] == 1
 
 
 def test_dry_run_never_loads_provider_or_calls_model(tmp_path, monkeypatch, capsys):

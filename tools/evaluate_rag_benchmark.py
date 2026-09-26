@@ -105,8 +105,9 @@ def main() -> int:
         raise SystemExit("database and benchmark must exist")
     sys.path.insert(0, str(root / "src"))
     import knowledge.retriever as retriever
+    import knowledge.core as core
+    from unittest.mock import patch
 
-    retriever._index_path = lambda: database
     retriever._retrieve_cached.cache_clear()
     retriever._close_thread_connection()
 
@@ -120,55 +121,56 @@ def main() -> int:
     latencies_ms: list[float] = []
     details = []
     category_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for case in cases:
-        started = time.perf_counter()
-        results = retriever.retrieve_knowledge(
-            case["query"],
-            plc_model=case.get("plc_model", "FX3U"),
-            task_type=case.get("task_type", "analysis"),
-            top_k=int(args.top_k),
-            char_budget=int(args.char_budget),
-        )
-        latency_ms = (time.perf_counter() - started) * 1000.0
-        latencies_ms.append(latency_ms)
-        if case.get("negative"):
-            passed = len(results) == 0
-            rank = None
-            negative_outcomes.append(passed)
-        else:
-            rank = next(
-                (
-                    index
-                    for index, result in enumerate(results, start=1)
-                    if result_matches(case, result)
-                ),
-                None,
+    with patch.object(core, "_index_path", lambda: database):
+        for case in cases:
+            started = time.perf_counter()
+            results = retriever.retrieve_knowledge(
+                case["query"],
+                plc_model=case.get("plc_model", "FX3U"),
+                task_type=case.get("task_type", "analysis"),
+                top_k=int(args.top_k),
+                char_budget=int(args.char_budget),
             )
-            passed = rank is not None
-            positive_ranks.append(rank)
-        row = {
-            "id": case["id"],
-            "category": case["category"],
-            "negative": bool(case.get("negative")),
-            "passed": passed,
-            "rank": rank,
-            "latency_ms": round(latency_ms, 3),
-            "result_count": len(results),
-            "top_results": [
-                {
-                    "id": result.get("id"),
-                    "manual_id": result.get("manual_id"),
-                    "chunk_type": result.get("chunk_type"),
-                    "instruction_opcode": result.get("instruction_opcode"),
-                    "match_type": result.get("match_type"),
-                    "matched_entity": result.get("matched_entity"),
-                    "score": result.get("score"),
-                }
-                for result in results[:3]
-            ],
-        }
-        details.append(row)
-        category_rows[str(case["category"])].append(row)
+            latency_ms = (time.perf_counter() - started) * 1000.0
+            latencies_ms.append(latency_ms)
+            if case.get("negative"):
+                passed = len(results) == 0
+                rank = None
+                negative_outcomes.append(passed)
+            else:
+                rank = next(
+                    (
+                        index
+                        for index, result in enumerate(results, start=1)
+                        if result_matches(case, result)
+                    ),
+                    None,
+                )
+                passed = rank is not None
+                positive_ranks.append(rank)
+            row = {
+                "id": case["id"],
+                "category": case["category"],
+                "negative": bool(case.get("negative")),
+                "passed": passed,
+                "rank": rank,
+                "latency_ms": round(latency_ms, 3),
+                "result_count": len(results),
+                "top_results": [
+                    {
+                        "id": result.get("id"),
+                        "manual_id": result.get("manual_id"),
+                        "chunk_type": result.get("chunk_type"),
+                        "instruction_opcode": result.get("instruction_opcode"),
+                        "match_type": result.get("match_type"),
+                        "matched_entity": result.get("matched_entity"),
+                        "score": result.get("score"),
+                    }
+                    for result in results[:3]
+                ],
+            }
+            details.append(row)
+            category_rows[str(case["category"])].append(row)
 
     positives = len(positive_ranks)
     recalls = {

@@ -3,7 +3,7 @@
     "case_id": "design-conveyor",
     "mode": "design",
     "plc_model": "FX3U",
-    "request": "Mitsubishi FX3U。一条输送线上最多同时存在8个工件，分类结果随输送节拍跟踪。请设计不同的数据跟踪实现，只讨论内部数据。",
+    "request": "Mitsubishi FX3U。一条输送线上最多同时存在8个工件，分类结果随输送节拍跟踪。请设计不同的数据跟踪实现，只讨论内部数据。\n已确认的接口与内部地址：\nX0：输送节拍\nM10：运行状态\nD100：剩余节拍\nT0：启动延时\nC0：产品计数",
     "analysis": {
       "summary": "比较位串移位、工位数组与工件槽位计数三种方案。",
       "missing_info": [
@@ -34,7 +34,7 @@
           "pros": "",
           "cons": "",
           "generation_guide": "",
-          "generation_contract": {}
+          "implementation_semantics": []
         },
         {
           "approach_id": "station_array",
@@ -43,7 +43,7 @@
           "pros": "",
           "cons": "",
           "generation_guide": "",
-          "generation_contract": {}
+          "implementation_semantics": []
         },
         {
           "approach_id": "slot_position_counter",
@@ -52,7 +52,7 @@
           "pros": "",
           "cons": "",
           "generation_guide": "每节拍使用 DEC D100 更新剩余节拍计数。",
-          "generation_contract": {}
+          "implementation_semantics": []
         }
       ],
       "assumptions": []
@@ -94,7 +94,7 @@
     "case_id": "typed-parameter-identity",
     "mode": "direct",
     "plc_model": "FX3U",
-    "request": "Mitsubishi FX3U。采用工件槽位跟踪。使用 DEC D100 维护剩余节拍。",
+    "request": "Mitsubishi FX3U。采用工件槽位跟踪。使用 DEC D100 维护剩余节拍。\n已确认的接口与内部地址：\nX0：输送节拍\nM10：运行状态\nD100：剩余节拍\nT0：启动延时\nC0：产品计数",
     "analysis": {
       "summary": "比较位串移位、工位数组与工件槽位计数三种方案。",
       "missing_info": [
@@ -142,7 +142,7 @@
           "pros": "",
           "cons": "",
           "generation_guide": "每节拍使用 DEC D100 更新剩余节拍计数。",
-          "generation_contract": {}
+          "implementation_semantics": []
         }
       ],
       "assumptions": []
@@ -186,7 +186,7 @@
     "case_id": "user-edited-prose",
     "mode": "direct",
     "plc_model": "FX3U",
-    "request": "Mitsubishi FX3U。采用工件槽位跟踪。使用 DEC D100 维护剩余节拍。",
+    "request": "Mitsubishi FX3U。采用工件槽位跟踪。使用 DEC D100 维护剩余节拍。\n已确认的接口与内部地址：\nX0：输送节拍\nM10：运行状态\nD100：剩余节拍\nT0：启动延时\nC0：产品计数",
     "analysis": {
       "summary": "比较位串移位、工位数组与工件槽位计数三种方案。",
       "missing_info": [
@@ -234,7 +234,7 @@
           "pros": "",
           "cons": "",
           "generation_guide": "每节拍使用 DEC D100 更新剩余节拍计数。",
-          "generation_contract": {}
+          "implementation_semantics": []
         }
       ],
       "assumptions": []
@@ -387,7 +387,7 @@
           "pros": "",
           "cons": "",
           "generation_guide": "每节拍使用 DEC D100 更新剩余节拍计数。",
-          "generation_contract": {}
+          "implementation_semantics": []
         }
       ],
       "assumptions": []
@@ -611,7 +611,7 @@
     "case_id": "servo-typed-handoff",
     "mode": "direct",
     "plc_model": "FX3U",
-    "request": "FX3U 已选择 ZRN 回零与单轴定位。DOG 为 X0，启动为 X1，报警为 X4，均为动作时 ON，脉冲输出 Y0。",
+    "request": "FX3U 已选择 ZRN 回零与单轴定位。DOG 为 X0，启动为 X1，报警为 X4，均为动作时 ON，脉冲输出 Y0。\nY0：脉冲输出",
     "analysis": {
       "summary": "单轴边界测试",
       "assumptions": [],
@@ -680,7 +680,7 @@
           "generation_guide": "使用已确认速度与 DOG。",
           "pros": "",
           "cons": "",
-          "generation_contract": {}
+          "implementation_semantics": []
         }
       ]
     },

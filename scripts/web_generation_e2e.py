@@ -46,6 +46,11 @@ REQUIREMENT = 'FX3U，普通梯形图。只用常开输入 X0 直接控制输出
 class Provider:
     def __init__(self, live=None):
         self.live, self.calls, self.usage = live, 0, []
+        self.profile = copy.deepcopy(live.profile) if live else {
+            "adapter": "openai_compatible", "baseUrl": "https://offline.invalid/v1",
+            "model": "deterministic-delivery-fixture",
+        }
+        self.api_key = live.api_key if live else None
     def stream(self, request):
         self.calls += 1
         if self.calls > 6:
@@ -79,7 +84,7 @@ class Server:
         self.token = secrets.token_urlsafe(32)
         model = 'deepseek-v4-flash' if provider.live else 'deterministic-delivery-fixture'
         self.service = WorkbenchService(root / 'workspace', root / 'state', settings=IsolatedSettings(model),
-            model_factory=lambda: (provider, {'model': model}))
+            model_factory=lambda: (provider, provider.profile))
         self.app = create_app(self.service.store.base_dir, state_dir=self.service.state_dir,
             service=self.service, operator_token=self.token, origin=self.origin, static_dir=web_dist)
         self.preview_attempts = 0

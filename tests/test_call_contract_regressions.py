@@ -26,6 +26,7 @@ from model_runtime.provider import (
     ToolCallEnd, ToolCallStart, Usage, UserMessage, collect_response,
 )
 from shared.i18n import language_context
+from model_profile_fixtures import offline_runtime_profile
 
 
 def ladder():
@@ -140,7 +141,7 @@ class EventsProvider:
     def __init__(self, rounds, profile=None):
         self.rounds = list(rounds)
         self.requests = []
-        self.profile = profile or {}
+        self.profile = profile if profile is not None else offline_runtime_profile()
         self.api_key = "key"
 
     def stream(self, request):

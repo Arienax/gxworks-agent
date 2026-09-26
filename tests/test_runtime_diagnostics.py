@@ -26,7 +26,7 @@ def provider(reply):
         return reply
     client = S(chat=S(completions=S(create=create)))
     return OpenAICompatibleProvider({'adapter':'openai_compatible','model':'fixture-model',
-        'baseUrl':'https://private.example/v1?token=PRIVATE_ENDPOINT',
+        'baseUrl':'https://private.invalid/PRIVATE_ENDPOINT/v1',
         'generationDefaults':{'response_format':{'type':'json_object'},'max_tokens':999}},
         'sk-PRIVATE_CREDENTIAL', client=client), calls
 

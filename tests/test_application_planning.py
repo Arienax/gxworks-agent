@@ -91,7 +91,7 @@ def test_test_plan_uses_frozen_ir_and_checks_under_write_lock(monkeypatch, stale
 def test_evidence_plan_persists_bound_candidate_without_activating_version(monkeypatch, tmp_path):
     import application.debug_loop as plc_debug_loop
     store, project, version, program, run_id = _project_with_failure(tmp_path)
-    monkeypatch.setattr(plc_debug_loop, "retrieve_knowledge", _knowledge)
+    monkeypatch.setattr(plc_debug_loop, "retrieve_fact_aware_knowledge", _knowledge)
     monkeypatch.setattr(api, "debug_evidence_diagnosis", lambda *a, **k: _diagnosis())
     monkeypatch.setattr(api, "debug_evidence_patch", lambda *a, **k: _patch(program))
     before = store.get_project(project)

@@ -1551,5 +1551,10 @@
   "已移除模型 JSON 末尾多余的闭合符号": "Removed the extra closing delimiter at the end of the model JSON.",
   "已安全移除 JSON 末尾多余闭合符号；继续解析候选程序。": "Safely removed the extra closing delimiter at the end of the JSON; continuing to parse the candidate program.",
   "JSON 格式已恢复；正在对新暴露的字段错误执行一次精确修复。": "JSON format recovered; applying one precise repair to the newly exposed field error.",
-  "JSON 格式已恢复；正在对新暴露的局部结构错误执行一次有界修复。": "JSON format recovered; applying one bounded repair to the newly exposed local structural error."
+  "JSON 格式已恢复；正在对新暴露的局部结构错误执行一次有界修复。": "JSON format recovered; applying one bounded repair to the newly exposed local structural error.",
+  "候选程序已保留；已确认语义检查发现不一致，未触发额外模型调用": "The candidate program was retained; confirmed semantic checks found inconsistencies. No additional model call was made.",
+  "候选程序已保留；部分已确认语义无法由当前本地检查完整覆盖": "The candidate program was retained; current local checks cannot fully cover some confirmed semantic requirements.",
+  "模型分配的未声明内部软元件已移除；内部地址由生成阶段决定。": "Undeclared internal devices allocated by the model were removed; internal addresses are assigned during generation.",
+  "独立生成 Agent 未返回梯形图候选": "The independent generation agent did not return a ladder candidate.",
+  "候选结构与当前可机检的已确认语义已通过；其余工程检查保留给 Review": "The candidate structure and currently machine-checkable confirmed semantics passed; remaining engineering checks belong to Review."
 }

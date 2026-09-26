@@ -5,6 +5,7 @@ import itertools
 import json
 from pathlib import Path
 
+from model_profile_fixtures import offline_runtime_profile
 import pytest
 
 from plc.device_identity import canonical_device, canonical_operand, canonical_ladder_devices
@@ -159,11 +160,31 @@ def test_http_analysis_confirmation_delivery_keeps_comments_without_bogus_vfd(tm
     requests = []
 
     class Provider:
-        profile = {"id": "fixture", "model": "offline", "adapter": "openai_compatible", "capabilities": {"structured_output": True}}
+        profile = offline_runtime_profile()
         def stream(self, request):
             requests.append(request)
             if request.response_contract.name == "analysis":
                 payload = hallucinated_analysis()
+                # Labels and roles are declared bindings; guessed hardware
+                # addresses in suggested_io are intentionally not authoritative.
+                bindings = {
+                    "start_input": ("start", "X", "启动按钮"),
+                    "stop_input": ("stop", "X", "停止按钮"),
+                    "output_address": ("output", "Y", "电机接触器输出"),
+                }
+                for question in payload["missing_info"]:
+                    identity = question["id"]
+                    if identity in bindings:
+                        role, kind, label = bindings[identity]
+                        question["io_binding"] = {"binding_id": identity, "role": role, "kind": kind, "label": label}
+                # This is a fresh provider response, not a legacy saved snapshot.
+                for approach in payload["approaches"]:
+                    contract = approach.pop("generation_contract")
+                    approach["implementation_semantics"] = [
+                        {"kind": "structure", "status": status, "value": value}
+                        for status in ("required", "forbidden")
+                        for value in contract.get(status + "_structures", [])
+                    ]
             else:
                 assert len(requests) == 2  # one analysis, one generation, no probes
                 prompt = next(m.content for m in request.messages if isinstance(m, SystemMessage))
@@ -182,7 +203,7 @@ def test_http_analysis_confirmation_delivery_keeps_comments_without_bogus_vfd(tm
                 yield TextDelta(raw[offset:offset+11])
 
     provider = Provider()
-    service = WorkbenchService(tmp_path / "workspace", tmp_path / "state", model_factory=lambda: (provider, {"model": "offline"}))
+    service = WorkbenchService(tmp_path / "workspace", tmp_path / "state", model_factory=lambda: (provider, provider.profile))
     app = create_app(service.store.base_dir, state_dir=service.state_dir, service=service, origin=ORIGIN, operator_token=OPERATOR)
     with TestClient(app, base_url=ORIGIN) as client:
         headers = _login(client)

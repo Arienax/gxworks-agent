@@ -254,7 +254,7 @@ def test_search_manual_tool_uses_selected_plc_and_caps_results(monkeypatch):
             }
         ]
 
-    monkeypatch.setattr('knowledge.retriever.retrieve_knowledge', fake_retrieve)
+    monkeypatch.setattr('knowledge.retriever.retrieve_fact_aware_knowledge', fake_retrieve)
     result = build_default_tool_registry().call(
         "search_plc_manual", {"query": "T0 怎么用", "top_k": 3}, _context()
     )

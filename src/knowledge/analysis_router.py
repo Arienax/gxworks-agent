@@ -80,9 +80,15 @@ def route_analysis_request(user_request, confirmed_context=None, *, analysis_mod
     if resolve_opcode is not None:
         for token in _TOKEN.finditer(text):
             raw_token = token.group()
-            if (raw_token in {"to", "or", "and", "not", "out", "set", "for", "end", "in", "on", "off"}
-                    and not re.match(r"\s+[KHDXYMTSCRVZ]\d+", text[token.end():], re.I)):
-                continue
+            if raw_token in {"to", "or", "and", "not", "out", "set", "for", "end", "in", "on", "off"}:
+                # Common English words need explicit instruction context. This
+                # applies to every ambiguous mnemonic, not one opcode family.
+                tail = text[token.end():]
+                quoted = token.start() > 0 and text[token.start()-1] in "`\"'" and tail[:1] == text[token.start()-1]
+                qualified = re.match(r"\s*(?:instruction\b|指令|循环|/\s*[A-Za-z]+\b)", tail, re.I)
+                operand = re.match(r"\s+[KHDXYMTSCRVZ][+-]?\d+", tail, re.I)
+                if not (text.strip() == raw_token or quoted or qualified or operand):
+                    continue
             resolution = resolve_opcode(raw_token)
             if resolution is None:
                 continue
