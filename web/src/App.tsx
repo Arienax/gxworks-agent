@@ -1,5 +1,5 @@
 import { ConditionNormalization } from "./features/ConditionNormalization";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import {
   Activity,
@@ -43,6 +43,9 @@ import type {
   Session,
   Spec,
 } from "./api/client";
+import { LatestRead, reconcileById, sameValue } from "./lifecycle/requests";
+import { usePolling } from "./lifecycle/usePolling";
+import { RetainedPanel } from "./components/RetainedPanel";
 import { Badge, Button, Modal } from "./components/ui";
 import { statusText, statusTone, translate } from "./i18n";
 import type { Locale } from "./i18n";
@@ -88,6 +91,7 @@ export default function App() {
       new URLSearchParams(location.search).get("project") || "",
     ),
     [vid, setVid] = useState("");
+  const [projectListRevision, setProjectListRevision] = useState(0);
   const [refresh, setRefresh] = useState(0),
     [loading, setLoading] = useState(false);
   const [tab, setTab] = useState("ladder"),
@@ -166,6 +170,11 @@ export default function App() {
   const openedDrafts = useRef(new Set<string>());
   const activeProjectRef = useRef(pid);
   const projectEpoch = useRef(0);
+  const projectRead = useRef(new LatestRead());
+  const settingsRead = useRef(new LatestRead());
+  const terminalJobs = useRef(new Set<string>());
+  const panelDragCleanup = useRef<(() => void) | null>(null);
+  useEffect(() => () => { projectRead.current.cancel(); panelDragCleanup.current?.(); }, []);
   const [gxSend, setGXSend] = useState<GXSendSelection | null>(null);
   const gxSendSelection = useRef({ pid, vid, activeVersionId: "", epoch: 0 });
   gxSendSelection.current = { pid, vid, activeVersionId: project?.active_version_id || "", epoch: projectEpoch.current };
@@ -181,6 +190,8 @@ export default function App() {
   }
   useEffect(() => {
     projectEpoch.current += 1;
+    projectRead.current.cancel();
+    terminalJobs.current.clear();
     previewEpoch.current += 1;
     setPreview(null);
     setSelectedProposal(null);
@@ -232,7 +243,13 @@ export default function App() {
   const canSubmit = canWrite && !!pid && project?.id === pid &&
     (intent === "generation" ? canGenerate : !!text.trim());
   const operations = version?.capabilities?.operations || defaultOperations;
-  const refreshAll = () => setRefresh((n) => n + 1);
+  const refreshAll = () => {
+    setRefresh(n => n + 1);
+    jobsPolling.current?.refresh();
+    void reloadProjectSilently(pid).catch(e => {
+      if (activeProjectRef.current === pid) setError(e.message);
+    });
+  };
   const guarded = async (action: () => Promise<void>) => {
     // State updates are asynchronous: hold a synchronous submission lock too.
     if (busyRef.current) return;
@@ -284,58 +301,53 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!session) return;
-    let stopped = false;
-    api<{ projects: Project[] }>("/projects")
-      .then((result) => {
-        if (stopped) return;
-        setProjects(result.projects);
-        setPid((selected) =>
-          selected && result.projects.some((p) => p.id === selected)
-            ? selected
-            : result.projects[0]?.id || "",
-        );
-      })
-      .catch((e) => setError(e.message));
-    api<ModelSettings>("/settings")
-      .then((v) => {
-        if (!stopped) setSettings(v);
-      })
-      .catch((e) => setError(e.message));
-    api<Record<string, Json>>("/environment")
-      .then((v) => {
-        if (!stopped) setEnvironment(v);
-      })
-      .catch((e) => setError(e.message));
-    return () => {
-      stopped = true;
-    };
-  }, [session, refresh]);
+    const controller = new AbortController();
+    void api<{ projects: Project[] }>("/projects", "GET", undefined, { signal: controller.signal })
+      .then(result => {
+        if (controller.signal.aborted) return;
+        setProjects(old => reconcileById(old, result.projects));
+        setPid(selected => selected && result.projects.some(p => p.id === selected)
+          ? selected : result.projects[0]?.id || "");
+      }).catch(e => { if (!controller.signal.aborted) setError(e.message); });
+    return () => controller.abort();
+  }, [session, projectListRevision]);
+  const settingsOpen = modal === "settings", environmentOpen = modal === "environment";
+  useEffect(() => {
+    if (!session || (!settingsOpen && settings)) return;
+    const read = settingsRead.current.begin();
+    void api<ModelSettings>("/settings", "GET", undefined, { signal: read.signal })
+      .then(value => { if (read.current()) setSettings(old => sameValue(old, value)); })
+      .catch(e => { if (read.current()) setError(e.message); });
+    return () => read.cancel();
+  }, [session, settingsOpen]);
   useEffect(() => {
     if (!session) return;
-    let stopped = false;
-    const read = () => api<ApprovalSettings>("/settings/approval").then((value) => {
-      if (!stopped) { setApprovalSettings(value); setSettingsError(""); }
-    }).catch((e) => { if (!stopped) setSettingsError(e.message); });
-    void read();
-    const interval = setInterval(() => void read(), 5000);
-    return () => { stopped = true; clearInterval(interval); };
-  }, [session, settingsRetry]);
+    const controller = new AbortController();
+    void api<Record<string, Json>>("/environment", "GET", undefined, { signal: controller.signal })
+      .then(value => { if (!controller.signal.aborted) setEnvironment(old => sameValue(old, value)); })
+      .catch(e => { if (!controller.signal.aborted) setError(e.message); });
+    return () => controller.abort();
+  }, [session, environmentOpen]);
+  usePolling(session ? `approval:${settingsRetry}` : null,
+    signal => api<ApprovalSettings>("/settings/approval", "GET", undefined, { signal }),
+    value => { setApprovalSettings(old => old && old.revision > value.revision ? old : sameValue(old, value)); setSettingsError(""); },
+    e => setSettingsError(String(e instanceof Error ? e.message : e)), 5000);
   useEffect(() => {
     if (!pid || !session) {
       setProject(null);
       return;
     }
-    let stopped = false;
+    const read = projectRead.current.begin();
     setLoading(true);
     history.replaceState(null, "", `?project=${encodeURIComponent(pid)}`);
-    api<Project>(`/projects/${pid}`)
+    api<Project>(`/projects/${pid}`, "GET", undefined, { signal: read.signal })
       .then((value) => {
-        if (stopped) return;
-        setProject(value);
+        if (!read.current()) return;
+        setProject(old => sameValue(old, value));
         syncComposerRoute(value);
         if (!value.versions?.length && value.target_mode === "fbd") setTab("fbd");
         const binding = value.id + ":" + (value.confirmed_spec_hash || "");
-        if (specBinding.current !== binding) {
+        if (!specDirty.current && specBinding.current !== binding) {
           specBinding.current = binding;
           setSpec((value.confirmed_spec as Spec) || null);
         }
@@ -345,14 +357,10 @@ export default function App() {
             : value.active_version_id || value.versions?.[0]?.id || "",
         );
       })
-      .catch((e) => setError(e.message))
-      .finally(() => {
-        if (!stopped) setLoading(false);
-      });
-    return () => {
-      stopped = true;
-    };
-  }, [pid, session, refresh]);
+      .catch(e => { if (read.current()) setError(e.message); })
+      .finally(() => { if (read.current()) setLoading(false); });
+    return () => read.cancel();
+  }, [pid, session]);
   useEffect(() => {
     setScopeEnabled(false);
     setScopeNetworks("");
@@ -361,69 +369,53 @@ export default function App() {
     setIssueContext(old => old?.versionId === vid ? old : undefined);
     setReport(null);
   }, [pid, vid]);
+  const stArtifact = version?.artifacts?.find(a => ["st_from_ir", "st"].includes(a.id) && a.available)?.id;
   useEffect(() => {
-    if (!pid || !vid || !session) {
-      setProgram(null);
-      setSt("");
-      return;
-    }
-    let stopped = false;
-    const path = `/projects/${pid}/versions/${vid}`;
-    api<Record<string, Json>>(path + "/program")
-      .then((v) => {
-        if (!stopped) setProgram(v);
-      })
-      .catch((e) => setError(e.message));
-    const artifact = version?.artifacts?.find(
-      (a) => ["st_from_ir", "st"].includes(a.id) && a.available,
-    );
-    if (artifact)
-      fetch(artifactUrl(pid, vid, artifact.id))
-        .then(async (r) => {
-          if (!r.ok) throw new Error(t("此版本没有该产物"));
-          return r.text();
-        })
-        .then((v) => {
-          if (!stopped) setSt(v);
-        })
-        .catch((e) => setError(e.message));
-    else setSt("");
-    return () => {
-      stopped = true;
-    };
-  }, [pid, vid, version, session, t]);
+    setProgram(null); setSt("");
+    if (!pid || !vid || !session) return;
+    const controller = new AbortController();
+    void api<Record<string, Json>>(`/projects/${pid}/versions/${vid}/program`, "GET", undefined,
+      { signal: controller.signal }).then(value => {
+        if (!controller.signal.aborted) setProgram(value);
+      }).catch(e => { if (!controller.signal.aborted) setError(e.message); });
+    if (stArtifact) void fetch(artifactUrl(pid, vid, stArtifact), { signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) throw new Error(`ST artifact (${response.status})`);
+        return response.text();
+      }).then(value => { if (!controller.signal.aborted) setSt(value); })
+      .catch(e => { if (!controller.signal.aborted) setError(e.message); });
+    return () => controller.abort();
+  }, [pid, vid, stArtifact, session]);
   useEffect(() => {
     if (version?.target_mode === "fbd") setTab("fbd");
   }, [version?.id, version?.target_mode]);
+  const jobsPolling = usePolling(session ? pid : null, async signal => {
+    const query = pid ? `?project_id=${encodeURIComponent(pid)}` : "";
+    const [j, p] = await Promise.all([
+      api<{ jobs: Job[] }>(`/jobs${query}`, "GET", undefined, { signal }),
+      api<{ proposals: Proposal[] }>(`/proposals${query}`, "GET", undefined, { signal }),
+    ]);
+    return { jobs: j.jobs, proposals: p.proposals };
+  }, value => {
+    setJobs(old => reconcileById(old, value.jobs));
+    setProposals(old => reconcileById(old, value.proposals));
+    setJobId(old => value.jobs.some(item => item.id === old) ? old : value.jobs[0]?.id || "");
+  }, e => setError(String(e instanceof Error ? e.message : e)), 2500);
+
+  // Both SSE and polling feed the same completion invalidation path. Refresh
+  // dependent evidence once, without remounting editors or requiring SSE.
   useEffect(() => {
-    if (!session) return;
-    let stopped = false;
-    async function poll() {
-      try {
-        const [j, p] = await Promise.all([
-          api<{ jobs: Job[] }>(`/jobs${pid ? `?project_id=${pid}` : ""}`),
-          api<{ proposals: Proposal[] }>(
-            `/proposals${pid ? `?project_id=${pid}` : ""}`,
-          ),
-        ]);
-        if (!stopped) {
-          setJobs(j.jobs);
-          setProposals(p.proposals);
-          setJobId((old) =>
-            j.jobs.some((item) => item.id === old) ? old : j.jobs[0]?.id || "",
-          );
-        }
-      } catch (e) {
-        if (!stopped) setError((e as Error).message);
-      }
-    }
-    void poll();
-    const interval = setInterval(poll, 2500);
-    return () => {
-      stopped = true;
-      clearInterval(interval);
-    };
-  }, [session, pid, refresh]);
+    const completed = jobs.filter(job => job.project_id === pid && !activeJob(job) &&
+      !terminalJobs.current.has(`${job.id}:${job.status}`));
+    if (!completed.length) return;
+    completed.forEach(job => terminalJobs.current.add(`${job.id}:${job.status}`));
+    setRefresh(n => n + 1);
+    const willOpenSaved = !busy && !loading && !specDirty.current && completed.some(job => job.id === jobs[0]?.id && job.id === jobId &&
+      job.status === "completed" && typeof job.result?.version_id === "string");
+    if (!willOpenSaved) void reloadProjectSilently(pid).catch(e => {
+      if (activeProjectRef.current === pid) setError(e.message);
+    });
+  }, [jobs, pid, jobId]);
   useEffect(() => {
     setAnalysisOutput(null);
     if (!jobId || !session) {
@@ -434,17 +426,31 @@ export default function App() {
     let sequence = 0;
     let stopped = false;
     const stream = new EventSource(`/api/jobs/${jobId}/events`);
+    let frame = 0;
+    let pendingEvents: JobEvent[] = [];
+    const flushEvents = () => {
+      frame = 0;
+      if (stopped || !pendingEvents.length) return;
+      const batch = pendingEvents; pendingEvents = [];
+      setEvents(old => [...old, ...batch]);
+    };
     stream.onmessage = (event) => {
-      const value = JSON.parse(event.data) as JobEvent;
+      if (stopped) return;
+      let value: JobEvent;
+      try { value = JSON.parse(event.data) as JobEvent; }
+      catch { return; } // A malformed frame must not break the following event.
+      if (value.job_id !== jobId || value.project_id !== activeProjectRef.current) return;
       if (value.sequence <= sequence) return;
       sequence = value.sequence;
-      setEvents((old) => [...old, value]);
+      pendingEvents.push(value);
+      if (!frame) frame = requestAnimationFrame(flushEvents);
       if (["running", "completed", "failed", "cancelled", "interrupted"].includes(value.event_type)) {
+        jobsPolling.current?.refresh(); // Discard snapshots started before this event.
         setJobs((old) => old.map((job) => job.id === value.job_id
-          ? { ...job, status: value.event_type,
+          ? ((!activeJob(job) || job.status === "cancelling") && value.event_type === "running" ? job : { ...job, status: value.event_type,
               ...(value.event_type === "failed" ? {error_code: value.payload?.error_code as Job["error_code"],
                 error_details: value.payload?.error_details as Job["error_details"]} : {}),
-              ...(value.payload?.result ? { result: value.payload.result as Record<string, Json> } : {}) }
+              ...(value.payload?.result ? { result: value.payload.result as Record<string, Json> } : {}) })
           : job));
       }
       if (
@@ -453,37 +459,17 @@ export default function App() {
         )
       ) {
         stream.close();
-        if (value.event_type === "completed")
-          api<Record<string, Json>>(`/jobs/${jobId}/output`)
-            .then((output) => {
-              if (stopped || activeProjectRef.current !== value.project_id)
-                return;
-              if (output.spec_draft && !consumedDrafts.current.has(jobId)) {
-                setAnalysisOutput(output);
-              }
-            })
-            .catch(() => {});
-        const eventResult = value.payload?.result;
-        const savedVersionId = value.event_type === "completed" &&
-          !!eventResult && typeof eventResult === "object" && !Array.isArray(eventResult) &&
-          typeof (eventResult as Record<string, Json>).version_id === "string"
-            ? String((eventResult as Record<string, Json>).version_id)
-            : "";
-        if (savedVersionId) {
-          void openSavedVersion(savedVersionId).catch((error: Error) => {
-            if (!stopped && activeProjectRef.current === value.project_id)
-              setError(error.message);
-          });
-        } else {
-          void reloadProjectSilently(value.project_id);
-        }
+        cancelAnimationFrame(frame);
+        flushEvents();
       }
     };
     return () => {
       stopped = true;
+      cancelAnimationFrame(frame);
+      pendingEvents = [];
       stream.close();
     };
-  }, [jobId, session]);
+  }, [jobId, session, pid]);
   useEffect(() => {
     if (!session || currentJob?.kind !== "analysis" || currentJob.status !== "completed" ||
         consumedDrafts.current.has(currentJob.id)) return;
@@ -586,13 +572,17 @@ export default function App() {
 
   async function openSavedVersion(versionId: string, previewTheme = theme) {
     const epoch = projectEpoch.current;
-    const fresh = await api<Project>(`/projects/${pid}`);
-    if (epoch !== projectEpoch.current || fresh.id !== pid) return;
+    const read = projectRead.current.begin();
+    let fresh: Project;
+    try { fresh = await api<Project>(`/projects/${pid}`, "GET", undefined, { signal: read.signal }); }
+    catch (error) { if (!read.current()) return; throw error; }
+    if (!read.current() || epoch !== projectEpoch.current || fresh.id !== pid) return;
     const saved = fresh.versions?.find((v) => v.id === versionId);
     if (!saved) throw new Error(t("已保存版本尚不可用，请刷新重试。"));
     previewEpoch.current += 1;
     syncComposerRoute(fresh);
-    setProject(fresh); setVid(versionId); setPreview(null); setSelectedProposal(null);
+    setLoading(false);
+    setProject(old => sameValue(old, fresh)); setVid(versionId); setPreview(null); setSelectedProposal(null);
     setDiagnosticJobId(""); setTab(saved.target_mode || fresh.target_mode || "ladder"); setPanel("agent");
     if (saved.target_mode === "ladder") await redrawVersion(versionId, previewTheme);
   }
@@ -611,12 +601,16 @@ export default function App() {
   async function reloadProjectSilently(targetPid: string | null | undefined = pid) {
     const epoch = projectEpoch.current;
     if (!targetPid || activeProjectRef.current !== targetPid) return;
-    const fresh = await api<Project>(`/projects/${targetPid}`);
-    if (epoch !== projectEpoch.current ||
+    const read = projectRead.current.begin();
+    let fresh: Project;
+    try { fresh = await api<Project>(`/projects/${targetPid}`, "GET", undefined, { signal: read.signal }); }
+    catch (error) { if (!read.current()) return; throw error; }
+    if (!read.current() || epoch !== projectEpoch.current ||
         activeProjectRef.current !== targetPid || fresh.id !== targetPid) return;
     syncComposerRoute(fresh);
-    setProject(fresh);
-    setProjects((old) => old.map((item) => item.id === fresh.id ? fresh : item));
+    setProject(old => sameValue(old, fresh));
+    setLoading(false);
+    setProjects((old) => old.map((item) => item.id === fresh.id ? sameValue(item, fresh) : item));
     setVid((old) => fresh.versions?.some((item) => item.id === old)
       ? old
       : fresh.active_version_id || fresh.versions?.[0]?.id || "");
@@ -630,15 +624,16 @@ export default function App() {
   async function refreshDrawing() {
     const epoch = projectEpoch.current;
     setRefreshingDrawing(true);
+    setRefresh(n => n + 1);
     try {
       if (selectedProposal) await showProposal(selectedProposal);
       else if (diagnosticJobId) await openGenerationResult(theme, true);
       else if (version?.target_mode === "ladder") await redrawVersion();
       else if (generationResult.id) await openGenerationResult(theme, true);
-      else { setOutputRetry((n) => n + 1); void reloadProjectSilently(pid); return; }
+      else { setOutputRetry((n) => n + 1); void reloadProjectSilently(pid).catch(e => { if (activeProjectRef.current === pid) setError(e.message); }); return; }
       if (epoch === projectEpoch.current) {
         setOutputRetry((n) => n + 1);
-        void reloadProjectSilently(pid);
+        void reloadProjectSilently(pid).catch(e => { if (activeProjectRef.current === pid) setError(e.message); });
         setNotice(t("预览已刷新，未调用模型或修改程序。"));
       }
     } finally {
@@ -671,6 +666,7 @@ export default function App() {
     });
     if (activeProjectRef.current !== pid || epoch !== projectEpoch.current)
       return;
+    jobsPolling.current?.refresh();
     setJobId(job.id);
     if (kind === "analysis") specDirty.current = false;
     setJobs((old) => [job, ...old]);
@@ -684,6 +680,7 @@ export default function App() {
     if (!window.confirm(t("只修复当前候选的局部格式/结构错误，不重新分析需求，也不重写完整程序。继续吗？"))) return;
     const repaired = await api<Job>(`/jobs/${encodeURIComponent(job.id)}/repair`, "POST", { request_id: key() });
     if (activeProjectRef.current !== pid) return;
+    jobsPolling.current?.refresh();
     setEvents([]);
     setJobId(repaired.id);
     setJobs((old) => [repaired, ...old.filter((item) => item.id !== repaired.id)]);
@@ -708,6 +705,7 @@ export default function App() {
     }
     if (!result.spec || !result.hash)
       throw new Error(t("确认规格响应不完整，请刷新后重试。"));
+    projectRead.current.cancel();
     const savedSpec = result.spec;
     const savedHash = result.hash;
     setSpecIssues([]);
@@ -724,7 +722,7 @@ export default function App() {
     setIntent("generation");
     setPanel("agent");
     if (generateAfterSave) await submitJob("generation");
-    else void reloadProjectSilently(pid);
+    else void reloadProjectSilently(pid).catch(e => { if (activeProjectRef.current === pid) setError(e.message); });
   }
   async function showProposal(value: Proposal, previewTheme = theme) {
     if (value.action === "accept_local" && value.status === "accepted" && typeof value.result?.version_id === "string") {
@@ -770,6 +768,9 @@ export default function App() {
       epoch !== projectEpoch.current
     )
       return;
+    jobsPolling.current?.refresh();
+    if (result.proposal) setProposals(old => old.map(item => item.id === result.proposal!.id ? result.proposal! : item));
+    setRefresh(n => n + 1);
     if (result.job) {
       setJobId(result.job.id);
       setJobs((old) => [result.job!, ...old]);
@@ -796,7 +797,8 @@ export default function App() {
     });
     if (activeProjectRef.current !== pid || epoch !== projectEpoch.current)
       return;
-    setProposals((old) => [value, ...old]);
+    jobsPolling.current?.refresh();
+    setProposals((old) => [value, ...old.filter(item => item.id !== value.id)]);
     await showProposal(value);
   }
   function requestGXSend() {
@@ -820,6 +822,7 @@ export default function App() {
     };
     const result = await submitGXSend(selection, isCurrent, api);
     if (!isCurrent()) return;
+    jobsPolling.current?.refresh();
     setProposals(old => [result.proposal, ...old.filter(p => p.id !== result.proposal.id)]);
     setSelectedProposal(null);
     setPreview(null);
@@ -850,17 +853,33 @@ export default function App() {
     }
   }
   function resizePanel(event: React.PointerEvent) {
-    const start = event.clientX,
-      width = rightWidth;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    const move = (e: PointerEvent) =>
-      setRightWidth(Math.max(300, Math.min(650, width + start - e.clientX)));
-    const end = () => {
+    panelDragCleanup.current?.();
+    const start = event.clientX, width = rightWidth;
+    const target = event.currentTarget, pointerId = event.pointerId;
+    target.setPointerCapture(pointerId);
+    let frame = 0, nextWidth = width;
+    const apply = () => { frame = 0; setRightWidth(nextWidth); };
+    const move = (e: PointerEvent) => {
+      if (e.pointerId !== pointerId) return;
+      nextWidth = Math.max(300, Math.min(650, width + start - e.clientX));
+      if (!frame) frame = requestAnimationFrame(apply);
+    };
+    const cleanup = () => {
+      cancelAnimationFrame(frame);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      window.removeEventListener("blur", end);
+      target.removeEventListener("lostpointercapture", end);
+      panelDragCleanup.current = null;
     };
+    const end = () => { apply(); cleanup(); };
+    panelDragCleanup.current = cleanup;
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    window.addEventListener("blur", end);
+    target.addEventListener("lostpointercapture", end);
   }
   function toggleTheme() {
     const next = theme === "dark" ? "light" : "dark";
@@ -882,26 +901,183 @@ export default function App() {
     ? (visibleProgram.networks as Record<string, Json>[])
     : [];
   const freshVersionSvg = versionDrawing?.key === `${pid}:${vid}:${theme}` ? versionDrawing.svg : "";
-  const svg = preview?.svg
+  const svg = useMemo(() => preview?.svg
     ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(String(preview.svg))}`
     : !preview && freshVersionSvg
       ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(freshVersionSvg)}`
     : !preview && version?.artifacts?.find((a) => a.id === "svg" && a.available)
       ? artifactUrl(pid, vid, "svg") + `?theme=${theme}`
-      : "";
+      : "", [preview, freshVersionSvg, version?.id, pid, vid, theme]);
+  const selectNetwork = useCallback((id: string) => {
+    setNetwork({ ...networks.find(n => n.id === id), id, version_id: vid });
+  }, [visibleProgram, vid]);
   const status = (value?: string | null) => (
     <Badge tone={statusTone(value || "unknown")}>
       {statusText(locale, value || "unknown")}
     </Badge>
   );
-  const latestMessage = events
-    .filter((e) => e.event_type === "progress")
-    .at(-1)?.payload;
+  const latestMessage = useMemo(() => events.filter(e => e.event_type === "progress").at(-1)?.payload, [events]);
   const eventText = (kind: string) =>
     events
       .filter((e) => e.event_type === kind)
       .map((e) => e.payload?.text || e.payload?.message || "")
       .join("");
+
+  function renderEditorTab(visibleTab: string) {
+    return (loading && project?.id !== pid ? (
+            <div className="empty-state">
+              <LoaderCircle size={28} className="spin" />
+              <p>{t("正在读取工程")}</p>
+            </div>
+          ) : !project || project.id !== pid ? (
+            <div className="empty-state">
+              <FolderOpen size={42} />
+              <h2>{t("打开本地工程")}</h2>
+              <p>{t("选择已有工程，或创建一个新工程开始。")}</p>
+              <Button
+                variant="primary"
+                disabled={!canWrite}
+                onClick={() => setModal("new")}
+              >
+                <Plus size={16} />
+                {t("新建工程")}
+              </Button>
+            </div>
+          ) : visibleTab === "fbd" && (preview?.target_mode === "fbd" || (!preview && (version?.target_mode === "fbd" || (!version && project.target_mode === "fbd")))) ? (
+            <FBDPanel key={`${pid}:${vid}:${selectedProposal?.id || "version"}`} value={Array.isArray(visibleProgram?.nodes) ? visibleProgram as unknown as FBDModel : null}
+              svg={svg} pid={pid} vid={vid} readOnly={!canWrite} preview={!!preview} t={t} onProposal={showFBDProposal} />
+          ) : visibleTab === "fbd" ? (
+            <div className="empty-state"><GitBranch size={38}/><h2>{t("结构化梯形图/FBD")}</h2><p>{t("导入 GXW 工程，或将当前梯形图转换为 FBD。也可以新建 FBD 工程直接生成。")}</p></div>
+          ) : !version && !preview ? (
+            generationResult.id ? (<div className="empty-state">
+              <Workflow size={44} />
+              <h2>{t(generationResult.id
+                ? generationResult.blocked ? "候选与确认方案冲突"
+                  : generationResult.loading ? "正在读取生成结果"
+                  : generationResult.proposalId ? "程序已保存，等待查看"
+                  : "生成结果暂不可用"
+                : "工程中还没有程序")}</h2>
+              <p>{t(generationResult.id
+                ? "请在 Agent 面板查看生成结果及具体诊断。"
+                : "描述控制需求，确认规格后生成第一个程序。")}</p>
+              {generationResult.id && <Button onClick={() => setPanel("agent")}>{t("查看生成结果")}</Button>}
+              <Badge>
+                {project.plc_model} · {project.target_mode.toUpperCase()}
+              </Badge>
+            </div>) : (<FirstProjectGuide example={creation?.starter_requirement || ""} t={t} hasSpec={!!project.confirmed_spec} disabled={!canWrite || jobs.some(activeJob)}
+              onExample={value=>{setText(value);setIntent("analysis");setPanel("agent");}}
+              onSpec={()=>setPanel("spec")} onGenerate={()=>void guarded(()=>submitJob("generation"))} />)
+          ) : visibleTab === "delivery" ? (
+            <DeliverySummary key={`${pid}:${vid}`} pid={pid} vid={vid} t={t} refreshKey={refresh} readOnly={!canWrite}/>
+          ) : visibleTab === "ladder" ? (
+            <ProgramExplorer key={`${pid}:${vid}:${selectedProposal?.id || diagnosticJobId || "version"}`} pid={pid} vid={vid} proposalId={preview ? selectedProposal?.id : undefined}
+              jobId={preview && diagnosticJobId ? diagnosticJobId : undefined} refreshKey={`${refresh}:${versionDrawing?.key || ""}`}
+              changeSummary={preview ? selectedProposal?.summary : proposals.find(p=>p.action === "accept_local" && p.status === "accepted" && p.result?.version_id === vid)?.summary}
+              theme={theme} selectedNetwork={String(network?.id || "")} initialAddress={jumpVersion === vid ? jumpAddress : ""} t={t}
+              onNetwork={selectNetwork} />
+          ) : visibleTab === "st" ? (
+            <div className="code-view">
+              <header>
+                <FileCode2 size={15} />
+                {preview
+                  ? "candidate.st"
+                  : version?.artifacts?.find((a) => a.id.includes("st"))
+                      ?.filename || "ST"}
+                <span className="spacer" />
+                {!preview &&
+                  version?.artifacts
+                    ?.filter(
+                      (a) => ["st", "st_from_ir"].includes(a.id) && a.available,
+                    )
+                    .map((a) => (
+                      <a key={a.id} href={artifactUrl(pid, vid, a.id, true)}>
+                        <ArrowDownToLine size={14} />
+                        {t("下载")}
+                      </a>
+                    ))}
+              </header>
+              <pre>
+                {String((preview ? preview.st : st) || t("此版本没有该产物"))}
+              </pre>
+            </div>
+          ) : visibleTab === "diagnostics" ? (
+            <div className="document-view">
+              <div className="content-heading">
+                <h2>{t("诊断")}</h2>
+                <Button
+                  disabled={!canWrite || !operations.diagnose}
+                  onClick={() =>
+                    void guarded(() => submitJob("review", { deep: false }))
+                  }
+                >
+                  <ShieldCheck size={15} />
+                  {t("本地检查")}
+                </Button>
+              </div>
+              <IssueCards pid={pid} vid={vid} readOnly={!canWrite || !operations.simulation} t={t} refreshKey={refresh}
+                onNetwork={(id,address)=>{setNetwork({...networks.find(n=>n.id===id),id,version_id:vid});setJumpAddress(address||"");setJumpVersion(vid);setTab("ladder");}}
+                onTest={issue=>{setIssueContext({...issue,versionId:vid});setTab("simulation");}}/>
+            </div>
+          ) : visibleTab === "reports" ? (
+            <div className="document-view">
+              <div className="content-heading">
+                <h2>{t("检查报告")}</h2>
+                <Button
+                  disabled={!canWrite || !operations.diagnose}
+                  onClick={() => void guarded(() => submitJob("review"))}
+                >
+                  <FileCheck2 size={15} />
+                  {t("本地检查")} + AI
+                </Button>
+              </div>
+              {project.reports?.length ? (
+                project.reports.map((r) => (
+                  <button
+                    className="report-item"
+                    key={r.report_id}
+                    onClick={() =>
+                      void guarded(async () => {
+                        setReport(
+                          await api(`/projects/${pid}/reports/${r.report_id}`),
+                        );
+                        setModal("report");
+                      })
+                    }
+                  >
+                    <FileCheck2 size={20} />
+                    <span>
+                      {r.summary || r.report_id}
+                      <small className="mono">
+                        {r.base_version_id} · {r.report_id}
+                      </small>
+                    </span>
+                    {status(r.status)}
+                    <ChevronRight size={16} />
+                  </button>
+                ))
+              ) : (
+                <div className="panel-empty">{t("没有检查报告")}</div>
+              )}
+            </div>
+          ) : (
+            <div className="document-view">
+              <div className="content-heading">
+                <h2>{t("仿真记录")}</h2>
+                <Button
+                  disabled={!canWrite || !!preview || !operations.simulation}
+                  onClick={() => void guarded(() => submitJob("test_plan"))}
+                >
+                  <Plus size={15} />
+                  {t("生成测试方案")}
+                </Button>
+              </div>
+              {operations.simulation ? <SimulationWorkbench key={`${pid}:${vid}`} pid={pid} vid={vid} readOnly={!canWrite || !operations.simulation}
+                t={t} refreshKey={refresh} onSaved={refreshAll} issueContext={issueContext} initialPlanId={issueContext?.planId}
+                onExecute={planId=>guarded(()=>proposeExecution("simulation",planId))}
+                onDebug={runId=>guarded(()=>submitJob("debug_plan",{run_id:runId}))}/> : <p>{t("此程序形式尚未接通仿真。")}</p>}
+            </div>
+          ));
+  }
 
   if (!session)
     return (
@@ -1205,159 +1381,11 @@ export default function App() {
           </div>
         )}
         <div className="editor-content">
-          {loading ? (
-            <div className="empty-state">
-              <LoaderCircle size={28} className="spin" />
-              <p>{t("正在读取工程")}</p>
-            </div>
-          ) : !project ? (
-            <div className="empty-state">
-              <FolderOpen size={42} />
-              <h2>{t("打开本地工程")}</h2>
-              <p>{t("选择已有工程，或创建一个新工程开始。")}</p>
-              <Button
-                variant="primary"
-                disabled={!canWrite}
-                onClick={() => setModal("new")}
-              >
-                <Plus size={16} />
-                {t("新建工程")}
-              </Button>
-            </div>
-          ) : tab === "fbd" && (preview?.target_mode === "fbd" || (!preview && (version?.target_mode === "fbd" || (!version && project.target_mode === "fbd")))) ? (
-            <FBDPanel key={`${pid}:${vid}:${selectedProposal?.id || "version"}`} value={Array.isArray(visibleProgram?.nodes) ? visibleProgram as unknown as FBDModel : null}
-              svg={svg} pid={pid} vid={vid} readOnly={!canWrite} preview={!!preview} t={t} onProposal={showFBDProposal} />
-          ) : tab === "fbd" ? (
-            <div className="empty-state"><GitBranch size={38}/><h2>{t("结构化梯形图/FBD")}</h2><p>{t("导入 GXW 工程，或将当前梯形图转换为 FBD。也可以新建 FBD 工程直接生成。")}</p></div>
-          ) : !version && !preview ? (
-            generationResult.id ? (<div className="empty-state">
-              <Workflow size={44} />
-              <h2>{t(generationResult.id
-                ? generationResult.blocked ? "候选与确认方案冲突"
-                  : generationResult.loading ? "正在读取生成结果"
-                  : generationResult.proposalId ? "程序已保存，等待查看"
-                  : "生成结果暂不可用"
-                : "工程中还没有程序")}</h2>
-              <p>{t(generationResult.id
-                ? "请在 Agent 面板查看生成结果及具体诊断。"
-                : "描述控制需求，确认规格后生成第一个程序。")}</p>
-              {generationResult.id && <Button onClick={() => setPanel("agent")}>{t("查看生成结果")}</Button>}
-              <Badge>
-                {project.plc_model} · {project.target_mode.toUpperCase()}
-              </Badge>
-            </div>) : (<FirstProjectGuide example={creation?.starter_requirement || ""} t={t} hasSpec={!!project.confirmed_spec} disabled={!canWrite || jobs.some(activeJob)}
-              onExample={value=>{setText(value);setIntent("analysis");setPanel("agent");}}
-              onSpec={()=>setPanel("spec")} onGenerate={()=>void guarded(()=>submitJob("generation"))} />)
-          ) : tab === "delivery" ? (
-            <DeliverySummary key={`${pid}:${vid}`} pid={pid} vid={vid} t={t} refreshKey={refresh} readOnly={!canWrite}/>
-          ) : tab === "ladder" ? (
-            <ProgramExplorer key={`${pid}:${vid}:${selectedProposal?.id || diagnosticJobId || "version"}`} pid={pid} vid={vid} proposalId={preview ? selectedProposal?.id : undefined}
-              jobId={preview && diagnosticJobId ? diagnosticJobId : undefined} refreshKey={versionDrawing}
-              changeSummary={preview ? selectedProposal?.summary : proposals.find(p=>p.action === "accept_local" && p.status === "accepted" && p.result?.version_id === vid)?.summary}
-              theme={theme} selectedNetwork={String(network?.id || "")} initialAddress={jumpVersion === vid ? jumpAddress : ""} t={t}
-              onNetwork={id => setNetwork({...networks.find(n => n.id === id), id, version_id:vid})} />
-          ) : tab === "st" ? (
-            <div className="code-view">
-              <header>
-                <FileCode2 size={15} />
-                {preview
-                  ? "candidate.st"
-                  : version?.artifacts?.find((a) => a.id.includes("st"))
-                      ?.filename || "ST"}
-                <span className="spacer" />
-                {!preview &&
-                  version?.artifacts
-                    ?.filter(
-                      (a) => ["st", "st_from_ir"].includes(a.id) && a.available,
-                    )
-                    .map((a) => (
-                      <a key={a.id} href={artifactUrl(pid, vid, a.id, true)}>
-                        <ArrowDownToLine size={14} />
-                        {t("下载")}
-                      </a>
-                    ))}
-              </header>
-              <pre>
-                {String((preview ? preview.st : st) || t("此版本没有该产物"))}
-              </pre>
-            </div>
-          ) : tab === "diagnostics" ? (
-            <div className="document-view">
-              <div className="content-heading">
-                <h2>{t("诊断")}</h2>
-                <Button
-                  disabled={!canWrite || !operations.diagnose}
-                  onClick={() =>
-                    void guarded(() => submitJob("review", { deep: false }))
-                  }
-                >
-                  <ShieldCheck size={15} />
-                  {t("本地检查")}
-                </Button>
-              </div>
-              <IssueCards pid={pid} vid={vid} readOnly={!canWrite || !operations.simulation} t={t} refreshKey={refresh}
-                onNetwork={(id,address)=>{setNetwork({...networks.find(n=>n.id===id),id,version_id:vid});setJumpAddress(address||"");setJumpVersion(vid);setTab("ladder");}}
-                onTest={issue=>{setIssueContext({...issue,versionId:vid});setTab("simulation");}}/>
-            </div>
-          ) : tab === "reports" ? (
-            <div className="document-view">
-              <div className="content-heading">
-                <h2>{t("检查报告")}</h2>
-                <Button
-                  disabled={!canWrite || !operations.diagnose}
-                  onClick={() => void guarded(() => submitJob("review"))}
-                >
-                  <FileCheck2 size={15} />
-                  {t("本地检查")} + AI
-                </Button>
-              </div>
-              {project.reports?.length ? (
-                project.reports.map((r) => (
-                  <button
-                    className="report-item"
-                    key={r.report_id}
-                    onClick={() =>
-                      void guarded(async () => {
-                        setReport(
-                          await api(`/projects/${pid}/reports/${r.report_id}`),
-                        );
-                        setModal("report");
-                      })
-                    }
-                  >
-                    <FileCheck2 size={20} />
-                    <span>
-                      {r.summary || r.report_id}
-                      <small className="mono">
-                        {r.base_version_id} · {r.report_id}
-                      </small>
-                    </span>
-                    {status(r.status)}
-                    <ChevronRight size={16} />
-                  </button>
-                ))
-              ) : (
-                <div className="panel-empty">{t("没有检查报告")}</div>
-              )}
-            </div>
-          ) : (
-            <div className="document-view">
-              <div className="content-heading">
-                <h2>{t("仿真记录")}</h2>
-                <Button
-                  disabled={!canWrite || !!preview || !operations.simulation}
-                  onClick={() => void guarded(() => submitJob("test_plan"))}
-                >
-                  <Plus size={15} />
-                  {t("生成测试方案")}
-                </Button>
-              </div>
-              {operations.simulation ? <SimulationWorkbench key={`${pid}:${vid}`} pid={pid} vid={vid} readOnly={!canWrite || !operations.simulation}
-                t={t} refreshKey={`${refresh}:${jobs.filter(job => !activeJob(job)).map(job => `${job.id}:${job.status}`).join("|")}`} onSaved={refreshAll} issueContext={issueContext} initialPlanId={issueContext?.planId}
-                onExecute={planId=>guarded(()=>proposeExecution("simulation",planId))}
-                onDebug={runId=>guarded(()=>submitJob("debug_plan",{run_id:runId}))}/> : <p>{t("此程序形式尚未接通仿真。")}</p>}
-            </div>
-          )}
+          {["ladder", "fbd", "st", "diagnostics", "reports", "simulation", "delivery"].map(id => (
+            <RetainedPanel key={`${pid}:${vid}:${selectedProposal?.id || diagnosticJobId || "version"}:${id}`} active={tab === id}>
+              {() => renderEditorTab(id)}
+            </RetainedPanel>
+          ))}
         </div>
         {version && !preview && (
           <footer className="artifact-footer">
@@ -1496,7 +1524,7 @@ export default function App() {
                   )}
                   <GenerationResult result={generationResult} busy={busy || loading}
                     onOpen={() => void guarded(() => openGenerationResult())}
-                    onRetry={() => { setOutputRetry((n) => n + 1); void reloadProjectSilently(pid); }}
+                    onRetry={() => { setOutputRetry((n) => n + 1); void reloadProjectSilently(pid).catch(e => { if (activeProjectRef.current === pid) setError(e.message); }); }}
                     onRepair={() => { if (currentJob) void guarded(() => repairFailedGeneration(currentJob)); }}
                     onSpec={() => setPanel("spec")} t={t} />
                   <JobFailure job={currentJob} busy={!canWrite}
@@ -1804,8 +1832,9 @@ export default function App() {
               title={t("安全检查点取消")}
               onClick={() =>
                 void guarded(async () => {
-                  await api(`/jobs/${jobId}/cancel`, "POST");
-                  void reloadProjectSilently(pid);
+                  const cancelled = await api<Job>(`/jobs/${jobId}/cancel`, "POST");
+                  jobsPolling.current?.refresh();
+                  setJobs(old => old.map(job => job.id === cancelled.id ? cancelled : job));
                 })
               }
             >
@@ -1873,7 +1902,7 @@ export default function App() {
               setVid("");
               setModal("");
               setNewName("");
-              refreshAll();
+              setProjectListRevision(n => n + 1);
             });
           }}
         >
@@ -1913,18 +1942,18 @@ export default function App() {
           <Button variant={settingsTab === "general" ? "primary" : "ghost"} onClick={() => setSettingsTab("general")}>{t("通用与审批")}</Button>
           <Button variant={settingsTab === "model" ? "primary" : "ghost"} onClick={() => setSettingsTab("model")}>{t("模型")}</Button>
         </nav>
-        {settingsTab === "general" && (approvalSettings ? <ApprovalSettingsPanel value={approvalSettings}
-          disabled={!!session.read_only} onChange={setApprovalSettings} t={t}/> : <p>{t("正在读取设置")}</p>)}
+        <RetainedPanel active={settingsTab === "general"}>{() => approvalSettings ? <ApprovalSettingsPanel value={approvalSettings}
+          disabled={!!session.read_only} onChange={setApprovalSettings} t={t}/> : <p>{t("正在读取设置")}</p>}</RetainedPanel>
         {settingsTab === "general" && settingsError && <p role="alert" className="error-text">{settingsError}
           <Button onClick={() => setSettingsRetry((n) => n + 1)}>{t("重试")}</Button></p>}
-        {settingsTab === "model" && settings && (
+        <RetainedPanel active={settingsTab === "model"}>{() => settings && (
           <Settings
             value={settings}
             t={t}
             disabled={!session || !!session.read_only}
-            onChange={setSettings}
+            onChange={value => { settingsRead.current.cancel(); setSettings(value); }}
           />
-        )}
+        )}</RetainedPanel>
       </Modal>
       <Modal
         open={modal === "environment"}

@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { activeJob } from "../api/client";
 import type { Job, JobEvent } from "../api/client";
 
 /** An indeterminate bar: real activity and elapsed time, never a guessed %. */
-export function JobProgress({ job, events, t }: {
+export const JobProgress = memo(function JobProgress({ job, events, t }: {
   job: Job; events: JobEvent[]; t: (key: string) => string;
 }) {
   const running = activeJob(job);
@@ -15,6 +15,7 @@ export function JobProgress({ job, events, t }: {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [job.id, running]);
+  const preview = useMemo(() => {
   let preview = { reasoning: "", content: "", discarded: false, truncated: false };
   for (const event of events) {
     if (event.event_type !== "model_preview") continue;
@@ -27,6 +28,9 @@ export function JobProgress({ job, events, t }: {
     }
     preview.truncated ||= !!payload?.truncated;
   }
+  return preview;
+  }, [events]);
+  const latest = useMemo(() => [...events].reverse().find(event => ["model_progress", "progress"].includes(event.event_type)), [events]);
   const envelope = job.kind === "execution" && job.result ? job.result : null;
   const outcome = typeof envelope?.status === "string" ? envelope.status : "";
   const nested = envelope?.result;
@@ -40,7 +44,6 @@ export function JobProgress({ job, events, t }: {
   const showModelPreview = modelDriven || hasModelPreview;
   const executionCompleted = !running && outcome === "accepted" && !!executionDetails?.message;
   if (!running && !showModelPreview && !executionFailed && !executionCompleted) return null;
-  const latest = [...events].reverse().find((event) => ["model_progress", "progress"].includes(event.event_type));
   const phaseNames: Record<string, string> = {
     waiting: "正在等待模型响应", thinking: "模型正在处理需求",
     receiving: "正在接收模型回复", validating: "正在检查回复格式",
@@ -67,4 +70,4 @@ export function JobProgress({ job, events, t }: {
       {preview.truncated && <p className="muted">{t("预览较长，完整内容请查看最终结果。")}</p>}
     </details>}
   </section>;
-}
+});

@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import copy
+from collections import Counter
 from dataclasses import replace
 import getpass
 import json
@@ -90,6 +91,11 @@ class Server:
         self.preview_attempts = 0
         self.api_errors = []
         self.executions = []
+        self.read_counts, self.inflight, self.max_inflight = Counter(), Counter(), Counter()
+        self.delays = {}
+        self.hold_next_jobs = False
+        self.jobs_snapshot_ready = threading.Event()
+        self.release_jobs_snapshot = threading.Event()
         @self.app.middleware('http')
         async def observe(request, call_next):
             # Fault injection delays genuine backend requests or fails one read;
@@ -108,10 +114,30 @@ class Server:
                 return Response(status_code=204)
             if request.method == 'POST' and path == '/api/proposals':
                 self.executions.append(path)
-            response = await call_next(request)
-            if path.startswith('/api/') and response.status_code >= 500:
-                self.api_errors.append((request.method, path, response.status_code))
-            return response
+            counted = request.method == 'GET' and path.startswith('/api/') and not path.endswith('/events')
+            if counted:
+                self.read_counts[path] += 1
+                self.inflight[path] += 1
+                self.max_inflight[path] = max(self.max_inflight[path], self.inflight[path])
+            hold = path == '/api/jobs' and self.hold_next_jobs
+            if hold: self.hold_next_jobs = False
+            try:
+                response = await call_next(request)
+                if hold:
+                    # Freeze genuine old bytes, not a fabricated API response.
+                    from fastapi.responses import Response
+                    body = b''.join([part async for part in response.body_iterator])
+                    self.jobs_snapshot_ready.set()
+                    for _ in range(400):
+                        if self.release_jobs_snapshot.is_set(): break
+                        await asyncio.sleep(0.05)
+                    response = Response(body, status_code=response.status_code, headers=dict(response.headers))
+                if path in self.delays: await asyncio.sleep(self.delays[path])
+                if path.startswith('/api/') and response.status_code >= 500:
+                    self.api_errors.append((request.method, path, response.status_code))
+                return response
+            finally:
+                if counted: self.inflight[path] -= 1
         self.server = uvicorn.Server(uvicorn.Config(self.app, log_level='error', access_log=False, timeout_graceful_shutdown=5))
         self.thread = threading.Thread(target=lambda: self.server.run(sockets=[self.socket]), daemon=True)
     def __enter__(self):
@@ -124,6 +150,7 @@ class Server:
     def __exit__(self, exc_type, exc_value, exc_tb):
         # Bound orphaned HTTP connections in the disposable fault-injection server.
         # Service shutdown still joins workers and releases its real workspace lock.
+        self.release_jobs_snapshot.set()
         self.server.should_exit = True
         self.thread.join(timeout=30)
         self.socket.close()
@@ -310,13 +337,163 @@ async def run_case(browser, root, web_dist, name, *, legacy_contract=False, faul
             await context.close()
 
 
+async def until(predicate, message, timeout=12):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate(): return
+        await asyncio.sleep(0.05)
+    raise AssertionError(message)
+
+
+async def lifecycle_cases(browser, root, web_dist, results):
+    """Production UI and real persistence. No GX/PLC calls or model spend."""
+    from application.simulation_workbench import SimulationWorkbenchService
+    provider = Provider()
+    with Server(root, web_dist, provider, fault='no-sse') as server:
+        pid = server.project('Lifecycle regression', legacy_contract=True)
+        server.service.submit({'kind': 'generation', 'project_id': pid, 'version_id': None,
+            'request_id': secrets.token_hex(16), 'text': REQUIREMENT,
+            'response_language': 'zh-CN', 'attachment_ids': []})
+        saved = await wait_job(server, pid)
+        vid = server.service.output(saved['id'])['version_id']
+        version_path = f'/api/projects/{pid}/versions/{vid}'
+        simulation = SimulationWorkbenchService(server.service)
+        simulation.save(pid, vid, suite={'name': 'Lifecycle plan', 'plc_model': 'FX3U', 'tests': [{
+            'name': 'input follows output', 'plc_model': 'FX3U', 'initial': {'X0': 0},
+            'steps': [{'id': 'on', 'at_ms': 0, 'set': {'X0': 1}},
+                      {'id': 'assert', 'at_ms': 10, 'expect': {'Y0': 1}}],
+            'sample_ms': 5, 'timeout_ms': 100}]}, requirement_links={}, issue_ids=[],
+            expected_ir_sha256=simulation.read(pid, vid)['ir_sha256'])
+
+        async def tab(page, name):
+            await page.locator('.editor-tabs').get_by_role('button', name=name, exact=True).click()
+
+        async def preserve_tabs(page):
+            explorer = page.locator('.program-explorer')
+            await explorer.get_by_label('搜索地址或注释', exact=True).fill('X0')
+            await explorer.get_by_role('button', name='+', exact=True).click()
+            await explorer.evaluate('el => window.__retainedExplorer=el')
+            before = server.read_counts[version_path + '/explorer']
+            before_program = server.read_counts[version_path + '/program']
+            for _ in range(20):
+                await tab(page, 'ST')
+                await tab(page, '梯形图')
+            await expect(explorer.get_by_label('搜索地址或注释', exact=True)).to_have_value('X0')
+            await expect(explorer.get_by_role('button', name='125%', exact=True)).to_be_visible()
+            assert await explorer.evaluate('el => el===window.__retainedExplorer'), 'Tab switching remounted explorer'
+            assert server.read_counts[version_path + '/explorer'] == before, 'Tab clicks refetched unchanged drawings'
+            assert server.read_counts[version_path + '/program'] == before_program, 'Tab clicks refetched immutable IR'
+            await tab(page, '仿真记录')
+            await page.get_by_label('方案名称', exact=True).fill('Unsaved lifecycle draft')
+            await tab(page, '梯形图'); await tab(page, '仿真记录')
+            await expect(page.get_by_label('方案名称', exact=True)).to_have_value('Unsaved lifecycle draft')
+            return {'tab_clicks': 42, 'extra_explorer_requests': server.read_counts[version_path + '/explorer'] - before}
+
+        async def redraw_retains_dom(page):
+            explorer = page.locator('.program-explorer')
+            await explorer.get_by_label('搜索地址或注释', exact=True).fill('Y0')
+            await explorer.evaluate('el => {window.__retainedExplorer=el;window.__retainedImage=el.querySelector("img");window.__detached=false;window.__watch=new MutationObserver(()=>{if(!window.__retainedImage.isConnected)window.__detached=true});window.__watch.observe(document.body,{subtree:true,childList:true})}')
+            server.delays[version_path + '/explorer'] = 0.45
+            before = server.read_counts[version_path + '/explorer']
+            await page.get_by_role('button', name='刷新结果 / 重绘梯形图', exact=True).click()
+            await until(lambda: server.read_counts[version_path + '/explorer'] > before and not server.inflight[version_path + '/explorer'], 'Redraw did not complete')
+            await visible_svg(page)
+            assert await explorer.evaluate('el => el===window.__retainedExplorer && el.querySelector("img")===window.__retainedImage && !window.__detached'), 'Refreshing detached the rendered drawing'
+            await expect(explorer.get_by_label('搜索地址或注释', exact=True)).to_have_value('Y0')
+            await page.evaluate('window.__watch.disconnect()')
+            return {'drawing_detached': False}
+
+        async def save_plan_retains_editor(page):
+            await tab(page, '仿真记录')
+            field = page.get_by_label('方案名称', exact=True)
+            await field.fill('Saved lifecycle plan')
+            await field.evaluate('el => {window.__planField=el;window.__planDetached=false;window.__watch=new MutationObserver(()=>{if(!el.isConnected)window.__planDetached=true});window.__watch.observe(document.body,{subtree:true,childList:true})}')
+            before = {path: server.read_counts[path] for path in ['/api/settings', '/api/environment', '/api/projects', version_path + '/program']}
+            count = len(simulation.read(pid, vid)['plans'])
+            button = page.get_by_role('button', name='保存为新方案', exact=True)
+            # Same-turn clicks exercise the synchronous lock, not only disabled styling.
+            await button.evaluate('el => {for(let i=0;i<20;i++)el.click()}')
+            await until(lambda: len(simulation.read(pid, vid)['plans']) == count + 1, 'Plan was not saved once')
+            await expect(page.locator('.sim-notice')).to_contain_text('已保存新方案')
+            await asyncio.sleep(0.7)
+            assert len(simulation.read(pid, vid)['plans']) == count + 1, 'Rapid save duplicated plans'
+            assert await field.evaluate('el => el===window.__planField && !window.__planDetached'), 'Save remounted the plan editor'
+            await expect(field).to_have_value('Saved lifecycle plan')
+            assert all(server.read_counts[path] == total for path, total in before.items()), 'Plan save refetched unrelated global resources'
+            await page.evaluate('window.__watch.disconnect()')
+            return {'save_clicks': 20, 'plans_created': 1, 'unrelated_requests': 0}
+
+        async def completion_without_sse(page):
+            await tab(page, '诊断')
+            issues_path = version_path + '/issues'
+            await until(lambda: server.read_counts[issues_path] > 0 and not server.inflight[issues_path], 'Initial issues missing')
+            before = server.read_counts[issues_path]
+            jobs_before = {j['id'] for j in server.service.jobs.list(pid)}
+            await page.get_by_role('button', name='本地检查', exact=True).click()
+            await until(lambda: any(j['id'] not in jobs_before and j['kind'] == 'review' and j['status'] == 'completed' for j in server.service.jobs.list(pid)), 'Review did not complete')
+            await until(lambda: server.read_counts[issues_path] > before, 'Polling completion did not refresh mounted diagnosis')
+            assert await page.locator('.editor-tabs .active').inner_text() == '诊断'
+            return {'sse_disabled': True, 'diagnosis_refreshed_without_click': True}
+
+        async def stale_poll_and_slow_reads(page):
+            await tab(page, '诊断')
+            server.jobs_snapshot_ready.clear(); server.release_jobs_snapshot.clear()
+            server.hold_next_jobs = True
+            await until(server.jobs_snapshot_ready.is_set, 'No poll was available to hold')
+            # This exceeds the old 2.5 s interval: a second overlapping request is a defect.
+            current = server.read_counts['/api/jobs']
+            await asyncio.sleep(2.8)
+            assert server.read_counts['/api/jobs'] == current, 'A slow job poll overlapped the previous request'
+            async with page.expect_response(lambda r: r.request.method == 'POST' and r.url.endswith('/api/jobs')) as response:
+                await page.get_by_role('button', name='本地检查', exact=True).click()
+            job = await (await response.value).json()
+            selector = page.get_by_label('任务记录', exact=True)
+            await expect(selector).to_have_value(job['id'])
+            await selector.evaluate('''(el) => {window.__regressed=false;const expected=el.value;window.__watch=new MutationObserver(()=>{if(el.value!==expected)window.__regressed=true});window.__watch.observe(el,{subtree:true,childList:true,attributes:true})}''')
+            server.release_jobs_snapshot.set()
+            await asyncio.sleep(1)
+            await expect(selector).to_have_value(job['id'])
+            assert not await page.evaluate('window.__regressed'), 'An old snapshot erased the newly submitted task'
+            await page.evaluate('window.__watch.disconnect()')
+            return {'slow_poll_overlap': False, 'stale_snapshot_applied': False}
+
+        checks = [('tab-state-and-request-budget', preserve_tabs), ('redraw-keeps-dom', redraw_retains_dom),
+                  ('plan-save-is-local-and-single-flight', save_plan_retains_editor),
+                  ('diagnosis-autorefresh-without-SSE', completion_without_sse),
+                  ('slow-poll-and-stale-response', stale_poll_and_slow_reads)]
+        for name, check in checks:
+            print('START lifecycle:', name, flush=True)
+            context, page, errors = await open_page(browser, server, pid)
+            try:
+                await visible_svg(page)
+                await expect(page.get_by_role('button', name='刷新结果 / 重绘梯形图', exact=True)).to_be_enabled()
+                await asyncio.sleep(0.2)
+                metrics = await check(page)
+                assert not errors, errors
+                results.append({'name': name, 'passed': True, 'real_http': True, **metrics})
+                print('PASS lifecycle:', name, flush=True)
+            except Exception:
+                results.append({'name': name, 'passed': False, 'error': traceback.format_exc()})
+                await page.screenshot(path=str(Path(os.environ['GX_DELIVERY_EVIDENCE_DIR']) / f'{name}-failure.png'), full_page=True)
+                print('FAIL lifecycle:', name, flush=True)
+            finally:
+                server.release_jobs_snapshot.set(); server.delays.clear()
+                await context.close()
+        assert not server.executions, 'Lifecycle acceptance must not execute native operations'
+        assert provider.calls == 1, 'UI interactions must not generate extra model requests'
+        assert all(result['passed'] for result in results), 'Lifecycle acceptance failed; see per-case evidence'
+    return results
+
+
 async def exercise(args, root, live, results=None):
     # Real HTTP calls include persistence and polling; mocked UI timing does not
     # apply. All state, bytes, permissions and pixel assertions remain required.
     expect.set_options(timeout=15000)
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch()
+        browser = await playwright.chromium.launch(executable_path=args.browser_executable)
         try:
+            if args.lifecycle_only:
+                return await lifecycle_cases(browser, root / 'lifecycle', args.web_dist, results if results is not None else [])
             if live:
                 return [await run_case(browser, root / 'live', args.web_dist, 'DeepSeek simple control', live=live)]
             cases = results if results is not None else []
@@ -332,6 +509,7 @@ async def exercise(args, root, live, results=None):
                                         legacy_contract=legacy_contract, fault=fault)
                 cases.append(result)
                 print('PASS:', name, flush=True)
+            await lifecycle_cases(browser, root / 'lifecycle', args.web_dist, cases)
             return cases
         finally:
             await browser.close()
@@ -341,6 +519,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--web-dist', type=Path, default=ROOT / 'web/dist')
     parser.add_argument('--report', type=Path, default=Path('generation-delivery-e2e.json'))
+    parser.add_argument('--lifecycle-only', action='store_true', help='Run lifecycle and request-budget acceptance only')
+    parser.add_argument('--browser-executable', default=None, help='Optional installed Chromium executable')
     parser.add_argument('--live', action='store_true', help='Use a real DeepSeek API key; incurs API usage')
     args = parser.parse_args()
     args.web_dist = args.web_dist.resolve()

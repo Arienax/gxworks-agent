@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2, GitBranch, FileUp, Download } from "lucide-react";
 import { api, artifactUrl, key } from "../api/client";
 import type { Proposal } from "../api/client";
@@ -143,7 +143,7 @@ export function FBDPanel({ value, svg, pid, vid, readOnly, preview, onProposal, 
   const [zoom, setZoom] = useState(1), [page, setPage] = useState(0);
   const [rendered, setRendered] = useState<{ identity: string; value?: DraftPreview; error?: string } | null>(null);
   const generation = useRef(0), pending = useRef(false);
-  const inputKey = JSON.stringify(value);
+  const inputKey = useMemo(() => JSON.stringify(value), [value]);
   useEffect(() => {
     const current = ++generation.current;
     pending.current = false; setBusy(false); setEditor(null); setError(""); setRendered(null);
@@ -159,7 +159,7 @@ export function FBDPanel({ value, svg, pid, vid, readOnly, preview, onProposal, 
     return () => { active = false; };
   }, []);
   const draft = editor?.model;
-  const draftKey = JSON.stringify(draft), dirty = !!draft && draftKey !== sourceKey;
+  const draftKey = useMemo(() => JSON.stringify(draft), [draft]), dirty = !!draft && draftKey !== sourceKey;
   const previewIdentity = `${pid}/${vid}/${draftKey}`;
   const disabled = readOnly || preview || busy;
   useEffect(() => {

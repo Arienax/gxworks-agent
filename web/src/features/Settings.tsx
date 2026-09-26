@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { usePolling } from "../lifecycle/usePolling";
+import { sameValue } from "../lifecycle/requests";
 import { api } from "../api/client";
 import type { Json, ModelSettings } from "../api/client";
 import type { components } from "../api/generated";
@@ -57,40 +59,18 @@ function McpIntegrations({
   const [error, setError] = useState("");
   const [serviceCheck, setServiceCheck] = useState<"unchecked" | "passed" | "failed">("unchecked");
 
-  const refresh = async () => {
-    if (!projectId) {
-      setStatus(null);
-      return;
-    }
-    const value = await api<McpStatus>(
-      `/integrations/mcp?project_id=${encodeURIComponent(projectId)}`,
-    );
-    setStatus(value);
-  };
-
+  const commandPending = useRef(false);
   useEffect(() => {
-    let stopped = false;
-    setStatus(null);
-    setMessage("");
-    setError("");
-    setServiceCheck("unchecked");
-    if (!projectId) return;
-    const poll = () => {
-      if (document.visibilityState === "hidden") return;
-      api<McpStatus>(`/integrations/mcp?project_id=${encodeURIComponent(projectId)}`)
-        .then((value) => !stopped && setStatus(value))
-        .catch((e) => !stopped && setError((e as Error).message));
-    };
-    poll();
-    const timer = window.setInterval(poll, 5000);
-    return () => {
-      stopped = true;
-      window.clearInterval(timer);
-    };
+    setStatus(null); setMessage(""); setError(""); setServiceCheck("unchecked");
   }, [projectId]);
+  const polling = usePolling(projectId || null,
+    signal => api<McpStatus>(`/integrations/mcp?project_id=${encodeURIComponent(projectId)}`, "GET", undefined, { signal }),
+    value => setStatus(old => sameValue(old, value)),
+    error => setError(error instanceof Error ? error.message : String(error)), 5000);
 
   const run = async (path: string) => {
-    if (!projectId || busy || disabled) return;
+    if (!projectId || commandPending.current || disabled) return;
+    commandPending.current = true;
     setBusy(true);
     setError("");
     setMessage("");
@@ -103,7 +83,8 @@ function McpIntegrations({
       if (path.endsWith("/test")) setServiceCheck("failed");
       setError((e as Error).message);
     } finally {
-      try { await refresh(); } catch (e) { setError((e as Error).message); }
+      polling.current?.refresh();
+      commandPending.current = false;
       setBusy(false);
     }
   };
@@ -332,7 +313,10 @@ export function Settings({
     capability_overrides: parse(manualOverrides),
   });
   };
+  const commandPending = useRef(false);
   const run = async (action: () => Promise<void>) => {
+    if (commandPending.current || disabled) return;
+    commandPending.current = true;
     setBusy(true);
     setError("");
     setMessage("");
@@ -341,6 +325,7 @@ export function Settings({
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      commandPending.current = false;
       setBusy(false);
     }
   };

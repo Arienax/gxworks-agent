@@ -243,11 +243,11 @@ Owns HTTP/Web contracts, presentation state, startup, FBD UI, workbench/applicat
 | `tests/test_web_contract.py` | focused coverage for web contract |
 | `tests/test_web_demo_isolation.py` | focused coverage for web demo isolation |
 | `tests/test_web_fbd.py` | focused coverage for web fbd |
-| `tests/test_web_frontend_state_flow.py` | focused coverage for web frontend state flow |
 | `tests/test_web_live_acceptance.py` | focused coverage for web live acceptance |
 | `tests/test_web_source_entrypoints.py` | focused coverage for web source entrypoints |
 | `tests/test_web_startup.py` | focused coverage for web startup |
 | `tests/test_workbench_service.py` | focused coverage for workbench service |
+| `web/tests/requests.test.mjs` | read cancellation, serial polling, invalidation, visibility and structural sharing |
 | `web/tests/gx-send.test.mjs` | browser-side GX send interaction and presentation wiring |
 | `web/tests/model-parameters.test.mjs` | browser model-parameter UI behavior |
 | `web/tests/module-resolution.test.mjs` | frontend module resolution and packaging-sensitive imports |
