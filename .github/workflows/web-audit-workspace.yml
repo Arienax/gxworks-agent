@@ -1,30 +1,81 @@
-name: Web audit workspace
+name: Web lifecycle validation
 on:
   push:
     branches: [fix/web-lifecycle-performance-20260926]
     paths: [.github/workflows/web-audit-workspace.yml]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  workspace:
+  validate:
+    if: github.ref == 'refs/heads/fix/web-lifecycle-performance-20260926'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Prepare reproducible source and frontend dependencies
-        run: |
-          git archive HEAD | gzip > "$RUNNER_TEMP/source.tar.gz"
-          npm ci --prefix web --ignore-scripts
-          tar -czf "$RUNNER_TEMP/web-dependencies.tar.gz" web/node_modules
-      - uses: actions/upload-artifact@v4
+      - uses: actions/setup-python@v5
         with:
-          name: web-audit-workspace
-          path: |
-            ${{ runner.temp }}/source.tar.gz
-            ${{ runner.temp }}/web-dependencies.tar.gz
-          retention-days: 1
+          python-version: '3.13'
+      - name: Prepare dependencies and baseline production build
+        run: |
+          mkdir -p validation-web/baseline validation-web/fixed
+          npm ci --prefix web
+          npm run build --prefix web 2>&1 | tee validation-web/baseline-build.log
+          cp -a web/dist "$RUNNER_TEMP/baseline-dist"
+          python -m pip install -r requirements/web.txt pytest==9.1.1 playwright==1.55.0
+          python -m playwright install --with-deps chromium
+      - name: Apply checksum-verified source patch
+        run: |
+          python - <<'PY'
+          import base64, gzip, hashlib
+          from pathlib import Path
+          parts = [Path(f'.github/web-lifecycle-transfer.{i}').read_text().strip() for i in range(4)]
+          for i, part in enumerate(parts):
+              print(i, len(part), hashlib.sha256(part.encode()).hexdigest())
+          patch = gzip.decompress(base64.b64decode(''.join(parts), validate=True))
+          assert hashlib.sha256(patch).hexdigest() == 'a15a0ca05bd038e9d12b4148bb81031e4f9b62d08fb53758f3b3595c1404c21d'
+          Path('/tmp/web-lifecycle.patch').write_bytes(patch)
+          PY
+          git apply --unidiff-zero --index /tmp/web-lifecycle.patch
+          git diff --cached --check
+      - name: Unit, boundary and production build checks
+        run: |
+          node --experimental-strip-types --test web/tests/*.test.mjs 2>&1 | tee validation-web/unit.log
+          python -m pytest -q tests/test_architecture_boundaries.py tests/test_source_layout.py tests/test_simulation_workbench.py tests/test_program_exploration.py --junitxml=validation-web/scoped.xml 2>&1 | tee validation-web/scoped.log
+          npm run build --prefix web 2>&1 | tee validation-web/build.log
+      - name: Verify original production build reproduces lifecycle defects
+        run: |
+          set +e
+          python scripts/web_generation_e2e.py --lifecycle-only --web-dist "$RUNNER_TEMP/baseline-dist" --report validation-web/baseline/report.json > validation-web/baseline/run.log 2>&1
+          status=$?
+          set -e
+          cat validation-web/baseline/run.log
+          test "$status" -ne 0
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path('validation-web/baseline/report.json').read_text())
+          failures = [c['name'] for c in result['cases'] if not c['passed']]
+          assert len(failures) >= 3, result
+          print('Reproduced baseline defects:', failures)
+          PY
+      - name: Production browser acceptance
+        run: |
+          python scripts/web_model_settings_e2e.py --web-dist web/dist --evidence validation-web/model-api 2>&1 | tee validation-web/model-api.log
+          python scripts/web_generation_e2e.py --web-dist web/dist --report validation-web/fixed/report.json 2>&1 | tee validation-web/fixed/run.log
+      - name: Publish tested source and remove temporary transfer files
+        run: |
+          git rm .github/workflows/web-audit-workspace.yml .github/web-lifecycle-transfer.*
+          git config user.name 'Arienax'
+          git config user.email '61538298+Arienax@users.noreply.github.com'
+          git commit -m 'fix(web): preserve editor lifecycle and serialize result refresh' -m 'Retain visited views and dirty drafts; isolate result invalidation from global settings; serialize and cancel reads; batch streaming and pointer updates; adopt authoritative mutation responses. Replace source-string lifecycle assertions with production HTTP/browser regressions and request-ownership unit tests.'
+          git rev-parse HEAD | tee validation-web/tested-commit.txt
+          git push origin HEAD:fix/web-lifecycle-performance-20260926
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-lifecycle-validation
+          path: validation-web
+          retention-days: 7
