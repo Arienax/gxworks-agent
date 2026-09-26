@@ -20,6 +20,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
+          echo '/evidence/' >> .git/info/exclude
           git rev-parse HEAD > evidence/workflow-commit.txt
           python - <<'PY'
           import base64, gzip, hashlib, subprocess
@@ -29,9 +30,20 @@ jobs:
           assert hashlib.sha256(patch).hexdigest() == 'd958f5951674b50f69558adabde4a15fa706692e3441e17430682b5b0876112d'
           subprocess.run(['git', 'apply', '--check', '-'], input=patch, check=True)
           subprocess.run(['git', 'apply', '-'], input=patch, check=True)
+          path = Path('scripts/web_generation_e2e.py')
+          before = path.read_text()
+          old = "page.get_by_label('本版本运行记录', exact=True).select_option"
+          assert before.count(old) == 1
+          path.write_text(before.replace(old, "page.get_by_role('combobox', name='本版本运行记录', exact=True).select_option"))
+          path = Path('scripts/web_model_settings_e2e.py')
+          before = path.read_text()
+          old = "                        field=page.get_by_label('配置名称',exact=True)\n                        if await field.count()"
+          new = "                        field=page.get_by_label('配置名称',exact=True)\n                        # Wait for the lazy panel before deciding whether its\n                        # empty-profile create card is already open.\n                        await expect(field.or_(page.get_by_role('button',name='新增配置',exact=True))).to_be_visible()\n                        if await field.count()"
+          assert before.count(old) == 1
+          path.write_text(before.replace(old, new))
           PY
           git rm .web-bundle-fix.b64 .github/workflows/web-bundle-validation.yml
-          git add web/src/App.tsx web/src/features/DeliverySummary.tsx web/tests/module-resolution.test.mjs scripts/web_generation_e2e.py tests/README.md
+          git add web/src/App.tsx web/src/features/DeliverySummary.tsx web/tests/module-resolution.test.mjs scripts/web_generation_e2e.py scripts/web_model_settings_e2e.py tests/README.md
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'fix(web): defer optional panels without resetting retained views'
           git rev-parse HEAD > evidence/tested-commit.txt
           git diff --check a23948a8e453369634b59608ace9fc6d1fd1704e HEAD
@@ -108,6 +120,15 @@ jobs:
           set -o pipefail
           mkdir -p evidence/browser
           python scripts/web_generation_e2e.py --web-dist web/dist --report evidence/browser/generation-report.json 2>&1 | tee evidence/browser/generation.log
+      - name: Repeat lifecycle browser regression on the same production commit
+        if: ${{ !cancelled() && steps.web.outcome == 'success' }}
+        shell: bash
+        env:
+          GX_DELIVERY_EVIDENCE_DIR: ${{ github.workspace }}/evidence/lifecycle-repeat
+        run: |
+          set -o pipefail
+          mkdir -p evidence/lifecycle-repeat
+          python scripts/web_generation_e2e.py --lifecycle-only --web-dist web/dist --report evidence/lifecycle-repeat/report.json 2>&1 | tee evidence/lifecycle-repeat/run.log
       - name: Production model settings browser regressions
         if: ${{ !cancelled() && steps.web.outcome == 'success' }}
         shell: bash
