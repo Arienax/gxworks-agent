@@ -114,6 +114,8 @@ jobs:
                       if path.is_file() and not path.is_symlink():
                           archive.write(path, path.as_posix())
           PY
+          python -m pip freeze > validation/requirements.lock
+          python -m pip download --dest validation/wheels -r validation/requirements.lock
       - uses: actions/upload-artifact@v4
         if: always() && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-validation'))
         with:
@@ -130,6 +132,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          lfs: true
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
