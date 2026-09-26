@@ -1,0 +1,75 @@
+name: Web bundle validation
+on:
+  push:
+    branches: [fix/web-bundle-splitting-20260926]
+    paths: [.github/workflows/web-bundle-validation.yml]
+permissions:
+  contents: read
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: a23948a8e453369634b59608ace9fc6d1fd1704e
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Baseline production build
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p evidence
+          git rev-parse HEAD > evidence/tested-commit.txt
+          cd web
+          npm ci 2>&1 | tee ../evidence/npm-ci.log
+          npm run build 2>&1 | tee ../evidence/baseline-build.log
+          cp -r dist ../evidence/baseline-dist
+      - name: Attribute generated chunks to modules
+        shell: bash
+        run: |
+          cd web
+          cat > bundle-profile.mjs <<'JS'
+          import { build } from 'vite';
+          import { writeFileSync } from 'node:fs';
+          import { gzipSync } from 'node:zlib';
+          const root = process.cwd() + '/';
+          await build({
+            build: { outDir: '../evidence/profile-dist', emptyOutDir: true, sourcemap: true, manifest: true },
+            plugins: [{
+              name: 'measure-bundle',
+              generateBundle(_options, bundle) {
+                const chunks = Object.values(bundle).filter(item => item.type === 'chunk').map(chunk => ({
+                  file: chunk.fileName, entry: chunk.isEntry, dynamicEntry: chunk.isDynamicEntry,
+                  bytes: Buffer.byteLength(chunk.code), gzipBytes: gzipSync(chunk.code).length,
+                  imports: chunk.imports, dynamicImports: chunk.dynamicImports,
+                  modules: Object.entries(chunk.modules).map(([id, info]) => ({
+                    id: id.replace(root, ''), renderedLength: info.renderedLength,
+                    originalLength: info.originalLength, renderedExports: info.renderedExports,
+                    importers: this.getModuleInfo(id)?.importers?.map(value => value.replace(root, '')),
+                    dynamicImporters: this.getModuleInfo(id)?.dynamicImporters?.map(value => value.replace(root, '')),
+                  })).sort((a, b) => (b.renderedLength || 0) - (a.renderedLength || 0)),
+                }));
+                writeFileSync('../evidence/baseline-modules.json', JSON.stringify(chunks, null, 2));
+                for (const chunk of chunks) {
+                  console.log(JSON.stringify({ ...chunk, modules: chunk.modules.slice(0, 25) }, null, 2));
+                }
+              },
+            }],
+          });
+          JS
+          node bundle-profile.mjs 2>&1 | tee ../evidence/baseline-profile.log
+          rm bundle-profile.mjs
+      - name: Package isolated source and installed frontend dependencies
+        shell: bash
+        run: |
+          tar --exclude=.git --exclude=./evidence --exclude=web/dist -czf "$RUNNER_TEMP/source-with-web-deps.tar.gz" .
+          mv "$RUNNER_TEMP/source-with-web-deps.tar.gz" evidence/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-bundle-baseline
+          path: evidence/
+          retention-days: 7
