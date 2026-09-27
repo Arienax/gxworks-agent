@@ -1,6 +1,10 @@
 // Bounded read-only observations of the pinned, type-library-mapped COM ABI.
 globalThis.observeWorkspace=function(m) {
   const table={
+    'dzdatanavigatorserver.dll':[
+      ['Navigator.SetCpuTypeString',149107,3,[]],
+      ['Navigator.SetProjectParameter',145115,5,[]]
+    ],
     'dzdataabs_projectoperation.dll':[
       ['Project.SetWorkspace',0x31418,3,[]],
       ['Project.Open',0x31991,9,[2,3,4]],
@@ -8,6 +12,8 @@ globalThis.observeWorkspace=function(m) {
       ['Project.OpenByTypeEX',0x3d4ac,10,[2,3,4]],
       ['Project.ImportOneFile',0x300aa,6,[1,2,3,4]],
       ['Project.Save',0x3b65f,19,[1,2,3]],
+      ['Project.CreateProjectHash',0x3ab3a,3,[1]],
+      ['Project.CheckProjectHash',0x39497,3,[1]],
       ['Project.ExportOneFile',0x30112,9,[1,2,3,4]],
       ['Project.SetProjectStatus',0x358ce,17,[]],
       ['Project.SetProjectStatusNavi',0x3c651,8,[1,2,3]],
@@ -69,7 +75,13 @@ globalThis.observeWorkspace=function(m) {
         }catch(e){item.error=String(e);}
         values.push(item);
       }
-      send({event:'workspace_enter',id:this.id,name,args:values,caller:location(this.returnAddress),
+      let parameters=null;
+      try {
+        const text=p=>{const n=p.sub(4).readU32();return n<=8192&&n%2===0?p.readUtf16String(n/2):null;};
+        if(name==='Navigator.SetCpuTypeString')parameters={cpu:text(args[1].readPointer()),group:args[2].toInt32()};
+        if(name==='Navigator.SetProjectParameter')parameters={cpu:text(args[2].readPointer()),name:text(args[2].add(4).readPointer()),extra:text(args[2].add(8).readPointer()),kind:args[2].add(12).readS32(),mode:args[2].add(16).readS32()};
+      } catch(e){parameters={error:String(e)};}
+      send({event:'workspace_enter',id:this.id,name,args:values,parameters,caller:location(this.returnAddress),
         stack:name.startsWith('NativeData.')?Thread.backtrace(this.context,Backtracer.ACCURATE).slice(0,12).map(location):null});
     },
     onLeave(result){if(this.skip)return;send({event:'workspace_leave',id:this.id,name,result:result.toString(),

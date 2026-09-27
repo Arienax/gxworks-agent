@@ -73,13 +73,13 @@ def independent_cfb(raw: bytes) -> dict:
         return {"status": "not-checkable", "reason": type(exc).__name__ + ": " + str(exc)}
 
 
-def reverse_token_boundaries(raw: bytes) -> list[tuple[int, bytes]]:
+def reverse_token_boundaries(raw: bytes, *, body_end: int | None = None) -> list[tuple[int, bytes]]:
     """Independent traversal from trailing lengths; no production tokenizer.
 
     Shares the observed envelope/length hypothesis, so agreement is NOT an
     independent discovery of that hypothesis. It catches traversal/offset bugs.
     """
-    stop, cursor, tokens = 79, len(raw) - 24, []
+    stop, cursor, tokens = 79, len(raw) - 24 if body_end is None else body_end, []
     while cursor > stop:
         size = raw[cursor - 1]
         start = cursor - size
@@ -179,6 +179,15 @@ def program_report(raw: bytes, logical_name: str, resources: list[bytes]) -> dic
         result["res_body_cross_check"] = "byte-identical-subsequence" if any(p.body in r for r in resources) else "not-found"
         result["res_scope"] = "native .res byte duplication; no decoded semantics or freshness claim"
         result["writer_roundtrip"] = "unsupported: read-only token path"
+    elif image.layout == "ladder-framed":
+        p = image.projection
+        result["framing_cross_check"] = "agrees" if reverse_token_boundaries(
+            raw, body_end=p.body_end) == [(t.offset, t.raw) for t in p.tokens] else "differs"
+        result.update(token_count=len(p.tokens), annotated_tokens=0,
+                      critical_token_gaps=len(p.tokens), decoded_instructions=0,
+                      semantic_projection="unsupported: no CPU lexical grammar selected",
+                      writer_roundtrip="unsupported: framing-only source path",
+                      trailer_bytes=len(raw) - p.body_end)
     else:
         result["framing_cross_check"] = "not-checkable"
         result["writer_roundtrip"] = "not-checkable"

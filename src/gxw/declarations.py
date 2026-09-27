@@ -149,6 +149,14 @@ def _type_parts(data_type):
                 raise GXWFormatError("invalid declaration array bounds")
             bounds.append((int(bound[1]), int(bound[2])))
         text = array[2].strip()
+    sized_string = re.fullmatch(r"STRING[ \t]*\[[ \t]*([0-9]+)[ \t]*\]", text)
+    if sized_string:
+        # Native ParseDataTypeString accepts larger lengths than the compiler.
+        # Used Q03UDV ST declarations compile at 255 and reject 256; lowercase
+        # string[n] is rejected too. Keep the caller's spelling in data_type.
+        if not 1 <= int(sized_string[1]) <= 255:
+            raise GXWFormatError("sized STRING length must be between 1 and 255")
+        return "STRING", bounds
     if not re.fullmatch(r"[^\W\d]\w*", text, re.UNICODE):
         raise GXWFormatError("invalid declaration base type")
     return text, bounds

@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import re
+import struct
 import subprocess
 import sys
 
@@ -26,9 +27,12 @@ from gxw.models import GXWFormatError
 
 DLL_SHA256 = "a700da129ede89869a00a5614d08b43dc64e94c240494fc753fe09104c5b9399"
 DEFAULT_DLL = Path("D:/GXWORKS2/Easysocket/CodeGenerator/ECCodeGeneratorFX2.dll")
+Q_DLL = DEFAULT_DLL.with_name("ECCodeGenerator2.dll")
+Q_DLL_SHA256 = "2e5c47b0a0d0b59eb26dbab149862a05983a1fa9519a75e446bc680e7cc16f73"
 
 
-def native_batch(requests, directory: Path, *, dll=DEFAULT_DLL, cpu_code=0x208, encode_option1=1):
+def native_batch(requests, directory: Path, *, dll=DEFAULT_DLL, cpu_code=0x208, encode_option1=1,
+                 native_versions=None, device_context=None):
     """Persist inputs before invoking native code; retain partial/crash results.
 
     Requests contain mode, input_base64 and optional provenance. Decode input
@@ -46,12 +50,46 @@ def native_batch(requests, directory: Path, *, dll=DEFAULT_DLL, cpu_code=0x208, 
     error_offset is the unmodified GetErrorOffset result on failure, otherwise
     null. Its units depend on the native operation; P -> M uses token bytes.
     The CPU code is a native adapter value, not inferred project CPU identity.
+    native_versions explicitly replays the inspected Q SetVersion(count,
+    uint32*) initialization. Values ()/(1,)/(25,) were observed in an actual
+    Q03UDV build; omission retains the unconfigured historical oracle behavior.
+    This setting is not inferred from successful decoding or a CPU name.
+    device_context is an explicit raw Q device-allocation table captured from
+    the project compiler: a 6-byte header plus count * 4 bytes. It affects
+    operand-range checks; do not invent or broaden it to make an input pass.
     """
-    if os.name != "nt" or sha256(dll.read_bytes()) != DLL_SHA256:
-        raise ValueError("requires Windows and the inspected ECCodeGeneratorFX2.dll 15.31 hash")
+    # Q03UDV's native offline build opens ECCodeGenerator2 with adapter CPU
+    # 209, not its Navigator CPU identifier 192. Public text conversion and
+    # GetStepSize (Q 0x61ab -> 0x17e9) have inspected ABIs; FX private routines
+    # and machine buffers are deliberately excluded.
+    dll = Path(dll)
+    dll_hash = sha256(dll.read_bytes())
+    profile = {DLL_SHA256: "fx", Q_DLL_SHA256: "q"}.get(dll_hash)
+    if os.name != "nt" or profile is None:
+        raise ValueError("requires Windows and an inspected native token converter hash")
+    if profile == "q" and (cpu_code != 209 or any(
+            r["mode"] not in ("decode", "encode", "stored-steps") for r in requests)):
+        raise ValueError("Q oracle supports only CPU 209 public text conversion and stored step counts")
+    if native_versions is not None:
+        native_versions = tuple(native_versions)
+        if profile != "q" or native_versions not in ((), (1,), (25,)):
+            raise ValueError("SetVersion is limited to independently observed Q configuration values")
+    if device_context is not None:
+        if (profile != "q" or native_versions is None or
+                any(r["mode"] != "encode" for r in requests)):
+            raise ValueError("device context requires explicitly configured Q encoding")
+        if (not isinstance(device_context, bytes) or not 6 <= len(device_context) <= 4096 or
+                struct.unpack_from('<HH', device_context) != (len(device_context), 0x2000) or
+                len(device_context) != 6 + 4 * struct.unpack_from('<H', device_context, 4)[0]):
+            raise ValueError("unrecognized bounded native device-allocation table")
     directory.mkdir(parents=True, exist_ok=False)
-    evidence = {"dll_sha256": DLL_SHA256, "cpu_code": cpu_code, "encode_option1": encode_option1, "requests": requests,
+    evidence = {"dll_sha256": dll_hash, "profile": profile, "cpu_code": cpu_code, "encode_option1": encode_option1,
+                "native_versions": native_versions, "requests": requests,
                 "scope": "in-process offline native conversion; no native project compile/reopen"}
+    if device_context is not None:
+        (directory / "device-context.bin").write_bytes(device_context)
+        evidence["device_context"] = {"sha256": sha256(device_context), "bytes": len(device_context),
+                                      "handling": "raw-preserved; supplied explicitly"}
     (directory / "requests.json").write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     source = directory / "TokenOracle.cs"
     source.write_bytes((ROOT / "research/native/TokenOracle.cs").read_bytes())
@@ -63,8 +101,13 @@ def native_batch(requests, directory: Path, *, dll=DEFAULT_DLL, cpu_code=0x208, 
         (directory / "build-failure.bin").write_bytes(build.stdout + build.stderr)
         raise RuntimeError("native adapter build failed; output retained")
     protocol = "".join(f"{r['mode']}\t{i}\t{r['input_base64']}\n" for i, r in enumerate(requests))
+    command = [str(executable.resolve()), str(dll.resolve()), str(cpu_code), str(encode_option1), profile]
+    if native_versions is not None:
+        command.append(",".join(str(value) for value in native_versions))
+    if device_context is not None:
+        command.append(str((directory / "device-context.bin").resolve()))
     try:
-        run = subprocess.run([str(executable.resolve()), str(dll.resolve()), str(cpu_code), str(encode_option1)], input=protocol.encode("ascii"),
+        run = subprocess.run(command, input=protocol.encode("ascii"),
                              capture_output=True, timeout=45, creationflags=subprocess.CREATE_NO_WINDOW)
         stdout, stderr, returncode = run.stdout, run.stderr, run.returncode
     except subprocess.TimeoutExpired as exc:
@@ -82,7 +125,23 @@ def native_batch(requests, directory: Path, *, dll=DEFAULT_DLL, cpu_code=0x208, 
 
 def native_il_records(raw, *, encoding="cp936"):
     """Read native IL result framing without using our source token decoder."""
-    cursor, records, line_start = 0, [], True
+    return _read_native_il(raw, encoding=encoding, preserve_opaque_text=False)["records"]
+
+
+def native_il_projection(raw, *, encoding):
+    """Keep undecodable text local to its native-output token.
+
+    Cross-language native paste can retain source-language comments. A project
+    code page therefore is not proof that every text token uses that encoding.
+    Do not guess another encoding or replace characters. Missing text is None;
+    each gap retains the exact token and its offset in the native IL output,
+    not an invented offset in the original POU. Grammar errors still reject.
+    """
+    return _read_native_il(raw, encoding=encoding, preserve_opaque_text=True)
+
+
+def _read_native_il(raw, *, encoding, preserve_opaque_text):
+    cursor, records, gaps, line_start = 0, [], [], True
     while cursor < len(raw):
         size = raw[cursor]
         if size == 0:  # native instruction delimiter
@@ -92,7 +151,16 @@ def native_il_records(raw, *, encoding="cp936"):
         token = raw[cursor:cursor + size]
         if size < 3 or len(token) != size or token[-1] != 0:
             raise ValueError(f"unsupported native IL framing at {cursor}")
-        kind, text = token[1], token[2:-1].decode(encoding)
+        kind, gap = token[1], None
+        try:
+            text = token[2:-1].decode(encoding)
+        except UnicodeDecodeError as exc:
+            if not preserve_opaque_text:
+                raise
+            text = None
+            gap = dict(native_output_offset=cursor, raw_token_hex=token.hex(),
+                       text_encoding=encoding, diagnostic=str(exc), handling="opaque-preserved")
+        field = "text"
         if kind >= 0x90:
             if line_start and kind in (0xD0, 0xD1):
                 records.append({"kind": "label", "text": text})
@@ -100,15 +168,24 @@ def native_il_records(raw, *, encoding="cp936"):
                 raise ValueError("native IL operand has no instruction")
             else:
                 records[-1]["args"].append(text)
+                field = "args"
         elif kind in (0x80, 0x82):
             records.append({"kind": "statement" if kind == 0x80 else "note", "text": text})
         elif kind < 0x80:
             records.append({"kind": "instruction", "op": text, "args": []})
+            field = "op"
         else:
             raise ValueError(f"unknown native IL class {kind}")
+        if gap is not None:
+            gap.update(record_index=len(records) - 1, field=field)
+            if field == "args":
+                gap["argument_index"] = len(records[-1]["args"]) - 1
+            records[-1]["handling"] = "partially-decoded"
+            gaps.append(gap)
         line_start = False
         cursor += size
-    return records
+    return dict(records=records, text_gaps=gaps, native_output_sha256=sha256(raw),
+                handling="partially-decoded" if gaps else "native-decoded")
 
 
 def canonical_record(record):
@@ -153,6 +230,8 @@ def cross_check(raw, native, *, encoding="cp936"):
 
 
 def check_programs(programs, directory, *, dll=DEFAULT_DLL, cpu_code=0x208):
+    if sha256(Path(dll).read_bytes()) != DLL_SHA256:
+        raise ValueError("this Python lexical cross-check is FX-specific; use native_batch for Q observations")
     requests = [{"mode": "decode", "input_base64": base64.b64encode(parse_token_pou(raw).body + b"\0").decode(),
                  "program_sha256": sha256(raw), "provenance": provenance} for raw, provenance in programs]
     rows = native_batch(requests, directory, dll=dll, cpu_code=cpu_code)

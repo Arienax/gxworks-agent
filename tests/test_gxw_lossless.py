@@ -17,7 +17,7 @@ from gxw.models import GXWFormatError
 from gxw.project_metadata import logical_mapping, synchronize_history
 from gxw.structured_pou import parse_structured_pou
 from gxw.structured_pou_writer import serialize_structured_pou
-from gxw.token_pou import parse_token_pou
+from gxw.token_pou import parse_token_pou, frame_token_pou
 from gxw.token_listing import decode_token_listing, decode_token_program, TokenText, TokenLabel
 from gxw.token_resource import parse_token_resource
 from gxw.token_patch import TokenInstructionPatch, patch_token_instructions, TokenRecordSplice, splice_token_records
@@ -29,6 +29,7 @@ NATIVE_SLICES = json.loads((ROOT / "tests/fixtures/gxw_token_native_20260919.jso
 NATIVE_CONVERSION = json.loads((ROOT / "research/results/token-20260919/native-conversion-ladder-mode.json").read_text(encoding="utf-8"))
 NATIVE_OPERANDS = json.loads((ROOT / "research/results/token-20260919/native-operand-corpus-20260920.json").read_text(encoding="utf-8"))
 NATIVE_RESOURCES = json.loads((ROOT / "research/results/token-20260919/compiled-resource-corpus-20260920.json").read_text(encoding="utf-8"))
+SIMPLE_SOURCES = json.loads((ROOT / "tests/fixtures/gxw_simple_ladder_sources.json").read_text(encoding="utf-8"))["cases"]
 
 
 def token_envelope(body):
@@ -635,6 +636,42 @@ def test_native_token_corpus_reconstruction_and_separate_res_bytes(case):
 
 def token_case(prefix):
     return base64.b64decode(next(c for c in CORPUS if c["source"].startswith(prefix))["program_base64"])
+
+
+@pytest.mark.parametrize("case", SIMPLE_SOURCES, ids=lambda c: c["id"])
+def test_native_q_and_legacy_sources_are_framed_without_fx_semantic_promotion(case):
+    raw = base64.b64decode(case["program_base64"])
+    assert sha256(raw) == case["program_sha256"]
+    framed = frame_token_pou(raw)
+    assert framed.reconstruct() == raw
+    assert sha256(framed.body) == case["body_sha256"]
+    assert len(framed.body) == case["native_consumed_bytes"]
+    assert case["native_return_code"] == "0x00000000"
+    assert len(framed.tokens) == case["token_count"]
+    assert len(raw) - framed.body_end == case["trailer_bytes"]
+    assert HARNESS["reverse_token_boundaries"](raw, body_end=framed.body_end) == [
+        (t.offset, t.raw) for t in framed.tokens]
+    image = inspect_program(raw)
+    assert image.layout == "ladder-framed" and image.reconstruct() == raw
+    assert all(r.handling == "opaque-preserved" for r in image.regions)
+    # Framing must not enable the existing FX lexical/writer entry point.
+    with pytest.raises(GXWFormatError):
+        parse_token_pou(raw)
+    report = HARNESS["program_report"](raw, case["logical_name"], [])
+    assert report["critical_token_gaps"] == len(framed.tokens)
+    assert report["decoded_instructions"] == 0
+    assert report["framing_cross_check"] == "agrees"
+
+
+@pytest.mark.parametrize("offset,value", [(54, 0), (55, 0), (63, 0), (67, 0), (79, 0), (-1, 1)])
+def test_framing_only_source_rejects_broken_envelopes_and_boundaries(offset, value):
+    raw = bytearray(base64.b64decode(SIMPLE_SOURCES[1]["program_base64"]))
+    raw[offset] = value
+    with pytest.raises(GXWFormatError):
+        frame_token_pou(raw)
+    image = inspect_program(raw)
+    assert image.layout == "unsupported"
+    assert image.reconstruct() == raw and len(image.regions) == 1
 
 
 def test_annotations_preserve_numeric_base_and_signed_width_without_guessing_roles():

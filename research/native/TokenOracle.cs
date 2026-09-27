@@ -1,6 +1,8 @@
 // Offline byte conversion only. This helper has no project, UI or device APIs.
-// ABI recovered from ECCodeGeneratorFX2.dll 15.31; the Python caller pins its hash.
+// Hash-bound FX2 ABI; Q ECCodeGenerator2 public encode/decode exports were
+// independently inspected and observed in the Q03UDV offline build path.
 using System;
+using System.IO;
 using System.Runtime.InteropServices;
 
 public static class TokenOracle {
@@ -10,6 +12,8 @@ public static class TokenOracle {
     static extern IntPtr GetProcAddress(IntPtr module, string name);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr NewObject();
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int OpenObject(IntPtr h, int cpu, int mode);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int SetVersion(
+        IntPtr h, int count, [In] uint[] versions);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int CloseObject(IntPtr h);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void DeleteObject(IntPtr h);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int Decode(IntPtr h,
@@ -56,7 +60,12 @@ public static class TokenOracle {
     }
 
     public static int Main(string[] args) {
-        if (IntPtr.Size != 4 || args.Length != 3) return 2;
+        if (IntPtr.Size != 4 || args.Length < 3 || args.Length > 6) return 2;
+        string profile = args.Length >= 4 ? args[3] : "fx";
+        if (profile != "fx" && profile != "q") return 2;
+        if (profile == "q" && args[1] != "209") return 2;
+        if (args.Length >= 5 && (profile != "q" ||
+            (args[4] != "" && args[4] != "1" && args[4] != "25"))) return 2;
         IntPtr module = LoadLibraryEx(args[0], IntPtr.Zero, 8);
         if (module == IntPtr.Zero) throw new Exception("LoadLibraryEx: " + Marshal.GetLastWin32Error());
         NewObject create = Export<NewObject>(module, "ObjectNew");
@@ -69,24 +78,47 @@ public static class TokenOracle {
         Machinecode machinecode = Export<Machinecode>(module, "ChangePToMcode");
         FromMachinecode fromMachinecode = Export<FromMachinecode>(module, "ChangeMToPcode");
         ErrorOffset getErrorOffset = Export<ErrorOffset>(module, "GetErrorOffset");
-        RecomputeWidth recomputeWidth = Marshal.GetDelegateForFunctionPointer(
-            IntPtr.Add(module, 0x3E534), typeof(RecomputeWidth)) as RecomputeWidth;
+        RecomputeWidth recomputeWidth = profile == "fx" ? Marshal.GetDelegateForFunctionPointer(
+            IntPtr.Add(module, 0x3E534), typeof(RecomputeWidth)) as RecomputeWidth : null;
         IntPtr handle = create();
         if (handle == IntPtr.Zero) throw new Exception("ObjectNew failed");
+        IntPtr deviceContext = IntPtr.Zero;
         try {
             int result = open(handle, int.Parse(args[1]), 0);
             if (result != 0) throw new Exception("Open: " + result.ToString("X8"));
+            if (args.Length >= 5) {
+                // Public ABI inspected at RVA 0x7379 -> 0x5605; the terminal
+                // implementation 0x2E3C0 copies count * 4 bytes. Actual Q03UDV
+                // compilation supplies {25} before encoding ST timer operands.
+                uint[] versions = args[4] == "" ? new uint[0] : new uint[] { uint.Parse(args[4]) };
+                result = Export<SetVersion>(module, "SetVersion")(handle, versions.Length, versions);
+                if (result != 0) throw new Exception("SetVersion: " + result.ToString("X8"));
+            }
+            if (args.Length == 6) {
+                byte[] table = File.ReadAllBytes(args[5]);
+                if (table.Length < 6 || table.Length > 4096 ||
+                    BitConverter.ToUInt16(table, 0) != table.Length ||
+                    BitConverter.ToUInt16(table, 2) != 0x2000 ||
+                    6 + 4 * BitConverter.ToUInt16(table, 4) != table.Length)
+                    throw new Exception("Unsupported device context envelope");
+                // Public encoder passes this raw table through RVA 0x2D375;
+                // its bounded count entries become the internal range table.
+                deviceContext = Marshal.AllocHGlobal(table.Length);
+                Marshal.Copy(table, 0, deviceContext, table.Length);
+            }
             string line;
             while ((line = Console.ReadLine()) != null) {
                 string[] fields = line.Split('\t');
                 if (fields.Length != 3) throw new Exception("Invalid request framing");
+                if (profile == "q" && fields[0] != "decode" && fields[0] != "encode" && fields[0] != "stored-steps")
+                    throw new Exception("Q profile is limited to public text conversion and stored step counts");
                 int id = int.Parse(fields[1]);
                 byte[] input = Convert.FromBase64String(fields[2]);
                 if (input.Length == 0 || input.Length > 32768) throw new Exception("Input size outside tested envelope");
                 byte[] output = new byte[1048576];
                 int inputSize = input.Length, outputSize = output.Length, lastKind = 0, nativeValue = 0;
                 if (fields[0] == "decode") result = decode(handle, input, ref inputSize, output, ref outputSize);
-                else if (fields[0] == "encode") result = encode(handle, input, inputSize, int.Parse(args[2]), 0, output, ref outputSize, ref lastKind, IntPtr.Zero);
+                else if (fields[0] == "encode") result = encode(handle, input, inputSize, int.Parse(args[2]), 0, output, ref outputSize, ref lastKind, deviceContext);
                 else if (fields[0] == "stored-steps") {
                     outputSize = 0;
                     result = storedSteps(handle, inputSize, input, ref nativeValue);
@@ -164,7 +196,10 @@ public static class TokenOracle {
                     + ",\"output_base64\":\"" + payload + "\"}");
                 Console.Out.Flush();
             }
-        } finally { close(handle); destroy(handle); }
+        } finally {
+            if (deviceContext != IntPtr.Zero) Marshal.FreeHGlobal(deviceContext);
+            close(handle); destroy(handle);
+        }
         return 0;
     }
 }

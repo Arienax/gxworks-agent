@@ -1,4 +1,4 @@
-"""Lossless framing and lexical decoding of ordinary FX Ladder Program.pou.
+"""Lossless token framing, with lexical decoding limited to observed FX code.
 
 Facts come from FX3U controls, full native CSV alignments and hash-bound native
 converter observations. Lexical annotations do not prove execution semantics.
@@ -148,6 +148,31 @@ def parse_token_pou(raw: bytes) -> TokenProgram:
     if struct.unpack_from("<II", raw, 55) != (len(raw) - 83,) * 2:
         raise GXWFormatError("unsupported token Program.pou size fields")
     return parse_token_region(raw, 79, len(raw) - 103)
+
+
+def frame_token_pou(raw: bytes) -> TokenProgram:
+    """Frame simple-ladder source without selecting a CPU's lexical grammar.
+
+    Native FX and Q sources share these length fields. Older public projects
+    have 20 zero trailer bytes; the inspected native save appends four zeros
+    without changing the body or its stored lengths. Q END differs from FX,
+    and native ladder FB bodies need not contain END. Consequently this entry
+    point proves boundaries and byte preservation only: do not feed its result
+    to an FX lexical decoder without separate CPU/format evidence.
+    """
+    raw = bytes(raw)
+    if len(raw) < 99 or raw[54] != 1:
+        raise GXWFormatError("outside observed ladder-token source envelope")
+    size, repeated = struct.unpack_from("<II", raw, 55)
+    if size != repeated or size < 20:
+        raise GXWFormatError("ladder-token source size fields disagree")
+    if raw[63:79] != bytes.fromhex("010000000c00000000000000ffffffff"):
+        raise GXWFormatError("unsupported ladder-token source prefix")
+    body_length = size - 20
+    end = 79 + body_length
+    if end > len(raw) or len(raw) - end not in (20, 24) or any(raw[end:]):
+        raise GXWFormatError("unsupported ladder-token source trailer")
+    return parse_token_fragment(raw, 79, body_length)
 
 
 def parse_token_region(raw: bytes, offset: int, length: int) -> TokenProgram:

@@ -45,7 +45,7 @@ public static class CompilerTableOracle {
         position=(int)next;return position;
     }
     public static int Main(string[] args) {
-        if(IntPtr.Size!=4 || args.Length<3 || args.Length>6)return 2;
+        if(IntPtr.Size!=4 || args.Length<3 || args.Length>7)return 2;
         SetErrorMode(3);
         string digest=BitConverter.ToString(SHA256.Create().ComputeHash(File.ReadAllBytes(args[0]))).Replace("-","").ToLowerInvariant();
         if(digest!="4f7b2398874c7a921f49f13f25a9a603562032b039de8a5bb74114df27fadf16")throw new Exception("Uninspected compiler DLL");
@@ -120,7 +120,7 @@ public static class CompilerTableOracle {
             }
             Marshal.FreeHGlobal(record);
         }
-        if(args.Length==6) {
+        if(args.Length>=6) {
             // Private, hash-pinned ABI: ArrDsc owns a 25-byte object and a
             // linked list of 20-byte nodes. Preserve raw bytes; Python owns
             // the interpretation and supplies every requested table offset.
@@ -151,6 +151,31 @@ public static class CompilerTableOracle {
                     rows.Flush();arrayDestroy(array);Marshal.FreeHGlobal(array);Marshal.FreeHGlobal(descriptor);
                 }
             }
+        }
+        if(args.Length==7) {
+            // Hash-pinned CstLine Read copies scalars to +8/+12/+24 and
+            // a manager-owned spelling pointer to +0. It does not dispatch
+            // through the value object's vptr or construct owned resources.
+            ReadComponent readConstant=Export<ReadComponent>(module,"?Read@CDZDataABS_CGTableDataManager@@UAEHAAJAAUCstLine@CgTab@@HPAX@Z");
+            IntPtr record=Marshal.AllocHGlobal(28);
+            using(StreamWriter rows=new StreamWriter(Path.Combine(args[2],"native-constants.jsonl"))) {
+                foreach(string line in File.ReadAllLines(args[6])) {
+                    int requested=int.Parse(line),next=requested;
+                    if(requested<0 || requested>=input.Length)throw new Exception("Requested offset out of input bounds");
+                    Marshal.Copy(new byte[28],0,record,28);
+                    int accepted=readConstant(obj,ref next,record,0,IntPtr.Zero);
+                    if(accepted!=1)throw new Exception("Native constant read failed");
+                    IntPtr chars=Marshal.ReadIntPtr(record,0);
+                    int length=0;
+                    while(length<65536 && Marshal.ReadByte(chars,length)!=0)length++;
+                    if(length==65536)throw new Exception("Native constant spelling exceeds bound");
+                    byte[] spelling=new byte[length],value=new byte[12];
+                    Marshal.Copy(chars,spelling,0,length);Marshal.Copy(IntPtr.Add(record,12),value,0,12);
+                    rows.WriteLine("{\"requested_offset\":"+requested+",\"next_offset\":"+next+",\"return_code\":"+accepted+",\"kind\":"+Marshal.ReadInt32(record,8)+",\"reference_count\":"+Marshal.ReadInt32(record,24)+",\"spelling_base64\":\""+Convert.ToBase64String(spelling)+"\",\"value_base64\":\""+Convert.ToBase64String(value)+"\"}");
+                    rows.Flush();
+                }
+            }
+            Marshal.FreeHGlobal(record);
         }
         code=save(obj,stream);File.WriteAllBytes(Path.Combine(args[2],"native-replay.bin"),output.ToArray());
         Console.WriteLine("save="+code+" bytes="+output.Length);

@@ -1,0 +1,220 @@
+{
+  "evidence": "native GX Works2 offline compile/save of isolated real ST declaration changes",
+  "source_project_sha256": "07d2bf942f08242a3443240951df36e4e05bb0f68995dee9131afb15a467f1bb",
+  "cpu": "Q03UDV",
+  "compiler_adapter_sha256": "4a048e05c189d903d1f8384fd9730c3094d4ef98c795259ba07496fb381b3959",
+  "compiler_iec_sha256": "f156107eb134680aad044f74e49105c4a32032c6a7cbfdb1b34d9cf5e0537319",
+  "logical_name": "Keypad.Labels.lh",
+  "cases": [
+    {
+      "name": "scalar255",
+      "target": "newString",
+      "data_type": "STRING[255]",
+      "old_row_hex": "0a0000006e006500770053007400720069006e00670000000a00000053005400520049004e0047005b0031005d000000010000000100000000000100000000000000000003000000270027000000010000000000090000000100000000000000000008000000010000000000",
+      "native_row_hex": "0a0000006e006500770053007400720069006e00670000000c00000053005400520049004e0047005b003200350035005d000000010000000100000000000100000000000000000003000000270027000000010000000000090000000100000000000000000008000000010000000000",
+      "native_export_sha256": "d3789136f1fbe1969651583810b4baf488daa588e1cd9e032b340246f1556aca",
+      "compiled": {
+        "pcode-0-0.bin": {
+          "size": 1375,
+          "sha256": "055eb103d38106923c9bcfd8e3cab70c3f48bf11b734c78419f5bbdddc93ac07"
+        },
+        "pcode-0-1.bin": {
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "pcode-0-2.bin": {
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "compile_completed": true,
+      "compiler_rejected": false,
+      "diagnostics": [
+        {
+          "kind": 3,
+          "code": 84869513,
+          "name": "Keypad",
+          "instance": "Keypad",
+          "step": 0,
+          "network": -1,
+          "left": -1,
+          "top": 5,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "WORD_TO_STR"
+          ],
+          "phase": "Progress"
+        }
+      ]
+    },
+    {
+      "name": "spaced20",
+      "target": "newString",
+      "data_type": "STRING [20]",
+      "old_row_hex": "0a0000006e006500770053007400720069006e00670000000a00000053005400520049004e0047005b0031005d000000010000000100000000000100000000000000000003000000270027000000010000000000090000000100000000000000000008000000010000000000",
+      "native_row_hex": "0a0000006e006500770053007400720069006e00670000000c00000053005400520049004e00470020005b00320030005d000000010000000100000000000100000000000000000003000000270027000000010000000000090000000100000000000000000008000000010000000000",
+      "native_export_sha256": "53f0fc351dfca13c51cfd81fbcb2da1583599b1b7ab153edf469e929a7ad2420",
+      "compiled": {
+        "pcode-0-0.bin": {
+          "size": 1375,
+          "sha256": "e73112982bd4a2af580cadaf70c4a4db83d113e89e441c748ab86bfb87ea09c6"
+        },
+        "pcode-0-1.bin": {
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "pcode-0-2.bin": {
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "compile_completed": true,
+      "compiler_rejected": false,
+      "diagnostics": [
+        {
+          "kind": 3,
+          "code": 84869513,
+          "name": "Keypad",
+          "instance": "Keypad",
+          "step": 0,
+          "network": -1,
+          "left": -1,
+          "top": 5,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "WORD_TO_STR"
+          ],
+          "phase": "Progress"
+        }
+      ]
+    },
+    {
+      "name": "array",
+      "target": "tempString",
+      "data_type": "ARRAY [0..19] OF STRING[4]",
+      "old_row_hex": "0b000000740065006d00700053007400720069006e00670000001b0000004100520052004100590020005b0030002e002e00310039005d0020004f004600200053005400520049004e0047005b0031005d0000000100000001000000000001000000000000000000090000005b003200300028002700270029005d000000010000000000050000000100000000000100000008000000010000000000",
+      "native_row_hex": "0b000000740065006d00700053007400720069006e00670000001b0000004100520052004100590020005b0030002e002e00310039005d0020004f004600200053005400520049004e0047005b0034005d0000000100000001000000000001000000000000000000090000005b003200300028002700270029005d000000010000000000050000000100000000000100000008000000010000000000",
+      "native_export_sha256": "7f65b7b704ff706e3b22001acc87fc1d3a4422fcb50b2f284ba16877232c5574",
+      "compiled": {
+        "pcode-0-0.bin": {
+          "size": 1409,
+          "sha256": "201e3d8851434cd4bf3246828bca5029464f61b486a8230dca04979435aeff90"
+        },
+        "pcode-0-1.bin": {
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "pcode-0-2.bin": {
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "compile_completed": true,
+      "compiler_rejected": false,
+      "diagnostics": [
+        {
+          "kind": 3,
+          "code": 84869513,
+          "name": "Keypad",
+          "instance": "Keypad",
+          "step": 0,
+          "network": -1,
+          "left": -1,
+          "top": 5,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "WORD_TO_STR"
+          ],
+          "phase": "Progress"
+        }
+      ]
+    },
+    {
+      "name": "negative-array",
+      "target": "tempString",
+      "data_type": "ARRAY [-2..17] OF STRING[4]",
+      "old_row_hex": "0b000000740065006d00700053007400720069006e00670000001b0000004100520052004100590020005b0030002e002e00310039005d0020004f004600200053005400520049004e0047005b0031005d0000000100000001000000000001000000000000000000090000005b003200300028002700270029005d000000010000000000050000000100000000000100000008000000010000000000",
+      "native_row_hex": "0b000000740065006d00700053007400720069006e00670000001c0000004100520052004100590020005b002d0032002e002e00310037005d0020004f004600200053005400520049004e0047005b0034005d0000000100000001000000000001000000000000000000090000005b003200300028002700270029005d000000010000000000050000000100000000000100000008000000010000000000",
+      "native_export_sha256": "a95440a7f3d087ff4a9a2607d0a80d339fb64054df61c824dca1c30dae41cba1",
+      "compiled": {
+        "pcode-0-0.bin": {
+          "size": 1453,
+          "sha256": "2f524bfd7d674121db2406b5d9f4fd94d999295fcdee02fd07d860ec61547e30"
+        },
+        "pcode-0-1.bin": {
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "pcode-0-2.bin": {
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "compile_completed": true,
+      "compiler_rejected": false,
+      "diagnostics": [
+        {
+          "kind": 3,
+          "code": 84869513,
+          "name": "Keypad",
+          "instance": "Keypad",
+          "step": 0,
+          "network": -1,
+          "left": -1,
+          "top": 5,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "WORD_TO_STR"
+          ],
+          "phase": "Progress"
+        }
+      ]
+    },
+    {
+      "name": "two-dimensional",
+      "target": "tempString",
+      "data_type": "ARRAY [-2..1,3..7] OF STRING[4]",
+      "old_row_hex": "0b000000740065006d00700053007400720069006e00670000001b0000004100520052004100590020005b0030002e002e00310039005d0020004f004600200053005400520049004e0047005b0031005d0000000100000001000000000001000000000000000000090000005b003200300028002700270029005d000000010000000000050000000100000000000100000008000000010000000000",
+      "native_row_hex": "0b000000740065006d00700053007400720069006e0067000000200000004100520052004100590020005b002d0032002e002e0031002c0033002e002e0037005d0020004f004600200053005400520049004e0047005b0034005d0000000100000001000000000001000000000000000000090000005b003200300028002700270029005d000000010000000000050000000100000000000100000008000000010000000000",
+      "native_export_sha256": "b44d54cf6dfddfd91248de181b1818a80fc6f6d5e83650611d31e65fa6977703",
+      "compiled": {
+        "pcode-0-0.bin": {
+          "size": 1579,
+          "sha256": "ed33b2523dacbc6e87b765dc891202214068fd0fd835589887cd33dc689e0ffe"
+        },
+        "pcode-0-1.bin": {
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "pcode-0-2.bin": {
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "compile_completed": true,
+      "compiler_rejected": false,
+      "diagnostics": [
+        {
+          "kind": 3,
+          "code": 84869513,
+          "name": "Keypad",
+          "instance": "Keypad",
+          "step": 0,
+          "network": -1,
+          "left": -1,
+          "top": 5,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "WORD_TO_STR"
+          ],
+          "phase": "Progress"
+        }
+      ]
+    }
+  ]
+}

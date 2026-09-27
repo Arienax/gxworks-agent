@@ -42,6 +42,12 @@ def compiled_graph(raw):
 
 def patch_raw(source, logical, old, new):
     outer = validate_cfb_streams(source)
+    if outer.get('Project.gd2'):
+        # Signed metadata envelopes have a non-CFB _hdb suffix. Validate it
+        # before editing, and retain the native checks instead of dropping
+        # the table or treating a successful source parse as authorization.
+        from probe_gxw_integrity import patch_verified_payloads
+        return patch_verified_payloads(source, {logical: (old, new)})
     nested = validate_cfb_streams(outer['_hdb'])
     physical = logical_mapping(outer['projectdatalist.xml'])[logical]
     if nested[physical] != old:
@@ -54,6 +60,20 @@ def patch_raw(source, logical, old, new):
     assert validate_cfb_streams(updated) == dict(outer, _hdb=hdb, **{'history.xml':history})
     return updated, dict(metadata_changes=changes, preserved_metadata=preserved,
                          unrelated_payloads='byte-identical')
+
+
+def replace_graph(raw, tokens):
+    """Replace only the observed compiled graph code, preserving its cache."""
+    graph, layout = compiled_graph(raw), framing(raw)
+    parse_token_fragment(tokens, 0, len(tokens))
+    start, size = layout['graph']['offset'], layout['graph']['size']
+    cache = raw[graph['cache_offset']:graph['cache_offset'] + graph['cache_size']]
+    body = bytearray(raw[start:start + 12] + struct.pack('<I', len(tokens) + 4) + tokens + cache)
+    struct.pack_into('<I', body, 0, len(body))
+    new = raw[:start - 4] + struct.pack('<I', len(body)) + body + raw[start + size:]
+    if compiled_graph(new)['cache_sha256'] != graph['cache_sha256']:
+        raise ValueError('opaque cache changed')
+    return new
 
 
 def main():
@@ -72,8 +92,8 @@ def main():
     if len(step)!=1 or len(jump)!=3 or len(action)!=1:raise ValueError('seed graph differs from inspected control')
     cases=[('step20-graph-only',[(step[0]['offset']+2,b'\x14')]),
            ('step20-with-action',[(step[0]['offset']+2,b'\x14'),(action[0]['number_offset'],struct.pack('<I',20))]),
-           ('jump-to-step10',[(jump[-1]['offset']+2,b'\x01')]),
-           ('invalid-jump-index2',[(jump[-1]['offset']+2,b'\x02')])]
+           ('jump-number1',[(jump[-1]['offset']+2,b'\x01')]),
+           ('jump-number2',[(jump[-1]['offset']+2,b'\x02')])]
     with (args.output/'cases.jsonl').open('w') as log:
         for name,changes in cases:
             directory=args.output/name;directory.mkdir()

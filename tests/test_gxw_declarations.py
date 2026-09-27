@@ -2,6 +2,7 @@
 from dataclasses import replace
 import json
 from pathlib import Path
+import struct
 import zipfile
 
 import pytest
@@ -17,6 +18,7 @@ from src.gxw.structured_pou_writer import replace_node_symbol
 
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE = json.loads((ROOT / "tests/fixtures/gxw_declarations_20260910.json").read_text())
+SIZED_STRINGS = json.loads((ROOT / "tests/fixtures/gxw_sized_string_declarations.json").read_text())
 
 
 def document(case="dtypes", logical="1.Labels.lh"):
@@ -51,6 +53,20 @@ def test_constant_class_and_value_match_native_record():
     assert [serialize_label(r) for r in generated.rows] == [r.raw for r in document("dconst").rows]
 
 
+@pytest.mark.parametrize("case", SIZED_STRINGS["cases"], ids=lambda c: c["name"])
+def test_sized_string_edits_match_independently_saved_native_rows(case):
+    empty = document("d0")
+    header = bytearray(empty.header)
+    struct.pack_into("<I", header, empty.count_offset, 1)
+    source = parse_declarations(bytes(header) + bytes.fromhex(case["old_row_hex"]) + empty.trailer,
+                                logical_name=empty.logical_name)
+    changed = edit_declarations(source, upserts=[{"name": case["target"], "data_type": case["data_type"]}])
+    assert serialize_label(changed.rows[0]) == bytes.fromhex(case["native_row_hex"])
+    assert changed.header == source.header
+    assert changed.trailer == source.trailer
+    assert serialize_declarations(source) == source.raw
+
+
 def test_native_global_variables_arrays_function_blocks_and_constant():
     native = document("dglobal", "Global1.gh")
     edits = [{"name": r.name, "data_type": r.data_type, "comment": r.comment,
@@ -80,7 +96,10 @@ def test_unknown_type_and_opaque_fields_survive_comment_and_name_edits():
     {"upserts": [{"name": "new", "data_type": "NotAKnownScalar"}]},
     {"upserts": [{"name": "new", "data_type": "ARRAY [3..0] OF BOOL"}]},
     {"upserts": [{"name": "new", "data_type": "BOOL", "mystery": 1}]},
-])
+] + [{"upserts": [{"name": "new", "data_type": dtype}]} for dtype in (
+    "STRING[0]", "STRING[256]", "STRING[-1]", "string[20]", "WSTRING[20]",
+    "STRING[+20]", "ARRAY [0..1] OF STRING[256]",
+)])
 def test_invalid_edits_fail_without_mutating_source(edits):
     source = document()
     with pytest.raises(GXWFormatError):

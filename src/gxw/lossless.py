@@ -17,7 +17,7 @@ from .project_metadata import logical_mapping, synchronize_history
 from .project_writer import ProjectWriteResult, binary_diff
 from .structured_pou import parse_structured_pou
 from .structured_pou_writer import serialize_structured_node
-from .token_pou import parse_token_pou
+from .token_pou import parse_token_pou, frame_token_pou
 
 
 def sha256(raw: bytes) -> str:
@@ -137,6 +137,18 @@ def inspect_program(raw: bytes, *, logical_name: str = "<Program.pou>") -> Progr
         return ProgramImage(bytes(raw), "ladder-token", tuple(regions), program)
     except GXWFormatError as exc:
         diagnostics.append("ladder-token: " + str(exc))
+    try:
+        # Separate boundary recognition from FX instruction interpretation.
+        # Q source and legacy trailers can be retained as bounded tokens even
+        # when the existing lexical decoder/writers cannot handle them.
+        program = frame_token_pou(raw)
+        regions = [RawRegion(0, raw[:program.body_offset], "program-prefix")]
+        regions.extend(RawRegion(t.offset, t.raw, "token") for t in program.tokens)
+        regions.append(RawRegion(program.body_end, raw[program.body_end:], "trailer"))
+        return ProgramImage(raw, "ladder-framed", tuple(regions), program,
+                            diagnostics=tuple(diagnostics))
+    except GXWFormatError as exc:
+        diagnostics.append("ladder-framed: " + str(exc))
     return ProgramImage(bytes(raw), "unsupported", (RawRegion(0, bytes(raw), "stream"),),
                         diagnostics=tuple(diagnostics))
 

@@ -81,10 +81,16 @@ def framing(raw):
         raise ValueError("unsupported SFC graph extent")
     cursor = graph_start + graph_size
     children = []
+    zoom_count_offset = cursor
     for _ in range(count()):
-        children.append(program("zoom", name()))
+        entry_start = cursor
+        child = program("zoom", name())
+        child.update(record_offset=entry_start, record_size=cursor-entry_start)
+        children.append(child)
     actions = []
+    action_count_offset = cursor
     for _ in range(count()):
+        entry_start = cursor
         identity = name()
         number_offset = cursor
         number = word()
@@ -94,15 +100,22 @@ def framing(raw):
             registrations.append(dict(qualifier=qualifier, zoom=name()))
         if word() != 1:
             raise ValueError("unsupported SFC action trailer")
-        actions.append(dict(name=identity, number=number, number_offset=number_offset, registrations=registrations))
+        actions.append(dict(name=identity, number=number, number_offset=number_offset, registrations=registrations,
+                            record_offset=entry_start, record_size=cursor-entry_start))
+    transition_count_offset = cursor
     for _ in range(count()):
+        entry_start = cursor
         identity, number = name(), word()
-        children.append(program("transition", identity, number))
+        child = program("transition", identity, number)
+        child.update(record_offset=entry_start, record_size=cursor-entry_start)
+        children.append(child)
     tail_offset = cursor
     if word() != 0 or cursor != len(raw):
         raise ValueError("unsupported SFC trailing region")
     return dict(graph=dict(offset=graph_start, size=graph_size, handling="opaque-preserved"),
-                children=children, actions=actions, tail_offset=tail_offset)
+                children=children, actions=actions, tail_offset=tail_offset,
+                zoom_count_offset=zoom_count_offset, action_count_offset=action_count_offset,
+                transition_count_offset=transition_count_offset)
 
 
 def replace_child(source, logical, kind, old_code, new_code):

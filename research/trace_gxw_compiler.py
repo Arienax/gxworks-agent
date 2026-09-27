@@ -45,12 +45,27 @@ def main():
     source = (ROOT / "research/native/CompilerTrace.js").read_bytes()
     frontend_hashes = {}
     if args.sfc:
+        workspace = Path("D:/GXWORKS2/DNaviZero/DataAbsorber/DZDataABS_Workspace.dll")
+        actual = hashlib.sha256(workspace.read_bytes()).hexdigest()
+        if actual != "861c1e25aebb05f6f6ef972f721bcff047c01679b89fe9922abd4743e137676f":
+            raise ValueError("native SFC workspace differs from inspected version")
+        frontend_hashes[workspace.name] = actual
         name = "DZDataABS_CompilerAdapter.dll"
         expected = "4a048e05c189d903d1f8384fd9730c3094d4ef98c795259ba07496fb381b3959"
         actual = hashlib.sha256((Path("D:/GXWORKS2/DNaviZero/DataAbsorber") / name).read_bytes()).hexdigest()
         if actual != expected:
             raise ValueError("native SFC adapter differs from inspected version")
         frontend_hashes[name] = actual
+        editor = Path('D:/GXWORKS2/GPPW2/GD2DataMng.dll')
+        actual = hashlib.sha256(editor.read_bytes()).hexdigest()
+        if actual != '2d85260f10db34ec4852c6279b17a6788aae65f6b59f9d7b7a8acab8595c042f':
+            raise ValueError('native SFC editor bridge differs from inspected version')
+        frontend_hashes[editor.name] = actual
+        generator = Path('D:/GXWORKS2/DNaviZero/DataAbsorber/DZDataABS_CodeGenerator.dll')
+        actual = hashlib.sha256(generator.read_bytes()).hexdigest()
+        if actual != 'b3424970d2d206bd92068b9b8d22eaa8ee3589b5ddf9692652f9e2b6da31f74e':
+            raise ValueError('native SFC code generator differs from inspected version')
+        frontend_hashes[generator.name] = actual
         source = (ROOT / "research/native/SfcTrace.js").read_bytes() + b"\n" + source
     if args.frontend:
         for name, expected in {
@@ -75,6 +90,11 @@ def main():
                 raise ValueError("workspace DLL differs: " + name)
             frontend_hashes[name] = actual
         source = (ROOT / "research/native/WorkspaceTrace.js").read_bytes() + b"\n" + source
+        navigator = Path("D:/GXWORKS2/DNaviZero/DZDataNavigatorServer/DZDataNavigatorServer.dll")
+        actual = hashlib.sha256(navigator.read_bytes()).hexdigest()
+        if actual != "c8b073657846d8841ffc99f32f1598fc3c1046c451f88d2deef2503f3e5e6a68":
+            raise ValueError("workspace navigator differs from inspected version")
+        frontend_hashes[navigator.name] = actual
     (args.output / "CompilerTrace.js").write_bytes(source)
     request = dict(pid=args.pid, process=process.name, dll_sha256=DLL_HASH,
                    iec_dll_sha256=IEC_DLL_HASH,

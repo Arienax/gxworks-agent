@@ -166,7 +166,7 @@ def compare_array_reads(raw, rows):
             "array_count": len(rows), "array_field_mismatches": mismatches}
 
 
-def native_table_dump(raw, directory, *, dll=DLL, read_components=False, read_addresses=False, read_arrays=False):
+def native_table_dump(raw, directory, *, dll=DLL, read_components=False, read_addresses=False, read_arrays=False, read_constants=False):
     if os.name != "nt" or sha256(dll.read_bytes()) != DLL_SHA256:
         raise ValueError("requires Windows and the inspected ECCompiler.dll 15.22 hash")
     directory = Path(directory)
@@ -178,6 +178,7 @@ def native_table_dump(raw, directory, *, dll=DLL, read_components=False, read_ad
     request = {"input_sha256": sha256(raw), "dll_sha256": DLL_SHA256,
                "adapter_source_sha256": sha256(source.read_bytes()),
                "scope": "offline table restore/dump/replay; no source freshness, execution or project acceptance claim"}
+    read_arrays = read_arrays or read_constants
     read_addresses = read_addresses or read_arrays
     read_components = read_components or read_addresses
     if read_components:
@@ -189,6 +190,13 @@ def native_table_dump(raw, directory, *, dll=DLL, read_components=False, read_ad
     if read_arrays:
         request["array_offsets"] = [r.table_offset for r in parse_compiler_tables(raw).tables[13].records]
         (directory / "array-offsets.txt").write_text("".join(str(p) + "\n" for p in request["array_offsets"]), encoding="ascii")
+    if read_constants:
+        from probe_gxw_compiler_constants import constant_record
+        records = parse_compiler_tables(raw).tables[5].records
+        if any("value_raw_hex" not in constant_record(r) for r in records):
+            raise ValueError("constant record outside inspected native framing")
+        request["constant_offsets"] = [r.table_offset for r in records]
+        (directory / "constant-offsets.txt").write_text("".join(str(p) + "\n" for p in request["constant_offsets"]), encoding="ascii")
     (directory / "request.json").write_text(json.dumps(request, indent=2) + "\n", encoding="utf-8")
     executable = directory / "CompilerTableOracle.exe"
     compiler = Path(os.environ["WINDIR"]) / "Microsoft.NET/Framework/v4.0.30319/csc.exe"
@@ -205,6 +213,8 @@ def native_table_dump(raw, directory, *, dll=DLL, read_components=False, read_ad
             command.append(str((directory / "address-offsets.txt").resolve()))
         if read_arrays:
             command.append(str((directory / "array-offsets.txt").resolve()))
+        if read_constants:
+            command.append(str((directory / "constant-offsets.txt").resolve()))
         run = subprocess.run(command,
                              capture_output=True, timeout=40, creationflags=subprocess.CREATE_NO_WINDOW)
         stdout, stderr, code = run.stdout, run.stderr, run.returncode
@@ -228,6 +238,10 @@ def native_table_dump(raw, directory, *, dll=DLL, read_components=False, read_ad
     if read_arrays:
         rows = [json.loads(line) for line in (directory / "native-arrays.jsonl").read_text().splitlines()]
         result.update(compare_array_reads(raw, rows))
+    if read_constants:
+        from probe_gxw_compiler_constants import compare_constant_reads
+        rows = [json.loads(line) for line in (directory / "native-constants.jsonl").read_text().splitlines()]
+        result.update(compare_constant_reads(raw, rows))
     (directory / "comparison.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     return result
 
@@ -240,7 +254,8 @@ if __name__ == "__main__":
     parser.add_argument("--components", action="store_true", help="also read native CMP_LINE and UserInfo for each component")
     parser.add_argument("--addresses", action="store_true", help="also read native declaration addresses and component references")
     parser.add_argument("--arrays", action="store_true", help="also snapshot native array descriptor objects and dimension nodes")
+    parser.add_argument("--constants", action="store_true", help="also read native typed constants, retaining their original spelling")
     args = parser.parse_args()
     print(json.dumps(native_table_dump(args.input.read_bytes(), args.output, dll=args.dll,
                                      read_components=args.components, read_addresses=args.addresses,
-                                     read_arrays=args.arrays)))
+                                     read_arrays=args.arrays, read_constants=args.constants)))
