@@ -21,6 +21,7 @@ from .project_resolver import GXWProjectResolver
 from .semantic import (
     CoilRole,
     ContactPolarity,
+    LadderEdge,
     DEFAULT_FUNCTION_BLOCK_REGISTRY,
     DEFAULT_FUNCTION_FAMILY_REGISTRY,
     FunctionFamilySpec,
@@ -69,6 +70,7 @@ __all__ = [
     "ConnectivityGraph",
     "ConnectivityNet",
     "ContactPolarity",
+    "LadderEdge",
     "DEFAULT_FUNCTION_BLOCK_REGISTRY",
     "DEFAULT_FUNCTION_FAMILY_REGISTRY",
     "FunctionFamilySpec",

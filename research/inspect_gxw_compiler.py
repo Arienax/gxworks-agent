@@ -150,14 +150,14 @@ def inspect_compiler_artifact(name, raw, *, encoding="cp936"):
                     entry["declared_address_offset"] = tables.component_address_offset(component)
                     entry["array_offset"] = tables.component_array_offset(component)
                     item["components"].append(entry)
-                    reference = component.instance_pou_offset
+                    reference = tables.component_instance_pou_offset(component)
                     if reference is not None:
                         entry["instance_pou_offset"] = reference
                         entry["instance_pou_name"] = tables.pou_at(reference).name_bytes.decode(encoding)
             except ValueError as exc:
                 item["unsupported"] = str(exc)
-        targets = {c.instance_pou_offset for c in (s.component for s in compiler_symbols(tables))
-                   if c.instance_pou_offset is not None}
+        targets = {reference for s in compiler_symbols(tables)
+                   if (reference := tables.component_instance_pou_offset(s.component)) is not None}
         result["instance_paths"] = []
         for record in tables.tables[1].records:
             if record.table_offset in targets:

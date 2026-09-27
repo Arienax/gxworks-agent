@@ -4,9 +4,67 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass, field
 import hashlib
+import struct
 from xml.parsers import expat
 
 from .models import GXWFormatError
+
+
+def mark_observed_source_compile_pending(raw: bytes, *, logical_name: str) -> bytes:
+    """Mark an observed source/declaration payload pending without dropping caches.
+
+    Native SetDataCompileStatus(1) changes this header word from 0 to 1.
+    Reopening a source-only or labels-only change makes the owning POU and
+    project report pending. Zero alone never proves source/cache freshness.
+    Pending is a status signal, not a compiler-cache invalidation guarantee.
+    Other marker values and header variants are deliberately not rewritten.
+    Callers must bind this payload to the intended project stream and update
+    its history/integrity metadata through their existing container writer.
+    """
+    prefix = bytes.fromhex("01000000000001000000000001000a00000000000200000001000000010000000000")
+    raw = bytes(raw)
+    if (not logical_name.endswith((".Program.pou", ".Labels.lh", ".gh"))
+            or len(raw) < 54 or not raw.startswith(prefix)):
+        raise GXWFormatError("outside observed source compile-status header")
+    marker = struct.unpack_from("<I", raw, 50)[0]
+    if marker not in (0, 1):
+        raise GXWFormatError("unsupported source compile-status marker; preserve it unchanged")
+    if marker == 1:
+        return raw
+    return raw[:50] + struct.pack("<I", 1) + raw[54:]
+
+
+def read_project_text_context(raw: bytes) -> dict:
+    """Read the observed .prj CPU/code-page prefix without interpreting its tail.
+
+    Native project attribute/code-page getters agree for the inspected Q/FX
+    controls. This is not a CPU capability or compiler-version description.
+    Unsupported code pages remain None instead of using the host's encoding.
+    """
+    offset, values = 0, []
+    for _ in range(2):
+        if offset + 4 > len(raw):
+            raise GXWFormatError("truncated project metadata string length")
+        count = struct.unpack_from("<I", raw, offset)[0]
+        end = offset + 4 + 2 * count
+        if not 1 <= count <= 8192 or end > len(raw):
+            raise GXWFormatError("unbounded project metadata string")
+        try:
+            text = raw[offset + 4:end].decode("utf-16le")
+        except UnicodeError as exc:
+            raise GXWFormatError("undecodable project metadata string") from exc
+        if not text.endswith("\0") or "\0" in text[:-1]:
+            raise GXWFormatError("unsupported project metadata string terminator")
+        values.append(text[:-1])
+        offset = end
+    if len(raw) < offset + 52 or raw[offset:offset + 14] != bytes.fromhex("0100000000000000000000000000"):
+        raise GXWFormatError("unsupported project metadata prefix")
+    codepage = struct.unpack_from("<I", raw, offset + 48)[0]
+    # The inspected native converter substitutes 54936 for stored CP936.
+    encoding = {932: "cp932", 936: "gb18030", 949: "cp949", 1252: "cp1252"}.get(codepage)
+    return dict(cpu=values[1], codepage=codepage, text_encoding=encoding,
+                codepage_offset=offset + 48, metadata_sha256=hashlib.sha256(raw).hexdigest(),
+                handling="partially-decoded")
 
 
 @dataclass

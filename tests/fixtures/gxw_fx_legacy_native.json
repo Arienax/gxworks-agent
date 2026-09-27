@@ -1,0 +1,474 @@
+{
+  "scope": "Derived three-instruction FX1S sources in an isolated real project container. Original full program has duplicate-coil ProgramCheck failures; these controls do not establish its validity.",
+  "reproducer": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\probe_fx1s_legacy_source_edits.py --minimal",
+  "cases": [
+    {
+      "id": "baseline",
+      "profile": "fx1s",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOAHAwAEABgACgAPADMAAAAAAAAAASsAAAArAAAAAQAAAAwAAAAAAAAA/////wMAAwScAAQFTAUABQToAgQEqAMEAzQDAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "project_sha256": "67bef1ef6f8ea30fefa5a79a8a22276a9a76f4d6a5788d4afcf5f4bd2b74bf5f",
+      "phases": [
+        {
+          "phase": "compile",
+          "outcome": {
+            "returncode": 0,
+            "timed_out": false,
+            "startup_attempts": 1,
+            "input_copy_unchanged": true,
+            "compile_operation": "Build",
+            "outputs": {
+              "pcode-0-0.bin": {
+                "size": 23,
+                "sha256": "9ea2d431ff115877367e6fb1fb3c0f8ef445709cfdd83d3c6aa7823b4e75c32b"
+              },
+              "pcode-0-1.bin": {
+                "size": 0,
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              "pcode-0-2.bin": {
+                "size": 0,
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              }
+            },
+            "native_export": {
+              "file": "native-saved.gxw",
+              "size": 897024,
+              "sha256": "39b2b71622c3df750ab8c8f0cbe11cdbabc00356d5907651239b2ad33330986d"
+            },
+            "diagnostics": [],
+            "project_attributes": {
+              "operation": "NativeProjectAttributes",
+              "cpu": "FX1S",
+              "mode": 1,
+              "attribute": 1,
+              "crypto": 0
+            },
+            "project_codepage": 936,
+            "native_crt_checks": [
+              {
+                "operation": "NativeCrtCharacterCase",
+                "phase": "before-build",
+                "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+                "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+                "codepage": 936,
+                "valid": true,
+                "mismatches": []
+              },
+              {
+                "operation": "NativeCrtCharacterCase",
+                "phase": "after-build",
+                "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+                "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+                "codepage": 936,
+                "valid": true,
+                "mismatches": []
+              }
+            ],
+            "open_succeeded": true,
+            "compile_completed": true,
+            "program_check_requested": true,
+            "program_check_completed": true,
+            "compiler_rejected": false,
+            "last_event": {
+              "operation": "NativeExport",
+              "path": "native-saved.gxw"
+            },
+            "native_temp_preserved": "native-temp",
+            "native_project_alias": "FX1SLEGACY",
+            "export_identity": "renamed by native import; original input preserved"
+          },
+          "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOAHAwAEABgACgAPADMAAAAAAAAAASsAAAArAAAAAQAAAAwAAAAAAAAA/////wMAAwScAAQFTAUABQToAgQEqAMEAzQDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "pcode_base64": "AwADBJwABAVMBQAFBOgCBASoAwQDNAM=",
+          "events_path": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx1s-legacy-minimal-source-edits\\baseline\\compile-1\\native-events.jsonl",
+          "events_sha256": "276cbdb375728f8a709ad54b3716847819f600a318b035394b95978671d00c25"
+        },
+        {
+          "phase": "reopen",
+          "outcome": {
+            "returncode": 0,
+            "timed_out": false,
+            "startup_attempts": 1,
+            "input_copy_unchanged": true,
+            "compile_operation": "Build",
+            "outputs": {
+              "pcode-0-0.bin": {
+                "size": 23,
+                "sha256": "9ea2d431ff115877367e6fb1fb3c0f8ef445709cfdd83d3c6aa7823b4e75c32b"
+              },
+              "pcode-0-1.bin": {
+                "size": 0,
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              "pcode-0-2.bin": {
+                "size": 0,
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              }
+            },
+            "native_export": {
+              "file": "native-saved.gxw",
+              "size": 901120,
+              "sha256": "ce1bb030861d7f639e367d96f8480aa20be050acc1412a463338d71b0f83b859"
+            },
+            "diagnostics": [],
+            "project_attributes": {
+              "operation": "NativeProjectAttributes",
+              "cpu": "FX1S",
+              "mode": 1,
+              "attribute": 1,
+              "crypto": 0
+            },
+            "project_codepage": 936,
+            "native_crt_checks": [
+              {
+                "operation": "NativeCrtCharacterCase",
+                "phase": "before-build",
+                "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+                "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+                "codepage": 936,
+                "valid": true,
+                "mismatches": []
+              },
+              {
+                "operation": "NativeCrtCharacterCase",
+                "phase": "after-build",
+                "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+                "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+                "codepage": 936,
+                "valid": true,
+                "mismatches": []
+              }
+            ],
+            "open_succeeded": true,
+            "compile_completed": true,
+            "program_check_requested": true,
+            "program_check_completed": true,
+            "compiler_rejected": false,
+            "last_event": {
+              "operation": "NativeExport",
+              "path": "native-saved.gxw"
+            },
+            "native_temp_preserved": "native-temp",
+            "native_project_alias": "FX1SLEGACY",
+            "export_identity": "renamed by native import; original input preserved"
+          },
+          "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOAHAwAEABgACgAPADMAAAAAAAAAASsAAAArAAAAAQAAAAwAAAAAAAAA/////wMAAwScAAQFTAUABQToAgQEqAMEAzQDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "pcode_base64": "AwADBJwABAVMBQAFBOgCBASoAwQDNAM=",
+          "events_path": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx1s-legacy-minimal-source-edits\\baseline\\reopen-1\\native-events.jsonl",
+          "events_sha256": "b14a6d3e56c2d6adb4322f93e7d3f57ad36f58a8aecccaad5cb98ad8db2bacee"
+        }
+      ]
+    },
+    {
+      "id": "same-size-k3",
+      "profile": "fx1s",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOAHAwAEABgACgAPADMAAAAAAAAAASsAAAArAAAAAQAAAAwAAAAAAAAA/////wMAAwScAAQFTAUABQToAwQEqAMEAzQDAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "project_sha256": "cefa0d75efb3127321e9d19ea4ba883f0a88eb6666d2cba9bc9d784b4ed7c5e2",
+      "phases": [
+        {
+          "phase": "compile",
+          "outcome": {
+            "returncode": 0,
+            "timed_out": false,
+            "startup_attempts": 1,
+            "input_copy_unchanged": true,
+            "compile_operation": "Build",
+            "outputs": {
+              "pcode-0-0.bin": {
+                "size": 23,
+                "sha256": "c2038fd8290d53d645bf6393e95b4ae715cc67430825b2efbe1da5f01ea15c1a"
+              },
+              "pcode-0-1.bin": {
+                "size": 0,
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              "pcode-0-2.bin": {
+                "size": 0,
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              }
+            },
+            "native_export": {
+              "file": "native-saved.gxw",
+              "size": 897024,
+              "sha256": "b18b5a410a487359f849d707fb668ea576f7ef9005ade4e007ffc20a716b5933"
+            },
+            "diagnostics": [],
+            "project_attributes": {
+              "operation": "NativeProjectAttributes",
+              "cpu": "FX1S",
+              "mode": 1,
+              "attribute": 1,
+              "crypto": 0
+            },
+            "project_codepage": 936,
+            "native_crt_checks": [
+              {
+                "operation": "NativeCrtCharacterCase",
+                "phase": "before-build",
+                "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+                "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+                "codepage": 936,
+                "valid": true,
+                "mismatches": []
+              },
+              {
+                "operation": "NativeCrtCharacterCase",
+                "phase": "after-build",
+                "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+                "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+                "codepage": 936,
+                "valid": true,
+                "mismatches": []
+              }
+            ],
+            "open_succeeded": true,
+            "compile_completed": true,
+            "program_check_requested": true,
+            "program_check_completed": true,
+            "compiler_rejected": false,
+            "last_event": {
+              "operation": "NativeExport",
+              "path": "native-saved.gxw"
+            },
+            "native_temp_preserved": "native-temp",
+            "native_project_alias": "FX1SLEGACY",
+            "export_identity": "renamed by native import; original input preserved"
+          },
+          "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOAHAwAEABgACgAPADMAAAAAAAAAASsAAAArAAAAAQAAAAwAAAAAAAAA/////wMAAwScAAQFTAUABQToAwQEqAMEAzQDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "pcode_base64": "AwADBJwABAVMBQAFBOgDBASoAwQDNAM=",
+          "events_path": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx1s-legacy-minimal-source-edits\\same-size-k3\\compile-1\\native-events.jsonl",
+          "events_sha256": "820a3f9f61b17ce47a93d5b3cb49dbaf0c9972a03e067db0dd6f58632a8a9037"
+        },
+        {
+          "phase": "reopen",
+          "outcome": {
+            "returncode": 0,
+            "timed_out": false,
+            "startup_attempts": 1,
+            "input_copy_unchanged": true,
+            "compile_operation": "Build",
+            "outputs": {
+              "pcode-0-0.bin": {
+                "size": 23,
+                "sha256": "c2038fd8290d53d645bf6393e95b4ae715cc67430825b2efbe1da5f01ea15c1a"
+              },
+              "pcode-0-1.bin": {
+                "size": 0,
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              "pcode-0-2.bin": {
+                "size": 0,
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              }
+            },
+            "native_export": {
+              "file": "native-saved.gxw",
+              "size": 901120,
+              "sha256": "440593942ef94d0a4ba5285a5ee6cd062330b051ca85e0d9e02c7214d7de300b"
+            },
+            "diagnostics": [],
+            "project_attributes": {
+              "operation": "NativeProjectAttributes",
+              "cpu": "FX1S",
+              "mode": 1,
+              "attribute": 1,
+              "crypto": 0
+            },
+            "project_codepage": 936,
+            "native_crt_checks": [
+              {
+                "operation": "NativeCrtCharacterCase",
+                "phase": "before-build",
+                "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+                "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+                "codepage": 936,
+                "valid": true,
+                "mismatches": []
+              },
+              {
+                "operation": "NativeCrtCharacterCase",
+                "phase": "after-build",
+                "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+                "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+                "codepage": 936,
+                "valid": true,
+                "mismatches": []
+              }
+            ],
+            "open_succeeded": true,
+            "compile_completed": true,
+            "program_check_requested": true,
+            "program_check_completed": true,
+            "compiler_rejected": false,
+            "last_event": {
+              "operation": "NativeExport",
+              "path": "native-saved.gxw"
+            },
+            "native_temp_preserved": "native-temp",
+            "native_project_alias": "FX1SLEGACY",
+            "export_identity": "renamed by native import; original input preserved"
+          },
+          "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOAHAwAEABgACgAPADMAAAAAAAAAASsAAAArAAAAAQAAAAwAAAAAAAAA/////wMAAwScAAQFTAUABQToAwQEqAMEAzQDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "pcode_base64": "AwADBJwABAVMBQAFBOgDBASoAwQDNAM=",
+          "events_path": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx1s-legacy-minimal-source-edits\\same-size-k3\\reopen-1\\native-events.jsonl",
+          "events_sha256": "c66ee1f36a9bcca32e81d84b6f9b63738e56ffd073894b601f8b4057aa546ec3"
+        }
+      ]
+    },
+    {
+      "id": "grow-k300",
+      "profile": "fx1s",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOAHAwAEABgACgAPADMAAAAAAAAAASwAAAAsAAAAAQAAAAwAAAAAAAAA/////wMAAwScAAQFTAUABQXoLAEFBKgDBAM0AwAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "project_sha256": "595231f2166ffef8638dd8a4c80d317cf3359ef890b13569920d5dbaf6578aa7",
+      "phases": [
+        {
+          "phase": "compile",
+          "outcome": {
+            "returncode": 0,
+            "timed_out": false,
+            "startup_attempts": 1,
+            "input_copy_unchanged": true,
+            "compile_operation": "Build",
+            "outputs": {
+              "pcode-0-0.bin": {
+                "size": 24,
+                "sha256": "4ac7e114f73657d95b7b7af2f15fdc81dacbac194511555a7c16cc9f876623d8"
+              },
+              "pcode-0-1.bin": {
+                "size": 0,
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              "pcode-0-2.bin": {
+                "size": 0,
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              }
+            },
+            "native_export": {
+              "file": "native-saved.gxw",
+              "size": 897024,
+              "sha256": "4f993f7c8a6da2515f10d5dc9e91495fee530cb41277d936dbcff74f8b64422a"
+            },
+            "diagnostics": [],
+            "project_attributes": {
+              "operation": "NativeProjectAttributes",
+              "cpu": "FX1S",
+              "mode": 1,
+              "attribute": 1,
+              "crypto": 0
+            },
+            "project_codepage": 936,
+            "native_crt_checks": [
+              {
+                "operation": "NativeCrtCharacterCase",
+                "phase": "before-build",
+                "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+                "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+                "codepage": 936,
+                "valid": true,
+                "mismatches": []
+              },
+              {
+                "operation": "NativeCrtCharacterCase",
+                "phase": "after-build",
+                "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+                "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+                "codepage": 936,
+                "valid": true,
+                "mismatches": []
+              }
+            ],
+            "open_succeeded": true,
+            "compile_completed": true,
+            "program_check_requested": true,
+            "program_check_completed": true,
+            "compiler_rejected": false,
+            "last_event": {
+              "operation": "NativeExport",
+              "path": "native-saved.gxw"
+            },
+            "native_temp_preserved": "native-temp",
+            "native_project_alias": "FX1SLEGACY",
+            "export_identity": "renamed by native import; original input preserved"
+          },
+          "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOAHAwAEABgACgAPADMAAAAAAAAAASwAAAAsAAAAAQAAAAwAAAAAAAAA/////wMAAwScAAQFTAUABQXoLAEFBKgDBAM0AwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          "pcode_base64": "AwADBJwABAVMBQAFBegsAQUEqAMEAzQD",
+          "events_path": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx1s-legacy-minimal-source-edits\\grow-k300\\compile-1\\native-events.jsonl",
+          "events_sha256": "825b0364f9459fedcac53028bcc523e21b4d85be7e0c88d7a54eacdedc3bb02f"
+        },
+        {
+          "phase": "reopen",
+          "outcome": {
+            "returncode": 0,
+            "timed_out": false,
+            "startup_attempts": 1,
+            "input_copy_unchanged": true,
+            "compile_operation": "Build",
+            "outputs": {
+              "pcode-0-0.bin": {
+                "size": 24,
+                "sha256": "4ac7e114f73657d95b7b7af2f15fdc81dacbac194511555a7c16cc9f876623d8"
+              },
+              "pcode-0-1.bin": {
+                "size": 0,
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              "pcode-0-2.bin": {
+                "size": 0,
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              }
+            },
+            "native_export": {
+              "file": "native-saved.gxw",
+              "size": 901120,
+              "sha256": "eb057333ff9ab50961e6e9fecba1d826dc70856f505452b879f6a0663aa2f37e"
+            },
+            "diagnostics": [],
+            "project_attributes": {
+              "operation": "NativeProjectAttributes",
+              "cpu": "FX1S",
+              "mode": 1,
+              "attribute": 1,
+              "crypto": 0
+            },
+            "project_codepage": 936,
+            "native_crt_checks": [
+              {
+                "operation": "NativeCrtCharacterCase",
+                "phase": "before-build",
+                "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+                "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+                "codepage": 936,
+                "valid": true,
+                "mismatches": []
+              },
+              {
+                "operation": "NativeCrtCharacterCase",
+                "phase": "after-build",
+                "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+                "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+                "codepage": 936,
+                "valid": true,
+                "mismatches": []
+              }
+            ],
+            "open_succeeded": true,
+            "compile_completed": true,
+            "program_check_requested": true,
+            "program_check_completed": true,
+            "compiler_rejected": false,
+            "last_event": {
+              "operation": "NativeExport",
+              "path": "native-saved.gxw"
+            },
+            "native_temp_preserved": "native-temp",
+            "native_project_alias": "FX1SLEGACY",
+            "export_identity": "renamed by native import; original input preserved"
+          },
+          "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOAHAwAEABgACgAPADMAAAAAAAAAASwAAAAsAAAAAQAAAAwAAAAAAAAA/////wMAAwScAAQFTAUABQXoLAEFBKgDBAM0AwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          "pcode_base64": "AwADBJwABAVMBQAFBegsAQUEqAMEAzQD",
+          "events_path": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx1s-legacy-minimal-source-edits\\grow-k300\\reopen-1\\native-events.jsonl",
+          "events_sha256": "c774f1a474251d34fda3406d51a131ede9524fbdf71490eeb0be28e823bf846a"
+        }
+      ]
+    }
+  ]
+}

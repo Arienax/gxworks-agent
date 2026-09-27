@@ -1,8 +1,9 @@
 """Deterministic SVG preview of the parsed native object graph."""
 from html import escape
 
-from .models import NodeKind
+from .models import COIL_NODE_KINDS, NodeKind
 from .object_model import _port_names
+from .semantic import CoilRole, ContactPolarity, LadderEdge, build_semantic_model
 
 
 def render_structured_svg(program):
@@ -25,6 +26,8 @@ def render_structured_svg(program):
 
 
 def _render_single(program):
+    model = build_semantic_model(program)
+    ladder = {n.node_offset: n for n in (*model.contacts, *model.coils)}
     unit, margin = 34, 42
     right = max([1, *[n.bbox.right for n in program.nodes], *[max(w.start.x, w.end.x) for w in program.wires]])
     bottom = max([program.canvas_height, *[n.bbox.bottom for n in program.nodes]])
@@ -41,15 +44,24 @@ def _render_single(program):
         x, y = n.bbox.left*unit, n.bbox.top*unit
         width, height = (n.bbox.right-n.bbox.left)*unit, (n.bbox.bottom-n.bbox.top)*unit
         parts.append(f'<g data-node-offset="{n.offset}"><title>{escape(n.symbol)}{escape(": "+n.type_name) if n.type_name else ""}</title>')
-        if n.kind in (NodeKind.CONTACT, NodeKind.CONTACT_NC, NodeKind.COIL):
-            cy = n.port_point(0).y * unit
+        element = ladder.get(n.offset)
+        if (element is not None and element.execution_in is not None
+                and element.edge != LadderEdge.UNKNOWN):
+            cy = element.execution_in.point.y * unit
             parts.append(f'<path class="wire" d="M{x},{cy} H{x+width/3} M{x+width*2/3},{cy} H{x+width}"/>')
-            if n.kind == NodeKind.COIL:
+            if n.kind in COIL_NODE_KINDS:
                 parts.append(f'<path class="wire" d="M{x+width*.42},{cy-11} Q{x+width*.15},{cy} {x+width*.42},{cy+11} M{x+width*.58},{cy-11} Q{x+width*.85},{cy} {x+width*.58},{cy+11}"/>')
+                negated = element.role == CoilRole.NEGATED
+                marker = {CoilRole.SET: "S", CoilRole.RESET: "R"}.get(element.role, "")
             else:
                 parts.append(f'<path class="wire" d="M{x+width/3},{cy-11} V{cy+11} M{x+width*2/3},{cy-11} V{cy+11}"/>')
-                if n.kind == NodeKind.CONTACT_NC:
-                    parts.append(f'<path class="wire" d="M{x+width*.27},{cy+12} L{x+width*.73},{cy-12}"/>')
+                negated = element.polarity == ContactPolarity.NORMALLY_CLOSED
+                marker = ""
+            if negated:
+                parts.append(f'<path class="wire" d="M{x+width*.27},{cy+12} L{x+width*.73},{cy-12}"/>')
+            marker = {LadderEdge.RISING: "↑", LadderEdge.FALLING: "↓"}.get(element.edge, marker)
+            if marker:
+                parts.append(f'<text x="{x+width/2}" y="{cy+5}" text-anchor="middle">{marker}</text>')
             parts.append(f'<text class="symbol" x="{x+width/2}" y="{cy-18}" text-anchor="middle">{escape(n.symbol)}</text>')
         elif n.kind in (NodeKind.INPUT, NodeKind.OUTPUT):
             point = n.port_point(0)

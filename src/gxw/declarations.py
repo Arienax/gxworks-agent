@@ -11,6 +11,7 @@ import re
 import struct
 
 from .models import GXWFormatError
+from .source_header import source_payload_offset
 
 
 # Native saved basic-type codes, not PLC instruction opcodes.
@@ -74,6 +75,9 @@ class LabelRecord:
     type_reference: str
     offset: int = 0
     raw: bytes = field(default=b"", repr=False)
+    # Structure members / structure-array address storage precedes the two
+    # value strings. Keep it verbatim; scalar device fields do not describe it.
+    value_extension: bytes = field(default=b"", repr=False)
 
 
 @dataclass(frozen=True)
@@ -86,21 +90,70 @@ class DeclarationDocument:
     header: bytes = field(repr=False)
     trailer: bytes = field(repr=False)
     raw: bytes = field(repr=False)
+    owner_return_type: str | None = None
+
+
+@dataclass(frozen=True)
+class StructureMember:
+    name: str
+    data_type: str
+    initial_value: str
+    unknown_text: str
+    record_id: int
+    comment: str
+    array_marker: int
+    type_code: int
+    type_reference: str
+    offset: int
+    raw: bytes = field(repr=False)
+
+
+@dataclass(frozen=True)
+class StructureDocument:
+    logical_name: str
+    members: tuple[StructureMember, ...]
+    header: bytes = field(repr=False)
+    trailer: bytes = field(repr=False)
+    raw: bytes = field(repr=False)
+
+    def reconstruct(self) -> bytes:
+        return self.raw
+
+
+def parse_structure_declarations(raw: bytes, *, logical_name: str) -> StructureDocument:
+    """Read observed library type members; this does not assign PLC addresses."""
+    if not logical_name.endswith(".lns"):
+        raise GXWFormatError("not an observed library structure source")
+    reader = _Reader(raw, source_payload_offset(raw))
+    count = reader.uint()
+    header = raw[:reader.offset]
+    if count > (len(raw) - reader.offset) // 48:
+        raise GXWFormatError("structure member count cannot fit the stream")
+    members = []
+    for _ in range(count):
+        start = reader.offset
+        values = [reader.string(), reader.string(), reader.string(), reader.string(), reader.uint(),
+                  reader.string(), reader.uint(), reader.uint(), reader.string()]
+        members.append(StructureMember(*values, offset=start, raw=raw[start:reader.offset]))
+    return StructureDocument(logical_name, tuple(members), header, raw[reader.offset:], raw)
 
 
 def parse_declarations(raw: bytes, *, logical_name: str) -> DeclarationDocument:
-    if logical_name.endswith(".Labels.lh"):
+    if logical_name.endswith((".Labels.lh", ".lnl")):
         scope = "local"
-    elif logical_name.endswith(".gh"):
+    elif logical_name.endswith((".gh", ".lng")):
         scope = "global"
     else:
         raise GXWFormatError("not a local/global declaration stream")
     reader = _Reader(raw)
     # Common native header; the timestamp/status bytes remain opaque.
-    reader.take(54)
+    reader.take(source_payload_offset(raw))
     owner = reader.string() if scope == "local" else None
+    return_type = None
     if scope == "local":
-        reader.take(20)
+        reader.take(8)
+        reader.string()  # Retained in header; no meaning assigned.
+        return_type = reader.string() or None
     count_offset = reader.offset
     count = reader.uint()
     header = raw[:reader.offset]
@@ -111,12 +164,30 @@ def parse_declarations(raw: bytes, *, logical_name: str) -> DeclarationDocument:
     rows = []
     for _ in range(count):
         start = reader.offset
-        values = [reader.string(), reader.string(), reader.uint(), reader.string(), reader.string(),
-                  reader.uint(), reader.string(), reader.string(), reader.uint(), reader.string(),
-                  reader.uint(), reader.uint(), reader.string()]
-        rows.append(LabelRecord(*values, offset=start, raw=raw[start:reader.offset]))
+        values = [reader.string(), reader.string(), reader.uint(), reader.string(), reader.string(), reader.uint()]
+        extension_start = reader.offset
+        if values[5] == 1:
+            members = reader.uint()
+            if members > (len(raw) - reader.offset) // 12:
+                raise GXWFormatError("structure member address count cannot fit the stream")
+            for _ in range(members):
+                reader.string()
+                reader.string()
+        elif values[5] == 2:
+            reader.string()
+            reader.string()
+            if reader.uint() != 0:
+                raise GXWFormatError("unobserved structure array address variant")
+            reader.string()
+            reader.string()
+        extension = raw[extension_start:reader.offset]
+        values.extend([reader.string(), reader.string(), reader.uint(), reader.string(),
+                       reader.uint(), reader.uint(), reader.string()])
+        if values[5] in (1, 2) and (values[11] != 9 or values[10] != int(values[5] == 2)):
+            raise GXWFormatError("address extension outside observed structure declaration types")
+        rows.append(LabelRecord(*values, offset=start, raw=raw[start:reader.offset], value_extension=extension))
     result = DeclarationDocument(logical_name, scope, owner, count_offset, tuple(rows),
-                                 header, raw[reader.offset:], raw)
+                                 header, raw[reader.offset:], raw, return_type)
     if serialize_declarations(result) != raw:
         raise GXWFormatError("declaration table is not losslessly serializable")
     return result
@@ -125,6 +196,7 @@ def parse_declarations(raw: bytes, *, logical_name: str) -> DeclarationDocument:
 def serialize_label(row: LabelRecord) -> bytes:
     return b"".join((_string(row.name), _string(row.data_type), struct.pack("<I", row.class_code),
                      _string(row.device), _string(row.iec_address), struct.pack("<I", row.unknown_u32),
+                     row.value_extension,
                      _string(row.initial_value), _string(row.unknown_text), struct.pack("<I", row.record_id),
                      _string(row.comment), struct.pack("<II", row.array_marker, row.type_code),
                      _string(row.type_reference)))
@@ -176,6 +248,10 @@ def edit_declarations(document: DeclarationDocument, *, upserts=(), renames=None
             or any(not isinstance(item, dict) or any(not isinstance(v, str) for v in item.values()) for item in upserts)):
         raise GXWFormatError("declaration edits require string-valued rows, renames and names")
     rows = list(document.rows)
+    touched = {n.casefold() for n in remove} | {n.casefold() for n in (renames or {})}
+    touched.update(item.get("name", "").casefold() for item in upserts)
+    if any(r.value_extension and r.name.casefold() in touched for r in rows):
+        raise GXWFormatError("structure address extensions are read-only")
     names = [r.name.casefold() for r in rows]
     if len(set(names)) != len(names):
         raise GXWFormatError("ambiguous declaration names")

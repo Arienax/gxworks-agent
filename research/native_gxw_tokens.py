@@ -67,9 +67,13 @@ def native_batch(requests, directory: Path, *, dll=DEFAULT_DLL, cpu_code=0x208, 
     profile = {DLL_SHA256: "fx", Q_DLL_SHA256: "q"}.get(dll_hash)
     if os.name != "nt" or profile is None:
         raise ValueError("requires Windows and an inspected native token converter hash")
-    if profile == "q" and (cpu_code != 209 or any(
+    if profile == "q" and (cpu_code not in (209, 34) or any(
             r["mode"] not in ("decode", "encode", "stored-steps") for r in requests)):
-        raise ValueError("Q oracle supports only CPU 209 public text conversion and stored step counts")
+        raise ValueError("Q oracle requires an observed CPU and public conversion operation")
+    # Q02/Q02H Open(cpu=34, mode=0) is observed in the independently compiled
+    # new-source control; traced/untraced PCode agrees. Extend decoding only.
+    if profile == "q" and cpu_code == 34 and any(r["mode"] != "decode" for r in requests):
+        raise ValueError("Q02/Q02H oracle is limited to independently observed text decoding")
     if native_versions is not None:
         native_versions = tuple(native_versions)
         if profile != "q" or native_versions not in ((), (1,), (25,)):

@@ -321,12 +321,13 @@ def replace_stream_within_allocation(
 def validate_cfb_streams(data: bytes) -> dict[str, bytes]:
     """Writer preflight: reject truncated, aliased, or unterminated live chains.
 
-    This adds write-side guards without broadening the read-only parser ABI.
+    A native file may omit unused padding in its last physical sector. Check
+    original payloads before any writer adds padding; never repair missing data.
     Unallocated bytes and unknown directory fields are not interpreted.
     """
     cfb = CompoundFile(data)
-    if cfb.major_version not in (3, 4) or len(data) % cfb.sector_size:
-        raise GXWFormatError("unsupported/alignment-invalid CFB writer input")
+    if cfb.major_version not in (3, 4):
+        raise GXWFormatError("unsupported CFB writer version")
     regular_owners, mini_owners = {}, {}
 
     def claim(chain, owners, label, table):
@@ -354,8 +355,11 @@ def validate_cfb_streams(data: bytes) -> dict[str, bytes]:
                          ("root", cfb.root_entry.start_sector)):
         chain = _regular_chain(cfb, start)
         claim(chain, regular_owners, label, cfb._fat)
-        for sid in chain:
-            cfb._sector(sid)
+        if label == "root":
+            cfb._read_regular_stream(start, cfb.root_entry.stream_size)
+        else:
+            for sid in chain:
+                cfb._sector(sid)
         if label == "root" and cfb.root_entry.stream_size > len(chain) * cfb.sector_size:
             raise GXWFormatError("truncated root MiniStream")
         if label == "MiniFAT" and len(chain) != cfb.num_minifat_sectors:
@@ -386,6 +390,18 @@ def replace_project_stream(data: bytes, stream_name: str, new_data: bytes) -> tu
     from .cfb_allocator import resize_cfb_stream
     allocation = inspect_stream_allocation(data, stream_name)
     cfb = CompoundFile(data)
+    if len(data) % cfb.sector_size:
+        expected = validate_cfb_streams(data)
+        if expected[stream_name] == new_data:
+            return data, "existing_allocation"
+        # Allocation writers use full-sector EOF arithmetic. Padding is safe
+        # only after every original live payload and metadata chain is checked.
+        padded = data + bytes((-len(data)) % cfb.sector_size)
+        result, mode = replace_project_stream(padded, stream_name, new_data)
+        expected[stream_name] = new_data
+        if validate_cfb_streams(result) != expected:
+            raise GXWFormatError("padded CFB failed stream preservation checks")
+        return result, "pad_final_sector+" + mode
     if bool(allocation.stream_size) != bool(new_data):
         return resize_cfb_stream(data, stream_name, new_data), "empty_stream_transition"
     if (allocation.stream_size < cfb.mini_stream_cutoff) != (len(new_data) < cfb.mini_stream_cutoff):

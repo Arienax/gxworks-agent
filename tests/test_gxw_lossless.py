@@ -14,12 +14,14 @@ from gxw.container import CompoundFile
 from gxw.container_writer import replace_stream_within_allocation
 from gxw.lossless import inspect_project, inspect_program, patch_structured_symbol_equal_size, patch_token_constant, sha256
 from gxw.models import GXWFormatError
-from gxw.project_metadata import logical_mapping, synchronize_history
+from gxw.project_metadata import logical_mapping, synchronize_history, read_project_text_context
 from gxw.structured_pou import parse_structured_pou
 from gxw.structured_pou_writer import serialize_structured_pou
-from gxw.token_pou import parse_token_pou, frame_token_pou
-from gxw.token_listing import decode_token_listing, decode_token_program, TokenText, TokenLabel
+from gxw.token_pou import parse_token_pou, frame_token_pou, parse_token_fragment
+from gxw.token_listing import decode_token_listing, decode_token_program, TokenText, TokenLabel, TokenInstruction
 from gxw.token_resource import parse_token_resource
+from gxw.text_pou import parse_st_pou
+from gxw.sfc_pou import parse_sfc_pou
 from gxw.token_patch import TokenInstructionPatch, patch_token_instructions, TokenRecordSplice, splice_token_records
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +32,447 @@ NATIVE_CONVERSION = json.loads((ROOT / "research/results/token-20260919/native-c
 NATIVE_OPERANDS = json.loads((ROOT / "research/results/token-20260919/native-operand-corpus-20260920.json").read_text(encoding="utf-8"))
 NATIVE_RESOURCES = json.loads((ROOT / "research/results/token-20260919/compiled-resource-corpus-20260920.json").read_text(encoding="utf-8"))
 SIMPLE_SOURCES = json.loads((ROOT / "tests/fixtures/gxw_simple_ladder_sources.json").read_text(encoding="utf-8"))["cases"]
+Q_EVIDENCE = ROOT / "research/evidence/gxw-q-token-grammar-20260927.zip"
+Q02_EVIDENCE = ROOT / "research/evidence/gxw-q02-lexical-20260927.zip"
+ST_TEXT_CONTROLS = json.loads((ROOT / "tests/fixtures/gxw_st_text_native.json").read_text(encoding="utf-8"))["cases"]
+SFC_SOURCE_CONTROLS = json.loads((ROOT / "tests/fixtures/gxw_sfc_source_native.json").read_text(encoding="utf-8"))["cases"]
+LIBRARY_TASKS = json.loads((ROOT / "tests/fixtures/gxw_library_tasks_native.json").read_text(encoding="utf-8"))["cases"]
+
+
+def q_native_records(listing):
+    """Transport the Core records into the independent vendor output shape."""
+    result = []
+    for record in listing.records:
+        if isinstance(record, TokenInstruction):
+            result.append(dict(kind="instruction", op=record.mnemonic, args=list(record.args)))
+        elif isinstance(record, TokenText):
+            result.append(dict(kind=record.role, text=record.text))
+        elif isinstance(record, TokenLabel):
+            result.append(dict(kind="label", text=record.text))
+        else:
+            result.append(None)
+    return result
+
+
+@pytest.mark.parametrize("case", ST_TEXT_CONTROLS, ids=lambda c: c["id"])
+def test_st_source_utf16_is_preserved_independently_of_native_compiler_text(case):
+    raw = base64.b64decode(case["program_base64"])
+    assert sha256(raw) == case["program_sha256"]
+    source = parse_st_pou(raw)
+    image = inspect_program(raw, token_profile=None)
+    assert image.layout == "structured-text" and image.reconstruct() == source.reconstruct() == raw
+    assert source.code_units == case["units"]
+    assert source.diagnostic == case["text_gap"]
+    native = base64.b64decode(case["frontend_text_base64"])
+    report = HARNESS["program_report"](raw, case["program"], [], token_profile=None)
+    assert report["source_text"] == source.text and report["semantic_complete"] is False
+    assert report["text_gaps"] == int(source.text is None)
+    if source.text is None:
+        assert image.regions[1].handling == "opaque-preserved" and image.diagnostics
+    else:
+        assert source.text.encode(case["context"]["text_encoding"]) + b"\0" == native
+        assert image.regions[1].handling == "decoded" and not image.diagnostics
+    if "saved_program_base64" in case:
+        saved = parse_st_pou(base64.b64decode(case["saved_program_base64"]))
+        assert saved.text_bytes == source.text_bytes
+
+
+def test_st_native_success_does_not_hide_truncation_or_replace_original_unicode():
+    def case(name):
+        return next(c for c in ST_TEXT_CONTROLS if '/' + name + '/' in c["id"])
+
+    nul, clean, unicode = [case(name) for name in ("embedded-nul", "without-nul", "unicode-comment")]
+    source = parse_st_pou(base64.b64decode(nul["program_base64"]))
+    assert source.text is None and "embedded NUL" in source.diagnostic
+    assert "D0:=1;".encode("utf-16le") in source.text_bytes
+    assert base64.b64decode(nul["frontend_text_base64"]) == b"Y0:=X0;\r\n\0"
+    assert nul["compiled_pcode_base64"] == unicode["compiled_pcode_base64"]
+    assert nul["compiled_pcode_base64"] != clean["compiled_pcode_base64"]
+    astral = parse_st_pou(base64.b64decode(unicode["program_base64"]))
+    assert "\U0001f680" in astral.text and astral.code_units == len(astral.text) + 2
+
+
+@pytest.mark.parametrize("offset,replacement", [(54, b"\xc0"), (55, b"\xff"), (59, b"\xff"),
+    (63, b"\x02"), (67, b"\xff\xff\xff\xff"), (-30, b"\x01"), (-1, b"\x01")])
+def test_st_source_envelope_failure_preserves_the_whole_stream(offset, replacement):
+    raw = bytearray(base64.b64decode(ST_TEXT_CONTROLS[0]["program_base64"]))
+    start = offset if offset >= 0 else len(raw) + offset
+    raw[start:start + len(replacement)] = replacement
+    with pytest.raises(GXWFormatError):
+        parse_st_pou(raw)
+    image = inspect_program(raw, token_profile=None)
+    assert image.layout == "unsupported" and image.reconstruct() == raw
+
+
+@pytest.mark.parametrize("description,source_flag,trailer_flag", [("", 0, 1), ("A description", 1, 0), ("\U0001f680 description", 0, 1)])
+def test_st_description_is_counted_in_code_units_and_flags_remain_raw(description, source_flag, trailer_flag):
+    from gxw.declarations import _string
+
+    original = base64.b64decode(ST_TEXT_CONTROLS[0]["program_base64"])
+    text = parse_st_pou(original).text_bytes
+    header_text = _string(description)
+    raw = bytearray(original[:6] + header_text + original[12:])
+    start = 54 + len(header_text)-6
+    struct.pack_into("<I",raw,start+9,source_flag)
+    struct.pack_into("<I",raw,len(raw)-4,trailer_flag)
+    parsed = parse_st_pou(raw)
+    image = inspect_program(raw,token_profile=None)
+    assert parsed.text_offset == start+17 and parsed.text_bytes == text
+    assert image.layout == "structured-text" and image.reconstruct() == bytes(raw)
+    struct.pack_into("<I",raw,6,0xffffffff)
+    with pytest.raises(GXWFormatError):
+        parse_st_pou(raw)
+    assert inspect_program(raw,token_profile=None).reconstruct() == raw
+
+
+@pytest.mark.parametrize("case", LIBRARY_TASKS, ids=lambda c: c["task"])
+def test_library_task_records_match_independent_native_frontend(case):
+    reader = runpy.run_path(str(ROOT / "research/probe_gxw_task_graph.py"))["task_records"]
+    raw = base64.b64decode(case["task_base64"])
+    parsed = reader(raw)
+    assert parsed["configuration_hex"] == case["native_configuration_hex"]
+    assert parsed["uninterpreted_texts"] == case["native_texts"]
+    assert [{k:r[k] for k in ("program_reference", "stored_order")} for r in parsed["entries"]] == case["native_entries"]
+    assert bytes.fromhex(parsed["opaque_prefix_hex"]) + b"".join(bytes.fromhex(e["raw_hex"]) for e in parsed["entries"]) == raw
+    # The config text FALSE is retained; it is not a proof that this task's
+    # source is omitted from compilation or can safely be removed.
+    assert all(e["secondary_text_role"] == "unknown" for e in parsed["entries"])
+
+
+def test_native_program_check_cache_counterexample_is_kept_as_a_false_acceptance():
+    evidence = json.loads((ROOT / "research/results/program-check-freshness-20260928.json").read_text(encoding="utf-8"))
+    legacy, fresh, default = evidence["negative_controls"]
+    assert len({c["input_sha256"] for c in (legacy, fresh, default)}) == 1
+    assert len({c["pcode_sha256"] for c in (legacy, fresh, default)}) == 1
+    assert all(sha256(base64.b64decode(c["pcode_base64"])) == c["pcode_sha256"] for c in (legacy, fresh, default))
+    assert legacy["program_check_completed"] and not legacy["compiler_rejected"] and legacy["exported"]
+    for control in (fresh, default):
+        assert control["refresh_program_check"] and control["program_check_completed"] and control["compiler_rejected"]
+        assert not control["exported"]
+        assert any(r["code"] == 84710144 and r["arguments"] == ["Y000"] for r in control["native_errors"])
+
+
+@pytest.mark.parametrize("cpu,profile,encoded", [(520, "fx3u", True), (518, "fx1s", False)])
+def test_fx_modbus_spelling_is_not_a_cpu_instruction_availability_claim(cpu, profile, encoded):
+    evidence = json.loads((ROOT / "research/results/token-20260919/native-fx-cpu-lexical-20260927.json").read_text(encoding="utf-8"))
+    control = next(c for c in evidence["additional_controls"] if c["cpu"] == cpu)
+    raw = bytes.fromhex(control["body_hex"])
+    listing = decode_token_program(parse_token_fragment(raw, 0, len(raw)), profile=profile)
+    oracle = runpy.run_path(str(ROOT / "research/native_gxw_tokens.py"))["native_il_projection"]
+    assert q_native_records(listing) == oracle(base64.b64decode(control["native"][0]["output_base64"]), encoding="cp1252")["records"]
+    assert [(i.mnemonic, i.args) for i in listing.instructions] == [("ADPRW", ("H1", "H1", "H0", "H1", "D0"))]
+    assert listing.reconstruct() == raw
+    assert (control["native"][1]["return_code"] == "0x00000000") == encoded
+
+
+@pytest.mark.parametrize("case", SFC_SOURCE_CONTROLS, ids=lambda c: c["program_sha256"][:12])
+def test_sfc_source_children_and_registrations_match_native_ownership(case):
+    raw = base64.b64decode(case["program_base64"])
+    assert sha256(raw) == case["program_sha256"]
+    source = parse_sfc_pou(raw)
+    children = [{k: c[k] for k in ("kind", "name", "number", "token_hex")} for c in source.layout["children"]]
+    actions = [{k: a[k] for k in ("name", "number", "registrations")} for a in source.layout["actions"]]
+    canonical = lambda rows: sorted(rows, key=lambda row: json.dumps(row, sort_keys=True))
+    assert canonical(children) == canonical(case["native_children"])
+    assert canonical(actions) == canonical(case["native_actions"])
+    image = inspect_program(raw, token_profile=case["context"]["token_profile"], text_encoding=case["context"]["text_encoding"])
+    assert image.layout == "sfc-source" and image.reconstruct() == source.reconstruct() == raw
+    assert list(source.diagnostics) == case["reference_gaps"]
+    assert any(r.kind in ("sfc-graph", "sfc-graph-cache") and r.handling == "opaque-preserved" for r in image.regions)
+
+
+@pytest.mark.parametrize("change", ["cache", "graph-opcode", "child-size"])
+def test_sfc_source_unknown_graph_and_malformed_children_remain_raw(change):
+    raw = bytearray(next(base64.b64decode(c["program_base64"]) for c in SFC_SOURCE_CONTROLS
+                         if parse_sfc_pou(base64.b64decode(c["program_base64"])).graph_tokens is not None))
+    before = parse_sfc_pou(raw)
+    graph = before.layout["graph"]
+    if change == "cache":
+        offset = graph["cache_offset"] + graph["cache_size"] - 1
+        raw[offset] ^= 0xff
+    elif change == "graph-opcode":
+        raw[graph["code_offset"] + 1] = 0x7f
+    else:
+        struct.pack_into("<I", raw, before.layout["children"][0]["size_offset"], 0xffffffff)
+    image = inspect_program(raw, token_profile="fx3u")
+    assert image.reconstruct() == raw
+    if change == "child-size":
+        assert image.layout == "unsupported"
+    else:
+        assert image.layout == "sfc-source"
+        assert image.projection.layout["children"] == before.layout["children"]
+        if change == "graph-opcode":
+            assert image.projection.graph_records[0]["kind"] == "opaque" and image.diagnostics
+        else:
+            region, = [r for r in image.regions if r.kind == "sfc-graph-cache"]
+            assert region.handling == "opaque-preserved"
+            assert region.raw[-1] == raw[offset]
+
+
+def test_q_real_source_corpus_matches_independent_native_text_and_preserves_every_byte():
+    oracle = runpy.run_path(str(ROOT / "research/native_gxw_tokens.py"))["native_il_projection"]
+    with zipfile.ZipFile(Q_EVIDENCE) as archive:
+        manifest = json.loads(archive.read("manifest.json"))
+        for member in manifest["files"]:
+            assert sha256(archive.read(member["path"])) == member["sha256"]
+        count = 0
+        for case in manifest["programs"]:
+            metadata = archive.read(case["native_prefix"].removesuffix("/native") + "/metadata.prj")
+            context = read_project_text_context(metadata)
+            assert all(case["context"][k] == v for k, v in context.items())
+            raw = archive.read(case["source"])
+            assert sha256(raw) == case["source_sha256"]
+            requests = json.loads(archive.read(case["native_prefix"] + "/requests.json"))["requests"]
+            answers = [json.loads(s) for s in archive.read(case["native_prefix"] + "/native-stdout.jsonl").splitlines()]
+            request, answer = requests[case["request_index"]], answers[case["request_index"]]
+            listing = decode_token_listing(raw, profile="q03udv", text_encoding=case["context"]["text_encoding"])
+            assert listing.profile == "q03udv" and not listing.gaps
+            assert listing.source.body + b"\0" == base64.b64decode(request["input_base64"])
+            assert answer["return_code"] == "0x00000000" and answer["consumed_bytes"] == len(listing.source.body)
+            native = oracle(base64.b64decode(answer["output_base64"]), encoding=case["context"]["text_encoding"])
+            assert not native["text_gaps"] and q_native_records(listing) == native["records"]
+            assert listing.reconstruct() == raw
+            assert reverse_q_boundaries(raw, listing.source) == [(t.offset, t.raw) for t in listing.source.tokens]
+            image = inspect_program(raw, token_profile="q03udv", text_encoding=case["context"]["text_encoding"])
+            assert image.layout == "ladder-token-q03udv" and not image.diagnostics
+            assert image.reconstruct() == raw and image.projection == listing
+            report = HARNESS["program_report"](raw, case["logical_name"], [],
+                                               token_profile="q03udv", text_encoding=context["text_encoding"])
+            assert report["instruction_gaps"] == report["critical_token_gaps"] == report["undecoded_texts"] == 0
+            assert report["decoded_instructions"] == len(listing.instructions)
+            assert report["framing_cross_check"] == "agrees"
+            opaque = inspect_program(raw, token_profile=None)
+            assert opaque.layout == "ladder-framed" and opaque.reconstruct() == raw
+            assert all(r.handling == "opaque-preserved" for r in opaque.regions)
+            # This profile cannot inherit the FX-only CSV model identity.
+            with pytest.raises(GXWFormatError, match="CSV.*FX"):
+                listing.csv_bytes()
+            count += len(listing.records)
+        assert manifest["summary"] == dict(programs=75, projects=35, records=7364)
+        assert count == 7364
+
+
+def reverse_q_boundaries(raw, source):
+    return HARNESS["reverse_token_boundaries"](raw, body_end=source.body_end)
+
+
+@pytest.mark.parametrize("control,accepted,rejected", [
+    ("q-header-catalog-controls", 2618, 30), ("q-operand-catalog-controls", 354, 0),
+])
+def test_q_lexical_controls_replay_native_successes_and_version_dependent_failures(control, accepted, rejected):
+    oracle = runpy.run_path(str(ROOT / "research/native_gxw_tokens.py"))["native_il_projection"]
+    with zipfile.ZipFile(Q_EVIDENCE) as archive:
+        prefix = "controls/" + control + "/native-decode/"
+        requests = json.loads(archive.read(prefix + "requests.json"))["requests"]
+        answers = [json.loads(s) for s in archive.read(prefix + "native-stdout.jsonl").splitlines()]
+        counts = [0, 0]
+        for request, answer in zip(requests, answers, strict=True):
+            raw = base64.b64decode(request["input_base64"])[:-1]
+            listing = decode_token_program(parse_token_fragment(raw, 0, len(raw)), profile="q03udv", text_encoding="cp949")
+            assert listing.reconstruct() == raw
+            if answer["return_code"] == "0x00000000":
+                native = oracle(base64.b64decode(answer["output_base64"]), encoding="cp949")
+                assert not listing.gaps and not native["text_gaps"]
+                assert q_native_records(listing) == native["records"]
+                counts[0] += 1
+            else:
+                assert answer["return_code"] == "0x04021003"
+                assert len(listing.gaps) == 1 and "version context" in listing.gaps[0].reason
+                with pytest.raises(GXWFormatError):
+                    listing.instruction_ir()
+                counts[1] += 1
+        assert counts == [accepted, rejected]
+
+
+@pytest.mark.parametrize("body", [
+    "05fe01000504a80004",                 # unknown family plus its operand
+    "054c02ff0504a8000404a80104",         # descriptor hole, no FX fallback
+    "064c0200770604a8000404a80104",       # unknown header modifier
+    "054c02000504a80004",                 # MOV with too few operands
+    "054c02000507ec000000800704a80004",   # native Q rejects decimal negative zero
+    "054c02000504f0000404f0010404a8000404a80104",  # duplicate index
+    "054c02000504f00004",                 # trailing modifier
+    "054c00000504a8000404a80104",         # zero stored width
+    "054c80000504a8000404a80104",         # negative signed stored width
+    "033c0304a80004",                     # label with a non-pointer operand
+    "054c02000504df810404a80004",         # undecodable cp949 label
+    "054c02000506ee4100420604a80004",     # embedded NUL string
+])
+def test_q_unknown_records_keep_their_operands_and_do_not_consume_the_next_header(body):
+    raw = bytes.fromhex(body + "033403")
+    listing = decode_token_program(parse_token_fragment(raw, 0, len(raw)), profile="q03udv", text_encoding="cp949")
+    assert len(listing.gaps) == 1 and listing.reconstruct() == raw
+    assert b"".join(t.raw for t in listing.gaps[0].tokens) == bytes.fromhex(body)
+    assert len(listing.instructions) == 1 and listing.instructions[0].mnemonic == "END"
+    assert listing.instructions[0].step is None
+    with pytest.raises(GXWFormatError):
+        listing.instruction_ir()
+
+
+def test_q_profile_is_explicit_and_text_never_uses_the_host_codepage():
+    raw = bytes.fromhex("030003049c1004")
+    frame = parse_token_fragment(raw, 0, len(raw))
+    assert decode_token_program(frame).instructions[0].args == ("X20",)
+    assert decode_token_program(frame, profile="q03udv").instructions[0].args == ("X10",)
+    with pytest.raises(GXWFormatError, match="unsupported token profile"):
+        decode_token_program(frame, profile="Q")
+    with pytest.raises(GXWFormatError, match="unsupported token profile"):
+        inspect_program(raw, token_profile="Q")
+    text = "제어".encode("cp949")
+    text_token = bytes([len(text) + 4, 0x80, 0]) + text + bytes([len(text) + 4])
+    label = bytes([len(text) + 3, 0xdf]) + text + bytes([len(text) + 3])
+    body = text_token + bytes.fromhex("030003") + label + bytes.fromhex("033403")
+    frame = parse_token_fragment(body, 0, len(body))
+    unknown = decode_token_program(frame, profile="q03udv")
+    assert unknown.records[0].text is None and len(unknown.gaps) == 1
+    assert unknown.reconstruct() == body
+    decoded = decode_token_program(frame, profile="q03udv", text_encoding="cp949")
+    assert decoded.records[0].text == "제어" and decoded.instructions[0].args == ("'제어",)
+    assert not decoded.gaps and decoded.reconstruct() == body
+
+
+@pytest.mark.parametrize("control,profile,accepted,rejected", [
+    ("q02-lexical-controls/native", "q02", 2597, 3),
+    ("q-float-bitpattern-holdouts/native", "q02", 5606, 3004),
+    ("q-float-bitpattern-holdouts/native-q03udv", "q03udv", 5606, 3004),
+])
+def test_q02_cpu_rules_and_float_display_match_independent_native_controls(control, profile, accepted, rejected):
+    oracle = runpy.run_path(str(ROOT / "research/native_gxw_tokens.py"))["native_il_projection"]
+    with zipfile.ZipFile(Q02_EVIDENCE) as archive:
+        manifest = json.loads(archive.read("manifest.json"))
+        prefix = "controls/" + control + "/"
+        for member in manifest["files"]:
+            if member["path"].startswith(prefix):
+                assert sha256(archive.read(member["path"])) == member["sha256"]
+        requests = json.loads(archive.read(prefix + "requests.json"))["requests"]
+        answers = [json.loads(line) for line in archive.read(prefix + "native-stdout.jsonl").splitlines()]
+        counts = [0, 0]
+        for request, answer in zip(requests, answers, strict=True):
+            raw = base64.b64decode(request["input_base64"])[:-1]
+            listing = decode_token_program(parse_token_fragment(raw, 0, len(raw)), profile=profile, text_encoding="cp949")
+            assert listing.reconstruct() == raw and listing.profile == profile
+            if answer["return_code"] == "0x00000000":
+                assert answer["consumed_bytes"] == len(raw)
+                native = oracle(base64.b64decode(answer["output_base64"]), encoding="cp949")
+                assert not listing.gaps and q_native_records(listing) == native["records"]
+                counts[0] += 1
+            else:
+                assert listing.gaps
+                counts[1] += 1
+        assert counts == [accepted, rejected]
+
+
+def test_q02_descriptor_catalog_matches_native_queries_and_never_uses_q03_holes():
+    catalog = json.loads((ROOT / "src/gxw/templates/q02-token-grammar.json").read_text(encoding="utf-8"))
+    with zipfile.ZipFile(Q02_EVIDENCE) as archive:
+        rows = [json.loads(line) for line in archive.read("descriptors/34/native-stdout.jsonl").splitlines()]
+    assert len(rows) == 31110
+    assert catalog["headers"] == {f"{r['family']:02x}:{r['variant']:02x}": [r["name"], bytes.fromhex(r["descriptor_hex"])[4]]
+                                  for r in rows if r["result"] == "0x00000000"}
+    for body, profile, mnemonic in [("054101000504a80004", "q02", "PCHK"),
+                                    ("06400218ff0604a8000404a80104", "q03udv", "ED=")]:
+        frame = parse_token_fragment(bytes.fromhex(body), 0, len(bytes.fromhex(body)))
+        accepted = decode_token_program(frame, profile=profile)
+        rejected = decode_token_program(frame, profile="q03udv" if profile == "q02" else "q02")
+        assert not accepted.gaps and accepted.instructions[0].mnemonic == mnemonic
+        assert len(rejected.gaps) == 1 and rejected.reconstruct() == frame.reconstruct()
+
+
+def test_q_float_native_display_does_not_replace_raw_value_or_negative_zero():
+    from gxw.token_q import q_operand_text
+
+    for code, value, displayed in [(0xec, 1234500.5, "E1234501"), (0xed, -0.0, "E0.0")]:
+        raw = bytes([7, code]) + struct.pack("<f", value) + b"\x07"
+        assert q_operand_text(raw, text_encoding=None) == displayed
+        body = bytes.fromhex("054c030205") + raw + bytes.fromhex("04a80004")
+        listing = decode_token_program(parse_token_fragment(body, 0, len(body)), profile="q02")
+        assert listing.instructions[0].args[0] == displayed
+        assert listing.instructions[0].operands[0].tokens[0].raw == raw
+        assert listing.reconstruct() == body
+
+
+@pytest.mark.parametrize("change", ["length", "terminator", "utf16", "prefix", "truncated"])
+def test_project_text_context_rejects_broken_metadata_without_guessing_a_cpu(change):
+    with zipfile.ZipFile(Q_EVIDENCE) as archive:
+        case = json.loads(archive.read("manifest.json"))["programs"][0]
+        raw = bytearray(archive.read(case["native_prefix"].removesuffix("/native") + "/metadata.prj"))
+    context = read_project_text_context(raw)
+    if change == "length":
+        struct.pack_into("<I", raw, 0, 0xffffffff)
+    elif change == "terminator":
+        raw[4 + 2 * struct.unpack_from("<I", raw)[0] - 2] = 65
+    elif change == "utf16":
+        raw[4:6] = b"\0\xd8"
+    elif change == "prefix":
+        raw[context["codepage_offset"] - 48] = 2
+    else:
+        raw = raw[:context["codepage_offset"] + 3]
+    with pytest.raises(GXWFormatError):
+        read_project_text_context(raw)
+
+
+def test_project_context_keeps_unknown_codepages_and_cpus_explicit():
+    from types import SimpleNamespace
+
+    with zipfile.ZipFile(Q_EVIDENCE) as archive:
+        case = json.loads(archive.read("manifest.json"))["programs"][0]
+        raw = bytearray(archive.read(case["native_prefix"].removesuffix("/native") + "/metadata.prj"))
+    offset = read_project_text_context(raw)["codepage_offset"]
+    struct.pack_into("<I", raw, offset, 65001)
+    stream = SimpleNamespace(layer="nested", raw=bytes(raw), logical_name="Project.prj")
+    image = SimpleNamespace(streams=[stream])
+    context = HARNESS["project_token_context"](image)
+    assert context["token_profile"] == "q03udv" and context["text_encoding"] is None
+    at = bytes(raw).index("Q03UDV".encode("utf-16le"))
+    raw[at:at + 12] = "Q00XYZ".encode("utf-16le")
+    stream.raw = bytes(raw)
+    assert HARNESS["project_token_context"](image)["token_profile"] is None
+    image.streams.append(stream)
+    assert HARNESS["project_token_context"](image)["token_profile"] is None
+
+
+def test_q_project_scan_and_cli_select_the_source_cpu_and_encoding(tmp_path):
+    with zipfile.ZipFile(ROOT / "research/evidence/gxw-callsite-inputs-20260927.zip") as archive:
+        source = archive.read("research/experiments/sfc-graph-20260926/public-corpus-discovery/samples/scpi-SCPI_FB.gxw")
+    report = HARNESS["analyze"](source)
+    assert report["token_context"]["token_profile"] == "q03udv"
+    assert report["token_context"]["text_encoding"] == "cp932"
+    programs = [s["program"] for s in report["streams"] if "program" in s]
+    assert len(programs) == 2 and all(p["layout"] == "ladder-token-q03udv" for p in programs)
+    assert report["coverage"]["instruction_gaps"] == report["coverage"]["critical_token_gaps"] == 0
+    assert report["coverage"]["decoded_instructions"] > 100
+    path, output = tmp_path / "source.gxw", tmp_path / "listing.json"
+    path.write_bytes(source)
+    HARNESS["main"](["decode-tokens", str(path), "--program", "SCPI.Program.pou", "-o", str(output)])
+    result = json.loads(output.read_text(encoding="utf-8"))
+    assert result["token_profile"] == "q03udv" and result["text_encoding"] == "cp932"
+    assert result["instruction_gaps"] == 0 and len(result["records"]) == 163
+    assert any(r.get("op") == "G.INPUT" for r in result["records"])
+    assert path.read_bytes() == source
+
+
+@pytest.mark.parametrize("tail_bytes", [0, 110, 111, 112, 511, 512])
+def test_native_nested_container_requires_payload_but_not_unused_sector_tail(tail_bytes):
+    with zipfile.ZipFile(ROOT / "research/evidence/gxw-partial-sector-20260927.zip") as archive:
+        source = archive.read("native/native-saved.gxw")
+        expected = archive.read("native/compiler_DZComp/CGTable.dat")
+        manifest = json.loads(archive.read("manifest.json"))
+    outer = CompoundFile(source)
+    nested = outer.read_stream("_hdb")
+    physical = logical_mapping(outer.read_stream("projectdatalist.xml"))["CGTable.dat"]
+    assert len(nested) % 512 == 111
+    assert sha256(expected) == manifest["observation"]["cg_sha256"]
+    final_sector = nested[-111:] + bytes(512 - 111)
+    candidate = nested[:-111] + final_sector[:tail_bytes]
+    if tail_bytes < 111:
+        with pytest.raises(GXWFormatError, match="outside the file"):
+            CompoundFile(candidate).read_stream(physical)
+    else:
+        assert CompoundFile(candidate).read_stream(physical) == expected
+        image = inspect_project(source)
+        assert not image.diagnostics and not any(s.error for s in image.streams)
+        assert image.reconstruct() == source
+        assert next(s.raw for s in image.streams if s.logical_name == "CGTable.dat") == expected
 
 
 def token_envelope(body):
@@ -458,7 +901,9 @@ def test_compiled_resource_regions_match_independent_native_il_with_labels():
         assert sha256(raw) == case["resource_sha256"]
         resource = parse_token_resource(raw)
         assert resource.reconstruct() == raw
-        assert resource.observed_program_names[0] + ".Program.pou" == case["sources"][0]["observed_program_name"]
+        # The frozen oracle used this historical field name for the suffix;
+        # it is not independent evidence of source-program ownership.
+        assert resource.observed_cached_names[0] == case["sources"][0]["observed_program_name"].removesuffix(".Program.pou")
         for region, recorded in zip(resource.code_regions, case["regions"]):
             listing = decode_token_program(region, text_encoding="cp936")
             assert listing.reconstruct() == raw and not listing.gaps
@@ -526,19 +971,24 @@ def test_actual_native_patch_retains_old_compiled_code_until_native_conversion()
         image = inspect_project(source)
         stream = next(s for s in image.streams if (s.logical_name or "").endswith(".res"))
         resource = parse_token_resource(stream.raw)
-        program_name = resource.observed_program_names[0] + ".Program.pou"
-        program = next(s for s in image.streams if s.logical_name == program_name)
+        program = next(s for s in image.streams if s.logical_name == "1.Program.pou")
         assert "X2" in [n.symbol for n in parse_structured_pou(program.raw).nodes]
         readings.append(decode_token_program(resource.code_regions[0]).instructions[0].args)
     assert readings == [("X1",), ("X2",)]
 
 
-def test_resource_unknown_suffix_survives_but_broken_code_bounds_are_rejected():
+@pytest.mark.parametrize("legacy", [False, True])
+def test_resource_unknown_suffix_survives_but_broken_code_bounds_are_rejected(legacy):
     raw = base64.b64decode(NATIVE_RESOURCES["cases"][0]["raw_base64"])
+    if legacy:
+        # Second prefix independently captured in the FX3U SFC empty-task
+        # control. The remaining frame and opaque bytes must stay untouched.
+        prefix = bytes.fromhex("01000000000001000000000000000000000000000200000001000000010000000000")
+        raw = prefix + raw[len(prefix):]
     resource = parse_token_resource(raw)
     opaque = raw[:resource.suffix_offset] + b"future suffix"
     parsed = parse_token_resource(opaque)
-    assert parsed.reconstruct() == opaque and parsed.observed_program_names is None
+    assert parsed.reconstruct() == opaque and parsed.observed_cached_names is None
     for position, value in ((54, 0xFFFFFFFF), (58 + len(resource.code_regions[0].body), 1)):
         broken = bytearray(raw)
         struct.pack_into("<I", broken, position, value)
@@ -638,6 +1088,115 @@ def token_case(prefix):
     return base64.b64decode(next(c for c in CORPUS if c["source"].startswith(prefix))["program_base64"])
 
 
+@pytest.mark.parametrize("profile", ["fx3u", "fx1s"])
+@pytest.mark.parametrize("trailer_bytes,prefix_word", [(20, 0), (20, 1), (24, 0), (24, 1)])
+def test_cpu_bound_fx_source_frames_keep_every_byte_and_unknown_record(profile, trailer_bytes, prefix_word):
+    # Envelope variants observed in the independent real-source compiler
+    # cross-check; derive the controlled body from the existing native corpus.
+    raw = bytearray(token_case("02_"))
+    struct.pack_into("<I", raw, 63, prefix_word)
+    if trailer_bytes == 20:
+        del raw[-4:]
+        with pytest.raises(GXWFormatError):
+            decode_token_listing(raw)
+    listing = decode_token_listing(raw, profile=profile)
+    assert listing.profile == profile and not listing.gaps
+    assert listing.reconstruct() == raw
+    image = inspect_program(raw, token_profile=profile)
+    assert image.layout == "ladder-token-" + profile
+    assert image.reconstruct() == raw and not image.diagnostics
+    assert len(raw) - listing.source.body_end == trailer_bytes
+    opaque = inspect_program(raw, token_profile=None)
+    assert opaque.layout == "ladder-framed"
+    assert all(r.handling == "opaque-preserved" for r in opaque.regions)
+    # An unknown token stays at its exact source offset. CPU selection is not
+    # permission to skip bytes, invent an instruction or export complete IR.
+    raw[80] = 0x7f
+    unknown = inspect_program(raw, token_profile=profile)
+    assert unknown.reconstruct() == raw and unknown.projection.gaps
+    assert unknown.regions[1].handling == "opaque-preserved"
+    with pytest.raises(GXWFormatError):
+        unknown.projection.instruction_ir()
+
+
+@pytest.mark.parametrize("cpu,profile", [(520, "fx3u"), (518, "fx1s")])
+def test_real_fx_ret_header_matches_independent_native_encode_and_decode(cpu, profile):
+    evidence = json.loads((ROOT / "research/results/token-20260919/native-fx-cpu-lexical-20260927.json").read_text(encoding="utf-8"))
+    raw = bytes.fromhex(evidence["ret_body_hex"])
+    native = evidence["ret"][str(cpu)]
+    assert native["encode"]["return_code"] == native["decode"]["return_code"] == "0x00000000"
+    assert base64.b64decode(native["encode"]["output_base64"]) == raw
+    oracle = runpy.run_path(str(ROOT / "research/native_gxw_tokens.py"))["native_il_projection"]
+    listing = decode_token_program(parse_token_fragment(raw, 0, len(raw)), profile=profile)
+    assert q_native_records(listing) == oracle(base64.b64decode(native["decode"]["output_base64"]), encoding="cp936")["records"]
+    assert [(r.mnemonic, r.args, r.step) for r in listing.instructions] == [("RET", (), 0), ("END", (), 1)]
+    assert listing.reconstruct() == raw
+    if profile == "fx1s":
+        with pytest.raises(GXWFormatError):
+            listing.csv_bytes()  # No FX1S native CSV header has been observed.
+
+
+@pytest.mark.parametrize("case", json.loads((ROOT / "tests/fixtures/gxw_fx_legacy_native.json").read_text(encoding="utf-8"))["cases"],
+                         ids=lambda c: c["id"])
+def test_fx1s_legacy_source_edits_match_native_save_and_reopen(case):
+    raw = base64.b64decode(case["program_base64"])
+    original = decode_token_listing(raw, profile=case["profile"])
+    assert not original.gaps and original.reconstruct() == raw
+    assert len(raw) - original.source.body_end == 20
+    expected = {"baseline": "K2", "same-size-k3": "K3", "grow-k300": "K300"}[case["id"]]
+    assert original.instructions[1].args == (expected, "D3")
+    for phase in case["phases"]:
+        assert phase["outcome"]["open_succeeded"] and phase["outcome"]["compile_completed"]
+        assert phase["outcome"]["program_check_completed"] and not phase["outcome"]["compiler_rejected"]
+        saved = base64.b64decode(phase["program_base64"])
+        listing = decode_token_listing(saved, profile=case["profile"])
+        assert listing.source.body == original.source.body == base64.b64decode(phase["pcode_base64"])
+        assert len(saved) - listing.source.body_end == 24
+        assert listing.reconstruct() == saved
+
+
+@pytest.mark.parametrize("cpu,profile", [("FX3U/FX3UC", "fx3u"), ("FX1S", "fx1s"), ("FX3G", "fx3g"), ("FX1N", None)])
+def test_source_cpu_metadata_selects_fx_profiles_without_name_guessing(cpu, profile):
+    from types import SimpleNamespace
+
+    def metadata_string(text):
+        return struct.pack("<I", len(text) + 1) + (text + "\0").encode("utf-16le")
+
+    raw = metadata_string("") + metadata_string(cpu) + b"\x01" + bytes(47) + struct.pack("<I", 936)
+    image = SimpleNamespace(streams=[SimpleNamespace(layer="nested", raw=raw, logical_name="Project.prj")])
+    context = HARNESS["project_token_context"](image)
+    assert context["cpu"] == cpu and context["token_profile"] == profile
+    assert context["text_encoding"] == "gb18030"
+
+
+@pytest.mark.parametrize("cpu,profile", [(521, "fx3g"), (520, "fx3u"), (518, "fx1s")])
+def test_fx_extended_devices_and_edge_opcodes_match_independent_native_controls(cpu, profile):
+    evidence = json.loads((ROOT / "tests/fixtures/gxw_fx3g_lexical_native.json").read_text(encoding="utf-8"))
+    oracle = runpy.run_path(str(ROOT / "research/native_gxw_tokens.py"))["native_il_projection"]
+    for case in evidence["cases"]:
+        raw = bytes.fromhex(case["body_hex"])
+        native = case["native"][str(cpu)]
+        assert native["return_code"] == "0x00000000" and native["consumed_bytes"] == len(raw)
+        listing = decode_token_program(parse_token_fragment(raw, 0, len(raw)), profile=profile)
+        assert listing.reconstruct() == raw
+        # The vendor prints even three-byte addresses and modified interrupt
+        # labels. They remain unsupported here; lexical acceptance does not
+        # establish valid CPU ranges or permission to expand the reader.
+        supported = ("width" not in case or case["width"] <= 2 and (
+            case["code"] == 0xAF and case["modifier"] != "04f20004" or
+            case["code"] == 0xD1 and not case["modifier"]))
+        if supported:
+            assert not listing.gaps
+            assert q_native_records(listing) == oracle(base64.b64decode(native["output_base64"]), encoding="cp1252")["records"]
+        else:
+            assert listing.gaps
+            with pytest.raises(GXWFormatError):
+                listing.instruction_ir()
+        if profile == "fx3g":
+            with pytest.raises(GXWFormatError):
+                listing.csv_bytes()  # FX3G CSV header is not independently observed.
+
+
 @pytest.mark.parametrize("case", SIMPLE_SOURCES, ids=lambda c: c["id"])
 def test_native_q_and_legacy_sources_are_framed_without_fx_semantic_promotion(case):
     raw = base64.b64decode(case["program_base64"])
@@ -663,7 +1222,7 @@ def test_native_q_and_legacy_sources_are_framed_without_fx_semantic_promotion(ca
     assert report["framing_cross_check"] == "agrees"
 
 
-@pytest.mark.parametrize("offset,value", [(54, 0), (55, 0), (63, 0), (67, 0), (79, 0), (-1, 1)])
+@pytest.mark.parametrize("offset,value", [(54, 0), (55, 0), (63, 2), (64, 1), (67, 0), (79, 0), (-1, 1)])
 def test_framing_only_source_rejects_broken_envelopes_and_boundaries(offset, value):
     raw = bytearray(base64.b64decode(SIMPLE_SOURCES[1]["program_base64"]))
     raw[offset] = value
@@ -672,6 +1231,19 @@ def test_framing_only_source_rejects_broken_envelopes_and_boundaries(offset, val
     image = inspect_program(raw)
     assert image.layout == "unsupported"
     assert image.reconstruct() == raw and len(image.regions) == 1
+
+
+def test_observed_zero_prefix_keeps_original_bytes_and_body_boundaries():
+    raw = bytearray(base64.b64decode(SIMPLE_SOURCES[1]["program_base64"]))
+    control = frame_token_pou(raw)
+    raw[63:67] = b"\0" * 4
+    framed = frame_token_pou(raw)
+    assert framed.reconstruct() == bytes(raw)
+    assert framed.body == control.body
+    assert (framed.body_offset, framed.body_end) == (control.body_offset, control.body_end)
+    image = inspect_program(raw)
+    assert image.layout == "ladder-framed" and image.reconstruct() == bytes(raw)
+    assert all(r.handling == "opaque-preserved" for r in image.regions)
 
 
 def test_annotations_preserve_numeric_base_and_signed_width_without_guessing_roles():
@@ -704,6 +1276,89 @@ def test_broken_framing_becomes_whole_opaque_stream_never_resynchronizes(offset,
 def native_source():
     with zipfile.ZipFile(ROOT / "research/evidence/gxw-abi-checkpoint-20260919.zip") as z:
         return z.read("frozen/set_spaced_compile.gxw")
+
+
+@pytest.mark.parametrize("program_segment,label_segment", [("程序", "标签"), ("", "")])
+def test_corpus_counts_localized_programs_without_changing_payloads(program_segment, label_segment):
+    from gxw.container_writer import replace_project_stream
+    from gxw.project_metadata import current_rows
+
+    source = native_source()
+    xml = CompoundFile(source).read_stream("projectdatalist.xml")
+    _, encoding = current_rows(xml, "DSPROJECTDATA", "D_Projectdata")
+    text = xml.decode(encoding).replace(".Program.pou", f".{program_segment}.pou").replace(
+        ".Labels.lh", f".{label_segment}.lh")
+    changed, _ = replace_project_stream(source, "projectdatalist.xml", text.encode(encoding))
+    before, after = HARNESS["analyze"](source), HARNESS["analyze"](changed)
+    assert after["source_replay"] == "byte-identical"
+    for key in ("programs", "program_layout_gaps", "recognized_objects", "known_node_projections"):
+        assert after["coverage"][key] == before["coverage"][key]
+    programs = [s for s in after["streams"] if "program" in s]
+    assert programs and all(s["logical_name"].endswith(f".{program_segment}.pou") for s in programs)
+    before_payloads = {(s.layer, s.name): s.raw for s in inspect_project(source).streams if s.layer == "nested"}
+    after_payloads = {(s.layer, s.name): s.raw for s in inspect_project(changed).streams if s.layer == "nested"}
+    assert after_payloads == before_payloads
+    comparisons = HARNESS["compare"](changed, changed)["known_structured_projections"]
+    assert all(s["logical_name"] in comparisons for s in programs)
+
+
+@pytest.mark.parametrize("folder", ["8", "99"])
+def test_corpus_does_not_interpret_sfc_or_unknown_metadata_as_label_tables(folder):
+    from gxw.container_writer import replace_project_stream
+    from gxw.project_metadata import current_rows
+
+    source = native_source()
+    xml = CompoundFile(source).read_stream("projectdatalist.xml")
+    rows, encoding = current_rows(xml, "DSPROJECTDATA", "D_Projectdata")
+    edits, names = [], []
+    for row in rows:
+        fields = row.fields()
+        name = fields["szName"].text.strip()
+        if name.endswith(".Labels.lh"):
+            field = fields["ucFolderType"]
+            edits.append((field.content_start, field.content_end, folder.encode(encoding)))
+            names.append(name)
+    assert names
+    for start, end, replacement in sorted(edits, reverse=True):
+        xml = xml[:start] + replacement + xml[end:]
+    changed, _ = replace_project_stream(source, "projectdatalist.xml", xml)
+    report = HARNESS["analyze"](changed)
+    declarations = [s for s in report["streams"] if s["logical_name"] in names]
+    assert declarations and all("declaration_rows" not in s for s in declarations)
+    assert all(s["handling"] == "opaque-preserved" and s["parse_gap"] for s in declarations)
+
+
+@pytest.mark.parametrize("folder,suffix,has_source", [("92", "lnb", True), ("83", "lbo", False), ("99", "lnb", False)])
+def test_corpus_library_source_selection_uses_metadata_and_keeps_companions_opaque(folder, suffix, has_source):
+    from gxw.container_writer import replace_project_stream
+    from gxw.project_metadata import current_rows
+
+    source = native_source()
+    xml = CompoundFile(source).read_stream("projectdatalist.xml")
+    rows, encoding = current_rows(xml, "DSPROJECTDATA", "D_Projectdata")
+    edits, names = [], []
+    for row in rows:
+        fields = row.fields()
+        logical = fields["szName"].text.strip()
+        if logical.endswith(".pou"):
+            target = logical[:-4] + "\\Example." + suffix
+            names.append(target)
+            for key, value in (("szName", target), ("ucFolderType", folder)):
+                field = fields[key]
+                edits.append((field.content_start, field.content_end, value.encode(encoding)))
+    assert names
+    for start, end, replacement in sorted(edits, reverse=True):
+        xml = xml[:start] + replacement + xml[end:]
+    changed, _ = replace_project_stream(source, "projectdatalist.xml", xml)
+    report = HARNESS["analyze"](changed)
+    targets = [s for s in report["streams"] if s["logical_name"] in names]
+    assert len(targets) == len(names)
+    assert all(("program" in s) == has_source for s in targets)
+    assert report["coverage"]["library_programs"] == (len(names) if has_source else 0)
+    if not has_source:
+        assert all(s["handling"] == "opaque-preserved" for s in targets)
+    assert {(s.layer,s.name):s.raw for s in inspect_project(source).streams if s.layer=="nested"} == {
+        (s.layer,s.name):s.raw for s in inspect_project(changed).streams if s.layer=="nested"}
 
 
 def token_container_fixture():

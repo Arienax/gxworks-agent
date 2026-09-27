@@ -169,6 +169,10 @@ def resize_cfb_stream(data: bytes, name: str, payload: bytes) -> bytes:
         raise KeyError(name)
     if expected[name] == payload:
         return data
+    # Preflight above reads the original bytes first, including any partially
+    # present final sector. Complete only its unused tail before EOF allocation.
+    sector_size = CompoundFile(data).sector_size
+    data = data + bytes((-len(data)) % sector_size)
     allocator = _Allocator(data)
     allocator.replace(name, payload)
     result = allocator.finish()

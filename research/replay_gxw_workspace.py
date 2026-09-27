@@ -8,9 +8,11 @@ import re
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'src'))
 NATIVE = Path('D:/GXWORKS2/DNaviZero')
 HASHES = {
     '../GPPW2/GD2DataMng.dll': '2d85260f10db34ec4852c6279b17a6788aae65f6b59f9d7b7a8acab8595c042f',
@@ -33,10 +35,59 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def prepare(input_path, output, *, compile=False, snapshot_frontend=False, export_project=False, commit_kind=None, change_sfc=False, program_check=False, sfc_graph_tokens=None, sfc_graph_edits=None, native_copy=None, project_alias=None, assignment_queries=None, address_queries=None, analysis_queries=None, create_analysis=True, analysis_version=1, remake_call_tree=False, pcode_location_queries=None, pcode_range_queries=None, type_queries=None):
+def source_output_context(source: bytes, resource_outputs: dict[str, bytes]) -> dict:
+    """Separate selected source roots from returned bytes and stored caches.
+
+    Equality with a stored cache alone proves neither reuse nor a rebuild.
+    An empty SFC task has independently returned even a deliberately changed
+    cache, whereas the observed IEC Build emits a new empty-program footer.
+    Source selection here is a compile-root view, not runtime reachability.
+    """
+    from gxw.lossless import inspect_project, sha256
+    from gxw.token_resource import parse_token_resource
+    from probe_gxw_task_graph import inspect_task_graph
+
+    result = dict(source_sha256=sha256(source), resources=[], gaps=[],
+                  source_recompilation="not-established-by-completion-or-cache-equality")
+    try:
+        graph = inspect_task_graph(source)
+        streams = {s.logical_name:s.raw for s in inspect_project(source).streams if s.logical_name}
+    except (ValueError, KeyError) as exc:
+        result['gaps'].append(str(exc))
+        return result
+    result['gaps'].extend(graph['gaps'])
+    for name, output in resource_outputs.items():
+        logical = name + '.res'
+        associations = [r for r in graph['resources'] if r['resource'] == logical]
+        row = dict(native_resource=name, source_resource=logical if associations else None,
+                   output_bytes=len(output), output_sha256=sha256(output), tasks=[], cached_code_matches=[])
+        for association in associations:
+            task = graph['tasks'][association['task']]
+            entries = task.get('entries')
+            row['tasks'].append(dict(logical_name=association['task'],
+                selected_sources=[e.get('source_program') for e in entries] if entries is not None else None))
+        selected = [s for task in row['tasks'] for s in (task['selected_sources'] or [])]
+        complete = (bool(associations) and not graph['gaps'] and
+                    all(t['selected_sources'] is not None for t in row['tasks']) and all(selected))
+        row['source_selection'] = ('selected' if selected else 'empty') if complete else 'unresolved'
+        if logical in streams:
+            try:
+                resource = parse_token_resource(streams[logical])
+                row['cached_code_matches'] = [dict(offset=start, bytes=size,
+                    sha256=sha256(resource.raw[start:start+size]), matches_output=output==resource.raw[start:start+size])
+                    for start,size in resource.code_spans]
+            except ValueError as exc:
+                row['cache_gap'] = str(exc)
+        result['resources'].append(row)
+    return result
+
+
+def prepare(input_path, output, *, compile=False, snapshot_frontend=False, snapshot_compiler_cache=False, export_project=False, commit_kind=None, change_sfc=False, program_check=False, sfc_graph_tokens=None, sfc_graph_chars=None, sfc_graph_edits=None, native_copy=None, project_alias=None, assignment_queries=None, address_queries=None, analysis_queries=None, create_analysis=True, analysis_version=1, remake_call_tree=False, pcode_location_queries=None, pcode_range_queries=None, type_queries=None, refresh_program_check=True):
     input_path, output = Path(input_path).resolve(), Path(output).resolve()
     if os.name != 'nt' or input_path.suffix.lower() != '.gxw':
         raise ValueError('requires Windows and an explicit GXW input')
+    if snapshot_compiler_cache and (not compile or change_sfc):
+        raise ValueError('compiler-cache snapshot requires an offline IEC build')
     if export_project and not compile:
         raise ValueError('native export experiment requires a completed compile')
     if change_sfc and not compile:
@@ -128,7 +179,7 @@ def prepare(input_path, output, *, compile=False, snapshot_frontend=False, expor
                 build_identifier=0, report_kind=-1, gui_bootstrap=True,
                 reserve_project=True, comm_metadata=True, cpu_group=True,
                 create_native_temp=True, support_flags=4294967295,
-                native_attributes=True, snapshot_frontend=snapshot_frontend, export_project=export_project,
+                native_attributes=True, snapshot_frontend=snapshot_frontend, snapshot_compiler_cache=snapshot_compiler_cache, export_project=export_project,
                 change_sfc=change_sfc, project_owned_compiler=change_sfc)
     if project_alias is not None:
         # Explicit native import naming, not an automatic source rewrite. The
@@ -158,6 +209,16 @@ def prepare(input_path, output, *, compile=False, snapshot_frontend=False, expor
                 raise ValueError('external native copy buffer outside bound')
             shutil.copyfile(copy_buffer, output / 'import-copy-buffer.bin')
             plan['native_copy']['buffer_file'] = str(output / 'import-copy-buffer.bin')
+    if sfc_graph_chars is not None:
+        if sfc_graph_tokens is not None:
+            raise ValueError('choose one SFC graph input representation')
+        data = Path(sfc_graph_chars).read_bytes()
+        if len(data) != 21512:
+            raise ValueError('outside observed serialized SFC character buffer size')
+        (output / 'sfc-input-chars.bin').write_bytes(data)
+        plan['sfc_graph_chars'] = str(output / 'sfc-input-chars.bin')
+        if sfc_graph_edits is not None:
+            plan['sfc_graph_edits'] = sfc_graph_edits
     if sfc_graph_tokens is not None:
         shutil.copyfile(sfc_graph_tokens, output / 'sfc-input-tokens.bin')
         plan['sfc_graph_tokens'] = str(output / 'sfc-input-tokens.bin')
@@ -169,6 +230,7 @@ def prepare(input_path, output, *, compile=False, snapshot_frontend=False, expor
         plan['program_check_kind'] = 0x7fffffff
         plan['program_check_collection'] = 7
         plan['project_owned_compiler'] = True
+        plan['refresh_program_check'] = refresh_program_check
     if export_project:
         plan['compile_all_after'] = 1
         plan['project_compile_status'] = 0x200000
@@ -183,9 +245,11 @@ def prepare(input_path, output, *, compile=False, snapshot_frontend=False, expor
         ]
         plan['preserve_project_name'] = project_alias is None
         plan['native_library_directory'] = str(NATIVE / 'DataAbsorber')
-        # Recreate the owned backend without LoadData: otherwise an unchanged
-        # compile-status field can retain stale internal state. The R.gxw
-        # counterexample compiled X2 as AND instead of ANI until this reset.
+        # Retain the observed fresh initialization sequence. R.gxw's lost ANI
+        # was later traced to CRT CP54936 character classification, not stale
+        # PCode: changing only process CRT state reproduced/repaired it. Fresh
+        # initialization restores CP936 in that control. The helper checks CRT
+        # ASCII case conversion before/after Build; reset alone is no proof.
         plan['reset_compiler'] = True
         plan['fresh_compiler_state'] = True
         # GUI save clears only these masks, not the entire status words.
@@ -226,9 +290,9 @@ def prepare(input_path, output, *, compile=False, snapshot_frontend=False, expor
     return exe
 
 
-def run(input_path, output, *, compile=False, snapshot_frontend=False, export_project=False, commit_kind=None, change_sfc=False, program_check=False, sfc_graph_tokens=None, sfc_graph_edits=None, native_copy=None, project_alias=None, assignment_queries=None, address_queries=None, analysis_queries=None, create_analysis=True, analysis_version=1, remake_call_tree=False, pcode_location_queries=None, pcode_range_queries=None, type_queries=None):
+def run(input_path, output, *, compile=False, snapshot_frontend=False, snapshot_compiler_cache=False, export_project=False, commit_kind=None, change_sfc=False, program_check=False, sfc_graph_tokens=None, sfc_graph_chars=None, sfc_graph_edits=None, native_copy=None, project_alias=None, assignment_queries=None, address_queries=None, analysis_queries=None, create_analysis=True, analysis_version=1, remake_call_tree=False, pcode_location_queries=None, pcode_range_queries=None, type_queries=None, refresh_program_check=True):
     output = Path(output).resolve()
-    exe = prepare(input_path, output, compile=compile, snapshot_frontend=snapshot_frontend, export_project=export_project, commit_kind=commit_kind, change_sfc=change_sfc, program_check=program_check, sfc_graph_tokens=sfc_graph_tokens, sfc_graph_edits=sfc_graph_edits, native_copy=native_copy, project_alias=project_alias, assignment_queries=assignment_queries, address_queries=address_queries, analysis_queries=analysis_queries, create_analysis=create_analysis, analysis_version=analysis_version, remake_call_tree=remake_call_tree, pcode_location_queries=pcode_location_queries, pcode_range_queries=pcode_range_queries, type_queries=type_queries)
+    exe = prepare(input_path, output, compile=compile, snapshot_frontend=snapshot_frontend, snapshot_compiler_cache=snapshot_compiler_cache, export_project=export_project, commit_kind=commit_kind, change_sfc=change_sfc, program_check=program_check, sfc_graph_tokens=sfc_graph_tokens, sfc_graph_chars=sfc_graph_chars, sfc_graph_edits=sfc_graph_edits, native_copy=native_copy, project_alias=project_alias, assignment_queries=assignment_queries, address_queries=address_queries, analysis_queries=analysis_queries, create_analysis=create_analysis, analysis_version=analysis_version, remake_call_tree=remake_call_tree, pcode_location_queries=pcode_location_queries, pcode_range_queries=pcode_range_queries, type_queries=type_queries, refresh_program_check=refresh_program_check)
     with (output / 'process.stdout.txt').open('wb') as stdout, (output / 'process.stderr.txt').open('wb') as stderr:
         try:
             for attempt in range(5):
@@ -260,11 +324,24 @@ def run(input_path, output, *, compile=False, snapshot_frontend=False, export_pr
     outcome['diagnostics'] = list(diagnostics.values())
     outcome['project_attributes'] = next((e for e in events if e.get('operation') == 'NativeProjectAttributes'), None)
     outcome['project_codepage'] = next((e['codepage'] for e in events if e.get('operation') == 'NativeProjectCodePage'), None)
+    outcome['native_crt_checks'] = [e for e in events if e.get('operation') == 'NativeCrtCharacterCase']
     outcome['open_succeeded'] = any(e.get('operation') == 'OpenProjectEX2' and e.get('hresult') == e.get('code') == 0 for e in events)
     outcome['compile_completed'] = any(e.get('operation') == 'Progress' and e.get('percent') == 100 for e in events)
     outcome['program_check_requested'] = program_check
     outcome['program_check_completed'] = any(e.get('operation') == 'ProgramCheckCompleted' for e in events)
+    published_for_check = any(e.get('operation') == 'Workspace.UpdatePCodeBeforeProgramCheck'
+                              and e.get('hresult') == e.get('code') == 0 for e in events)
+    outcome['program_check_target'] = ('freshly-published-pcode' if published_for_check else
+        'existing-workspace-resource') if outcome['program_check_completed'] else 'not-checked'
     outcome['compiler_rejected'] = any(d['kind'] == 2 for d in diagnostics.values())
+    if compile:
+        returned = {}
+        for event in events:
+            if event.get('operation') == 'Resource':
+                path = output / ('pcode-' + str(event['index']) + '-0.bin')
+                if path.is_file():
+                    returned[event['name']] = path.read_bytes()
+        outcome['source_output_context'] = source_output_context((output / 'input.gxw').read_bytes(), returned)
     outcome['last_event'] = events[-1] if events else None
     # Relocate only the process directory this helper created and marked. Never
     # reuse pre-existing vendor temp data or touch another process's directory.

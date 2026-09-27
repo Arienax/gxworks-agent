@@ -84,8 +84,11 @@ def observed_library_text(raw: bytes, *, native_kind: int) -> str:
 
 def observed_library_declarations(raw: bytes) -> dict:
     """Frame the legacy ANSI library ABI; this is not a GXW Labels.lh stream."""
-    if (len(raw) < 93 or raw[:36] != b'@\0"\x01' + b' ' * 32
-            or struct.unpack_from('<II', raw, 64) != (len(raw) - 64, 1)):
+    # Bytes 4..35 may contain a description, including F_INCN/F_SHFT in the
+    # FX3G custom-library snapshot. Both header variants remain raw below.
+    if (len(raw) < 93 or raw[:4] != b'@\0"\x01'
+            or struct.unpack_from('<I', raw, 64)[0] != len(raw) - 64
+            or struct.unpack_from('<I', raw, 68)[0] not in (0, 1)):
         raise ValueError('outside observed native declaration envelope')
     header_fields = struct.unpack_from('<IIII', raw, 68)
     cursor = 84
@@ -126,6 +129,84 @@ def observed_library_declarations(raw: bytes) -> dict:
         header_metadata_handling='opaque-preserved', trailer_raw_base64=base64.b64encode(raw[cursor:]).decode(),
         fully_framed=cursor == len(raw),
         implicit_ports='raw declarations may omit compiler-inserted EN and ENO; record IDs are not template ordinals')
+
+
+def observed_graph_formals(raw: bytes, *, input_port_count: int | None = None) -> dict:
+    """Expand observed library declarations into graph formal parameter order.
+
+    SICConverter_IEC 1.635.0.1 RVA 0x4dbe9 supplies the independent native view.
+    Its type table is initialized at 0x4de54..0x4df98. This view describes
+    interface binding only: IN_OUT expressions can compile without copying
+    the result back to the source device, so it is not an access/effect model.
+    ``raw`` is the library frontend ABI, never a project Labels.lh payload.
+    """
+    result = dict(handling='opaque-preserved', raw_base64=base64.b64encode(raw).decode(),
+                  formals=[], gaps=[], execution_effects='not inferred')
+    try:
+        declaration = observed_library_declarations(raw)
+        result['declaration'] = declaration
+        header = declaration['header_fields']
+        if (not declaration['fully_framed'] or header[0] != 1
+                or header[1] not in (1, 2) or header[2] not in (1, 2, 3)
+                or header[3] not in (0, 2, 4, 5, 6, 13)):
+            raise ValueError('library declaration header outside observed graph interfaces')
+        rows = declaration['rows']
+        if any(r['class_code'] not in (1, 2, 3, 4, 5, 11, 12) for r in rows):
+            raise ValueError('unobserved declaration class')
+        # Preserve class 11: the FMOV native control rejects a variable at
+        # that input even though the interface binding itself succeeds.
+        inputs = [r for r in rows if r['class_code'] in (3, 11, 12)]
+        outputs = [r for r in rows if r['class_code'] == 4]
+        inouts = [r for r in rows if r['class_code'] == 5]
+        enabled = bool(header[3] & 4)
+        extensible = [r for r in inputs if r['class_code'] == 12]
+        if extensible:
+            if len(extensible) != 1 or len(inputs) != 1 or input_port_count is None:
+                raise ValueError('extensible input requires an observed graph port count')
+            repeat = input_port_count - len(inouts) - int(enabled)
+            if not 1 <= repeat <= 256:
+                raise ValueError('extensible graph input count outside bounded projection')
+            inputs = inputs * repeat
+        inputs = inputs + inouts
+        outputs = outputs + inouts
+        if enabled:
+            inputs = [dict(name='EN', data_type='BOOL', class_code=3)] + inputs
+            outputs = [dict(name='ENO', data_type='BOOL', class_code=4)] + outputs
+        if input_port_count is not None and input_port_count != len(inputs):
+            raise ValueError('graph input count differs from formal interface')
+        type_codes = {
+            'BOOL': 1, 'INT': 4, 'DINT': 8, 'WORD': 0x20000, 'DWORD': 0x40000,
+            'REAL': 0x200, 'LREAL': 0x400, 'TIME': 0x800, 'STRING': 0x8000,
+            'ANY_INT': 0x1fe, 'ANY_NUM': 0x7fe, 'ANY_BIT': 0xf0001,
+            'ANY': 0xffffff, 'ANY_SIMPLE': 0xfffff, 'ANY16': 0x20044,
+            'ANY32': 0x40088, 'ANY_REAL': 0x600,
+        }
+        for row in inputs + outputs:
+            code = type_codes.get(row['data_type'])
+            # RVA 0x4e3db..0x4e4ec collapses these declarations to coarse
+            # ARRAY / STRING masks. Bounds and lengths do not survive in
+            # the native 16-byte graph formal descriptor. Retain their
+            # original spelling below; this mask is not a buffer extent.
+            if code is None:
+                array = re.fullmatch(r'ARRAY ?\[([^]]+)\] OF (\w+)', row['data_type'])
+                if array and array[2] in type_codes:
+                    bounds = [re.fullmatch(r'(-?\d+)\.\.(-?\d+)', part)
+                              for part in array[1].split(',')]
+                    if bounds and all(b and -2**31 <= int(b[1]) <= int(b[2]) < 2**31
+                                      for b in bounds):
+                        code = 0x100000
+                elif re.fullmatch(r'STRING\([1-9][0-9]*\)', row['data_type']):
+                    code = 0x8000
+            result['formals'].append(dict(name=row['name'], class_code=row['class_code'],
+                                          type_code=code, declared_type=row['data_type']))
+            if code is None:
+                result['gaps'].append('unmodeled formal type: ' + row['data_type'])
+        result['input_count'] = len(inputs)
+        result['output_count'] = len(outputs)
+        result['handling'] = 'partially-decoded' if result['gaps'] else 'observed-graph-formals'
+    except ValueError as exc:
+        result['gaps'].append(str(exc))
+    return result
 
 
 def observed_builtin_template(raw: bytes) -> dict:

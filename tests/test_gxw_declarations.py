@@ -8,7 +8,7 @@ import zipfile
 import pytest
 
 from src.gxw.container import CompoundFile
-from src.gxw.declarations import edit_declarations, parse_declarations, serialize_declarations, serialize_label
+from src.gxw.declarations import edit_declarations, parse_declarations, serialize_declarations, serialize_label, parse_structure_declarations
 from src.gxw.models import GXWFormatError
 from src.gxw.project_resolver import GXWProjectResolver
 from src.gxw.project_writer import build_gxw_project
@@ -19,6 +19,7 @@ from src.gxw.structured_pou_writer import replace_node_symbol
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE = json.loads((ROOT / "tests/fixtures/gxw_declarations_20260910.json").read_text())
 SIZED_STRINGS = json.loads((ROOT / "tests/fixtures/gxw_sized_string_declarations.json").read_text())
+STRUCTURES = json.loads((ROOT / "tests/fixtures/gxw_structure_declarations_native.json").read_text(encoding="utf-8"))["cases"]
 
 
 def document(case="dtypes", logical="1.Labels.lh"):
@@ -88,6 +89,68 @@ def test_unknown_type_and_opaque_fields_survive_comment_and_name_edits():
     assert edited.trailer == source.trailer
     renamed = edit_declarations(edited, renames={odd.name: "renamed"})
     assert renamed.rows[0] == replace(odd, comment="new", name="renamed")
+
+
+@pytest.mark.parametrize("case", STRUCTURES, ids=lambda c: c["id"])
+def test_structure_extensions_keep_following_rows_aligned_and_remain_read_only(case):
+    base = document("dglobal", "Global1.gh")
+    header = bytearray(base.header)
+    struct.pack_into("<I", header, base.count_offset, 2)
+    raw = bytes(header) + bytes.fromhex(case["row_hex"]) + base.rows[-1].raw + base.trailer
+    source = parse_declarations(raw, logical_name=base.logical_name)
+    assert serialize_declarations(source) == raw
+    first, following = source.rows
+    assert first.value_extension and following.raw == base.rows[-1].raw
+    native = case["native_row"]
+    for field in ("record_id", "name", "data_type", "class_code", "initial_value", "comment"):
+        assert getattr(first, field) == native[field]
+    # The scalar device fields do not silently become a complete description
+    # of the native structure/array address list.
+    assert (first.device, first.iec_address) == (("", "") if first.unknown_u32 == 1 else ("D100", "D101"))
+    for changes in ({"remove": [first.name]}, {"renames": {first.name: "renamed"}},
+                    {"upserts": [{"name": first.name, "comment": "new"}]}):
+        with pytest.raises(GXWFormatError, match="read-only"):
+            edit_declarations(source, **changes)
+    other = edit_declarations(source, upserts=[{"name": following.name, "comment": "preserve structure"}])
+    assert serialize_label(other.rows[0]) == first.raw
+    if first.unknown_u32 == 2:
+        # The independent native negative control fails OpenProjectEX2 after
+        # treating this zero DWORD as a counted third address string.
+        from src.gxw.declarations import _string
+        extension = raw.index(first.value_extension)
+        zero_word = extension + len(_string("D102")) + len(_string("D103"))
+        malformed = raw[:zero_word] + _string("D106") + raw[zero_word+4:]
+        with pytest.raises(GXWFormatError, match="unobserved structure array"):
+            parse_declarations(malformed, logical_name=source.logical_name)
+
+
+def test_function_header_return_type_and_description_move_the_label_rows():
+    from src.gxw.declarations import _string
+
+    base = document("d0")
+    owner_bytes = _string(base.owner_name)
+    owner_end = 54 + len(owner_bytes)
+    # Generated boundary control, not an independent native acceptance claim.
+    description = _string("Function description")
+    raw = base.raw[:6] + description + base.raw[12:owner_end+14] + _string("BOOL") + base.raw[owner_end+20:]
+    parsed = parse_declarations(raw, logical_name="Example.Labels\\Library.lnl")
+    assert parsed.owner_name == base.owner_name and parsed.owner_return_type == "BOOL"
+    assert parsed.count_offset == base.count_offset + len(description)-6 + 8
+    assert serialize_declarations(parsed) == raw
+
+
+def test_structure_source_member_boundaries_are_not_ordinary_label_rows():
+    from src.gxw.declarations import _string
+
+    base = document("d0", "Global1.gh")
+    member = b"".join((_string("flag"), _string("BOOL"), _string("FALSE"), _string(""),
+                       struct.pack("<I", 7), _string("Generated member"), struct.pack("<II", 0, 1), _string("")))
+    raw = base.raw[:54] + struct.pack("<I", 1) + member + b"opaque"
+    parsed = parse_structure_declarations(raw, logical_name="Example\\Library.lns")
+    assert parsed.members[0].name == "flag" and parsed.members[0].record_id == 7
+    assert parsed.header + parsed.members[0].raw + parsed.trailer == parsed.reconstruct() == raw
+    with pytest.raises(GXWFormatError):
+        parse_structure_declarations(raw[:54] + struct.pack("<I", 0xffffffff) + raw[58:], logical_name=parsed.logical_name)
 
 
 @pytest.mark.parametrize("edits", [

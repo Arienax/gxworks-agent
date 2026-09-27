@@ -1,0 +1,22 @@
+[
+  {
+    "Path": "D:\\GXWORKS2\\Easysocket\\Compiler\\ECCompiler.dll",
+    "Version": "15.22",
+    "SHA256": "4f7b2398874c7a921f49f13f25a9a603562032b039de8a5bb74114df27fadf16"
+  },
+  {
+    "Path": "D:\\GXWORKS2\\Easysocket\\Compiler\\ECCompiler_IEC.dll",
+    "Version": "15.50",
+    "SHA256": "f58e7c70b855526bf2f943399a14089f771a43109b13ee9af34c88fb065cf4d7"
+  },
+  {
+    "Path": "D:\\GXWORKS2\\Easysocket\\CodeGenerator\\ECCodeGenerator2.dll",
+    "Version": "15.41",
+    "SHA256": "2e5c47b0a0d0b59eb26dbab149862a05983a1fa9519a75e446bc680e7cc16f73"
+  },
+  {
+    "Path": "C:\\Windows\\SysWOW64\\MSVCR71.dll",
+    "Version": "7.10.7031.4",
+    "SHA256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46"
+  }
+]

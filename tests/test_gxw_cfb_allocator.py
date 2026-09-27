@@ -1,11 +1,15 @@
 import io
+from pathlib import Path
 import struct
+import zipfile
 
 import pytest
 
 from src.gxw.cfb_allocator import resize_cfb_stream
 from src.gxw.container import CompoundFile, DIFSECT, FATSECT, FREESECT, ENDOFCHAIN
 from src.gxw.container_writer import replace_project_stream, validate_cfb_streams
+from src.gxw.models import GXWFormatError
+from src.gxw.project_metadata import logical_mapping
 from tests.test_gxw_project_writer import cfb_fixture
 from tests.test_gxw_container_writer import _directory_entry, _header
 
@@ -19,6 +23,75 @@ def verify_external(raw, expected):
     olefile = pytest.importorskip("olefile")
     with olefile.OleFileIO(io.BytesIO(raw)) as external:
         assert {path[0]: external.openstream(path).read() for path in external.listdir()} == expected
+
+
+def partial_native_container():
+    archive = Path(__file__).resolve().parents[1] / "research/evidence/gxw-partial-sector-20260927.zip"
+    with zipfile.ZipFile(archive) as z:
+        outer = CompoundFile(z.read("native/native-saved.gxw"))
+    name = logical_mapping(outer.read_stream("projectdatalist.xml"))["CGTable.dat"]
+    return outer.read_stream("_hdb"), name
+
+
+@pytest.mark.parametrize("size", [6767, 7000, 8000, 80])
+@pytest.mark.parametrize("writer", ["dispatch", "allocator"])
+def test_native_partial_final_sector_can_be_edited_after_payload_preflight(size, writer):
+    raw, name = partial_native_container()
+    expected = validate_cfb_streams(raw)
+    assert len(raw) % 512 == 111
+    if writer == "dispatch":
+        assert replace_project_stream(raw, name, expected[name])[0] == raw
+    else:
+        assert resize_cfb_stream(raw, name, expected[name]) == raw
+    expected[name] = bytes(i % 251 for i in range(size))
+    if writer == "dispatch":
+        result, mode = replace_project_stream(raw, name, expected[name])
+        assert mode.startswith("pad_final_sector+")
+    else:
+        result = resize_cfb_stream(raw, name, expected[name])
+    assert len(result) % 512 == 0
+    verify(result, expected)
+    verify_external(result, expected)
+
+
+@pytest.mark.parametrize("writer", ["dispatch", "allocator"])
+def test_padding_never_repairs_truncated_declared_native_payload(writer):
+    raw, name = partial_native_container()
+    with pytest.raises(GXWFormatError, match="outside the file"):
+        if writer == "dispatch":
+            replace_project_stream(raw[:-1], name, b"replacement")
+        else:
+            resize_cfb_stream(raw[:-1], name, b"replacement")
+
+
+def test_partial_root_ministream_tail_can_be_extended_but_not_repaired():
+    expected = {"edit": b"A" * 64, "other": b"unknown payload"}
+    raw = cfb_fixture(expected)
+    expected["edit"] = b"C" * 1300
+    raw = resize_cfb_stream(raw, "edit", expected["edit"])
+    cfb = CompoundFile(raw)
+    chain = cfb._walk_chain(cfb.root_entry.start_sector, cfb._fat)
+    assert chain[-1] == len(raw) // 512 - 2
+    padding = (-cfb.root_entry.stream_size) % 512
+    assert padding
+    partial = raw[:-padding]
+    verify(partial, expected)
+    verify_external(partial, expected)
+    with pytest.raises(GXWFormatError, match="outside the file"):
+        replace_project_stream(partial[:-1], "edit", b"different")
+    expected["edit"] = b"D" * 2200
+    result, mode = replace_project_stream(partial, "edit", expected["edit"])
+    assert mode.startswith("pad_final_sector+")
+    verify(result, expected)
+    verify_external(result, expected)
+
+
+def test_metadata_sector_truncation_is_not_padding():
+    raw = cfb_fixture({"edit": b"A" * 4096})
+    cfb = CompoundFile(raw)
+    assert cfb._fat_sector_ids[-1] == len(raw) // 512 - 2
+    with pytest.raises(GXWFormatError, match="outside the file"):
+        replace_project_stream(raw[:-1], "edit", b"new")
 
 
 def test_mini_regular_empty_roundtrips_preserve_unrelated_data_and_directory_fields():

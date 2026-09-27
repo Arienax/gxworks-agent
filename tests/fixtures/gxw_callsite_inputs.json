@@ -1,0 +1,4988 @@
+{
+  "scope": "native Q03UDV SCPI caller observations; independent FB body comparison is preserved in the evidence archive",
+  "source_license": "MIT; Copyright (c) 2025 rain-yukizora; full license in checkpoint archive",
+  "cases": [
+    {
+      "id": "first-1",
+      "source_sha256": "d0324737ca36737f7c0fa4d7e4e925a5c178489e91d772afbb11ee80e028d434",
+      "evidence_path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/scpi-repeated-complex-enable/first/callsite-comparison-v2.json",
+      "element": 1,
+      "input_fragment": {
+        "offset": 109,
+        "length": 57,
+        "sha256": "42fe2e4f375af592f1343f69a2b6edf748ccc15a7d7de79820c25b89e85d8c57",
+        "handling": "native-decoded",
+        "raw_base64": "AwADBJwfBAMMAwScAAQEIAIEB99faUVuBwQAAgQI319UUlVFCAVMAgAFBOgBBAvfX2lVbml0Tm8L",
+        "native_return_code": "0x00000000",
+        "native_consumed_bytes": 57,
+        "records": [
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "X1F"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "AND",
+            "args": [
+              "X0"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "OUT",
+            "args": [
+              "'_iEn"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "MOV",
+            "args": [
+              "K1",
+              "'_iUnitNo"
+            ]
+          }
+        ],
+        "text_gaps": [],
+        "native_output_sha256": "c69ce4cc2fedcd45c3235457cd107aec93791d36338389d4efd5dde8ef9f0479",
+        "bindings": [
+          {
+            "port": "iUnitNo",
+            "operand": "K1",
+            "template": "TRUE-MOV",
+            "type_marker": "W",
+            "direction": "input",
+            "record_start": 3,
+            "record_end": 5,
+            "handling": "native-source-template-observed"
+          }
+        ],
+        "uninterpreted_groups": [
+          {
+            "record_start": 0,
+            "record_end": 3,
+            "records": [
+              {
+                "kind": "instruction",
+                "op": "LD",
+                "args": [
+                  "X1F"
+                ]
+              },
+              {
+                "kind": "instruction",
+                "op": "AND",
+                "args": [
+                  "X0"
+                ]
+              },
+              {
+                "kind": "instruction",
+                "op": "OUT",
+                "args": [
+                  "'_iEn"
+                ]
+              }
+            ],
+            "handling": "opaque-preserved"
+          }
+        ]
+      },
+      "ports": [
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iEn",
+          "offset": 221,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oRecvCmdDone",
+          "offset": 237,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iUnitNo",
+          "offset": 263,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "W",
+          "name": "oRecvCmdNum",
+          "offset": 283,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iComCh",
+          "offset": 308,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "S",
+          "name": "oRecvData",
+          "offset": 327,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "D",
+          "name": "iPrm",
+          "offset": 350,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oStrReq",
+          "offset": 367,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iMaxCmdNum",
+          "offset": 388,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oResTimeOut",
+          "offset": 411,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "S",
+          "name": "iResStr",
+          "offset": 436,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oSendDone",
+          "offset": 456,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iResSetDone",
+          "offset": 479,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        }
+      ],
+      "native_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "X1F"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "AND",
+          "args": [
+            "X0"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "M9201"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K1",
+            "D12949"
+          ]
+        }
+      ],
+      "native_groups": [
+        {
+          "offset": 0,
+          "stored_step": 0,
+          "stored_width": 1,
+          "raw_base64": "AwADBJwfBA==",
+          "sha256": "4bc6c13d05e7413174f419760b15c27411f4f8a44e0ee41054153a859e0d85ee",
+          "decode_request": 0
+        },
+        {
+          "offset": 7,
+          "stored_step": 1,
+          "stored_width": 1,
+          "raw_base64": "AwwDBJwABA==",
+          "sha256": "8aa29d5df243f4c3585f2c0eb6b14914269a88a43a0b8ce9a5cac7aa82051620",
+          "decode_request": 1
+        },
+        {
+          "offset": 14,
+          "stored_step": 2,
+          "stored_width": 1,
+          "raw_base64": "AyADBZDxIwU=",
+          "sha256": "b0205d85e31a8578c5d714de28965b15e31974eb241a82963942415edf0f4fd7",
+          "decode_request": 2
+        },
+        {
+          "offset": 22,
+          "stored_step": 3,
+          "stored_width": 1,
+          "raw_base64": "AwADBZGQAQU=",
+          "sha256": "7708d90cbd45639ef1ebb6d85aa4706f4e993e7076d1acdf558e988f86d3fb9b",
+          "decode_request": 3
+        },
+        {
+          "offset": 30,
+          "stored_step": 4,
+          "stored_width": 2,
+          "raw_base64": "BUwCAAUE6AEEBaiVMgU=",
+          "sha256": "4536e0970e3e06c17b54a8b25296ad64a4bfe8b24bbe19d3cbb1c2c10740000d",
+          "decode_request": 4
+        }
+      ],
+      "parent_boundary": "preceding-code-interval",
+      "final_allocations": {
+        "idxT": "D13131",
+        "iEn": "X2F",
+        "iUnitNo": "D12949",
+        "unitNo": "D13140",
+        "iMaxCmdNum": "D12945",
+        "maxCmdN": "D13139",
+        "iPrm": "D12946",
+        "prmAdr": "D13137",
+        "crLfStr": "D13153",
+        "lfStr": "D13152",
+        "iComCh": "D12948",
+        "rPrm": "D13308",
+        "sPrm": "D13305",
+        "rSts": "M9215",
+        "rBuf": "D13255",
+        "oRecvCmdDone": "M51",
+        "crT": "D13151",
+        "crFlag": "M9211",
+        "prmAdrT": "D13135",
+        "oRecvCmdNum": "D101",
+        "cmdNum": "D13142",
+        "rDatFlg": "M9209",
+        "oStrReq": "M9200",
+        "oRecvData": "D12911",
+        "sd705T": "D13133",
+        "cBuf": "D13205",
+        "cmdT": "D13149",
+        "sWait": "M9210",
+        "sSts": "M9213",
+        "tOutCnt": "T2047",
+        "oResTimeOut": "M9199",
+        "sndT": "D13144",
+        "sBuf": "D13155",
+        "iResSetDone": "SM400",
+        "iResStr": "D12928",
+        "oSendDone": "M9198"
+      },
+      "expected_bindings": {
+        "iEn": "M9201",
+        "iUnitNo": "D12949"
+      },
+      "expected_modes": {
+        "iEn": "materialized-BOOL",
+        "iUnitNo": "materialized-scalar"
+      },
+      "wrong_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K2",
+            "D12949"
+          ]
+        }
+      ],
+      "observed_body_groups": {
+        "source_groups": 163,
+        "exact": 163,
+        "corrected_groups": 19
+      }
+    },
+    {
+      "id": "first-3",
+      "source_sha256": "d0324737ca36737f7c0fa4d7e4e925a5c178489e91d772afbb11ee80e028d434",
+      "evidence_path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/scpi-repeated-complex-enable/first/callsite-comparison-v2.json",
+      "element": 3,
+      "input_fragment": {
+        "offset": 622,
+        "length": 50,
+        "sha256": "401d7debb55aeb84c1042ed03f80809accc00e532a8366bfe8c55434c6ba3249",
+        "handling": "native-decoded",
+        "raw_base64": "AwADBJwvBAQgAgQH319pRW4HBAACBAjfX1RSVUUIBUwCAAUE6AIEC99faVVuaXRObws=",
+        "native_return_code": "0x00000000",
+        "native_consumed_bytes": 50,
+        "records": [
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "X2F"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "OUT",
+            "args": [
+              "'_iEn"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "MOV",
+            "args": [
+              "K2",
+              "'_iUnitNo"
+            ]
+          }
+        ],
+        "text_gaps": [],
+        "native_output_sha256": "5eff5acc78e1b152074c639dbd25ef9c15f97c3d7757d0275ae863769879a51a",
+        "bindings": [
+          {
+            "port": "iEn",
+            "operand": "X2F",
+            "template": "LD-OUT",
+            "type_marker": "B",
+            "direction": "input",
+            "record_start": 0,
+            "record_end": 2,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iUnitNo",
+            "operand": "K2",
+            "template": "TRUE-MOV",
+            "type_marker": "W",
+            "direction": "input",
+            "record_start": 2,
+            "record_end": 4,
+            "handling": "native-source-template-observed"
+          }
+        ],
+        "uninterpreted_groups": []
+      },
+      "ports": [
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iEn",
+          "offset": 727,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oRecvCmdDone",
+          "offset": 743,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iUnitNo",
+          "offset": 769,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "W",
+          "name": "oRecvCmdNum",
+          "offset": 789,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iComCh",
+          "offset": 814,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "S",
+          "name": "oRecvData",
+          "offset": 833,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "D",
+          "name": "iPrm",
+          "offset": 856,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oStrReq",
+          "offset": 873,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iMaxCmdNum",
+          "offset": 894,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oResTimeOut",
+          "offset": 917,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "S",
+          "name": "iResStr",
+          "offset": 942,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oSendDone",
+          "offset": 962,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iResSetDone",
+          "offset": 985,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        }
+      ],
+      "native_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K2",
+            "D12949"
+          ]
+        }
+      ],
+      "native_groups": [
+        {
+          "offset": 1949,
+          "stored_step": 392,
+          "stored_width": 1,
+          "raw_base64": "AwADBZGQAQU=",
+          "sha256": "7708d90cbd45639ef1ebb6d85aa4706f4e993e7076d1acdf558e988f86d3fb9b",
+          "decode_request": 3
+        },
+        {
+          "offset": 1957,
+          "stored_step": 393,
+          "stored_width": 2,
+          "raw_base64": "BUwCAAUE6AIEBaiVMgU=",
+          "sha256": "6959bba7142dbd9fcc23f538be471901ba4a25d43bb5ac7373c5c054fcd290d7",
+          "decode_request": 217
+        }
+      ],
+      "parent_boundary": "preceding-code-interval",
+      "final_allocations": {
+        "idxT": "D13131",
+        "iEn": "X2F",
+        "iUnitNo": "D12949",
+        "unitNo": "D13140",
+        "iMaxCmdNum": "D12945",
+        "maxCmdN": "D13139",
+        "iPrm": "D12946",
+        "prmAdr": "D13137",
+        "crLfStr": "D13153",
+        "lfStr": "D13152",
+        "iComCh": "D12948",
+        "rPrm": "D13308",
+        "sPrm": "D13305",
+        "rSts": "M9215",
+        "rBuf": "D13255",
+        "oRecvCmdDone": "M51",
+        "crT": "D13151",
+        "crFlag": "M9211",
+        "prmAdrT": "D13135",
+        "oRecvCmdNum": "D101",
+        "cmdNum": "D13142",
+        "rDatFlg": "M9209",
+        "oStrReq": "M9200",
+        "oRecvData": "D12911",
+        "sd705T": "D13133",
+        "cBuf": "D13205",
+        "cmdT": "D13149",
+        "sWait": "M9210",
+        "sSts": "M9213",
+        "tOutCnt": "T2047",
+        "oResTimeOut": "M9199",
+        "sndT": "D13144",
+        "sBuf": "D13155",
+        "iResSetDone": "SM400",
+        "iResStr": "D12928",
+        "oSendDone": "M9198"
+      },
+      "expected_bindings": {
+        "iEn": "X2F",
+        "iUnitNo": "D12949"
+      },
+      "expected_modes": {
+        "iEn": "eliminated-direct-BOOL",
+        "iUnitNo": "materialized-scalar"
+      },
+      "wrong_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "X1F"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "AND",
+          "args": [
+            "X0"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "M9201"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K1",
+            "D12949"
+          ]
+        }
+      ],
+      "observed_body_groups": {
+        "source_groups": 163,
+        "exact": 163,
+        "corrected_groups": 0
+      }
+    },
+    {
+      "id": "last-1",
+      "source_sha256": "40f9ac0e847338c65903cad5ba9fca8237841fba6ef6160ec0d40dc436eec52d",
+      "evidence_path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/scpi-repeated-complex-enable/last/callsite-comparison-v2.json",
+      "element": 1,
+      "input_fragment": {
+        "offset": 109,
+        "length": 50,
+        "sha256": "d453922a5ce68839bb7475cb750bb9b1f85debeb998399aa697f0bc84080ea06",
+        "handling": "native-decoded",
+        "raw_base64": "AwADBJwfBAQgAgQH319pRW4HBAACBAjfX1RSVUUIBUwCAAUE6AEEC99faVVuaXRObws=",
+        "native_return_code": "0x00000000",
+        "native_consumed_bytes": 50,
+        "records": [
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "X1F"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "OUT",
+            "args": [
+              "'_iEn"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "MOV",
+            "args": [
+              "K1",
+              "'_iUnitNo"
+            ]
+          }
+        ],
+        "text_gaps": [],
+        "native_output_sha256": "dcbb5255bad0b41a1e872b904c623b406a0b25e4c3d557fb1c037150880c7521",
+        "bindings": [
+          {
+            "port": "iEn",
+            "operand": "X1F",
+            "template": "LD-OUT",
+            "type_marker": "B",
+            "direction": "input",
+            "record_start": 0,
+            "record_end": 2,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iUnitNo",
+            "operand": "K1",
+            "template": "TRUE-MOV",
+            "type_marker": "W",
+            "direction": "input",
+            "record_start": 2,
+            "record_end": 4,
+            "handling": "native-source-template-observed"
+          }
+        ],
+        "uninterpreted_groups": []
+      },
+      "ports": [
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iEn",
+          "offset": 214,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oRecvCmdDone",
+          "offset": 230,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iUnitNo",
+          "offset": 256,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "W",
+          "name": "oRecvCmdNum",
+          "offset": 276,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iComCh",
+          "offset": 301,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "S",
+          "name": "oRecvData",
+          "offset": 320,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "D",
+          "name": "iPrm",
+          "offset": 343,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oStrReq",
+          "offset": 360,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iMaxCmdNum",
+          "offset": 381,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oResTimeOut",
+          "offset": 404,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "S",
+          "name": "iResStr",
+          "offset": 429,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oSendDone",
+          "offset": 449,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iResSetDone",
+          "offset": 472,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        }
+      ],
+      "native_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K1",
+            "D12949"
+          ]
+        }
+      ],
+      "native_groups": [
+        {
+          "offset": 0,
+          "stored_step": 0,
+          "stored_width": 1,
+          "raw_base64": "AwADBZGQAQU=",
+          "sha256": "7708d90cbd45639ef1ebb6d85aa4706f4e993e7076d1acdf558e988f86d3fb9b",
+          "decode_request": 0
+        },
+        {
+          "offset": 8,
+          "stored_step": 1,
+          "stored_width": 2,
+          "raw_base64": "BUwCAAUE6AEEBaiVMgU=",
+          "sha256": "4536e0970e3e06c17b54a8b25296ad64a4bfe8b24bbe19d3cbb1c2c10740000d",
+          "decode_request": 1
+        }
+      ],
+      "parent_boundary": "preceding-code-interval",
+      "final_allocations": {
+        "idxT": "D13131",
+        "iEn": "M9198",
+        "iUnitNo": "D12949",
+        "unitNo": "D13140",
+        "iMaxCmdNum": "D12945",
+        "maxCmdN": "D13139",
+        "iPrm": "D12946",
+        "prmAdr": "D13137",
+        "crLfStr": "D13153",
+        "lfStr": "D13152",
+        "iComCh": "D12948",
+        "rPrm": "D13308",
+        "sPrm": "D13305",
+        "rSts": "M9215",
+        "rBuf": "D13255",
+        "oRecvCmdDone": "M51",
+        "crT": "D13151",
+        "crFlag": "M9211",
+        "prmAdrT": "D13135",
+        "oRecvCmdNum": "D101",
+        "cmdNum": "D13142",
+        "rDatFlg": "M9209",
+        "oStrReq": "M9201",
+        "oRecvData": "D12911",
+        "sd705T": "D13133",
+        "cBuf": "D13205",
+        "cmdT": "D13149",
+        "sWait": "M9210",
+        "sSts": "M9213",
+        "tOutCnt": "T2047",
+        "oResTimeOut": "M9200",
+        "sndT": "D13144",
+        "sBuf": "D13155",
+        "iResSetDone": "SM400",
+        "iResStr": "D12928",
+        "oSendDone": "M9199"
+      },
+      "expected_bindings": {
+        "iEn": "X1F",
+        "iUnitNo": "D12949"
+      },
+      "expected_modes": {
+        "iEn": "eliminated-direct-BOOL",
+        "iUnitNo": "materialized-scalar"
+      },
+      "wrong_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "X2F"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "AND",
+          "args": [
+            "X0"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "M9198"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K2",
+            "D12949"
+          ]
+        }
+      ],
+      "observed_body_groups": {
+        "source_groups": 163,
+        "exact": 163,
+        "corrected_groups": 19
+      }
+    },
+    {
+      "id": "last-3",
+      "source_sha256": "40f9ac0e847338c65903cad5ba9fca8237841fba6ef6160ec0d40dc436eec52d",
+      "evidence_path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/scpi-repeated-complex-enable/last/callsite-comparison-v2.json",
+      "element": 3,
+      "input_fragment": {
+        "offset": 615,
+        "length": 57,
+        "sha256": "fbe5c00322da0629c2cc79c76ec1e2900dac5b721b3edebedc24cad419d5bebf",
+        "handling": "native-decoded",
+        "raw_base64": "AwADBJwvBAMMAwScAAQEIAIEB99faUVuBwQAAgQI319UUlVFCAVMAgAFBOgCBAvfX2lVbml0Tm8L",
+        "native_return_code": "0x00000000",
+        "native_consumed_bytes": 57,
+        "records": [
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "X2F"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "AND",
+            "args": [
+              "X0"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "OUT",
+            "args": [
+              "'_iEn"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "MOV",
+            "args": [
+              "K2",
+              "'_iUnitNo"
+            ]
+          }
+        ],
+        "text_gaps": [],
+        "native_output_sha256": "69ec5ee6489c51a05ffa9119d39693abdfca785bec6b7b6f7c547e06e16a9669",
+        "bindings": [
+          {
+            "port": "iUnitNo",
+            "operand": "K2",
+            "template": "TRUE-MOV",
+            "type_marker": "W",
+            "direction": "input",
+            "record_start": 3,
+            "record_end": 5,
+            "handling": "native-source-template-observed"
+          }
+        ],
+        "uninterpreted_groups": [
+          {
+            "record_start": 0,
+            "record_end": 3,
+            "records": [
+              {
+                "kind": "instruction",
+                "op": "LD",
+                "args": [
+                  "X2F"
+                ]
+              },
+              {
+                "kind": "instruction",
+                "op": "AND",
+                "args": [
+                  "X0"
+                ]
+              },
+              {
+                "kind": "instruction",
+                "op": "OUT",
+                "args": [
+                  "'_iEn"
+                ]
+              }
+            ],
+            "handling": "opaque-preserved"
+          }
+        ]
+      },
+      "ports": [
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iEn",
+          "offset": 727,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oRecvCmdDone",
+          "offset": 743,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iUnitNo",
+          "offset": 769,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "W",
+          "name": "oRecvCmdNum",
+          "offset": 789,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iComCh",
+          "offset": 814,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "S",
+          "name": "oRecvData",
+          "offset": 833,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "D",
+          "name": "iPrm",
+          "offset": 856,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oStrReq",
+          "offset": 873,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iMaxCmdNum",
+          "offset": 894,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oResTimeOut",
+          "offset": 917,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "S",
+          "name": "iResStr",
+          "offset": 942,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oSendDone",
+          "offset": 962,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iResSetDone",
+          "offset": 985,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        }
+      ],
+      "native_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "X2F"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "AND",
+          "args": [
+            "X0"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "M9198"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K2",
+            "D12949"
+          ]
+        }
+      ],
+      "native_groups": [
+        {
+          "offset": 1914,
+          "stored_step": 389,
+          "stored_width": 1,
+          "raw_base64": "AwADBJwvBA==",
+          "sha256": "7764c281d6c6e2e8bfdf02fc6f319294b5d0b13b3629f3b165a26d8293a9e9d6",
+          "decode_request": 214
+        },
+        {
+          "offset": 1921,
+          "stored_step": 390,
+          "stored_width": 1,
+          "raw_base64": "AwwDBJwABA==",
+          "sha256": "8aa29d5df243f4c3585f2c0eb6b14914269a88a43a0b8ce9a5cac7aa82051620",
+          "decode_request": 215
+        },
+        {
+          "offset": 1928,
+          "stored_step": 391,
+          "stored_width": 1,
+          "raw_base64": "AyADBZDuIwU=",
+          "sha256": "96e438e95d3384ead58f52a3e34121616254d8be111c4cdbd0bbfcccd4427f8c",
+          "decode_request": 216
+        },
+        {
+          "offset": 1936,
+          "stored_step": 392,
+          "stored_width": 1,
+          "raw_base64": "AwADBZGQAQU=",
+          "sha256": "7708d90cbd45639ef1ebb6d85aa4706f4e993e7076d1acdf558e988f86d3fb9b",
+          "decode_request": 0
+        },
+        {
+          "offset": 1944,
+          "stored_step": 393,
+          "stored_width": 2,
+          "raw_base64": "BUwCAAUE6AIEBaiVMgU=",
+          "sha256": "6959bba7142dbd9fcc23f538be471901ba4a25d43bb5ac7373c5c054fcd290d7",
+          "decode_request": 217
+        }
+      ],
+      "parent_boundary": "preceding-code-interval",
+      "final_allocations": {
+        "idxT": "D13131",
+        "iEn": "M9198",
+        "iUnitNo": "D12949",
+        "unitNo": "D13140",
+        "iMaxCmdNum": "D12945",
+        "maxCmdN": "D13139",
+        "iPrm": "D12946",
+        "prmAdr": "D13137",
+        "crLfStr": "D13153",
+        "lfStr": "D13152",
+        "iComCh": "D12948",
+        "rPrm": "D13308",
+        "sPrm": "D13305",
+        "rSts": "M9215",
+        "rBuf": "D13255",
+        "oRecvCmdDone": "M51",
+        "crT": "D13151",
+        "crFlag": "M9211",
+        "prmAdrT": "D13135",
+        "oRecvCmdNum": "D101",
+        "cmdNum": "D13142",
+        "rDatFlg": "M9209",
+        "oStrReq": "M9201",
+        "oRecvData": "D12911",
+        "sd705T": "D13133",
+        "cBuf": "D13205",
+        "cmdT": "D13149",
+        "sWait": "M9210",
+        "sSts": "M9213",
+        "tOutCnt": "T2047",
+        "oResTimeOut": "M9200",
+        "sndT": "D13144",
+        "sBuf": "D13155",
+        "iResSetDone": "SM400",
+        "iResStr": "D12928",
+        "oSendDone": "M9199"
+      },
+      "expected_bindings": {
+        "iEn": "M9198",
+        "iUnitNo": "D12949"
+      },
+      "expected_modes": {
+        "iEn": "materialized-BOOL",
+        "iUnitNo": "materialized-scalar"
+      },
+      "wrong_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K1",
+            "D12949"
+          ]
+        }
+      ],
+      "observed_body_groups": {
+        "source_groups": 163,
+        "exact": 163,
+        "corrected_groups": 0
+      }
+    },
+    {
+      "id": "int-literal-first-1",
+      "source_sha256": "c9cef5810a5ed07edf82705fd4fe6d180ef8d74ce323f81b75cbff53472d55ec",
+      "evidence_path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/scpi-repeated-value-inputs/int-literal-first/callsite-comparison-v2.json",
+      "element": 1,
+      "input_fragment": {
+        "offset": 109,
+        "length": 50,
+        "sha256": "88fe88edb55812e4d3ddb3fd5d7481ff8016c79a8719b1d8e2c4ac6967ac03fc",
+        "handling": "native-decoded",
+        "raw_base64": "AwADBJwfBAQgAgQH319pRW4HBAACBAjfX1RSVUUIBUwCAAUE6HsEC99faVVuaXRObws=",
+        "native_return_code": "0x00000000",
+        "native_consumed_bytes": 50,
+        "records": [
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "X1F"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "OUT",
+            "args": [
+              "'_iEn"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "MOV",
+            "args": [
+              "K123",
+              "'_iUnitNo"
+            ]
+          }
+        ],
+        "text_gaps": [],
+        "native_output_sha256": "e46bc22ed585f4966c3ea60792af8b970908b3d1062ced11fd0aeab8ddddf90e",
+        "bindings": [
+          {
+            "port": "iEn",
+            "operand": "X1F",
+            "template": "LD-OUT",
+            "type_marker": "B",
+            "direction": "input",
+            "record_start": 0,
+            "record_end": 2,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iUnitNo",
+            "operand": "K123",
+            "template": "TRUE-MOV",
+            "type_marker": "W",
+            "direction": "input",
+            "record_start": 2,
+            "record_end": 4,
+            "handling": "native-source-template-observed"
+          }
+        ],
+        "uninterpreted_groups": []
+      },
+      "ports": [
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iEn",
+          "offset": 214,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oRecvCmdDone",
+          "offset": 230,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iUnitNo",
+          "offset": 256,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "W",
+          "name": "oRecvCmdNum",
+          "offset": 276,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iComCh",
+          "offset": 301,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "S",
+          "name": "oRecvData",
+          "offset": 320,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "D",
+          "name": "iPrm",
+          "offset": 343,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oStrReq",
+          "offset": 360,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iMaxCmdNum",
+          "offset": 381,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oResTimeOut",
+          "offset": 404,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "S",
+          "name": "iResStr",
+          "offset": 429,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oSendDone",
+          "offset": 449,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iResSetDone",
+          "offset": 472,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        }
+      ],
+      "native_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K123",
+            "D12949"
+          ]
+        }
+      ],
+      "native_groups": [
+        {
+          "offset": 0,
+          "stored_step": 0,
+          "stored_width": 1,
+          "raw_base64": "AwADBZGQAQU=",
+          "sha256": "7708d90cbd45639ef1ebb6d85aa4706f4e993e7076d1acdf558e988f86d3fb9b",
+          "decode_request": 0
+        },
+        {
+          "offset": 8,
+          "stored_step": 1,
+          "stored_width": 2,
+          "raw_base64": "BUwCAAUE6HsEBaiVMgU=",
+          "sha256": "1e7820179e4ba58dfd0ca1da06d97862980a8d1ccccf93f0778bc02ffd30a072",
+          "decode_request": 1
+        }
+      ],
+      "parent_boundary": "preceding-code-interval",
+      "final_allocations": {
+        "idxT": "D13131",
+        "iEn": "X2F",
+        "iUnitNo": "D200",
+        "unitNo": "D13140",
+        "iMaxCmdNum": "D12945",
+        "maxCmdN": "D13139",
+        "iPrm": "D12946",
+        "prmAdr": "D13137",
+        "crLfStr": "D13153",
+        "lfStr": "D13152",
+        "iComCh": "D12948",
+        "rPrm": "D13308",
+        "sPrm": "D13305",
+        "rSts": "M9215",
+        "rBuf": "D13255",
+        "oRecvCmdDone": "M51",
+        "crT": "D13151",
+        "crFlag": "M9211",
+        "prmAdrT": "D13135",
+        "oRecvCmdNum": "D101",
+        "cmdNum": "D13142",
+        "rDatFlg": "M9209",
+        "oStrReq": "M9201",
+        "oRecvData": "D12911",
+        "sd705T": "D13133",
+        "cBuf": "D13205",
+        "cmdT": "D13149",
+        "sWait": "M9210",
+        "sSts": "M9213",
+        "tOutCnt": "T2047",
+        "oResTimeOut": "M9200",
+        "sndT": "D13144",
+        "sBuf": "D13155",
+        "iResSetDone": "SM400",
+        "iResStr": "D12928",
+        "oSendDone": "M9199"
+      },
+      "expected_bindings": {
+        "iEn": "X1F",
+        "iUnitNo": "D12949"
+      },
+      "expected_modes": {
+        "iEn": "eliminated-direct-BOOL",
+        "iUnitNo": "materialized-scalar"
+      },
+      "wrong_caller": [],
+      "observed_body_groups": {
+        "source_groups": 163,
+        "exact": 163,
+        "corrected_groups": 20
+      }
+    },
+    {
+      "id": "int-literal-first-3",
+      "source_sha256": "c9cef5810a5ed07edf82705fd4fe6d180ef8d74ce323f81b75cbff53472d55ec",
+      "evidence_path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/scpi-repeated-value-inputs/int-literal-first/callsite-comparison-v2.json",
+      "element": 3,
+      "input_fragment": {
+        "offset": 615,
+        "length": 50,
+        "sha256": "e7f76ddb4f187822cf0e2606ec76701c4bd27d81b0cc51b486f32aba59281b0f",
+        "handling": "native-decoded",
+        "raw_base64": "AwADBJwvBAQgAgQH319pRW4HBAACBAjfX1RSVUUIBUwCAAUEqMgEC99faVVuaXRObws=",
+        "native_return_code": "0x00000000",
+        "native_consumed_bytes": 50,
+        "records": [
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "X2F"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "OUT",
+            "args": [
+              "'_iEn"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "MOV",
+            "args": [
+              "D200",
+              "'_iUnitNo"
+            ]
+          }
+        ],
+        "text_gaps": [],
+        "native_output_sha256": "f05b46f05e5ddc9f8d656b188af3c256ad9d266e5d5dd1d030e1213162814a95",
+        "bindings": [
+          {
+            "port": "iEn",
+            "operand": "X2F",
+            "template": "LD-OUT",
+            "type_marker": "B",
+            "direction": "input",
+            "record_start": 0,
+            "record_end": 2,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iUnitNo",
+            "operand": "D200",
+            "template": "TRUE-MOV",
+            "type_marker": "W",
+            "direction": "input",
+            "record_start": 2,
+            "record_end": 4,
+            "handling": "native-source-template-observed"
+          }
+        ],
+        "uninterpreted_groups": []
+      },
+      "ports": [
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iEn",
+          "offset": 720,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oRecvCmdDone",
+          "offset": 736,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iUnitNo",
+          "offset": 762,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "W",
+          "name": "oRecvCmdNum",
+          "offset": 782,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iComCh",
+          "offset": 807,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "S",
+          "name": "oRecvData",
+          "offset": 826,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "D",
+          "name": "iPrm",
+          "offset": 849,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oStrReq",
+          "offset": 866,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iMaxCmdNum",
+          "offset": 887,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oResTimeOut",
+          "offset": 910,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "S",
+          "name": "iResStr",
+          "offset": 935,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oSendDone",
+          "offset": 955,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iResSetDone",
+          "offset": 978,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        }
+      ],
+      "native_caller": [],
+      "native_groups": [],
+      "parent_boundary": "empty-marker-overlaps-FB-entry",
+      "final_allocations": {
+        "idxT": "D13131",
+        "iEn": "X2F",
+        "iUnitNo": "D200",
+        "unitNo": "D13140",
+        "iMaxCmdNum": "D12945",
+        "maxCmdN": "D13139",
+        "iPrm": "D12946",
+        "prmAdr": "D13137",
+        "crLfStr": "D13153",
+        "lfStr": "D13152",
+        "iComCh": "D12948",
+        "rPrm": "D13308",
+        "sPrm": "D13305",
+        "rSts": "M9215",
+        "rBuf": "D13255",
+        "oRecvCmdDone": "M51",
+        "crT": "D13151",
+        "crFlag": "M9211",
+        "prmAdrT": "D13135",
+        "oRecvCmdNum": "D101",
+        "cmdNum": "D13142",
+        "rDatFlg": "M9209",
+        "oStrReq": "M9201",
+        "oRecvData": "D12911",
+        "sd705T": "D13133",
+        "cBuf": "D13205",
+        "cmdT": "D13149",
+        "sWait": "M9210",
+        "sSts": "M9213",
+        "tOutCnt": "T2047",
+        "oResTimeOut": "M9200",
+        "sndT": "D13144",
+        "sBuf": "D13155",
+        "iResSetDone": "SM400",
+        "iResStr": "D12928",
+        "oSendDone": "M9199"
+      },
+      "expected_bindings": {
+        "iEn": "X2F",
+        "iUnitNo": "D200"
+      },
+      "expected_modes": {
+        "iEn": "eliminated-direct-BOOL",
+        "iUnitNo": "eliminated-direct-scalar"
+      },
+      "wrong_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K123",
+            "D12949"
+          ]
+        }
+      ],
+      "observed_body_groups": {
+        "source_groups": 163,
+        "exact": 163,
+        "corrected_groups": 0
+      }
+    },
+    {
+      "id": "int-device-first-1",
+      "source_sha256": "1ef325b535e03097415e12b8f6865a147f7e5304f4ae6e221a0018a06c953455",
+      "evidence_path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/scpi-repeated-value-inputs/int-device-first/callsite-comparison-v2.json",
+      "element": 1,
+      "input_fragment": {
+        "offset": 109,
+        "length": 50,
+        "sha256": "f03709c0145a750c35ca460cd91f4e8f6719ea0410dcf1e7bb052e8c3d927ffd",
+        "handling": "native-decoded",
+        "raw_base64": "AwADBJwfBAQgAgQH319pRW4HBAACBAjfX1RSVUUIBUwCAAUEqMgEC99faVVuaXRObws=",
+        "native_return_code": "0x00000000",
+        "native_consumed_bytes": 50,
+        "records": [
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "X1F"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "OUT",
+            "args": [
+              "'_iEn"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "MOV",
+            "args": [
+              "D200",
+              "'_iUnitNo"
+            ]
+          }
+        ],
+        "text_gaps": [],
+        "native_output_sha256": "ddfdff821f86c2bbc51eb6f0eb0c64f67c8bed5ae93674c83888882746777938",
+        "bindings": [
+          {
+            "port": "iEn",
+            "operand": "X1F",
+            "template": "LD-OUT",
+            "type_marker": "B",
+            "direction": "input",
+            "record_start": 0,
+            "record_end": 2,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iUnitNo",
+            "operand": "D200",
+            "template": "TRUE-MOV",
+            "type_marker": "W",
+            "direction": "input",
+            "record_start": 2,
+            "record_end": 4,
+            "handling": "native-source-template-observed"
+          }
+        ],
+        "uninterpreted_groups": []
+      },
+      "ports": [
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iEn",
+          "offset": 214,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oRecvCmdDone",
+          "offset": 230,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iUnitNo",
+          "offset": 256,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "W",
+          "name": "oRecvCmdNum",
+          "offset": 276,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iComCh",
+          "offset": 301,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "S",
+          "name": "oRecvData",
+          "offset": 320,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "D",
+          "name": "iPrm",
+          "offset": 343,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oStrReq",
+          "offset": 360,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iMaxCmdNum",
+          "offset": 381,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oResTimeOut",
+          "offset": 404,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "S",
+          "name": "iResStr",
+          "offset": 429,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oSendDone",
+          "offset": 449,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iResSetDone",
+          "offset": 472,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        }
+      ],
+      "native_caller": [],
+      "native_groups": [],
+      "parent_boundary": "empty-marker-overlaps-FB-entry",
+      "final_allocations": {
+        "idxT": "D13131",
+        "iEn": "X2F",
+        "iUnitNo": "D12911",
+        "unitNo": "D13140",
+        "iMaxCmdNum": "D12946",
+        "maxCmdN": "D13139",
+        "iPrm": "D12947",
+        "prmAdr": "D13137",
+        "crLfStr": "D13153",
+        "lfStr": "D13152",
+        "iComCh": "D12949",
+        "rPrm": "D13308",
+        "sPrm": "D13305",
+        "rSts": "M9215",
+        "rBuf": "D13255",
+        "oRecvCmdDone": "M51",
+        "crT": "D13151",
+        "crFlag": "M9211",
+        "prmAdrT": "D13135",
+        "oRecvCmdNum": "D101",
+        "cmdNum": "D13142",
+        "rDatFlg": "M9209",
+        "oStrReq": "M9201",
+        "oRecvData": "D12912",
+        "sd705T": "D13133",
+        "cBuf": "D13205",
+        "cmdT": "D13149",
+        "sWait": "M9210",
+        "sSts": "M9213",
+        "tOutCnt": "T2047",
+        "oResTimeOut": "M9200",
+        "sndT": "D13144",
+        "sBuf": "D13155",
+        "iResSetDone": "SM400",
+        "iResStr": "D12929",
+        "oSendDone": "M9199"
+      },
+      "expected_bindings": {
+        "iEn": "X1F",
+        "iUnitNo": "D200"
+      },
+      "expected_modes": {
+        "iEn": "eliminated-direct-BOOL",
+        "iUnitNo": "eliminated-direct-scalar"
+      },
+      "wrong_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K123",
+            "D12911"
+          ]
+        }
+      ],
+      "observed_body_groups": {
+        "source_groups": 163,
+        "exact": 163,
+        "corrected_groups": 20
+      }
+    },
+    {
+      "id": "int-device-first-3",
+      "source_sha256": "1ef325b535e03097415e12b8f6865a147f7e5304f4ae6e221a0018a06c953455",
+      "evidence_path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/scpi-repeated-value-inputs/int-device-first/callsite-comparison-v2.json",
+      "element": 3,
+      "input_fragment": {
+        "offset": 615,
+        "length": 50,
+        "sha256": "8d4c20cdc53a62dad7651aa7795142be4087c524a2169fc72db4c9dd006fe226",
+        "handling": "native-decoded",
+        "raw_base64": "AwADBJwvBAQgAgQH319pRW4HBAACBAjfX1RSVUUIBUwCAAUE6HsEC99faVVuaXRObws=",
+        "native_return_code": "0x00000000",
+        "native_consumed_bytes": 50,
+        "records": [
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "X2F"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "OUT",
+            "args": [
+              "'_iEn"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "MOV",
+            "args": [
+              "K123",
+              "'_iUnitNo"
+            ]
+          }
+        ],
+        "text_gaps": [],
+        "native_output_sha256": "17e6d1676c7a3f32da356315f786e8bd017d45860a6ea404b86bb3b6396ac224",
+        "bindings": [
+          {
+            "port": "iEn",
+            "operand": "X2F",
+            "template": "LD-OUT",
+            "type_marker": "B",
+            "direction": "input",
+            "record_start": 0,
+            "record_end": 2,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iUnitNo",
+            "operand": "K123",
+            "template": "TRUE-MOV",
+            "type_marker": "W",
+            "direction": "input",
+            "record_start": 2,
+            "record_end": 4,
+            "handling": "native-source-template-observed"
+          }
+        ],
+        "uninterpreted_groups": []
+      },
+      "ports": [
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iEn",
+          "offset": 720,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oRecvCmdDone",
+          "offset": 736,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iUnitNo",
+          "offset": 762,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "W",
+          "name": "oRecvCmdNum",
+          "offset": 782,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iComCh",
+          "offset": 807,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "S",
+          "name": "oRecvData",
+          "offset": 826,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "D",
+          "name": "iPrm",
+          "offset": 849,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oStrReq",
+          "offset": 866,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iMaxCmdNum",
+          "offset": 887,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oResTimeOut",
+          "offset": 910,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "S",
+          "name": "iResStr",
+          "offset": 935,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oSendDone",
+          "offset": 955,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iResSetDone",
+          "offset": 978,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        }
+      ],
+      "native_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K123",
+            "D12911"
+          ]
+        }
+      ],
+      "native_groups": [
+        {
+          "offset": 1891,
+          "stored_step": 386,
+          "stored_width": 1,
+          "raw_base64": "AwADBZGQAQU=",
+          "sha256": "7708d90cbd45639ef1ebb6d85aa4706f4e993e7076d1acdf558e988f86d3fb9b",
+          "decode_request": 1
+        },
+        {
+          "offset": 1899,
+          "stored_step": 387,
+          "stored_width": 2,
+          "raw_base64": "BUwCAAUE6HsEBahvMgU=",
+          "sha256": "db67690b68542d45d514975ad150432ce346d9c9819df7e109f13e55086873d4",
+          "decode_request": 213
+        }
+      ],
+      "parent_boundary": "preceding-code-interval",
+      "final_allocations": {
+        "idxT": "D13131",
+        "iEn": "X2F",
+        "iUnitNo": "D12911",
+        "unitNo": "D13140",
+        "iMaxCmdNum": "D12946",
+        "maxCmdN": "D13139",
+        "iPrm": "D12947",
+        "prmAdr": "D13137",
+        "crLfStr": "D13153",
+        "lfStr": "D13152",
+        "iComCh": "D12949",
+        "rPrm": "D13308",
+        "sPrm": "D13305",
+        "rSts": "M9215",
+        "rBuf": "D13255",
+        "oRecvCmdDone": "M51",
+        "crT": "D13151",
+        "crFlag": "M9211",
+        "prmAdrT": "D13135",
+        "oRecvCmdNum": "D101",
+        "cmdNum": "D13142",
+        "rDatFlg": "M9209",
+        "oStrReq": "M9201",
+        "oRecvData": "D12912",
+        "sd705T": "D13133",
+        "cBuf": "D13205",
+        "cmdT": "D13149",
+        "sWait": "M9210",
+        "sSts": "M9213",
+        "tOutCnt": "T2047",
+        "oResTimeOut": "M9200",
+        "sndT": "D13144",
+        "sBuf": "D13155",
+        "iResSetDone": "SM400",
+        "iResStr": "D12929",
+        "oSendDone": "M9199"
+      },
+      "expected_bindings": {
+        "iEn": "X2F",
+        "iUnitNo": "D12911"
+      },
+      "expected_modes": {
+        "iEn": "eliminated-direct-BOOL",
+        "iUnitNo": "materialized-scalar"
+      },
+      "wrong_caller": [],
+      "observed_body_groups": {
+        "source_groups": 163,
+        "exact": 163,
+        "corrected_groups": 0
+      }
+    },
+    {
+      "id": "dint-literal-first-1",
+      "source_sha256": "2290082c8b46472f3e12eeff42e354a87d89147b22e98c5fc02d071cdf816fda",
+      "evidence_path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/scpi-repeated-value-inputs/dint-literal-first/callsite-comparison-v2.json",
+      "element": 1,
+      "input_fragment": {
+        "offset": 109,
+        "length": 81,
+        "sha256": "d5210cb1367335bd5e9b4fdb0d5c7dd38472d948c8fbd244e2d8d5faf3c9a9ba",
+        "handling": "native-decoded",
+        "raw_base64": "AwADBJwfBAQgAgQH319pRW4HBAACBAjfX1RSVUUIBUwDAQUG6UDiAQYI319pUHJtCAQAAgQI319UUlVFCAVMAgAFBOgBBAvfX2lVbml0Tm8L",
+        "native_return_code": "0x00000000",
+        "native_consumed_bytes": 81,
+        "records": [
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "X1F"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "OUT",
+            "args": [
+              "'_iEn"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "DMOV",
+            "args": [
+              "K123456",
+              "'_iPrm"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "MOV",
+            "args": [
+              "K1",
+              "'_iUnitNo"
+            ]
+          }
+        ],
+        "text_gaps": [],
+        "native_output_sha256": "6df5ea747c88c9568416cea80ff26005a264b616c9164d9722a69ba8942a7690",
+        "bindings": [
+          {
+            "port": "iEn",
+            "operand": "X1F",
+            "template": "LD-OUT",
+            "type_marker": "B",
+            "direction": "input",
+            "record_start": 0,
+            "record_end": 2,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iPrm",
+            "operand": "K123456",
+            "template": "TRUE-DMOV",
+            "type_marker": "D",
+            "direction": "input",
+            "record_start": 2,
+            "record_end": 4,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iUnitNo",
+            "operand": "K1",
+            "template": "TRUE-MOV",
+            "type_marker": "W",
+            "direction": "input",
+            "record_start": 4,
+            "record_end": 6,
+            "handling": "native-source-template-observed"
+          }
+        ],
+        "uninterpreted_groups": []
+      },
+      "ports": [
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iEn",
+          "offset": 245,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oRecvCmdDone",
+          "offset": 261,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iUnitNo",
+          "offset": 287,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "W",
+          "name": "oRecvCmdNum",
+          "offset": 307,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iComCh",
+          "offset": 332,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "S",
+          "name": "oRecvData",
+          "offset": 351,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "D",
+          "name": "iPrm",
+          "offset": 374,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oStrReq",
+          "offset": 391,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iMaxCmdNum",
+          "offset": 412,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oResTimeOut",
+          "offset": 435,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "S",
+          "name": "iResStr",
+          "offset": 460,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oSendDone",
+          "offset": 480,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iResSetDone",
+          "offset": 503,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        }
+      ],
+      "native_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "DMOV",
+          "args": [
+            "K123456",
+            "D12946"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K1",
+            "D12949"
+          ]
+        }
+      ],
+      "native_groups": [
+        {
+          "offset": 0,
+          "stored_step": 0,
+          "stored_width": 1,
+          "raw_base64": "AwADBZGQAQU=",
+          "sha256": "7708d90cbd45639ef1ebb6d85aa4706f4e993e7076d1acdf558e988f86d3fb9b",
+          "decode_request": 0
+        },
+        {
+          "offset": 8,
+          "stored_step": 1,
+          "stored_width": 3,
+          "raw_base64": "BUwDAQUG6UDiAQYFqJIyBQ==",
+          "sha256": "7ee08200b94ad7b2d7d41f896fe1dde3012495e75a1579084ef101eb8a125b49",
+          "decode_request": 1
+        },
+        {
+          "offset": 24,
+          "stored_step": 4,
+          "stored_width": 1,
+          "raw_base64": "AwADBZGQAQU=",
+          "sha256": "7708d90cbd45639ef1ebb6d85aa4706f4e993e7076d1acdf558e988f86d3fb9b",
+          "decode_request": 0
+        },
+        {
+          "offset": 32,
+          "stored_step": 5,
+          "stored_width": 2,
+          "raw_base64": "BUwCAAUE6AEEBaiVMgU=",
+          "sha256": "4536e0970e3e06c17b54a8b25296ad64a4bfe8b24bbe19d3cbb1c2c10740000d",
+          "decode_request": 2
+        }
+      ],
+      "parent_boundary": "preceding-code-interval",
+      "final_allocations": {
+        "idxT": "D13131",
+        "iEn": "X2F",
+        "iUnitNo": "D12949",
+        "unitNo": "D13140",
+        "iMaxCmdNum": "D12945",
+        "maxCmdN": "D13139",
+        "iPrm": "D202",
+        "prmAdr": "D13137",
+        "crLfStr": "D13153",
+        "lfStr": "D13152",
+        "iComCh": "D12948",
+        "rPrm": "D13308",
+        "sPrm": "D13305",
+        "rSts": "M9215",
+        "rBuf": "D13255",
+        "oRecvCmdDone": "M51",
+        "crT": "D13151",
+        "crFlag": "M9211",
+        "prmAdrT": "D13135",
+        "oRecvCmdNum": "D101",
+        "cmdNum": "D13142",
+        "rDatFlg": "M9209",
+        "oStrReq": "M9201",
+        "oRecvData": "D12911",
+        "sd705T": "D13133",
+        "cBuf": "D13205",
+        "cmdT": "D13149",
+        "sWait": "M9210",
+        "sSts": "M9213",
+        "tOutCnt": "T2047",
+        "oResTimeOut": "M9200",
+        "sndT": "D13144",
+        "sBuf": "D13155",
+        "iResSetDone": "SM400",
+        "iResStr": "D12928",
+        "oSendDone": "M9199"
+      },
+      "expected_bindings": {
+        "iEn": "X1F",
+        "iPrm": "D12946",
+        "iUnitNo": "D12949"
+      },
+      "expected_modes": {
+        "iEn": "eliminated-direct-BOOL",
+        "iPrm": "materialized-scalar",
+        "iUnitNo": "materialized-scalar"
+      },
+      "wrong_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K2",
+            "D12949"
+          ]
+        }
+      ],
+      "observed_body_groups": {
+        "source_groups": 163,
+        "exact": 163,
+        "corrected_groups": 20
+      }
+    },
+    {
+      "id": "dint-literal-first-3",
+      "source_sha256": "2290082c8b46472f3e12eeff42e354a87d89147b22e98c5fc02d071cdf816fda",
+      "evidence_path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/scpi-repeated-value-inputs/dint-literal-first/callsite-comparison-v2.json",
+      "element": 3,
+      "input_fragment": {
+        "offset": 646,
+        "length": 79,
+        "sha256": "f1762b1d369ad5980b7b3e40a4d7b45c9a993cc8398321394cfcfc631560eca0",
+        "handling": "native-decoded",
+        "raw_base64": "AwADBJwvBAQgAgQH319pRW4HBAACBAjfX1RSVUUIBUwCAQUEqMoECN9faVBybQgEAAIECN9fVFJVRQgFTAIABQToAgQL319pVW5pdE5vCw==",
+        "native_return_code": "0x00000000",
+        "native_consumed_bytes": 79,
+        "records": [
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "X2F"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "OUT",
+            "args": [
+              "'_iEn"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "DMOV",
+            "args": [
+              "D202",
+              "'_iPrm"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "MOV",
+            "args": [
+              "K2",
+              "'_iUnitNo"
+            ]
+          }
+        ],
+        "text_gaps": [],
+        "native_output_sha256": "53200bb0b422188d4f64cbf21302b9d627793c4522fcdc4c7eb919041bee4097",
+        "bindings": [
+          {
+            "port": "iEn",
+            "operand": "X2F",
+            "template": "LD-OUT",
+            "type_marker": "B",
+            "direction": "input",
+            "record_start": 0,
+            "record_end": 2,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iPrm",
+            "operand": "D202",
+            "template": "TRUE-DMOV",
+            "type_marker": "D",
+            "direction": "input",
+            "record_start": 2,
+            "record_end": 4,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iUnitNo",
+            "operand": "K2",
+            "template": "TRUE-MOV",
+            "type_marker": "W",
+            "direction": "input",
+            "record_start": 4,
+            "record_end": 6,
+            "handling": "native-source-template-observed"
+          }
+        ],
+        "uninterpreted_groups": []
+      },
+      "ports": [
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iEn",
+          "offset": 780,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oRecvCmdDone",
+          "offset": 796,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iUnitNo",
+          "offset": 822,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "W",
+          "name": "oRecvCmdNum",
+          "offset": 842,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iComCh",
+          "offset": 867,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "S",
+          "name": "oRecvData",
+          "offset": 886,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "D",
+          "name": "iPrm",
+          "offset": 909,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oStrReq",
+          "offset": 926,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iMaxCmdNum",
+          "offset": 947,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oResTimeOut",
+          "offset": 970,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "S",
+          "name": "iResStr",
+          "offset": 995,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oSendDone",
+          "offset": 1015,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iResSetDone",
+          "offset": 1038,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        }
+      ],
+      "native_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K2",
+            "D12949"
+          ]
+        }
+      ],
+      "native_groups": [
+        {
+          "offset": 1938,
+          "stored_step": 393,
+          "stored_width": 1,
+          "raw_base64": "AwADBZGQAQU=",
+          "sha256": "7708d90cbd45639ef1ebb6d85aa4706f4e993e7076d1acdf558e988f86d3fb9b",
+          "decode_request": 0
+        },
+        {
+          "offset": 1946,
+          "stored_step": 394,
+          "stored_width": 2,
+          "raw_base64": "BUwCAAUE6AIEBaiVMgU=",
+          "sha256": "6959bba7142dbd9fcc23f538be471901ba4a25d43bb5ac7373c5c054fcd290d7",
+          "decode_request": 215
+        }
+      ],
+      "parent_boundary": "preceding-code-interval",
+      "final_allocations": {
+        "idxT": "D13131",
+        "iEn": "X2F",
+        "iUnitNo": "D12949",
+        "unitNo": "D13140",
+        "iMaxCmdNum": "D12945",
+        "maxCmdN": "D13139",
+        "iPrm": "D202",
+        "prmAdr": "D13137",
+        "crLfStr": "D13153",
+        "lfStr": "D13152",
+        "iComCh": "D12948",
+        "rPrm": "D13308",
+        "sPrm": "D13305",
+        "rSts": "M9215",
+        "rBuf": "D13255",
+        "oRecvCmdDone": "M51",
+        "crT": "D13151",
+        "crFlag": "M9211",
+        "prmAdrT": "D13135",
+        "oRecvCmdNum": "D101",
+        "cmdNum": "D13142",
+        "rDatFlg": "M9209",
+        "oStrReq": "M9201",
+        "oRecvData": "D12911",
+        "sd705T": "D13133",
+        "cBuf": "D13205",
+        "cmdT": "D13149",
+        "sWait": "M9210",
+        "sSts": "M9213",
+        "tOutCnt": "T2047",
+        "oResTimeOut": "M9200",
+        "sndT": "D13144",
+        "sBuf": "D13155",
+        "iResSetDone": "SM400",
+        "iResStr": "D12928",
+        "oSendDone": "M9199"
+      },
+      "expected_bindings": {
+        "iEn": "X2F",
+        "iPrm": "D202",
+        "iUnitNo": "D12949"
+      },
+      "expected_modes": {
+        "iEn": "eliminated-direct-BOOL",
+        "iPrm": "eliminated-direct-scalar",
+        "iUnitNo": "materialized-scalar"
+      },
+      "wrong_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "DMOV",
+          "args": [
+            "K123456",
+            "D12946"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K1",
+            "D12949"
+          ]
+        }
+      ],
+      "observed_body_groups": {
+        "source_groups": 163,
+        "exact": 163,
+        "corrected_groups": 0
+      }
+    },
+    {
+      "id": "dint-device-first-1",
+      "source_sha256": "b669e540dff6629a38b558d16240b533a8e4a98755f27a7633c7dd842af19e4d",
+      "evidence_path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/scpi-repeated-value-inputs/dint-device-first/callsite-comparison-v2.json",
+      "element": 1,
+      "input_fragment": {
+        "offset": 109,
+        "length": 79,
+        "sha256": "4c878202cf6e7178b70463450572f5ffa7d698c91f197096d9eafe09f57ec0a8",
+        "handling": "native-decoded",
+        "raw_base64": "AwADBJwfBAQgAgQH319pRW4HBAACBAjfX1RSVUUIBUwCAQUEqMoECN9faVBybQgEAAIECN9fVFJVRQgFTAIABQToAQQL319pVW5pdE5vCw==",
+        "native_return_code": "0x00000000",
+        "native_consumed_bytes": 79,
+        "records": [
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "X1F"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "OUT",
+            "args": [
+              "'_iEn"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "DMOV",
+            "args": [
+              "D202",
+              "'_iPrm"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "MOV",
+            "args": [
+              "K1",
+              "'_iUnitNo"
+            ]
+          }
+        ],
+        "text_gaps": [],
+        "native_output_sha256": "b4da2674b0c6c7855373162bfd8b325aa78eba82a42f32b8c4d5a2d447fdc736",
+        "bindings": [
+          {
+            "port": "iEn",
+            "operand": "X1F",
+            "template": "LD-OUT",
+            "type_marker": "B",
+            "direction": "input",
+            "record_start": 0,
+            "record_end": 2,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iPrm",
+            "operand": "D202",
+            "template": "TRUE-DMOV",
+            "type_marker": "D",
+            "direction": "input",
+            "record_start": 2,
+            "record_end": 4,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iUnitNo",
+            "operand": "K1",
+            "template": "TRUE-MOV",
+            "type_marker": "W",
+            "direction": "input",
+            "record_start": 4,
+            "record_end": 6,
+            "handling": "native-source-template-observed"
+          }
+        ],
+        "uninterpreted_groups": []
+      },
+      "ports": [
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iEn",
+          "offset": 243,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oRecvCmdDone",
+          "offset": 259,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iUnitNo",
+          "offset": 285,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "W",
+          "name": "oRecvCmdNum",
+          "offset": 305,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iComCh",
+          "offset": 330,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "S",
+          "name": "oRecvData",
+          "offset": 349,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "D",
+          "name": "iPrm",
+          "offset": 372,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oStrReq",
+          "offset": 389,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iMaxCmdNum",
+          "offset": 410,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oResTimeOut",
+          "offset": 433,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "S",
+          "name": "iResStr",
+          "offset": 458,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oSendDone",
+          "offset": 478,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iResSetDone",
+          "offset": 501,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        }
+      ],
+      "native_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K1",
+            "D12949"
+          ]
+        }
+      ],
+      "native_groups": [
+        {
+          "offset": 0,
+          "stored_step": 0,
+          "stored_width": 1,
+          "raw_base64": "AwADBZGQAQU=",
+          "sha256": "7708d90cbd45639ef1ebb6d85aa4706f4e993e7076d1acdf558e988f86d3fb9b",
+          "decode_request": 0
+        },
+        {
+          "offset": 8,
+          "stored_step": 1,
+          "stored_width": 2,
+          "raw_base64": "BUwCAAUE6AEEBaiVMgU=",
+          "sha256": "4536e0970e3e06c17b54a8b25296ad64a4bfe8b24bbe19d3cbb1c2c10740000d",
+          "decode_request": 1
+        }
+      ],
+      "parent_boundary": "preceding-code-interval",
+      "final_allocations": {
+        "idxT": "D13131",
+        "iEn": "X2F",
+        "iUnitNo": "D12949",
+        "unitNo": "D13140",
+        "iMaxCmdNum": "D12947",
+        "maxCmdN": "D13139",
+        "iPrm": "D12911",
+        "prmAdr": "D13137",
+        "crLfStr": "D13153",
+        "lfStr": "D13152",
+        "iComCh": "D12948",
+        "rPrm": "D13308",
+        "sPrm": "D13305",
+        "rSts": "M9215",
+        "rBuf": "D13255",
+        "oRecvCmdDone": "M51",
+        "crT": "D13151",
+        "crFlag": "M9211",
+        "prmAdrT": "D13135",
+        "oRecvCmdNum": "D101",
+        "cmdNum": "D13142",
+        "rDatFlg": "M9209",
+        "oStrReq": "M9201",
+        "oRecvData": "D12913",
+        "sd705T": "D13133",
+        "cBuf": "D13205",
+        "cmdT": "D13149",
+        "sWait": "M9210",
+        "sSts": "M9213",
+        "tOutCnt": "T2047",
+        "oResTimeOut": "M9200",
+        "sndT": "D13144",
+        "sBuf": "D13155",
+        "iResSetDone": "SM400",
+        "iResStr": "D12930",
+        "oSendDone": "M9199"
+      },
+      "expected_bindings": {
+        "iEn": "X1F",
+        "iPrm": "D202",
+        "iUnitNo": "D12949"
+      },
+      "expected_modes": {
+        "iEn": "eliminated-direct-BOOL",
+        "iPrm": "eliminated-direct-scalar",
+        "iUnitNo": "materialized-scalar"
+      },
+      "wrong_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "DMOV",
+          "args": [
+            "K123456",
+            "D12911"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K2",
+            "D12949"
+          ]
+        }
+      ],
+      "observed_body_groups": {
+        "source_groups": 163,
+        "exact": 163,
+        "corrected_groups": 20
+      }
+    },
+    {
+      "id": "dint-device-first-3",
+      "source_sha256": "b669e540dff6629a38b558d16240b533a8e4a98755f27a7633c7dd842af19e4d",
+      "evidence_path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/scpi-repeated-value-inputs/dint-device-first/callsite-comparison-v2.json",
+      "element": 3,
+      "input_fragment": {
+        "offset": 644,
+        "length": 81,
+        "sha256": "b7d82cd52edcc8aa86d4874271a05e76aac65efe03afcea5b154d7961b830fe5",
+        "handling": "native-decoded",
+        "raw_base64": "AwADBJwvBAQgAgQH319pRW4HBAACBAjfX1RSVUUIBUwDAQUG6UDiAQYI319pUHJtCAQAAgQI319UUlVFCAVMAgAFBOgCBAvfX2lVbml0Tm8L",
+        "native_return_code": "0x00000000",
+        "native_consumed_bytes": 81,
+        "records": [
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "X2F"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "OUT",
+            "args": [
+              "'_iEn"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "DMOV",
+            "args": [
+              "K123456",
+              "'_iPrm"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "MOV",
+            "args": [
+              "K2",
+              "'_iUnitNo"
+            ]
+          }
+        ],
+        "text_gaps": [],
+        "native_output_sha256": "f6f973b421544f3830cad62b6543c84bade41629d7fce3ed5a5f654e9285ac8d",
+        "bindings": [
+          {
+            "port": "iEn",
+            "operand": "X2F",
+            "template": "LD-OUT",
+            "type_marker": "B",
+            "direction": "input",
+            "record_start": 0,
+            "record_end": 2,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iPrm",
+            "operand": "K123456",
+            "template": "TRUE-DMOV",
+            "type_marker": "D",
+            "direction": "input",
+            "record_start": 2,
+            "record_end": 4,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iUnitNo",
+            "operand": "K2",
+            "template": "TRUE-MOV",
+            "type_marker": "W",
+            "direction": "input",
+            "record_start": 4,
+            "record_end": 6,
+            "handling": "native-source-template-observed"
+          }
+        ],
+        "uninterpreted_groups": []
+      },
+      "ports": [
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iEn",
+          "offset": 780,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oRecvCmdDone",
+          "offset": 796,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iUnitNo",
+          "offset": 822,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "W",
+          "name": "oRecvCmdNum",
+          "offset": 842,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iComCh",
+          "offset": 867,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "S",
+          "name": "oRecvData",
+          "offset": 886,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "D",
+          "name": "iPrm",
+          "offset": 909,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oStrReq",
+          "offset": 926,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iMaxCmdNum",
+          "offset": 947,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oResTimeOut",
+          "offset": 970,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "S",
+          "name": "iResStr",
+          "offset": 995,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oSendDone",
+          "offset": 1015,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iResSetDone",
+          "offset": 1038,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        }
+      ],
+      "native_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "DMOV",
+          "args": [
+            "K123456",
+            "D12911"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K2",
+            "D12949"
+          ]
+        }
+      ],
+      "native_groups": [
+        {
+          "offset": 1913,
+          "stored_step": 389,
+          "stored_width": 1,
+          "raw_base64": "AwADBZGQAQU=",
+          "sha256": "7708d90cbd45639ef1ebb6d85aa4706f4e993e7076d1acdf558e988f86d3fb9b",
+          "decode_request": 0
+        },
+        {
+          "offset": 1921,
+          "stored_step": 390,
+          "stored_width": 3,
+          "raw_base64": "BUwDAQUG6UDiAQYFqG8yBQ==",
+          "sha256": "d2a1025fecff038368700912413c3ec53cc5a032316f9fcb00314a3f118c5e5c",
+          "decode_request": 214
+        },
+        {
+          "offset": 1937,
+          "stored_step": 393,
+          "stored_width": 1,
+          "raw_base64": "AwADBZGQAQU=",
+          "sha256": "7708d90cbd45639ef1ebb6d85aa4706f4e993e7076d1acdf558e988f86d3fb9b",
+          "decode_request": 0
+        },
+        {
+          "offset": 1945,
+          "stored_step": 394,
+          "stored_width": 2,
+          "raw_base64": "BUwCAAUE6AIEBaiVMgU=",
+          "sha256": "6959bba7142dbd9fcc23f538be471901ba4a25d43bb5ac7373c5c054fcd290d7",
+          "decode_request": 215
+        }
+      ],
+      "parent_boundary": "preceding-code-interval",
+      "final_allocations": {
+        "idxT": "D13131",
+        "iEn": "X2F",
+        "iUnitNo": "D12949",
+        "unitNo": "D13140",
+        "iMaxCmdNum": "D12947",
+        "maxCmdN": "D13139",
+        "iPrm": "D12911",
+        "prmAdr": "D13137",
+        "crLfStr": "D13153",
+        "lfStr": "D13152",
+        "iComCh": "D12948",
+        "rPrm": "D13308",
+        "sPrm": "D13305",
+        "rSts": "M9215",
+        "rBuf": "D13255",
+        "oRecvCmdDone": "M51",
+        "crT": "D13151",
+        "crFlag": "M9211",
+        "prmAdrT": "D13135",
+        "oRecvCmdNum": "D101",
+        "cmdNum": "D13142",
+        "rDatFlg": "M9209",
+        "oStrReq": "M9201",
+        "oRecvData": "D12913",
+        "sd705T": "D13133",
+        "cBuf": "D13205",
+        "cmdT": "D13149",
+        "sWait": "M9210",
+        "sSts": "M9213",
+        "tOutCnt": "T2047",
+        "oResTimeOut": "M9200",
+        "sndT": "D13144",
+        "sBuf": "D13155",
+        "iResSetDone": "SM400",
+        "iResStr": "D12930",
+        "oSendDone": "M9199"
+      },
+      "expected_bindings": {
+        "iEn": "X2F",
+        "iPrm": "D12911",
+        "iUnitNo": "D12949"
+      },
+      "expected_modes": {
+        "iEn": "eliminated-direct-BOOL",
+        "iPrm": "materialized-scalar",
+        "iUnitNo": "materialized-scalar"
+      },
+      "wrong_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K1",
+            "D12949"
+          ]
+        }
+      ],
+      "observed_body_groups": {
+        "source_groups": 163,
+        "exact": 163,
+        "corrected_groups": 0
+      }
+    },
+    {
+      "id": "string-literal-first-1",
+      "source_sha256": "9bcf1f9d4721274072ee6d2187bfb9edf40ceaefe0f0a08d8fd191b88fee0430",
+      "evidence_path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/scpi-repeated-value-inputs/string-literal-first/callsite-comparison-v2.json",
+      "element": 1,
+      "input_fragment": {
+        "offset": 109,
+        "length": 84,
+        "sha256": "9b971ef76a11f6f1aa1fc5b1a0d4077ecfe7ebe81a6721922b0994a78157a7fb",
+        "handling": "native-decoded",
+        "raw_base64": "AwADBJwfBAQgAgQH319pRW4HBAACBAjfX1RSVUUIBUwFAwUG7k9ORQYL319pUmVzU3RyCwQAAgQI319UUlVFCAVMAgAFBOgBBAvfX2lVbml0Tm8L",
+        "native_return_code": "0x00000000",
+        "native_consumed_bytes": 84,
+        "records": [
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "X1F"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "OUT",
+            "args": [
+              "'_iEn"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "$MOV",
+            "args": [
+              "\"ONE\"",
+              "'_iResStr"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "MOV",
+            "args": [
+              "K1",
+              "'_iUnitNo"
+            ]
+          }
+        ],
+        "text_gaps": [],
+        "native_output_sha256": "579888a4e6387156c97b34aaf1de7e7e9677be8978f0fffbddb0366d7bcbbaa2",
+        "bindings": [
+          {
+            "port": "iEn",
+            "operand": "X1F",
+            "template": "LD-OUT",
+            "type_marker": "B",
+            "direction": "input",
+            "record_start": 0,
+            "record_end": 2,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iResStr",
+            "operand": "\"ONE\"",
+            "template": "TRUE-$MOV",
+            "type_marker": "S",
+            "direction": "input",
+            "record_start": 2,
+            "record_end": 4,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iUnitNo",
+            "operand": "K1",
+            "template": "TRUE-MOV",
+            "type_marker": "W",
+            "direction": "input",
+            "record_start": 4,
+            "record_end": 6,
+            "handling": "native-source-template-observed"
+          }
+        ],
+        "uninterpreted_groups": []
+      },
+      "ports": [
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iEn",
+          "offset": 248,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oRecvCmdDone",
+          "offset": 264,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iUnitNo",
+          "offset": 290,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "W",
+          "name": "oRecvCmdNum",
+          "offset": 310,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iComCh",
+          "offset": 335,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "S",
+          "name": "oRecvData",
+          "offset": 354,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "D",
+          "name": "iPrm",
+          "offset": 377,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oStrReq",
+          "offset": 394,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iMaxCmdNum",
+          "offset": 415,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oResTimeOut",
+          "offset": 438,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "S",
+          "name": "iResStr",
+          "offset": 463,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oSendDone",
+          "offset": 483,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iResSetDone",
+          "offset": 506,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        }
+      ],
+      "native_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "$MOV",
+          "args": [
+            "\"ONE\"",
+            "D12928"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K1",
+            "D12949"
+          ]
+        }
+      ],
+      "native_groups": [
+        {
+          "offset": 0,
+          "stored_step": 0,
+          "stored_width": 1,
+          "raw_base64": "AwADBZGQAQU=",
+          "sha256": "7708d90cbd45639ef1ebb6d85aa4706f4e993e7076d1acdf558e988f86d3fb9b",
+          "decode_request": 0
+        },
+        {
+          "offset": 8,
+          "stored_step": 1,
+          "stored_width": 5,
+          "raw_base64": "BUwFAwUG7k9ORQYFqIAyBQ==",
+          "sha256": "ffb69931b9142a5583547ea02d591f75a6b867556c9e7b23530e698f0d7ab8e8",
+          "decode_request": 1
+        },
+        {
+          "offset": 24,
+          "stored_step": 6,
+          "stored_width": 1,
+          "raw_base64": "AwADBZGQAQU=",
+          "sha256": "7708d90cbd45639ef1ebb6d85aa4706f4e993e7076d1acdf558e988f86d3fb9b",
+          "decode_request": 0
+        },
+        {
+          "offset": 32,
+          "stored_step": 7,
+          "stored_width": 2,
+          "raw_base64": "BUwCAAUE6AEEBaiVMgU=",
+          "sha256": "4536e0970e3e06c17b54a8b25296ad64a4bfe8b24bbe19d3cbb1c2c10740000d",
+          "decode_request": 2
+        }
+      ],
+      "parent_boundary": "preceding-code-interval",
+      "final_allocations": {
+        "idxT": "D13131",
+        "iEn": "X2F",
+        "iUnitNo": "D12949",
+        "unitNo": "D13140",
+        "iMaxCmdNum": "D12945",
+        "maxCmdN": "D13139",
+        "iPrm": "D12946",
+        "prmAdr": "D13137",
+        "crLfStr": "D13153",
+        "lfStr": "D13152",
+        "iComCh": "D12948",
+        "rPrm": "D13308",
+        "sPrm": "D13305",
+        "rSts": "M9215",
+        "rBuf": "D13255",
+        "oRecvCmdDone": "M51",
+        "crT": "D13151",
+        "crFlag": "M9211",
+        "prmAdrT": "D13135",
+        "oRecvCmdNum": "D101",
+        "cmdNum": "D13142",
+        "rDatFlg": "M9209",
+        "oStrReq": "M9201",
+        "oRecvData": "D12911",
+        "sd705T": "D13133",
+        "cBuf": "D13205",
+        "cmdT": "D13149",
+        "sWait": "M9210",
+        "sSts": "M9213",
+        "tOutCnt": "T2047",
+        "oResTimeOut": "M9200",
+        "sndT": "D13144",
+        "sBuf": "D13155",
+        "iResSetDone": "SM400",
+        "iResStr": "D220",
+        "oSendDone": "M9199"
+      },
+      "expected_bindings": {
+        "iEn": "X1F",
+        "iResStr": "D12928",
+        "iUnitNo": "D12949"
+      },
+      "expected_modes": {
+        "iEn": "eliminated-direct-BOOL",
+        "iResStr": "materialized-scalar",
+        "iUnitNo": "materialized-scalar"
+      },
+      "wrong_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K2",
+            "D12949"
+          ]
+        }
+      ],
+      "observed_body_groups": {
+        "source_groups": 163,
+        "exact": 163,
+        "corrected_groups": 20
+      }
+    },
+    {
+      "id": "string-literal-first-3",
+      "source_sha256": "9bcf1f9d4721274072ee6d2187bfb9edf40ceaefe0f0a08d8fd191b88fee0430",
+      "evidence_path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/scpi-repeated-value-inputs/string-literal-first/callsite-comparison-v2.json",
+      "element": 3,
+      "input_fragment": {
+        "offset": 649,
+        "length": 82,
+        "sha256": "3612c4a609f91ee5bff7a98d3f8a69e8e4eee98d726f1ee85db7573138221413",
+        "handling": "native-decoded",
+        "raw_base64": "AwADBJwvBAQgAgQH319pRW4HBAACBAjfX1RSVUUIBUwDAwUEqNwEC99faVJlc1N0cgsEAAIECN9fVFJVRQgFTAIABQToAgQL319pVW5pdE5vCw==",
+        "native_return_code": "0x00000000",
+        "native_consumed_bytes": 82,
+        "records": [
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "X2F"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "OUT",
+            "args": [
+              "'_iEn"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "$MOV",
+            "args": [
+              "D220",
+              "'_iResStr"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "MOV",
+            "args": [
+              "K2",
+              "'_iUnitNo"
+            ]
+          }
+        ],
+        "text_gaps": [],
+        "native_output_sha256": "7ce5f460a5902730956fe044dbd2eeefb9a78aacf17240741b5d52383aed4399",
+        "bindings": [
+          {
+            "port": "iEn",
+            "operand": "X2F",
+            "template": "LD-OUT",
+            "type_marker": "B",
+            "direction": "input",
+            "record_start": 0,
+            "record_end": 2,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iResStr",
+            "operand": "D220",
+            "template": "TRUE-$MOV",
+            "type_marker": "S",
+            "direction": "input",
+            "record_start": 2,
+            "record_end": 4,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iUnitNo",
+            "operand": "K2",
+            "template": "TRUE-MOV",
+            "type_marker": "W",
+            "direction": "input",
+            "record_start": 4,
+            "record_end": 6,
+            "handling": "native-source-template-observed"
+          }
+        ],
+        "uninterpreted_groups": []
+      },
+      "ports": [
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iEn",
+          "offset": 786,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oRecvCmdDone",
+          "offset": 802,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iUnitNo",
+          "offset": 828,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "W",
+          "name": "oRecvCmdNum",
+          "offset": 848,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iComCh",
+          "offset": 873,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "S",
+          "name": "oRecvData",
+          "offset": 892,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "D",
+          "name": "iPrm",
+          "offset": 915,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oStrReq",
+          "offset": 932,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iMaxCmdNum",
+          "offset": 953,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oResTimeOut",
+          "offset": 976,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "S",
+          "name": "iResStr",
+          "offset": 1001,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oSendDone",
+          "offset": 1021,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iResSetDone",
+          "offset": 1044,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        }
+      ],
+      "native_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K2",
+            "D12949"
+          ]
+        }
+      ],
+      "native_groups": [
+        {
+          "offset": 1938,
+          "stored_step": 395,
+          "stored_width": 1,
+          "raw_base64": "AwADBZGQAQU=",
+          "sha256": "7708d90cbd45639ef1ebb6d85aa4706f4e993e7076d1acdf558e988f86d3fb9b",
+          "decode_request": 0
+        },
+        {
+          "offset": 1946,
+          "stored_step": 396,
+          "stored_width": 2,
+          "raw_base64": "BUwCAAUE6AIEBaiVMgU=",
+          "sha256": "6959bba7142dbd9fcc23f538be471901ba4a25d43bb5ac7373c5c054fcd290d7",
+          "decode_request": 215
+        }
+      ],
+      "parent_boundary": "preceding-code-interval",
+      "final_allocations": {
+        "idxT": "D13131",
+        "iEn": "X2F",
+        "iUnitNo": "D12949",
+        "unitNo": "D13140",
+        "iMaxCmdNum": "D12945",
+        "maxCmdN": "D13139",
+        "iPrm": "D12946",
+        "prmAdr": "D13137",
+        "crLfStr": "D13153",
+        "lfStr": "D13152",
+        "iComCh": "D12948",
+        "rPrm": "D13308",
+        "sPrm": "D13305",
+        "rSts": "M9215",
+        "rBuf": "D13255",
+        "oRecvCmdDone": "M51",
+        "crT": "D13151",
+        "crFlag": "M9211",
+        "prmAdrT": "D13135",
+        "oRecvCmdNum": "D101",
+        "cmdNum": "D13142",
+        "rDatFlg": "M9209",
+        "oStrReq": "M9201",
+        "oRecvData": "D12911",
+        "sd705T": "D13133",
+        "cBuf": "D13205",
+        "cmdT": "D13149",
+        "sWait": "M9210",
+        "sSts": "M9213",
+        "tOutCnt": "T2047",
+        "oResTimeOut": "M9200",
+        "sndT": "D13144",
+        "sBuf": "D13155",
+        "iResSetDone": "SM400",
+        "iResStr": "D220",
+        "oSendDone": "M9199"
+      },
+      "expected_bindings": {
+        "iEn": "X2F",
+        "iResStr": "D220",
+        "iUnitNo": "D12949"
+      },
+      "expected_modes": {
+        "iEn": "eliminated-direct-BOOL",
+        "iResStr": "eliminated-direct-scalar",
+        "iUnitNo": "materialized-scalar"
+      },
+      "wrong_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "$MOV",
+          "args": [
+            "\"ONE\"",
+            "D12928"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K1",
+            "D12949"
+          ]
+        }
+      ],
+      "observed_body_groups": {
+        "source_groups": 163,
+        "exact": 163,
+        "corrected_groups": 0
+      }
+    },
+    {
+      "id": "string-device-first-1",
+      "source_sha256": "ba95efe6e841d2c1b3ba6811d12e7b3d60576f388293712f2ebbe4e31a9e4734",
+      "evidence_path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/scpi-repeated-value-inputs/string-device-first/callsite-comparison-v2.json",
+      "element": 1,
+      "input_fragment": {
+        "offset": 109,
+        "length": 82,
+        "sha256": "0e53b2cb77fb86c99357366eaa03894a0dbcd090d3335a1501c9c03a97160830",
+        "handling": "native-decoded",
+        "raw_base64": "AwADBJwfBAQgAgQH319pRW4HBAACBAjfX1RSVUUIBUwDAwUEqNwEC99faVJlc1N0cgsEAAIECN9fVFJVRQgFTAIABQToAQQL319pVW5pdE5vCw==",
+        "native_return_code": "0x00000000",
+        "native_consumed_bytes": 82,
+        "records": [
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "X1F"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "OUT",
+            "args": [
+              "'_iEn"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "$MOV",
+            "args": [
+              "D220",
+              "'_iResStr"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "MOV",
+            "args": [
+              "K1",
+              "'_iUnitNo"
+            ]
+          }
+        ],
+        "text_gaps": [],
+        "native_output_sha256": "83ad870ab36d059b82e1667a8bc0800c73e97c345f5307f5fcf7768f7d8a9841",
+        "bindings": [
+          {
+            "port": "iEn",
+            "operand": "X1F",
+            "template": "LD-OUT",
+            "type_marker": "B",
+            "direction": "input",
+            "record_start": 0,
+            "record_end": 2,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iResStr",
+            "operand": "D220",
+            "template": "TRUE-$MOV",
+            "type_marker": "S",
+            "direction": "input",
+            "record_start": 2,
+            "record_end": 4,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iUnitNo",
+            "operand": "K1",
+            "template": "TRUE-MOV",
+            "type_marker": "W",
+            "direction": "input",
+            "record_start": 4,
+            "record_end": 6,
+            "handling": "native-source-template-observed"
+          }
+        ],
+        "uninterpreted_groups": []
+      },
+      "ports": [
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iEn",
+          "offset": 246,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oRecvCmdDone",
+          "offset": 262,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iUnitNo",
+          "offset": 288,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "W",
+          "name": "oRecvCmdNum",
+          "offset": 308,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iComCh",
+          "offset": 333,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "S",
+          "name": "oRecvData",
+          "offset": 352,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "D",
+          "name": "iPrm",
+          "offset": 375,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oStrReq",
+          "offset": 392,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iMaxCmdNum",
+          "offset": 413,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oResTimeOut",
+          "offset": 436,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "S",
+          "name": "iResStr",
+          "offset": 461,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oSendDone",
+          "offset": 481,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iResSetDone",
+          "offset": 504,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        }
+      ],
+      "native_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K1",
+            "D12949"
+          ]
+        }
+      ],
+      "native_groups": [
+        {
+          "offset": 0,
+          "stored_step": 0,
+          "stored_width": 1,
+          "raw_base64": "AwADBZGQAQU=",
+          "sha256": "7708d90cbd45639ef1ebb6d85aa4706f4e993e7076d1acdf558e988f86d3fb9b",
+          "decode_request": 0
+        },
+        {
+          "offset": 8,
+          "stored_step": 1,
+          "stored_width": 2,
+          "raw_base64": "BUwCAAUE6AEEBaiVMgU=",
+          "sha256": "4536e0970e3e06c17b54a8b25296ad64a4bfe8b24bbe19d3cbb1c2c10740000d",
+          "decode_request": 1
+        }
+      ],
+      "parent_boundary": "preceding-code-interval",
+      "final_allocations": {
+        "idxT": "D13131",
+        "iEn": "X2F",
+        "iUnitNo": "D12949",
+        "unitNo": "D13140",
+        "iMaxCmdNum": "D12945",
+        "maxCmdN": "D13139",
+        "iPrm": "D12946",
+        "prmAdr": "D13137",
+        "crLfStr": "D13153",
+        "lfStr": "D13152",
+        "iComCh": "D12948",
+        "rPrm": "D13308",
+        "sPrm": "D13305",
+        "rSts": "M9215",
+        "rBuf": "D13255",
+        "oRecvCmdDone": "M51",
+        "crT": "D13151",
+        "crFlag": "M9211",
+        "prmAdrT": "D13135",
+        "oRecvCmdNum": "D101",
+        "cmdNum": "D13142",
+        "rDatFlg": "M9209",
+        "oStrReq": "M9201",
+        "oRecvData": "D12928",
+        "sd705T": "D13133",
+        "cBuf": "D13205",
+        "cmdT": "D13149",
+        "sWait": "M9210",
+        "sSts": "M9213",
+        "tOutCnt": "T2047",
+        "oResTimeOut": "M9200",
+        "sndT": "D13144",
+        "sBuf": "D13155",
+        "iResSetDone": "SM400",
+        "iResStr": "D12911",
+        "oSendDone": "M9199"
+      },
+      "expected_bindings": {
+        "iEn": "X1F",
+        "iResStr": "D220",
+        "iUnitNo": "D12949"
+      },
+      "expected_modes": {
+        "iEn": "eliminated-direct-BOOL",
+        "iResStr": "eliminated-direct-scalar",
+        "iUnitNo": "materialized-scalar"
+      },
+      "wrong_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "$MOV",
+          "args": [
+            "\"ONE\"",
+            "D12911"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K2",
+            "D12949"
+          ]
+        }
+      ],
+      "observed_body_groups": {
+        "source_groups": 163,
+        "exact": 163,
+        "corrected_groups": 20
+      }
+    },
+    {
+      "id": "string-device-first-3",
+      "source_sha256": "ba95efe6e841d2c1b3ba6811d12e7b3d60576f388293712f2ebbe4e31a9e4734",
+      "evidence_path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/scpi-repeated-value-inputs/string-device-first/callsite-comparison-v2.json",
+      "element": 3,
+      "input_fragment": {
+        "offset": 647,
+        "length": 84,
+        "sha256": "454ea00735d1bc3040f6d8be02ab89527f120b91e68fc523569e9e83e775ba89",
+        "handling": "native-decoded",
+        "raw_base64": "AwADBJwvBAQgAgQH319pRW4HBAACBAjfX1RSVUUIBUwFAwUG7k9ORQYL319pUmVzU3RyCwQAAgQI319UUlVFCAVMAgAFBOgCBAvfX2lVbml0Tm8L",
+        "native_return_code": "0x00000000",
+        "native_consumed_bytes": 84,
+        "records": [
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "X2F"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "OUT",
+            "args": [
+              "'_iEn"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "$MOV",
+            "args": [
+              "\"ONE\"",
+              "'_iResStr"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "LD",
+            "args": [
+              "'_TRUE"
+            ]
+          },
+          {
+            "kind": "instruction",
+            "op": "MOV",
+            "args": [
+              "K2",
+              "'_iUnitNo"
+            ]
+          }
+        ],
+        "text_gaps": [],
+        "native_output_sha256": "803386c0a0b3d5335133d39cb9a77343d7c9dae756bb072bf1aade8acd5c0a65",
+        "bindings": [
+          {
+            "port": "iEn",
+            "operand": "X2F",
+            "template": "LD-OUT",
+            "type_marker": "B",
+            "direction": "input",
+            "record_start": 0,
+            "record_end": 2,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iResStr",
+            "operand": "\"ONE\"",
+            "template": "TRUE-$MOV",
+            "type_marker": "S",
+            "direction": "input",
+            "record_start": 2,
+            "record_end": 4,
+            "handling": "native-source-template-observed"
+          },
+          {
+            "port": "iUnitNo",
+            "operand": "K2",
+            "template": "TRUE-MOV",
+            "type_marker": "W",
+            "direction": "input",
+            "record_start": 4,
+            "record_end": 6,
+            "handling": "native-source-template-observed"
+          }
+        ],
+        "uninterpreted_groups": []
+      },
+      "ports": [
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iEn",
+          "offset": 786,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oRecvCmdDone",
+          "offset": 802,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iUnitNo",
+          "offset": 828,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "W",
+          "name": "oRecvCmdNum",
+          "offset": 848,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iComCh",
+          "offset": 873,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "S",
+          "name": "oRecvData",
+          "offset": 892,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "D",
+          "name": "iPrm",
+          "offset": 915,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oStrReq",
+          "offset": 932,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "W",
+          "name": "iMaxCmdNum",
+          "offset": 953,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oResTimeOut",
+          "offset": 976,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "S",
+          "name": "iResStr",
+          "offset": 1001,
+          "observed_binding_count": 1,
+          "connection_handling": "native-source-template-observed"
+        },
+        {
+          "direction": "output",
+          "type_marker": "B",
+          "name": "oSendDone",
+          "offset": 1021,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        },
+        {
+          "direction": "input",
+          "type_marker": "B",
+          "name": "iResSetDone",
+          "offset": 1044,
+          "observed_binding_count": 0,
+          "connection_handling": "no-binding-decoded"
+        }
+      ],
+      "native_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "$MOV",
+          "args": [
+            "\"ONE\"",
+            "D12911"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K2",
+            "D12949"
+          ]
+        }
+      ],
+      "native_groups": [
+        {
+          "offset": 1913,
+          "stored_step": 389,
+          "stored_width": 1,
+          "raw_base64": "AwADBZGQAQU=",
+          "sha256": "7708d90cbd45639ef1ebb6d85aa4706f4e993e7076d1acdf558e988f86d3fb9b",
+          "decode_request": 0
+        },
+        {
+          "offset": 1921,
+          "stored_step": 390,
+          "stored_width": 5,
+          "raw_base64": "BUwFAwUG7k9ORQYFqG8yBQ==",
+          "sha256": "3c6a301cb54258a40afb739ae6f24c24befdcfd92f36eaaaa8062dcb8778fb69",
+          "decode_request": 214
+        },
+        {
+          "offset": 1937,
+          "stored_step": 395,
+          "stored_width": 1,
+          "raw_base64": "AwADBZGQAQU=",
+          "sha256": "7708d90cbd45639ef1ebb6d85aa4706f4e993e7076d1acdf558e988f86d3fb9b",
+          "decode_request": 0
+        },
+        {
+          "offset": 1945,
+          "stored_step": 396,
+          "stored_width": 2,
+          "raw_base64": "BUwCAAUE6AIEBaiVMgU=",
+          "sha256": "6959bba7142dbd9fcc23f538be471901ba4a25d43bb5ac7373c5c054fcd290d7",
+          "decode_request": 215
+        }
+      ],
+      "parent_boundary": "preceding-code-interval",
+      "final_allocations": {
+        "idxT": "D13131",
+        "iEn": "X2F",
+        "iUnitNo": "D12949",
+        "unitNo": "D13140",
+        "iMaxCmdNum": "D12945",
+        "maxCmdN": "D13139",
+        "iPrm": "D12946",
+        "prmAdr": "D13137",
+        "crLfStr": "D13153",
+        "lfStr": "D13152",
+        "iComCh": "D12948",
+        "rPrm": "D13308",
+        "sPrm": "D13305",
+        "rSts": "M9215",
+        "rBuf": "D13255",
+        "oRecvCmdDone": "M51",
+        "crT": "D13151",
+        "crFlag": "M9211",
+        "prmAdrT": "D13135",
+        "oRecvCmdNum": "D101",
+        "cmdNum": "D13142",
+        "rDatFlg": "M9209",
+        "oStrReq": "M9201",
+        "oRecvData": "D12928",
+        "sd705T": "D13133",
+        "cBuf": "D13205",
+        "cmdT": "D13149",
+        "sWait": "M9210",
+        "sSts": "M9213",
+        "tOutCnt": "T2047",
+        "oResTimeOut": "M9200",
+        "sndT": "D13144",
+        "sBuf": "D13155",
+        "iResSetDone": "SM400",
+        "iResStr": "D12911",
+        "oSendDone": "M9199"
+      },
+      "expected_bindings": {
+        "iEn": "X2F",
+        "iResStr": "D12911",
+        "iUnitNo": "D12949"
+      },
+      "expected_modes": {
+        "iEn": "eliminated-direct-BOOL",
+        "iResStr": "materialized-scalar",
+        "iUnitNo": "materialized-scalar"
+      },
+      "wrong_caller": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "SM400"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K1",
+            "D12949"
+          ]
+        }
+      ],
+      "observed_body_groups": {
+        "source_groups": 163,
+        "exact": 163,
+        "corrected_groups": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,127 @@
+{
+  "scope": "Source metadata and task records versus independent native frontend. Configuration semantics and cross-task scheduling order are not inferred.",
+  "source_sha256": "3283514cae3cfaa3cb2849c37e8b3cae1e26a34f656e8aa60b8df006e1b61bfe",
+  "snapshot_sha256": "228d3dcfa1698905c916635623559c7cc238c0951f9e5ec8f42cbf9d11ee65d2",
+  "cases": [
+    {
+      "task": "TCO",
+      "resource": "MAIN",
+      "task_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCAAEAA0AEQAcABAAAAAAAAAABQAAAEkANwA1ADAAAAACAAAAMAAAABoAAAAAAAAAAQAAABIAAABQAFIARwBfAFQAQwBPAF8AVABJAEMASwBFAFIAXwA1ADAAAAABAAAAAQAAAAAA",
+      "native_buffer_base64": "QAAiASAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg/////////////////////////////////////0EAAAAAAAAAAAAAAAUAAABJNzUwAAIAAAAwABoAAAAAAAAAAQAAAAEAAAASAAAAUFJHX1RDT19USUNLRVJfNTAA",
+      "native_entries": [
+        {
+          "program_reference": "PRG_TCO_TICKER_50",
+          "stored_order": 1
+        }
+      ],
+      "native_texts": [
+        "I750",
+        "0"
+      ],
+      "native_configuration_hex": "1a00000000000000",
+      "resolved_sources": [
+        {
+          "source_program": "PRG_TCO_TICKER_50.Program\\TimeControl.lnb",
+          "declarations": "PRG_TCO_TICKER_50.Labels\\TimeControl.lnl",
+          "library": "TimeControl"
+        }
+      ]
+    },
+    {
+      "task": "AM",
+      "resource": "MAIN",
+      "task_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCAAEAA0ADQAXACQAAAAAAAAABgAAAEYAQQBMAFMARQAAAAgAAABUACMAMQAwADAAbQBzAAAAHwAAAAAAAAABAAAADAAAAFAAUgBHAF8AQQBNAF8AVABFAFMAVAAAAAEAAAABAAAAAAA=",
+      "native_buffer_base64": "QAAiASAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg/////////////////////////////////////0IAAAAAAAAAAAAAAAYAAABGQUxTRQAIAAAAVCMxMDBtcwAfAAAAAAAAAAEAAAABAAAADAAAAFBSR19BTV9URVNUAA==",
+      "native_entries": [
+        {
+          "program_reference": "PRG_AM_TEST",
+          "stored_order": 1
+        }
+      ],
+      "native_texts": [
+        "FALSE",
+        "T#100ms"
+      ],
+      "native_configuration_hex": "1f00000000000000",
+      "resolved_sources": [
+        {
+          "source_program": "PRG_AM_TEST.Program\\AlarmManger.lnb",
+          "declarations": "PRG_AM_TEST.Labels\\AlarmManger.lnl",
+          "library": "AlarmManger"
+        }
+      ]
+    },
+    {
+      "task": "MAIN",
+      "resource": "MAIN",
+      "task_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCAAEAA0AEgArAA0AAAAAAAAABQAAAFQAUgBVAEUAAAACAAAAMAAAAB8AAAAAAAAAAQAAAAUAAABNAEEASQBOAAAAAQAAAAEAAAAAAA==",
+      "native_buffer_base64": "QAAiASAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg/////////////////////////////////////zQAAAAAAAAAAAAAAAUAAABUUlVFAAIAAAAwAB8AAAAAAAAAAQAAAAEAAAAFAAAATUFJTgA=",
+      "native_entries": [
+        {
+          "program_reference": "MAIN",
+          "stored_order": 1
+        }
+      ],
+      "native_texts": [
+        "TRUE",
+        "0"
+      ],
+      "native_configuration_hex": "1f00000000000000",
+      "resolved_sources": [
+        {
+          "source_program": "MAIN.Program.pou",
+          "declarations": "MAIN.Labels.lh",
+          "library": null
+        }
+      ]
+    },
+    {
+      "task": "MB",
+      "resource": "MAIN",
+      "task_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCAAEAA0AEgAqADAAAAAAAAAABgAAAEYAQQBMAFMARQAAAAcAAABUACMAMgAwAG0AcwAAAB8AAAAAAAAAAQAAAAwAAABQAFIARwBfAE0AQgBfAFQARQBTAFQAAAABAAAAAQAAAAAA",
+      "native_buffer_base64": "QAAiASAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg/////////////////////////////////////0EAAAAAAAAAAAAAAAYAAABGQUxTRQAHAAAAVCMyMG1zAB8AAAAAAAAAAQAAAAEAAAAMAAAAUFJHX01CX1RFU1QA",
+      "native_entries": [
+        {
+          "program_reference": "PRG_MB_TEST",
+          "stored_order": 1
+        }
+      ],
+      "native_texts": [
+        "FALSE",
+        "T#20ms"
+      ],
+      "native_configuration_hex": "1f00000000000000",
+      "resolved_sources": [
+        {
+          "source_program": "PRG_MB_TEST.Program\\Modbus.lnb",
+          "declarations": "PRG_MB_TEST.Labels\\Modbus.lnl",
+          "library": "Modbus"
+        }
+      ]
+    },
+    {
+      "task": "TCO_TEST",
+      "resource": "MAIN",
+      "task_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCAAEAA0AEQAdAAsAAAAAAAAABgAAAEYAQQBMAFMARQAAAAcAAABUACMAMgAwAG0AcwAAAB8AAAAAAAAAAQAAABAAAABQAFIARwBfAFQARQBTAFQAXwBUAEMATwBfADUAMAAAAAEAAAABAAAAAAA=",
+      "native_buffer_base64": "QAAiASAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg/////////////////////////////////////0UAAAAAAAAAAAAAAAYAAABGQUxTRQAHAAAAVCMyMG1zAB8AAAAAAAAAAQAAAAEAAAAQAAAAUFJHX1RFU1RfVENPXzUwAA==",
+      "native_entries": [
+        {
+          "program_reference": "PRG_TEST_TCO_50",
+          "stored_order": 1
+        }
+      ],
+      "native_texts": [
+        "FALSE",
+        "T#20ms"
+      ],
+      "native_configuration_hex": "1f00000000000000",
+      "resolved_sources": [
+        {
+          "source_program": "PRG_TEST_TCO_50.Program\\TimeControl.lnb",
+          "declarations": "PRG_TEST_TCO_50.Labels\\TimeControl.lnl",
+          "library": "TimeControl"
+        }
+      ]
+    }
+  ]
+}

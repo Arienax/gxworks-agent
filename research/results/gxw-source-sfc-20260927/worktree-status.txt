@@ -1,0 +1,63 @@
+ M docs/reports/README.md
+ M research/README.md
+ M research/gxw_corpus.py
+ M research/inspect_gxw_compiler.py
+ M research/native/NativeSfcGraphOracle.cs
+ M research/native/WorkspaceReplayOracle.cs
+ M research/native_gxw_compiler.py
+ M research/probe_gxw_callsite_inputs.py
+ M research/probe_gxw_library_sources.py
+ M research/probe_gxw_native_listing.py
+ M research/probe_gxw_operand_bindings.py
+ M research/probe_gxw_sfc_sources.py
+ M research/read_gxw_resources.py
+ M research/replay_gxw_workspace.py
+ M research/verify_relay_blocks.py
+ M src/gxw/__init__.py
+ M src/gxw/cfb_allocator.py
+ M src/gxw/compiler_symbols.py
+ M src/gxw/compiler_tables.py
+ M src/gxw/container.py
+ M src/gxw/container_writer.py
+ M src/gxw/lossless.py
+ M src/gxw/models.py
+ M src/gxw/object_model.py
+ M src/gxw/project_metadata.py
+ M src/gxw/render.py
+ M src/gxw/semantic.py
+ M src/gxw/token_listing.py
+ M src/gxw/token_pou.py
+ M src/gxw/token_resource.py
+ M tests/test_gxw_cfb_allocator.py
+ M tests/test_gxw_compiler.py
+ M tests/test_gxw_lossless.py
+ M tests/test_gxw_network_blocks.py
+ M tests/test_gxw_object_model.py
+ M tests/test_gxw_project_writer.py
+ M tests/test_gxw_semantic_model.py
+?? docs/reports/gxw/2026-09-27-callsite-array-real-checkpoint.md
+?? docs/reports/gxw/2026-09-27-source-allocation-checkpoint.md
+?? docs/reports/gxw/2026-09-27-source-sfc-checkpoint.md
+?? research/evidence/gxw-callsite-inputs-20260927.zip
+?? research/evidence/gxw-partial-sector-20260927.zip
+?? research/evidence/gxw-q-token-grammar-20260927.zip
+?? research/evidence/gxw-source-allocation-20260927.zip
+?? research/freeze_gxw_sfc_checkpoint.py
+?? research/native/TraceCallableLowering.js
+?? research/probe_gxw_build_dependencies.py
+?? research/probe_gxw_callable_ports.py
+?? research/probe_gxw_compiled_dependencies.py
+?? research/probe_gxw_ladder_primitives.py
+?? research/probe_gxw_task_graph.py
+?? research/results/gxw-checkpoint-20260927/
+?? research/results/gxw-partial-sector-20260927.json
+?? research/results/gxw-source-allocation-20260927/
+?? research/results/gxw-source-sfc-20260927/
+?? research/verify_gxw_source_allocation_checkpoint.py
+?? src/gxw/templates/q03udv-token-grammar.json
+?? src/gxw/token_q.py
+?? tests/fixtures/gxw_callable_ports.json
+?? tests/fixtures/gxw_callsite_inputs.json
+?? tests/fixtures/gxw_compile_pending.json
+?? tests/fixtures/gxw_global_instances.json
+?? tests/fixtures/gxw_ladder_primitives.json

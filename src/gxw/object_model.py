@@ -14,7 +14,9 @@ import re
 
 from .container_writer import validate_cfb_streams
 from .declarations import parse_declarations, edit_declarations, CLASS_CODES
-from .models import GXWFormatError, NodeKind, Point, Rect, StructuredBlock
+from .models import (
+    COIL_NODE_KINDS, CONTACT_NODE_KINDS, GXWFormatError, NodeKind, Point, Rect, StructuredBlock,
+)
 from .project_metadata import logical_mapping
 from .project_writer import build_gxw_project
 from .semantic import DEFAULT_FUNCTION_BLOCK_REGISTRY, build_semantic_model
@@ -60,8 +62,9 @@ def _port_names(node):
             return [p.formal_name for p in spec.ports]
     if node.kind == NodeKind.FUNCTION and node.symbol == "MOV" and len(node.ports) == 4:
         return ["EN", "IN", "ENO", "OUT"]
-    return {NodeKind.CONTACT: ["IN", "OUT"], NodeKind.CONTACT_NC: ["IN", "OUT"],
-            NodeKind.COIL: ["IN", "OUT"], NodeKind.INPUT: ["OUT"], NodeKind.OUTPUT: ["IN"]}.get(
+    if node.kind in CONTACT_NODE_KINDS | COIL_NODE_KINDS:
+        return ["IN", "OUT"] if len(node.ports) == 2 else [str(i) for i in range(len(node.ports))]
+    return {NodeKind.INPUT: ["OUT"], NodeKind.OUTPUT: ["IN"]}.get(
                 node.kind, [str(i) for i in range(len(node.ports))])
 
 

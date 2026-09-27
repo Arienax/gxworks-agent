@@ -1,0 +1,273 @@
+{
+  "controls": 1597,
+  "accepted": {
+    "520": 1597,
+    "518": 1597
+  },
+  "differences": [],
+  "ret": {
+    "520": {
+      "decode": {
+        "id": 1596,
+        "return_code": "0x00000000",
+        "consumed_bytes": 8,
+        "output_bytes": 14,
+        "last_kind": 0,
+        "native_value": 0,
+        "error_offset": null,
+        "output_base64": "BmxSRVQAAAY0RU5EAAA="
+      },
+      "encode": {
+        "id": 0,
+        "return_code": "0x00000000",
+        "consumed_bytes": 9,
+        "output_bytes": 8,
+        "last_kind": 8,
+        "native_value": 0,
+        "error_offset": null,
+        "output_base64": "BWwBJAUDNAM="
+      }
+    },
+    "518": {
+      "decode": {
+        "id": 1596,
+        "return_code": "0x00000000",
+        "consumed_bytes": 8,
+        "output_bytes": 14,
+        "last_kind": 0,
+        "native_value": 0,
+        "error_offset": null,
+        "output_base64": "BmxSRVQAAAY0RU5EAAA="
+      },
+      "encode": {
+        "id": 0,
+        "return_code": "0x00000000",
+        "consumed_bytes": 9,
+        "output_bytes": 8,
+        "last_kind": 8,
+        "native_value": 0,
+        "error_offset": null,
+        "output_base64": "BWwBJAUDNAM="
+      }
+    }
+  },
+  "scope": "Native lexical conversion only; no CPU instruction-availability or project-validity inference",
+  "schema_version": 1,
+  "dll_sha256": "a700da129ede89869a00a5614d08b43dc64e94c240494fc753fe09104c5b9399",
+  "reproducer": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\probe_fx_cpu_lexical_controls.py",
+  "ret_body_hex": "056c012405033403",
+  "artifacts": [
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\comparison.json",
+      "sha256": "209b02fb84fc59970a0adfd5742fd5876d99420cb852f1dc3194220268e1efdf"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\cpu-518\\native-stderr.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\cpu-518\\native-stdout.jsonl",
+      "sha256": "c313a9d53461e4e1f7e750c6918b6c5c22ff9b9f43e7328f0356c666ddde41f9"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\cpu-518\\process.json",
+      "sha256": "fa2a52b249ce721a3ca26b2bff69f6c7fd7c55762b24672ef39e9c740e5e12b7"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\cpu-518\\requests.json",
+      "sha256": "35f7cc4d6b0da6c6e3fa104b17c312fe8329f8847df64a3c329824ddc728cafe"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\cpu-518\\TokenOracle.cs",
+      "sha256": "86e116c2817a0b9526c6f5fe2943746044815db995a8c919105676bda241fe30"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\cpu-518\\TokenOracle.exe",
+      "sha256": "301f50dc875f001d13939740a1661c7f87fd1172f07527da36c940f1fd50d360"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\cpu-520\\native-stderr.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\cpu-520\\native-stdout.jsonl",
+      "sha256": "c313a9d53461e4e1f7e750c6918b6c5c22ff9b9f43e7328f0356c666ddde41f9"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\cpu-520\\process.json",
+      "sha256": "939255c309d5386cd6adb4766d347774e7f6c3750123403892504a9cca6f9c0e"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\cpu-520\\requests.json",
+      "sha256": "1c15cbe66094fbd6553c7248c49b042761b412d3d605a6c95387b9f6fce4a5c5"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\cpu-520\\TokenOracle.cs",
+      "sha256": "86e116c2817a0b9526c6f5fe2943746044815db995a8c919105676bda241fe30"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\cpu-520\\TokenOracle.exe",
+      "sha256": "9a328fd4ba2c500abcd7daed2e0a30b40a82d3401019a447dd1d0cad80c0d35c"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\predictions.json",
+      "sha256": "c67a5cce7d31f9d7cb359f526c38d2f0911112e7d9d176f38781b90bf4ac3cd4"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\probe_fx_cpu_lexical_controls.py",
+      "sha256": "b27985de09f952fee2ac57835706b7e6ab04399247390dd48dedbaa8217c3faa"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\ret-encode-518\\native-stderr.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\ret-encode-518\\native-stdout.jsonl",
+      "sha256": "2bbd5deb8431454136f2ac69aa0aa85ddeaf743f804afb8142a9959b8468c363"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\ret-encode-518\\process.json",
+      "sha256": "440a2a8bb743fc6f2e92515d6741557b4524547a291eaa205839b63a9051a441"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\ret-encode-518\\requests.json",
+      "sha256": "8c0fc8dd3351f905e2b35a8bc654abeedd0a4076e4ff7316f41941d7dc836599"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\ret-encode-518\\TokenOracle.cs",
+      "sha256": "86e116c2817a0b9526c6f5fe2943746044815db995a8c919105676bda241fe30"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\ret-encode-518\\TokenOracle.exe",
+      "sha256": "280d27d25530625608aa8682da93d242e07936ac05182a9c4e42828fb05614b3"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\ret-encode-520\\native-stderr.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\ret-encode-520\\native-stdout.jsonl",
+      "sha256": "2bbd5deb8431454136f2ac69aa0aa85ddeaf743f804afb8142a9959b8468c363"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\ret-encode-520\\process.json",
+      "sha256": "343190a3164ffa58af240d221b8d63e3e222d911e4a54ef2855f23d7ef2d8268"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\ret-encode-520\\requests.json",
+      "sha256": "13e2db78eaa01af2188651e96f952f855d2d2f3f71e6d1de6c411ad8d5a7e9fb"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\ret-encode-520\\TokenOracle.cs",
+      "sha256": "86e116c2817a0b9526c6f5fe2943746044815db995a8c919105676bda241fe30"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-cpu-lexical-controls\\ret-encode-520\\TokenOracle.exe",
+      "sha256": "2f951491af56952a46ac9a22c765868ebe64e3fec3c2ad2af62aac3a6b6b2656"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\modbus-source-lexical-control\\control-518\\native-stderr.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\modbus-source-lexical-control\\control-518\\native-stdout.jsonl",
+      "sha256": "309d8f38e536bd10a585069b10b0ad7504f18feee866527f5617bce69f2eae38"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\modbus-source-lexical-control\\control-518\\process.json",
+      "sha256": "b7093b9374193e8d90c528a218ea3ac67c70540689a58eb88efe668a4e242cac"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\modbus-source-lexical-control\\control-518\\requests.json",
+      "sha256": "e33e1ee45ccff7b3c61de20c3fae59921ab6b8f8e09d018e972490c5cb339897"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\modbus-source-lexical-control\\control-518\\TokenOracle.cs",
+      "sha256": "86e116c2817a0b9526c6f5fe2943746044815db995a8c919105676bda241fe30"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\modbus-source-lexical-control\\control-518\\TokenOracle.exe",
+      "sha256": "8c9b7571a20c4509cb3820a43063952e03fcf4b8c65f41e446468e543aff62a0"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\modbus-source-lexical-control\\control-520\\native-stderr.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\modbus-source-lexical-control\\control-520\\native-stdout.jsonl",
+      "sha256": "51fad32fda8e54017e45274eaadea0507fc9be44cf2e3bbcecf9534c479f262c"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\modbus-source-lexical-control\\control-520\\process.json",
+      "sha256": "4d0335402e6878d17a9928e07d2df404e7bd5bb6c362ca20e5ef100de529825a"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\modbus-source-lexical-control\\control-520\\requests.json",
+      "sha256": "42a287bd90e89063f5b78ac2f0fca86146b943d8a8c881d6c494acf5c502beef"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\modbus-source-lexical-control\\control-520\\TokenOracle.cs",
+      "sha256": "86e116c2817a0b9526c6f5fe2943746044815db995a8c919105676bda241fe30"
+    },
+    {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\modbus-source-lexical-control\\control-520\\TokenOracle.exe",
+      "sha256": "e94f26f2731106ee3fd472c003e3a8bb3a2a265183f0ff15a4585050ceb29256"
+    }
+  ],
+  "additional_controls": [
+    {
+      "cpu": 520,
+      "body_hex": "055f0b240504ea010404ea010404ea000404ea010404a80004",
+      "native": [
+        {
+          "id": 0,
+          "return_code": "0x00000000",
+          "consumed_bytes": 25,
+          "output_bytes": 34,
+          "last_kind": 0,
+          "native_value": 0,
+          "error_offset": null,
+          "output_base64": "CF9BRFBSVwAF6kgxAAXqSDEABepIMAAF6kgxAAWoRDAAAA=="
+        },
+        {
+          "id": 1,
+          "return_code": "0x00000000",
+          "consumed_bytes": 26,
+          "output_bytes": 28,
+          "last_kind": 8,
+          "native_value": 0,
+          "error_offset": null,
+          "output_base64": "BV8LJAUE6gEEBOoBBATqAAQE6gEEBKgABAM0Aw=="
+        }
+      ],
+      "scope": "Both CPUs decode the spelling; FX1S encoding rejects this instruction. No CPU availability inferred."
+    },
+    {
+      "cpu": 518,
+      "body_hex": "055f0b240504ea010404ea010404ea000404ea010404a80004",
+      "native": [
+        {
+          "id": 0,
+          "return_code": "0x00000000",
+          "consumed_bytes": 25,
+          "output_bytes": 34,
+          "last_kind": 0,
+          "native_value": 0,
+          "error_offset": null,
+          "output_base64": "CF9BRFBSVwAF6kgxAAXqSDEABepIMAAF6kgxAAWoRDAAAA=="
+        },
+        {
+          "id": 1,
+          "return_code": "0x04020003",
+          "consumed_bytes": 26,
+          "output_bytes": 1048576,
+          "last_kind": 0,
+          "native_value": 0,
+          "error_offset": 0,
+          "output_base64": ""
+        }
+      ],
+      "scope": "Both CPUs decode the spelling; FX1S encoding rejects this instruction. No CPU availability inferred."
+    }
+  ]
+}

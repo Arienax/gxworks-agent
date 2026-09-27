@@ -97,11 +97,14 @@ class CompoundFile:
     def _u32(self, offset: int) -> int:
         return struct.unpack_from("<I", self._data, offset)[0]
 
-    def _sector(self, sector_id: int) -> bytes:
+    def _sector(self, sector_id: int, *, byte_count: Optional[int] = None) -> bytes:
         if sector_id in (FREESECT, ENDOFCHAIN, FATSECT, DIFSECT):
             raise GXWFormatError(f"invalid data sector id: 0x{sector_id:08X}")
         offset = (sector_id + 1) * self.sector_size
-        end = offset + self.sector_size
+        count = self.sector_size if byte_count is None else byte_count
+        if not 0 < count <= self.sector_size:
+            raise GXWFormatError("invalid CFB sector read length")
+        end = offset + count
         if offset < self.sector_size or end > len(self._data):
             raise GXWFormatError(f"CFB sector {sector_id} is outside the file")
         return self._data[offset:end]
@@ -153,10 +156,18 @@ class CompoundFile:
         return result
 
     def _read_regular_stream(self, start_sector: int, size: Optional[int] = None, *, sector_limit: Optional[int] = None) -> bytes:
-        chunks = [
-            self._sector(sector_id)
-            for sector_id in self._walk_chain(start_sector, self._fat, limit=sector_limit)
-        ]
+        chunks = []
+        for index, sector_id in enumerate(self._walk_chain(start_sector, self._fat, limit=sector_limit)):
+            count = self.sector_size
+            if size is not None:
+                remaining = size - index * self.sector_size
+                if 0 < remaining < count:
+                    # Native GX Works2 can omit the last sector's unused tail
+                    # in _hdb. Require all declared payload bytes, not padding.
+                    # Metadata and extra allocated sectors still require a
+                    # complete sector; chain validation is unchanged.
+                    count = remaining
+            chunks.append(self._sector(sector_id, byte_count=count))
         data = b"".join(chunks)
         return data if size is None else data[:size]
 

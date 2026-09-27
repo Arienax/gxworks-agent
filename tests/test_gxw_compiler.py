@@ -20,6 +20,93 @@ ARCHIVE = ROOT / "research/evidence/gxw-structured-compiler-20260920.zip"
 COMPONENT_ARCHIVE = ROOT / "research/evidence/gxw-compiler-components-20260920.zip"
 SYMBOL_ARCHIVE = ROOT / "research/evidence/gxw-compiler-symbols-20260920.zip"
 REPLAY_ARCHIVE = ROOT / "research/evidence/gxw-compiler-replay-20260920.zip"
+CALLSITE_INPUT_CASES = json.loads(
+    (ROOT / "tests/fixtures/gxw_callsite_inputs.json").read_text(encoding="utf-8")
+)["cases"]
+GRAPH_INTERFACE_CASES = json.loads(
+    (ROOT / "tests/fixtures/gxw_callable_ports.json").read_text(encoding="utf-8")
+)["interfaces"]
+
+
+@pytest.mark.parametrize("case", GRAPH_INTERFACE_CASES, ids=lambda row: row["case"] + "/" + row["symbol"])
+def test_graph_formals_match_native_descriptor_observations(case, monkeypatch):
+    monkeypatch.syspath_prepend(str(ROOT / "research"))
+    project = importlib.import_module("probe_gxw_library_sources").observed_graph_formals
+    from gxw.lossless import sha256
+
+    raw = base64.b64decode(case["declaration_base64"])
+    assert sha256(raw) == case["declaration_sha256"]
+    actual = project(raw, input_port_count=case["input_count"])
+    assert actual["handling"] == "observed-graph-formals" and not actual["gaps"]
+    assert [{k: row[k] for k in ("name", "class_code", "type_code")} for row in actual["formals"]] == case["expected"]
+    # Matching the native interface does not establish successful compilation,
+    # writeback destinations or equivalence of changed port flags.
+    assert actual["execution_effects"] == "not inferred"
+    assert base64.b64decode(actual["raw_base64"]) == raw
+
+
+@pytest.mark.parametrize("control", ["truncated", "wrong-input-count", "missing-extensible-count"])
+def test_graph_interface_gaps_retain_input_without_guessing(control, monkeypatch):
+    monkeypatch.syspath_prepend(str(ROOT / "research"))
+    project = importlib.import_module("probe_gxw_library_sources").observed_graph_formals
+    case = next(c for c in GRAPH_INTERFACE_CASES if c["symbol"] == "ADD_E-3")
+    raw = base64.b64decode(case["declaration_base64"])
+    count = case["input_count"]
+    if control == "truncated":
+        raw = raw[:-1]
+    elif control == "wrong-input-count":
+        count = 0
+    else:
+        count = None
+    result = project(raw, input_port_count=count)
+    assert result["handling"] == "opaque-preserved" and result["gaps"]
+    assert result["formals"] == []
+    assert base64.b64decode(result["raw_base64"]) == raw
+
+
+@pytest.mark.parametrize("case", CALLSITE_INPUT_CASES, ids=lambda case: case["id"])
+def test_repeated_fb_inputs_use_their_own_caller_code(case, monkeypatch):
+    """Native FB body cross-checks freeze a destination independent of final CGTable state."""
+    monkeypatch.syspath_prepend(str(ROOT / "research"))
+    compare = importlib.import_module("probe_gxw_callsite_inputs").compare_callsite_inputs
+    from gxw.lossless import sha256
+
+    fragment = case["input_fragment"]
+    assert sha256(base64.b64decode(fragment["raw_base64"])) == fragment["sha256"]
+    for group in case["native_groups"]:
+        assert sha256(base64.b64decode(group["raw_base64"])) == group["sha256"]
+    result = compare(fragment["records"], case["ports"], case["native_caller"], case["final_allocations"])
+    assert result["handling"] == "observed-callsite-input-lowering" and not result["gaps"]
+    assert {b["port"]: b["operand"] for b in result["bindings"]} == case["expected_bindings"]
+    assert {b["port"]: b["mode"] for b in result["bindings"]} == case["expected_modes"]
+    assert case["observed_body_groups"]["exact"] == case["observed_body_groups"]["source_groups"] == 163
+    # Final allocations are metadata only: later calls may replace their
+    # address and representation, including compact allocations versus tag 7.
+    without_final = compare(fragment["records"], case["ports"], case["native_caller"])
+    assert {b["port"]: b["operand"] for b in without_final["bindings"]} == case["expected_bindings"]
+    wrong = compare(fragment["records"], case["ports"], case["wrong_caller"], case["final_allocations"])
+    assert wrong["handling"] == "opaque-preserved" and wrong["gaps"]
+    assert wrong["source_records"] == fragment["records"]
+    assert wrong["native_records"] == case["wrong_caller"]
+
+
+@pytest.mark.parametrize("change", ["unknown_instruction", "wrong_port_type", "extra_native_group"])
+def test_callsite_input_unknown_shapes_remain_opaque(change, monkeypatch):
+    from copy import deepcopy
+    monkeypatch.syspath_prepend(str(ROOT / "research"))
+    compare = importlib.import_module("probe_gxw_callsite_inputs").compare_callsite_inputs
+    case = deepcopy(CALLSITE_INPUT_CASES[0])
+    source, ports, native = case["input_fragment"]["records"], case["ports"], case["native_caller"]
+    if change == "unknown_instruction":
+        source[1]["op"] = "UNOBSERVED"
+    elif change == "wrong_port_type":
+        next(p for p in ports if p["name"] == "iEn")["type_marker"] = "W"
+    else:
+        native += [{"kind": "instruction", "op": "LD", "args": ["X0"]},
+                   {"kind": "instruction", "op": "OUT", "args": ["M999"]}]
+    result = compare(source, ports, native)
+    assert result["handling"] == "opaque-preserved" and result["gaps"]
+    assert result["source_records"] == source and result["native_records"] == native
 
 
 def test_native_link_empty_name_placeholder_is_preserved():
@@ -221,6 +308,57 @@ def test_compiler_component_fields_match_native_reads_and_global_indirection(mon
         user[0] ^= 1
         rows[0]["user_info_base64"] = base64.b64encode(user).decode()
         assert compare(raw, rows)["component_field_mismatches"] == [{"offset": 0, "field": "user_info"}]
+
+
+def test_global_fb_instances_match_native_references_and_keep_distinct_paths(monkeypatch):
+    from gxw.compiler_symbols import compiler_symbol_paths
+    from gxw.lossless import sha256
+    monkeypatch.syspath_prepend(str(ROOT / "research"))
+    oracle = importlib.import_module("native_gxw_compiler")
+    fixture = json.loads((ROOT / "tests/fixtures/gxw_global_instances.json").read_text(encoding="utf-8"))
+    artifacts = {name: base64.b64decode(value["base64"]) for name, value in fixture["artifacts"].items()}
+    for name, raw in artifacts.items():
+        assert len(raw) == fixture["artifacts"][name]["bytes"]
+        assert sha256(raw) == fixture["artifacts"][name]["sha256"]
+    raw = artifacts["CGTable.dat"]
+    assert raw == artifacts["native-replay.bin"]
+    tables = parse_compiler_tables(raw)
+    assert tables.reconstruct() == raw
+    rows = [json.loads(line) for line in artifacts["native-components.jsonl"].splitlines()]
+    assert not oracle.compare_component_reads(raw, rows)["component_field_mismatches"]
+    comparison = oracle.compare_table_dump(raw, artifacts["native-table-dump.txt"])
+    assert comparison["pous_equal"] and comparison["components_equal"] and comparison["instance_refs_equal"]
+    assert (comparison["components"], comparison["instances"]) == (76, 2)
+    globals_pou = next(tables.pou_at(r.table_offset) for r in tables.tables[1].records
+                       if tables.pou_at(r.table_offset).name_bytes == b"@GLOBALS")
+    references = {c.name_bytes: tables.component_instance_pou_offset(c) for c in tables.components(globals_pou)}
+    assert references == {b"GlobalInstance": 0, b"GlobalOther": 65}
+    native = {row["requested_offset"]: base64.b64decode(row["record_base64"]) for row in rows}
+    for component in tables.components(globals_pou):
+        assert component.type_code is None and component.global_offset is not None
+        assert tables.component_instance_pou_offset(component) == struct.unpack_from("<I", native[component.record.table_offset], 0x111)[0]
+    paths = compiler_symbol_paths(tables, globals_pou.record.table_offset)
+    assert len(paths) == 76
+    members = {p.names[1]: p for p in paths if p.names[-1] == b"rPrm"}
+    assert set(members) == {b"GlobalInstance", b"GlobalOther"}
+    assert members[b"GlobalInstance"].symbol.pou_offset == 0
+    assert members[b"GlobalOther"].symbol.pou_offset == 65
+    assert members[b"GlobalInstance"].symbol.assignment.iec_address != members[b"GlobalOther"].symbol.assignment.iec_address
+
+
+@pytest.mark.parametrize("reference,error", [(1, "record boundary"), (130, "cycle")])
+def test_global_fb_reference_corruption_remains_visible(reference, error):
+    from gxw.compiler_symbols import compiler_symbol_paths
+    fixture = json.loads((ROOT / "tests/fixtures/gxw_global_instances.json").read_text(encoding="utf-8"))
+    raw = bytearray(base64.b64decode(fixture["artifacts"]["CGTable.dat"]["base64"]))
+    tables = parse_compiler_tables(raw)
+    global_record = tables.tables[3].records[0]
+    name, _ = global_record.named_fields()
+    struct.pack_into("<I", raw, global_record.offset + 5 + len(name) + 8, reference)
+    changed = parse_compiler_tables(raw)
+    assert changed.reconstruct() == raw
+    with pytest.raises(GXWFormatError, match=error):
+        compiler_symbol_paths(changed, 130)
 
 
 def test_compiler_assignment_native_text_does_not_turn_zero_into_x0():

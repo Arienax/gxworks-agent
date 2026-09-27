@@ -92,6 +92,9 @@ def compare_component_reads(raw, rows):
                   "address_reference": struct.unpack_from("<i", record, 0x109)[0] == tables.component_address_offset(component),
                   "user_info": user == component.user_info,
                   "next_offset": row["next_offset"] == component.record.table_offset + len(component.record.raw)}
+        if tables.component_type(component) == 0x35:
+            checks["instance_reference"] = (struct.unpack_from("<I", record, 0x111)[0]
+                                            == tables.component_instance_pou_offset(component))
         mismatches.extend({"offset": row["requested_offset"], "field": key} for key, equal in checks.items() if not equal)
     return {"component_reads_complete": complete, "component_count": len(rows),
             "component_field_mismatches": mismatches}
@@ -107,9 +110,10 @@ def compare_table_dump(raw, dump):
     pous = [tables.pou_at(r.table_offset) for r in tables.tables[1].records]
     components = [c for p in pous for c in tables.components(p)]
     native_pous = [(int(m[1]), m[2]) for m in re.finditer(rb"^Index\s+(\d+): ([^\r\n]+) \(POU_[^)]+\)", dump, re.M)]
-    native_components = [(int(m[1]), m[2]) for m in re.finditer(rb"^ +Index\s+(\d+): ([^\r\n]+) \(TYPE_[^)]+\)", dump, re.M)]
+    native_components = [(int(m[1]), m[2]) for m in re.finditer(rb"^ +Index\s+(\d+): ([^\r\n]+) \((?:TYPE_[^)]+|\?)\)", dump, re.M)]
     native_references = [int(m[1]) for m in re.finditer(rb"^ +PouIdx = (-?\d+)", dump, re.M)]
-    references = [c.instance_pou_offset for c in components if c.instance_pou_offset is not None]
+    references = [reference for c in components
+                  if (reference := tables.component_instance_pou_offset(c)) is not None]
     for reference in references:
         tables.pou_at(reference)
     return {"pous_equal": native_pous == [(p.record.table_offset, p.name_bytes) for p in pous],

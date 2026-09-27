@@ -25,8 +25,15 @@ partial class WorkspaceReplayOracle {
     static void ReadSfcGraph(IntPtr workspace,ObjectId project,string root,Dictionary<string,object> plan,string cpu) {
         bool fx=cpu=="FX3U/FX3UC";
         if(!fx&&cpu!="Q00J")throw new Exception("SFC work-buffer profile is only observed for FX3U/FX3UC and Q00J");
-        byte[] tokens=File.ReadAllBytes((string)plan["sfc_graph_tokens"]);
-        if(tokens.Length==0||tokens.Length>65536)throw new Exception("SFC token input exceeds experiment bound");
+        bool fromChars=plan.ContainsKey("sfc_graph_chars");
+        if(fromChars&&plan.ContainsKey("sfc_graph_tokens"))throw new Exception("Choose one SFC graph input representation");
+        byte[] graphInput=File.ReadAllBytes((string)plan[fromChars?"sfc_graph_chars":"sfc_graph_tokens"]);
+        if(fromChars) {
+            if(graphInput.Length!=21512)throw new Exception("Outside observed serialized SFC character buffer size");
+            ushort inputX=BitConverter.ToUInt16(graphInput,0),inputY=BitConverter.ToUInt16(graphInput,2);
+            if(inputX==0||inputY==0||inputX>256||inputY>4096||(long)inputX*inputY>3072)
+                throw new Exception("Serialized SFC character grid exceeds its fixed buffer");
+        } else if(graphInput.Length==0||graphInput.Length>65536)throw new Exception("SFC token input exceeds experiment bound");
         IntPtr borrowed,generator=IntPtr.Zero;int code;
         Check("SFC.GetProjectFunction",Slot<ProjectFunctionFn>(workspace,2560)(workspace,project,0x10009,out borrowed,out code),code);
         Guid iid=new Guid("be5a1e9b-bedf-42fe-891b-46cea35f9e04");
@@ -49,13 +56,16 @@ partial class WorkspaceReplayOracle {
                 Marshal.WriteInt16(buffers[4],0,512);Marshal.WriteInt16(buffers[4],2,512);
                 Marshal.WriteInt16(buffers[5],0,4096);Marshal.WriteInt16(buffers[5],2,512);
             } else for(int i=0;i<4;i++)Marshal.WriteInt16(buffers[4],i*2,128);
-            Marshal.Copy(tokens,0,buffers[6],tokens.Length);
+            Marshal.Copy(graphInput,0,buffers[fromChars?0:6],graphInput.Length);
             BindSfcBuffers(generator,buffers,fx);
-            short result;
-            Check("SFC.ConvertPcodeToSFC",Slot<SfcDecodeFn>(generator,716)(generator,buffers[6],out result,out code),code);
-            Record(new {operation="SFC.DecodeResult",result=result});
-            if(result!=0)throw new Exception("Native SFC decoder rejected graph");
-            short decodeResult=result;
+            short result=0,decodeResult=0;
+            if(fromChars)Record(new {operation="SFC.SourceCharacterBuffer",bytes=graphInput.Length});
+            else {
+                Check("SFC.ConvertPcodeToSFC",Slot<SfcDecodeFn>(generator,716)(generator,buffers[6],out result,out code),code);
+                Record(new {operation="SFC.DecodeResult",result=result});
+                if(result!=0)throw new Exception("Native SFC decoder rejected graph");
+                decodeResult=result;
+            }
             if(plan.ContainsKey("sfc_graph_edits")) {
                 foreach(Dictionary<string,object> edit in (System.Collections.IEnumerable)plan["sfc_graph_edits"]) {
                     BindSfcBuffers(generator,buffers,fx);
@@ -82,7 +92,7 @@ partial class WorkspaceReplayOracle {
                 if(hr<0||code!=0)Check("SFC.ReadSymbol",hr,code);
                 if(ret!=0)symbols.Add(new {x=x,y=y,type=type,undefined=undefined,substep=substep,number=number,branch=branch,result=ret});
             }
-            File.WriteAllText(Path.Combine(root,"sfc-native-graph.json"),json.Serialize(new {cpu=cpu,width=width,height=height,decode_result=decodeResult,symbols=symbols}));
+            File.WriteAllText(Path.Combine(root,"sfc-native-graph.json"),json.Serialize(new {cpu=cpu,width=width,height=height,input_kind=fromChars?"source-characters":"tokens",decode_result=fromChars?(short?)null:decodeResult,symbols=symbols}));
             Check("SFC.CheckSFCError",Slot<SfcDecodeFn>(generator,700)(generator,buffers[7],out result,out code),code);
             Record(new {operation="SFC.CheckResult",result=result});
             if(result==0) {

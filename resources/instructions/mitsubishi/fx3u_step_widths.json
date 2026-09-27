@@ -5,6 +5,22 @@
   "cpu_code": 520,
   "reproducer": "research/harvest_native_gxw_tokens.py",
   "opcodes": {
+    "031203": [
+      "MEP",
+      0
+    ],
+    "031303": [
+      "MEF",
+      0
+    ],
+    "055f0b2405": [
+      "ADPRW",
+      5
+    ],
+    "056c012405": [
+      "RET",
+      0
+    ],
     "030003": [
       "LD",
       1
@@ -2003,6 +2019,7 @@
     ]
   },
   "evidence_files": [
+    "research/results/token-20260919/native-fx-cpu-lexical-20260927.json",
     "research/results/token-20260919/native-conversion-ladder-mode.json",
     "research/results/token-20260919/native-operand-corpus-20260920.json"
   ],

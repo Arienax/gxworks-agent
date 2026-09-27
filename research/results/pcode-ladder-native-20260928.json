@@ -1,0 +1,2399 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-28",
+  "environment": {
+    "os": "Windows",
+    "python": "3.13",
+    "adapter_architecture": "x86",
+    "cpu_code": 521
+  },
+  "native_dlls": [
+    {
+      "path": "D:\\GXWORKS2\\Easysocket\\CodeGenerator\\ECCodeGeneratorFX2.dll",
+      "sha256": "a700da129ede89869a00a5614d08b43dc64e94c240494fc753fe09104c5b9399"
+    },
+    {
+      "path": "D:\\GXWORKS2\\Easysocket\\Compiler\\ECCompiler_IEC.dll",
+      "sha256": "f58e7c70b855526bf2f943399a14089f771a43109b13ee9af34c88fb065cf4d7"
+    }
+  ],
+  "scope": "Independent native in-memory PCode-to-ladder conversion for the observed FX3G configuration. No project execution or device access.",
+  "replay_api": "research/native_gxw_ladder.py::native_ladder_batch",
+  "adapter_source_sha256": "a34ed30046ba86e67155b38a7861384231e34562841596aa69a02a88199c70d9",
+  "real_project": {
+    "source_repository": "Serhioromano/gxw2-libraries",
+    "source_commit": "bf050f3879c826c504bcbd39fdab99e32c8d9c0f",
+    "input_sha256": "3283514cae3cfaa3cb2849c37e8b3cae1e26a34f656e8aa60b8df006e1b61bfe",
+    "pcode_sha256": "d9a3abd2aee070d66139e583d6d761d9d6861619774797e7833da439019aa855",
+    "comparison": {
+      "calls": 454,
+      "failures": 6,
+      "differences": [],
+      "guards_intact": true
+    },
+    "comparison_path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-ladder-call-corpus\\reusable-oracle-comparison.json",
+    "comparison_sha256": "4a1ef2f3449c95d4e4037b4a97b3b7092d1018638b9373b2537304d416f84385",
+    "raw_inputs": "Local experiment corpus; not redistributed in this portable record."
+  },
+  "error_provenance": [
+    {
+      "compiler_error": "0x050c9521",
+      "conversion_error": "0x04031004",
+      "site": "ECCompiler_IEC.dll RVA 0x3c34a..0x3c372",
+      "interpretation": "Ladder block size limit in the measured controls; not a universal definition of every occurrence of either code."
+    },
+    {
+      "compiler_error": "0x050c9322",
+      "conversion_error": "0x04031003",
+      "site": "ECCompiler_IEC.dll RVA 0x3c365..0x3c372",
+      "interpretation": "The four measured original-project diagnostics arise from this conversion failure; 0x050c9322 also has another native emission site."
+    }
+  ],
+  "generated_controls": [
+    {
+      "case": "out-parallel-1",
+      "lines": [
+        "LD M8000",
+        "OUT M0"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUDIAMEkAAEAA=="
+      },
+      "native": {
+        "id": 6,
+        "return_code": "0x00000000",
+        "consumed_bytes": 16,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          1,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2063
+      },
+      "fully_consumed": true
+    },
+    {
+      "case": "out-separate-1",
+      "lines": [
+        "LD M8000",
+        "OUT M0"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUDIAMEkAAEAA=="
+      },
+      "native": {
+        "id": 7,
+        "return_code": "0x00000000",
+        "consumed_bytes": 16,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          1,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2063
+      },
+      "fully_consumed": true
+    },
+    {
+      "case": "out-parallel-2",
+      "lines": [
+        "LD M8000",
+        "OUT M0",
+        "OUT M1"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUDIAMEkAAEAyADBJABBAA="
+      },
+      "native": {
+        "id": 8,
+        "return_code": "0x00000000",
+        "consumed_bytes": 23,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          2,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2070
+      },
+      "fully_consumed": true
+    },
+    {
+      "case": "out-separate-2",
+      "lines": [
+        "LD M8000",
+        "OUT M0",
+        "LD M8000",
+        "OUT M1"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUDIAMEkAAEAwADBZBAHwUDIAMEkAEEAA=="
+      },
+      "native": {
+        "id": 9,
+        "return_code": "0x00000000",
+        "consumed_bytes": 15,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          1,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2078
+      },
+      "fully_consumed": false
+    },
+    {
+      "case": "out-parallel-22",
+      "lines": [
+        "LD M8000",
+        "OUT M0",
+        "OUT M1",
+        "OUT M2",
+        "OUT M3",
+        "OUT M4",
+        "OUT M5",
+        "OUT M6",
+        "OUT M7",
+        "OUT M8",
+        "OUT M9",
+        "OUT M10",
+        "OUT M11",
+        "OUT M12",
+        "OUT M13",
+        "OUT M14",
+        "OUT M15",
+        "OUT M16",
+        "OUT M17",
+        "OUT M18",
+        "OUT M19",
+        "OUT M20",
+        "OUT M21"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUDIAMEkAAEAyADBJABBAMgAwSQAgQDIAMEkAMEAyADBJAEBAMgAwSQBQQDIAMEkAYEAyADBJAHBAMgAwSQCAQDIAMEkAkEAyADBJAKBAMgAwSQCwQDIAMEkAwEAyADBJANBAMgAwSQDgQDIAMEkA8EAyADBJAQBAMgAwSQEQQDIAMEkBIEAyADBJATBAMgAwSQFAQDIAMEkBUEAA=="
+      },
+      "native": {
+        "id": 10,
+        "return_code": "0x00000000",
+        "consumed_bytes": 163,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          22,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2210
+      },
+      "fully_consumed": true
+    },
+    {
+      "case": "out-separate-22",
+      "lines": [
+        "LD M8000",
+        "OUT M0",
+        "LD M8000",
+        "OUT M1",
+        "LD M8000",
+        "OUT M2",
+        "LD M8000",
+        "OUT M3",
+        "LD M8000",
+        "OUT M4",
+        "LD M8000",
+        "OUT M5",
+        "LD M8000",
+        "OUT M6",
+        "LD M8000",
+        "OUT M7",
+        "LD M8000",
+        "OUT M8",
+        "LD M8000",
+        "OUT M9",
+        "LD M8000",
+        "OUT M10",
+        "LD M8000",
+        "OUT M11",
+        "LD M8000",
+        "OUT M12",
+        "LD M8000",
+        "OUT M13",
+        "LD M8000",
+        "OUT M14",
+        "LD M8000",
+        "OUT M15",
+        "LD M8000",
+        "OUT M16",
+        "LD M8000",
+        "OUT M17",
+        "LD M8000",
+        "OUT M18",
+        "LD M8000",
+        "OUT M19",
+        "LD M8000",
+        "OUT M20",
+        "LD M8000",
+        "OUT M21"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUDIAMEkAAEAwADBZBAHwUDIAMEkAEEAwADBZBAHwUDIAMEkAIEAwADBZBAHwUDIAMEkAMEAwADBZBAHwUDIAMEkAQEAwADBZBAHwUDIAMEkAUEAwADBZBAHwUDIAMEkAYEAwADBZBAHwUDIAMEkAcEAwADBZBAHwUDIAMEkAgEAwADBZBAHwUDIAMEkAkEAwADBZBAHwUDIAMEkAoEAwADBZBAHwUDIAMEkAsEAwADBZBAHwUDIAMEkAwEAwADBZBAHwUDIAMEkA0EAwADBZBAHwUDIAMEkA4EAwADBZBAHwUDIAMEkA8EAwADBZBAHwUDIAMEkBAEAwADBZBAHwUDIAMEkBEEAwADBZBAHwUDIAMEkBIEAwADBZBAHwUDIAMEkBMEAwADBZBAHwUDIAMEkBQEAwADBZBAHwUDIAMEkBUEAA=="
+      },
+      "native": {
+        "id": 11,
+        "return_code": "0x00000000",
+        "consumed_bytes": 15,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          1,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2378
+      },
+      "fully_consumed": false
+    },
+    {
+      "case": "out-parallel-23",
+      "lines": [
+        "LD M8000",
+        "OUT M0",
+        "OUT M1",
+        "OUT M2",
+        "OUT M3",
+        "OUT M4",
+        "OUT M5",
+        "OUT M6",
+        "OUT M7",
+        "OUT M8",
+        "OUT M9",
+        "OUT M10",
+        "OUT M11",
+        "OUT M12",
+        "OUT M13",
+        "OUT M14",
+        "OUT M15",
+        "OUT M16",
+        "OUT M17",
+        "OUT M18",
+        "OUT M19",
+        "OUT M20",
+        "OUT M21",
+        "OUT M22"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUDIAMEkAAEAyADBJABBAMgAwSQAgQDIAMEkAMEAyADBJAEBAMgAwSQBQQDIAMEkAYEAyADBJAHBAMgAwSQCAQDIAMEkAkEAyADBJAKBAMgAwSQCwQDIAMEkAwEAyADBJANBAMgAwSQDgQDIAMEkA8EAyADBJAQBAMgAwSQEQQDIAMEkBIEAyADBJATBAMgAwSQFAQDIAMEkBUEAyADBJAWBAA="
+      },
+      "native": {
+        "id": 12,
+        "return_code": "0x00000000",
+        "consumed_bytes": 170,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          23,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2217
+      },
+      "fully_consumed": true
+    },
+    {
+      "case": "out-separate-23",
+      "lines": [
+        "LD M8000",
+        "OUT M0",
+        "LD M8000",
+        "OUT M1",
+        "LD M8000",
+        "OUT M2",
+        "LD M8000",
+        "OUT M3",
+        "LD M8000",
+        "OUT M4",
+        "LD M8000",
+        "OUT M5",
+        "LD M8000",
+        "OUT M6",
+        "LD M8000",
+        "OUT M7",
+        "LD M8000",
+        "OUT M8",
+        "LD M8000",
+        "OUT M9",
+        "LD M8000",
+        "OUT M10",
+        "LD M8000",
+        "OUT M11",
+        "LD M8000",
+        "OUT M12",
+        "LD M8000",
+        "OUT M13",
+        "LD M8000",
+        "OUT M14",
+        "LD M8000",
+        "OUT M15",
+        "LD M8000",
+        "OUT M16",
+        "LD M8000",
+        "OUT M17",
+        "LD M8000",
+        "OUT M18",
+        "LD M8000",
+        "OUT M19",
+        "LD M8000",
+        "OUT M20",
+        "LD M8000",
+        "OUT M21",
+        "LD M8000",
+        "OUT M22"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUDIAMEkAAEAwADBZBAHwUDIAMEkAEEAwADBZBAHwUDIAMEkAIEAwADBZBAHwUDIAMEkAMEAwADBZBAHwUDIAMEkAQEAwADBZBAHwUDIAMEkAUEAwADBZBAHwUDIAMEkAYEAwADBZBAHwUDIAMEkAcEAwADBZBAHwUDIAMEkAgEAwADBZBAHwUDIAMEkAkEAwADBZBAHwUDIAMEkAoEAwADBZBAHwUDIAMEkAsEAwADBZBAHwUDIAMEkAwEAwADBZBAHwUDIAMEkA0EAwADBZBAHwUDIAMEkA4EAwADBZBAHwUDIAMEkA8EAwADBZBAHwUDIAMEkBAEAwADBZBAHwUDIAMEkBEEAwADBZBAHwUDIAMEkBIEAwADBZBAHwUDIAMEkBMEAwADBZBAHwUDIAMEkBQEAwADBZBAHwUDIAMEkBUEAwADBZBAHwUDIAMEkBYEAA=="
+      },
+      "native": {
+        "id": 13,
+        "return_code": "0x00000000",
+        "consumed_bytes": 15,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          1,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2393
+      },
+      "fully_consumed": false
+    },
+    {
+      "case": "out-parallel-24",
+      "lines": [
+        "LD M8000",
+        "OUT M0",
+        "OUT M1",
+        "OUT M2",
+        "OUT M3",
+        "OUT M4",
+        "OUT M5",
+        "OUT M6",
+        "OUT M7",
+        "OUT M8",
+        "OUT M9",
+        "OUT M10",
+        "OUT M11",
+        "OUT M12",
+        "OUT M13",
+        "OUT M14",
+        "OUT M15",
+        "OUT M16",
+        "OUT M17",
+        "OUT M18",
+        "OUT M19",
+        "OUT M20",
+        "OUT M21",
+        "OUT M22",
+        "OUT M23"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUDIAMEkAAEAyADBJABBAMgAwSQAgQDIAMEkAMEAyADBJAEBAMgAwSQBQQDIAMEkAYEAyADBJAHBAMgAwSQCAQDIAMEkAkEAyADBJAKBAMgAwSQCwQDIAMEkAwEAyADBJANBAMgAwSQDgQDIAMEkA8EAyADBJAQBAMgAwSQEQQDIAMEkBIEAyADBJATBAMgAwSQFAQDIAMEkBUEAyADBJAWBAMgAwSQFwQA"
+      },
+      "native": {
+        "id": 14,
+        "return_code": "0x00000000",
+        "consumed_bytes": 177,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          24,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2224
+      },
+      "fully_consumed": true
+    },
+    {
+      "case": "out-separate-24",
+      "lines": [
+        "LD M8000",
+        "OUT M0",
+        "LD M8000",
+        "OUT M1",
+        "LD M8000",
+        "OUT M2",
+        "LD M8000",
+        "OUT M3",
+        "LD M8000",
+        "OUT M4",
+        "LD M8000",
+        "OUT M5",
+        "LD M8000",
+        "OUT M6",
+        "LD M8000",
+        "OUT M7",
+        "LD M8000",
+        "OUT M8",
+        "LD M8000",
+        "OUT M9",
+        "LD M8000",
+        "OUT M10",
+        "LD M8000",
+        "OUT M11",
+        "LD M8000",
+        "OUT M12",
+        "LD M8000",
+        "OUT M13",
+        "LD M8000",
+        "OUT M14",
+        "LD M8000",
+        "OUT M15",
+        "LD M8000",
+        "OUT M16",
+        "LD M8000",
+        "OUT M17",
+        "LD M8000",
+        "OUT M18",
+        "LD M8000",
+        "OUT M19",
+        "LD M8000",
+        "OUT M20",
+        "LD M8000",
+        "OUT M21",
+        "LD M8000",
+        "OUT M22",
+        "LD M8000",
+        "OUT M23"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUDIAMEkAAEAwADBZBAHwUDIAMEkAEEAwADBZBAHwUDIAMEkAIEAwADBZBAHwUDIAMEkAMEAwADBZBAHwUDIAMEkAQEAwADBZBAHwUDIAMEkAUEAwADBZBAHwUDIAMEkAYEAwADBZBAHwUDIAMEkAcEAwADBZBAHwUDIAMEkAgEAwADBZBAHwUDIAMEkAkEAwADBZBAHwUDIAMEkAoEAwADBZBAHwUDIAMEkAsEAwADBZBAHwUDIAMEkAwEAwADBZBAHwUDIAMEkA0EAwADBZBAHwUDIAMEkA4EAwADBZBAHwUDIAMEkA8EAwADBZBAHwUDIAMEkBAEAwADBZBAHwUDIAMEkBEEAwADBZBAHwUDIAMEkBIEAwADBZBAHwUDIAMEkBMEAwADBZBAHwUDIAMEkBQEAwADBZBAHwUDIAMEkBUEAwADBZBAHwUDIAMEkBYEAwADBZBAHwUDIAMEkBcEAA=="
+      },
+      "native": {
+        "id": 15,
+        "return_code": "0x00000000",
+        "consumed_bytes": 15,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          1,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2408
+      },
+      "fully_consumed": false
+    },
+    {
+      "case": "out-parallel-25",
+      "lines": [
+        "LD M8000",
+        "OUT M0",
+        "OUT M1",
+        "OUT M2",
+        "OUT M3",
+        "OUT M4",
+        "OUT M5",
+        "OUT M6",
+        "OUT M7",
+        "OUT M8",
+        "OUT M9",
+        "OUT M10",
+        "OUT M11",
+        "OUT M12",
+        "OUT M13",
+        "OUT M14",
+        "OUT M15",
+        "OUT M16",
+        "OUT M17",
+        "OUT M18",
+        "OUT M19",
+        "OUT M20",
+        "OUT M21",
+        "OUT M22",
+        "OUT M23",
+        "OUT M24"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUDIAMEkAAEAyADBJABBAMgAwSQAgQDIAMEkAMEAyADBJAEBAMgAwSQBQQDIAMEkAYEAyADBJAHBAMgAwSQCAQDIAMEkAkEAyADBJAKBAMgAwSQCwQDIAMEkAwEAyADBJANBAMgAwSQDgQDIAMEkA8EAyADBJAQBAMgAwSQEQQDIAMEkBIEAyADBJATBAMgAwSQFAQDIAMEkBUEAyADBJAWBAMgAwSQFwQDIAMEkBgEAA=="
+      },
+      "native": {
+        "id": 16,
+        "return_code": "0x04031004",
+        "consumed_bytes": 184,
+        "count": 1,
+        "error_offset": 183,
+        "metadata": [
+          23,
+          24,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2231
+      },
+      "fully_consumed": true
+    },
+    {
+      "case": "out-separate-25",
+      "lines": [
+        "LD M8000",
+        "OUT M0",
+        "LD M8000",
+        "OUT M1",
+        "LD M8000",
+        "OUT M2",
+        "LD M8000",
+        "OUT M3",
+        "LD M8000",
+        "OUT M4",
+        "LD M8000",
+        "OUT M5",
+        "LD M8000",
+        "OUT M6",
+        "LD M8000",
+        "OUT M7",
+        "LD M8000",
+        "OUT M8",
+        "LD M8000",
+        "OUT M9",
+        "LD M8000",
+        "OUT M10",
+        "LD M8000",
+        "OUT M11",
+        "LD M8000",
+        "OUT M12",
+        "LD M8000",
+        "OUT M13",
+        "LD M8000",
+        "OUT M14",
+        "LD M8000",
+        "OUT M15",
+        "LD M8000",
+        "OUT M16",
+        "LD M8000",
+        "OUT M17",
+        "LD M8000",
+        "OUT M18",
+        "LD M8000",
+        "OUT M19",
+        "LD M8000",
+        "OUT M20",
+        "LD M8000",
+        "OUT M21",
+        "LD M8000",
+        "OUT M22",
+        "LD M8000",
+        "OUT M23",
+        "LD M8000",
+        "OUT M24"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUDIAMEkAAEAwADBZBAHwUDIAMEkAEEAwADBZBAHwUDIAMEkAIEAwADBZBAHwUDIAMEkAMEAwADBZBAHwUDIAMEkAQEAwADBZBAHwUDIAMEkAUEAwADBZBAHwUDIAMEkAYEAwADBZBAHwUDIAMEkAcEAwADBZBAHwUDIAMEkAgEAwADBZBAHwUDIAMEkAkEAwADBZBAHwUDIAMEkAoEAwADBZBAHwUDIAMEkAsEAwADBZBAHwUDIAMEkAwEAwADBZBAHwUDIAMEkA0EAwADBZBAHwUDIAMEkA4EAwADBZBAHwUDIAMEkA8EAwADBZBAHwUDIAMEkBAEAwADBZBAHwUDIAMEkBEEAwADBZBAHwUDIAMEkBIEAwADBZBAHwUDIAMEkBMEAwADBZBAHwUDIAMEkBQEAwADBZBAHwUDIAMEkBUEAwADBZBAHwUDIAMEkBYEAwADBZBAHwUDIAMEkBcEAwADBZBAHwUDIAMEkBgEAA=="
+      },
+      "native": {
+        "id": 17,
+        "return_code": "0x00000000",
+        "consumed_bytes": 15,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          1,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2423
+      },
+      "fully_consumed": false
+    },
+    {
+      "case": "out-parallel-30",
+      "lines": [
+        "LD M8000",
+        "OUT M0",
+        "OUT M1",
+        "OUT M2",
+        "OUT M3",
+        "OUT M4",
+        "OUT M5",
+        "OUT M6",
+        "OUT M7",
+        "OUT M8",
+        "OUT M9",
+        "OUT M10",
+        "OUT M11",
+        "OUT M12",
+        "OUT M13",
+        "OUT M14",
+        "OUT M15",
+        "OUT M16",
+        "OUT M17",
+        "OUT M18",
+        "OUT M19",
+        "OUT M20",
+        "OUT M21",
+        "OUT M22",
+        "OUT M23",
+        "OUT M24",
+        "OUT M25",
+        "OUT M26",
+        "OUT M27",
+        "OUT M28",
+        "OUT M29"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUDIAMEkAAEAyADBJABBAMgAwSQAgQDIAMEkAMEAyADBJAEBAMgAwSQBQQDIAMEkAYEAyADBJAHBAMgAwSQCAQDIAMEkAkEAyADBJAKBAMgAwSQCwQDIAMEkAwEAyADBJANBAMgAwSQDgQDIAMEkA8EAyADBJAQBAMgAwSQEQQDIAMEkBIEAyADBJATBAMgAwSQFAQDIAMEkBUEAyADBJAWBAMgAwSQFwQDIAMEkBgEAyADBJAZBAMgAwSQGgQDIAMEkBsEAyADBJAcBAMgAwSQHQQA"
+      },
+      "native": {
+        "id": 18,
+        "return_code": "0x04031004",
+        "consumed_bytes": 219,
+        "count": 1,
+        "error_offset": 218,
+        "metadata": [
+          23,
+          24,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2266
+      },
+      "fully_consumed": true
+    },
+    {
+      "case": "out-separate-30",
+      "lines": [
+        "LD M8000",
+        "OUT M0",
+        "LD M8000",
+        "OUT M1",
+        "LD M8000",
+        "OUT M2",
+        "LD M8000",
+        "OUT M3",
+        "LD M8000",
+        "OUT M4",
+        "LD M8000",
+        "OUT M5",
+        "LD M8000",
+        "OUT M6",
+        "LD M8000",
+        "OUT M7",
+        "LD M8000",
+        "OUT M8",
+        "LD M8000",
+        "OUT M9",
+        "LD M8000",
+        "OUT M10",
+        "LD M8000",
+        "OUT M11",
+        "LD M8000",
+        "OUT M12",
+        "LD M8000",
+        "OUT M13",
+        "LD M8000",
+        "OUT M14",
+        "LD M8000",
+        "OUT M15",
+        "LD M8000",
+        "OUT M16",
+        "LD M8000",
+        "OUT M17",
+        "LD M8000",
+        "OUT M18",
+        "LD M8000",
+        "OUT M19",
+        "LD M8000",
+        "OUT M20",
+        "LD M8000",
+        "OUT M21",
+        "LD M8000",
+        "OUT M22",
+        "LD M8000",
+        "OUT M23",
+        "LD M8000",
+        "OUT M24",
+        "LD M8000",
+        "OUT M25",
+        "LD M8000",
+        "OUT M26",
+        "LD M8000",
+        "OUT M27",
+        "LD M8000",
+        "OUT M28",
+        "LD M8000",
+        "OUT M29"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUDIAMEkAAEAwADBZBAHwUDIAMEkAEEAwADBZBAHwUDIAMEkAIEAwADBZBAHwUDIAMEkAMEAwADBZBAHwUDIAMEkAQEAwADBZBAHwUDIAMEkAUEAwADBZBAHwUDIAMEkAYEAwADBZBAHwUDIAMEkAcEAwADBZBAHwUDIAMEkAgEAwADBZBAHwUDIAMEkAkEAwADBZBAHwUDIAMEkAoEAwADBZBAHwUDIAMEkAsEAwADBZBAHwUDIAMEkAwEAwADBZBAHwUDIAMEkA0EAwADBZBAHwUDIAMEkA4EAwADBZBAHwUDIAMEkA8EAwADBZBAHwUDIAMEkBAEAwADBZBAHwUDIAMEkBEEAwADBZBAHwUDIAMEkBIEAwADBZBAHwUDIAMEkBMEAwADBZBAHwUDIAMEkBQEAwADBZBAHwUDIAMEkBUEAwADBZBAHwUDIAMEkBYEAwADBZBAHwUDIAMEkBcEAwADBZBAHwUDIAMEkBgEAwADBZBAHwUDIAMEkBkEAwADBZBAHwUDIAMEkBoEAwADBZBAHwUDIAMEkBsEAwADBZBAHwUDIAMEkBwEAwADBZBAHwUDIAMEkB0EAA=="
+      },
+      "native": {
+        "id": 19,
+        "return_code": "0x00000000",
+        "consumed_bytes": 15,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          1,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2498
+      },
+      "fully_consumed": false
+    },
+    {
+      "case": "out-parallel-48",
+      "lines": [
+        "LD M8000",
+        "OUT M0",
+        "OUT M1",
+        "OUT M2",
+        "OUT M3",
+        "OUT M4",
+        "OUT M5",
+        "OUT M6",
+        "OUT M7",
+        "OUT M8",
+        "OUT M9",
+        "OUT M10",
+        "OUT M11",
+        "OUT M12",
+        "OUT M13",
+        "OUT M14",
+        "OUT M15",
+        "OUT M16",
+        "OUT M17",
+        "OUT M18",
+        "OUT M19",
+        "OUT M20",
+        "OUT M21",
+        "OUT M22",
+        "OUT M23",
+        "OUT M24",
+        "OUT M25",
+        "OUT M26",
+        "OUT M27",
+        "OUT M28",
+        "OUT M29",
+        "OUT M30",
+        "OUT M31",
+        "OUT M32",
+        "OUT M33",
+        "OUT M34",
+        "OUT M35",
+        "OUT M36",
+        "OUT M37",
+        "OUT M38",
+        "OUT M39",
+        "OUT M40",
+        "OUT M41",
+        "OUT M42",
+        "OUT M43",
+        "OUT M44",
+        "OUT M45",
+        "OUT M46",
+        "OUT M47"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUDIAMEkAAEAyADBJABBAMgAwSQAgQDIAMEkAMEAyADBJAEBAMgAwSQBQQDIAMEkAYEAyADBJAHBAMgAwSQCAQDIAMEkAkEAyADBJAKBAMgAwSQCwQDIAMEkAwEAyADBJANBAMgAwSQDgQDIAMEkA8EAyADBJAQBAMgAwSQEQQDIAMEkBIEAyADBJATBAMgAwSQFAQDIAMEkBUEAyADBJAWBAMgAwSQFwQDIAMEkBgEAyADBJAZBAMgAwSQGgQDIAMEkBsEAyADBJAcBAMgAwSQHQQDIAMEkB4EAyADBJAfBAMgAwSQIAQDIAMEkCEEAyADBJAiBAMgAwSQIwQDIAMEkCQEAyADBJAlBAMgAwSQJgQDIAMEkCcEAyADBJAoBAMgAwSQKQQDIAMEkCoEAyADBJArBAMgAwSQLAQDIAMEkC0EAyADBJAuBAMgAwSQLwQA"
+      },
+      "native": {
+        "id": 20,
+        "return_code": "0x04031004",
+        "consumed_bytes": 345,
+        "count": 1,
+        "error_offset": 344,
+        "metadata": [
+          23,
+          24,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2392
+      },
+      "fully_consumed": true
+    },
+    {
+      "case": "out-separate-48",
+      "lines": [
+        "LD M8000",
+        "OUT M0",
+        "LD M8000",
+        "OUT M1",
+        "LD M8000",
+        "OUT M2",
+        "LD M8000",
+        "OUT M3",
+        "LD M8000",
+        "OUT M4",
+        "LD M8000",
+        "OUT M5",
+        "LD M8000",
+        "OUT M6",
+        "LD M8000",
+        "OUT M7",
+        "LD M8000",
+        "OUT M8",
+        "LD M8000",
+        "OUT M9",
+        "LD M8000",
+        "OUT M10",
+        "LD M8000",
+        "OUT M11",
+        "LD M8000",
+        "OUT M12",
+        "LD M8000",
+        "OUT M13",
+        "LD M8000",
+        "OUT M14",
+        "LD M8000",
+        "OUT M15",
+        "LD M8000",
+        "OUT M16",
+        "LD M8000",
+        "OUT M17",
+        "LD M8000",
+        "OUT M18",
+        "LD M8000",
+        "OUT M19",
+        "LD M8000",
+        "OUT M20",
+        "LD M8000",
+        "OUT M21",
+        "LD M8000",
+        "OUT M22",
+        "LD M8000",
+        "OUT M23",
+        "LD M8000",
+        "OUT M24",
+        "LD M8000",
+        "OUT M25",
+        "LD M8000",
+        "OUT M26",
+        "LD M8000",
+        "OUT M27",
+        "LD M8000",
+        "OUT M28",
+        "LD M8000",
+        "OUT M29",
+        "LD M8000",
+        "OUT M30",
+        "LD M8000",
+        "OUT M31",
+        "LD M8000",
+        "OUT M32",
+        "LD M8000",
+        "OUT M33",
+        "LD M8000",
+        "OUT M34",
+        "LD M8000",
+        "OUT M35",
+        "LD M8000",
+        "OUT M36",
+        "LD M8000",
+        "OUT M37",
+        "LD M8000",
+        "OUT M38",
+        "LD M8000",
+        "OUT M39",
+        "LD M8000",
+        "OUT M40",
+        "LD M8000",
+        "OUT M41",
+        "LD M8000",
+        "OUT M42",
+        "LD M8000",
+        "OUT M43",
+        "LD M8000",
+        "OUT M44",
+        "LD M8000",
+        "OUT M45",
+        "LD M8000",
+        "OUT M46",
+        "LD M8000",
+        "OUT M47"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUDIAMEkAAEAwADBZBAHwUDIAMEkAEEAwADBZBAHwUDIAMEkAIEAwADBZBAHwUDIAMEkAMEAwADBZBAHwUDIAMEkAQEAwADBZBAHwUDIAMEkAUEAwADBZBAHwUDIAMEkAYEAwADBZBAHwUDIAMEkAcEAwADBZBAHwUDIAMEkAgEAwADBZBAHwUDIAMEkAkEAwADBZBAHwUDIAMEkAoEAwADBZBAHwUDIAMEkAsEAwADBZBAHwUDIAMEkAwEAwADBZBAHwUDIAMEkA0EAwADBZBAHwUDIAMEkA4EAwADBZBAHwUDIAMEkA8EAwADBZBAHwUDIAMEkBAEAwADBZBAHwUDIAMEkBEEAwADBZBAHwUDIAMEkBIEAwADBZBAHwUDIAMEkBMEAwADBZBAHwUDIAMEkBQEAwADBZBAHwUDIAMEkBUEAwADBZBAHwUDIAMEkBYEAwADBZBAHwUDIAMEkBcEAwADBZBAHwUDIAMEkBgEAwADBZBAHwUDIAMEkBkEAwADBZBAHwUDIAMEkBoEAwADBZBAHwUDIAMEkBsEAwADBZBAHwUDIAMEkBwEAwADBZBAHwUDIAMEkB0EAwADBZBAHwUDIAMEkB4EAwADBZBAHwUDIAMEkB8EAwADBZBAHwUDIAMEkCAEAwADBZBAHwUDIAMEkCEEAwADBZBAHwUDIAMEkCIEAwADBZBAHwUDIAMEkCMEAwADBZBAHwUDIAMEkCQEAwADBZBAHwUDIAMEkCUEAwADBZBAHwUDIAMEkCYEAwADBZBAHwUDIAMEkCcEAwADBZBAHwUDIAMEkCgEAwADBZBAHwUDIAMEkCkEAwADBZBAHwUDIAMEkCoEAwADBZBAHwUDIAMEkCsEAwADBZBAHwUDIAMEkCwEAwADBZBAHwUDIAMEkC0EAwADBZBAHwUDIAMEkC4EAwADBZBAHwUDIAMEkC8EAA=="
+      },
+      "native": {
+        "id": 21,
+        "return_code": "0x00000000",
+        "consumed_bytes": 15,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          1,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2768
+      },
+      "fully_consumed": false
+    },
+    {
+      "case": "mov-parallel-1",
+      "lines": [
+        "LD M8000",
+        "MOV K0 D0"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUFTAUABQToAAQEqAAEAA=="
+      },
+      "native": {
+        "id": 22,
+        "return_code": "0x00000000",
+        "consumed_bytes": 22,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          1,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2069
+      },
+      "fully_consumed": true
+    },
+    {
+      "case": "mov-separate-1",
+      "lines": [
+        "LD M8000",
+        "MOV K0 D0"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUFTAUABQToAAQEqAAEAA=="
+      },
+      "native": {
+        "id": 23,
+        "return_code": "0x00000000",
+        "consumed_bytes": 22,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          1,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2069
+      },
+      "fully_consumed": true
+    },
+    {
+      "case": "mov-parallel-2",
+      "lines": [
+        "LD M8000",
+        "MOV K0 D0",
+        "MOV K1 D1"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUFTAUABQToAAQEqAAEBUwFAAUE6AEEBKgBBAA="
+      },
+      "native": {
+        "id": 24,
+        "return_code": "0x00000000",
+        "consumed_bytes": 35,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          2,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2082
+      },
+      "fully_consumed": true
+    },
+    {
+      "case": "mov-separate-2",
+      "lines": [
+        "LD M8000",
+        "MOV K0 D0",
+        "LD M8000",
+        "MOV K1 D1"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUFTAUABQToAAQEqAAEAwADBZBAHwUFTAUABQToAQQEqAEEAA=="
+      },
+      "native": {
+        "id": 25,
+        "return_code": "0x00000000",
+        "consumed_bytes": 21,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          1,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2090
+      },
+      "fully_consumed": false
+    },
+    {
+      "case": "mov-parallel-22",
+      "lines": [
+        "LD M8000",
+        "MOV K0 D0",
+        "MOV K1 D1",
+        "MOV K2 D2",
+        "MOV K3 D3",
+        "MOV K4 D4",
+        "MOV K5 D5",
+        "MOV K6 D6",
+        "MOV K7 D7",
+        "MOV K8 D8",
+        "MOV K9 D9",
+        "MOV K10 D10",
+        "MOV K11 D11",
+        "MOV K12 D12",
+        "MOV K13 D13",
+        "MOV K14 D14",
+        "MOV K15 D15",
+        "MOV K16 D16",
+        "MOV K17 D17",
+        "MOV K18 D18",
+        "MOV K19 D19",
+        "MOV K20 D20",
+        "MOV K21 D21"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUFTAUABQToAAQEqAAEBUwFAAUE6AEEBKgBBAVMBQAFBOgCBASoAgQFTAUABQToAwQEqAMEBUwFAAUE6AQEBKgEBAVMBQAFBOgFBASoBQQFTAUABQToBgQEqAYEBUwFAAUE6AcEBKgHBAVMBQAFBOgIBASoCAQFTAUABQToCQQEqAkEBUwFAAUE6AoEBKgKBAVMBQAFBOgLBASoCwQFTAUABQToDAQEqAwEBUwFAAUE6A0EBKgNBAVMBQAFBOgOBASoDgQFTAUABQToDwQEqA8EBUwFAAUE6BAEBKgQBAVMBQAFBOgRBASoEQQFTAUABQToEgQEqBIEBUwFAAUE6BMEBKgTBAVMBQAFBOgUBASoFAQFTAUABQToFQQEqBUEAA=="
+      },
+      "native": {
+        "id": 26,
+        "return_code": "0x00000000",
+        "consumed_bytes": 295,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          22,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2342
+      },
+      "fully_consumed": true
+    },
+    {
+      "case": "mov-separate-22",
+      "lines": [
+        "LD M8000",
+        "MOV K0 D0",
+        "LD M8000",
+        "MOV K1 D1",
+        "LD M8000",
+        "MOV K2 D2",
+        "LD M8000",
+        "MOV K3 D3",
+        "LD M8000",
+        "MOV K4 D4",
+        "LD M8000",
+        "MOV K5 D5",
+        "LD M8000",
+        "MOV K6 D6",
+        "LD M8000",
+        "MOV K7 D7",
+        "LD M8000",
+        "MOV K8 D8",
+        "LD M8000",
+        "MOV K9 D9",
+        "LD M8000",
+        "MOV K10 D10",
+        "LD M8000",
+        "MOV K11 D11",
+        "LD M8000",
+        "MOV K12 D12",
+        "LD M8000",
+        "MOV K13 D13",
+        "LD M8000",
+        "MOV K14 D14",
+        "LD M8000",
+        "MOV K15 D15",
+        "LD M8000",
+        "MOV K16 D16",
+        "LD M8000",
+        "MOV K17 D17",
+        "LD M8000",
+        "MOV K18 D18",
+        "LD M8000",
+        "MOV K19 D19",
+        "LD M8000",
+        "MOV K20 D20",
+        "LD M8000",
+        "MOV K21 D21"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUFTAUABQToAAQEqAAEAwADBZBAHwUFTAUABQToAQQEqAEEAwADBZBAHwUFTAUABQToAgQEqAIEAwADBZBAHwUFTAUABQToAwQEqAMEAwADBZBAHwUFTAUABQToBAQEqAQEAwADBZBAHwUFTAUABQToBQQEqAUEAwADBZBAHwUFTAUABQToBgQEqAYEAwADBZBAHwUFTAUABQToBwQEqAcEAwADBZBAHwUFTAUABQToCAQEqAgEAwADBZBAHwUFTAUABQToCQQEqAkEAwADBZBAHwUFTAUABQToCgQEqAoEAwADBZBAHwUFTAUABQToCwQEqAsEAwADBZBAHwUFTAUABQToDAQEqAwEAwADBZBAHwUFTAUABQToDQQEqA0EAwADBZBAHwUFTAUABQToDgQEqA4EAwADBZBAHwUFTAUABQToDwQEqA8EAwADBZBAHwUFTAUABQToEAQEqBAEAwADBZBAHwUFTAUABQToEQQEqBEEAwADBZBAHwUFTAUABQToEgQEqBIEAwADBZBAHwUFTAUABQToEwQEqBMEAwADBZBAHwUFTAUABQToFAQEqBQEAwADBZBAHwUFTAUABQToFQQEqBUEAA=="
+      },
+      "native": {
+        "id": 27,
+        "return_code": "0x00000000",
+        "consumed_bytes": 21,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          1,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2510
+      },
+      "fully_consumed": false
+    },
+    {
+      "case": "mov-parallel-23",
+      "lines": [
+        "LD M8000",
+        "MOV K0 D0",
+        "MOV K1 D1",
+        "MOV K2 D2",
+        "MOV K3 D3",
+        "MOV K4 D4",
+        "MOV K5 D5",
+        "MOV K6 D6",
+        "MOV K7 D7",
+        "MOV K8 D8",
+        "MOV K9 D9",
+        "MOV K10 D10",
+        "MOV K11 D11",
+        "MOV K12 D12",
+        "MOV K13 D13",
+        "MOV K14 D14",
+        "MOV K15 D15",
+        "MOV K16 D16",
+        "MOV K17 D17",
+        "MOV K18 D18",
+        "MOV K19 D19",
+        "MOV K20 D20",
+        "MOV K21 D21",
+        "MOV K22 D22"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUFTAUABQToAAQEqAAEBUwFAAUE6AEEBKgBBAVMBQAFBOgCBASoAgQFTAUABQToAwQEqAMEBUwFAAUE6AQEBKgEBAVMBQAFBOgFBASoBQQFTAUABQToBgQEqAYEBUwFAAUE6AcEBKgHBAVMBQAFBOgIBASoCAQFTAUABQToCQQEqAkEBUwFAAUE6AoEBKgKBAVMBQAFBOgLBASoCwQFTAUABQToDAQEqAwEBUwFAAUE6A0EBKgNBAVMBQAFBOgOBASoDgQFTAUABQToDwQEqA8EBUwFAAUE6BAEBKgQBAVMBQAFBOgRBASoEQQFTAUABQToEgQEqBIEBUwFAAUE6BMEBKgTBAVMBQAFBOgUBASoFAQFTAUABQToFQQEqBUEBUwFAAUE6BYEBKgWBAA="
+      },
+      "native": {
+        "id": 28,
+        "return_code": "0x00000000",
+        "consumed_bytes": 308,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          23,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2355
+      },
+      "fully_consumed": true
+    },
+    {
+      "case": "mov-separate-23",
+      "lines": [
+        "LD M8000",
+        "MOV K0 D0",
+        "LD M8000",
+        "MOV K1 D1",
+        "LD M8000",
+        "MOV K2 D2",
+        "LD M8000",
+        "MOV K3 D3",
+        "LD M8000",
+        "MOV K4 D4",
+        "LD M8000",
+        "MOV K5 D5",
+        "LD M8000",
+        "MOV K6 D6",
+        "LD M8000",
+        "MOV K7 D7",
+        "LD M8000",
+        "MOV K8 D8",
+        "LD M8000",
+        "MOV K9 D9",
+        "LD M8000",
+        "MOV K10 D10",
+        "LD M8000",
+        "MOV K11 D11",
+        "LD M8000",
+        "MOV K12 D12",
+        "LD M8000",
+        "MOV K13 D13",
+        "LD M8000",
+        "MOV K14 D14",
+        "LD M8000",
+        "MOV K15 D15",
+        "LD M8000",
+        "MOV K16 D16",
+        "LD M8000",
+        "MOV K17 D17",
+        "LD M8000",
+        "MOV K18 D18",
+        "LD M8000",
+        "MOV K19 D19",
+        "LD M8000",
+        "MOV K20 D20",
+        "LD M8000",
+        "MOV K21 D21",
+        "LD M8000",
+        "MOV K22 D22"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUFTAUABQToAAQEqAAEAwADBZBAHwUFTAUABQToAQQEqAEEAwADBZBAHwUFTAUABQToAgQEqAIEAwADBZBAHwUFTAUABQToAwQEqAMEAwADBZBAHwUFTAUABQToBAQEqAQEAwADBZBAHwUFTAUABQToBQQEqAUEAwADBZBAHwUFTAUABQToBgQEqAYEAwADBZBAHwUFTAUABQToBwQEqAcEAwADBZBAHwUFTAUABQToCAQEqAgEAwADBZBAHwUFTAUABQToCQQEqAkEAwADBZBAHwUFTAUABQToCgQEqAoEAwADBZBAHwUFTAUABQToCwQEqAsEAwADBZBAHwUFTAUABQToDAQEqAwEAwADBZBAHwUFTAUABQToDQQEqA0EAwADBZBAHwUFTAUABQToDgQEqA4EAwADBZBAHwUFTAUABQToDwQEqA8EAwADBZBAHwUFTAUABQToEAQEqBAEAwADBZBAHwUFTAUABQToEQQEqBEEAwADBZBAHwUFTAUABQToEgQEqBIEAwADBZBAHwUFTAUABQToEwQEqBMEAwADBZBAHwUFTAUABQToFAQEqBQEAwADBZBAHwUFTAUABQToFQQEqBUEAwADBZBAHwUFTAUABQToFgQEqBYEAA=="
+      },
+      "native": {
+        "id": 29,
+        "return_code": "0x00000000",
+        "consumed_bytes": 21,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          1,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2531
+      },
+      "fully_consumed": false
+    },
+    {
+      "case": "mov-parallel-24",
+      "lines": [
+        "LD M8000",
+        "MOV K0 D0",
+        "MOV K1 D1",
+        "MOV K2 D2",
+        "MOV K3 D3",
+        "MOV K4 D4",
+        "MOV K5 D5",
+        "MOV K6 D6",
+        "MOV K7 D7",
+        "MOV K8 D8",
+        "MOV K9 D9",
+        "MOV K10 D10",
+        "MOV K11 D11",
+        "MOV K12 D12",
+        "MOV K13 D13",
+        "MOV K14 D14",
+        "MOV K15 D15",
+        "MOV K16 D16",
+        "MOV K17 D17",
+        "MOV K18 D18",
+        "MOV K19 D19",
+        "MOV K20 D20",
+        "MOV K21 D21",
+        "MOV K22 D22",
+        "MOV K23 D23"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUFTAUABQToAAQEqAAEBUwFAAUE6AEEBKgBBAVMBQAFBOgCBASoAgQFTAUABQToAwQEqAMEBUwFAAUE6AQEBKgEBAVMBQAFBOgFBASoBQQFTAUABQToBgQEqAYEBUwFAAUE6AcEBKgHBAVMBQAFBOgIBASoCAQFTAUABQToCQQEqAkEBUwFAAUE6AoEBKgKBAVMBQAFBOgLBASoCwQFTAUABQToDAQEqAwEBUwFAAUE6A0EBKgNBAVMBQAFBOgOBASoDgQFTAUABQToDwQEqA8EBUwFAAUE6BAEBKgQBAVMBQAFBOgRBASoEQQFTAUABQToEgQEqBIEBUwFAAUE6BMEBKgTBAVMBQAFBOgUBASoFAQFTAUABQToFQQEqBUEBUwFAAUE6BYEBKgWBAVMBQAFBOgXBASoFwQA"
+      },
+      "native": {
+        "id": 30,
+        "return_code": "0x00000000",
+        "consumed_bytes": 321,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          24,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2368
+      },
+      "fully_consumed": true
+    },
+    {
+      "case": "mov-separate-24",
+      "lines": [
+        "LD M8000",
+        "MOV K0 D0",
+        "LD M8000",
+        "MOV K1 D1",
+        "LD M8000",
+        "MOV K2 D2",
+        "LD M8000",
+        "MOV K3 D3",
+        "LD M8000",
+        "MOV K4 D4",
+        "LD M8000",
+        "MOV K5 D5",
+        "LD M8000",
+        "MOV K6 D6",
+        "LD M8000",
+        "MOV K7 D7",
+        "LD M8000",
+        "MOV K8 D8",
+        "LD M8000",
+        "MOV K9 D9",
+        "LD M8000",
+        "MOV K10 D10",
+        "LD M8000",
+        "MOV K11 D11",
+        "LD M8000",
+        "MOV K12 D12",
+        "LD M8000",
+        "MOV K13 D13",
+        "LD M8000",
+        "MOV K14 D14",
+        "LD M8000",
+        "MOV K15 D15",
+        "LD M8000",
+        "MOV K16 D16",
+        "LD M8000",
+        "MOV K17 D17",
+        "LD M8000",
+        "MOV K18 D18",
+        "LD M8000",
+        "MOV K19 D19",
+        "LD M8000",
+        "MOV K20 D20",
+        "LD M8000",
+        "MOV K21 D21",
+        "LD M8000",
+        "MOV K22 D22",
+        "LD M8000",
+        "MOV K23 D23"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUFTAUABQToAAQEqAAEAwADBZBAHwUFTAUABQToAQQEqAEEAwADBZBAHwUFTAUABQToAgQEqAIEAwADBZBAHwUFTAUABQToAwQEqAMEAwADBZBAHwUFTAUABQToBAQEqAQEAwADBZBAHwUFTAUABQToBQQEqAUEAwADBZBAHwUFTAUABQToBgQEqAYEAwADBZBAHwUFTAUABQToBwQEqAcEAwADBZBAHwUFTAUABQToCAQEqAgEAwADBZBAHwUFTAUABQToCQQEqAkEAwADBZBAHwUFTAUABQToCgQEqAoEAwADBZBAHwUFTAUABQToCwQEqAsEAwADBZBAHwUFTAUABQToDAQEqAwEAwADBZBAHwUFTAUABQToDQQEqA0EAwADBZBAHwUFTAUABQToDgQEqA4EAwADBZBAHwUFTAUABQToDwQEqA8EAwADBZBAHwUFTAUABQToEAQEqBAEAwADBZBAHwUFTAUABQToEQQEqBEEAwADBZBAHwUFTAUABQToEgQEqBIEAwADBZBAHwUFTAUABQToEwQEqBMEAwADBZBAHwUFTAUABQToFAQEqBQEAwADBZBAHwUFTAUABQToFQQEqBUEAwADBZBAHwUFTAUABQToFgQEqBYEAwADBZBAHwUFTAUABQToFwQEqBcEAA=="
+      },
+      "native": {
+        "id": 31,
+        "return_code": "0x00000000",
+        "consumed_bytes": 21,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          1,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2552
+      },
+      "fully_consumed": false
+    },
+    {
+      "case": "mov-parallel-25",
+      "lines": [
+        "LD M8000",
+        "MOV K0 D0",
+        "MOV K1 D1",
+        "MOV K2 D2",
+        "MOV K3 D3",
+        "MOV K4 D4",
+        "MOV K5 D5",
+        "MOV K6 D6",
+        "MOV K7 D7",
+        "MOV K8 D8",
+        "MOV K9 D9",
+        "MOV K10 D10",
+        "MOV K11 D11",
+        "MOV K12 D12",
+        "MOV K13 D13",
+        "MOV K14 D14",
+        "MOV K15 D15",
+        "MOV K16 D16",
+        "MOV K17 D17",
+        "MOV K18 D18",
+        "MOV K19 D19",
+        "MOV K20 D20",
+        "MOV K21 D21",
+        "MOV K22 D22",
+        "MOV K23 D23",
+        "MOV K24 D24"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUFTAUABQToAAQEqAAEBUwFAAUE6AEEBKgBBAVMBQAFBOgCBASoAgQFTAUABQToAwQEqAMEBUwFAAUE6AQEBKgEBAVMBQAFBOgFBASoBQQFTAUABQToBgQEqAYEBUwFAAUE6AcEBKgHBAVMBQAFBOgIBASoCAQFTAUABQToCQQEqAkEBUwFAAUE6AoEBKgKBAVMBQAFBOgLBASoCwQFTAUABQToDAQEqAwEBUwFAAUE6A0EBKgNBAVMBQAFBOgOBASoDgQFTAUABQToDwQEqA8EBUwFAAUE6BAEBKgQBAVMBQAFBOgRBASoEQQFTAUABQToEgQEqBIEBUwFAAUE6BMEBKgTBAVMBQAFBOgUBASoFAQFTAUABQToFQQEqBUEBUwFAAUE6BYEBKgWBAVMBQAFBOgXBASoFwQFTAUABQToGAQEqBgEAA=="
+      },
+      "native": {
+        "id": 32,
+        "return_code": "0x04031004",
+        "consumed_bytes": 334,
+        "count": 1,
+        "error_offset": 333,
+        "metadata": [
+          23,
+          24,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2381
+      },
+      "fully_consumed": true
+    },
+    {
+      "case": "mov-separate-25",
+      "lines": [
+        "LD M8000",
+        "MOV K0 D0",
+        "LD M8000",
+        "MOV K1 D1",
+        "LD M8000",
+        "MOV K2 D2",
+        "LD M8000",
+        "MOV K3 D3",
+        "LD M8000",
+        "MOV K4 D4",
+        "LD M8000",
+        "MOV K5 D5",
+        "LD M8000",
+        "MOV K6 D6",
+        "LD M8000",
+        "MOV K7 D7",
+        "LD M8000",
+        "MOV K8 D8",
+        "LD M8000",
+        "MOV K9 D9",
+        "LD M8000",
+        "MOV K10 D10",
+        "LD M8000",
+        "MOV K11 D11",
+        "LD M8000",
+        "MOV K12 D12",
+        "LD M8000",
+        "MOV K13 D13",
+        "LD M8000",
+        "MOV K14 D14",
+        "LD M8000",
+        "MOV K15 D15",
+        "LD M8000",
+        "MOV K16 D16",
+        "LD M8000",
+        "MOV K17 D17",
+        "LD M8000",
+        "MOV K18 D18",
+        "LD M8000",
+        "MOV K19 D19",
+        "LD M8000",
+        "MOV K20 D20",
+        "LD M8000",
+        "MOV K21 D21",
+        "LD M8000",
+        "MOV K22 D22",
+        "LD M8000",
+        "MOV K23 D23",
+        "LD M8000",
+        "MOV K24 D24"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUFTAUABQToAAQEqAAEAwADBZBAHwUFTAUABQToAQQEqAEEAwADBZBAHwUFTAUABQToAgQEqAIEAwADBZBAHwUFTAUABQToAwQEqAMEAwADBZBAHwUFTAUABQToBAQEqAQEAwADBZBAHwUFTAUABQToBQQEqAUEAwADBZBAHwUFTAUABQToBgQEqAYEAwADBZBAHwUFTAUABQToBwQEqAcEAwADBZBAHwUFTAUABQToCAQEqAgEAwADBZBAHwUFTAUABQToCQQEqAkEAwADBZBAHwUFTAUABQToCgQEqAoEAwADBZBAHwUFTAUABQToCwQEqAsEAwADBZBAHwUFTAUABQToDAQEqAwEAwADBZBAHwUFTAUABQToDQQEqA0EAwADBZBAHwUFTAUABQToDgQEqA4EAwADBZBAHwUFTAUABQToDwQEqA8EAwADBZBAHwUFTAUABQToEAQEqBAEAwADBZBAHwUFTAUABQToEQQEqBEEAwADBZBAHwUFTAUABQToEgQEqBIEAwADBZBAHwUFTAUABQToEwQEqBMEAwADBZBAHwUFTAUABQToFAQEqBQEAwADBZBAHwUFTAUABQToFQQEqBUEAwADBZBAHwUFTAUABQToFgQEqBYEAwADBZBAHwUFTAUABQToFwQEqBcEAwADBZBAHwUFTAUABQToGAQEqBgEAA=="
+      },
+      "native": {
+        "id": 33,
+        "return_code": "0x00000000",
+        "consumed_bytes": 21,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          1,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2573
+      },
+      "fully_consumed": false
+    },
+    {
+      "case": "mov-parallel-30",
+      "lines": [
+        "LD M8000",
+        "MOV K0 D0",
+        "MOV K1 D1",
+        "MOV K2 D2",
+        "MOV K3 D3",
+        "MOV K4 D4",
+        "MOV K5 D5",
+        "MOV K6 D6",
+        "MOV K7 D7",
+        "MOV K8 D8",
+        "MOV K9 D9",
+        "MOV K10 D10",
+        "MOV K11 D11",
+        "MOV K12 D12",
+        "MOV K13 D13",
+        "MOV K14 D14",
+        "MOV K15 D15",
+        "MOV K16 D16",
+        "MOV K17 D17",
+        "MOV K18 D18",
+        "MOV K19 D19",
+        "MOV K20 D20",
+        "MOV K21 D21",
+        "MOV K22 D22",
+        "MOV K23 D23",
+        "MOV K24 D24",
+        "MOV K25 D25",
+        "MOV K26 D26",
+        "MOV K27 D27",
+        "MOV K28 D28",
+        "MOV K29 D29"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUFTAUABQToAAQEqAAEBUwFAAUE6AEEBKgBBAVMBQAFBOgCBASoAgQFTAUABQToAwQEqAMEBUwFAAUE6AQEBKgEBAVMBQAFBOgFBASoBQQFTAUABQToBgQEqAYEBUwFAAUE6AcEBKgHBAVMBQAFBOgIBASoCAQFTAUABQToCQQEqAkEBUwFAAUE6AoEBKgKBAVMBQAFBOgLBASoCwQFTAUABQToDAQEqAwEBUwFAAUE6A0EBKgNBAVMBQAFBOgOBASoDgQFTAUABQToDwQEqA8EBUwFAAUE6BAEBKgQBAVMBQAFBOgRBASoEQQFTAUABQToEgQEqBIEBUwFAAUE6BMEBKgTBAVMBQAFBOgUBASoFAQFTAUABQToFQQEqBUEBUwFAAUE6BYEBKgWBAVMBQAFBOgXBASoFwQFTAUABQToGAQEqBgEBUwFAAUE6BkEBKgZBAVMBQAFBOgaBASoGgQFTAUABQToGwQEqBsEBUwFAAUE6BwEBKgcBAVMBQAFBOgdBASoHQQA"
+      },
+      "native": {
+        "id": 34,
+        "return_code": "0x04031004",
+        "consumed_bytes": 399,
+        "count": 1,
+        "error_offset": 398,
+        "metadata": [
+          23,
+          24,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2446
+      },
+      "fully_consumed": true
+    },
+    {
+      "case": "mov-separate-30",
+      "lines": [
+        "LD M8000",
+        "MOV K0 D0",
+        "LD M8000",
+        "MOV K1 D1",
+        "LD M8000",
+        "MOV K2 D2",
+        "LD M8000",
+        "MOV K3 D3",
+        "LD M8000",
+        "MOV K4 D4",
+        "LD M8000",
+        "MOV K5 D5",
+        "LD M8000",
+        "MOV K6 D6",
+        "LD M8000",
+        "MOV K7 D7",
+        "LD M8000",
+        "MOV K8 D8",
+        "LD M8000",
+        "MOV K9 D9",
+        "LD M8000",
+        "MOV K10 D10",
+        "LD M8000",
+        "MOV K11 D11",
+        "LD M8000",
+        "MOV K12 D12",
+        "LD M8000",
+        "MOV K13 D13",
+        "LD M8000",
+        "MOV K14 D14",
+        "LD M8000",
+        "MOV K15 D15",
+        "LD M8000",
+        "MOV K16 D16",
+        "LD M8000",
+        "MOV K17 D17",
+        "LD M8000",
+        "MOV K18 D18",
+        "LD M8000",
+        "MOV K19 D19",
+        "LD M8000",
+        "MOV K20 D20",
+        "LD M8000",
+        "MOV K21 D21",
+        "LD M8000",
+        "MOV K22 D22",
+        "LD M8000",
+        "MOV K23 D23",
+        "LD M8000",
+        "MOV K24 D24",
+        "LD M8000",
+        "MOV K25 D25",
+        "LD M8000",
+        "MOV K26 D26",
+        "LD M8000",
+        "MOV K27 D27",
+        "LD M8000",
+        "MOV K28 D28",
+        "LD M8000",
+        "MOV K29 D29"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUFTAUABQToAAQEqAAEAwADBZBAHwUFTAUABQToAQQEqAEEAwADBZBAHwUFTAUABQToAgQEqAIEAwADBZBAHwUFTAUABQToAwQEqAMEAwADBZBAHwUFTAUABQToBAQEqAQEAwADBZBAHwUFTAUABQToBQQEqAUEAwADBZBAHwUFTAUABQToBgQEqAYEAwADBZBAHwUFTAUABQToBwQEqAcEAwADBZBAHwUFTAUABQToCAQEqAgEAwADBZBAHwUFTAUABQToCQQEqAkEAwADBZBAHwUFTAUABQToCgQEqAoEAwADBZBAHwUFTAUABQToCwQEqAsEAwADBZBAHwUFTAUABQToDAQEqAwEAwADBZBAHwUFTAUABQToDQQEqA0EAwADBZBAHwUFTAUABQToDgQEqA4EAwADBZBAHwUFTAUABQToDwQEqA8EAwADBZBAHwUFTAUABQToEAQEqBAEAwADBZBAHwUFTAUABQToEQQEqBEEAwADBZBAHwUFTAUABQToEgQEqBIEAwADBZBAHwUFTAUABQToEwQEqBMEAwADBZBAHwUFTAUABQToFAQEqBQEAwADBZBAHwUFTAUABQToFQQEqBUEAwADBZBAHwUFTAUABQToFgQEqBYEAwADBZBAHwUFTAUABQToFwQEqBcEAwADBZBAHwUFTAUABQToGAQEqBgEAwADBZBAHwUFTAUABQToGQQEqBkEAwADBZBAHwUFTAUABQToGgQEqBoEAwADBZBAHwUFTAUABQToGwQEqBsEAwADBZBAHwUFTAUABQToHAQEqBwEAwADBZBAHwUFTAUABQToHQQEqB0EAA=="
+      },
+      "native": {
+        "id": 35,
+        "return_code": "0x00000000",
+        "consumed_bytes": 21,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          1,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2678
+      },
+      "fully_consumed": false
+    },
+    {
+      "case": "mov-parallel-48",
+      "lines": [
+        "LD M8000",
+        "MOV K0 D0",
+        "MOV K1 D1",
+        "MOV K2 D2",
+        "MOV K3 D3",
+        "MOV K4 D4",
+        "MOV K5 D5",
+        "MOV K6 D6",
+        "MOV K7 D7",
+        "MOV K8 D8",
+        "MOV K9 D9",
+        "MOV K10 D10",
+        "MOV K11 D11",
+        "MOV K12 D12",
+        "MOV K13 D13",
+        "MOV K14 D14",
+        "MOV K15 D15",
+        "MOV K16 D16",
+        "MOV K17 D17",
+        "MOV K18 D18",
+        "MOV K19 D19",
+        "MOV K20 D20",
+        "MOV K21 D21",
+        "MOV K22 D22",
+        "MOV K23 D23",
+        "MOV K24 D24",
+        "MOV K25 D25",
+        "MOV K26 D26",
+        "MOV K27 D27",
+        "MOV K28 D28",
+        "MOV K29 D29",
+        "MOV K30 D30",
+        "MOV K31 D31",
+        "MOV K32 D32",
+        "MOV K33 D33",
+        "MOV K34 D34",
+        "MOV K35 D35",
+        "MOV K36 D36",
+        "MOV K37 D37",
+        "MOV K38 D38",
+        "MOV K39 D39",
+        "MOV K40 D40",
+        "MOV K41 D41",
+        "MOV K42 D42",
+        "MOV K43 D43",
+        "MOV K44 D44",
+        "MOV K45 D45",
+        "MOV K46 D46",
+        "MOV K47 D47"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUFTAUABQToAAQEqAAEBUwFAAUE6AEEBKgBBAVMBQAFBOgCBASoAgQFTAUABQToAwQEqAMEBUwFAAUE6AQEBKgEBAVMBQAFBOgFBASoBQQFTAUABQToBgQEqAYEBUwFAAUE6AcEBKgHBAVMBQAFBOgIBASoCAQFTAUABQToCQQEqAkEBUwFAAUE6AoEBKgKBAVMBQAFBOgLBASoCwQFTAUABQToDAQEqAwEBUwFAAUE6A0EBKgNBAVMBQAFBOgOBASoDgQFTAUABQToDwQEqA8EBUwFAAUE6BAEBKgQBAVMBQAFBOgRBASoEQQFTAUABQToEgQEqBIEBUwFAAUE6BMEBKgTBAVMBQAFBOgUBASoFAQFTAUABQToFQQEqBUEBUwFAAUE6BYEBKgWBAVMBQAFBOgXBASoFwQFTAUABQToGAQEqBgEBUwFAAUE6BkEBKgZBAVMBQAFBOgaBASoGgQFTAUABQToGwQEqBsEBUwFAAUE6BwEBKgcBAVMBQAFBOgdBASoHQQFTAUABQToHgQEqB4EBUwFAAUE6B8EBKgfBAVMBQAFBOggBASoIAQFTAUABQToIQQEqCEEBUwFAAUE6CIEBKgiBAVMBQAFBOgjBASoIwQFTAUABQToJAQEqCQEBUwFAAUE6CUEBKglBAVMBQAFBOgmBASoJgQFTAUABQToJwQEqCcEBUwFAAUE6CgEBKgoBAVMBQAFBOgpBASoKQQFTAUABQToKgQEqCoEBUwFAAUE6CsEBKgrBAVMBQAFBOgsBASoLAQFTAUABQToLQQEqC0EBUwFAAUE6C4EBKguBAVMBQAFBOgvBASoLwQA"
+      },
+      "native": {
+        "id": 36,
+        "return_code": "0x04031004",
+        "consumed_bytes": 633,
+        "count": 1,
+        "error_offset": 632,
+        "metadata": [
+          23,
+          24,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 2680
+      },
+      "fully_consumed": true
+    },
+    {
+      "case": "mov-separate-48",
+      "lines": [
+        "LD M8000",
+        "MOV K0 D0",
+        "LD M8000",
+        "MOV K1 D1",
+        "LD M8000",
+        "MOV K2 D2",
+        "LD M8000",
+        "MOV K3 D3",
+        "LD M8000",
+        "MOV K4 D4",
+        "LD M8000",
+        "MOV K5 D5",
+        "LD M8000",
+        "MOV K6 D6",
+        "LD M8000",
+        "MOV K7 D7",
+        "LD M8000",
+        "MOV K8 D8",
+        "LD M8000",
+        "MOV K9 D9",
+        "LD M8000",
+        "MOV K10 D10",
+        "LD M8000",
+        "MOV K11 D11",
+        "LD M8000",
+        "MOV K12 D12",
+        "LD M8000",
+        "MOV K13 D13",
+        "LD M8000",
+        "MOV K14 D14",
+        "LD M8000",
+        "MOV K15 D15",
+        "LD M8000",
+        "MOV K16 D16",
+        "LD M8000",
+        "MOV K17 D17",
+        "LD M8000",
+        "MOV K18 D18",
+        "LD M8000",
+        "MOV K19 D19",
+        "LD M8000",
+        "MOV K20 D20",
+        "LD M8000",
+        "MOV K21 D21",
+        "LD M8000",
+        "MOV K22 D22",
+        "LD M8000",
+        "MOV K23 D23",
+        "LD M8000",
+        "MOV K24 D24",
+        "LD M8000",
+        "MOV K25 D25",
+        "LD M8000",
+        "MOV K26 D26",
+        "LD M8000",
+        "MOV K27 D27",
+        "LD M8000",
+        "MOV K28 D28",
+        "LD M8000",
+        "MOV K29 D29",
+        "LD M8000",
+        "MOV K30 D30",
+        "LD M8000",
+        "MOV K31 D31",
+        "LD M8000",
+        "MOV K32 D32",
+        "LD M8000",
+        "MOV K33 D33",
+        "LD M8000",
+        "MOV K34 D34",
+        "LD M8000",
+        "MOV K35 D35",
+        "LD M8000",
+        "MOV K36 D36",
+        "LD M8000",
+        "MOV K37 D37",
+        "LD M8000",
+        "MOV K38 D38",
+        "LD M8000",
+        "MOV K39 D39",
+        "LD M8000",
+        "MOV K40 D40",
+        "LD M8000",
+        "MOV K41 D41",
+        "LD M8000",
+        "MOV K42 D42",
+        "LD M8000",
+        "MOV K43 D43",
+        "LD M8000",
+        "MOV K44 D44",
+        "LD M8000",
+        "MOV K45 D45",
+        "LD M8000",
+        "MOV K46 D46",
+        "LD M8000",
+        "MOV K47 D47"
+      ],
+      "request": {
+        "cpu": 521,
+        "input_base64": "AwADBZBAHwUFTAUABQToAAQEqAAEAwADBZBAHwUFTAUABQToAQQEqAEEAwADBZBAHwUFTAUABQToAgQEqAIEAwADBZBAHwUFTAUABQToAwQEqAMEAwADBZBAHwUFTAUABQToBAQEqAQEAwADBZBAHwUFTAUABQToBQQEqAUEAwADBZBAHwUFTAUABQToBgQEqAYEAwADBZBAHwUFTAUABQToBwQEqAcEAwADBZBAHwUFTAUABQToCAQEqAgEAwADBZBAHwUFTAUABQToCQQEqAkEAwADBZBAHwUFTAUABQToCgQEqAoEAwADBZBAHwUFTAUABQToCwQEqAsEAwADBZBAHwUFTAUABQToDAQEqAwEAwADBZBAHwUFTAUABQToDQQEqA0EAwADBZBAHwUFTAUABQToDgQEqA4EAwADBZBAHwUFTAUABQToDwQEqA8EAwADBZBAHwUFTAUABQToEAQEqBAEAwADBZBAHwUFTAUABQToEQQEqBEEAwADBZBAHwUFTAUABQToEgQEqBIEAwADBZBAHwUFTAUABQToEwQEqBMEAwADBZBAHwUFTAUABQToFAQEqBQEAwADBZBAHwUFTAUABQToFQQEqBUEAwADBZBAHwUFTAUABQToFgQEqBYEAwADBZBAHwUFTAUABQToFwQEqBcEAwADBZBAHwUFTAUABQToGAQEqBgEAwADBZBAHwUFTAUABQToGQQEqBkEAwADBZBAHwUFTAUABQToGgQEqBoEAwADBZBAHwUFTAUABQToGwQEqBsEAwADBZBAHwUFTAUABQToHAQEqBwEAwADBZBAHwUFTAUABQToHQQEqB0EAwADBZBAHwUFTAUABQToHgQEqB4EAwADBZBAHwUFTAUABQToHwQEqB8EAwADBZBAHwUFTAUABQToIAQEqCAEAwADBZBAHwUFTAUABQToIQQEqCEEAwADBZBAHwUFTAUABQToIgQEqCIEAwADBZBAHwUFTAUABQToIwQEqCMEAwADBZBAHwUFTAUABQToJAQEqCQEAwADBZBAHwUFTAUABQToJQQEqCUEAwADBZBAHwUFTAUABQToJgQEqCYEAwADBZBAHwUFTAUABQToJwQEqCcEAwADBZBAHwUFTAUABQToKAQEqCgEAwADBZBAHwUFTAUABQToKQQEqCkEAwADBZBAHwUFTAUABQToKgQEqCoEAwADBZBAHwUFTAUABQToKwQEqCsEAwADBZBAHwUFTAUABQToLAQEqCwEAwADBZBAHwUFTAUABQToLQQEqC0EAwADBZBAHwUFTAUABQToLgQEqC4EAwADBZBAHwUFTAUABQToLwQEqC8EAA=="
+      },
+      "native": {
+        "id": 37,
+        "return_code": "0x00000000",
+        "consumed_bytes": 21,
+        "count": 1,
+        "error_offset": null,
+        "metadata": [
+          23,
+          1,
+          8
+        ],
+        "guards_intact": true,
+        "pointers_unchanged": true,
+        "capacity": 3056
+      },
+      "fully_consumed": false
+    }
+  ],
+  "source_controls": [
+    {
+      "assignments": 24,
+      "source_text": "D0 := 0;\r\nD1 := 1;\r\nD2 := 2;\r\nD3 := 3;\r\nD4 := 4;\r\nD5 := 5;\r\nD6 := 6;\r\nD7 := 7;\r\nD8 := 8;\r\nD9 := 9;\r\nD10 := 10;\r\nD11 := 11;\r\nD12 := 12;\r\nD13 := 13;\r\nD14 := 14;\r\nD15 := 15;\r\nD16 := 16;\r\nD17 := 17;\r\nD18 := 18;\r\nD19 := 19;\r\nD20 := 20;\r\nD21 := 21;\r\nD22 := 22;\r\nD23 := 23;\r\n",
+      "fresh_check_completed": true,
+      "compiler_rejected": false,
+      "errors": [],
+      "pcode_sha256": "c902da9b897f2459550227e55b8730764138e972be7d110c29ad24aa0756651d",
+      "native_listing": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "M8000"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K0",
+            "D0"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K1",
+            "D1"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K2",
+            "D2"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K3",
+            "D3"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K4",
+            "D4"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K5",
+            "D5"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K6",
+            "D6"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K7",
+            "D7"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K8",
+            "D8"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K9",
+            "D9"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K10",
+            "D10"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K11",
+            "D11"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K12",
+            "D12"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K13",
+            "D13"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K14",
+            "D14"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K15",
+            "D15"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K16",
+            "D16"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K17",
+            "D17"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K18",
+            "D18"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K19",
+            "D19"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K20",
+            "D20"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K21",
+            "D21"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K22",
+            "D22"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K23",
+            "D23"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ]
+    },
+    {
+      "assignments": 25,
+      "source_text": "D0 := 0;\r\nD1 := 1;\r\nD2 := 2;\r\nD3 := 3;\r\nD4 := 4;\r\nD5 := 5;\r\nD6 := 6;\r\nD7 := 7;\r\nD8 := 8;\r\nD9 := 9;\r\nD10 := 10;\r\nD11 := 11;\r\nD12 := 12;\r\nD13 := 13;\r\nD14 := 14;\r\nD15 := 15;\r\nD16 := 16;\r\nD17 := 17;\r\nD18 := 18;\r\nD19 := 19;\r\nD20 := 20;\r\nD21 := 21;\r\nD22 := 22;\r\nD23 := 23;\r\nD24 := 24;\r\n",
+      "fresh_check_completed": true,
+      "compiler_rejected": true,
+      "errors": [
+        {
+          "kind": 2,
+          "code": 84710689,
+          "name": "MAIN",
+          "instance": "MAIN",
+          "step": 0,
+          "network": -1,
+          "left": -1,
+          "top": 0,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [],
+          "phase": "ProgramCheckProgress"
+        }
+      ],
+      "pcode_sha256": "82eb7765a2c5fa9e6e146d6e8a5e3fb0e1836ed892c78f062d6a3947050004d1",
+      "native_listing": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "M8000"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K0",
+            "D0"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K1",
+            "D1"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K2",
+            "D2"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K3",
+            "D3"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K4",
+            "D4"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K5",
+            "D5"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K6",
+            "D6"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K7",
+            "D7"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K8",
+            "D8"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K9",
+            "D9"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K10",
+            "D10"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K11",
+            "D11"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K12",
+            "D12"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K13",
+            "D13"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K14",
+            "D14"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K15",
+            "D15"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K16",
+            "D16"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K17",
+            "D17"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K18",
+            "D18"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K19",
+            "D19"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K20",
+            "D20"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K21",
+            "D21"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K22",
+            "D22"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K23",
+            "D23"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "MOV",
+          "args": [
+            "K24",
+            "D24"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "A successful call can consume only a prefix; count 1 does not mean all circuits were checked.",
+    "The output buffers are retained as raw bytes. Failed conversion may leave partial layout data.",
+    "Text decoding, ladder conversion, fresh ProgramCheck, project export and reopen are different evidence paths.",
+    "Only adapter CPU 521 with observed descriptor settings is admitted by this new oracle."
+  ]
+}

@@ -1,4 +1,4 @@
-"""Source-bound instruction/text projection of the observed FX token grammar.
+"""Source-bound instruction/text projection of explicit token grammars.
 
 Binary arities come from the controlled samples and native CSV alignments.
 PLC execution semantics remain in plc; this module does not simulate code or
@@ -12,7 +12,7 @@ from decimal import Decimal
 import io
 
 from .models import GXWFormatError
-from .token_pou import LadderToken, TokenProgram, parse_token_pou, observed_native_arity
+from .token_pou import LadderToken, TokenProgram, parse_token_pou, frame_token_pou, observed_native_arity
 
 
 # Counts describe the observed binary spellings, including OUT_T_C. They are
@@ -89,7 +89,7 @@ def _operand_groups(tokens: tuple[LadderToken, ...], text_encoding: str | None) 
         if roles not in ((), ("index_z",), ("index_v",), ("digit_group",),
                          ("digit_group", "index_z"), ("digit_group", "index_v"), ("bit_select",)):
             raise GXWFormatError("unobserved operand modifier sequence")
-        if any(r.startswith("index_") for r in roles) and prefix not in ("M", "X", "Y", "S", "D", "T", "C"):
+        if any(r.startswith("index_") for r in roles) and prefix not in ("M", "X", "Y", "S", "D", "R", "T", "C"):
             raise GXWFormatError("unobserved indexed base type")
         if "digit_group" in roles and prefix not in ("M", "X", "Y", "S"):
             raise GXWFormatError("unobserved digit group base type")
@@ -154,6 +154,7 @@ class TokenGap:
 class TokenListing:
     source: TokenProgram
     records: tuple[TokenInstruction | TokenText | TokenLabel | TokenGap, ...]
+    profile: str = "fx"
 
     @property
     def instructions(self) -> tuple[TokenInstruction, ...]:
@@ -170,6 +171,12 @@ class TokenListing:
         return self.source.reconstruct()
 
     def instruction_ir(self) -> list[dict]:
+        """Return lexical strings for inspection, not a lossless writer IR.
+
+        Native floating displays can round the value or hide a zero sign while
+        compilation retains the original bits. Mutations and reconstruction
+        must use the bound raw tokens rather than re-encoding these strings.
+        """
         if self.gaps:
             raise GXWFormatError("opaque tokens prevent a complete instruction sequence")
         if any(isinstance(r, TokenLabel) for r in self.records):
@@ -182,6 +189,8 @@ class TokenListing:
         Refuse a lossy export: opaque instructions and undecoded text must be
         resolved or retained in the listing. Does not write a GXW or a PLC.
         """
+        if self.profile not in ("fx", "fx3u"):
+            raise GXWFormatError("native CSV export is only established for the FX profile")
         if self.gaps or any(isinstance(r, TokenText) and r.text is None for r in self.records):
             raise GXWFormatError("cannot export a complete CSV with opaque instructions/text")
         out = io.StringIO(newline="")
@@ -203,18 +212,31 @@ class TokenListing:
         return out.getvalue().encode("utf-16")
 
 
-def decode_token_listing(raw: bytes, *, text_encoding: str | None = None) -> TokenListing:
+def decode_token_listing(raw: bytes, *, text_encoding: str | None = None,
+                         profile: str = "fx") -> TokenListing:
     """Decode all possible records without dropping or resynchronizing bytes.
 
-    Text encoding is explicit because bytes do not prove a project code page.
+    Profile defaults to the existing strict FX reader. The explicit "fx3u",
+    "fx1s", "fx3g", "q02" and "q03udv" profiles require project CPU context and also
+    accept the observed legacy source frames. Shared framing is not CPU
+    evidence; lexical decoding does not establish CPU instruction availability.
+    Text encoding is explicit because bytes do not prove a code page.
     Unknown instruction widths make later absolute steps unknown. Known records
     following a gap remain inspectable, but complete CSV/IR export is refused.
     """
-    return decode_token_program(parse_token_pou(raw), text_encoding=text_encoding)
+    if profile not in ("fx", "fx3u", "fx1s", "fx3g", "q02", "q03udv"):
+        raise GXWFormatError("unsupported token profile: " + profile)
+    program = parse_token_pou(raw) if profile == "fx" else frame_token_pou(raw)
+    return decode_token_program(program, text_encoding=text_encoding, profile=profile)
 
 
-def decode_token_program(program: TokenProgram, *, text_encoding: str | None = None) -> TokenListing:
-    """Project a framed source or compiled region without copying its envelope."""
+def decode_token_program(program: TokenProgram, *, text_encoding: str | None = None,
+                         profile: str = "fx") -> TokenListing:
+    """Project an explicitly framed region; its caller establishes CPU context."""
+    if profile in ("q02", "q03udv"):
+        return _decode_q_token_program(program, text_encoding=text_encoding, profile=profile)
+    if profile not in ("fx", "fx3u", "fx1s", "fx3g"):
+        raise GXWFormatError("unsupported token profile: " + profile)
     records, cursor, step = [], 0, 0
     while cursor < len(program.tokens):
         token = program.tokens[cursor]
@@ -267,4 +289,52 @@ def decode_token_program(program: TokenProgram, *, text_encoding: str | None = N
             records.append(TokenGap((token,), "unknown token or unbound operand"))
             cursor += 1
             step = None
-    return TokenListing(program, tuple(records))
+    return TokenListing(program, tuple(records), profile)
+
+
+def _decode_q_token_program(program: TokenProgram, *, text_encoding: str | None, profile: str) -> TokenListing:
+    from .token_q import q_instruction_header, q_operand_text, q_operand_groups
+
+    records, cursor, step = [], 0, 0
+    while cursor < len(program.tokens):
+        end = cursor + 1
+        # The native record walk groups trailing operand tokens independently
+        # of their meaning. An unknown operand thus stays in its source record
+        # and cannot steal the following instruction or be silently discarded.
+        while (end < len(program.tokens) and len(program.tokens[end].raw) > 2
+               and program.tokens[end].raw[1] >= 0x90):
+            end += 1
+        tokens = program.tokens[cursor:end]
+        raw = tokens[0].raw
+        try:
+            if len(raw) >= 4 and raw[1] in (0x80, 0x82) and len(tokens) == 1:
+                text = None
+                if text_encoding is not None:
+                    try:
+                        text = raw[3:-1].decode(text_encoding)
+                        if "\0" in text:
+                            text = None
+                    except (UnicodeError, LookupError):
+                        pass
+                records.append(TokenText(tokens, "statement" if raw[1] == 0x80 else "note", text, step))
+            else:
+                width = 1 if len(raw) <= 3 else raw[2]
+                if not 1 <= width <= 127:
+                    raise GXWFormatError("nonpositive signed Q stored step width")
+                if len(raw) in (3, 4) and raw[1] == 0x3c:
+                    if len(tokens) != 2 or tokens[1].raw[1] not in (0xd0, 0xd1):
+                        raise GXWFormatError("Q label lacks a pointer/interrupt identifier")
+                    records.append(TokenLabel(tokens, q_operand_text(tokens[1].raw, text_encoding=text_encoding, profile=profile), step))
+                else:
+                    name, arity = q_instruction_header(raw, profile=profile)
+                    operands = tuple(TokenOperand(bound, text) for bound, text in
+                                     q_operand_groups(tokens[1:], text_encoding=text_encoding, profile=profile))
+                    if len(operands) != arity:
+                        raise GXWFormatError(f"{name}: observed operand count {len(operands)} != {arity}")
+                    records.append(TokenInstruction(tokens, name, step, width, operands))
+                step = step + width if step is not None else None
+        except GXWFormatError as exc:
+            records.append(TokenGap(tokens, str(exc)))
+            step = None
+        cursor = end
+    return TokenListing(program, tuple(records), profile=profile)

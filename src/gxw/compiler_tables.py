@@ -101,6 +101,8 @@ class CompilerComponent:
 
     @property
     def instance_pou_offset(self) -> int | None:
+        # Direct local field only. Resolve global/external instances with
+        # CompilerTables.component_instance_pou_offset instead.
         # Native TabsDump identifies TYPE_INSTANCE and its PouIdx at this slot.
         # Array/structure types have other layouts; do not reinterpret them.
         if self.type_code == 0x35:
@@ -253,6 +255,22 @@ class CompilerTables:
         if len(fields) < offset + 4:
             raise GXWFormatError("truncated compiler array reference")
         return struct.unpack_from("<I", fields, offset)[0]
+
+    def component_instance_pou_offset(self, component: CompilerComponent) -> int | None:
+        """Resolve a scalar FB target through local or global type storage.
+
+        Native CMP Read/TabsDump agree for distinct global targets at 0 and
+        65. Zero is a valid POU record offset, not a missing-reference marker.
+        Array and structure elements retain their separate representations.
+        """
+        if self.component_type(component) != 0x35:
+            return None
+        if component.global_offset is None:
+            return component.instance_pou_offset
+        _, fields = self.tables[3].record_at(component.global_offset).named_fields()
+        if len(fields) < 12:
+            raise GXWFormatError("truncated compiler global instance reference")
+        return struct.unpack_from("<I", fields, 8)[0]
 
     def array_at(self, offset: int) -> CompilerArray:
         """Read table 13 using the native 141C0 framing; retain all other bytes.

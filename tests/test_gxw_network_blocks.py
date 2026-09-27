@@ -180,6 +180,22 @@ def test_relay_lowering_matches_all_expected_boolean_assignments_and_has_two_blo
         assert row['outputs'] == {'Y0': expected, 'Y1': expected, 'Y2': x['X3']}
 
 
+@pytest.mark.parametrize('case', [
+    'contact-03-port-019', 'coil-05-port-035',
+    'coil-05-port-067', 'coil-05-port-131',
+])
+def test_combinational_oracle_rejects_native_stateful_port_modifiers(case):
+    sys.path.insert(0, str(Path(__file__).parents[1] / 'research'))
+    from verify_relay_blocks import relay_truth_table
+    observations = json.loads((Path(__file__).parent / 'fixtures/gxw_ladder_primitives.json').read_text())
+    row = next(r for r in observations['cases'] if r['case'] == case)
+    program = parse_structured_pou(base64.b64decode(row['program_base64']))
+    # These keep ordinary node kinds but native compilation emits LDP/LDF/SET/RST.
+    assert all(n.kind_code in {3, 5} for n in program.nodes)
+    with pytest.raises(ValueError, match='canonical ordinary relay ports'):
+        relay_truth_table(program)
+
+
 def test_preview_places_local_canvases_in_separate_viewports():
     import xml.etree.ElementTree as ET
     from src.gxw.render import render_structured_svg

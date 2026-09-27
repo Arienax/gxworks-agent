@@ -1,0 +1,30 @@
+{
+  "q_real_programs_exact": 58,
+  "q_real_programs_recorded": 60,
+  "q_native_byte_pairs": 58,
+  "sfc_grid_snapshots": 31,
+  "sfc_effective_symbols": 256,
+  "sfc_path_controls": 5,
+  "sfc_path_edges": 23,
+  "saved_byte_comparisons": 79,
+  "product_q_corpus": {
+    "projects": 36,
+    "programs": 76,
+    "decoded_instructions": 7492,
+    "decoded_labels": 0,
+    "recognized_texts": 21,
+    "undecoded_texts": 0,
+    "instruction_gaps": 0,
+    "critical_token_gaps": 0,
+    "reconstruction_exact": 36
+  },
+  "q_width_application": {
+    "byte-identical": 32384,
+    "native-rejected": 47779,
+    "unsupported": 8
+  },
+  "q_width_boundaries": {
+    "native-rejected": 24322,
+    "byte-identical": 7955
+  }
+}

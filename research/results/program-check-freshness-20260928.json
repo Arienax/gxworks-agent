@@ -1,0 +1,235 @@
+{
+  "scope": "Observed FX3G offline native controls. No PLC or simulator. Snapshot and compile equivalence remain separate from source freshness.",
+  "finding": "ProgramCheck can read the older workspace resource. UpdatePCode before ProgramCheck binds it to current adapter output.",
+  "historical_implication": "A historical program_check_completed or successful ProgramCheck alone does not prove that edited code was checked. Frozen artifacts remain unchanged. Establish matching resource bytes or rerun the check with publication before claiming current-output validation.",
+  "source_text": "Y0 := X0;\r\nY0 := X1;\r\n",
+  "negative_controls": [
+    {
+      "case": "legacy-cache-1",
+      "input_sha256": "386a069277ecaba5e5ad4cbeeca042f5290ac3e364e29b7cb68624e4975b397a",
+      "oracle_source_sha256": "39203d6d0638989961edd8bccb0b970f4797839f0f9e00e75aa819f28ba55909",
+      "native": {
+        "../GPPW2/GD2DataMng.dll": "2d85260f10db34ec4852c6279b17a6788aae65f6b59f9d7b7a8acab8595c042f",
+        "DataAbsorber/DZDataABS_Workspace.dll": "861c1e25aebb05f6f6ef972f721bcff047c01679b89fe9922abd4743e137676f",
+        "DataAbsorber/DZDataABS_ProjectOperation.dll": "74e4cd0fd98215eb36a7c5df7103fdb3cc917d636e036f7f8b774a89b01dcfdb",
+        "DataAbsorber/DZDataABS_CompilerAdapter.dll": "4a048e05c189d903d1f8384fd9730c3094d4ef98c795259ba07496fb381b3959",
+        "DataAbsorber/DZDataABS_Converter.dll": "d0ad723422b1ca63f35bfe3a4eea57a13f7c7142395cfc419ffb43ca3a859e6f",
+        "DataAbsorber/DZDataABS_DataManager_IEC.dll": "4e6785f6797f4b621b0df3876172e45b43bb8f60a85abe715b1edbba05fc2b6d",
+        "DataAbsorber/DZDataABS_SICConverter_IEC.dll": "670fd037852287e4c99de6aa58d19ea0ba9505f10bb46969d2e17d1e54b863f6",
+        "DataAbsorber/DZDataABS_Inside.dll": "914a9cd0fc1b82578dfd5ec62d58124bd7851ea6fa8c8fa3ed488241715e776f",
+        "DataAbsorber/DZDataABS_CodeGenerator.dll": "b3424970d2d206bd92068b9b8d22eaa8ee3589b5ddf9692652f9e2b6da31f74e",
+        "DZDataNavigatorServer/DZDataNavigatorServer.dll": "c8b073657846d8841ffc99f32f1598fc3c1046c451f88d2deef2503f3e5e6a68",
+        "DZDataNavigatorServer/_DNAVI.dll": "e1bf88580a3f22a196fced795cc0a46d218188285a89a09bd5d9fd5a48d3e106",
+        "CommunicationAbsorber/DZCommABS.dll": "57619ebc3ffc296f4d032ee904d9ef05a5987fb06833c8c28fcf68818a89e92a",
+        "CommunicationAbsorber/DZCommABS_Inside.dll": "f76188f214f26f963206d17d7dd4431ff4bb08059268fbbf8ca7a612cacbbaea"
+      },
+      "refresh_program_check": false,
+      "pcode_sha256": "9bce0c2911caaa8c16de0b21b537e327ae8ccde4bbf0eb8a4688289a4170ed85",
+      "pcode_base64": "AwADBJwABAMgAwSdAAQDAAMEnAEEAyADBJ0ABAMzAwICAzQD",
+      "program_check_completed": true,
+      "compiler_rejected": false,
+      "native_errors": [],
+      "exported": true
+    },
+    {
+      "case": "fresh-pcode-1",
+      "input_sha256": "386a069277ecaba5e5ad4cbeeca042f5290ac3e364e29b7cb68624e4975b397a",
+      "oracle_source_sha256": "39203d6d0638989961edd8bccb0b970f4797839f0f9e00e75aa819f28ba55909",
+      "native": {
+        "../GPPW2/GD2DataMng.dll": "2d85260f10db34ec4852c6279b17a6788aae65f6b59f9d7b7a8acab8595c042f",
+        "DataAbsorber/DZDataABS_Workspace.dll": "861c1e25aebb05f6f6ef972f721bcff047c01679b89fe9922abd4743e137676f",
+        "DataAbsorber/DZDataABS_ProjectOperation.dll": "74e4cd0fd98215eb36a7c5df7103fdb3cc917d636e036f7f8b774a89b01dcfdb",
+        "DataAbsorber/DZDataABS_CompilerAdapter.dll": "4a048e05c189d903d1f8384fd9730c3094d4ef98c795259ba07496fb381b3959",
+        "DataAbsorber/DZDataABS_Converter.dll": "d0ad723422b1ca63f35bfe3a4eea57a13f7c7142395cfc419ffb43ca3a859e6f",
+        "DataAbsorber/DZDataABS_DataManager_IEC.dll": "4e6785f6797f4b621b0df3876172e45b43bb8f60a85abe715b1edbba05fc2b6d",
+        "DataAbsorber/DZDataABS_SICConverter_IEC.dll": "670fd037852287e4c99de6aa58d19ea0ba9505f10bb46969d2e17d1e54b863f6",
+        "DataAbsorber/DZDataABS_Inside.dll": "914a9cd0fc1b82578dfd5ec62d58124bd7851ea6fa8c8fa3ed488241715e776f",
+        "DataAbsorber/DZDataABS_CodeGenerator.dll": "b3424970d2d206bd92068b9b8d22eaa8ee3589b5ddf9692652f9e2b6da31f74e",
+        "DZDataNavigatorServer/DZDataNavigatorServer.dll": "c8b073657846d8841ffc99f32f1598fc3c1046c451f88d2deef2503f3e5e6a68",
+        "DZDataNavigatorServer/_DNAVI.dll": "e1bf88580a3f22a196fced795cc0a46d218188285a89a09bd5d9fd5a48d3e106",
+        "CommunicationAbsorber/DZCommABS.dll": "57619ebc3ffc296f4d032ee904d9ef05a5987fb06833c8c28fcf68818a89e92a",
+        "CommunicationAbsorber/DZCommABS_Inside.dll": "f76188f214f26f963206d17d7dd4431ff4bb08059268fbbf8ca7a612cacbbaea"
+      },
+      "refresh_program_check": true,
+      "pcode_sha256": "9bce0c2911caaa8c16de0b21b537e327ae8ccde4bbf0eb8a4688289a4170ed85",
+      "pcode_base64": "AwADBJwABAMgAwSdAAQDAAMEnAEEAyADBJ0ABAMzAwICAzQD",
+      "program_check_completed": true,
+      "compiler_rejected": true,
+      "native_errors": [
+        {
+          "kind": 2,
+          "code": 84710144,
+          "name": "MAIN",
+          "instance": "MAIN",
+          "step": 1,
+          "network": -1,
+          "left": -1,
+          "top": 1,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y000"
+          ],
+          "phase": "ProgramCheckProgress"
+        },
+        {
+          "kind": 2,
+          "code": 84710144,
+          "name": "MAIN",
+          "instance": "MAIN",
+          "step": 3,
+          "network": -1,
+          "left": -1,
+          "top": 3,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y000"
+          ],
+          "phase": "ProgramCheckProgress"
+        }
+      ],
+      "exported": false
+    },
+    {
+      "case": "default-fresh-1",
+      "input_sha256": "386a069277ecaba5e5ad4cbeeca042f5290ac3e364e29b7cb68624e4975b397a",
+      "oracle_source_sha256": "03b9d05f0bf4e22874ccf2008f5349afb78fd79f2eeb4bdbfbded7ffc1765ee4",
+      "native": {
+        "../GPPW2/GD2DataMng.dll": "2d85260f10db34ec4852c6279b17a6788aae65f6b59f9d7b7a8acab8595c042f",
+        "DataAbsorber/DZDataABS_Workspace.dll": "861c1e25aebb05f6f6ef972f721bcff047c01679b89fe9922abd4743e137676f",
+        "DataAbsorber/DZDataABS_ProjectOperation.dll": "74e4cd0fd98215eb36a7c5df7103fdb3cc917d636e036f7f8b774a89b01dcfdb",
+        "DataAbsorber/DZDataABS_CompilerAdapter.dll": "4a048e05c189d903d1f8384fd9730c3094d4ef98c795259ba07496fb381b3959",
+        "DataAbsorber/DZDataABS_Converter.dll": "d0ad723422b1ca63f35bfe3a4eea57a13f7c7142395cfc419ffb43ca3a859e6f",
+        "DataAbsorber/DZDataABS_DataManager_IEC.dll": "4e6785f6797f4b621b0df3876172e45b43bb8f60a85abe715b1edbba05fc2b6d",
+        "DataAbsorber/DZDataABS_SICConverter_IEC.dll": "670fd037852287e4c99de6aa58d19ea0ba9505f10bb46969d2e17d1e54b863f6",
+        "DataAbsorber/DZDataABS_Inside.dll": "914a9cd0fc1b82578dfd5ec62d58124bd7851ea6fa8c8fa3ed488241715e776f",
+        "DataAbsorber/DZDataABS_CodeGenerator.dll": "b3424970d2d206bd92068b9b8d22eaa8ee3589b5ddf9692652f9e2b6da31f74e",
+        "DZDataNavigatorServer/DZDataNavigatorServer.dll": "c8b073657846d8841ffc99f32f1598fc3c1046c451f88d2deef2503f3e5e6a68",
+        "DZDataNavigatorServer/_DNAVI.dll": "e1bf88580a3f22a196fced795cc0a46d218188285a89a09bd5d9fd5a48d3e106",
+        "CommunicationAbsorber/DZCommABS.dll": "57619ebc3ffc296f4d032ee904d9ef05a5987fb06833c8c28fcf68818a89e92a",
+        "CommunicationAbsorber/DZCommABS_Inside.dll": "f76188f214f26f963206d17d7dd4431ff4bb08059268fbbf8ca7a612cacbbaea"
+      },
+      "refresh_program_check": true,
+      "pcode_sha256": "9bce0c2911caaa8c16de0b21b537e327ae8ccde4bbf0eb8a4688289a4170ed85",
+      "pcode_base64": "AwADBJwABAMgAwSdAAQDAAMEnAEEAyADBJ0ABAMzAwICAzQD",
+      "program_check_completed": true,
+      "compiler_rejected": true,
+      "native_errors": [
+        {
+          "kind": 2,
+          "code": 84710144,
+          "name": "MAIN",
+          "instance": "MAIN",
+          "step": 1,
+          "network": -1,
+          "left": -1,
+          "top": 1,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y000"
+          ],
+          "phase": "ProgramCheckProgress"
+        },
+        {
+          "kind": 2,
+          "code": 84710144,
+          "name": "MAIN",
+          "instance": "MAIN",
+          "step": 3,
+          "network": -1,
+          "left": -1,
+          "top": 3,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y000"
+          ],
+          "phase": "ProgramCheckProgress"
+        }
+      ],
+      "exported": false
+    }
+  ],
+  "library_roundtrip_controls": [
+    {
+      "case": "original-library",
+      "phases": [
+        {
+          "phase": "compile",
+          "pcode_sha256": "713b03c6b85a0d36fb9b6d06c60e79ab5784fbfc41452d55ce72c345dcc25421",
+          "saved_project_sha256": "d358a1348d07a47204ebaddbc34a0d6e8bbc53f04505116eaf984deabed7bfcb",
+          "saved_resource_copies_match_pcode": true,
+          "lnb_lbo_text_equal": true
+        },
+        {
+          "phase": "reopen",
+          "pcode_sha256": "713b03c6b85a0d36fb9b6d06c60e79ab5784fbfc41452d55ce72c345dcc25421",
+          "saved_project_sha256": "8b430e1928b555bfb1cc5b8770a38664d2efa0c791256c673618ca83b775ee34",
+          "saved_resource_copies_match_pcode": true,
+          "lnb_lbo_text_equal": true
+        }
+      ]
+    },
+    {
+      "case": "true-source-only",
+      "phases": [
+        {
+          "phase": "compile",
+          "pcode_sha256": "1aefe69c8065115610933814a17de1ca4a6293a85bbaeddb3e4d797107c8a680",
+          "saved_project_sha256": "577db3006045357093a532b75681423a152ea0d191c2431be73a2dfa0dedbc9d",
+          "saved_resource_copies_match_pcode": true,
+          "lnb_lbo_text_equal": true
+        },
+        {
+          "phase": "reopen",
+          "pcode_sha256": "1aefe69c8065115610933814a17de1ca4a6293a85bbaeddb3e4d797107c8a680",
+          "saved_project_sha256": "99deb431348e46fc90c68adcc356402b2210c614d0c39c794442221b91ea05da",
+          "saved_resource_copies_match_pcode": true,
+          "lnb_lbo_text_equal": true
+        }
+      ]
+    },
+    {
+      "case": "false-source-only",
+      "phases": [
+        {
+          "phase": "compile",
+          "pcode_sha256": "fa3a8b217dbbdacc6f7f0a7ebe8fb8b54f67c6143b07e12762736ecb849736bd",
+          "saved_project_sha256": "09e5f79790034e49dec3244d3d3b90ab4c992e7a5d1a480d7615ee19fc631177",
+          "saved_resource_copies_match_pcode": true,
+          "lnb_lbo_text_equal": true
+        },
+        {
+          "phase": "reopen",
+          "pcode_sha256": "fa3a8b217dbbdacc6f7f0a7ebe8fb8b54f67c6143b07e12762736ecb849736bd",
+          "saved_project_sha256": "7b86b8e68132e74ab7b49446235998056c1c2799ffbb5c184abd3f2cd77468d5",
+          "saved_resource_copies_match_pcode": true,
+          "lnb_lbo_text_equal": true
+        }
+      ]
+    },
+    {
+      "case": "true-both-copies",
+      "phases": [
+        {
+          "phase": "compile",
+          "pcode_sha256": "1aefe69c8065115610933814a17de1ca4a6293a85bbaeddb3e4d797107c8a680",
+          "saved_project_sha256": "2a7138e3478c347c67d42fddb1408cb6c281e4e376df8b0df1e50e94068807cd",
+          "saved_resource_copies_match_pcode": true,
+          "lnb_lbo_text_equal": true
+        },
+        {
+          "phase": "reopen",
+          "pcode_sha256": "1aefe69c8065115610933814a17de1ca4a6293a85bbaeddb3e4d797107c8a680",
+          "saved_project_sha256": "711d8056ea2b700935124f9094922f42112befc9faa6f9dab59625b64d9cd0c9",
+          "saved_resource_copies_match_pcode": true,
+          "lnb_lbo_text_equal": true
+        }
+      ]
+    }
+  ],
+  "local_evidence": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\program-check-freshness",
+  "reproducer": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\probe_program_check_freshness.py"
+}

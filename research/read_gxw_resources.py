@@ -1,7 +1,7 @@
 """Inspect compiled FX .res code without assuming it matches current source.
 
 Optionally compare every bounded code region with the offline vendor decoder.
-All resource bytes, duplicate regions and source references remain inspectable.
+All resource bytes, duplicate regions and source-project identities remain inspectable.
 """
 from __future__ import annotations
 
@@ -34,14 +34,12 @@ def inspect_resources(paths, directory, *, native=False, encoding=None):
             key = sha256(stream.raw)
             case = resources.setdefault(key, {"resource_sha256": key, "raw_base64": base64.b64encode(stream.raw).decode(), "sources": []})
             try:
-                program_names = parse_token_resource(stream.raw).observed_program_names
+                cached_names = parse_token_resource(stream.raw).observed_cached_names
             except ValueError:
-                program_names = None
-            program_name = program_names[0] + ".Program.pou" if program_names else None
-            associated = by_name.get(program_name)
+                cached_names = None
             case["sources"].append({"location": location, "resource_name": name,
-                "project_sha256": image.sha256, "observed_program_name": program_name,
-                "source_program_sha256": sha256(associated.raw) if associated else None})
+                "project_sha256": image.sha256, "observed_cached_names": cached_names,
+                "source_association": "not-inferred: resource suffix names are a cache, not source-program references"})
     cases, requests, bindings = [], [], []
     for case in resources.values():
         raw = base64.b64decode(case["raw_base64"])
@@ -81,7 +79,7 @@ def inspect_resources(paths, directory, *, native=False, encoding=None):
     result["summary"] = {"unique_resources": len(cases), "source_references": sum(len(c["sources"]) for c in cases),
         "unsupported": sum("unsupported" in c for c in cases),
         "empty_resources": sum(c.get("regions") == [] for c in cases),
-        "source_versions_sharing_resource": sum(len({s["source_program_sha256"] for s in c["sources"]}) > 1 for c in cases),
+        "project_versions_sharing_resource": sum(len({s["project_sha256"] for s in c["sources"]}) > 1 for c in cases),
         "code_regions": sum(len(c.get("regions", [])) for c in cases),
         "native_cross_checks": dict(Counter(r["native_cross_check"] for c in cases for r in c.get("regions", []) if "native_cross_check" in r))}
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

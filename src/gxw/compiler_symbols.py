@@ -93,7 +93,7 @@ def compiler_declaration_bindings(tables: CompilerTables, document: DeclarationD
     for row, name, expected in zip(document.rows, names, references):
         candidates = []
         for pou, component in by_name.get(name, ()):
-            reference = component.instance_pou_offset
+            reference = tables.component_instance_pou_offset(component)
             actual = tables.pou_at(reference).name_bytes if reference is not None else None
             agrees = key(actual) == expected if actual is not None and expected is not None else None
             candidates.append(CompilerDeclarationCandidate(pou.record.table_offset, component.record.table_offset,
@@ -135,7 +135,7 @@ def compiler_symbol_paths(tables: CompilerTables, root_pou_offset: int, *, limit
             path = CompilerSymbolPath(root_pou_offset, names + (component.name_bytes,),
                                       offsets + (component.record.table_offset,), symbol)
             result.append(path)
-            reference = component.instance_pou_offset
+            reference = tables.component_instance_pou_offset(component)
             if reference is not None:
                 children.append((tables.pou_at(reference), path.names, path.component_offsets, ancestors))
         pending.extend(reversed(children))

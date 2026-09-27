@@ -1,0 +1,71 @@
+{
+  "scope": "Generated address-field controls; source rows versus independently captured compiler declarations. Both projects are compiler-rejected; no valid-device or writer acceptance claim.",
+  "cases": [
+    {
+      "id": "structure-array-fields",
+      "row_hex": "0a00000041004d005f004500560045004e005400530000001c0000004100520052004100590020005b0030002e002e0033005d0020004f0046002000530054005f0041004d005f004500560045004e00540000000800000005000000440031003000300000000500000044003100300031000000020000000500000044003100300032000000050000004400310030003300000000000000050000004400310030003400000005000000440031003000350000000100000000000100000000000100000001000000000001000000090000000c000000530054005f0041004d005f004500560045004e0054000000",
+      "native_row": {
+        "record_id": 1,
+        "name": "AM_EVENTS",
+        "data_type": "ARRAY [0..3] OF ST_AM_EVENT",
+        "class_code": 8,
+        "device": "D102,D103,,D104,D105",
+        "iec_address": "%MW0.102,D103,,%MW0.104,D105",
+        "initial_value": "",
+        "comment": ""
+      },
+      "source_sha256": "9bd7d55aa4db07f05692db8f2b53b544e700bd052b08cf06e0c0dd99b943ab15",
+      "snapshot_sha256": "f096b764bdc8d2701ddc56be80223b70abc90f7536914f7f7ea857f9caa7b8c0",
+      "native": {
+        "../GPPW2/GD2DataMng.dll": "2d85260f10db34ec4852c6279b17a6788aae65f6b59f9d7b7a8acab8595c042f",
+        "DataAbsorber/DZDataABS_Workspace.dll": "861c1e25aebb05f6f6ef972f721bcff047c01679b89fe9922abd4743e137676f",
+        "DataAbsorber/DZDataABS_ProjectOperation.dll": "74e4cd0fd98215eb36a7c5df7103fdb3cc917d636e036f7f8b774a89b01dcfdb",
+        "DataAbsorber/DZDataABS_CompilerAdapter.dll": "4a048e05c189d903d1f8384fd9730c3094d4ef98c795259ba07496fb381b3959",
+        "DataAbsorber/DZDataABS_Converter.dll": "d0ad723422b1ca63f35bfe3a4eea57a13f7c7142395cfc419ffb43ca3a859e6f",
+        "DataAbsorber/DZDataABS_DataManager_IEC.dll": "4e6785f6797f4b621b0df3876172e45b43bb8f60a85abe715b1edbba05fc2b6d",
+        "DataAbsorber/DZDataABS_SICConverter_IEC.dll": "670fd037852287e4c99de6aa58d19ea0ba9505f10bb46969d2e17d1e54b863f6",
+        "DataAbsorber/DZDataABS_Inside.dll": "914a9cd0fc1b82578dfd5ec62d58124bd7851ea6fa8c8fa3ed488241715e776f",
+        "DataAbsorber/DZDataABS_CodeGenerator.dll": "b3424970d2d206bd92068b9b8d22eaa8ee3589b5ddf9692652f9e2b6da31f74e",
+        "DZDataNavigatorServer/DZDataNavigatorServer.dll": "c8b073657846d8841ffc99f32f1598fc3c1046c451f88d2deef2503f3e5e6a68",
+        "DZDataNavigatorServer/_DNAVI.dll": "e1bf88580a3f22a196fced795cc0a46d218188285a89a09bd5d9fd5a48d3e106",
+        "CommunicationAbsorber/DZCommABS.dll": "57619ebc3ffc296f4d032ee904d9ef05a5987fb06833c8c28fcf68818a89e92a",
+        "CommunicationAbsorber/DZCommABS_Inside.dll": "f76188f214f26f963206d17d7dd4431ff4bb08059268fbbf8ca7a612cacbbaea"
+      },
+      "open_succeeded": true,
+      "compiler_rejected": true
+    },
+    {
+      "id": "scalar-member-pairs",
+      "row_hex": "0a00000041004d005f004500560045004e005400530000000c000000530054005f0041004d005f004500560045004e005400000008000000010000000000010000000000010000000200000005000000440031003100300000000500000044003100310031000000050000004400310031003200000005000000440031003100330000000100000000000100000000000100000001000000000000000000090000000c000000530054005f0041004d005f004500560045004e0054000000",
+      "native_row": {
+        "record_id": 1,
+        "name": "AM_EVENTS",
+        "data_type": "ST_AM_EVENT",
+        "class_code": 8,
+        "device": "D110,D112",
+        "iec_address": "D111,D113",
+        "initial_value": "",
+        "comment": ""
+      },
+      "source_sha256": "a13ac9db06485a3f9d250c579dabec0d2e9931beb4476cb83933f85d54270636",
+      "snapshot_sha256": "82db3703d01f3ac9b17e4c62cca006772f2c98fc40a67f015f8f7714e0c0ed2f",
+      "native": {
+        "../GPPW2/GD2DataMng.dll": "2d85260f10db34ec4852c6279b17a6788aae65f6b59f9d7b7a8acab8595c042f",
+        "DataAbsorber/DZDataABS_Workspace.dll": "861c1e25aebb05f6f6ef972f721bcff047c01679b89fe9922abd4743e137676f",
+        "DataAbsorber/DZDataABS_ProjectOperation.dll": "74e4cd0fd98215eb36a7c5df7103fdb3cc917d636e036f7f8b774a89b01dcfdb",
+        "DataAbsorber/DZDataABS_CompilerAdapter.dll": "4a048e05c189d903d1f8384fd9730c3094d4ef98c795259ba07496fb381b3959",
+        "DataAbsorber/DZDataABS_Converter.dll": "d0ad723422b1ca63f35bfe3a4eea57a13f7c7142395cfc419ffb43ca3a859e6f",
+        "DataAbsorber/DZDataABS_DataManager_IEC.dll": "4e6785f6797f4b621b0df3876172e45b43bb8f60a85abe715b1edbba05fc2b6d",
+        "DataAbsorber/DZDataABS_SICConverter_IEC.dll": "670fd037852287e4c99de6aa58d19ea0ba9505f10bb46969d2e17d1e54b863f6",
+        "DataAbsorber/DZDataABS_Inside.dll": "914a9cd0fc1b82578dfd5ec62d58124bd7851ea6fa8c8fa3ed488241715e776f",
+        "DataAbsorber/DZDataABS_CodeGenerator.dll": "b3424970d2d206bd92068b9b8d22eaa8ee3589b5ddf9692652f9e2b6da31f74e",
+        "DZDataNavigatorServer/DZDataNavigatorServer.dll": "c8b073657846d8841ffc99f32f1598fc3c1046c451f88d2deef2503f3e5e6a68",
+        "DZDataNavigatorServer/_DNAVI.dll": "e1bf88580a3f22a196fced795cc0a46d218188285a89a09bd5d9fd5a48d3e106",
+        "CommunicationAbsorber/DZCommABS.dll": "57619ebc3ffc296f4d032ee904d9ef05a5987fb06833c8c28fcf68818a89e92a",
+        "CommunicationAbsorber/DZCommABS_Inside.dll": "f76188f214f26f963206d17d7dd4431ff4bb08059268fbbf8ca7a612cacbbaea"
+      },
+      "open_succeeded": true,
+      "compiler_rejected": true
+    }
+  ]
+}

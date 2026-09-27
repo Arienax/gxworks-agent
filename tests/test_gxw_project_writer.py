@@ -3,14 +3,16 @@ from dataclasses import replace
 import json
 from pathlib import Path
 import struct
+import zipfile
 
 import pytest
 
 from src.gxw.container import CompoundFile, ENDOFCHAIN, FATSECT, FREESECT
 from src.gxw.container_writer import validate_cfb_streams
+from src.gxw.declarations import parse_declarations, edit_declarations, serialize_declarations
 from src.gxw.experiment import compare_programs, run_regression
 from src.gxw.models import GXWFormatError, NodeKind
-from src.gxw.project_metadata import current_rows, logical_mapping, md5_base64, synchronize_history
+from src.gxw.project_metadata import current_rows, logical_mapping, mark_observed_source_compile_pending, md5_base64, synchronize_history
 from src.gxw.project_writer import build_gxw_project, write_gxw_project
 from src.gxw.structured_pou import parse_structured_pou
 from src.gxw.structured_pou_writer import replace_node_symbol, serialize_structured_pou
@@ -76,6 +78,30 @@ def project_fixture():
     mapping = b'<DSPROJECTDATA><D_Projectdata><iID>83</iID><szName>1.Program.pou</szName><bScrapFlag>false</bScrapFlag></D_Projectdata></DSPROJECTDATA>'
     return cfb_fixture({"_hdb": nested, "projectdatalist.xml": mapping,
                         "history.xml": history_xml("1.Program.pou", "83", program.raw)}), program
+
+
+@pytest.mark.parametrize("change", [{}, {"initial_value": "124"}, {"comment": "Q" * 3000}])
+def test_native_partial_nested_container_declaration_edits_preserve_other_payloads(change):
+    archive = Path(__file__).resolve().parents[1] / "research/evidence/gxw-partial-sector-20260927.zip"
+    with zipfile.ZipFile(archive) as z:
+        source = z.read("native/native-saved.gxw")
+    outer = validate_cfb_streams(source)
+    nested = validate_cfb_streams(outer["_hdb"])
+    logical = "Global1.gh"
+    physical = logical_mapping(outer["projectdatalist.xml"])[logical]
+    doc = parse_declarations(nested[physical], logical_name=logical)
+    edited = edit_declarations(doc, upserts=[dict(name="InputValue", **change)]) if change else doc
+    result = build_gxw_project(source, declarations={logical: edited})
+    after = validate_cfb_streams(result.data)
+    assert validate_cfb_streams(after["_hdb"]) == dict(nested, **{physical: serialize_declarations(edited)})
+    assert {k: v for k, v in after.items() if k not in ("_hdb", "history.xml")} == {
+        k: v for k, v in outer.items() if k not in ("_hdb", "history.xml")}
+    if change:
+        assert any(a["mode"].startswith("pad_final_sector+") for a in result.report["allocations"])
+        assert len(after["_hdb"]) % 512 == 0
+    else:
+        assert result.data == source
+        assert result.report["allocations"] == []
 
 
 @pytest.mark.parametrize("encoding", ["utf-8", "utf-16le", "utf-16be"])
@@ -288,3 +314,39 @@ def test_legacy_commands_sync_history_and_never_overwrite(tmp_path, tool):
     saved = output.read_bytes()
     assert subprocess.run(args, capture_output=True).returncode != 0
     assert output.read_bytes() == saved
+
+
+@pytest.mark.parametrize("case_index", range(3))
+def test_compile_pending_matches_native_setter_payloads(case_index):
+    import hashlib
+
+    fixture = json.loads((Path(__file__).parent / "fixtures/gxw_compile_pending.json").read_text(encoding="utf-8"))
+    case = fixture["cases"][case_index]
+    original = base64.b64decode(case["original_base64"])
+    native = base64.b64decode(case["native_marked_base64"])
+    assert hashlib.sha256(original).hexdigest() == case["original_sha256"]
+    assert hashlib.sha256(native).hexdigest() == case["native_marked_sha256"]
+    assert case["native_reopen_status"] == 1
+    actual = mark_observed_source_compile_pending(original, logical_name=case["logical_name"])
+    assert actual == native
+    assert mark_observed_source_compile_pending(actual, logical_name=case["logical_name"]) == native
+
+
+@pytest.mark.parametrize("variant", ["unknown-header", "unknown-marker", "resource", "truncated"])
+def test_compile_pending_does_not_reinterpret_other_payloads(variant):
+    fixture = json.loads((Path(__file__).parent / "fixtures/gxw_compile_pending.json").read_text(encoding="utf-8"))
+    case = fixture["cases"][0]
+    raw = bytearray(base64.b64decode(case["original_base64"]))
+    logical = case["logical_name"]
+    if variant == "unknown-header":
+        raw[0] ^= 1
+    elif variant == "unknown-marker":
+        struct.pack_into("<I", raw, 50, 2)
+    elif variant == "resource":
+        logical = "MAIN.res"
+    else:
+        raw = raw[:53]
+    before = bytes(raw)
+    with pytest.raises(GXWFormatError):
+        mark_observed_source_compile_pending(raw, logical_name=logical)
+    assert raw == before

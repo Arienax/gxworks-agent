@@ -6,7 +6,7 @@ caller region; it never obtains the BOOL input destination from the FB body
 being checked. Unknown templates or unconsumed native records remain gaps.
 """
 from __future__ import annotations
-import copy,re
+import re
 
 
 def _groups(records):
@@ -19,13 +19,14 @@ def _groups(records):
     return groups
 
 
-def compare_callsite_inputs(source,ports,native,allocations):
+def compare_callsite_inputs(source,ports,native,allocations=None):
     """Compare observed direct BOOL, materialized Boolean, and scalar copies.
 
-    A direct BOOL pair can be eliminated into a pin alias. A compound Boolean
-    expression must be materialized by the same complete instruction prefix
-    and a native OUT. Native input groups are consumed in source order. This
-    is not an optimizer, evaluator, or inference of unobserved expression forms.
+    Direct BOOL and D-device copies can be eliminated into pin aliases. Other
+    observed groups must match a complete native prefix, opcode and source;
+    their destination comes from that caller, never from the final allocation.
+    Native groups are consumed in source order. Optional final allocations
+    are recorded for comparison only. This is not a general optimizer.
     """
     result=dict(handling='opaque-preserved',source_records=source,native_records=native,bindings=[],steps=[],gaps=[])
     try:
@@ -54,11 +55,16 @@ def compare_callsite_inputs(source,ports,native,allocations):
             elif (len(group)==2 and group[0]['op']=='LD' and group[0]['args']==["'_TRUE"]
                     and last['op'] in ('MOV','DMOV','$MOV') and len(last['args'])==2
                     and port['type_marker']=={'MOV':'W','DMOV':'D','$MOV':'S'}[last['op']]):
-                allocation=allocations.get(port['name'])
-                if not allocation or not re.fullmatch(r'D[0-9]+',allocation):raise ValueError('copy destination allocation unresolved')
-                expected=copy.deepcopy(group);expected[0]['args']=['SM400'];expected[1]['args'][-1]=allocation
-                if actual!=expected:raise ValueError('scalar copy differs from complete caller group')
-                binding=dict(port=port['name'],operand=allocation,mode='materialized-scalar',source_operand=last['args'][0]);consume=True
+                value=last['args'][0]
+                if (len(actual)==2 and actual[0]==dict(kind='instruction',op='LD',args=['SM400'])
+                        and actual[1]['op']==last['op'] and len(actual[1]['args'])==2
+                        and actual[1]['args'][0]==value and re.fullmatch(r'D[0-9]+',actual[1]['args'][1])):
+                    binding=dict(port=port['name'],operand=actual[1]['args'][1],mode='materialized-scalar',source_operand=value)
+                    consume=True
+                elif re.fullmatch(r'D[0-9]+',value):
+                    binding=dict(port=port['name'],operand=value,mode='eliminated-direct-scalar',source_operand=value)
+                else:raise ValueError('scalar source has no exact caller materialization')
+                binding['stored_final_allocation']=(allocations or {}).get(port['name'])
             else:raise ValueError('input connection template outside observed forms')
             binding.update(source_group=ordinal,native_group=cursor if consume else None)
             result['bindings'].append(binding);bound.add(port['name'])

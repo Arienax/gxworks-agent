@@ -114,17 +114,18 @@ def resolve_operand(token: str, tables, allocated_tables, *, cpu: str) -> dict:
     member=re.fullmatch(r'K([0-9]+)\.(K([0-9]+)(?:\[.*\])?)',token)
     if member:
         instance=tables.component_at(int(member[1]));allocated_instance=allocated_tables.component_at(int(member[1]))
-        if (instance.name_bytes!=allocated_instance.name_bytes or instance.instance_pou_offset is None
-                or instance.instance_pou_offset!=allocated_instance.instance_pou_offset):
+        reference=tables.component_instance_pou_offset(instance)
+        if (instance.name_bytes!=allocated_instance.name_bytes or reference is None
+                or reference!=allocated_tables.component_instance_pou_offset(allocated_instance)):
             return dict(result,gaps=['instance identity or instance POU reference unresolved'])
-        pou=tables.pou_at(instance.instance_pou_offset)
+        pou=tables.pou_at(reference)
         if int(member[3]) not in {c.record.table_offset for c in tables.components(pou)}:
             return dict(result,gaps=['member does not belong to the referenced instance POU'])
         child=resolve_operand(member[2],tables,allocated_tables,cpu=cpu)
         return dict(child,token=token,member_token=member[2],
                     qualified_component=instance.name_bytes.decode('ascii')+'.'+child.get('component',member[2]),
                     instance=dict(component_offset=int(member[1]),name=instance.name_bytes.decode('ascii'),
-                                  pou_offset=instance.instance_pou_offset,pou_name=pou.name_bytes.decode('ascii'),
+                                  pou_offset=reference,pou_name=pou.name_bytes.decode('ascii'),
                                   raw_component_base64=base64.b64encode(instance.record.raw).decode(),
                                   raw_pou_base64=base64.b64encode(pou.record.raw).decode()),
                     member_binding_rule='member allocation in the exact instance POU; no name-based merging or base-address addition')
@@ -203,8 +204,9 @@ def resolve_simple_instance_label(token: str, instance_offset: int, tables, *, c
     match=re.fullmatch(r"'([^\[\]]+)(?:\[(-?[0-9]+(?:\s*,\s*-?[0-9]+)*)\])?",token)
     if not match:return dict(result,gaps=['simple label outside observed literal-index grammar'])
     instance=tables.component_at(instance_offset)
-    if instance.instance_pou_offset is None:return dict(result,gaps=['component is not an instance'])
-    pou=tables.pou_at(instance.instance_pou_offset)
+    reference=tables.component_instance_pou_offset(instance)
+    if reference is None:return dict(result,gaps=['component is not an instance'])
+    pou=tables.pou_at(reference)
     # Native real source uses both rBuf and rbuf for the same exact member.
     # Fold ASCII bytes only; ambiguous names and other casing rules stay raw.
     candidates=[c for c in tables.components(pou) if c.name_bytes.lower()==match[1].encode(encoding).lower()]

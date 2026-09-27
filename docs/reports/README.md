@@ -11,6 +11,9 @@
 
 ## GXW 与原生实验
 
+- [源声明重建与 SFC 源图阶段快照（2026-09-27）](gxw/2026-09-27-source-sfc-checkpoint.md)
+- [Q 系列源声明分配与 MAIN 重建快照（2026-09-27）](gxw/2026-09-27-source-allocation-checkpoint.md)
+- [GX Works2 调用位置、数组与 REAL 转换阶段快照（2026-09-27）](gxw/2026-09-27-callsite-array-real-checkpoint.md)
 - [GLM 需求分析 JSON 格式失败与纠正](gxw/2026-09-10-analysis-json-format-repair.md)
 - [SQLite device heuristic warning review — 2026-09-13](gxw/device_heuristic_warning_review_20260913.md)
 - [Web CSV 发送到 GX：隔离验收（2026-09-13）](gxw/gx_send_fast_path_20260913.md)

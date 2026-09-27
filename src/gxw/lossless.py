@@ -110,9 +110,78 @@ class ProgramImage:
         return b"".join(chunks)
 
 
-def inspect_program(raw: bytes, *, logical_name: str = "<Program.pou>") -> ProgramImage:
+def inspect_program(raw: bytes, *, logical_name: str = "<Program.pou>",
+                    token_profile: str | None = "fx", text_encoding: str | None = None) -> ProgramImage:
+    """Retain source bytes; None selects framing without a CPU lexical grammar."""
+    if token_profile not in (None, "fx", "fx3u", "fx1s", "fx3g", "q02", "q03udv"):
+        raise GXWFormatError("unsupported token profile: " + token_profile)
     raw = bytes(raw)
     diagnostics = []
+    from .source_header import source_payload_offset
+
+    try:
+        source_start = source_payload_offset(raw)
+    except GXWFormatError:
+        source_start = None
+    if raw[54:58] == b"\xf0\0\0\0":
+        from .sfc_pou import parse_sfc_pou
+        from .token_pou import parse_token_fragment
+        from .token_listing import decode_token_program, TokenGap, TokenText
+
+        try:
+            source = parse_sfc_pou(raw)
+            spans = [RawRegion(0, raw[:54], "program-prefix")]
+            diagnostics.extend(source.diagnostics)
+            graph = source.layout["graph"]
+            if source.graph_tokens is None:
+                spans.append(RawRegion(graph["offset"], raw[graph["offset"]:graph["offset"] + graph["size"]], "sfc-graph"))
+            else:
+                for record in source.graph_records:
+                    size = len(record["raw_hex"]) // 2
+                    spans.append(RawRegion(record["offset"], raw[record["offset"]:record["offset"] + size],
+                        "sfc-reference", "opaque-preserved" if record["kind"] == "opaque" else "partially-decoded"))
+                spans.append(RawRegion(graph["cache_offset"], raw[graph["cache_offset"]:graph["cache_offset"] + graph["cache_size"]], "sfc-graph-cache"))
+            for child in source.layout["children"]:
+                tokens = parse_token_fragment(raw, child["token_offset"], child["token_size"])
+                if token_profile in ("fx3u", "fx1s", "fx3g", "q02", "q03udv"):
+                    listing = decode_token_program(tokens, profile=token_profile, text_encoding=text_encoding)
+                    diagnostics.extend(child["name"] + ": " + gap.reason for gap in listing.gaps)
+                    for record in listing.records:
+                        opaque = isinstance(record, TokenGap) or (isinstance(record, TokenText) and record.text is None)
+                        spans.extend(RawRegion(t.offset, t.raw, "sfc-child-token",
+                            "opaque-preserved" if opaque else "partially-decoded") for t in record.tokens)
+                else:
+                    spans.extend(RawRegion(t.offset, t.raw, "sfc-child-token") for t in tokens.tokens)
+            cursor, regions = 0, []
+            for span in sorted(spans, key=lambda r: r.offset):
+                if span.offset < cursor:
+                    raise GXWFormatError("overlapping SFC source regions")
+                if span.offset > cursor:
+                    regions.append(RawRegion(cursor, raw[cursor:span.offset], "sfc-source-fields", "partially-decoded"))
+                regions.append(span)
+                cursor = span.offset + len(span.raw)
+            if cursor < len(raw):
+                regions.append(RawRegion(cursor, raw[cursor:], "sfc-source-fields", "partially-decoded"))
+            return ProgramImage(raw, "sfc-source", tuple(regions), source, tuple(diagnostics))
+        except GXWFormatError as exc:
+            return ProgramImage(raw, "unsupported", (RawRegion(0, raw, "stream"),),
+                                diagnostics=("sfc-source: " + str(exc),))
+    if source_start is not None and raw[source_start] == 0xc1:
+        from .text_pou import parse_st_pou
+
+        try:
+            source = parse_st_pou(raw)
+            regions = (RawRegion(0, raw[:source.text_offset], "program-prefix"),
+                       RawRegion(source.text_offset, source.text_bytes, "source-text",
+                                 "decoded" if source.text is not None else "opaque-preserved"),
+                       RawRegion(source.text_end, raw[source.text_end:source.text_end + 2],
+                                 "text-terminator", "partially-decoded"),
+                       RawRegion(source.text_end + 2, raw[source.text_end + 2:], "trailer"))
+            return ProgramImage(raw, "structured-text", regions, source,
+                                diagnostics=(source.diagnostic,) if source.diagnostic else ())
+        except GXWFormatError as exc:
+            return ProgramImage(raw, "unsupported", (RawRegion(0, raw, "stream"),),
+                                diagnostics=("structured-text: " + str(exc),))
     try:
         program = parse_structured_pou(raw, logical_name=logical_name, preserve_unsupported_records=True)
         regions = [RawRegion(0, raw[:71], "program-prefix")]
@@ -128,15 +197,35 @@ def inspect_program(raw: bytes, *, logical_name: str = "<Program.pou>") -> Progr
         return ProgramImage(bytes(raw), "structured", tuple(regions), program)
     except GXWFormatError as exc:
         diagnostics.append("structured: " + str(exc))
-    try:
-        program = parse_token_pou(raw)
-        regions = [RawRegion(0, raw[:79], "program-prefix")]
-        regions.extend(RawRegion(t.offset, t.raw, "token", "opaque-preserved" if
-                                 t.annotation()["kind"] == "opaque" else "partially-decoded") for t in program.tokens)
-        regions.append(RawRegion(len(raw) - 24, raw[-24:], "trailer"))
-        return ProgramImage(bytes(raw), "ladder-token", tuple(regions), program)
-    except GXWFormatError as exc:
-        diagnostics.append("ladder-token: " + str(exc))
+    if token_profile in ("fx3u", "fx1s", "fx3g", "q02", "q03udv"):
+        from .token_listing import decode_token_listing, TokenGap, TokenText
+
+        try:
+            listing = decode_token_listing(raw, profile=token_profile, text_encoding=text_encoding)
+            program = listing.source
+            regions = [RawRegion(0, raw[:program.body_offset], "program-prefix")]
+            for record in listing.records:
+                opaque = isinstance(record, TokenGap) or (isinstance(record, TokenText) and record.text is None)
+                regions.extend(RawRegion(t.offset, t.raw, "token",
+                                         "opaque-preserved" if opaque else "partially-decoded")
+                               for t in record.tokens)
+            regions.append(RawRegion(program.body_end, raw[program.body_end:], "trailer"))
+            return ProgramImage(raw, "ladder-token-" + token_profile, tuple(regions), listing,
+                                diagnostics=tuple(g.reason for g in listing.gaps))
+        except GXWFormatError as exc:
+            diagnostics.append("ladder-token-" + token_profile + ": " + str(exc))
+        return ProgramImage(raw, "unsupported", (RawRegion(0, raw, "stream"),),
+                            diagnostics=tuple(diagnostics))
+    if token_profile == "fx":
+        try:
+            program = parse_token_pou(raw)
+            regions = [RawRegion(0, raw[:79], "program-prefix")]
+            regions.extend(RawRegion(t.offset, t.raw, "token", "opaque-preserved" if
+                                     t.annotation()["kind"] == "opaque" else "partially-decoded") for t in program.tokens)
+            regions.append(RawRegion(len(raw) - 24, raw[-24:], "trailer"))
+            return ProgramImage(bytes(raw), "ladder-token", tuple(regions), program)
+        except GXWFormatError as exc:
+            diagnostics.append("ladder-token: " + str(exc))
     try:
         # Separate boundary recognition from FX instruction interpretation.
         # Q source and legacy trailers can be retained as bounded tokens even

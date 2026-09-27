@@ -20,11 +20,13 @@ class TokenResource:
     suffix_offset: int
 
     @property
-    def observed_program_names(self) -> tuple[str, ...] | None:
+    def observed_cached_names(self) -> tuple[str, ...] | None:
         """Known single-name suffix only; other suffixes remain opaque.
 
         The trailing 4/1 fields are matched, not assigned speculative roles.
-        Names were cross-checked against projectdatalist in the corpus.
+        Native Q controls retain a task name here after task references change;
+        swapping these names does not change the resource/task association.
+        This cache must not be used to infer source-program or task ownership.
         """
         tail = self.raw[self.suffix_offset:]
         if len(tail) < 18 or struct.unpack_from("<I", tail)[0] != 1:
@@ -54,8 +56,13 @@ The two length-prefixed code spans are separated/followed by eight zero bytes.
 Either span may be empty. Their roles and freshness are deliberately unnamed.
 """
     raw = bytes(raw)
-    signature = bytes.fromhex("01000000000001000000000001000a00000000000200000001000000010000000000")
-    if len(raw) < 78 or not raw.startswith(signature):
+    signatures = (
+        bytes.fromhex("01000000000001000000000001000a00000000000200000001000000010000000000"),
+        # Legacy FX3U SFC resource: both bounded copies independently match
+        # the native GetPCode buffer, including the empty-task cache control.
+        bytes.fromhex("01000000000001000000000000000000000000000200000001000000010000000000"),
+    )
+    if len(raw) < 78 or not raw.startswith(signatures):
         raise GXWFormatError("unsupported compiled resource wrapper")
     cursor, spans, regions = 54, [], []
     for _ in range(2):

@@ -14,6 +14,12 @@ partial class WorkspaceReplayOracle {
     [DllImport("kernel32")] static extern uint SetErrorMode(uint mode);
     [DllImport("kernel32",CharSet=CharSet.Unicode,SetLastError=true)] static extern bool SetDllDirectory(string path);
     [DllImport("kernel32",CharSet=CharSet.Unicode,SetLastError=true)] static extern IntPtr LoadLibrary(string path);
+    [DllImport("kernel32",CharSet=CharSet.Unicode,EntryPoint="GetModuleHandleW")] static extern IntPtr CrtModuleHandle(string name);
+    [DllImport("kernel32",CharSet=CharSet.Unicode,EntryPoint="GetModuleFileNameW")] static extern uint CrtModulePath(IntPtr module,System.Text.StringBuilder path,int capacity);
+    [DllImport("msvcr71.dll",CallingConvention=CallingConvention.Cdecl,EntryPoint="_getmbcp")] static extern int CrtCodePage();
+    [DllImport("msvcr71.dll",CallingConvention=CallingConvention.Cdecl,EntryPoint="_mbctolower")] static extern int CrtLower(int value);
+    [DllImport("msvcr71.dll",CallingConvention=CallingConvention.Cdecl,EntryPoint="_mbctoupper")] static extern int CrtUpper(int value);
+    [DllImport("msvcr71.dll",CallingConvention=CallingConvention.Cdecl,EntryPoint="_ismbclower")] static extern int CrtIsLower(int value);
     [StructLayout(LayoutKind.Sequential)] struct ObjectId {
         [MarshalAs(UnmanagedType.ByValArray,SizeConst=12)] public uint[] words;
     }
@@ -55,6 +61,7 @@ partial class WorkspaceReplayOracle {
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int ImportFn(IntPtr self,IntPtr home,IntPtr workspace,IntPtr project,IntPtr file,out int code);
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int FileNameFn(IntPtr self,IntPtr file,out IntPtr name,out int code);
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int SaveFn(IntPtr self,IntPtr home,IntPtr workspace,IntPtr project,uint mode,ObjectId id,int succession,out int code);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int CompilerCacheFn(IntPtr self,IntPtr home,IntPtr workspace,IntPtr project,out int code);
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int ProjectStatusFn(IntPtr self,ObjectId id,uint index,uint value,uint mask,out int code);
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int ExportFn(IntPtr self,IntPtr home,IntPtr workspace,IntPtr project,IntPtr file,int history,int overwrite,uint splitSize,out int code);
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int OpenFn(IntPtr self,int type,IntPtr home,IntPtr workspace,IntPtr project,int label,uint mode,int operation,out ObjectId id,out int code);
@@ -128,6 +135,29 @@ partial class WorkspaceReplayOracle {
             Thread.Sleep(10);
         }
         Record(new {operation=operation+"Timeout"});Environment.Exit(3);return true;
+    }
+    static void VerifyNativeCharacterCase(string phase) {
+        // The pinned SIC converter uses these CRT operations to emit NOT(...).
+        // CP54936 controls silently lost negation despite Build reporting success.
+        // Check the active runtime, without changing locale or project encoding.
+        IntPtr module=CrtModuleHandle("msvcr71.dll");
+        if(module==IntPtr.Zero)throw new Exception("Native compiler CRT is not loaded");
+        var path=new System.Text.StringBuilder(2048);
+        uint length=CrtModulePath(module,path,path.Capacity);
+        if(length==0||length>=path.Capacity)throw new Exception("Cannot identify native compiler CRT");
+        string digest;
+        using(var hash=System.Security.Cryptography.SHA256.Create())
+            digest=BitConverter.ToString(hash.ComputeHash(File.ReadAllBytes(path.ToString()))).Replace("-","").ToLowerInvariant();
+        var mismatches=new List<object>();
+        for(int upper=65;upper<=90;upper++) {
+            int lower=upper+32,actualLower=CrtLower(upper),actualUpper=CrtUpper(lower),isLower=CrtIsLower(lower);
+            if(actualLower!=lower||actualUpper!=upper||isLower!=1)
+                mismatches.Add(new {upper=upper,lower=lower,actual_lower=actualLower,actual_upper=actualUpper,is_lower=isLower});
+        }
+        bool valid=mismatches.Count==0;
+        Record(new {operation="NativeCrtCharacterCase",phase=phase,module=path.ToString(),sha256=digest,
+            codepage=CrtCodePage(),valid=valid,mismatches=mismatches});
+        if(!valid)throw new Exception("Native CRT character classification is invalid; compile output cannot be trusted");
     }
     static List<ObjectId> Inventory(IntPtr workspace,ObjectId id) {
         var children=new List<ObjectId>();
@@ -332,7 +362,7 @@ partial class WorkspaceReplayOracle {
                 } finally {Marshal.Release(encodingInfo);}
             }
             if(plan.ContainsKey("native_copy"))CopyNativeObject(workspace,id,root,plan);
-            if(plan.ContainsKey("sfc_graph_tokens")) {
+            if(plan.ContainsKey("sfc_graph_tokens")||plan.ContainsKey("sfc_graph_chars")) {
                 ReadSfcGraph(workspace,id,root,plan,cpuName);
             }
             if(plan.ContainsKey("snapshot_frontend")&&Convert.ToBoolean(plan["snapshot_frontend"])) {
@@ -400,10 +430,13 @@ partial class WorkspaceReplayOracle {
                 hr=Slot<CodeFn>(compiler,156)(compiler,out code);
                 Check("Compiler.ChangeSFCProgram",hr,code);
             } else {
+                VerifyNativeCharacterCase("before-build");
                 hr=Slot<BuildFn>(compiler,28)(compiler,Convert.ToInt32(plan["build_identifier"]),Convert.ToInt32(plan["report_kind"]),out code);
                 Check("Compiler.Build",hr,code);
             }
             bool compilerRejected=WaitReports(compiler,changeSfc?168:40,"Progress");
+            bool buildRejected=compilerRejected;
+            if(!changeSfc)VerifyNativeCharacterCase("after-build");
             if(plan.ContainsKey("remake_call_tree")&&Convert.ToBoolean(plan["remake_call_tree"])&&!compilerRejected&&!changeSfc)
                 Check("Compiler.RemakeCallTreeData",Slot<CodeFn>(compiler,184)(compiler,out code),code);
             int pcCount;IntPtr pcRecords;
@@ -662,6 +695,12 @@ partial class WorkspaceReplayOracle {
                 File.WriteAllText(Path.Combine(root,"native-device-assignments.json"),json.Serialize(results));
             }
             if(plan.ContainsKey("program_check_kind")&&!compilerRejected) {
+                if(plan.ContainsKey("refresh_program_check")&&Convert.ToBoolean(plan["refresh_program_check"])) {
+                    // ProgramCheck reads the workspace resource. A generated
+                    // duplicate-coil control passes incorrectly without this
+                    // publication even though GetPCode returns the new bytes.
+                    Check("Workspace.UpdatePCodeBeforeProgramCheck",Slot<IdCodeFn>(workspace,1736)(workspace,id,out code),code);
+                }
                 ObjectId collection;
                 Check("Workspace.GetProgramCheckCollection",Slot<CollectionFn>(workspace,36)(workspace,id,
                     Convert.ToInt32(plan["program_check_collection"]),out collection,out code),code);
@@ -731,6 +770,23 @@ partial class WorkspaceReplayOracle {
                     Check("ExportOneFileProject",Slot<ExportFn>(operations,420)(operations,home,ws,project,BStr(exportPath),3,0,0,out code),code);
                     Record(new {operation="NativeExport",path="native-saved.gxw"});
                 }
+            }
+            if(plan.ContainsKey("snapshot_compiler_cache")&&Convert.ToBoolean(plan["snapshot_compiler_cache"])&&!buildRejected&&!changeSfc) {
+                // IDZDataABS_CompilerAdapter::SaveData, typelib slot 24,
+                // takes three BSTRs. It flushes the owned compiler working
+                // files and writes metadata to a new owned destination. Run
+                // after queries/checks: SaveData makes the adapter busy. This
+                // is not SaveProject, GXW export or ProgramCheck success.
+                string cacheHome=Path.Combine(root,"compiler-snapshot");
+                if(Directory.Exists(cacheHome))throw new Exception("Compiler snapshot destination already exists");
+                Directory.CreateDirectory(Path.Combine(cacheHome,"workspace","project"));
+                Check("Compiler.SaveDataSnapshot",Slot<CompilerCacheFn>(compiler,24)(compiler,
+                    BStr(cacheHome+Path.DirectorySeparatorChar),BStr("workspace"),BStr("project"),out code),code);
+                // SaveData is not a build/analysis progress operation. The
+                // observed GetProgress stays at zero after it returns; no
+                // compiler calls follow this snapshot. Retain its result and
+                // inspect the emitted files independently after process exit.
+                Record(new {operation="CompilerSnapshotReturned"});
             }
         } catch(Exception ex) {
             // Preserve the original failure before partially initialized native

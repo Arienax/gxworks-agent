@@ -1,0 +1,402 @@
+{
+  "files_verified": 23331,
+  "missing_archives": [],
+  "comparisons": [
+    {
+      "case": "q-real/case-00-0",
+      "status": "byte-identical",
+      "bytes": 858
+    },
+    {
+      "case": "q-real/case-01-0",
+      "status": "byte-identical",
+      "bytes": 895
+    },
+    {
+      "case": "q-real/case-02-0",
+      "status": "byte-identical",
+      "bytes": 322
+    },
+    {
+      "case": "q-real/case-04-0",
+      "status": "byte-identical",
+      "bytes": 546
+    },
+    {
+      "case": "q-real/case-04-1",
+      "status": "byte-identical",
+      "bytes": 962
+    },
+    {
+      "case": "q-real/case-04-2",
+      "status": "byte-identical",
+      "bytes": 1025
+    },
+    {
+      "case": "q-real/case-05-0",
+      "status": "byte-identical",
+      "bytes": 574
+    },
+    {
+      "case": "q-real/case-05-1",
+      "status": "byte-identical",
+      "bytes": 837
+    },
+    {
+      "case": "q-real/case-07-0",
+      "status": "byte-identical",
+      "bytes": 490
+    },
+    {
+      "case": "q-real/case-07-1",
+      "status": "byte-identical",
+      "bytes": 1738
+    },
+    {
+      "case": "q-real/case-08-0",
+      "status": "byte-identical",
+      "bytes": 1717
+    },
+    {
+      "case": "q-real/case-08-1",
+      "status": "byte-identical",
+      "bytes": 490
+    },
+    {
+      "case": "q-real/case-09-0",
+      "status": "byte-identical",
+      "bytes": 1608
+    },
+    {
+      "case": "q-real/case-09-1",
+      "status": "byte-identical",
+      "bytes": 490
+    },
+    {
+      "case": "q-real/case-11-0",
+      "status": "byte-identical",
+      "bytes": 475
+    },
+    {
+      "case": "q-real/case-11-1",
+      "status": "byte-identical",
+      "bytes": 1492
+    },
+    {
+      "case": "q-real/case-12-0",
+      "status": "byte-identical",
+      "bytes": 482
+    },
+    {
+      "case": "q-real/case-12-1",
+      "status": "byte-identical",
+      "bytes": 1715
+    },
+    {
+      "case": "q-real/case-13-0",
+      "status": "byte-identical",
+      "bytes": 468
+    },
+    {
+      "case": "q-real/case-13-1",
+      "status": "byte-identical",
+      "bytes": 1787
+    },
+    {
+      "case": "q-real/case-14-0",
+      "status": "byte-identical",
+      "bytes": 475
+    },
+    {
+      "case": "q-real/case-14-1",
+      "status": "byte-identical",
+      "bytes": 1715
+    },
+    {
+      "case": "q-real/case-15-0",
+      "status": "byte-identical",
+      "bytes": 475
+    },
+    {
+      "case": "q-real/case-15-1",
+      "status": "byte-identical",
+      "bytes": 1689
+    },
+    {
+      "case": "q-real/case-16-0",
+      "status": "byte-identical",
+      "bytes": 475
+    },
+    {
+      "case": "q-real/case-16-1",
+      "status": "byte-identical",
+      "bytes": 1728
+    },
+    {
+      "case": "q-real/case-17-0",
+      "status": "byte-identical",
+      "bytes": 475
+    },
+    {
+      "case": "q-real/case-17-1",
+      "status": "byte-identical",
+      "bytes": 1673
+    },
+    {
+      "case": "q-real/case-18-0",
+      "status": "byte-identical",
+      "bytes": 475
+    },
+    {
+      "case": "q-real/case-18-1",
+      "status": "byte-identical",
+      "bytes": 1503
+    },
+    {
+      "case": "q-real/case-19-0",
+      "status": "byte-identical",
+      "bytes": 475
+    },
+    {
+      "case": "q-real/case-19-1",
+      "status": "byte-identical",
+      "bytes": 1880
+    },
+    {
+      "case": "q-real/case-20-0",
+      "status": "byte-identical",
+      "bytes": 475
+    },
+    {
+      "case": "q-real/case-20-1",
+      "status": "byte-identical",
+      "bytes": 1876
+    },
+    {
+      "case": "q-real/case-21-0",
+      "status": "byte-identical",
+      "bytes": 475
+    },
+    {
+      "case": "q-real/case-21-1",
+      "status": "byte-identical",
+      "bytes": 1853
+    },
+    {
+      "case": "q-real/case-22-0",
+      "status": "byte-identical",
+      "bytes": 475
+    },
+    {
+      "case": "q-real/case-22-1",
+      "status": "byte-identical",
+      "bytes": 1711
+    },
+    {
+      "case": "q-real/case-23-0",
+      "status": "byte-identical",
+      "bytes": 475
+    },
+    {
+      "case": "q-real/case-23-1",
+      "status": "byte-identical",
+      "bytes": 1942
+    },
+    {
+      "case": "q-real/case-24-0",
+      "status": "byte-identical",
+      "bytes": 475
+    },
+    {
+      "case": "q-real/case-24-1",
+      "status": "byte-identical",
+      "bytes": 1741
+    },
+    {
+      "case": "q-real/case-25-0",
+      "status": "byte-identical",
+      "bytes": 475
+    },
+    {
+      "case": "q-real/case-25-1",
+      "status": "byte-identical",
+      "bytes": 1731
+    },
+    {
+      "case": "q-real/case-26-0",
+      "status": "byte-identical",
+      "bytes": 475
+    },
+    {
+      "case": "q-real/case-26-1",
+      "status": "byte-identical",
+      "bytes": 1806
+    },
+    {
+      "case": "q-real/case-27-0",
+      "status": "byte-identical",
+      "bytes": 475
+    },
+    {
+      "case": "q-real/case-27-1",
+      "status": "byte-identical",
+      "bytes": 1851
+    },
+    {
+      "case": "q-real/case-28-0",
+      "status": "byte-identical",
+      "bytes": 475
+    },
+    {
+      "case": "q-real/case-28-1",
+      "status": "byte-identical",
+      "bytes": 1843
+    },
+    {
+      "case": "q-real/case-29-0",
+      "status": "byte-identical",
+      "bytes": 475
+    },
+    {
+      "case": "q-real/case-29-1",
+      "status": "byte-identical",
+      "bytes": 1774
+    },
+    {
+      "case": "q-real/case-30-0",
+      "status": "byte-identical",
+      "bytes": 468
+    },
+    {
+      "case": "q-real/case-30-1",
+      "status": "byte-identical",
+      "bytes": 1532
+    },
+    {
+      "case": "q-real/case-31-0",
+      "status": "byte-identical",
+      "bytes": 475
+    },
+    {
+      "case": "q-real/case-31-1",
+      "status": "byte-identical",
+      "bytes": 2109
+    },
+    {
+      "case": "q-real/case-32-0",
+      "status": "byte-identical",
+      "bytes": 475
+    },
+    {
+      "case": "q-real/case-32-1",
+      "status": "byte-identical",
+      "bytes": 1777
+    },
+    {
+      "case": "sfc-existing/parallel-project-1/native",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "sfc-existing/q-mask10",
+      "status": "byte-identical",
+      "bytes": 227
+    },
+    {
+      "case": "sfc-existing/q-mask1000",
+      "status": "byte-identical",
+      "bytes": 199
+    },
+    {
+      "case": "sfc-existing/q00j-copy-preserved-distinct/native",
+      "status": "byte-identical",
+      "bytes": 227
+    },
+    {
+      "case": "sfc-existing/q00j-copy-api-3",
+      "status": "byte-identical",
+      "bytes": 199
+    },
+    {
+      "case": "sfc-existing/q00j-copy-api-4",
+      "status": "byte-identical",
+      "bytes": 199
+    },
+    {
+      "case": "sfc-existing/q00j-copy-api-6",
+      "status": "byte-identical",
+      "bytes": 227
+    },
+    {
+      "case": "sfc-existing/q00j-copy-two-blocks",
+      "status": "byte-identical",
+      "bytes": 435
+    },
+    {
+      "case": "sfc-existing/q00j-copy-two-reversed",
+      "status": "byte-identical",
+      "bytes": 435
+    },
+    {
+      "case": "sfc-existing/q00j-decode-end-6",
+      "status": "byte-identical",
+      "bytes": 67
+    },
+    {
+      "case": "sfc-existing/q00j-two-steps-project/native",
+      "status": "byte-identical",
+      "bytes": 120
+    },
+    {
+      "case": "sfc-existing/selective-project-1/native",
+      "status": "byte-identical",
+      "bytes": 211
+    },
+    {
+      "case": "sfc-existing/three-steps-1/native",
+      "status": "byte-identical",
+      "bytes": 177
+    },
+    {
+      "case": "sfc-source-targeted-mutations/parallel-swap-transition-references",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "sfc-source-targeted-mutations/selective-swap-transition-references",
+      "status": "byte-identical",
+      "bytes": 211
+    },
+    {
+      "case": "sfc-source-targeted-mutations/pending-FX-jump-target0",
+      "status": "byte-identical",
+      "bytes": 177
+    },
+    {
+      "case": "sfc-source-targeted-mutations/pending-FX-action30",
+      "status": "byte-identical",
+      "bytes": 177
+    },
+    {
+      "case": "pending-q-end-kind/convert",
+      "status": "byte-identical",
+      "bytes": 67
+    },
+    {
+      "case": "pending-q-end-kind/reload",
+      "status": "byte-identical",
+      "bytes": 67
+    },
+    {
+      "case": "pending-sfc-reload/pending-FX-jump-target0",
+      "status": "byte-identical",
+      "bytes": 177
+    },
+    {
+      "case": "pending-sfc-reload/pending-FX-action30",
+      "status": "byte-identical",
+      "bytes": 177
+    }
+  ],
+  "scope": "Archive integrity and saved byte equality only; native compiler was not rerun."
+}

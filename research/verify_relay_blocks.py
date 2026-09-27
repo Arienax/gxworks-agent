@@ -16,6 +16,17 @@ def relay_truth_table(program):
     if program.unknown_records or any(n.kind not in (NodeKind.CONTACT, NodeKind.CONTACT_NC, NodeKind.COIL)
                                       for n in program.nodes):
         raise GXWFormatError('truth-table experiment supports only known relay nodes')
+    # A normal-looking kind can carry rising/falling, SET or RST port flags.
+    # This combinational oracle admits only its original canonical port forms;
+    # it must not silently erase stateful modifiers recognized by the reader.
+    for n in program.nodes:
+        codes = (11 if n.kind == NodeKind.CONTACT_NC else 3,
+                 0 if n.kind == NodeKind.COIL else 2)
+        if (tuple(p.port_kind_code for p in n.ports) != codes
+                or n.ports[0].local_x != 0
+                or n.ports[1].local_x != n.bbox.right - n.bbox.left
+                or n.ports[0].local_y != n.ports[1].local_y):
+            raise GXWFormatError('truth-table experiment requires canonical ordinary relay ports')
     inputs = sorted({n.symbol for n in program.nodes if n.kind != NodeKind.COIL})
     if len(inputs) > 8 or any(not s.startswith('X') for s in inputs):
         raise GXWFormatError('truth-table experiment requires at most eight direct X inputs')

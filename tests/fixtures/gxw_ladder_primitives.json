@@ -1,0 +1,2479 @@
+{
+  "schema": 1,
+  "provenance": {
+    "date": "2026-09-27",
+    "source_archive": "research/evidence/gxw-abi-checkpoint-20260919.zip",
+    "source_member": "frozen/base_spaced.gxw",
+    "source_archive_sha256": "902f38e79f0478cf414acacf70495eb362d5ff552f319eeb10deb5df1f3fda8a",
+    "scope": "Controlled source mutations in fresh isolated native offline builds; no PLC or simulator execution. Multiple variants of one source, not independent projects. SIC trace missing for one variant; PCode and independent native decoder captured for every included case.",
+    "crt": "Native ASCII case checks passed before and after each build.",
+    "dll_sha256": {
+      "DZDataABS_SICConverter_IEC.dll": "670fd037852287e4c99de6aa58d19ea0ba9505f10bb46969d2e17d1e54b863f6",
+      "DZDataABS_DataManager_IEC.dll": "4e6785f6797f4b621b0df3876172e45b43bb8f60a85abe715b1edbba05fc2b6d",
+      "sc_edit.dll": "6159e9ce9defb8116edb3b119da552359522e94b38d5dbf2b342ea5a3cf02d77"
+    },
+    "static_entry_rvas": {
+      "SIC.mode_from_flags": "0x49d7d",
+      "SIC.format_inversion_and_edges": "0x3ef05",
+      "DataManager.network_decode": "0x33583",
+      "sc_edit.SetBoxType": "0xff05",
+      "sc_edit.GetGD2BoxType": "0x1005d",
+      "SIC.import_graph_network": "0x4b824",
+      "SIC.normalize_first_primitive_port": "0x4c0ad",
+      "SIC.primitive_kind_jump_table": "0x4ca00"
+    },
+    "independent_decoder": {
+      "module": "ECCodeGeneratorFX2.dll",
+      "sha256": "a700da129ede89869a00a5614d08b43dc64e94c240494fc753fe09104c5b9399",
+      "cpu_code": 520
+    },
+    "helper_sha256": "ce0e94e3b72b2f748705639bbe78e0e40741aa77d60cf14794e92114d063f0c2"
+  },
+  "cases": [
+    {
+      "case": "contact-03-port-003",
+      "kind": 3,
+      "role": "contact",
+      "port_code": 3,
+      "target_symbol": "X1",
+      "source_sha256": "9875155c91978609691579e5d3ea7c7a3253bdf9133662fabacef5f62b730918",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "45e8b389d9e34db501f6737092d0a820b1c1678595f8c27f5a6aa44bff815769",
+      "pcode_base64": "AwADBJwBBAMgAwSdAQQDMwMCAgM0Aw==",
+      "pcode_sha256": "c3d4002ef01a18bff747b59298d7c1e741ed37d815d2edac1742917b645a5f12",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := %IX1;\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-primitive-kinds/contact-03",
+      "native_export_sha256": "f20b87012bb70c7a63e724bda647e3c7d77253df4d8ddca859ce6cbf1ffa715c"
+    },
+    {
+      "case": "contact-04-port-003",
+      "kind": 4,
+      "role": "contact",
+      "port_code": 3,
+      "target_symbol": "X1",
+      "source_sha256": "3d28e10f3eb00253355f5ab977c1b9b05b0f2b3f322cc8205e563025d4ceb025",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAQAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "bda49649d10671e163105c91c58624184c72bf7d895db7c6510bdbb46b0155f0",
+      "pcode_base64": "AwEDBJwBBAMgAwSdAQQDMwMCAgM0Aw==",
+      "pcode_sha256": "7e4a9d8259423083b3d5379b9afa3033576d75e028f87233a27dabcf624de880",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LDI",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := NOT(%IX1);\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-primitive-kinds/contact-04",
+      "native_export_sha256": "52babf010402fc6ec97460c657a66b74f8005cf47087b26a4ed56f11b9f24092"
+    },
+    {
+      "case": "coil-05-port-003",
+      "kind": 5,
+      "role": "coil",
+      "port_code": 3,
+      "target_symbol": "Y1",
+      "source_sha256": "9875155c91978609691579e5d3ea7c7a3253bdf9133662fabacef5f62b730918",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "45e8b389d9e34db501f6737092d0a820b1c1678595f8c27f5a6aa44bff815769",
+      "pcode_base64": "AwADBJwBBAMgAwSdAQQDMwMCAgM0Aw==",
+      "pcode_sha256": "c3d4002ef01a18bff747b59298d7c1e741ed37d815d2edac1742917b645a5f12",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := %IX1;\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-primitive-kinds/coil-05",
+      "native_export_sha256": "0c3f1b78f681ca796074fabe51d7f5ebede3883f557af64e17603092b0d2b7c6"
+    },
+    {
+      "case": "coil-06-port-003",
+      "kind": 6,
+      "role": "coil",
+      "port_code": 3,
+      "target_symbol": "Y1",
+      "source_sha256": "546fa81ef7414da6766f6aa3edc3872641ddf24fd07ccb101be96a6db241bb47",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABgAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "52f3344761c9298d4028610635a4c606a53975fef4f633ce1b25efeb817dfbde",
+      "pcode_base64": "AwEDBJwBBAMgAwSdAQQDMwMCAgM0Aw==",
+      "pcode_sha256": "7e4a9d8259423083b3d5379b9afa3033576d75e028f87233a27dabcf624de880",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LDI",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := NOT(%IX1);\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-primitive-kinds/coil-06",
+      "native_export_sha256": "5eeb4ee8d393d53f8813aa1ee1838269d98259c02873ce794063755f9104fddb"
+    },
+    {
+      "case": "coil-07-port-003",
+      "kind": 7,
+      "role": "coil",
+      "port_code": 3,
+      "target_symbol": "Y1",
+      "source_sha256": "b72c14d880a00075c69b514805ff9cf019763d9c1e16f7d9e26e0859bb2674fe",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABwAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "712b1081c9e6040c2d1901d3ef6cd39d47d33f5607a256ad135812e1baf8704d",
+      "pcode_base64": "AwADBJwBBAMjAwSdAQQDMwMCAgM0Aw==",
+      "pcode_sha256": "60368d64442d14eef562431fd5f13fa189738f6ccebfca5601ccb454d4fe7cba",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "SET",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\nS %QX1 := %IX1;\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-primitive-kinds/coil-07",
+      "native_export_sha256": "cbe70aaaea79b29cf178aa020833ed82aec4865ca9f52d2d2de29db65bda7639"
+    },
+    {
+      "case": "coil-08-port-003",
+      "kind": 8,
+      "role": "coil",
+      "port_code": 3,
+      "target_symbol": "Y1",
+      "source_sha256": "e17c4ed242c6fb66402f7690a2462fedc8f8ad183b72ed05bb6ffb8429f876b2",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAACAAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "0f36cc25b76b75181567f4ac889b43eb21e275956ef0035bf7116c8eec0b5f04",
+      "pcode_base64": "AwADBJwBBAMkAwSdAQQDMwMCAgM0Aw==",
+      "pcode_sha256": "97878f2047f8970dab9db9e22dc5d8a47d8b5daa28f0b2cfd6ed77f7a1c1f6f5",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "RST",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\nR %QX1 := %IX1;\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-primitive-kinds/coil-08",
+      "native_export_sha256": "ffd8fa063bb2350057ef163b952b694c8115aefb8d49399c2aa9d4e54032405e"
+    },
+    {
+      "case": "contact-03-port-011",
+      "kind": 3,
+      "role": "contact",
+      "port_code": 11,
+      "target_symbol": "X1",
+      "source_sha256": "39399a2134fce10325658f427945a7505ce0c6cc05c2e646b97629394d5df0f3",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAACwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "e4791b7fc0a79fc5fa81024e06fc270bafccff2834845847fb4304fadaab0272",
+      "pcode_base64": "AwADBJwBBAMgAwSdAQQDMwMCAgM0Aw==",
+      "pcode_sha256": "c3d4002ef01a18bff747b59298d7c1e741ed37d815d2edac1742917b645a5f12",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := %IX1;\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-port-flags/contact-03-port-011",
+      "native_export_sha256": "b8112450c24aad7017924c26662cac3d0029c8c206c28dab1f9af4de374d11ae"
+    },
+    {
+      "case": "contact-04-port-011",
+      "kind": 4,
+      "role": "contact",
+      "port_code": 11,
+      "target_symbol": "X1",
+      "source_sha256": "65fea14cf70ee5ec0854fc8eded5de1a6875d28c384eecff2aeeed703a280fe5",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAQAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAACwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "86e0265e9088b8fca54bf69694f2f76cc8c2318142ba752c6b6d42a6c4adebfd",
+      "pcode_base64": "AwEDBJwBBAMgAwSdAQQDMwMCAgM0Aw==",
+      "pcode_sha256": "7e4a9d8259423083b3d5379b9afa3033576d75e028f87233a27dabcf624de880",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LDI",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := NOT(%IX1);\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-port-flags/contact-04-port-011",
+      "native_export_sha256": "b5f54bcd018fed2a237e20fb1988bd4c9f307a2ab9bca756d79a4627d74ba79d"
+    },
+    {
+      "case": "contact-03-port-019",
+      "kind": 3,
+      "role": "contact",
+      "port_code": 19,
+      "target_symbol": "X1",
+      "source_sha256": "e0acd6611de4082ee52bf20b5d7af82c28cc47fd3dad1139b7ce73ddd750e9ef",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAEwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "bb805912749e2585394700e31add95bd4e6d6aba7e0a49731c21327b144573c4",
+      "pcode_base64": "BAICBAScAQQDIAMEnQEEAzMDAgIDNAM=",
+      "pcode_sha256": "5a5bce04b6c6356c51763fe257608aac4995299fee5af3101f890e1c6f0d6916",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LDP",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := REDGE(%IX1);\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-port-flags/contact-03-port-019",
+      "native_export_sha256": "0a4ac4f06766fb86821f5a094b17376710fa965ef85d4cf67b9c2696a390191c"
+    },
+    {
+      "case": "contact-03-port-035",
+      "kind": 3,
+      "role": "contact",
+      "port_code": 35,
+      "target_symbol": "X1",
+      "source_sha256": "b9bf57d4616b92ca9bf418e675ebce048f5fbba09768e0cd200cd6bfd816528a",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAIwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "206af7d3f36137e441d5715587298cc25abce0d730b435e1a53b01ecca66e862",
+      "pcode_base64": "BAMCBAScAQQDIAMEnQEEAzMDAgIDNAM=",
+      "pcode_sha256": "ab4bda2168f7b0c1d018a65baac069f52c0b95a61b224b1dad0c56bd77ecae29",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LDF",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := FEDGE(%IX1);\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-port-flags/contact-03-port-035",
+      "native_export_sha256": "fdf3be2591d04966c98adf0383586bb9309c466097d6bb70f9ef8812faa52ec7"
+    },
+    {
+      "case": "contact-03-port-027",
+      "kind": 3,
+      "role": "contact",
+      "port_code": 27,
+      "target_symbol": "X1",
+      "source_sha256": "3e4b9e24f39189e5dd0ebc21e3e323b25f13d635da111f14ba8e4e0c387dd18b",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAGwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "57acbbb9d5a639042950ea07dbdbc37c05968cd6ca70ef1c663bdfb91c6115fa",
+      "pcode_base64": "BAICBAScAQQDIAMEnQEEAzMDAgIDNAM=",
+      "pcode_sha256": "5a5bce04b6c6356c51763fe257608aac4995299fee5af3101f890e1c6f0d6916",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LDP",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-port-flags/contact-03-port-027",
+      "native_export_sha256": "c37f21bff4d47a998d6f64f8835150b8e090b84ffdf9fc5858f4a508c89faf83"
+    },
+    {
+      "case": "contact-03-port-043",
+      "kind": 3,
+      "role": "contact",
+      "port_code": 43,
+      "target_symbol": "X1",
+      "source_sha256": "eda5a8c017ec3a08c4fe10b892644c57edd52ae705c1ea096621525ccb408dd1",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAKwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "be5f3be3e2906b75fe999926033bcb1537f87e96331610d337c629cceb7e1590",
+      "pcode_base64": "BAMCBAScAQQDIAMEnQEEAzMDAgIDNAM=",
+      "pcode_sha256": "ab4bda2168f7b0c1d018a65baac069f52c0b95a61b224b1dad0c56bd77ecae29",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LDF",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := FEDGE(%IX1);\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-port-flags/contact-03-port-043",
+      "native_export_sha256": "1f03e1007d7e3513cd34a8fc94718a6b08d988eb270e190ee5fcb5a9247749f2"
+    },
+    {
+      "case": "coil-05-port-011",
+      "kind": 5,
+      "role": "coil",
+      "port_code": 11,
+      "target_symbol": "Y1",
+      "source_sha256": "5a468c04870de2248b67a6aa2b8dba0376971c49dcc0a2fb2f55ed1a87751cf5",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAALAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "4bd64714582119961e2157034264285c690e7ffce4edbefda38383776437621a",
+      "pcode_base64": "AwADBJwBBAMgAwSdAQQDMwMCAgM0Aw==",
+      "pcode_sha256": "c3d4002ef01a18bff747b59298d7c1e741ed37d815d2edac1742917b645a5f12",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := %IX1;\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-port-flags/coil-05-port-011",
+      "native_export_sha256": "ee4334768b76235f5b2a24736008093255c170474117881e2789025db4c169b3"
+    },
+    {
+      "case": "coil-06-port-011",
+      "kind": 6,
+      "role": "coil",
+      "port_code": 11,
+      "target_symbol": "Y1",
+      "source_sha256": "d74f4d8ddf6cd9732655ea65f7c813c117eb94c85d12f36894acab3601c31b24",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABgAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAALAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "cf0232fd5f5971ba9b47fc16ff031f3a871228693985ef2a4b951741047c982a",
+      "pcode_base64": "AwEDBJwBBAMgAwSdAQQDMwMCAgM0Aw==",
+      "pcode_sha256": "7e4a9d8259423083b3d5379b9afa3033576d75e028f87233a27dabcf624de880",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LDI",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := NOT(%IX1);\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-port-flags/coil-06-port-011",
+      "native_export_sha256": "80bdeae3b43a37a5777eae0a25118512a3bf9ff3d9035d8932f01081294e57ae"
+    },
+    {
+      "case": "coil-05-port-019",
+      "kind": 5,
+      "role": "coil",
+      "port_code": 19,
+      "target_symbol": "Y1",
+      "source_sha256": "2a3da597570407094ab7c923cdff4699b223ecbb2f1f444380ce37f0b293a76a",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAATAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "e6b41120de11a91043c55f1505a4172887548f0505a1b5b8ef919e94e79e3853",
+      "pcode_base64": "BAICBAScAQQDIAMEnQEEAzMDAgIDNAM=",
+      "pcode_sha256": "5a5bce04b6c6356c51763fe257608aac4995299fee5af3101f890e1c6f0d6916",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LDP",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := REDGE(%IX1);\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-port-flags/coil-05-port-019",
+      "native_export_sha256": "3fa240ad807dc3af3a6ae97e9cc9958839653db5a3066c285c1ba2e14ebf60c3"
+    },
+    {
+      "case": "coil-05-port-035",
+      "kind": 5,
+      "role": "coil",
+      "port_code": 35,
+      "target_symbol": "Y1",
+      "source_sha256": "bc54194ef3dbc2dfd036bf76cfa032fd60d985c65dce879146dd732f73464b25",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAAjAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "1f9ca5b6cc9309ec8179719a60527ea46c7abb1a1a65f43600fbf533792b8c06",
+      "pcode_base64": "BAMCBAScAQQDIAMEnQEEAzMDAgIDNAM=",
+      "pcode_sha256": "ab4bda2168f7b0c1d018a65baac069f52c0b95a61b224b1dad0c56bd77ecae29",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LDF",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := FEDGE(%IX1);\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-port-flags/coil-05-port-035",
+      "native_export_sha256": "007aa68eeb0b9727e412852cdfbb2df579ff63319911825b63e12dbd1643e721"
+    },
+    {
+      "case": "coil-05-port-067",
+      "kind": 5,
+      "role": "coil",
+      "port_code": 67,
+      "target_symbol": "Y1",
+      "source_sha256": "5a89fbb90d62363d127d91a0df4f4c882241030f27f22927f2ea7cc928f66f5c",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAABDAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "f6395670710818924d344dd1c3050b1ca0e12fdcd9b25709d66fb2b8a7bd3b53",
+      "pcode_base64": "AwADBJwBBAMjAwSdAQQDMwMCAgM0Aw==",
+      "pcode_sha256": "60368d64442d14eef562431fd5f13fa189738f6ccebfca5601ccb454d4fe7cba",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "SET",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\nS %QX1 := %IX1;\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-port-flags/coil-05-port-067",
+      "native_export_sha256": "26d8329f2e6e0a59e03a49fada160c1e3453d45cf318f003b08a456e9d17bfac"
+    },
+    {
+      "case": "coil-05-port-131",
+      "kind": 5,
+      "role": "coil",
+      "port_code": 131,
+      "target_symbol": "Y1",
+      "source_sha256": "988bec92bf83a0726bcee3311faed7840f347b70c022afe9af25362df0442665",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAACDAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "3a219fbf1840a6aabd8d713d7360a38c89efd4211b7bfcbe665ec6030639c36b",
+      "pcode_base64": "AwADBJwBBAMkAwSdAQQDMwMCAgM0Aw==",
+      "pcode_sha256": "97878f2047f8970dab9db9e22dc5d8a47d8b5daa28f0b2cfd6ed77f7a1c1f6f5",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "RST",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\nR %QX1 := %IX1;\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-port-flags/coil-05-port-131",
+      "native_export_sha256": "2009b10c8d1126916c72bc69699dab20dbc2979219baaf848004a2db063d115c"
+    },
+    {
+      "case": "coil-07-port-011",
+      "kind": 7,
+      "role": "coil",
+      "port_code": 11,
+      "target_symbol": "Y1",
+      "source_sha256": "dc3e25a93656880028846120bbc0217aa6ba49e4b4071a8b71e8c3966deadbf9",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABwAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAALAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "9c26d638e47ecf981917b7e471ecbfda75c0021e7c79a7675e7fb4a97c760464",
+      "pcode_base64": "AwEDBJwBBAMgAwSdAQQDMwMCAgM0Aw==",
+      "pcode_sha256": "7e4a9d8259423083b3d5379b9afa3033576d75e028f87233a27dabcf624de880",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LDI",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := NOT(%IX1);\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-port-flags/coil-07-port-011",
+      "native_export_sha256": "d039c74e8d79cd98fc54682a9d071cf7f839e2b781ac248cd2b2d4dd8ff9edf2"
+    },
+    {
+      "case": "coil-08-port-011",
+      "kind": 8,
+      "role": "coil",
+      "port_code": 11,
+      "target_symbol": "Y1",
+      "source_sha256": "5075d7fbbeab234bc5f6dce62cbe1919ddcbd239ef8d082fd9fd10e4c23d0880",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAACAAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAALAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "a63ebf986b4f9d9b429d5be200f44cff73bf69af65ce8bbbc79acb397e42c021",
+      "pcode_base64": "AwEDBJwBBAMgAwSdAQQDMwMCAgM0Aw==",
+      "pcode_sha256": "7e4a9d8259423083b3d5379b9afa3033576d75e028f87233a27dabcf624de880",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LDI",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := NOT(%IX1);\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-port-flags/coil-08-port-011",
+      "native_export_sha256": "6d868feb64f6e2c7aee78745429139f3239e1094e30fe960e95569f8c022f77c"
+    },
+    {
+      "case": "contact-17-port-003",
+      "kind": 17,
+      "role": "contact",
+      "port_code": 3,
+      "target_symbol": "X1",
+      "source_sha256": "2315fb6a72c5438c01983216490ba6efcb460cd76c222da632a627abc17791e8",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAABEAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "7c595d2bb7e5b16b48d3502a302b3e977a1719f90ee1acc78b23adea6decbe9b",
+      "pcode_base64": "BAICBAScAQQDIAMEnQEEAzMDAgIDNAM=",
+      "pcode_sha256": "5a5bce04b6c6356c51763fe257608aac4995299fee5af3101f890e1c6f0d6916",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LDP",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := REDGE(%IX1);\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-edge-kinds/contact-17-port-003",
+      "native_export_sha256": "fb86ee2f349a453af1f77b5d6d8b1459353ea066e9124661d8a0f7ea16023cca"
+    },
+    {
+      "case": "contact-18-port-003",
+      "kind": 18,
+      "role": "contact",
+      "port_code": 3,
+      "target_symbol": "X1",
+      "source_sha256": "eb59915d47bf20ef3c97e2032e1bac62a188867ecfa85cd91dcb57a85603641e",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAABIAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "1778d013ac698527c6b5e4a5986fa658ddbf83b052da02c91f0ffdbc1c905141",
+      "pcode_base64": "BAMCBAScAQQDIAMEnQEEAzMDAgIDNAM=",
+      "pcode_sha256": "ab4bda2168f7b0c1d018a65baac069f52c0b95a61b224b1dad0c56bd77ecae29",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LDF",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := FEDGE(%IX1);\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-edge-kinds/contact-18-port-003",
+      "native_export_sha256": "f7c149e09be7a323d10494848119154befc278068deccb00232971d20c2b063d"
+    },
+    {
+      "case": "contact-04-port-019",
+      "kind": 4,
+      "role": "contact",
+      "port_code": 19,
+      "target_symbol": "X1",
+      "source_sha256": "95eb18eb3d2c5d389f1b6e1fcdb5c01db43dda94e5508012a302d261f4c90d49",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAQAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAEwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "57846a8451b5bd117bacb21d42cb216fa06c95a751fd23c832c4d90431183f27",
+      "pcode_base64": "BAICBAScAQQDFAMDIAMEnQEEAzMDAgIDNAM=",
+      "pcode_sha256": "63cdfc629a4bd8d26d991be50f0c387380010803ee1257f8f4b7b21d93f9c519",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LDP",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "INV",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := NOT(REDGE(%IX1));\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-edge-kinds/contact-04-port-019",
+      "native_export_sha256": "e5140889509133111e1178a319be5cccb95b961154cafb3c260ddf555e6d2fbb"
+    },
+    {
+      "case": "contact-04-port-035",
+      "kind": 4,
+      "role": "contact",
+      "port_code": 35,
+      "target_symbol": "X1",
+      "source_sha256": "1ab40db36239b7859102aea0ced364b34fdca06b017043e6e4cb859e0a6de6e9",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAQAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAIwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "4d2eb422a819320a4e23a7020c500449e3aabdc58cf4b82f3acf6bcc3d39777f",
+      "pcode_base64": "BAMCBAScAQQDFAMDIAMEnQEEAzMDAgIDNAM=",
+      "pcode_sha256": "75514c38e87105465ef7f232e2b87e8bf72db080ae0f7dd5816586f8e6b9f827",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LDF",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "INV",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := NOT(FEDGE(%IX1));\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-edge-kinds/contact-04-port-035",
+      "native_export_sha256": "0c8625cafddeb57f9467e12d8c7ae945e99b39aa1cb62615f0b48e419d695624"
+    },
+    {
+      "case": "coil-07-port-019",
+      "kind": 7,
+      "role": "coil",
+      "port_code": 19,
+      "target_symbol": "Y1",
+      "source_sha256": "728322c04eca96bc492d60d73f5cb761e9985d4a0fe1c725983dff65a10b051a",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABwAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAATAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "4f0d034c17e7571d821a1b38e0113ddf604425e7db9f6f8e387b81fa12cb4fc5",
+      "pcode_base64": "BAICBAScAQQDIAMEnQEEAzMDAgIDNAM=",
+      "pcode_sha256": "5a5bce04b6c6356c51763fe257608aac4995299fee5af3101f890e1c6f0d6916",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LDP",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := REDGE(%IX1);\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-edge-kinds/coil-07-port-019",
+      "native_export_sha256": "68987ec077b1d427570e8ed004d64b5f5e553113c810f8f52bbefed4f2faa5c3"
+    },
+    {
+      "case": "coil-08-port-035",
+      "kind": 8,
+      "role": "coil",
+      "port_code": 35,
+      "target_symbol": "Y1",
+      "source_sha256": "1616d7149456ee410c7386e2c62f9b04af95793ec29fbd65085ea6922cbc2690",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAACAAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAAjAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "6505d667d8b07c92147e1eaf01d66b79a911eb8f9c6ff04e5813290a2bbff98c",
+      "pcode_base64": "BAMCBAScAQQDIAMEnQEEAzMDAgIDNAM=",
+      "pcode_sha256": "ab4bda2168f7b0c1d018a65baac069f52c0b95a61b224b1dad0c56bd77ecae29",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LDF",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "OUT",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 := FEDGE(%IX1);\r\n\r\n"
+      ],
+      "evidence": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-graph-edge-kinds/coil-08-port-035",
+      "native_export_sha256": "5d7ba58f459df0b37cdf005199e1b7f70af724e43eba9cd687b190a3339d2710"
+    }
+  ],
+  "unsupported_cases": [
+    {
+      "case": "native-graph-primitive-kinds/contact-09",
+      "kind": 9,
+      "role": "contact",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAkAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "4d81dde3c37ef5acc0ecbac6d1b17a2f7cfecfd9d845a443193f099fcdfc710b",
+      "native_exported": false,
+      "native_diagnostics": [
+        {
+          "arguments": [],
+          "bottom": -1,
+          "code": 1342242816,
+          "instance": "MAIN",
+          "kind": 2,
+          "left": -1,
+          "name": "MAIN",
+          "network": -1,
+          "right": -1,
+          "step": -1,
+          "top": -1
+        },
+        {
+          "arguments": [],
+          "bottom": -1,
+          "code": 1342971929,
+          "instance": "1",
+          "kind": 2,
+          "left": -1,
+          "name": "1",
+          "network": 1,
+          "right": -1,
+          "step": -1,
+          "top": -1
+        },
+        {
+          "arguments": [],
+          "bottom": 3,
+          "code": 1342971936,
+          "instance": "1",
+          "kind": 2,
+          "left": 7,
+          "name": "1",
+          "network": 1,
+          "right": 8,
+          "step": -1,
+          "top": 3
+        },
+        {
+          "arguments": [],
+          "bottom": 4,
+          "code": 1342971936,
+          "instance": "1",
+          "kind": 2,
+          "left": 8,
+          "name": "1",
+          "network": 1,
+          "right": 10,
+          "step": -1,
+          "top": 2
+        }
+      ],
+      "sic_ascii": [],
+      "handling": "opaque-preserved; accepted native controls are not enough to infer their control-flow meaning"
+    },
+    {
+      "case": "native-graph-primitive-kinds/contact-10",
+      "kind": 10,
+      "role": "contact",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAoAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "c39e678c0f248faff11d0d8fa363db8e17f99380debe8cb2aff765339dd8f996",
+      "native_exported": false,
+      "native_diagnostics": [
+        {
+          "arguments": [],
+          "bottom": -1,
+          "code": 1342242816,
+          "instance": "MAIN",
+          "kind": 2,
+          "left": -1,
+          "name": "MAIN",
+          "network": -1,
+          "right": -1,
+          "step": -1,
+          "top": -1
+        },
+        {
+          "arguments": [],
+          "bottom": 3,
+          "code": 1342971936,
+          "instance": "1",
+          "kind": 2,
+          "left": 7,
+          "name": "1",
+          "network": 1,
+          "right": 8,
+          "step": -1,
+          "top": 3
+        },
+        {
+          "arguments": [],
+          "bottom": 4,
+          "code": 1342971936,
+          "instance": "1",
+          "kind": 2,
+          "left": 8,
+          "name": "1",
+          "network": 1,
+          "right": 10,
+          "step": -1,
+          "top": 2
+        }
+      ],
+      "sic_ascii": [],
+      "handling": "opaque-preserved; accepted native controls are not enough to infer their control-flow meaning"
+    },
+    {
+      "case": "native-graph-primitive-kinds/contact-11",
+      "kind": 11,
+      "role": "contact",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAsAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "95b23333595356b2a3e3e163f17dc1a017f6c57d92e15535061e05ad6656128f",
+      "native_exported": false,
+      "native_diagnostics": [
+        {
+          "arguments": [],
+          "bottom": -1,
+          "code": 1342242816,
+          "instance": "MAIN",
+          "kind": 2,
+          "left": -1,
+          "name": "MAIN",
+          "network": -1,
+          "right": -1,
+          "step": -1,
+          "top": -1
+        },
+        {
+          "arguments": [],
+          "bottom": 3,
+          "code": 1342971936,
+          "instance": "1",
+          "kind": 2,
+          "left": 7,
+          "name": "1",
+          "network": 1,
+          "right": 8,
+          "step": -1,
+          "top": 3
+        },
+        {
+          "arguments": [],
+          "bottom": 4,
+          "code": 1342971936,
+          "instance": "1",
+          "kind": 2,
+          "left": 8,
+          "name": "1",
+          "network": 1,
+          "right": 10,
+          "step": -1,
+          "top": 2
+        }
+      ],
+      "sic_ascii": [],
+      "handling": "opaque-preserved; accepted native controls are not enough to infer their control-flow meaning"
+    },
+    {
+      "case": "native-graph-primitive-kinds/contact-12",
+      "kind": 12,
+      "role": "contact",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAwAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "b2ef7693410e4678f1efb2b68b3742118613a0251806070c45215cccabff8342",
+      "native_exported": false,
+      "native_diagnostics": [
+        {
+          "arguments": [],
+          "bottom": -1,
+          "code": 1342242816,
+          "instance": "MAIN",
+          "kind": 2,
+          "left": -1,
+          "name": "MAIN",
+          "network": -1,
+          "right": -1,
+          "step": -1,
+          "top": -1
+        },
+        {
+          "arguments": [],
+          "bottom": 3,
+          "code": 1342971936,
+          "instance": "1",
+          "kind": 2,
+          "left": 7,
+          "name": "1",
+          "network": 1,
+          "right": 8,
+          "step": -1,
+          "top": 3
+        },
+        {
+          "arguments": [],
+          "bottom": 4,
+          "code": 1342971936,
+          "instance": "1",
+          "kind": 2,
+          "left": 8,
+          "name": "1",
+          "network": 1,
+          "right": 10,
+          "step": -1,
+          "top": 2
+        }
+      ],
+      "sic_ascii": [],
+      "handling": "opaque-preserved; accepted native controls are not enough to infer their control-flow meaning"
+    },
+    {
+      "case": "native-graph-primitive-kinds/coil-09",
+      "kind": 9,
+      "role": "coil",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAACQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "32ec8408b943c18be0c971c6c465c856ec072725e22eb8d430dd17d5b751062e",
+      "native_exported": false,
+      "native_diagnostics": [
+        {
+          "arguments": [],
+          "bottom": -1,
+          "code": 1342242816,
+          "instance": "MAIN",
+          "kind": 2,
+          "left": -1,
+          "name": "MAIN",
+          "network": -1,
+          "right": -1,
+          "step": -1,
+          "top": -1
+        },
+        {
+          "arguments": [],
+          "bottom": -1,
+          "code": 1342971929,
+          "instance": "1",
+          "kind": 2,
+          "left": -1,
+          "name": "1",
+          "network": 1,
+          "right": -1,
+          "step": -1,
+          "top": -1
+        }
+      ],
+      "sic_ascii": [],
+      "handling": "opaque-preserved; accepted native controls are not enough to infer their control-flow meaning"
+    },
+    {
+      "case": "native-graph-primitive-kinds/coil-10",
+      "kind": 10,
+      "role": "coil",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAACgAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "cbe209bf34f98f5f02ed20dd88d76a371cac921ed832eb36ada4f20bbd9fcbda",
+      "native_exported": true,
+      "native_diagnostics": [
+        {
+          "arguments": [],
+          "bottom": -1,
+          "code": 84709396,
+          "instance": "1",
+          "kind": 3,
+          "left": -1,
+          "name": "1",
+          "network": 1,
+          "right": -1,
+          "step": 0,
+          "top": -1
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n_B000 := %IX1;\r\nRETURN := _B000;\r\n\r\n"
+      ],
+      "handling": "opaque-preserved; accepted native controls are not enough to infer their control-flow meaning"
+    },
+    {
+      "case": "native-graph-primitive-kinds/coil-11",
+      "kind": 11,
+      "role": "coil",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAACwAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "230104fb67a2b77b4c7ae8ec0452fffa7d31bbf448ed8f88b1cd527b87dbaaed",
+      "native_exported": true,
+      "native_diagnostics": [],
+      "sic_ascii": [
+        "N0 LD_NET\r\n\r\n"
+      ],
+      "handling": "opaque-preserved; accepted native controls are not enough to infer their control-flow meaning"
+    },
+    {
+      "case": "native-graph-port-flags/coil-12-port-003",
+      "kind": 12,
+      "role": "coil",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAADAAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "ded683c63e56de2d1e4ef2cf4f5de081f6be63d08c5452bf4d581b1075c80c18",
+      "native_exported": true,
+      "native_diagnostics": [],
+      "sic_ascii": [
+        "N0 LD_NET\r\n\r\n"
+      ],
+      "handling": "opaque-preserved; accepted native controls are not enough to infer their control-flow meaning"
+    },
+    {
+      "case": "native-graph-edge-kinds/contact-19-port-003",
+      "kind": 19,
+      "role": "contact",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAABMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "ac34bb0881fb9f9e0cf3af62c857125b7dac2734e9f26cc1ecc7ac44e9178029",
+      "native_exported": false,
+      "native_diagnostics": [
+        {
+          "arguments": [],
+          "bottom": -1,
+          "code": 1342242816,
+          "instance": "MAIN",
+          "kind": 2,
+          "left": -1,
+          "name": "MAIN",
+          "network": -1,
+          "right": -1,
+          "step": -1,
+          "top": -1
+        },
+        {
+          "arguments": [],
+          "bottom": 4,
+          "code": 1342972179,
+          "instance": "1",
+          "kind": 2,
+          "left": 5,
+          "name": "1",
+          "network": 1,
+          "right": 7,
+          "step": -1,
+          "top": 2
+        }
+      ],
+      "sic_ascii": [],
+      "handling": "opaque-preserved; accepted native controls are not enough to infer their control-flow meaning"
+    },
+    {
+      "case": "native-graph-edge-kinds/contact-20-port-003",
+      "kind": 20,
+      "role": "contact",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAABQAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "26e9f5eff570fb51e4fd030e77bc62a81b7561f0c47dbdbba69bfede22994fb2",
+      "native_exported": false,
+      "native_diagnostics": [
+        {
+          "arguments": [],
+          "bottom": -1,
+          "code": 1342242816,
+          "instance": "MAIN",
+          "kind": 2,
+          "left": -1,
+          "name": "MAIN",
+          "network": -1,
+          "right": -1,
+          "step": -1,
+          "top": -1
+        },
+        {
+          "arguments": [],
+          "bottom": 4,
+          "code": 1342972179,
+          "instance": "1",
+          "kind": 2,
+          "left": 5,
+          "name": "1",
+          "network": 1,
+          "right": 7,
+          "step": -1,
+          "top": 2
+        }
+      ],
+      "sic_ascii": [],
+      "handling": "opaque-preserved; accepted native controls are not enough to infer their control-flow meaning"
+    }
+  ],
+  "corpus_impact": {
+    "archive_count": 22,
+    "unique_project_bytes": 103,
+    "unique_structured_payloads": 36,
+    "affected": [
+      {
+        "program_sha256": "ddf3cc0b4d5a0b480b307a09dd8252d01ec00b4824b7fe10c5689c95a6885eff",
+        "source": {
+          "path": "research/evidence/gxw-abi-checkpoint-20260919.zip",
+          "member": "frozen/set_direct.gxw"
+        },
+        "logical": "1.Program.pou",
+        "nodes": 2,
+        "unknown_kind_before": 1,
+        "unknown_kind_after": 0,
+        "new_behavior": [
+          {
+            "offset": 175,
+            "role": "set",
+            "edge": "none"
+          }
+        ]
+      },
+      {
+        "program_sha256": "82fc3dd34f5ba19e020396b596678d5c2f3579ff76299370ea18da47080cdc5f",
+        "source": {
+          "path": "research/evidence/gxw-abi-checkpoint-20260919.zip",
+          "member": "frozen/set_direct_compile.gxw"
+        },
+        "logical": "1.Program.pou",
+        "nodes": 2,
+        "unknown_kind_before": 1,
+        "unknown_kind_after": 0,
+        "new_behavior": [
+          {
+            "offset": 175,
+            "role": "set",
+            "edge": "none"
+          }
+        ]
+      },
+      {
+        "program_sha256": "a966aa412cd13eae6016d108972802e1e4c7ee3006a478a03f0149507586e996",
+        "source": {
+          "path": "research/evidence/gxw-abi-checkpoint-20260919.zip",
+          "member": "frozen/set_spaced.gxw"
+        },
+        "logical": "1.Program.pou",
+        "nodes": 2,
+        "unknown_kind_before": 1,
+        "unknown_kind_after": 0,
+        "new_behavior": [
+          {
+            "offset": 175,
+            "role": "set",
+            "edge": "none"
+          }
+        ]
+      },
+      {
+        "program_sha256": "6f1a77903c049ec18ee3e9b304ea48371e185b391f104961362155848dbef6b0",
+        "source": {
+          "path": "research/evidence/gxw-abi-checkpoint-20260919.zip",
+          "member": "frozen/set_spaced_compile.gxw"
+        },
+        "logical": "1.Program.pou",
+        "nodes": 2,
+        "unknown_kind_before": 1,
+        "unknown_kind_after": 0,
+        "new_behavior": [
+          {
+            "offset": 175,
+            "role": "set",
+            "edge": "none"
+          }
+        ]
+      },
+      {
+        "program_sha256": "38ec7cbb0035fe4fc6b68b103ef7d910fd248fba1ea57104ee8e1411b6db34d3",
+        "source": {
+          "path": "research/evidence/gxw-abi-checkpoint-20260919.zip",
+          "member": "pending/rst_direct_recovered.gxw"
+        },
+        "logical": "1.Program.pou",
+        "nodes": 2,
+        "unknown_kind_before": 1,
+        "unknown_kind_after": 0,
+        "new_behavior": [
+          {
+            "offset": 175,
+            "role": "reset",
+            "edge": "none"
+          }
+        ]
+      },
+      {
+        "program_sha256": "dafd92c0acc438ef57e88beb00e5f7b9ba813e63fe2c906f78b4471b40bd22f1",
+        "source": {
+          "path": "research/evidence/gxw-lossless-20260919.zip",
+          "member": "samples/p.gxw"
+        },
+        "logical": "1.Program.pou",
+        "nodes": 2,
+        "unknown_kind_before": 1,
+        "unknown_kind_after": 0,
+        "new_behavior": [
+          {
+            "offset": 175,
+            "role": "set",
+            "edge": "none"
+          }
+        ]
+      }
+    ],
+    "inventory_failures": []
+  },
+  "untraced_crosscheck": [
+    {
+      "case": "coil-07-port-011",
+      "accepted": true,
+      "source_matches": true,
+      "pcode_matches": true
+    },
+    {
+      "case": "contact-04-port-019",
+      "accepted": true,
+      "source_matches": true,
+      "pcode_matches": true
+    },
+    {
+      "case": "coil-05-port-067",
+      "accepted": true,
+      "source_matches": true,
+      "pcode_matches": true
+    },
+    {
+      "case": "contact-17-port-003",
+      "accepted": true,
+      "source_matches": true,
+      "pcode_matches": true
+    }
+  ],
+  "existing_native_sources": [
+    {
+      "archive": "research/evidence/gxw-abi-checkpoint-20260919.zip",
+      "member": "frozen/set_direct.gxw",
+      "source_sha256": "4d4fad62f22c54ac0a80da6428c80af7eef5d08a09d1ca4b95e4da9d1afae443",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "SET",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "pcode_base64": "AwADBJwBBAMjAwSdAQQDMwMCAgM0Aw==",
+      "crt_checks": [
+        {
+          "operation": "NativeCrtCharacterCase",
+          "phase": "before-build",
+          "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+          "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+          "codepage": 936,
+          "valid": true,
+          "mismatches": []
+        },
+        {
+          "operation": "NativeCrtCharacterCase",
+          "phase": "after-build",
+          "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+          "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+          "codepage": 936,
+          "valid": true,
+          "mismatches": []
+        }
+      ]
+    },
+    {
+      "archive": "research/evidence/gxw-abi-checkpoint-20260919.zip",
+      "member": "frozen/set_direct_compile.gxw",
+      "source_sha256": "c5ea7ee3a1e9c2130f734cc8dd5f2a9fbf314252cb510e1f23814e8371621ca8",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "SET",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "pcode_base64": "AwADBJwBBAMjAwSdAQQDMwMCAgM0Aw==",
+      "crt_checks": [
+        {
+          "operation": "NativeCrtCharacterCase",
+          "phase": "before-build",
+          "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+          "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+          "codepage": 936,
+          "valid": true,
+          "mismatches": []
+        },
+        {
+          "operation": "NativeCrtCharacterCase",
+          "phase": "after-build",
+          "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+          "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+          "codepage": 936,
+          "valid": true,
+          "mismatches": []
+        }
+      ]
+    },
+    {
+      "archive": "research/evidence/gxw-abi-checkpoint-20260919.zip",
+      "member": "frozen/set_spaced.gxw",
+      "source_sha256": "08c69238832527bd5601dc596e0bfbdcdf5535be6411b057e5283e3e3ea8d547",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "SET",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "pcode_base64": "AwADBJwBBAMjAwSdAQQDMwMCAgM0Aw==",
+      "crt_checks": [
+        {
+          "operation": "NativeCrtCharacterCase",
+          "phase": "before-build",
+          "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+          "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+          "codepage": 936,
+          "valid": true,
+          "mismatches": []
+        },
+        {
+          "operation": "NativeCrtCharacterCase",
+          "phase": "after-build",
+          "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+          "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+          "codepage": 936,
+          "valid": true,
+          "mismatches": []
+        }
+      ]
+    },
+    {
+      "archive": "research/evidence/gxw-abi-checkpoint-20260919.zip",
+      "member": "frozen/set_spaced_compile.gxw",
+      "source_sha256": "df5c8c7e194a792804d8cd478a5618c7cca787fa398dd3c2dbecaeb55e5eeec3",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "SET",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "pcode_base64": "AwADBJwBBAMjAwSdAQQDMwMCAgM0Aw==",
+      "crt_checks": [
+        {
+          "operation": "NativeCrtCharacterCase",
+          "phase": "before-build",
+          "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+          "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+          "codepage": 936,
+          "valid": true,
+          "mismatches": []
+        },
+        {
+          "operation": "NativeCrtCharacterCase",
+          "phase": "after-build",
+          "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+          "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+          "codepage": 936,
+          "valid": true,
+          "mismatches": []
+        }
+      ]
+    },
+    {
+      "archive": "research/evidence/gxw-abi-checkpoint-20260919.zip",
+      "member": "pending/rst_direct_recovered.gxw",
+      "source_sha256": "9d78ba3794472028b4ddd39532cdf64a2cc70cedb2b80581632fed7e5c206e07",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "X001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "RST",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "pcode_base64": "AwADBJwBBAMkAwSdAQQDMwMCAgM0Aw==",
+      "crt_checks": [
+        {
+          "operation": "NativeCrtCharacterCase",
+          "phase": "before-build",
+          "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+          "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+          "codepage": 936,
+          "valid": true,
+          "mismatches": []
+        },
+        {
+          "operation": "NativeCrtCharacterCase",
+          "phase": "after-build",
+          "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+          "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+          "codepage": 936,
+          "valid": true,
+          "mismatches": []
+        }
+      ]
+    },
+    {
+      "archive": "research/evidence/gxw-lossless-20260919.zip",
+      "member": "samples/p.gxw",
+      "source_sha256": "4e49661ee9f2f88e53e0277466115eb0ea79c2197d34105e0e82e0044ab70bfe",
+      "native_records": [
+        {
+          "kind": "instruction",
+          "op": "LD",
+          "args": [
+            "X002"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "SET",
+          "args": [
+            "Y001"
+          ]
+        },
+        {
+          "kind": "instruction",
+          "op": "FEND",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "NOP",
+          "args": []
+        },
+        {
+          "kind": "instruction",
+          "op": "END",
+          "args": []
+        }
+      ],
+      "pcode_base64": "AwADBJwCBAMjAwSdAQQDMwMCAgM0Aw==",
+      "crt_checks": [
+        {
+          "operation": "NativeCrtCharacterCase",
+          "phase": "before-build",
+          "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+          "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+          "codepage": 936,
+          "valid": true,
+          "mismatches": []
+        },
+        {
+          "operation": "NativeCrtCharacterCase",
+          "phase": "after-build",
+          "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+          "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+          "codepage": 936,
+          "valid": true,
+          "mismatches": []
+        }
+      ]
+    }
+  ],
+  "port_order_failures": [
+    {
+      "case": "contact-03-port-011-reversed",
+      "kind": 3,
+      "role": "contact",
+      "port_code": 11,
+      "reversed_ports": true,
+      "source_sha256": "cb21e2c6ed24419fb5d898c9947f614fa456021c73326d56d66960764759c10b",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAgAAAAIAAAABAAAAEAAAAAsAAAAAAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "941b20f65093f220543dfc4d7d37fb0b4dad7e2d109edf3c809e1d08830b8a0d",
+      "native_exported": false,
+      "native_diagnostics": [
+        {
+          "arguments": [],
+          "bottom": -1,
+          "code": 1342984528,
+          "instance": "",
+          "kind": 2,
+          "left": -1,
+          "name": "",
+          "network": -1,
+          "right": -1,
+          "step": -1,
+          "top": -1
+        }
+      ],
+      "sic_ascii": [],
+      "handling": "opaque-preserved; geometry and connectivity retained without execution roles",
+      "raw_evidence": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\native-graph-port-order\\contact-03-port-011"
+    },
+    {
+      "case": "contact-04-port-003-reversed",
+      "kind": 4,
+      "role": "contact",
+      "port_code": 3,
+      "reversed_ports": true,
+      "source_sha256": "82f05f83e85ce7cb1bdfb30b9a35bcdf6a73fe4c15d9e49e1e7003c986148078",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAQAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAgAAAAIAAAABAAAAEAAAAAMAAAAAAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "2fce0ebda8c2dd53acf8c81769982b3f4f1ddd0bb31128f0ddd970c2ea9d0431",
+      "native_exported": false,
+      "native_diagnostics": [
+        {
+          "arguments": [],
+          "bottom": -1,
+          "code": 1342984528,
+          "instance": "",
+          "kind": 2,
+          "left": -1,
+          "name": "",
+          "network": -1,
+          "right": -1,
+          "step": -1,
+          "top": -1
+        }
+      ],
+      "sic_ascii": [],
+      "handling": "opaque-preserved; geometry and connectivity retained without execution roles",
+      "raw_evidence": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\native-graph-port-order\\contact-04-port-003",
+      "untraced_crosscheck": {
+        "source_identical": true,
+        "program_identical": true,
+        "compiler_rejected": true,
+        "diagnostics": [
+          {
+            "kind": 2,
+            "code": 1342984528,
+            "name": "",
+            "instance": "",
+            "step": -1,
+            "network": -1,
+            "left": -1,
+            "top": -1,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "phase": "Progress"
+          }
+        ],
+        "crt_checks": [
+          {
+            "operation": "NativeCrtCharacterCase",
+            "phase": "before-build",
+            "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+            "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+            "codepage": 936,
+            "valid": true,
+            "mismatches": []
+          },
+          {
+            "operation": "NativeCrtCharacterCase",
+            "phase": "after-build",
+            "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+            "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+            "codepage": 936,
+            "valid": true,
+            "mismatches": []
+          }
+        ]
+      }
+    },
+    {
+      "case": "contact-17-port-003-reversed",
+      "kind": 17,
+      "role": "contact",
+      "port_code": 3,
+      "reversed_ports": true,
+      "source_sha256": "ed99b34ad8580c492844acf3b1ddc8d11a7ff0ddcdbecbcd230e8003dc30bdbf",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAABEAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAgAAAAIAAAABAAAAEAAAAAMAAAAAAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAADAAAAAAAAAAEAAAAQAAAAAAAAAAIAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "c23bb6e0d57417abeb5e84b5427f9d991622199e61cd5e543c20aebd4b46ccb1",
+      "native_exported": false,
+      "native_diagnostics": [
+        {
+          "arguments": [],
+          "bottom": -1,
+          "code": 1342984528,
+          "instance": "",
+          "kind": 2,
+          "left": -1,
+          "name": "",
+          "network": -1,
+          "right": -1,
+          "step": -1,
+          "top": -1
+        }
+      ],
+      "sic_ascii": [],
+      "handling": "opaque-preserved; geometry and connectivity retained without execution roles",
+      "raw_evidence": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\native-graph-port-order\\contact-17-port-003"
+    },
+    {
+      "case": "coil-07-port-003-reversed",
+      "kind": 7,
+      "role": "coil",
+      "port_code": 3,
+      "reversed_ports": true,
+      "source_sha256": "a3c25d8ba5318a3e6b957c5578f1cbf4d557819995d176099b837fe203377401",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABwAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAAAAAAAAgAAAAEAAAAQAAAAAwAAAAAAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "457d8b041e0f44cbcb06a77523bc064359f9b8a01954147624af852f5beeb954",
+      "native_exported": false,
+      "native_diagnostics": [
+        {
+          "arguments": [],
+          "bottom": -1,
+          "code": 1342242816,
+          "instance": "MAIN",
+          "kind": 2,
+          "left": -1,
+          "name": "MAIN",
+          "network": -1,
+          "right": -1,
+          "step": -1,
+          "top": -1
+        },
+        {
+          "arguments": [],
+          "bottom": -1,
+          "code": 84680788,
+          "instance": "1",
+          "kind": 2,
+          "left": -1,
+          "name": "1",
+          "network": 1,
+          "right": -1,
+          "step": 0,
+          "top": -1
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\nS %QX1 :=  _B000 := ;\r\n\r\n"
+      ],
+      "handling": "opaque-preserved; geometry and connectivity retained without execution roles",
+      "raw_evidence": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\native-graph-port-order\\coil-07-port-003",
+      "untraced_crosscheck": {
+        "source_identical": true,
+        "program_identical": true,
+        "compiler_rejected": true,
+        "diagnostics": [
+          {
+            "kind": 2,
+            "code": 84680788,
+            "name": "1",
+            "instance": "1",
+            "step": 0,
+            "network": 1,
+            "left": -1,
+            "top": -1,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "phase": "Progress"
+          },
+          {
+            "kind": 2,
+            "code": 1342242816,
+            "name": "MAIN",
+            "instance": "MAIN",
+            "step": -1,
+            "network": -1,
+            "left": -1,
+            "top": -1,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "phase": "Progress"
+          }
+        ],
+        "crt_checks": [
+          {
+            "operation": "NativeCrtCharacterCase",
+            "phase": "before-build",
+            "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+            "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+            "codepage": 936,
+            "valid": true,
+            "mismatches": []
+          },
+          {
+            "operation": "NativeCrtCharacterCase",
+            "phase": "after-build",
+            "module": "C:\\Windows\\SYSTEM32\\MSVCR71.dll",
+            "sha256": "dca0e5faf6c94b6adff4d90d40795d5a91ba3a3059ea408e992a0f039a494d46",
+            "codepage": 936,
+            "valid": true,
+            "mismatches": []
+          }
+        ]
+      }
+    },
+    {
+      "case": "coil-06-port-003-reversed",
+      "kind": 6,
+      "role": "coil",
+      "port_code": 3,
+      "reversed_ports": true,
+      "source_sha256": "92c158ab2d0f9be29de51e487e01215cba9698a200e7585979668c6730dccf2e",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABgAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAAAAAAAAgAAAAEAAAAQAAAAAwAAAAAAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "e4f6b556d85eb5f0a7d9f4b3fe84b41aeb950d5b84b3da7c08806ad3201faf7f",
+      "native_exported": false,
+      "native_diagnostics": [
+        {
+          "arguments": [],
+          "bottom": -1,
+          "code": 1342242816,
+          "instance": "MAIN",
+          "kind": 2,
+          "left": -1,
+          "name": "MAIN",
+          "network": -1,
+          "right": -1,
+          "step": -1,
+          "top": -1
+        },
+        {
+          "arguments": [],
+          "bottom": -1,
+          "code": 84680788,
+          "instance": "1",
+          "kind": 2,
+          "left": -1,
+          "name": "1",
+          "network": 1,
+          "right": -1,
+          "step": 0,
+          "top": -1
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n_B000 := ;\r\n%QX1 := NOT();\r\n\r\n"
+      ],
+      "handling": "opaque-preserved; geometry and connectivity retained without execution roles",
+      "raw_evidence": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\native-graph-port-order\\coil-06-port-003"
+    },
+    {
+      "case": "coil-05-port-003-reversed",
+      "kind": 5,
+      "role": "coil",
+      "port_code": 3,
+      "reversed_ports": true,
+      "source_sha256": "1ecd11f682def7881012e56cf566ceda9d7bd272eaf61d7826fc4a72cb184ca4",
+      "program_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOoHCQAGAAUAFwAvAAYAAAABAAAA0EgBAABIAQAAAQAAAAEAAAA8AQAAAQAAAAAAAQAAAAAABQAAAAUAAABQAAAAAQAAAAMAAAADAAAAWAAxAAAAAQAAAAAABQAAAAIAAAAHAAAABAAAAAIAAAAQAAAAAwAAAAAAAAABAAAAEAAAAAIAAAACAAAAAQAAAFAAAAABAAAABQAAAAMAAABZADEAAAABAAAAAAAIAAAAAgAAAAoAAAAEAAAAAgAAABAAAAAAAAAAAgAAAAEAAAAQAAAAAwAAAAAAAAABAAAALAAAAAIAAAAAAAAAAQAAAAAAAQAAAAAAAQAAAAAAAAABAAAABQAAAAAAAAAsAAAAAgAAAAAAAAABAAAAAAABAAAAAAABAAAAAwAAAAUAAAADAAAAAAAAACwAAAACAAAAAAAAAAEAAAAAAAEAAAAAAAcAAAADAAAACAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "program_sha256": "a4c802a0ccb1d4d150554ce930cb8b6abf4ef965f9f90d387b01234e70f04a2d",
+      "native_exported": false,
+      "native_diagnostics": [
+        {
+          "arguments": [],
+          "bottom": -1,
+          "code": 1342242816,
+          "instance": "MAIN",
+          "kind": 2,
+          "left": -1,
+          "name": "MAIN",
+          "network": -1,
+          "right": -1,
+          "step": -1,
+          "top": -1
+        },
+        {
+          "arguments": [],
+          "bottom": -1,
+          "code": 84680788,
+          "instance": "1",
+          "kind": 2,
+          "left": -1,
+          "name": "1",
+          "network": 1,
+          "right": -1,
+          "step": 0,
+          "top": -1
+        }
+      ],
+      "sic_ascii": [
+        "N0 LD_NET\r\n%QX1 :=  _B000 := ;\r\n\r\n"
+      ],
+      "handling": "opaque-preserved; geometry and connectivity retained without execution roles",
+      "raw_evidence": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\native-graph-port-order\\coil-05-port-003"
+    }
+  ]
+}

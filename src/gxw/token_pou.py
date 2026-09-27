@@ -68,7 +68,7 @@ def observed_native_arity(raw: bytes) -> int | None:
 # Exact observed spellings only. In particular do not infer application opcodes
 # from FNC arithmetic, or the unobserved pulse/width variants of basic opcodes.
 _OPCODES = native_lexical_overrides()
-_DEVICES = {0x90: "M", 0x98: "S", 0x9C: "X", 0x9D: "Y", 0xA8: "D", 0xC2: "T", 0xC5: "C",
+_DEVICES = {0x90: "M", 0x98: "S", 0x9C: "X", 0x9D: "Y", 0xA8: "D", 0xAF: "R", 0xC2: "T", 0xC5: "C",
             0xCC: "Z", 0xCD: "V", 0xD0: "P", 0xD1: "I"}
 
 
@@ -91,7 +91,11 @@ class LadderToken:
                     "payload_hex": self.raw[3:-1].hex()}
         # Only widths observed by the controlled corpus. A longer token with a
         # familiar type byte might be a modifier, not a plain device address.
-        if code in _DEVICES and 1 <= len(value) <= (1 if code in (0xCC, 0xCD, 0xD1) else 2):
+        # Real FX3G output contains R0Z5/R23940Z3 and interrupt label I750.
+        # Independent 518/520/521 decoders agree on the one/two-byte forms.
+        # Longer encodings remain opaque; display acceptance is not a valid
+        # device-range or CPU instruction-availability check.
+        if code in _DEVICES and 1 <= len(value) <= (1 if code in (0xCC, 0xCD) else 2):
             return {"kind": "operand", "device_type": _DEVICES[code],
                     "numeric_value": int.from_bytes(value, "little")}
         if code in (0xE8, 0xE9, 0xEA, 0xEB):
@@ -166,7 +170,11 @@ def frame_token_pou(raw: bytes) -> TokenProgram:
     size, repeated = struct.unpack_from("<II", raw, 55)
     if size != repeated or size < 20:
         raise GXWFormatError("ladder-token source size fields disagree")
-    if raw[63:79] != bytes.fromhex("010000000c00000000000000ffffffff"):
+    # The older real FX3U MAIN..pou also stores zero in the first DWORD;
+    # its full source body matches native compiler output byte-for-byte.
+    # Preserve that value instead of normalizing the otherwise identical frame.
+    if raw[63:79] not in (bytes.fromhex("010000000c00000000000000ffffffff"),
+                         bytes.fromhex("000000000c00000000000000ffffffff")):
         raise GXWFormatError("unsupported ladder-token source prefix")
     body_length = size - 20
     end = 79 + body_length

@@ -1,0 +1,62 @@
+{
+  "files_verified": 1574,
+  "missing_archives": [],
+  "comparisons": [
+    {
+      "case": "project2",
+      "status": "byte-identical",
+      "bytes": 1289
+    },
+    {
+      "case": "banks",
+      "status": "byte-identical",
+      "bytes": 3792
+    },
+    {
+      "case": "registers",
+      "status": "byte-identical",
+      "bytes": 3801
+    },
+    {
+      "case": "groups",
+      "status": "byte-identical",
+      "bytes": 3834
+    },
+    {
+      "case": "modifiers",
+      "status": "byte-identical",
+      "bytes": 3957
+    },
+    {
+      "case": "buffers",
+      "status": "byte-identical",
+      "bytes": 3910
+    },
+    {
+      "case": "immediates",
+      "status": "byte-identical",
+      "bytes": 3832
+    },
+    {
+      "case": "shifted",
+      "status": "byte-identical",
+      "bytes": 3826
+    },
+    {
+      "case": "word-fallback",
+      "status": "byte-identical",
+      "bytes": 3832
+    },
+    {
+      "case": "bit-fallback",
+      "status": "byte-identical",
+      "bytes": 3832
+    },
+    {
+      "case": "word-fragmented",
+      "status": "byte-identical",
+      "bytes": 3832
+    }
+  ],
+  "scope": "Archive integrity and saved byte equality only; native compiler was not rerun."
+}

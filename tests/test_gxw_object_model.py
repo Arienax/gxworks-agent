@@ -1,6 +1,8 @@
 from copy import deepcopy
+import base64
 from dataclasses import replace
 import json
+from pathlib import Path
 import xml.etree.ElementTree as ET
 
 import pytest
@@ -85,3 +87,36 @@ def test_ladder_conversion_retains_series_parallel_and_multiple_outputs():
     assert graph.ports_connected(by_name['Y0'].offset, 0, by_name['Y1'].offset, 0)
     assert not graph.ports_connected(by_name['Y0'].offset, 0, by_name['Y2'].offset, 0)
     assert by_name['X2'].kind == NodeKind.CONTACT_NC
+
+
+@pytest.mark.parametrize("case,marker", [
+    ("coil-05-port-067", "S"),
+    ("coil-07-port-003", "S"),
+    ("coil-08-port-003", "R"),
+    ("contact-17-port-003", "↑"),
+    ("contact-18-port-003", "↓"),
+    ("coil-07-port-011", None),
+])
+def test_native_ladder_modifiers_survive_object_roundtrip_and_preview(case, marker):
+    from src.gxw.structured_pou import parse_structured_pou
+    from src.gxw.structured_pou_writer import serialize_structured_pou
+
+    cases = json.loads((Path(__file__).parent / "fixtures/gxw_ladder_primitives.json").read_text())["cases"]
+    row = next(r for r in cases if r["case"] == case)
+    raw = base64.b64decode(row["program_base64"])
+    program = parse_structured_pou(raw, logical_name="1.Program.pou")
+    model = export_object_model(program)
+    rebuilt = build_object_program(program, model)
+    assert serialize_structured_pou(rebuilt) == raw
+    root = ET.fromstring(render_structured_svg(program))
+    texts = [n.text for n in root.findall('.//{http://www.w3.org/2000/svg}text')]
+    if marker:
+        assert marker in texts
+    else:
+        # The native SET-kind/port-11 counterexample compiles to inverted OUT.
+        assert "S" not in texts and "R" not in texts
+    imported = next(n for n in model["nodes"] if n["symbol"] == row["target_symbol"])
+    if row["kind"] in {7, 8, 17, 18}:
+        imported.pop("source_offset")
+        with pytest.raises(GXWFormatError, match="no verified native ABI template"):
+            build_object_program(program, model)

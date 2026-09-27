@@ -127,26 +127,37 @@ def lookup(debug: CompilerDebug, resource: str, step: int, *, encoding: str) -> 
         # controls cover a parent plus one FB, repeated use of the same FB, and
         # two separate FB instances and a nested FB: the last containing element wins. The
         # first repeated instance can retain an end spanning the second call.
-        # Require one ordered resource group and the observed two-level instance
-        # paths. Q controls also append disjoint @IEC timer bodies to that same
-        # group; they must not disable resolution of the overlapping ST prefix.
-        # Further nesting and other scope syntax remain undecoded.
+        # Q controls also append disjoint @IEC timer bodies to the same group.
+        # The larger FX3G library control supplies multiple task owners and
+        # deeper qualified instance paths. Names do not determine precedence:
+        # 0x634df..0x63505 searches the ordered linked intervals toward the
+        # right. Require one complete, unique, sorted group and ST overlaps;
+        # retain other arrangements rather than choosing by definition order.
         group=resources[0]['groups']
         ordered=[(i,debug.elements[i]) for i in group[0]] if len(group)==1 else []
-        st_ordered=[(i,e) for i,e in ordered if e.kind_code==193]
-        if (st_ordered and all(e.kind_code==193 for _,e in selected)
-                and all(e.names[1]==st_ordered[0][1].names[1]
-                            and e.names[3]==e.names[1]
-                            and not any(c in e.names[4] for c in (b':',b'\\'))
-                            and len(e.names[4].split(b'.'))<=2 for _,e in st_ordered)
-                and all(e.kind_code==193 or (e.kind_code==192 and e.names[0]==b'@IEC')
+        containing=[(i,e) for i,e in ordered if e.linked_step_start<=step<=e.linked_step_end]
+        if (ordered and all(e.kind_code==193 for _,e in selected)
+                and len(group[0])==len(set(group[0]))
+                and all(e.resource_bytes.decode(encoding)==resource for _,e in ordered)
+                and all(e.kind_code in (193,241) or (e.kind_code==192 and e.names[0]==b'@IEC')
                         for _,e in ordered)
                 and [e.linked_step_start for _,e in ordered]==sorted(e.linked_step_start for _,e in ordered)
-                and [i for i,_ in selected]==[i for i,e in ordered if e.linked_step_start<=step<=e.linked_step_end]):
-            overlap=[i for i,_ in selected];selected=selected[-1:]
+                and {i for i,_ in selected}=={i for i,_ in containing}):
+            overlap=[i for i,_ in containing];selected=containing[-1:]
         else:return dict(handling='overlapping-elements-preserved',location=None,element_indexes=[i for i,_ in selected])
     index, element = selected[0]
     table = debug.offset_tables[element.offset_table_index]
+    if (element.kind_code==241 and table.kind_code==1
+            and element.names[:3]==(b'',b'',b'') and element.names[4]==b''
+            and element.names[3].startswith(b'\t') and element.fields[:2]==(-1,-1)
+            and table.rows==((0,0,element.linked_step_end-element.linked_step_start+1,-1,7,-1),)):
+        # Native task-boundary records have no source POU or line. Preserve
+        # their explicit anonymous result; do not attribute them to the next
+        # program merely because its code follows this interval.
+        return dict(handling='native-compatible-anonymous-location',element_index=index,
+                    element_offset=element.offset,table_offset=table.offset,
+                    location=dict(library='',pou='',program_kind=241,network=-1,
+                                  start_step=-1,step_count=-1,element_id=-1,action_transition_present=False))
     library_element=(element.kind_code==192 and element.names[0]==b'@IEC')
     library_il=(library_element and element.fields[0]>=0 and all(
         r[0]>=0 and r[3]>=1 and r[4]==8 and r[5]==0 for r in table.rows))

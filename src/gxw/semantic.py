@@ -7,7 +7,9 @@ from types import MappingProxyType
 from typing import Dict, Mapping, Optional, Tuple
 
 from .connectivity import ConnectivityGraph, ConnectivityNet, build_connectivity_graph
-from .models import NodeKind, Point, StructuredNode, StructuredProgram
+from .models import (
+    COIL_NODE_KINDS, CONTACT_NODE_KINDS, NodeKind, Point, StructuredNode, StructuredProgram,
+)
 
 
 class SemanticPortRole(str, Enum):
@@ -25,10 +27,62 @@ class SemanticPortRole(str, Enum):
 class ContactPolarity(str, Enum):
     NORMALLY_OPEN = "normally_open"
     NORMALLY_CLOSED = "normally_closed"
+    UNKNOWN = "unknown"
+
+
+class LadderEdge(str, Enum):
+    NONE = "none"
+    RISING = "rising"
+    FALLING = "falling"
+    UNKNOWN = "unknown"
 
 
 class CoilRole(str, Enum):
     NORMAL = "normal"
+    NEGATED = "negated"
+    SET = "set"
+    RESET = "reset"
+    UNKNOWN = "unknown"
+
+
+# Native source -> SIC -> independent PCode observations are retained in
+# tests/fixtures/gxw_ladder_primitives.json. Node kind and port flags jointly
+# determine behavior. Admit only observed combinations, not every bit pattern.
+_OBSERVED_LADDER_INPUTS = {
+    NodeKind.CONTACT: frozenset({3, 11, 19, 27, 35, 43}),
+    NodeKind.CONTACT_NC: frozenset({3, 11, 19, 35}),
+    NodeKind.CONTACT_RISING: frozenset({3}),
+    NodeKind.CONTACT_FALLING: frozenset({3}),
+    NodeKind.COIL: frozenset({3, 11, 19, 35, 67, 131}),
+    NodeKind.COIL_NEGATED: frozenset({3, 11}),
+    NodeKind.COIL_SET: frozenset({3, 11, 19}),
+    NodeKind.COIL_RESET: frozenset({3, 11, 35}),
+}
+
+
+def _ladder_behavior(kind: NodeKind, input_code: int):
+    """Return inversion, edge and coil operation for an observed input only.
+
+    Inversion applies *after* edge detection. An inverted rising edge is not a
+    falling edge. The native mode selector prioritizes edge, inversion, SET,
+    then RST; e.g. SET kind + port 11 is an inverted ordinary assignment.
+    """
+    if input_code not in _OBSERVED_LADDER_INPUTS.get(kind, ()):
+        return None
+    flags = input_code
+    if kind in {NodeKind.CONTACT, NodeKind.COIL}:
+        flags &= ~8
+    flags |= {
+        NodeKind.CONTACT_NC: 8, NodeKind.COIL_NEGATED: 8,
+        NodeKind.COIL_SET: 64, NodeKind.COIL_RESET: 128,
+        NodeKind.CONTACT_RISING: 16, NodeKind.CONTACT_FALLING: 32,
+    }.get(kind, 0)
+    edge = LadderEdge.RISING if flags & 16 else LadderEdge.FALLING if flags & 32 else LadderEdge.NONE
+    negated = bool(flags & 8)
+    role = CoilRole.NEGATED if negated else CoilRole.NORMAL
+    if edge == LadderEdge.NONE and not negated:
+        role = CoilRole.SET if flags & 64 else CoilRole.RESET if flags & 128 else CoilRole.NORMAL
+    return negated, edge, role
 
 
 class TerminalRole(str, Enum):
@@ -263,6 +317,8 @@ class SemanticContact:
     symbol: str
     polarity: ContactPolarity
     ports: Tuple[SemanticLadderPort, ...]
+    # Polarity inverts the detected edge, when an edge modifier is present.
+    edge: LadderEdge = LadderEdge.NONE
 
     @property
     def execution_in(self) -> Optional[SemanticLadderPort]:
@@ -279,6 +335,7 @@ class SemanticCoil:
     symbol: str
     role: CoilRole
     ports: Tuple[SemanticLadderPort, ...]
+    edge: LadderEdge = LadderEdge.NONE
 
     @property
     def execution_in(self) -> Optional[SemanticLadderPort]:
@@ -650,15 +707,26 @@ def _infer_ladder_port_roles(
             ),
         )
 
+    # Native graph conversion uses serialized port 0 as the input, including
+    # kind-derived flag changes. Geometric coincidence does not make a swapped
+    # port array semantically equivalent; native controls reject that form.
+    if left[0] != 0 or right[0] != 1:
+        return tuple(roles), (
+            SemanticIssue(
+                code="ladder_port_order",
+                message=(f"{node.kind.value} {node.symbol!r} has unsupported serialized "
+                         "port order; native controls require input before output"),
+                node_offset=node.offset,
+            ),
+        )
+
     issues = []
-    # Sample 50 independently establishes code 11 on the NC contact's left port.
-    input_code = 11 if node.kind == NodeKind.CONTACT_NC else 3
     for index, port in enumerate(node.ports):
-        if index == left[0] and port.port_kind_code == input_code:
+        if index == left[0] and port.port_kind_code in _OBSERVED_LADDER_INPUTS[node.kind]:
             roles[index] = SemanticPortRole.EXECUTION_IN
-        elif index == right[0] and node.kind != NodeKind.COIL and port.port_kind_code == 2:
+        elif index == right[0] and node.kind in CONTACT_NODE_KINDS and port.port_kind_code == 2:
             roles[index] = SemanticPortRole.EXECUTION_OUT
-        elif index == right[0] and node.kind == NodeKind.COIL and port.port_kind_code == 0:
+        elif index == right[0] and node.kind in COIL_NODE_KINDS and port.port_kind_code == 0:
             # The coil's code-0 right port is observed, but its execution meaning
             # is not. Do not reuse the Function-specific ENO interpretation.
             issues.append(
@@ -698,7 +766,7 @@ def _ladder_semantics(
     coils = []
     issues = []
     for node in program.nodes:
-        if node.kind not in {NodeKind.CONTACT, NodeKind.CONTACT_NC, NodeKind.COIL}:
+        if node.kind not in CONTACT_NODE_KINDS | COIL_NODE_KINDS:
             continue
 
         roles, role_issues = _infer_ladder_port_roles(node)
@@ -722,13 +790,17 @@ def _ladder_semantics(
                 )
             )
 
-        if node.kind == NodeKind.COIL:
+        input_port = _unique_ladder_port(tuple(semantic_ports), SemanticPortRole.EXECUTION_IN)
+        behavior = _ladder_behavior(node.kind, input_port.port_kind_code) if input_port else None
+        edge = behavior[1] if behavior else LadderEdge.UNKNOWN
+        if node.kind in COIL_NODE_KINDS:
             coils.append(
                 SemanticCoil(
                     node_offset=node.offset,
                     symbol=node.symbol,
-                    role=CoilRole.NORMAL,
+                    role=behavior[2] if behavior else CoilRole.UNKNOWN,
                     ports=tuple(semantic_ports),
+                    edge=edge,
                 )
             )
         else:
@@ -737,11 +809,12 @@ def _ladder_semantics(
                     node_offset=node.offset,
                     symbol=node.symbol,
                     polarity=(
-                        ContactPolarity.NORMALLY_OPEN
-                        if node.kind == NodeKind.CONTACT
-                        else ContactPolarity.NORMALLY_CLOSED
+                        ContactPolarity.UNKNOWN if behavior is None
+                        else ContactPolarity.NORMALLY_CLOSED if behavior[0]
+                        else ContactPolarity.NORMALLY_OPEN
                     ),
                     ports=tuple(semantic_ports),
+                    edge=edge,
                 )
             )
 
@@ -849,7 +922,9 @@ def build_semantic_model(
     """Build the first read-only semantic layer above GXW geometry.
 
     The model identifies observed Function and terminal roles, contact polarity,
-    ordinary coils, FB instances and net bindings. Known TON/TON_E/CTU/CTU_E interfaces
+    edge modifiers, coil operations, FB instances and net bindings. Unobserved
+    ladder input combinations retain their raw codes and unknown behavior.
+    Known TON/TON_E/CTU/CTU_E interfaces
     use a separate registry; this layer does not simulate timer/counter state.
     The coil's code-0 right port keeps an unknown
     role pending execution evidence. Other node kinds remain unmodeled references.
@@ -872,9 +947,8 @@ def build_semantic_model(
     unmodeled = tuple(
         UnmodeledNodeRef(node_offset=node.offset, kind=node.kind, symbol=node.symbol)
         for node in program.nodes
-        if node.kind not in {
+        if node.kind not in CONTACT_NODE_KINDS | COIL_NODE_KINDS | {
             NodeKind.FUNCTION, NodeKind.INPUT, NodeKind.OUTPUT,
-            NodeKind.CONTACT, NodeKind.CONTACT_NC, NodeKind.COIL,
             NodeKind.FUNCTION_BLOCK,
         }
     )

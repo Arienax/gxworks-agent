@@ -63,7 +63,7 @@ public static class TokenOracle {
         if (IntPtr.Size != 4 || args.Length < 3 || args.Length > 6) return 2;
         string profile = args.Length >= 4 ? args[3] : "fx";
         if (profile != "fx" && profile != "q") return 2;
-        if (profile == "q" && args[1] != "209") return 2;
+        if (profile == "q" && args[1] != "209" && args[1] != "34") return 2;
         if (args.Length >= 5 && (profile != "q" ||
             (args[4] != "" && args[4] != "1" && args[4] != "25"))) return 2;
         IntPtr module = LoadLibraryEx(args[0], IntPtr.Zero, 8);
@@ -112,6 +112,8 @@ public static class TokenOracle {
                 if (fields.Length != 3) throw new Exception("Invalid request framing");
                 if (profile == "q" && fields[0] != "decode" && fields[0] != "encode" && fields[0] != "stored-steps")
                     throw new Exception("Q profile is limited to public text conversion and stored step counts");
+                if (profile == "q" && args[1] == "34" && fields[0] != "decode")
+                    throw new Exception("Q02/Q02H profile is limited to public text decoding");
                 int id = int.Parse(fields[1]);
                 byte[] input = Convert.FromBase64String(fields[2]);
                 if (input.Length == 0 || input.Length > 32768) throw new Exception("Input size outside tested envelope");

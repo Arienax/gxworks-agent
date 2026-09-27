@@ -8,6 +8,7 @@ import pytest
 from src.gxw import (
     CoilRole,
     ContactPolarity,
+    LadderEdge,
     SemanticCoil,
     SemanticContact,
     SemanticLadderPort,
@@ -257,19 +258,23 @@ def test_sample_51_series_contacts_keep_three_distinct_execution_nets():
     assert len({first.execution_in.net_index, first.execution_out.net_index, second.execution_out.net_index}) == 3
 
 
-@pytest.mark.parametrize("sample,code", [(54, 11), (50, 3)])
-def test_synthetic_no_nc_input_codes_are_not_interchangeable(sample, code):
+@pytest.mark.parametrize("sample,code,polarity", [
+    (54, 11, ContactPolarity.NORMALLY_OPEN),
+    (50, 3, ContactPolarity.NORMALLY_CLOSED),
+])
+def test_no_nc_input_aliases_keep_native_kind_polarity(sample, code, polarity):
     program = _program(sample)
     node = next(node for node in program.nodes if node.kind in {NodeKind.CONTACT, NodeKind.CONTACT_NC})
     ports = (replace(node.ports[0], port_kind_code=code), node.ports[1])
     model = build_semantic_model(_replace_node(program, replace(node, ports=ports)))
     contact, = model.contacts
-    assert contact.execution_in is None
-    assert contact.ports[0].role == SemanticPortRole.UNKNOWN
-    assert any(issue.code == "unknown_ladder_port" for issue in model.issues)
+    assert contact.execution_in.port_kind_code == code
+    assert contact.polarity == polarity
+    assert contact.edge == LadderEdge.NONE
+    assert not any(issue.code == "unknown_ladder_port" for issue in model.issues)
 
 
-def test_synthetic_reordered_ladder_ports_use_geometry_and_keep_serialized_indices():
+def test_reordered_ladder_ports_preserve_connectivity_without_inferring_execution():
     program = _program(54)
     for node in program.nodes:
         if node.kind in {NodeKind.CONTACT, NodeKind.COIL}:
@@ -279,13 +284,15 @@ def test_synthetic_reordered_ladder_ports_use_geometry_and_keep_serialized_indic
     coil, = model.coils
     mov = _function(model, "MOV")
 
-    assert contact.execution_in.port_index == 1
-    assert contact.execution_out.port_index == 0
-    assert contact.execution_out.net_index == mov.enable_in.net_index
-    assert coil.execution_in.port_index == 1
-    assert coil.execution_in.net_index == mov.enable_out.net_index
-    assert coil.ports[0].role == SemanticPortRole.UNKNOWN
-    assert model.issues[0].port_index == 0
+    assert contact.polarity == ContactPolarity.UNKNOWN
+    assert coil.role == CoilRole.UNKNOWN
+    assert contact.edge == coil.edge == LadderEdge.UNKNOWN
+    assert contact.execution_in is contact.execution_out is coil.execution_in is None
+    assert all(p.role == SemanticPortRole.UNKNOWN for p in (*contact.ports, *coil.ports))
+    assert [p.port_index for p in contact.ports] == [0, 1]
+    assert contact.ports[0].net_index == mov.enable_in.net_index
+    assert coil.ports[1].net_index == mov.enable_out.net_index
+    assert [issue.code for issue in model.issues] == ["ladder_port_order"] * 2
 
 
 @pytest.mark.parametrize("kind", [NodeKind.CONTACT, NodeKind.COIL])
@@ -325,7 +332,8 @@ def test_synthetic_unsupported_ladder_layout_is_not_guessed(layout):
     model = build_semantic_model(_replace_node(program, replace(node, bbox=bbox, ports=(left, right))))
     contact, = model.contacts
 
-    assert contact.polarity == ContactPolarity.NORMALLY_OPEN
+    assert contact.polarity == ContactPolarity.UNKNOWN
+    assert contact.edge == LadderEdge.UNKNOWN
     assert contact.execution_in is None
     assert contact.execution_out is None
     assert [port.role for port in contact.ports] == [SemanticPortRole.UNKNOWN] * 2
@@ -395,3 +403,89 @@ def test_synthetic_unknown_kinds_remain_unmodeled_even_with_block_like_symbols(s
     unmodeled, = model.unmodeled_nodes
     assert (unmodeled.node_offset, unmodeled.kind, unmodeled.symbol) == (node.offset, NodeKind.UNKNOWN, symbol)
     assert [function.serialized_symbol for function in model.functions] == ["MOV"]
+
+
+_PRIMITIVE_FIXTURE = json.loads(
+    (_FIXTURE_DIR / "gxw_ladder_primitives.json").read_text(encoding="utf-8")
+)
+_PRIMITIVE_CASES = _PRIMITIVE_FIXTURE["cases"]
+
+
+@pytest.mark.parametrize("case", _PRIMITIVE_FIXTURE["port_order_failures"], ids=lambda row: row["case"])
+def test_native_rejected_port_order_preserves_raw_ports_without_execution_claims(case):
+    from hashlib import sha256
+
+    raw = base64.b64decode(case["program_base64"])
+    assert sha256(raw).hexdigest() == case["program_sha256"]
+    assert not case["native_exported"]
+    assert any(d["kind"] == 2 for d in case["native_diagnostics"])
+    program = parse_structured_pou(raw, logical_name="1.Program.pou")
+    model = build_semantic_model(program)
+    element = model.contacts[0] if case["role"] == "contact" else model.coils[0]
+    node = next(n for n in program.nodes if n.offset == element.node_offset)
+    assert element.execution_in is None
+    assert element.edge == LadderEdge.UNKNOWN
+    assert all(p.role == SemanticPortRole.UNKNOWN for p in element.ports)
+    assert [p.port_kind_code for p in element.ports] == [p.port_kind_code for p in node.ports]
+    assert [p.point for p in element.ports] == [node.port_point(i) for i in range(2)]
+    assert any(i.code == "ladder_port_order" and i.node_offset == node.offset for i in model.issues)
+
+
+@pytest.mark.parametrize("case", _PRIMITIVE_CASES, ids=lambda row: row["case"])
+def test_ladder_modifiers_agree_with_independent_native_instruction_listing(case):
+    """Native listing, not the Core mapping table, supplies the expected effect."""
+    from hashlib import sha256
+
+    raw = base64.b64decode(case["program_base64"])
+    assert sha256(raw).hexdigest() == case["program_sha256"]
+    assert sha256(base64.b64decode(case["pcode_base64"])).hexdigest() == case["pcode_sha256"]
+    program = parse_structured_pou(raw, logical_name="1.Program.pou")
+    model = build_semantic_model(program)
+    contact, = model.contacts
+    coil, = model.coils
+    element = contact if case["role"] == "contact" else coil
+    instructions = [r for r in case["native_records"] if r["kind"] == "instruction"]
+    load = instructions[0]
+    assert load["args"] == ["X001"]
+    expected_edge = {"LD": LadderEdge.NONE, "LDI": LadderEdge.NONE,
+                     "LDP": LadderEdge.RISING, "LDF": LadderEdge.FALLING}[load["op"]]
+    negated = load["op"] == "LDI" or instructions[1]["op"] == "INV"
+    output = next(r for r in instructions if r["op"] in {"OUT", "SET", "RST"})
+    assert output["args"] == ["Y001"]
+    assert element.symbol == case["target_symbol"]
+    assert element.execution_in.port_kind_code == case["port_code"]
+    assert element.edge == expected_edge
+    if case["role"] == "contact":
+        assert element.polarity == (ContactPolarity.NORMALLY_CLOSED if negated
+                                    else ContactPolarity.NORMALLY_OPEN)
+        assert coil.role == CoilRole.NORMAL and coil.edge == LadderEdge.NONE
+    else:
+        expected_role = {"SET": CoilRole.SET, "RST": CoilRole.RESET}.get(
+            output["op"], CoilRole.NEGATED if negated else CoilRole.NORMAL,
+        )
+        assert element.role == expected_role
+        assert contact.polarity == ContactPolarity.NORMALLY_OPEN and contact.edge == LadderEdge.NONE
+    assert contact.execution_out.net_index == coil.execution_in.net_index
+    assert model.unmodeled_nodes == ()
+    assert [issue.code for issue in model.issues] == ["unmodeled_coil_output"]
+
+
+@pytest.mark.parametrize("kind,code", [
+    (NodeKind.CONTACT, 51), (NodeKind.CONTACT_NC, 27),
+    (NodeKind.CONTACT_RISING, 19), (NodeKind.CONTACT_FALLING, 35),
+    (NodeKind.COIL, 259), (NodeKind.COIL_SET, 67), (NodeKind.COIL_RESET, 131),
+])
+def test_unobserved_modifier_combinations_remain_unknown(kind, code):
+    from src.gxw.models import node_kind_from_code, CONTACT_NODE_KINDS
+
+    case = next(row for row in _PRIMITIVE_CASES if node_kind_from_code(row["kind"]) == kind)
+    program = parse_structured_pou(base64.b64decode(case["program_base64"]))
+    node = next(n for n in program.nodes if n.symbol == case["target_symbol"])
+    ports = (replace(node.ports[0], port_kind_code=code), node.ports[1])
+    model = build_semantic_model(_replace_node(program, replace(node, ports=ports)))
+    element = model.contacts[0] if kind in CONTACT_NODE_KINDS else model.coils[0]
+    assert element.execution_in is None
+    assert element.edge == LadderEdge.UNKNOWN
+    assert (element.polarity if kind in CONTACT_NODE_KINDS else element.role).value == "unknown"
+    assert element.ports[0].port_kind_code == code
+    assert any(issue.code == "unknown_ladder_port" for issue in model.issues)

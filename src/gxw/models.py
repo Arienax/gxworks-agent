@@ -15,10 +15,24 @@ class NodeKind(str, Enum):
     FUNCTION_BLOCK = "function_block"
     CONTACT = "contact"
     CONTACT_NC = "contact_nc"
+    CONTACT_RISING = "contact_rising"
+    CONTACT_FALLING = "contact_falling"
     COIL = "coil"
+    COIL_NEGATED = "coil_negated"
+    COIL_SET = "coil_set"
+    COIL_RESET = "coil_reset"
     INPUT = "input"
     OUTPUT = "output"
     UNKNOWN = "unknown"
+
+
+CONTACT_NODE_KINDS = frozenset({
+    NodeKind.CONTACT, NodeKind.CONTACT_NC,
+    NodeKind.CONTACT_RISING, NodeKind.CONTACT_FALLING,
+})
+COIL_NODE_KINDS = frozenset({
+    NodeKind.COIL, NodeKind.COIL_NEGATED, NodeKind.COIL_SET, NodeKind.COIL_RESET,
+})
 
 
 def node_kind_from_code(kind_code: int) -> NodeKind:
@@ -28,8 +42,13 @@ def node_kind_from_code(kind_code: int) -> NodeKind:
         0x03: NodeKind.CONTACT,
         0x04: NodeKind.CONTACT_NC,
         0x05: NodeKind.COIL,
+        0x06: NodeKind.COIL_NEGATED,
+        0x07: NodeKind.COIL_SET,
+        0x08: NodeKind.COIL_RESET,
         0x0D: NodeKind.INPUT,
         0x0E: NodeKind.OUTPUT,
+        0x11: NodeKind.CONTACT_RISING,
+        0x12: NodeKind.CONTACT_FALLING,
     }.get(kind_code, NodeKind.UNKNOWN)
 
 

@@ -187,7 +187,8 @@ def patch_verified_payloads(source: bytes, replacements: dict[str, tuple[bytes, 
     if before['valid'] is not True:
         raise ValueError('original native integrity table is not verified')
     if not 1 <= len(replacements) <= 64 or any(
-            not name.endswith(('.Program.pou', '.Labels.lh', '.gh')) for name in replacements):
+            not name.endswith(('.Program.pou', '.Labels.lh', '.gh', '.lnb', '.lbo',
+                               '.lnl', '.llv', '.lng', '.lgv', '.lns', '.lst', '.tsk', '.res')) for name in replacements):
         raise ValueError('outside the bounded program/declaration patch scope')
     outer = validate_cfb_streams(source)
     body = outer['_hdb'][:-TABLE_BYTES]

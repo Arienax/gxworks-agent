@@ -1,0 +1,193 @@
+{
+  "source": {
+    "repository": "rain-yukizora/SCPI_FB",
+    "tree": "172dc7a69efed8b614e86dc4a54d00708f091904",
+    "source_sha256": "50cf82bf4c19b0a06b004b39f4402f587cf358d2e2df411e6cd7d3ace2931d7a",
+    "license": "MIT",
+    "derivation": "preserved SCPI body; repeated synthetic callers and one INT global constant"
+  },
+  "native_compiler": {
+    "version": "15.50",
+    "sha256": "f58e7c70b855526bf2f943399a14089f771a43109b13ee9af34c88fb065cf4d7"
+  },
+  "observation": {
+    "native_project_sha256": "1b0367e39b838847db5c330efc3eda9aeaa7971df8c7574e9dabdff9678763c6",
+    "nested_bytes": 524399,
+    "sector_bytes": 512,
+    "last_physical_sector_bytes": 111,
+    "cg_stream": "35",
+    "cg_bytes": 6767,
+    "cg_sha256": "b36418a95f1cd15400d603fbd4232f5497b2a0262d30bf8a1bf867f42ed0e5d0",
+    "cg_chain": [
+      989,
+      990,
+      991,
+      992,
+      993,
+      994,
+      995,
+      996,
+      997,
+      998,
+      999,
+      1000,
+      1001,
+      1023
+    ],
+    "original_reader_error": "CFB sector 1023 is outside the file"
+  },
+  "independent_reader": {
+    "name": "olefile",
+    "version": "0.47",
+    "payload_equal_to_native_compiler_dump": true
+  },
+  "native_reopen": {
+    "open_succeeded": true,
+    "compile_completed": true,
+    "compiler_rejected": false,
+    "diagnostics": [],
+    "pcode_files_equal": true
+  },
+  "members": [
+    {
+      "path": "LICENSE.txt",
+      "bytes": 1070,
+      "sha256": "e39426fbe31353c968dd3b2d65c93ea6d20339aaedefcbf44e817d17b108df04"
+    },
+    {
+      "path": "mutation.json",
+      "bytes": 2451,
+      "sha256": "52f9b84a20ed2aa154859ac4440110eacd072041f3ef57fc0d786e7c998c2f70"
+    },
+    {
+      "path": "changed.gxw",
+      "bytes": 1019392,
+      "sha256": "46ebd3c16d191b3ed221161b9e0ef095f77ab49f06852a6f52d0190621056ee4"
+    },
+    {
+      "path": "native/native-saved.gxw",
+      "bytes": 1019904,
+      "sha256": "1b0367e39b838847db5c330efc3eda9aeaa7971df8c7574e9dabdff9678763c6"
+    },
+    {
+      "path": "native/native-events.jsonl",
+      "bytes": 30418,
+      "sha256": "1e0692ad1c39771a67716517d89fd66594e23cdf3f023e762aeb8cfcddfc2ff5"
+    },
+    {
+      "path": "native/outcome.json",
+      "bytes": 1749,
+      "sha256": "cf753d33d833286917f93ddfe8abbd8b75188da057788594b80a7c3f49a0110c"
+    },
+    {
+      "path": "native/request.json",
+      "bytes": 2191,
+      "sha256": "812f70feb57aae58a0dbc0c47a9a648a048cd2fd7ce21f2cf922bb75e73643b2"
+    },
+    {
+      "path": "native/plan.json",
+      "bytes": 1902,
+      "sha256": "fa33e9db12a80fa4157a6421488982e14ea0b3e7fcfa5f16fe91a93dfeaf0c01"
+    },
+    {
+      "path": "native/compiler_DZComp/CGTable.dat",
+      "bytes": 6767,
+      "sha256": "b36418a95f1cd15400d603fbd4232f5497b2a0262d30bf8a1bf867f42ed0e5d0"
+    },
+    {
+      "path": "native/pcode-0-0.bin",
+      "bytes": 3832,
+      "sha256": "b2a3299bc6dc13e48937735a8d7e9adcfe15f9a5d98eda85488afc6e519eb8ba"
+    },
+    {
+      "path": "native/pcode-0-1.bin",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "native/pcode-0-2.bin",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "native/pcode-1-0.bin",
+      "bytes": 9,
+      "sha256": "a1d722024dddae035147665801c9b9d293ee1d46d7b442e18b103db992ae7849"
+    },
+    {
+      "path": "native/pcode-1-1.bin",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "native/pcode-1-2.bin",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "reopen/native-saved.gxw",
+      "bytes": 1019904,
+      "sha256": "fe1b10243b702d09e357f253efa77ffbc83bde455e950a42ce9087c61b5b589a"
+    },
+    {
+      "path": "reopen/native-events.jsonl",
+      "bytes": 30106,
+      "sha256": "3cbec79d706abf4cf755c490f6aa24091250a4a0695c90703c38da4d332fe7ad"
+    },
+    {
+      "path": "reopen/outcome.json",
+      "bytes": 1755,
+      "sha256": "faee9cfead2c3d8386073b4aa59eaa3ec980260793ad583b6f76392739961f7b"
+    },
+    {
+      "path": "reopen/request.json",
+      "bytes": 2197,
+      "sha256": "6572b11d77f639569a56f10cd0dc97b8b579a168c251490a2e50d5b837764092"
+    },
+    {
+      "path": "reopen/plan.json",
+      "bytes": 1776,
+      "sha256": "4b46787840fda56a2ea790e6076f2abeb8daecc72b567caa22ad18235967a3b1"
+    },
+    {
+      "path": "reopen/compiler_DZComp/CGTable.dat",
+      "bytes": 6767,
+      "sha256": "07e068b8e56d25099c60b32d4740dcde6901f124ef64b80733678849ed7b9e5b"
+    },
+    {
+      "path": "reopen/pcode-0-0.bin",
+      "bytes": 3832,
+      "sha256": "b2a3299bc6dc13e48937735a8d7e9adcfe15f9a5d98eda85488afc6e519eb8ba"
+    },
+    {
+      "path": "reopen/pcode-0-1.bin",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "reopen/pcode-0-2.bin",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "reopen/pcode-1-0.bin",
+      "bytes": 9,
+      "sha256": "a1d722024dddae035147665801c9b9d293ee1d46d7b442e18b103db992ae7849"
+    },
+    {
+      "path": "reopen/pcode-1-1.bin",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "reopen/pcode-1-2.bin",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "archive": {
+    "path": "research/evidence/gxw-partial-sector-20260927.zip",
+    "sha256": "7a3a1807cb71dd3a99056993ea018fdecc89b02c60b9cb30359e68f5ebfc3e87",
+    "bytes": 608606
+  }
+}

@@ -19,16 +19,17 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from gxw.container import CompoundFile
-from gxw.declarations import parse_declarations
+from gxw.declarations import parse_declarations, parse_structure_declarations
 from gxw.experiment import compare_programs
 from gxw.lossless import (inspect_project, inspect_program, sha256,
                           patch_structured_symbol_equal_size, patch_token_constant)
-from gxw.token_listing import decode_token_listing, TokenInstruction, TokenText, TokenLabel
+from gxw.token_listing import decode_token_listing, TokenInstruction, TokenText, TokenLabel, TokenGap
 from gxw.models import NodeKind
 from gxw.semantic import DEFAULT_FUNCTION_BLOCK_REGISTRY, DEFAULT_FUNCTION_FAMILY_REGISTRY
 from gxw.structured_pou import parse_structured_pou
 from gxw.structured_pou_writer import serialize_structured_pou
 from gxw.project_writer import write_new_file
+from gxw.project_metadata import read_project_text_context, current_rows, logical_mapping
 
 
 def _manifest_path(base: Path, value: str, label: str) -> Path:
@@ -125,15 +126,49 @@ def unknown_interface(node) -> bool:
         node.kind == NodeKind.FUNCTION and node.symbol.rsplit("-", 1)[0] not in DEFAULT_FUNCTION_FAMILY_REGISTRY)
 
 
-def program_report(raw: bytes, logical_name: str, resources: list[bytes]) -> dict:
-    image = inspect_program(raw, logical_name=logical_name)
+def program_report(raw: bytes, logical_name: str, resources: list[bytes], *,
+                   token_profile: str | None = "fx", text_encoding: str | None = None) -> dict:
+    image = inspect_program(raw, logical_name=logical_name, token_profile=token_profile, text_encoding=text_encoding)
     result = {"layout": image.layout, "handling": "opaque-preserved" if image.layout == "unsupported" else "partially-decoded",
               "evidence_level": "observed", "source_replay": "byte-identical" if image.reconstruct() == raw else "differs",
               "semantic_complete": False, "diagnostics": list(image.diagnostics),
               "regions": [{"offset": r.offset, "length": len(r.raw), "sha256": sha256(r.raw),
                            "kind": r.kind, "handling": r.handling} for r in image.regions],
               "semantic_roundtrip": "not-checkable", "native_validation": "not_run"}
-    if image.layout == "structured":
+    if image.layout == "sfc-source":
+        from gxw.token_listing import decode_token_program
+        from gxw.token_pou import parse_token_fragment
+
+        source = image.projection
+        children = []
+        decoded, opaque = 0, 0
+        for child in source.layout["children"]:
+            row = {k: v for k, v in child.items() if k != "token_hex"}
+            program = parse_token_fragment(raw, child["token_offset"], child["token_size"])
+            if token_profile in ("fx3u", "fx1s", "fx3g", "q02", "q03udv"):
+                listing = decode_token_program(program, profile=token_profile, text_encoding=text_encoding)
+                row.update(instructions=[dict(offset=r.tokens[0].offset, op=r.mnemonic, args=r.args) for r in listing.instructions],
+                           gaps=[dict(offset=g.tokens[0].offset, reason=g.reason) for g in listing.gaps])
+                decoded += len(listing.instructions)
+                opaque += sum(len(g.tokens) for g in listing.gaps)
+            else:
+                row["lexical_projection"] = "unsupported: no explicit CPU grammar"
+                opaque += len(program.tokens)
+            children.append(row)
+        result.update(sfc_graph=source.layout["graph"], sfc_references=source.graph_records,
+                      sfc_actions=source.layout["actions"], sfc_children=children,
+                      decoded_instructions=decoded, critical_token_gaps=opaque,
+                      sfc_reference_gaps=len(source.diagnostics),
+                      semantic_projection="SFC source references and child listings; graph cache and execution semantics remain uninterpreted",
+                      writer_roundtrip="unsupported: read-only SFC source path")
+    elif image.layout == "structured-text":
+        source = image.projection
+        result.update(source_text=source.text, source_text_encoding="utf-16le",
+                      source_utf16_units=source.code_units - 1,
+                      text_gaps=int(source.text is None),
+                      semantic_projection="source text only; ST syntax and execution are not parsed",
+                      writer_roundtrip="unsupported: read-only source text path")
+    elif image.layout == "structured":
         p = image.projection
         records = list(p.iter_records())
         actual = [(r.offset, r.record_length, struct.unpack_from("<I", r.raw, 4)[0]) for r in records]
@@ -164,17 +199,24 @@ def program_report(raw: bytes, logical_name: str, resources: list[bytes]) -> dic
             except ValueError as exc:
                 result["writer_roundtrip"] = "unsupported"
                 result["writer_reason"] = str(exc)
-    elif image.layout == "ladder-token":
-        p = image.projection
-        listing = decode_token_listing(raw)
+    elif image.layout in ("ladder-token", "ladder-token-fx3u", "ladder-token-fx1s", "ladder-token-fx3g",
+                          "ladder-token-q02", "ladder-token-q03udv"):
+        listing = (image.projection if image.layout != "ladder-token" else
+                   decode_token_listing(raw, text_encoding=text_encoding))
+        p = listing.source
+        result["token_profile"] = listing.profile
         result["decoded_instructions"] = len(listing.instructions)
         result["decoded_labels"] = sum(isinstance(r, TokenLabel) for r in listing.records)
         result["instruction_gaps"] = len(listing.gaps)
         result["recognized_texts"] = sum(isinstance(r, TokenText) for r in listing.records)
-        result["framing_cross_check"] = "agrees" if reverse_token_boundaries(raw) == [(t.offset, t.raw) for t in p.tokens] else "differs"
+        result["undecoded_texts"] = sum(isinstance(r, TokenText) and r.text is None for r in listing.records)
+        result["framing_cross_check"] = "agrees" if reverse_token_boundaries(raw, body_end=p.body_end) == [(t.offset, t.raw) for t in p.tokens] else "differs"
         result["token_count"] = len(p.tokens)
-        result["annotated_tokens"] = sum(t.annotation()["kind"] != "opaque" for t in p.tokens)
-        result["unknown_token_signatures"] = dict(Counter(f"type={t.raw[1]:02x},length={len(t.raw)}" for t in p.tokens if t.annotation()["kind"] == "opaque"))
+        opaque = ([t for record in listing.records if isinstance(record, TokenGap) or
+                   (isinstance(record, TokenText) and record.text is None) for t in record.tokens]
+                  if listing.profile != "fx" else [t for t in p.tokens if t.annotation()["kind"] == "opaque"])
+        result["annotated_tokens"] = len(p.tokens) - len(opaque)
+        result["unknown_token_signatures"] = dict(Counter(f"type={t.raw[1]:02x},length={len(t.raw)}" for t in opaque))
         result["critical_token_gaps"] = len(p.tokens) - result["annotated_tokens"]
         result["res_body_cross_check"] = "byte-identical-subsequence" if any(p.body in r for r in resources) else "not-found"
         result["res_scope"] = "native .res byte duplication; no decoded semantics or freshness claim"
@@ -194,14 +236,75 @@ def program_report(raw: bytes, logical_name: str, resources: list[bytes]) -> dic
     return result
 
 
+def project_token_context(image) -> dict:
+    metadata = [s.raw for s in image.streams if s.layer == "nested" and s.raw is not None
+                and s.logical_name and s.logical_name.endswith(".prj")]
+    if len(metadata) != 1:
+        return dict(token_profile=None, text_encoding=None, diagnostic="project metadata is missing or ambiguous")
+    try:
+        context = read_project_text_context(metadata[0])
+    except ValueError as exc:
+        return dict(token_profile=None, text_encoding=None, diagnostic=str(exc))
+    return dict(context, token_profile={"Q03UDV": "q03udv", "Q02/Q02H": "q02",
+        "FX3U/FX3UC": "fx3u", "FX1S": "fx1s", "FX3G": "fx3g"}.get(context["cpu"]))
+
+
+def source_metadata_roles(raw: bytes) -> dict:
+    """Read source roles without treating translated display names as formats.
+
+    Folder roles describe current metadata rows, not task membership or a
+    validated executable identity. Unknown groups keep their original fields.
+    """
+    xml = CompoundFile(raw).read_stream("projectdatalist.xml")
+    logical_mapping(xml)  # Reject ambiguous current names and physical IDs.
+    rows, _ = current_rows(xml, "DSPROJECTDATA", "D_Projectdata")
+    result = {}
+    for row in rows:
+        fields = {k: v.text.strip() for k, v in row.fields().items()}
+        if fields.get("bScrapFlag", "false").lower() in {"true", "1"}:
+            continue
+        name = fields["szName"]
+        if not name.endswith((".pou", ".lh", ".gh", ".lnb", ".lbo", ".lnl", ".llv", ".lng", ".lgv", ".lns", ".lst")):
+            continue
+        key = tuple(fields.get(k) for k in ("ucProductType", "ucFolderType", "ucFileType", "ucReserve"))
+        role = {
+            ("1", "7", "2", "0"): "program-source",
+            ("1", "8", "2", "0"): "sfc-source",
+            ("1", "7", "1", "0"): "local-declarations",
+            ("1", "8", "1", "0"): "sfc-block-declaration",
+            ("1", "5", "1", "0"): "global-declarations",
+            ("1", "92", "2", "0"): "library-program-source",
+            ("1", "83", "2", "0"): "library-program-companion",
+            ("1", "92", "1", "0"): "library-local-declarations",
+            ("1", "83", "1", "0"): "library-local-companion",
+            ("1", "91", "0", "0"): "library-global-declarations",
+            ("1", "82", "0", "0"): "library-global-companion",
+            ("1", "90", "0", "0"): "library-structure-source",
+            ("1", "81", "0", "0"): "library-structure-companion",
+        }.get(key, "unknown")
+        result[name] = dict(role=role, fields=fields, xml_offset=row.start,
+                            xml_length=row.end - row.start, metadata_sha256=sha256(xml))
+    return result
+
+
 def analyze(raw: bytes) -> dict:
     image = inspect_project(raw)
+    context = project_token_context(image)
     result = {"sha256": image.sha256, "size": len(raw), "diagnostics": list(image.diagnostics),
               "source_replay": "byte-identical" if image.reconstruct() == raw else "differs",
               "source_replay_scope": "raw snapshot replay, not a container rebuild or semantic proof",
               "unbacked_mappings": [dict(zip(("logical_name", "stream", "status"), row)) for row in image.unbacked_mappings],
               "streams": [], "independent_cfb": {"outer": independent_cfb(raw)},
               "dimensions": {"gxworks_version": "unknown unless separately attested", "plc_family": "unknown unless separately attested"}}
+    result["token_context"] = context
+    try:
+        source_roles = source_metadata_roles(raw)
+        result["source_metadata_gap"] = None
+    except ValueError as exc:
+        source_roles = {}
+        result["source_metadata_gap"] = str(exc)
+    if context.get("cpu"):
+        result["dimensions"]["plc_family"] = context["cpu"]
     resources = [s.raw for s in image.streams if s.raw is not None and s.logical_name and s.logical_name.endswith(".res")]
     for s in image.streams:
         item = {"layer": s.layer, "directory_index": s.directory_index, "name": s.name,
@@ -211,13 +314,34 @@ def analyze(raw: bytes) -> dict:
             item.update(size=len(s.raw), sha256=sha256(s.raw), prefix16=s.raw[:16].hex())
             if s.layer == "outer" and s.name == "_hdb":
                 result["independent_cfb"]["nested"] = independent_cfb(s.raw)
-            if s.logical_name and s.logical_name.endswith(".Program.pou"):
-                item["program"] = program_report(s.raw, s.logical_name, resources)
+            role = source_roles.get(s.logical_name, {}).get("role", "unknown")
+            if s.logical_name in source_roles:
+                item["source_metadata"] = source_roles[s.logical_name]
+            if s.logical_name and (s.logical_name.endswith(".pou") or
+                    s.logical_name.endswith(".lnb") and role == "library-program-source"):
+                item["program"] = program_report(s.raw, s.logical_name, resources,
+                                                 token_profile=context["token_profile"], text_encoding=context["text_encoding"])
                 item["handling"] = item["program"]["handling"]
-            elif s.logical_name and s.logical_name.endswith((".Labels.lh", ".gh")):
+            elif s.logical_name and s.logical_name.endswith((".lh", ".gh", ".lnl", ".lng")):
+                if role not in {"local-declarations", "global-declarations", "library-local-declarations", "library-global-declarations"}:
+                    item["parse_gap"] = ("SFC block declaration is not an ordinary label table"
+                                         if role == "sfc-block-declaration" else "unsupported declaration metadata role")
+                    result["streams"].append(item)
+                    continue
                 try:
-                    d = parse_declarations(s.raw, logical_name=s.logical_name)
-                    item.update(handling="partially-decoded", declaration_rows=len(d.rows))
+                    # Scope is established by metadata; this read-only alias
+                    # adapts the existing parser's English-name scope selector.
+                    parser_name = "metadata.Labels.lh" if role in {"local-declarations", "library-local-declarations"} else "metadata.gh"
+                    d = parse_declarations(s.raw, logical_name=parser_name)
+                    item.update(handling="partially-decoded", declaration_rows=len(d.rows),
+                                declaration_owner_return_type=d.owner_return_type,
+                                opaque_declaration_extensions=sum(bool(r.value_extension) for r in d.rows))
+                except ValueError as exc:
+                    item["parse_gap"] = str(exc)
+            elif s.logical_name and s.logical_name.endswith(".lns") and role == "library-structure-source":
+                try:
+                    d = parse_structure_declarations(s.raw, logical_name=s.logical_name)
+                    item.update(handling="partially-decoded", structure_members=len(d.members))
                 except ValueError as exc:
                     item["parse_gap"] = str(exc)
         result["streams"].append(item)
@@ -225,17 +349,22 @@ def analyze(raw: bytes) -> dict:
     programs = [s["program"] for s in nested if "program" in s]
     result["coverage"] = {
         "total_objects": len(nested), "object_unit": "nested CFB streams; storage mappings excluded",
-        "recognized_objects": sum("program" in s or "declaration_rows" in s for s in nested),
+        "recognized_objects": sum("program" in s or "declaration_rows" in s or "structure_members" in s for s in nested),
         "structurally_parsed_objects": sum(s["handling"] == "partially-decoded" for s in nested),
         "fully_semantically_decoded_objects": 0,
         "known_node_projections": sum(p.get("known_node_projections", 0) for p in programs),
         "opaque_preserved_objects": sum(s["handling"] == "opaque-preserved" for s in nested),
         "unreadable_objects": sum(s["handling"] == "unsupported" for s in nested),
         "programs": len(programs), "program_layout_gaps": sum(p["layout"] == "unsupported" for p in programs),
+        "library_programs": sum("program" in s and s.get("source_metadata", {}).get("role") == "library-program-source" for s in nested),
+        "source_metadata_role_gaps": sum(s.get("source_metadata", {}).get("role", "unknown") == "unknown"
+                                         for s in nested if "source_metadata" in s),
         "critical_record_gaps": sum(p.get("critical_record_gaps", 0) for p in programs),
         "critical_token_gaps": sum(p.get("critical_token_gaps", 0) for p in programs),
         "decoded_instructions": sum(p.get("decoded_instructions", 0) for p in programs),
         "instruction_gaps": sum(p.get("instruction_gaps", 0) for p in programs),
+        "source_text_gaps": sum(p.get("text_gaps", 0) for p in programs),
+        "sfc_reference_gaps": sum(p.get("sfc_reference_gaps", 0) for p in programs),
         "unresolved_mappings": sum(r[2] == "unresolved" for r in image.unbacked_mappings),
         "writer_touch_bytes": 0, "native_validated_in_this_run": 0,
     }
@@ -257,7 +386,7 @@ def compare(before: bytes, after: bytes) -> dict:
     projections = {}
     for key in a.keys() & b.keys():
         x, y = a[key], b[key]
-        if x.logical_name and x.logical_name.endswith(".Program.pou"):
+        if x.logical_name and x.logical_name.endswith(".pou"):
             try:
                 p, q = parse_structured_pou(x.raw), parse_structured_pou(y.raw)
                 checks = compare_programs(p, q)["checks"]
@@ -450,10 +579,12 @@ def main(argv=None):
     cmd.add_argument("--new", required=True)
     cmd.add_argument("-o", "--output", required=True, type=Path)
     cmd.add_argument("--report", required=True, type=Path)
-    cmd = commands.add_parser("decode-tokens", help="read the observed FX ordinary Ladder instruction/text stream")
+    cmd = commands.add_parser("decode-tokens", help="read observed FX/Q token source with explicit project context")
     cmd.add_argument("source", type=Path)
     cmd.add_argument("--program", default="MAIN.Program.pou")
     cmd.add_argument("--text-encoding", default=None)
+    cmd.add_argument("--profile", choices=("fx", "fx3u", "fx1s", "fx3g", "q02", "q03udv"),
+                     help="override the profile selected from the project CPU")
     cmd.add_argument("-o", "--output", type=Path, required=True)
     cmd.add_argument("--csv", type=Path)
     cmd = commands.add_parser("patch-constant", help="experimental source-only token constant edit")
@@ -481,7 +612,12 @@ def main(argv=None):
         found = [s for s in image.streams if s.logical_name == args.program and s.raw is not None]
         if len(found) != 1:
             raise ValueError("program is missing or ambiguous")
-        listing = decode_token_listing(found[0].raw, text_encoding=args.text_encoding)
+        context = project_token_context(image)
+        profile = args.profile or context["token_profile"]
+        if profile is None:
+            raise ValueError("project CPU has no established token profile; provide an explicit --profile")
+        listing = decode_token_listing(found[0].raw, profile=profile,
+                                       text_encoding=args.text_encoding or context["text_encoding"])
         rows = []
         for r in listing.records:
             row = {"offset": r.tokens[0].offset, "raw_hex": "".join(t.raw.hex() for t in r.tokens)}
@@ -498,6 +634,8 @@ def main(argv=None):
         if args.output.exists() or (args.csv and (args.csv.exists() or args.csv.resolve() == args.output.resolve())):
             raise ValueError("decode outputs must be distinct new files")
         write_json(args.output, {"source_sha256": sha256(raw), "program": args.program,
+                                "token_profile": listing.profile, "project_context": context,
+                                "text_encoding": args.text_encoding or context["text_encoding"],
                                 "records": rows, "instruction_gaps": len(listing.gaps)})
         if args.csv:
             write_new_file(args.csv, csv_raw)
