@@ -138,7 +138,12 @@ def _device_grounded(device, evidence, aliases):
 
 
 def _state(value):
-    token = str(value or "").strip().casefold()
+    # JSON numeric 0 is a valid state and must not disappear through truthiness.
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, float)) and value in {0, 1}:
+        return int(value)
+    token = str(value if value is not None else "").strip().casefold()
     if token in {"0", "off", "false", "low", "断开", "低电平"}:
         return 0
     if token in {"1", "on", "true", "high", "接通", "高电平"}:
