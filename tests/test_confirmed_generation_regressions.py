@@ -295,6 +295,55 @@ def test_pinned_execution_claim_replaces_only_touched_device_semantics():
 
 
 
+def test_analysis_does_not_turn_derived_events_or_timer_done_into_strict_edges():
+    text = (
+        "X2 一到料就产生 M1。"
+        "M1 是当前扫描事件并用于计算。"
+        "T0 到时后 Y1=ON。"
+        "T1 到时后 M2 自动解除。"
+    )
+    raw = {
+        "summary": "事件与定时完成",
+        "approaches": [],
+        "execution_intent_claims": [
+            {
+                "trigger": {"kind": "transition", "source_devices": ["X2"], "from": 0, "to": 1},
+                "effect": {"kind": "pulse", "devices": ["M1"]},
+                "evidence": ["X2 一到料就产生 M1。"],
+            },
+            {
+                "trigger": {"kind": "transition", "source_devices": ["M1"], "from": 0, "to": 1},
+                "effect": {"kind": "compute", "devices": []},
+                "evidence": ["M1 是当前扫描事件并用于计算。"],
+            },
+            {
+                "trigger": {"kind": "transition", "source_devices": ["T0"], "from": 0, "to": 1},
+                "effect": {"kind": "level", "devices": ["Y1"]},
+                "evidence": ["T0 到时后 Y1=ON。"],
+            },
+            {
+                "trigger": {"kind": "transition", "source_devices": ["T1"], "from": 0, "to": 1},
+                "effect": {"kind": "clear", "devices": ["M2"]},
+                "evidence": ["T1 到时后 M2 自动解除。"],
+            },
+        ],
+        "missing_info": [], "suggested_io": {}, "hardware_config": {}, "assumptions": [],
+    }
+    normalized = _normalize_analysis_result(raw, "FX3U", text)
+
+    pairs = {
+        (item["semantic"], tuple(item["devices"]), item["strict"])
+        for item in normalized["execution_semantics"]
+    }
+    assert ("RISING_EDGE", ("X2",), True) in pairs
+    assert ("LEVEL", ("T0",), False) in pairs
+    assert ("LEVEL", ("T1",), False) in pairs
+    assert not any(
+        item["strict"] and item["devices"] in (["M1"], ["T0"], ["T1"])
+        for item in normalized["execution_semantics"]
+    )
+
+
 def test_agent_b_frames_first_json_but_consumes_trailing_usage():
     base = _DuplicateJsonProvider()
     provider = _FirstJSONObjectProvider(base)

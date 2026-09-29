@@ -159,14 +159,12 @@ def normalize_semantic_requirements(value: Any) -> List[Dict[str, Any]]:
                 pulse_width = None
             if pulse_width is not None and pulse_width > 0:
                 record["pulse_width_ms"] = pulse_width
+        # Requirement identity belongs to the trigger, not effect metadata.
         key = (
             semantic,
             tuple(devices),
-            tuple(effect_devices),
             record.get("period_ms"),
             record.get("pulse_width_ms"),
-            record.get("effect_kind"),
-            record.get("rearm"),
         )
         existing_index = index_by_key.get(key)
         if existing_index is None:
@@ -178,6 +176,24 @@ def normalize_semantic_requirements(value: Any) -> List[Dict[str, Any]]:
         evidence = [item for item in (existing.get("evidence"), record.get("evidence")) if item]
         if evidence:
             existing["evidence"] = " | ".join(dict.fromkeys(evidence))[:500]
+        merged_effects = sorted(set(
+            (existing.get("effect_devices") or [])
+            + (record.get("effect_devices") or [])
+        ))
+        if merged_effects:
+            existing["effect_devices"] = merged_effects
+        if (
+            not existing.get("effect_kind")
+            or existing.get("effect_kind") == "unspecified"
+        ) and record.get("effect_kind"):
+            existing["effect_kind"] = record["effect_kind"]
+        if (
+            not existing.get("rearm")
+            or existing.get("rearm") == "unspecified"
+        ) and record.get("rearm"):
+            existing["rearm"] = record["rearm"]
+        if not existing.get("intent_id") and record.get("intent_id"):
+            existing["intent_id"] = record["intent_id"]
         if existing.get("source") != record.get("source"):
             existing["source"] = "merged"
     return result

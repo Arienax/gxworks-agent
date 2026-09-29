@@ -165,6 +165,24 @@ def _normalize_effect_kind(value):
     return token[:64] if token else "unspecified"
 
 
+def _device_prefix(device):
+    match = re.match(r"[A-Z]+", str(device or "").upper())
+    return match.group(0) if match else ""
+
+
+def _formal_edge_confirms(device, semantic, evidence):
+    """Whether the user's evidence itself contains explicit edge notation."""
+    if semantic not in {"RISING_EDGE", "FALLING_EDGE"}:
+        return False
+    for item in extract_explicit_execution_semantics(
+        "。".join(str(part or "") for part in evidence),
+        source="claim_explicit_check",
+    ):
+        if item.get("semantic") == semantic and device in (item.get("devices") or []):
+            return True
+    return False
+
+
 def execution_intent_claim_violations(value, path="$.execution_intent_claims"):
     """Validate only the Agent-A claim protocol shape, never sentence meaning."""
     if value is None:
@@ -276,15 +294,34 @@ def compile_execution_intent_claims(
         rearm = _normalize_rearm(claim.get("rearm"))
 
         semantic = None
+        advisory_transition = False
         if trigger_kind == "transition":
             before, after = _state(trigger.get("from")), _state(trigger.get("to"))
             if (before, after) == (0, 1):
-                semantic = "RISING_EDGE"
+                candidate_semantic = "RISING_EDGE"
             elif (before, after) == (1, 0):
-                semantic = "FALLING_EDGE"
+                candidate_semantic = "FALLING_EDGE"
             else:
                 rejected.append({"index": index, "reason": "non_edge_transition"})
                 continue
+
+            # "An event happened" is not automatically an instruction to edge-
+            # detect the source bit. Promote only one physical X input or an
+            # explicitly written edge for that exact source. T/C done contacts
+            # are state bits; other internal transitions remain advisory.
+            explicit_edge = (
+                len(source_devices) == 1
+                and _formal_edge_confirms(
+                    source_devices[0], candidate_semantic, evidence
+                )
+            )
+            prefixes = {_device_prefix(device) for device in source_devices}
+            if explicit_edge or (len(source_devices) == 1 and prefixes == {"X"}):
+                semantic = candidate_semantic
+            elif prefixes and prefixes <= {"T", "C"}:
+                semantic = "LEVEL"
+            else:
+                advisory_transition = True
         elif trigger_kind == "level":
             semantic = "LEVEL"
         elif trigger_kind == "first_scan":
@@ -316,8 +353,13 @@ def compile_execution_intent_claims(
             "evidence": evidence,
         }
         claim_id = _claim_id(frame)
-        accepted.append({"claim_id": claim_id, **frame})
+        accepted_item = {"claim_id": claim_id, **frame}
+        if advisory_transition:
+            accepted_item["projection_status"] = "advisory_transition"
+        accepted.append(accepted_item)
         touched.extend(device for device in source_devices if device not in touched)
+        if advisory_transition:
+            continue
         requirement = {
             "semantic": semantic,
             "devices": source_devices,

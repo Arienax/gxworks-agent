@@ -141,6 +141,98 @@ def test_level_claim_does_not_require_value_or_rearm_enum_to_be_protocol_valid()
     assert receipt["requirements"][0]["semantic"] == "LEVEL"
 
 
+def test_transition_claims_only_promote_high_confidence_source_edges():
+    from plc.execution_intent import compile_execution_intent_claims
+
+    text = (
+        "X2 一到料就产生 M1。"
+        "M1 事件用于本扫描计算。"
+        "T0 到时后 Y1 保持为 ON。"
+        "T1 到时后 M2 解除。"
+    )
+    claims = [
+        {
+            "trigger": {"kind": "transition", "source_devices": ["X2"], "from": 0, "to": 1},
+            "effect": {"kind": "pulse", "devices": ["M1"]},
+            "evidence": ["X2 一到料就产生 M1。"],
+        },
+        {
+            "trigger": {"kind": "transition", "source_devices": ["M1"], "from": 0, "to": 1},
+            "effect": {"kind": "compute", "devices": []},
+            "evidence": ["M1 事件用于本扫描计算。"],
+        },
+        {
+            "trigger": {"kind": "transition", "source_devices": ["T0"], "from": 0, "to": 1},
+            "effect": {"kind": "level", "devices": ["Y1"]},
+            "evidence": ["T0 到时后 Y1 保持为 ON。"],
+        },
+        {
+            "trigger": {"kind": "transition", "source_devices": ["T1"], "from": 0, "to": 1},
+            "effect": {"kind": "clear", "devices": ["M2"]},
+            "evidence": ["T1 到时后 M2 解除。"],
+        },
+    ]
+    receipt = compile_execution_intent_claims(claims, text)
+
+    assert receipt["rejected"] == []
+    assert {
+        (item["semantic"], tuple(item["devices"]), item["strict"])
+        for item in receipt["requirements"]
+    } == {
+        ("RISING_EDGE", ("X2",), True),
+        ("LEVEL", ("T0",), False),
+        ("LEVEL", ("T1",), False),
+    }
+    m1 = next(
+        item for item in receipt["accepted"]
+        if item["trigger"]["source_devices"] == ["M1"]
+    )
+    assert m1["projection_status"] == "advisory_transition"
+
+
+def test_internal_transition_with_explicit_edge_notation_remains_hard_edge():
+    from plc.execution_intent import compile_execution_intent_claims
+
+    text = "T0 上升沿触发一次记录。"
+    receipt = compile_execution_intent_claims([{
+        "trigger": {"kind": "transition", "source_devices": ["T0"], "from": 0, "to": 1},
+        "effect": {"kind": "event", "devices": []},
+        "evidence": [text],
+    }], text)
+
+    assert receipt["rejected"] == []
+    assert receipt["requirements"][0]["semantic"] == "RISING_EDGE"
+    assert receipt["requirements"][0]["devices"] == ["T0"]
+
+
+def test_semantic_normalization_merges_claim_and_explicit_fast_path_for_same_trigger():
+    from plc.semantics import normalize_semantic_requirements
+
+    normalized = normalize_semantic_requirements([
+        {
+            "semantic": "RISING_EDGE",
+            "devices": ["X2"],
+            "effect_devices": ["M1"],
+            "effect_kind": "pulse",
+            "evidence": "X2 一到料",
+            "source": "agent_a_claim",
+            "strict": True,
+        },
+        {
+            "semantic": "RISING_EDGE",
+            "devices": ["X2"],
+            "evidence": "X2 0 -> 1",
+            "source": "current_request_explicit",
+            "strict": True,
+        },
+    ])
+
+    assert len(normalized) == 1
+    assert normalized[0]["devices"] == ["X2"]
+    assert normalized[0]["effect_devices"] == ["M1"]
+    assert normalized[0]["effect_kind"] == "pulse"
+
+
 def test_agent_a_execution_claim_accepts_unique_confirmed_label_grounding():
     from plc.execution_intent import compile_execution_intent_claims
 
