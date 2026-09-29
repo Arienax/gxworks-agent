@@ -447,21 +447,42 @@ def _visual_operand_sequence(raw, opcode, expected):
     return locals().get("fallback", [])
 
 
-def _conflicts_with_verified_operand_order(result, raw):
+def _conflicts_with_verified_operand_order(
+    result, raw, *, expected_order=None, opcodes=None,
+):
     """True when manual visual residue contradicts a verified native order."""
     result = result if isinstance(result, Mapping) else {}
     target = result.get("target_applicability") or {}
-    if target.get("operand_order_status") != "source_verified":
-        return False
-    expected = list(target.get("native_operand_order") or ())
+    if expected_order is None:
+        if target.get("operand_order_status") != "source_verified":
+            return False
+        expected = list(target.get("native_operand_order") or ())
+    else:
+        expected = [str(value or "").strip().upper() for value in expected_order]
     if len(expected) < 2:
         return False
-    opcode = str(result.get("instruction_opcode") or target.get("opcode") or "")
-    sequence = _visual_operand_sequence(raw, opcode, expected)
-    if len(sequence) < 2:
-        return False
-    indexes = [expected.index(token) for token in sequence if token in expected]
-    return any(left >= right for left, right in zip(indexes, indexes[1:]))
+
+    names = [
+        str(value or "").strip().upper()
+        for value in (
+            opcodes
+            if opcodes is not None
+            else (
+                result.get("instruction_opcode"),
+                target.get("opcode"),
+                target.get("base_mnemonic"),
+            )
+        )
+        if str(value or "").strip()
+    ]
+    for opcode in dict.fromkeys(names):
+        sequence = _visual_operand_sequence(raw, opcode, expected)
+        if len(sequence) < 2:
+            continue
+        indexes = [expected.index(token) for token in sequence if token in expected]
+        if any(left >= right for left, right in zip(indexes, indexes[1:])):
+            return True
+    return False
 
 
 def _embedded_instruction_layout_offset(raw):
@@ -575,7 +596,10 @@ def _completion_sources(seed, plc_model, task_type):
                 break
     return results
 
-def _pack_target(results, allowance, *, needed_categories=None):
+def _pack_target(
+    results, allowance, *, needed_categories=None,
+    verified_operand_order=None, verified_opcodes=(),
+):
     """Pack definition, tables and cautions together before any top-k truncation.
 
     Prefer the first ranked manual revision. Different programming syntaxes are
@@ -614,7 +638,12 @@ def _pack_target(results, allowance, *, needed_categories=None):
             )
             for start, end, embedded_layout in pieces:
                 raw = text[start:end]
-                if _conflicts_with_verified_operand_order(result, raw):
+                if _conflicts_with_verified_operand_order(
+                    result,
+                    raw,
+                    expected_order=verified_operand_order,
+                    opcodes=verified_opcodes or None,
+                ):
                     # Native order already has source-verified ownership. A PDF
                     # diagram flattened into another sequence is not useful
                     # corroboration for any remaining operand facet and can make
@@ -768,10 +797,25 @@ def retrieve_instruction_facts(
             len(core._format_result_block(row)) + 40
             for row in companion_pool
         )
+        target_overlay = (
+            structured_owner.get("target_applicability")
+            if isinstance(structured_owner, Mapping)
+            else {}
+        ) or {}
+        verified_operand_order = (
+            list(target_overlay.get("native_operand_order") or ())
+            if target_overlay.get("operand_order_status") == "source_verified"
+            else None
+        )
         primary_pool = _pack_target(
             sources,
             allowance - companion_cost,
             needed_categories=manual_gaps,
+            verified_operand_order=verified_operand_order,
+            verified_opcodes=(
+                target.get("opcode"),
+                target.get("base_opcode"),
+            ),
         )
         pool = primary_pool[:1] + companion_pool + primary_pool[1:]
         for value in pool:
