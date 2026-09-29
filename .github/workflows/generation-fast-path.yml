@@ -6,6 +6,7 @@ on:
     paths:
       - 'src/application/generation.py'
       - 'src/application/generation_agent.py'
+      - 'src/application/construction_examples.py'
       - 'src/application/generation_context.py'
       - 'src/application/generation_support.py'
       - 'src/application/field_repair.py'
@@ -76,7 +77,7 @@ jobs:
           from="$BASE_SHA"
           to="$HEAD_SHA"
           git diff --name-only "$from"..."$to" > changed-files.txt
-          if grep -Eq '^(src/(application/(generation\.py|generation_agent\.py|generation_context\.py|generation_support\.py|field_repair\.py|format_patch_repair\.py|rejected_generation_preview\.py|repair_policy\.py|delivery\.py)|plc/(candidate_repair\.py|generation_contract\.py|validation\.py|instructions\.py|ir\.py|specification/(approach\.py|bindings\.py|conditions\.py|semantic_validation\.py))|agent_runtime/)|resources/instructions/|tools/(build_fx3u_verified_opcode_overlay|audit_fx3u_contracts)\.py|tests/(test_generation_.*\.py|test_field_patch_repair_protocol\.py|test_format_patch_repair\.py|test_hybrid_compact_recovery\.py|test_user_confirmed_generation_repair\.py|test_rejected_generation_delivery\.py|test_instruction_contract_alignment\.py|test_contract_repair_planner\.py)|\.github/workflows/generation-fast-path\.yml$)' changed-files.txt; then
+          if grep -Eq '^(src/(application/(generation\.py|generation_agent\.py|construction_examples\.py|generation_context\.py|generation_support\.py|field_repair\.py|format_patch_repair\.py|rejected_generation_preview\.py|repair_policy\.py|delivery\.py)|plc/(candidate_repair\.py|generation_contract\.py|validation\.py|instructions\.py|ir\.py|specification/(approach\.py|bindings\.py|conditions\.py|semantic_validation\.py))|agent_runtime/)|resources/instructions/|tools/(build_fx3u_verified_opcode_overlay|audit_fx3u_contracts)\.py|tests/(test_generation_.*\.py|test_field_patch_repair_protocol\.py|test_format_patch_repair\.py|test_hybrid_compact_recovery\.py|test_user_confirmed_generation_repair\.py|test_rejected_generation_delivery\.py|test_instruction_contract_alignment\.py|test_contract_repair_planner\.py)|\.github/workflows/generation-fast-path\.yml$)' changed-files.txt; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -103,6 +104,7 @@ jobs:
           tests/test_field_patch_repair_protocol.py
           tests/test_format_patch_repair.py
           tests/test_hybrid_compact_recovery.py
+          tests/test_generation_agent_boundary.py
           tests/test_generation_fast_path.py
           tests/test_generation_workflow.py
           tests/test_confirmed_generation_regressions.py
