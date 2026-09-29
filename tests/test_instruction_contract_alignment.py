@@ -315,7 +315,7 @@ def test_promotion_ledger_is_validated_before_registry_mutation(tmp_path, mutati
 
 
 def test_operand_semantic_audit_covers_entire_registry_and_is_read_only():
-    from tools.audit_operand_semantics import build
+    from tools.audit_operand_semantics import OUTPUT, SUMMARY, build
 
     ledger, report = build()
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
@@ -325,11 +325,30 @@ def test_operand_semantic_audit_covers_entire_registry_and_is_read_only():
     assert report["registry_forms"] == len(
         DEFAULT_INSTRUCTION_REGISTRY.known_mnemonics()
     )
-    assert report["fx3u_signature_verified_forms"] > 100
-    assert report["operand_role_promotions"] > 0
+    assert report["registry_forms"] == 325
+    assert report["fx3u_signature_verified_forms"] == 227
+    assert report["operand_role_promotions"] == 41
+    assert report["operand_type_promotions"] == 2
     assert ledger["entries"]
     assert all("operand_roles" in row for row in ledger["entries"])
+    assert json.loads(OUTPUT.read_text(encoding="utf-8")) == ledger
+    expected_summary = {
+        key: value for key, value in report.items() if key != "rows"
+    }
+    assert json.loads(SUMMARY.read_text(encoding="utf-8")) == expected_summary
 
+
+def test_operand_semantic_verification_is_target_scoped():
+    from plc.target_capabilities import resolve_target_applicability
+
+    fx3_add = resolve_target_applicability({"opcode": "ADD"}, "FX3U")
+    fx5_add = resolve_target_applicability({"opcode": "ADD"}, "FX5U")
+    fx3_dadd = resolve_target_applicability({"opcode": "DADD"}, "FX3U")
+
+    assert fx3_add["operand_order_status"] == "source_verified"
+    assert fx3_add["operand_role_status"] == "source_verified"
+    assert fx5_add["operand_role_status"] != "source_verified"
+    assert fx3_dadd["operand_type_status"] == "source_verified"
 
 def test_operand_semantic_overlay_cannot_change_declared_roles(tmp_path):
     from plc.instructions import InstructionRegistry

@@ -537,12 +537,30 @@ class InstructionRegistry:
         ):
             raise ValueError("Unsupported operand-semantic promotion ledger")
 
+        signature_digest = payload.get("signature_ledger_sha256")
+        source = payload.get("source")
+        if (
+            not isinstance(signature_digest, str)
+            or len(signature_digest) != 64
+            or any(c not in "0123456789abcdef" for c in signature_digest)
+            or not isinstance(source, Mapping)
+            or any(
+                not isinstance(source.get(key), str) or not source.get(key)
+                for key in ("manual", "revision", "sha256", "url")
+            )
+            or len(str(source.get("sha256"))) != 64
+            or any(c not in "0123456789abcdef" for c in str(source.get("sha256")))
+        ):
+            raise ValueError("Operand-semantic source identity missing")
+
         pending = {}
         for row in payload["entries"]:
             if not isinstance(row, Mapping):
                 raise ValueError("Invalid operand-semantic promotion entry")
             opcode = str(row.get("form") or "").strip().upper()
             key = ("mitsubishi", opcode, "FX3U")
+            if key in pending:
+                raise ValueError("Duplicate operand-semantic promotion: " + opcode)
             current = self._cpu_contracts.get(key)
             if current is None:
                 raise ValueError(
@@ -559,6 +577,7 @@ class InstructionRegistry:
                 or len(roles) != len(current.operands)
                 or not isinstance(verified, list)
                 or "operand_roles" not in verified
+                or len(set(verified)) != len(verified)
             ):
                 raise ValueError("Invalid operand-semantic shape: " + opcode)
             try:
@@ -592,6 +611,9 @@ class InstructionRegistry:
 
             evidence = {
                 "manual_id": "fx3_programming_r",
+                "manual": source["manual"],
+                "revision": source["revision"],
+                "source_sha256": source["sha256"],
                 "pdf_page": row.get("native_page"),
                 "operand_page_start": row.get("operand_page_start"),
                 "operand_page_end": row.get("operand_page_end"),
@@ -602,8 +624,11 @@ class InstructionRegistry:
                 type(evidence["pdf_page"]) is not int
                 or type(evidence["operand_page_start"]) is not int
                 or type(evidence["operand_page_end"]) is not int
+                or evidence["operand_page_start"] > evidence["pdf_page"]
+                or evidence["pdf_page"] > evidence["operand_page_end"]
                 or not isinstance(evidence["proof_sha256"], str)
                 or len(evidence["proof_sha256"]) != 64
+                or any(c not in "0123456789abcdef" for c in evidence["proof_sha256"])
             ):
                 raise ValueError("Operand-semantic evidence missing for " + opcode)
 

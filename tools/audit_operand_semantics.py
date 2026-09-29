@@ -27,7 +27,7 @@ from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY as REGISTRY
 from tools.audit_fx3u_contracts import DB, DIRECTORY, NATIVE, OUTPUT as SIGNATURE_LEDGER, source_scan
 
 OUTPUT = DIRECTORY / "fx3u_operand_semantic_promotions.json"
-REPORT = DIRECTORY / "operand_semantic_coverage.json"
+SUMMARY = DIRECTORY / "operand_semantic_coverage_summary.json"
 METHOD = "signature-gated-native-operands-v1"
 
 
@@ -317,6 +317,10 @@ def build(database=DB):
     return ledger, report
 
 
+def _summary(report):
+    return {key: value for key, value in report.items() if key != "rows"}
+
+
 def _json_text(payload):
     return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
 
@@ -325,37 +329,50 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--database", type=Path, default=DB)
     parser.add_argument("--output", type=Path, default=OUTPUT)
-    parser.add_argument("--report", type=Path, default=REPORT)
+    parser.add_argument("--summary", type=Path, default=SUMMARY)
+    parser.add_argument("--report", type=Path)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--promote", action="store_true")
     mode.add_argument("--check", action="store_true")
     args = parser.parse_args(argv)
 
-    for target in (args.output, args.report):
+    for target in (args.output, args.summary, args.report):
+        if target is None:
+            continue
         if target.resolve() == args.database.resolve() or (
             target.exists() and args.database.exists() and target.samefile(args.database)
         ):
             parser.error("Audit output must not overwrite the source database")
 
     ledger, report = build(args.database)
-    ledger_text = _json_text(ledger)
-    report_text = _json_text(report)
+    summary = _summary(report)
     if args.promote:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(ledger_text, encoding="utf-8")
-        args.report.parent.mkdir(parents=True, exist_ok=True)
-        args.report.write_text(report_text, encoding="utf-8")
+        args.output.write_text(_json_text(ledger), encoding="utf-8")
+        args.summary.parent.mkdir(parents=True, exist_ok=True)
+        args.summary.write_text(_json_text(summary), encoding="utf-8")
+        if args.report is not None:
+            args.report.parent.mkdir(parents=True, exist_ok=True)
+            args.report.write_text(_json_text(report), encoding="utf-8")
     if args.check:
-        if not args.output.is_file() or args.output.read_text(encoding="utf-8") != ledger_text:
+        try:
+            committed_ledger = json.loads(args.output.read_text(encoding="utf-8"))
+            committed_summary = json.loads(args.summary.read_text(encoding="utf-8"))
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            parser.error("Operand-semantic audit outputs are unavailable: " + str(exc))
+        if committed_ledger != ledger:
             parser.error("Operand-semantic promotion ledger is not reproducible")
-        if not args.report.is_file() or args.report.read_text(encoding="utf-8") != report_text:
-            parser.error("Operand-semantic coverage report is not reproducible")
-    print(json.dumps({
-        key: value for key, value in report.items()
-        if key != "rows"
-    }, ensure_ascii=False, sort_keys=True))
+        if committed_summary != summary:
+            parser.error("Operand-semantic coverage summary is not reproducible")
+        if args.report is not None:
+            try:
+                committed_report = json.loads(args.report.read_text(encoding="utf-8"))
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                parser.error("Operand-semantic report is unavailable: " + str(exc))
+            if committed_report != report:
+                parser.error("Operand-semantic full report is not reproducible")
+    print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
