@@ -379,6 +379,17 @@ def test_construction_router_is_conservative_without_composite_motif():
     assert routed.example_ids == ("reset_dominant_hold",)
     assert routed.route["reason"] == "matched_primary_need"
 
+    edge = {
+        "selected_approach": {
+            "generation_contract": {"required_structures": ["edge_trigger"]}
+        },
+        "execution_semantics": [
+            {"semantic": "RISING_EDGE", "devices": ["X2"]}
+        ],
+    }
+    edge_routed = prepare_construction_examples("FX3U", True, edge)
+    assert edge_routed.example_ids == ("edge_and_level",)
+
     mixed = {
         "selected_approach": {
             "generation_contract": {

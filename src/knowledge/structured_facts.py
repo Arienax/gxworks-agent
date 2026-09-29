@@ -370,7 +370,7 @@ def _local_instruction_fact_record(target, *, plc_model, task_type):
     )
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
     from plc.instruction_resolution import resolve_instruction_lanes
-    lanes = resolve_instruction_lanes(step_target, plc_model=plc_model)
+    lanes = resolve_instruction_lanes(target, plc_model=plc_model)
     lines = [
         "[STRUCTURED LOCAL INSTRUCTION RECORD]",
         f"INSTRUCTION: {opcode}",

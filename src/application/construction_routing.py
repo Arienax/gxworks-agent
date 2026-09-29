@@ -94,8 +94,11 @@ def route_construction_examples(profile, candidates, *, max_examples=2):
             "hit_motifs": sorted(hit_motifs),
         })
 
-    distinct_needs = set(primary_hits)
-    if not profile.motifs and len(distinct_needs) > 1:
+    eligible = [row for row in scored if row["score"] > 0 and row["id"]]
+    # Multiple signals may all describe one archetype (for example
+    # edge_trigger + RISING_EDGE -> edge_and_level). With no grounded composite
+    # motif, withhold examples only when different archetypes compete.
+    if not profile.motifs and len(eligible) > 1:
         return {
             "selected_ids": [],
             "reason": "multiple_primary_needs_without_composite_motif",
@@ -103,7 +106,6 @@ def route_construction_examples(profile, candidates, *, max_examples=2):
             "candidates": scored,
         }
 
-    eligible = [row for row in scored if row["score"] > 0 and row["id"]]
     eligible.sort(key=lambda row: (-row["score"], row["id"]))
     selected = [row["id"] for row in eligible[:max(0, int(max_examples))]]
     return {
