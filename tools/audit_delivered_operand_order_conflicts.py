@@ -34,17 +34,63 @@ def _high_conflicts(text, opcode, expected):
         r"(?<!%s)%s(?!%s)" % (boundary, re.escape(opcode), boundary),
         re.I,
     )
+    glyph_operand = re.compile(
+        r"(?i)([SDM]\d{0,3})\s*(?=\[GLYPH-[0-9A-F]+\])"
+    )
+    operand = re.compile(r"(?i)(?<![A-Z0-9])([SDMN]\d{0,3})(?![A-Z0-9])")
+    fused_count = re.compile(
+        r"(?i)(?<![A-Z0-9])(n\d{0,3})(?=[SDM]\d{0,3}\s*\[GLYPH-[0-9A-F]+\])"
+    )
+    expected_set = set(expected)
     lines = str(text or "").splitlines()
     offsets, cursor = [], 0
     for line in lines:
         offsets.append(cursor)
         cursor += len(line) + 1
-    arity = len(expected)
+
     out = []
     for match in pattern.finditer(str(text or "")):
-        line_index = max((i for i, off in enumerate(offsets) if off <= match.start()), default=0)
-        # Only source-rendered page/layout/table material can conflict with the
-        # structured lane. Ignore the structured line itself and ordinary metadata.
+        line_index = max(
+            (i for i, off in enumerate(offsets) if off <= match.start()),
+            default=0,
+        )
+        line = lines[line_index] if lines else ""
+        relative = match.start() - offsets[line_index] if offsets else 0
+        prefix = line[:relative]
+        if prefix.strip() and not re.search(r"(?:FNC\s*\d+|input)\s*$", prefix, re.I):
+            continue
+        region_lines = lines[line_index:line_index + 4]
+        region = "\n".join(region_lines)
+        if "[GLYPH-" not in region:
+            continue
+
+        positions = []
+        for item in glyph_operand.finditer(region):
+            positions.append((item.start(1), item.group(1).upper()))
+        for item in fused_count.finditer(region):
+            positions.append((item.start(1), item.group(1).upper()))
+        tail = line[relative + len(opcode):]
+        for item in operand.finditer(tail):
+            token = item.group(1).upper()
+            if token.startswith("N"):
+                positions.append((item.start(1), token))
+        running = len(region_lines[0]) + 1 if region_lines else 0
+        for short_line in region_lines[1:]:
+            stripped = short_line.strip()
+            if re.fullmatch(r"(?i)[SDMN]\d{0,3}", stripped):
+                positions.append((running + short_line.find(stripped), stripped.upper()))
+            running += len(short_line) + 1
+
+        sequence = []
+        for _position, token in sorted(positions):
+            if token in expected_set and token not in sequence:
+                sequence.append(token)
+        if len(sequence) < 2:
+            continue
+        indexes = [expected.index(token) for token in sequence]
+        if not any(left >= right for left, right in zip(indexes, indexes[1:])):
+            continue
+
         marker = ""
         for i in range(line_index, -1, -1):
             if lines[i].startswith("[PAGE ") or lines[i].startswith("[TABLE "):
@@ -52,26 +98,11 @@ def _high_conflicts(text, opcode, expected):
                 break
             if lines[i].startswith("[KNOWLEDGE ") or lines[i].startswith("[/KNOWLEDGE]"):
                 break
-        if not marker:
-            continue
-        immediate = "\n".join(lines[line_index:line_index + 4])
-        same_line = lines[line_index][match.start() - offsets[line_index]:]
-        glyphs = immediate.count("[GLYPH-")
-        after = immediate[immediate.upper().find(opcode.upper()) + len(opcode):]
-        seq = _tokens(after, expected)
-        same = _tokens(same_line[len(opcode):], expected)
-        tiers = []
-        if same and same[0] != expected[0] and glyphs >= 1:
-            tiers.append("inline_prefix_conflict")
-        if glyphs >= 2 and len(seq) == arity and set(seq) == set(expected) and seq != expected:
-            tiers.append("complete_diagram_conflict")
-        if tiers:
-            out.append({
-                "tiers": tiers,
-                "sequence": seq or same,
-                "marker": marker,
-                "excerpt": "\n".join(lines[line_index:line_index + 8])[:900],
-            })
+        out.append({
+            "sequence": sequence,
+            "marker": marker,
+            "excerpt": "\n".join(lines[line_index:line_index + 8])[:900],
+        })
     return out
 
 
