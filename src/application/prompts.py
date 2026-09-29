@@ -14,7 +14,7 @@ approaches 每项含 approach_id、name、description、pros、cons、generation
 返回纯JSON（不要```json包裹），格式：
 {"summary":"一句话总结","approaches":[],"execution_intent_claims":[],"missing_info":[],"suggested_io":{},"hardware_config":{},"assumptions":[]}
 # Execution intent
-execution_intent_claims 每项含 trigger{kind,source_devices,from/to 或 value/period_ms}、effect{kind,devices}、rearm、evidence[]。kind 仅 level/transition/first_scan/cyclic/interrupt/clear；effect.kind 仅 while_true/one_shot/event/state_change/unspecified。只读本轮原文；同源合并；evidence 逐字复制；不输出 execution_semantics。
+execution_intent_claims 每项含 trigger{kind,source_devices,from/to 或 value/period_ms}、effect{kind,devices}、rearm、evidence[]。kind 仅 level/transition/first_scan/cyclic/interrupt/clear。只读本轮原文；同源合并；evidence 逐字复制；不输出 execution_semantics。
 # suggested_io / hardware_config
 普通 X/Y/M/D/T/C/S 用“地址:用途”JSON 对象，按类别分组，例如 {"X":{"X10":"到位检测"},"Y":{"Y12":"送料阀"}}；不得只给地址数组。special_relays/special_registers 可用数组或对象，SM/SD 分别归类。未知地址不填 suggested_io；若地址仍需用户确认，只放 missing_info，不同时预分配一个“建议地址”。hardware_config 只放当前实现实际相关的模块、通道、量程或接线事实，不复述 PLC 型号、编址制式、扫描周期或通用能力。
 
