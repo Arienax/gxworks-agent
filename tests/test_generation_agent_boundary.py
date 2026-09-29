@@ -529,3 +529,10 @@ def test_generation_workflow_forwards_explicit_construction_example_arm(monkeypa
 def test_generation_request_rejects_non_boolean_construction_example_arm(value):
     with pytest.raises(TypeError, match="construction_examples"):
         GenerationRequest("Generate", construction_examples=value)
+
+
+
+@pytest.mark.parametrize("value", [None, "1", "false", 0, 1, {}, []])
+def test_generation_request_rejects_non_boolean_fresh_confirmed_mode(value):
+    with pytest.raises(TypeError, match="fresh_confirmed_generation"):
+        GenerationRequest("Generate", fresh_confirmed_generation=value)

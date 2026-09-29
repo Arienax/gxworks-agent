@@ -1,11 +1,15 @@
 export function DeveloperSettingsPanel({
   constructionExamples,
+  freshConfirmedGeneration,
   onConstructionExamplesChange,
+  onFreshConfirmedGenerationChange,
   disabled,
   t,
 }: {
   constructionExamples: boolean;
+  freshConfirmedGeneration: boolean;
   onConstructionExamplesChange: (value: boolean) => void;
+  onFreshConfirmedGenerationChange: (value: boolean) => void;
   disabled: boolean;
   t: (key: string) => string;
 }) {
@@ -42,10 +46,40 @@ export function DeveloperSettingsPanel({
       </label>
     </fieldset>
     <p role="status">
-      <strong>{t("下一次 Web 生成的实际设置")}：{constructionExamples ? "ON" : "OFF"}</strong>
+      <strong>{t("下一次 Web 生成的构造范例")}：{constructionExamples ? "ON" : "OFF"}</strong>
+    </p>
+    <fieldset disabled={disabled}>
+      <legend className="sr-only">{t("A/B 重跑模式")}</legend>
+      <label className={`approval-choice ${!freshConfirmedGeneration ? "selected" : ""}`}>
+        <input
+          type="radio"
+          name="fresh-confirmed-generation"
+          checked={!freshConfirmedGeneration}
+          onChange={() => onFreshConfirmedGenerationChange(false)}
+        />
+        <span>
+          <strong>{t("普通生成/编辑")}</strong>
+          <small>{t("已有版本时沿用正常编辑路径。")}</small>
+        </span>
+      </label>
+      <label className={`approval-choice ${freshConfirmedGeneration ? "selected" : ""}`}>
+        <input
+          type="radio"
+          name="fresh-confirmed-generation"
+          checked={freshConfirmedGeneration}
+          onChange={() => onFreshConfirmedGenerationChange(true)}
+        />
+        <span>
+          <strong>{t("从确认规格重新生成（A/B 重跑）")}</strong>
+          <small>{t("忽略当前程序作为生成基线，不重新运行 Agent A；用现有确认规格再次走 fresh Agent B，并把结果保存为新版本。")}</small>
+        </span>
+      </label>
+    </fieldset>
+    <p role="status">
+      <strong>{t("下一次 Web 生成的路径")}：{freshConfirmedGeneration ? "FRESH CONFIRMED" : "NORMAL"}</strong>
     </p>
     <p className="muted">
-      {t("切换立即保存到当前浏览器，只影响之后提交的 generation job；已经提交或正在运行的任务保持其提交时快照。环境变量仍仅作为脚本或其他未显式传值入口的兼容后备。")}
+      {t("两个开发者选项都会在提交 generation job 时冻结。之后再切换不会改变已经提交或正在运行的任务；环境变量仍仅作为脚本或其他未显式传值入口的兼容后备。")}
     </p>
   </section>;
 }

@@ -688,15 +688,17 @@ class WorkbenchService:
                 format_repair = bool(snapshot.get("format_repair"))
                 repair_baseline = snapshot.get("repair_baseline") if repair_mode else None
                 repair_plan = snapshot.get("repair_plan") if repair_mode else None
+                fresh_confirmed_generation = bool(snapshot.get("fresh_confirmed_generation"))
                 if repair_mode:
                     previous_json = copy.deepcopy(repair_baseline)
-                elif format_repair:
+                elif format_repair or fresh_confirmed_generation:
                     previous_json = None
                 else:
                     previous_json = ir_to_ladder(program) if program else None
                 request = GenerationRequest(
                     user_input=scoped_text, effort=None, target_mode=project["target_mode"],
-                    previous_json=previous_json, previous_ir=program,
+                    previous_json=previous_json,
+                    previous_ir=None if fresh_confirmed_generation else program,
                     confirmed_context=project.get("confirmed_spec"),
                     decision_receipt_id=project.get("confirmed_decision_receipt_id"),
                     conversation_history=[] if (repair_mode or format_repair) else project.get("messages", []),
@@ -706,9 +708,10 @@ class WorkbenchService:
                     requirement_text=text, repair_mode=repair_mode, format_repair=format_repair,
                     allowed_rung_ids=snapshot.get("allowed_rung_ids"),
                     allowed_addresses=snapshot.get("allowed_addresses"), repair_plan=repair_plan,
-                    source_handoff=(version or {}).get("generation_handoff"),
+                    source_handoff=None if fresh_confirmed_generation else (version or {}).get("generation_handoff"),
                     image_attachments=images, model_name=snapshot.get("model", {}).get("model"),
-                    response_language=language, construction_examples=snapshot.get("construction_examples"))
+                    response_language=language, construction_examples=snapshot.get("construction_examples"),
+                    fresh_confirmed_generation=fresh_confirmed_generation)
                 metadata = GenerationWorkflow(request, out_dir, ctx.emit, GenerationDependencies(
                     provider=provider, check_cancelled=ctx.checkpoint, preserve_rejected_candidate=True
                 )).run()

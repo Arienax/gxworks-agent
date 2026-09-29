@@ -226,11 +226,16 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
     def submit(command: JobCreate, request: Request):
         payload = command.model_dump()
         if command.kind == "generation":
-            construction_examples = request.headers.get("X-GX-Construction-Examples")
-            if construction_examples is not None:
-                if construction_examples not in {"0", "1"}:
-                    raise ValueError("Invalid construction-example developer setting")
-                payload["construction_examples"] = construction_examples == "1"
+            experiment_headers = {
+                "construction_examples": request.headers.get("X-GX-Construction-Examples"),
+                "fresh_confirmed_generation": request.headers.get("X-GX-Fresh-Confirmed-Generation"),
+            }
+            for field, value in experiment_headers.items():
+                if value is None:
+                    continue
+                if value not in {"0", "1"}:
+                    raise ValueError("Invalid developer generation setting")
+                payload[field] = value == "1"
         return service.submit(payload)
 
     @app.get("/api/jobs/{job_id}", response_model=dto.Job, response_model_exclude_unset=True)

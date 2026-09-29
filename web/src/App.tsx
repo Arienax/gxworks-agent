@@ -107,6 +107,9 @@ export default function App() {
   const [constructionExamples, setConstructionExamples] = useState(
     () => localStorage.getItem("gx.developer.constructionExamples") === "1",
   );
+  const [freshConfirmedGeneration, setFreshConfirmedGeneration] = useState(
+    () => localStorage.getItem("gx.developer.freshConfirmedGeneration") === "1",
+  );
   const [settingsError, setSettingsError] = useState("");
   const [settingsRetry, setSettingsRetry] = useState(0);
   const [settings, setSettings] = useState<ModelSettings | null>(null),
@@ -287,6 +290,9 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("gx.developer.constructionExamples", constructionExamples ? "1" : "0");
   }, [constructionExamples]);
+  useEffect(() => {
+    localStorage.setItem("gx.developer.freshConfirmedGeneration", freshConfirmedGeneration ? "1" : "0");
+  }, [freshConfirmedGeneration]);
   useEffect(() => {
     let stopped = false;
     const credential = bootstrapToken;
@@ -675,7 +681,10 @@ export default function App() {
       ...extra,
       ...(kind === "analysis" ? { analysis_mode: analysisMode } : {}),
     }, kind === "generation" ? {
-      headers: { "X-GX-Construction-Examples": constructionExamples ? "1" : "0" },
+      headers: {
+        "X-GX-Construction-Examples": constructionExamples ? "1" : "0",
+        "X-GX-Fresh-Confirmed-Generation": freshConfirmedGeneration ? "1" : "0",
+      },
     } : {});
     if (activeProjectRef.current !== pid || epoch !== projectEpoch.current)
       return;
@@ -1977,8 +1986,10 @@ export default function App() {
         <RetainedPanel active={settingsTab === "developer"}>{() => (
           <DeveloperSettingsPanel
             constructionExamples={constructionExamples}
+            freshConfirmedGeneration={freshConfirmedGeneration}
             disabled={!session || !!session.read_only}
             onConstructionExamplesChange={setConstructionExamples}
+            onFreshConfirmedGenerationChange={setFreshConfirmedGeneration}
             t={t}
           />
         )}</RetainedPanel>
