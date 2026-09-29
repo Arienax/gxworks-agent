@@ -138,8 +138,8 @@ def test_structured_contract_prompt_view_is_compact_but_metadata_keeps_sources()
         line for line in row["text"].splitlines()
         if line.startswith("TARGET_APPLICABILITY:")
     )
-    assert '"operands"' in operand_line
-    assert '"bound_slots"' in operand_line
+    assert '"slots"' in operand_line
+    assert '"role"' in operand_line
     assert '"target_model":"FX3U"' in target_line
     assert '"sources"' not in operand_line
     assert '"sources"' not in target_line

@@ -177,14 +177,51 @@ def resolve_instruction_contract(target, *, plc_model="FX3U"):
 
 
 def _instruction_lane_prompt_lines(lanes):
-    """Render the three instruction lanes without recombining their ownership."""
+    """Render only model decisions; keep full diagnostic objects in metadata.
+
+    The split must not consume the manual-evidence budget that it is intended to
+    clarify. Operand slots are already the materialized join of common meanings,
+    target-native symbols and exact values, so do not duplicate the source
+    objects verbatim in the prompt.
+    """
     lanes = lanes if isinstance(lanes, Mapping) else {}
-    operand = copy.deepcopy(lanes.get("operand_semantics") or {})
-    slots = copy.deepcopy(lanes.get("operand_slots") or [])
-    if slots:
-        operand["bound_slots"] = slots
-    applicability = copy.deepcopy(lanes.get("target_applicability") or {})
-    runtime = copy.deepcopy(lanes.get("runtime_semantics") or {})
+    common = lanes.get("operand_semantics") or {}
+    slots = lanes.get("operand_slots") or []
+    operand = {
+        "opcode": common.get("opcode"),
+        "semantic_scope": common.get("semantic_scope"),
+        "slots": [
+            {
+                key: copy.deepcopy(item[key])
+                for key in ("position", "symbol", "name", "role", "data_type", "value")
+                if isinstance(item, Mapping)
+                and key in item
+                and item[key] not in (None, "", [], {})
+            }
+            for item in slots
+            if isinstance(item, Mapping)
+        ],
+    }
+
+    full_target = lanes.get("target_applicability") or {}
+    applicability = {
+        key: copy.deepcopy(full_target[key])
+        for key in (
+            "target_model", "opcode", "available", "support_status",
+            "replacement_opcode", "min_operands", "max_operands",
+            "native_operand_order", "operand_order_status",
+            "operand_constraints", "numeric_operand_boundaries",
+            "disjoint_bit_ranges", "boundary_status",
+        )
+        if key in full_target and full_target[key] not in (None, "", [], {})
+    }
+
+    full_runtime = lanes.get("runtime_semantics") or {}
+    runtime = {
+        key: copy.deepcopy(full_runtime[key])
+        for key in ("target_model", "opcode", "available", "completion", "pulse_output", "special_devices")
+        if key in full_runtime and full_runtime[key] not in (None, "", [], {})
+    }
     return [
         "OPERAND_SEMANTICS: " + json.dumps(
             operand, ensure_ascii=False, separators=(",", ":"), sort_keys=True,
