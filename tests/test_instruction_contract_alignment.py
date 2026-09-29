@@ -569,3 +569,9 @@ def test_rd3a_wr3a_report_precise_confirmed_module_mismatch(opcode, module):
         match=r"valid instruction.*cannot access confirmed",
     ):
         validate_ladder_full(_analog_ladder(opcode, operands), "FX3U", confirmed)
+
+
+def test_temporary_delivered_operand_order_conflict_audit():
+    from tools.audit_delivered_operand_order_conflicts import build_report
+    report = build_report()
+    raise AssertionError(json.dumps(report, ensure_ascii=False, indent=2))
