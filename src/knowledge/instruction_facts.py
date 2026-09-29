@@ -389,6 +389,7 @@ def _visual_operand_sequence(raw, opcode, expected):
         offsets.append(cursor)
         cursor += len(line) + 1
 
+    fallback = []
     for match in opcode_re.finditer(text):
         line_index = max(
             (index for index, offset in enumerate(offsets) if offset <= match.start()),
@@ -442,9 +443,9 @@ def _visual_operand_sequence(raw, opcode, expected):
         indexes = [expected.index(token) for token in sequence]
         if any(left >= right for left, right in zip(indexes, indexes[1:])):
             return sequence
-        if "fallback" not in locals():
+        if not fallback:
             fallback = sequence
-    return locals().get("fallback", [])
+    return fallback
 
 
 def _conflicts_with_verified_operand_order(
