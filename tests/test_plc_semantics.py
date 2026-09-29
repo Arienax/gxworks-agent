@@ -70,6 +70,42 @@ def test_requirement_parser_distinguishes_all_six_scan_semantics():
     assert rising["devices"] == ["X1"]
 
 
+def test_requirement_parser_treats_explicit_binary_transition_and_no_repeat_hold_as_edge():
+    requirements = infer_semantic_requirements(
+        "X2 每次从 0 变成 1 时，M1 只产生一个扫描周期事件；"
+        "X2 持续为 1 时不得重复触发。"
+    )
+
+    x2 = [item for item in requirements if item["devices"] == ["X2"]]
+    assert x2
+    assert {item["semantic"] for item in x2} == {"RISING_EDGE"}
+    assert all(item["strict"] is True for item in x2)
+
+
+def test_requirement_parser_keeps_true_sustained_level_control_as_level():
+    requirements = infer_semantic_requirements(
+        "X2 持续为 1 时 Y0 保持输出；X3 只要接通时 Y1 输出。"
+    )
+
+    assert {
+        (item["semantic"], tuple(item["devices"]))
+        for item in requirements
+    } == {
+        ("LEVEL", ("X2",)),
+        ("LEVEL", ("X3",)),
+    }
+
+
+def test_requirement_parser_recognizes_explicit_falling_binary_transition():
+    requirements = infer_semantic_requirements(
+        "X4 每次从 1 变成 0 时记录一次；X4 持续为 0 时不得重复触发。"
+    )
+
+    x4 = [item for item in requirements if item["devices"] == ["X4"]]
+    assert x4
+    assert {item["semantic"] for item in x4} == {"FALLING_EDGE"}
+
+
 def test_requirement_parser_preserves_only_explicit_physical_input_pulse_width():
     requirements = infer_semantic_requirements(
         "X0 输入脉宽 50us 时 INC D0；Y0 输出脉宽 20ms；"

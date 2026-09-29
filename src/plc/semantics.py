@@ -60,11 +60,39 @@ _RISING_PATTERNS = (
     re.compile(r"上升沿|正沿|rising\s*edge|one[- ]?shot", re.I),
     re.compile(r"(?:每次|每当).{0,28}(?:按下|触发|到位|检测到|来料|接通)", re.I),
     re.compile(r"(?:按下|触发|到位|检测到|来料|接通).{0,12}(?:一次|瞬间)", re.I),
+    # Explicit binary transition wording is edge intent even when the user never
+    # says "上升沿".  Keep this separate from generic "变为1" state prose.
+    re.compile(
+        r"(?:(?:从|由)\s*)?(?:0|OFF|FALSE|断开)"
+        r"\s*(?:变(?:成|为)|切换(?:到|为)|转(?:成|为)|到|至|→|->)\s*"
+        r"(?:1|ON|TRUE|接通)",
+        re.I,
+    ),
+    # Holding the asserted state while explicitly forbidding a repeat trigger is
+    # one-shot/event intent, not LEVEL intent.
+    re.compile(
+        r"(?:持续|保持).{0,16}(?:为|是|处于)?\s*(?:1|ON|TRUE|高电平|接通)"
+        r".{0,28}(?:不得|不能|不应|不可|不会).{0,16}(?:重复|再次|连续)"
+        r".{0,16}(?:触发|计数|执行|动作)",
+        re.I,
+    ),
 )
 _FALLING_PATTERNS = (
     re.compile(r"下降沿|负沿|falling\s*edge", re.I),
     re.compile(r"(?:每次|每当).{0,28}(?:松开|断开|释放|变为OFF)", re.I),
     re.compile(r"(?:松开|断开|释放).{0,12}(?:一次|瞬间)", re.I),
+    re.compile(
+        r"(?:(?:从|由)\s*)?(?:1|ON|TRUE|接通)"
+        r"\s*(?:变(?:成|为)|切换(?:到|为)|转(?:成|为)|到|至|→|->)\s*"
+        r"(?:0|OFF|FALSE|断开)",
+        re.I,
+    ),
+    re.compile(
+        r"(?:持续|保持).{0,16}(?:为|是|处于)?\s*(?:0|OFF|FALSE|低电平|断开)"
+        r".{0,28}(?:不得|不能|不应|不可|不会).{0,16}(?:重复|再次|连续)"
+        r".{0,16}(?:触发|计数|执行|动作)",
+        re.I,
+    ),
 )
 _FIRST_SCAN_PATTERNS = (
     re.compile(r"首(?:次)?扫描|首扫|first\s*scan", re.I),
@@ -184,8 +212,14 @@ def _intent_devices(fragment: str, semantic: str) -> List[str]:
     """Return trigger devices, excluding action destinations in the sentence."""
 
     semantic_markers = {
-        "RISING_EDGE": ("按下", "触发", "到位", "检测到", "来料", "接通", "上升沿", "正沿", "脉冲", "脉宽"),
-        "FALLING_EDGE": ("松开", "断开", "释放", "下降沿", "负沿", "变为off", "脉冲", "脉宽"),
+        "RISING_EDGE": (
+            "按下", "触发", "到位", "检测到", "来料", "接通", "上升沿", "正沿",
+            "变成1", "变为1", "0→1", "0->1", "脉冲", "脉宽",
+        ),
+        "FALLING_EDGE": (
+            "松开", "断开", "释放", "下降沿", "负沿", "变为off",
+            "变成0", "变为0", "1→0", "1->0", "脉冲", "脉宽",
+        ),
         "INTERRUPT": ("中断", "interrupt"),
         "LEVEL": ("电平", "持续", "只要", "保持", "当"),
     }

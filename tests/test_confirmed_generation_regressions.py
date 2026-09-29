@@ -203,6 +203,41 @@ def test_scoped_negative_does_not_poison_generation_contract():
     assert contract["forbidden_devices"] == []
 
 
+def test_analysis_execution_semantics_prefers_edge_over_hold_wording_for_same_event():
+    normalized = _normalize_analysis_result(
+        {
+            "summary": "物料检测",
+            "approaches": [{
+                "approach_id": "direct",
+                "name": "直接逻辑",
+                "implementation_semantics": [
+                    {"kind": "structure", "status": "required", "value": "edge_trigger"},
+                ],
+            }],
+            "missing_info": [],
+            "suggested_io": {},
+            "hardware_config": {},
+            "assumptions": [],
+        },
+        plc_model="FX3U",
+        user_text=(
+            "X2 每次从 0 变成 1 时，M1 只产生一个扫描周期事件。"
+            "X2 持续为 1 时不得重复触发。"
+        ),
+    )
+
+    x2 = [
+        item for item in normalized["execution_semantics"]
+        if item.get("devices") == ["X2"]
+    ]
+    assert x2
+    assert {item["semantic"] for item in x2} == {"RISING_EDGE"}
+    assert not any(
+        item["semantic"] == "LEVEL" and "X2" in item.get("devices", [])
+        for item in normalized["execution_semantics"]
+    )
+
+
 def test_agent_b_frames_first_json_but_consumes_trailing_usage():
     base = _DuplicateJsonProvider()
     provider = _FirstJSONObjectProvider(base)
