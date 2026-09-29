@@ -143,6 +143,32 @@ def test_verified_order_visual_conflict_detector_ignores_prose_mnemonic_collisio
     ) == []
 
 
+def test_verified_order_filter_applies_to_related_manual_units():
+    rows = [
+        source(
+            "safe", opcode="CRC",
+            text="[PAGE 1 PROSE]\nOperation calculates a CRC from source data.\n",
+        ),
+        source(
+            "visual", opcode="CRC",
+            text=(
+                "[PAGE 1 PROSE]\nCRC n\nM8161\n"
+                "D [GLYPH-F0A0]S [GLYPH-F0A0]\nS\n"
+            ),
+        ),
+    ]
+    output = _pack_target(
+        rows,
+        4000,
+        needed_categories={"operands", "operation"},
+        verified_operand_order=["S", "D", "N"],
+        verified_opcodes=("CRC",),
+    )
+    rendered = "\n".join(row["text"] for row in output)
+    assert "Operation calculates a CRC" in rendered
+    assert "CRC n" not in rendered
+
+
 def test_embedded_pdf_layout_residue_is_not_a_second_operand_order():
     text = (
         "[PAGE 687 PROSE]\n"
