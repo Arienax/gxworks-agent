@@ -441,7 +441,8 @@ def retrieve_instruction_facts(
                 "id", "original_id", "source_text_sha256", "content_sha256",
                 "source_spans", "candidate_fact_categories", "fact_kind",
                 "fact_target", "fact_dimensions", "instruction_contract",
-                "instruction_step_width", "instruction_instance",
+                "operand_semantics", "target_applicability", "runtime_semantics",
+                "operand_slots", "instruction_step_width", "instruction_instance",
             )
             if key in item
         }

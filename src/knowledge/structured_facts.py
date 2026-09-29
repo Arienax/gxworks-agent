@@ -176,46 +176,46 @@ def resolve_instruction_contract(target, *, plc_model="FX3U"):
     return contract
 
 
-def _instruction_contract_prompt_view(contract):
-    """Compact model-facing view; full provenance stays in record metadata."""
-    contract = contract if isinstance(contract, Mapping) else {}
-    keys = (
-        "opcode", "base_mnemonic", "contract_level",
-        "min_operands", "max_operands", "native_operand_order",
-        "execution_form", "instruction_width",
-        "verified_fields", "unverified_fields",
-        "confirmed_operands", "instance_source",
-    )
-    value = {key: copy.deepcopy(contract[key]) for key in keys if key in contract}
-    annotations = contract.get("operand_annotations")
-    if isinstance(annotations, list) and annotations:
-        value["operand_annotations"] = [
-            {
-                key: copy.deepcopy(item[key])
-                for key in ("name", "role", "data_type", "device_prefixes")
-                if isinstance(item, Mapping) and key in item and item[key] not in (None, "", [])
-            }
-            for item in annotations
-            if isinstance(item, Mapping)
-        ]
-    return value
+def _instruction_lane_prompt_lines(lanes):
+    """Render the three instruction lanes without recombining their ownership."""
+    lanes = lanes if isinstance(lanes, Mapping) else {}
+    operand = copy.deepcopy(lanes.get("operand_semantics") or {})
+    slots = copy.deepcopy(lanes.get("operand_slots") or [])
+    if slots:
+        operand["bound_slots"] = slots
+    applicability = copy.deepcopy(lanes.get("target_applicability") or {})
+    runtime = copy.deepcopy(lanes.get("runtime_semantics") or {})
+    return [
+        "OPERAND_SEMANTICS: " + json.dumps(
+            operand, ensure_ascii=False, separators=(",", ":"), sort_keys=True,
+        ),
+        "TARGET_APPLICABILITY: " + json.dumps(
+            applicability, ensure_ascii=False, separators=(",", ":"), sort_keys=True,
+        ),
+        "RUNTIME_SEMANTICS: " + json.dumps(
+            runtime, ensure_ascii=False, separators=(",", ":"), sort_keys=True,
+        ),
+    ]
 
 
 def _attach_instruction_contract(record, target, *, plc_model):
+    # The legacy mixed contract remains metadata for compatibility/validators.
+    # Agent-facing text is split into independently owned lanes.
+    from plc.instruction_resolution import resolve_instruction_lanes
+
     contract = resolve_instruction_contract(target, plc_model=plc_model)
+    lanes = resolve_instruction_lanes(target, plc_model=plc_model)
     value = dict(record)
     value["instruction_contract"] = copy.deepcopy(contract)
+    value.update(copy.deepcopy(lanes))
 
     body = str(value.get("text") or "")
-    detail = "INSTRUCTION_CONTRACT: " + json.dumps(
-        _instruction_contract_prompt_view(contract),
-        ensure_ascii=False, separators=(",", ":"), sort_keys=True,
-    )
+    details = "\n".join(_instruction_lane_prompt_lines(lanes))
     if body.startswith("[STRUCTURED INSTRUCTION RECORD]"):
         first, separator, rest = body.partition("\n")
-        value["text"] = first + "\n" + detail + (separator + rest if separator else "")
+        value["text"] = first + "\n" + details + (separator + rest if separator else "")
     else:
-        value["text"] = detail + ("\n\n" + body if body else "")
+        value["text"] = details + ("\n\n" + body if body else "")
     return value
 
 
@@ -369,13 +369,12 @@ def _local_instruction_fact_record(target, *, plc_model, task_type):
         ensure_ascii=True, sort_keys=True, separators=(",", ":"),
     )
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
+    from plc.instruction_resolution import resolve_instruction_lanes
+    lanes = resolve_instruction_lanes(step_target, plc_model=plc_model)
     lines = [
         "[STRUCTURED LOCAL INSTRUCTION RECORD]",
         f"INSTRUCTION: {opcode}",
-        "INSTRUCTION_CONTRACT: " + json.dumps(
-            _instruction_contract_prompt_view(contract),
-            ensure_ascii=False, separators=(",", ":"), sort_keys=True,
-        ),
+        *_instruction_lane_prompt_lines(lanes),
     ]
     if isinstance(operands, (list, tuple)):
         lines.append("OPERANDS: " + " ".join(str(value) for value in operands))
@@ -409,6 +408,10 @@ def _local_instruction_fact_record(target, *, plc_model, task_type):
         "match_type": "structured_direct",
         "instruction_step_width": copy.deepcopy(step_width),
         "instruction_contract": copy.deepcopy(contract),
+        "operand_semantics": copy.deepcopy(lanes["operand_semantics"]),
+        "target_applicability": copy.deepcopy(lanes["target_applicability"]),
+        "runtime_semantics": copy.deepcopy(lanes["runtime_semantics"]),
+        "operand_slots": copy.deepcopy(lanes["operand_slots"]),
         "task_type": task_type,
         "plc_model": plc_model,
     }

@@ -366,6 +366,35 @@ def test_agent_b_prompt_makes_input_or_and_single_json_rules_explicit():
     assert "不得在同一次 completion 中自检后再重写或追加第二份完整 JSON" in _GENERATION_REQUEST
 
 
+def test_construction_router_is_conservative_without_composite_motif():
+    from application.construction_examples import prepare_construction_examples
+
+    simple = {
+        "selected_approach": {
+            "generation_contract": {"required_structures": ["self_hold"]}
+        },
+        "execution_semantics": [],
+    }
+    routed = prepare_construction_examples("FX3U", True, simple)
+    assert routed.example_ids == ("reset_dominant_hold",)
+    assert routed.route["reason"] == "matched_primary_need"
+
+    mixed = {
+        "selected_approach": {
+            "generation_contract": {
+                "required_structures": ["self_hold", "edge_trigger"]
+            }
+        },
+        "execution_semantics": [
+            {"semantic": "RISING_EDGE", "devices": ["X2"]}
+        ],
+    }
+    withheld = prepare_construction_examples("FX3U", True, mixed)
+    assert withheld.example_ids == ()
+    assert withheld.text == ""
+    assert withheld.route["reason"] == "multiple_primary_needs_without_composite_motif"
+
+
 def test_confirmed_comments_are_short_server_owned_device_names():
     from application.compact_protocol import _confirmed_comments
     from plc.comments import GXWORKS2_DEVICE_COMMENT_MAX_CHARS

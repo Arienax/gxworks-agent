@@ -115,7 +115,9 @@ def test_structured_instruction_record_merges_registry_contract(opcode):
     assert rows
     expected = DEFAULT_INSTRUCTION_REGISTRY.describe_contract(opcode, cpu="FX3U")
     assert rows[0]["instruction_contract"] == expected
-    assert "INSTRUCTION_CONTRACT:" in rows[0]["text"]
+    assert "OPERAND_SEMANTICS:" in rows[0]["text"]
+    assert "TARGET_APPLICABILITY:" in rows[0]["text"]
+    assert "RUNTIME_SEMANTICS:" in rows[0]["text"]
     assert rows[0]["instruction_contract"]["contract_level"] == "signature_verified"
 
 
@@ -128,13 +130,19 @@ def test_structured_contract_prompt_view_is_compact_but_metadata_keeps_sources()
     assert rows
     row = rows[0]
     assert row["instruction_contract"].get("sources")
-    contract_line = next(
+    operand_line = next(
         line for line in row["text"].splitlines()
-        if line.startswith("INSTRUCTION_CONTRACT:")
+        if line.startswith("OPERAND_SEMANTICS:")
     )
-    assert '"verified_fields"' in contract_line
-    assert '"operand_annotations"' in contract_line
-    assert '"sources"' not in contract_line
+    target_line = next(
+        line for line in row["text"].splitlines()
+        if line.startswith("TARGET_APPLICABILITY:")
+    )
+    assert '"operands"' in operand_line
+    assert '"bound_slots"' in operand_line
+    assert '"target_model":"FX3U"' in target_line
+    assert '"sources"' not in operand_line
+    assert '"sources"' not in target_line
 
 
 def test_instruction_instance_contract_keeps_exact_operands_and_source():
@@ -149,6 +157,56 @@ def test_instruction_instance_contract_keeps_exact_operands_and_source():
     assert contract["instance_source"] == "generation_contract"
     assert contract["native_operand_order"] == ["S", "D", "N1", "N2"]
     assert {"arity", "operand_order", "form_identity"} <= set(contract["verified_fields"])
+
+
+def test_instruction_lanes_split_common_semantics_target_overlay_and_runtime():
+    from plc.instruction_resolution import resolve_instruction_lanes
+
+    add_fx3 = resolve_instruction_lanes(
+        {"opcode": "ADD", "operands": ["K1", "D1", "D2"]},
+        plc_model="FX3U",
+    )
+    add_fx5 = resolve_instruction_lanes(
+        {"opcode": "ADD", "operands": ["K1", "D1", "D2"]},
+        plc_model="FX5U",
+    )
+
+    assert add_fx3["operand_semantics"]["operands"] == add_fx5["operand_semantics"]["operands"]
+    assert [slot["role"] for slot in add_fx3["operand_slots"]] == ["read", "read", "write"]
+    assert [slot["value"] for slot in add_fx3["operand_slots"]] == ["K1", "D1", "D2"]
+    assert add_fx3["target_applicability"]["target_model"] == "FX3U"
+    assert add_fx5["target_applicability"]["target_model"] == "FX5U"
+    assert add_fx3["runtime_semantics"]["special_devices"] == []
+    assert add_fx5["runtime_semantics"]["special_devices"] == []
+
+    zrn_fx3 = resolve_instruction_lanes({"opcode": "ZRN"}, plc_model="FX3U")
+    zrn_fx5 = resolve_instruction_lanes({"opcode": "ZRN"}, plc_model="FX5U")
+    assert zrn_fx3["target_applicability"]["available"] is True
+    assert zrn_fx3["runtime_semantics"]["completion"]["device"] == "M8029"
+    assert zrn_fx5["target_applicability"]["available"] is False
+    assert zrn_fx5["runtime_semantics"]["special_devices"] == []
+
+
+def test_model_facing_instruction_fact_uses_split_lane_headers():
+    rows = resolve_instruction_records(
+        [{
+            "opcode": "SFTL",
+            "base_opcode": "SFTL",
+            "operands": ["M10", "M100", "K56", "K1"],
+        }],
+        plc_model="FX3U",
+        task_type="generate",
+    )
+    assert rows
+    row = rows[0]
+    assert "OPERAND_SEMANTICS:" in row["text"]
+    assert "TARGET_APPLICABILITY:" in row["text"]
+    assert "RUNTIME_SEMANTICS:" in row["text"]
+    assert "INSTRUCTION_CONTRACT:" not in row["text"]
+    assert row["instruction_contract"]
+    assert [slot["value"] for slot in row["operand_slots"]] == [
+        "M10", "M100", "K56", "K1",
+    ]
 
 
 def test_local_instruction_fallback_keeps_contract_and_step_width_provenance_separate(tmp_path, monkeypatch):
