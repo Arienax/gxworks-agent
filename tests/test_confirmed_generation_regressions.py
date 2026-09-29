@@ -203,7 +203,11 @@ def test_scoped_negative_does_not_poison_generation_contract():
     assert contract["forbidden_devices"] == []
 
 
-def test_analysis_execution_semantics_prefers_edge_over_hold_wording_for_same_event():
+def test_analysis_execution_claim_compiles_one_grounded_event_without_duplicate_level():
+    text = (
+        "X2 一到料就让 M1 打一拍。"
+        "物料没离开 X2 之前不能再打一拍 M1。"
+    )
     normalized = _normalize_analysis_result(
         {
             "summary": "物料检测",
@@ -214,28 +218,70 @@ def test_analysis_execution_semantics_prefers_edge_over_hold_wording_for_same_ev
                     {"kind": "structure", "status": "required", "value": "edge_trigger"},
                 ],
             }],
+            "execution_intent_claims": [{
+                "trigger": {
+                    "kind": "transition",
+                    "source_devices": ["X2"],
+                    "from": "0",
+                    "to": "1",
+                },
+                "effect": {"kind": "one_shot", "devices": ["M1"]},
+                "rearm": "required",
+                "evidence": [
+                    "X2 一到料就让 M1 打一拍",
+                    "物料没离开 X2 之前不能再打一拍 M1",
+                ],
+            }],
             "missing_info": [],
             "suggested_io": {},
             "hardware_config": {},
             "assumptions": [],
         },
         plc_model="FX3U",
-        user_text=(
-            "X2 每次从 0 变成 1 时，M1 只产生一个扫描周期事件。"
-            "X2 持续为 1 时不得重复触发。"
-        ),
+        user_text=text,
     )
 
-    x2 = [
-        item for item in normalized["execution_semantics"]
-        if item.get("devices") == ["X2"]
-    ]
-    assert x2
-    assert {item["semantic"] for item in x2} == {"RISING_EDGE"}
-    assert not any(
-        item["semantic"] == "LEVEL" and "X2" in item.get("devices", [])
+    assert normalized["execution_semantics"] == [{
+        "semantic": "RISING_EDGE",
+        "devices": ["X2"],
+        "evidence": "X2 一到料就让 M1 打一拍 | 物料没离开 X2 之前不能再打一拍 M1",
+        "source": "agent_a_claim",
+        "strict": True,
+        "effect_devices": ["M1"],
+        "effect_kind": "one_shot",
+        "rearm": "required",
+        "intent_id": normalized["execution_intent_receipt"]["accepted"][0]["claim_id"],
+    }]
+
+
+def test_pinned_execution_claim_replaces_only_touched_device_semantics():
+    previous = {
+        "execution_semantics": [
+            {"semantic": "RISING_EDGE", "devices": ["X2"], "evidence": "old X2"},
+            {"semantic": "FALLING_EDGE", "devices": ["X7"], "evidence": "keep X7"},
+        ]
+    }
+    text = "X2 现在只看高电平，Y0 在它为高时保持输出。"
+    raw = {
+        "summary": "修改 X2",
+        "approaches": [],
+        "execution_intent_claims": [{
+            "trigger": {"kind": "level", "source_devices": ["X2"], "value": "1"},
+            "effect": {"kind": "while_true", "devices": ["Y0"]},
+            "rearm": "not_required",
+            "evidence": [text],
+        }],
+        "missing_info": [], "suggested_io": {}, "hardware_config": {}, "assumptions": [],
+    }
+    normalized = _normalize_analysis_result(raw, "FX3U", text, previous)
+    assert {
+        (item["semantic"], tuple(item["devices"]))
         for item in normalized["execution_semantics"]
-    )
+    } == {
+        ("LEVEL", ("X2",)),
+        ("FALLING_EDGE", ("X7",)),
+    }
+
 
 
 def test_agent_b_frames_first_json_but_consumes_trailing_usage():

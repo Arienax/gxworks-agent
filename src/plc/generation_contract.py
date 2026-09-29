@@ -309,8 +309,11 @@ _SPEC_FIELDS = {
     "hardware_context": _HARDWARE_CONTEXT_FIELDS,
     "hardware_requirements": dict.fromkeys(("hardware_dependent", "vfd", "motion", "pulse", "analog", "serial")),
     "execution_semantics": [{
-        **dict.fromkeys(("semantic", "type", "evidence", "source", "strict", "period_ms", "pulse_width_ms", "minimum_pulse_width_ms")),
+        **dict.fromkeys(("semantic", "type", "evidence", "source", "strict", "period_ms",
+                        "pulse_width_ms", "minimum_pulse_width_ms", "effect_kind",
+                        "rearm", "intent_id")),
         "devices": [None],
+        "effect_devices": [None],
     }],
     "timing": dict.fromkeys(("scan_budget_ms", "scan_warning_ms")),
 }

@@ -17,7 +17,7 @@ from application.response_contracts import ANALYSIS_RESPONSE
 BROKEN = '{"summary":"起保停控制","approaches":[],"flowchart_steps":[{"type":"transition":"X0启动"}]}'
 FIXED = '{"summary":"起保停控制","approaches":[],"flowchart_steps":[{"type":"transition","label":"X0启动"}]}'
 LEGACY_PROTOCOL = '{"summary":"起保停控制","approaches":[{"name":"旧协议","generation_contract":{"required_structures":["self_hold"]}}]}'
-CURRENT_EMPTY = '{"summary":"起保停控制","approaches":[{"name":"当前协议","implementation_semantics":[]}]}'
+CURRENT_EMPTY = '{"summary":"起保停控制","approaches":[{"name":"当前协议","implementation_semantics":[]}],"execution_intent_claims":[]}'
 MIXED_PROTOCOL = '{"summary":"起保停控制","approaches":[{"name":"新","implementation_semantics":[]},{"name":"旧","generation_contract":{"required_structures":["self_hold"]}}]}'
 LOW_LEVEL_SEMANTIC = '{"summary":"起保停控制","approaches":[{"name":"错误","implementation_semantics":[{"kind":"opcode","status":"required","value":"SFTL"}]}]}'
 
@@ -168,5 +168,5 @@ def test_analysis_prompt_contains_valid_json_examples():
     example = example.split("\n# suggested_io", 1)[0]
     assert isinstance(json.loads(example), dict)
     assert set(json.loads(example)) == {
-        "summary", "approaches", "missing_info", "suggested_io", "hardware_config", "assumptions",
+        "summary", "approaches", "execution_intent_claims", "missing_info", "suggested_io", "hardware_config", "assumptions",
     }

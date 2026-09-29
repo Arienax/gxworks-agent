@@ -54,11 +54,10 @@ def _ladder(*rungs, comments=None):
     return {"device_comments": comments or {}, "rungs": list(rungs)}
 
 
-def test_requirement_parser_distinguishes_all_six_scan_semantics():
+def test_explicit_execution_syntax_covers_all_six_scan_semantics_without_free_prose_nlp():
     requirements = infer_semantic_requirements(
-        "X0 持续接通时 Y0 输出；每次按下 X1 一次计数；"
-        "每次松开 X2 一次记录；上电初始化 D0；"
-        "每隔 100ms 周期执行采样；X3 触发中断任务。"
+        "X0 高电平；X1 上升沿；X2 下降沿；首扫初始化 D0；"
+        "每隔 100ms 周期执行采样；X3 中断输入。"
     )
 
     assert {item["semantic"] for item in requirements} == set(
@@ -70,40 +69,76 @@ def test_requirement_parser_distinguishes_all_six_scan_semantics():
     assert rising["devices"] == ["X1"]
 
 
-def test_requirement_parser_treats_explicit_binary_transition_and_no_repeat_hold_as_edge():
+def test_agent_a_execution_claim_handles_paraphrase_without_keyword_growth():
+    from plc.execution_intent import compile_execution_intent_claims
+
+    text = "X2 一亮就给 M1 打一拍，东西没离开传感器之前不要再打一拍。"
+    receipt = compile_execution_intent_claims([{
+        "trigger": {
+            "kind": "transition",
+            "source_devices": ["X2"],
+            "from": "0",
+            "to": "1",
+        },
+        "effect": {"kind": "one_shot", "devices": ["M1"]},
+        "rearm": "required",
+        "evidence": [text],
+    }], text)
+
+    assert receipt["rejected"] == []
+    assert receipt["requirements"] == [{
+        "semantic": "RISING_EDGE",
+        "devices": ["X2"],
+        "effect_devices": ["M1"],
+        "effect_kind": "one_shot",
+        "rearm": "required",
+        "evidence": text,
+        "source": "agent_a_claim",
+        "intent_id": receipt["accepted"][0]["claim_id"],
+        "strict": True,
+    }]
+
+
+def test_agent_a_execution_claim_requires_grounded_evidence_and_devices():
+    from plc.execution_intent import compile_execution_intent_claims
+
+    text = "X2 检测物料。"
+    ungrounded = compile_execution_intent_claims([{
+        "trigger": {"kind": "transition", "source_devices": ["X2"], "from": "0", "to": "1"},
+        "effect": {"kind": "one_shot", "devices": ["M1"]},
+        "rearm": "required",
+        "evidence": ["模型自己补的句子"],
+    }], text)
+    assert ungrounded["requirements"] == []
+    assert ungrounded["rejected"][0]["reason"] == "evidence_not_in_current_request"
+
+    wrong_device = compile_execution_intent_claims([{
+        "trigger": {"kind": "transition", "source_devices": ["X3"], "from": "0", "to": "1"},
+        "effect": {"kind": "unspecified", "devices": []},
+        "rearm": "required",
+        "evidence": [text],
+    }], text)
+    assert wrong_device["requirements"] == []
+    assert wrong_device["rejected"][0]["reason"] == "claimed_device_not_in_evidence"
+
+
+def test_formal_binary_transition_is_a_narrow_explicit_fast_path():
     requirements = infer_semantic_requirements(
-        "X2 每次从 0 变成 1 时，M1 只产生一个扫描周期事件；"
-        "X2 持续为 1 时不得重复触发。"
+        "X2 从 0 变成 1；X4 从 1 变成 0。"
     )
-
-    x2 = [item for item in requirements if item["devices"] == ["X2"]]
-    assert x2
-    assert {item["semantic"] for item in x2} == {"RISING_EDGE"}
-    assert all(item["strict"] is True for item in x2)
-
-
-def test_requirement_parser_keeps_true_sustained_level_control_as_level():
-    requirements = infer_semantic_requirements(
-        "X2 持续为 1 时 Y0 保持输出；X3 只要接通时 Y1 输出。"
-    )
-
-    assert all(
-        item["semantic"] not in {"RISING_EDGE", "FALLING_EDGE"}
+    assert {
+        (item["semantic"], tuple(item["devices"]))
         for item in requirements
-    )
-    levels = [item for item in requirements if item["semantic"] == "LEVEL"]
-    assert any("X2" in item["devices"] for item in levels)
-    assert any("X3" in item["devices"] for item in levels)
+    } == {
+        ("RISING_EDGE", ("X2",)),
+        ("FALLING_EDGE", ("X4",)),
+    }
 
 
-def test_requirement_parser_recognizes_explicit_falling_binary_transition():
-    requirements = infer_semantic_requirements(
-        "X4 每次从 1 变成 0 时记录一次；X4 持续为 0 时不得重复触发。"
-    )
-
-    x4 = [item for item in requirements if item["devices"] == ["X4"]]
-    assert x4
-    assert {item["semantic"] for item in x4} == {"FALLING_EDGE"}
+def test_free_form_hold_wording_is_not_reclassified_by_core_keywords():
+    assert infer_semantic_requirements(
+        "X2 持续为 1 时不得重复产生 M1。"
+    ) == []
 
 
 def test_requirement_parser_preserves_only_explicit_physical_input_pulse_width():
@@ -269,10 +304,11 @@ def test_ir_validation_detects_tampered_execution_or_logic_analysis():
         validate_plc_ir(tampered)
 
 
-def test_confirmed_spec_semantics_survive_without_becoming_parameters():
+def test_confirmed_spec_semantics_are_not_reconstructed_from_summary_or_guide_prose():
     requirements = semantic_requirements_from_spec(
         {
-            "summary": "每次按下 X0 一次，计数加一",
+            "summary": "每次按下 X9 一次，模型摘要里还有别的事件",
+            "selected_approach": {"generation_guide": "X8 持续时执行"},
             "execution_semantics": [
                 {
                     "semantic": "RISING_EDGE",
@@ -284,9 +320,13 @@ def test_confirmed_spec_semantics_survive_without_becoming_parameters():
         }
     )
 
-    assert len(requirements) == 2
-    assert all(item["semantic"] == "RISING_EDGE" for item in requirements)
-    assert {item["source"] for item in requirements} == {"requirement", "confirmed_spec"}
+    assert requirements == [{
+        "semantic": "RISING_EDGE",
+        "devices": ["X0"],
+        "evidence": "用户确认",
+        "source": "requirement",
+        "strict": True,
+    }]
 
 
 def test_analysis_drops_model_invented_semantics_and_keeps_user_evidence():
@@ -306,12 +346,22 @@ def test_analysis_drops_model_invented_semantics_and_keeps_user_evidence():
     )
     assert hallucinated["execution_semantics"] == []
 
+    text = "按钮 X0 每来一下，只给 D0 记一次。"
     evidenced = _normalize_analysis_result(
-        {"summary": "计数", "execution_semantics": []},
-        user_text="每次按下 X0 一次，INC D0",
+        {
+            "summary": "计数",
+            "execution_intent_claims": [{
+                "trigger": {"kind": "transition", "source_devices": ["X0"], "from": "0", "to": "1"},
+                "effect": {"kind": "event", "devices": ["D0"]},
+                "rearm": "required",
+                "evidence": [text],
+            }],
+        },
+        user_text=text,
     )
     assert evidenced["execution_semantics"][0]["semantic"] == "RISING_EDGE"
     assert evidenced["execution_semantics"][0]["devices"] == ["X0"]
+    assert evidenced["execution_semantics"][0]["effect_devices"] == ["D0"]
 
 
 # Retained serialized SFC requirements, independent of the retired canvas.

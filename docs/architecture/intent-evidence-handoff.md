@@ -36,6 +36,16 @@ Regression coverage belongs to [test_intent_evidence_handoff.py](../../tests/tes
 ## Implementation semantics ownership
 
 Fresh Agent A candidates use `implementation_semantics` for control-structure
+semantics only. Free-form scan/event language is carried separately as
+`execution_intent_claims`: Agent A supplies a non-authoritative trigger frame plus
+exact spans copied from the current user request. Core verifies the evidence and
+device grounding before projecting a claim into `execution_semantics`. Agent A
+never emits the final execution enum directly. Formal notation such as an explicit
+`0 -> 1`, `上升沿`, `首扫` or numeric cycle remains a narrow deterministic fast
+path; summary/description/generation_guide prose is never re-parsed into hard
+execution constraints.
+
+Fresh Agent A candidates use `implementation_semantics` for control-structure
 semantics only. Agent A does not own opcode selection, operand layout, or internal
 M/D/T/C allocation. `plc.specification.approach` normalizes the structure vocabulary.
 

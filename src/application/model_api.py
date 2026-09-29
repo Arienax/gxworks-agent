@@ -322,7 +322,9 @@ def _request_analysis_response(messages, *, on_format_repair=None, **kwargs):
                 "analysis protocol above. Correct JSON syntax and missing protocol "
                 "keys only; preserve the requirement, devices, alternatives and "
                 "questions. Every approach must include implementation_semantics "
-                "as an array; an empty array is valid. Do not invent confirmed "
+                "as an array; an empty array is valid. Keep execution_intent_claims "
+                "as trigger frames with exact user evidence; never emit execution_semantics. "
+                "Do not invent confirmed "
                 "answers or generate PLC code. No markdown or explanations."
             )
         else:
@@ -342,7 +344,9 @@ def _request_analysis_response(messages, *, on_format_repair=None, **kwargs):
                     "or any_of and Core structure vocabulary. Do not emit "
                     "generation_contract, explicit_user_constraints, "
                     "implementation_preferences, opcode, operands, device or "
-                    "instruction_instance fields. Preserve the user's requirement, "
+                    "instruction_instance fields. Do not emit execution_semantics; "
+                    "use grounded execution_intent_claims for scan/event intent. "
+                    "Preserve the user's requirement, "
                     "alternatives and unanswered questions. Do not generate PLC code."
                 )
             else:

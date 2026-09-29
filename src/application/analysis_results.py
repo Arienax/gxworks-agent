@@ -44,6 +44,7 @@ _CURRENT_SEMANTIC_FORBIDDEN_FIELDS = frozenset({
     "device",
     "instruction_instance",
 })
+_CURRENT_ROOT_FORBIDDEN_FIELDS = frozenset({"execution_semantics"})
 
 
 class AnalysisProtocolError(ValueError):
@@ -64,6 +65,16 @@ def current_analysis_protocol_violations(result):
         return ["$.approaches: current protocol requires an array"]
 
     violations = []
+    forbidden_root = sorted(_CURRENT_ROOT_FORBIDDEN_FIELDS.intersection(result))
+    if forbidden_root:
+        violations.append(
+            "$: model must not emit " + ", ".join(forbidden_root)
+            + "; use execution_intent_claims instead"
+        )
+    from plc.execution_intent import execution_intent_claim_violations
+    violations.extend(
+        execution_intent_claim_violations(result.get("execution_intent_claims"))
+    )
     for index, approach in enumerate(approaches):
         path = f"$.approaches[{index}]"
         if not isinstance(approach, dict):
@@ -605,22 +616,53 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     normalized["assumptions"] = assumptions
     normalized["format_diagnostics"] = diagnostics
     normalized["plc_model"] = plc_model
-    from plc.semantics import (
-        infer_semantic_requirements,
-        normalize_semantic_requirements,
+    from plc.semantics import normalize_semantic_requirements
+    from plc.execution_intent import (
+        compile_execution_intent_claims,
+        extract_explicit_execution_semantics,
     )
 
-    # Execution semantics are validation constraints, so hidden model output
-    # must not be allowed to invent them.  Only deterministic evidence from the
-    # user's own request is authoritative here.  A previously confirmed value
-    # is preserved later by ``build_review_draft`` when this list is empty.
-    inferred_semantics = infer_semantic_requirements(
+    # Agent A may understand arbitrary wording, but it cannot author the final
+    # validation enum directly.  Core grounds each frame in current-request
+    # evidence and independently retains only formal explicit syntax as a fast
+    # path.  On pinned reanalysis, current claims replace only the source
+    # devices they touch; unrelated confirmed semantics remain stable.
+    normalized.pop("execution_semantics", None)
+    claim_receipt = compile_execution_intent_claims(
+        normalized.get("execution_intent_claims") or [],
         user_text,
-        source="current_request",
+        source="agent_a_claim",
     )
+    explicit_semantics = normalize_semantic_requirements(
+        extract_explicit_execution_semantics(
+            user_text,
+            source="current_request_explicit",
+        )
+    )
+    current_semantics = normalize_semantic_requirements(
+        [*claim_receipt["requirements"], *explicit_semantics]
+    )
+    touched_devices = set(claim_receipt.get("touched_devices") or [])
+    touched_devices.update(
+        device
+        for item in explicit_semantics
+        for device in item.get("devices") or []
+    )
+    previous_semantics = normalize_semantic_requirements(
+        (confirmed_spec or {}).get("execution_semantics") or []
+    ) if isinstance(confirmed_spec, dict) else []
+    if touched_devices:
+        previous_semantics = [
+            item for item in previous_semantics
+            if not touched_devices.intersection(item.get("devices") or [])
+        ]
     normalized["execution_semantics"] = normalize_semantic_requirements(
-        inferred_semantics
+        [*previous_semantics, *current_semantics]
     )
+    normalized["execution_intent_receipt"] = {
+        "accepted": copy.deepcopy(claim_receipt.get("accepted") or []),
+        "rejected": copy.deepcopy(claim_receipt.get("rejected") or []),
+    }
     normalized = ensure_hardware_questions(normalized, plc_model, user_text, confirmed_spec)
     normalized = _apply_explicit_user_constraints(
         normalized, user_text, plc_model, confirmed_spec
