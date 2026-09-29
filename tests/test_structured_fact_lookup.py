@@ -81,7 +81,7 @@ def test_exact_instruction_is_resolved_from_structured_table(opcode):
     assert any(str(row.get("instruction_opcode") or "").upper() == opcode for row in rows)
     assert all(row["match_type"] == "structured_direct" for row in rows)
     assert all(row["instruction_step_width"]["known"] is True for row in rows)
-    assert all("STEP_WIDTH:" in row["text"] for row in rows)
+    assert all("STEP_WIDTH:" not in row["text"] for row in rows)
 
 
 def test_every_promoted_fx3u_contract_uses_registry_owner():
@@ -134,15 +134,10 @@ def test_structured_contract_prompt_view_is_compact_but_metadata_keeps_sources()
         line for line in row["text"].splitlines()
         if line.startswith("OPERAND_SEMANTICS:")
     )
-    target_line = next(
-        line for line in row["text"].splitlines()
-        if line.startswith("TARGET_APPLICABILITY:")
-    )
     assert '"slots"' in operand_line
     assert '"role"' in operand_line
-    assert '"target_model":"FX3U"' in target_line
     assert '"sources"' not in operand_line
-    assert '"sources"' not in target_line
+    assert "STEP_WIDTH:" not in row["text"]
 
 
 def test_instruction_instance_contract_keeps_exact_operands_and_source():
@@ -187,6 +182,27 @@ def test_instruction_lanes_split_common_semantics_target_overlay_and_runtime():
     assert zrn_fx5["runtime_semantics"]["special_devices"] == []
 
 
+def test_sparse_lane_view_omits_empty_target_and_runtime_but_keeps_real_runtime_fact():
+    from plc.instruction_resolution import resolve_instruction_lanes
+    from knowledge.structured_facts import _instruction_lane_prompt_lines
+
+    add = _instruction_lane_prompt_lines(
+        resolve_instruction_lanes(
+            {"opcode": "ADD", "operands": ["K1", "D1", "D2"]},
+            plc_model="FX3U",
+        )
+    )
+    assert len(add) == 1
+    assert add[0].startswith("OPERAND_SEMANTICS:")
+
+    zrn = _instruction_lane_prompt_lines(
+        resolve_instruction_lanes({"opcode": "ZRN"}, plc_model="FX3U")
+    )
+    assert any(line.startswith("TARGET_APPLICABILITY:") for line in zrn)
+    assert any(line.startswith("RUNTIME_SEMANTICS:") for line in zrn)
+    assert any("M8029" in line for line in zrn)
+
+
 def test_model_facing_instruction_fact_uses_split_lane_headers():
     rows = resolve_instruction_records(
         [{
@@ -200,9 +216,8 @@ def test_model_facing_instruction_fact_uses_split_lane_headers():
     assert rows
     row = rows[0]
     assert "OPERAND_SEMANTICS:" in row["text"]
-    assert "TARGET_APPLICABILITY:" in row["text"]
-    assert "RUNTIME_SEMANTICS:" in row["text"]
     assert "INSTRUCTION_CONTRACT:" not in row["text"]
+    assert "STEP_WIDTH:" not in row["text"]
     assert row["instruction_contract"]
     assert [slot["value"] for slot in row["operand_slots"]] == [
         "M10", "M100", "K56", "K1",
@@ -257,7 +272,7 @@ def test_structured_step_width_uses_shared_owner_for_instruction_instance():
         assert fact["steps"] == expected
         assert fact["resolution"] == "instruction_instance"
         assert fact["operands"] == operands
-        assert f"STEP_WIDTH: {expected} program step(s)" in rows[0]["text"]
+        assert "STEP_WIDTH:" not in rows[0]["text"]
         if opcode == "RST":
             assert rows[0]["instruction_lookup_basis"] == "official_section_heading"
             assert rows[0]["manual_number"] == "JY997D16601"

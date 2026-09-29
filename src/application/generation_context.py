@@ -168,7 +168,9 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
                                      "reason": reason, "records": [], "plc_model": plc_model, **metadata})
     if normalized_task in {"contract_repair", "format_repair"}:
         return absent("excluded", "repair_scope_only")
-    top_k, char_budget = _KNOWLEDGE_TASK_SETTINGS.get(normalized_task, _KNOWLEDGE_TASK_SETTINGS["generate"])
+    base_top_k, fallback_char_budget = _KNOWLEDGE_TASK_SETTINGS.get(
+        normalized_task, _KNOWLEDGE_TASK_SETTINGS["generate"]
+    )
     engineering = retrieval_projection(confirmed_context)
     if getattr(primary_query, "precompiled", False):
         query = primary_query
@@ -200,9 +202,20 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
         from knowledge.retriever import build_knowledge_context as retrieve_context
         query_meta = getattr(query, "metadata", {}) if getattr(query, "precompiled", False) else {}
         token_budget = query_meta.get("rag_evidence_token_budget") if isinstance(query_meta, dict) else None
-        # Model capacity is a ceiling, not a reason to fill the context with
-        # whole chapters. Respect both the task allowance and token reserve.
-        retrieval_char_budget = char_budget
+        # The model-aware token budget is authoritative. Character limits are
+        # only a compatibility/CPU guard and must never silently reduce that
+        # allowance. Eight chars/token is deliberately loose across CJK/ASCII;
+        # the retriever's token accounting remains the real ceiling.
+        if isinstance(token_budget, (int, float)) and not isinstance(token_budget, bool):
+            token_budget = max(0, int(token_budget))
+            retrieval_char_budget = token_budget * 8
+            top_k = max(
+                int(base_top_k),
+                (token_budget + 4095) // 4096 if token_budget else 0,
+            )
+        else:
+            retrieval_char_budget = int(fallback_char_budget)
+            top_k = int(base_top_k)
         analysis_options = ({"include_design": bool(include_design), "design_query": design_query}
                             if normalized_task == "analysis" else {})
         context = retrieve_context(query, plc_model=plc_model, task_type=normalized_task,

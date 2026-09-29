@@ -53,3 +53,31 @@ Construction examples are injected independently by the application router.
 This split is intentionally compatible with the existing instruction registry.
 It does not yet claim complete cross-family source verification; missing common
 or target facts remain visible through their existing coverage status.
+
+
+## Context budget contract
+
+The four lanes do not receive fixed prompt slices. `ContextCompiler.model_budget`
+owns the model-aware token envelope. Generation evidence uses
+`rag_evidence_token_budget` as the authoritative ceiling; the old 7000-character
+generation cap is not allowed to reduce it. The character budget is only a loose
+8-chars-per-token compatibility guard and the final retriever still enforces the
+token ceiling.
+
+For large-context models the evidence allowance remains bounded to one eighth of
+usable input, up to 131072 tokens. This leaves room for confirmed specification,
+current program, recent context and completion output instead of treating a large
+window as permission to fill it.
+
+Instruction delivery is also sparse:
+
+- program-step width stays in handoff/runtime metadata and never enters Agent B;
+- operand semantics contain only the current opcode's bound slots;
+- target applicability is omitted when the shared default adds no decision;
+- runtime semantics is omitted when there is no completion/pulse fact;
+- manual instruction evidence is selected only for dimensions that are not
+  already source-verified by the structured lanes.
+
+Checkpoint compaction remains downstream of the actual rendered wire. Its recent
+verbatim tail and checkpoint ceiling now scale with model capacity (up to 65536
+and 32768 tokens respectively) instead of retaining the old 16K/4K ceilings.

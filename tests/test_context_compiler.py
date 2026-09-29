@@ -129,7 +129,10 @@ def test_model_budget_reserves_output_and_keeps_retrieval_separate():
     assert budget["reserved_output_tokens"] == 32_768
     assert budget["usable_input_tokens"] < budget["context_window"]
     assert budget["retrieval_query_token_budget"] <= 24_000
-    assert budget["rag_evidence_token_budget"] <= 32_000
+    assert 32_000 < budget["rag_evidence_token_budget"] <= 131_072
+    assert budget["rag_evidence_token_budget"] == min(
+        131_072, budget["usable_input_tokens"] // 8
+    )
 
 
 

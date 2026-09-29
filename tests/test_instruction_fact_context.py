@@ -236,10 +236,8 @@ def test_generation_packer_delivers_structured_contract_with_manual_evidence():
     from application.confirmed_generation_context import build_confirmed_generation_context
     context = build_confirmed_generation_context(spec, "FX3U")
     assert "OPERAND_SEMANTICS:" in context.knowledge_context
-    assert "TARGET_APPLICABILITY:" in context.knowledge_context
-    assert "RUNTIME_SEMANTICS:" in context.knowledge_context
     assert "INSTRUCTION_CONTRACT:" not in context.knowledge_context
-    assert "STEP_WIDTH: 9 program step(s)" in context.knowledge_context
+    assert "STEP_WIDTH:" not in context.knowledge_context
     report = context.handoff["instruction_facts"]
     record = next(row for row in report["records"] if row.get("instruction_contract"))
     assert record["instruction_contract"]["native_operand_order"] == ["S", "D", "N1", "N2"]

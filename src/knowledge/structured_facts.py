@@ -177,62 +177,85 @@ def resolve_instruction_contract(target, *, plc_model="FX3U"):
 
 
 def _instruction_lane_prompt_lines(lanes):
-    """Render only model decisions; keep full diagnostic objects in metadata.
-
-    The split must not consume the manual-evidence budget that it is intended to
-    clarify. Operand slots are already the materialized join of common meanings,
-    target-native symbols and exact values, so do not duplicate the source
-    objects verbatim in the prompt.
-    """
+    """Render only current Agent-B decisions; full lane objects stay metadata."""
     lanes = lanes if isinstance(lanes, Mapping) else {}
     common = lanes.get("operand_semantics") or {}
     slots = lanes.get("operand_slots") or []
-    operand = {
-        "opcode": common.get("opcode"),
-        "semantic_scope": common.get("semantic_scope"),
-        "slots": [
-            {
-                key: copy.deepcopy(item[key])
-                for key in ("position", "symbol", "name", "role", "data_type", "value")
-                if isinstance(item, Mapping)
-                and key in item
-                and item[key] not in (None, "", [], {})
-            }
-            for item in slots
-            if isinstance(item, Mapping)
-        ],
-    }
 
-    full_target = lanes.get("target_applicability") or {}
-    applicability = {
-        key: copy.deepcopy(full_target[key])
-        for key in (
-            "target_model", "opcode", "available", "support_status",
-            "replacement_opcode", "min_operands", "max_operands",
-            "native_operand_order", "operand_order_status",
-            "operand_constraints", "numeric_operand_boundaries",
-            "disjoint_bit_ranges", "boundary_status",
+    compact_slots = []
+    for item in slots:
+        if not isinstance(item, Mapping):
+            continue
+        slot = {
+            key: copy.deepcopy(item[key])
+            for key in ("position", "symbol", "name", "role", "data_type", "value")
+            if key in item
+            and item[key] not in (None, "", [], {})
+            and not (key == "data_type" and item[key] == "any")
+        }
+        if slot:
+            compact_slots.append(slot)
+
+    lines = []
+    if compact_slots:
+        lines.append(
+            "OPERAND_SEMANTICS: "
+            + json.dumps(
+                {"opcode": common.get("opcode"), "slots": compact_slots},
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
         )
-        if key in full_target and full_target[key] not in (None, "", [], {})
-    }
 
-    full_runtime = lanes.get("runtime_semantics") or {}
-    runtime = {
-        key: copy.deepcopy(full_runtime[key])
-        for key in ("target_model", "opcode", "available", "completion", "pulse_output", "special_devices")
-        if key in full_runtime and full_runtime[key] not in (None, "", [], {})
+    target = lanes.get("target_applicability") or {}
+    target_view = {}
+    if target.get("available") is False:
+        for key in ("target_model", "opcode", "available", "replacement_opcode"):
+            if target.get(key) not in (None, "", [], {}):
+                target_view[key] = copy.deepcopy(target[key])
+    else:
+        # Shared catalogue applicability is the default and adds no decision.
+        if target.get("support_status") not in (None, "", "shared_catalog"):
+            target_view["target_model"] = target.get("target_model")
+            target_view["support_status"] = target.get("support_status")
+        if target.get("replacement_opcode"):
+            target_view["replacement_opcode"] = target.get("replacement_opcode")
+        for key in (
+            "operand_constraints",
+            "numeric_operand_boundaries",
+            "disjoint_bit_ranges",
+        ):
+            if target.get(key):
+                target_view[key] = copy.deepcopy(target[key])
+    if target_view:
+        lines.append(
+            "TARGET_APPLICABILITY: "
+            + json.dumps(
+                target_view,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+        )
+
+    runtime = lanes.get("runtime_semantics") or {}
+    runtime_view = {
+        key: copy.deepcopy(runtime[key])
+        for key in ("completion", "pulse_output")
+        if runtime.get(key)
     }
-    return [
-        "OPERAND_SEMANTICS: " + json.dumps(
-            operand, ensure_ascii=False, separators=(",", ":"), sort_keys=True,
-        ),
-        "TARGET_APPLICABILITY: " + json.dumps(
-            applicability, ensure_ascii=False, separators=(",", ":"), sort_keys=True,
-        ),
-        "RUNTIME_SEMANTICS: " + json.dumps(
-            runtime, ensure_ascii=False, separators=(",", ":"), sort_keys=True,
-        ),
-    ]
+    if runtime_view:
+        lines.append(
+            "RUNTIME_SEMANTICS: "
+            + json.dumps(
+                runtime_view,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+        )
+    return lines
 
 
 def _attach_instruction_contract(record, target, *, plc_model):
@@ -338,6 +361,7 @@ def resolve_instruction_step_width(target, *, plc_model="FX3U"):
 
 
 def _attach_instruction_step_width(record, target, *, plc_model):
+    """Attach runtime/export width metadata without exposing it to Agent B."""
     fact = resolve_instruction_step_width(target, plc_model=plc_model)
     value = dict(record)
     value["instruction_step_width"] = copy.deepcopy(fact)
@@ -349,31 +373,13 @@ def _attach_instruction_step_width(record, target, *, plc_model):
         )
         original_id = str(value.get("id") or "")
         value["original_id"] = original_id
-        value["id"] = original_id + "#instance-" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:12]
+        value["id"] = original_id + "#instance-" + hashlib.sha256(
+            identity.encode("utf-8")
+        ).hexdigest()[:12]
         value["instruction_instance"] = {
             "opcode": str(target.get("opcode") or "").upper(),
             "operands": [str(item) for item in operands],
         }
-
-    body = str(value.get("text") or "")
-    if fact["known"]:
-        detail = f"STEP_WIDTH: {fact['steps']} program step(s)"
-        if fact["resolution"] == "fixed_mnemonic":
-            detail += f" [fixed mnemonic; arity={fact.get('operand_arity', '?')}; source={fact['source']}]"
-        else:
-            detail += f" [instruction instance; source={fact['source']}]"
-    else:
-        detail = "STEP_WIDTH: unresolved"
-        if fact["resolution"] == "requires_operands":
-            detail += " [opcode alone is insufficient; supply operands]"
-        elif fact.get("reason"):
-            detail += f" [{fact['reason']}]"
-
-    if body.startswith("[STRUCTURED INSTRUCTION RECORD]"):
-        first, separator, rest = body.partition("\n")
-        value["text"] = first + "\n" + detail + (separator + rest if separator else "")
-    else:
-        value["text"] = detail + ("\n\n" + body if body else "")
     return value
 
 
@@ -415,12 +421,6 @@ def _local_instruction_fact_record(target, *, plc_model, task_type):
     ]
     if isinstance(operands, (list, tuple)):
         lines.append("OPERANDS: " + " ".join(str(value) for value in operands))
-    if step_width["known"]:
-        lines.append(f"STEP_WIDTH: {step_width['steps']} program step(s)")
-        lines.append(f"STEP_WIDTH_SOURCE: {step_width['source']}")
-    else:
-        lines.append("STEP_WIDTH: unresolved")
-        lines.append("STEP_WIDTH_REASON: " + str(step_width.get("reason") or "unknown"))
 
     value = {
         "id": f"structured-instruction:{digest}",

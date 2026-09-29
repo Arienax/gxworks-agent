@@ -27,7 +27,63 @@ _FACT_TERMS = {
     "limits": re.compile(r"range|limit|restrict|overflow|overlap|outside|exceed|maximum|minimum|caution|supported|≤|≥|范围|边界|限制|溢出|重叠|最大|最小", re.I),
 }
 _OFFICIAL = frozenset({"programming", "positioning", "structured_instruction", "structured_function"})
-_VERSION = "instruction-facts-v2-direct-structured"
+_VERSION = "instruction-facts-v3-gap-directed"
+
+
+def _manual_fact_gaps(record):
+    """Return only dimensions not already source-verified structurally."""
+    record = record if isinstance(record, Mapping) else {}
+    gaps = set(FACT_QUESTIONS)
+    operand = record.get("operand_semantics") or {}
+    target = record.get("target_applicability") or {}
+
+    if (
+        operand.get("operand_role_status") == "source_verified"
+        and operand.get("operand_type_status") == "source_verified"
+        and target.get("operand_order_status") == "source_verified"
+    ):
+        gaps.discard("operands")
+    if target.get("boundary_status") == "source_verified":
+        gaps.discard("limits")
+
+    # Operation/execution remain manual gaps until dedicated structured owners
+    # prove those dimensions; a mnemonic or canonical-op label is insufficient.
+    return frozenset(gaps)
+
+
+def _structured_fact_dimensions(record):
+    return frozenset(FACT_QUESTIONS) - _manual_fact_gaps(record)
+
+
+def _needs_completion_manual(record):
+    runtime = record.get("runtime_semantics") if isinstance(record, Mapping) else None
+    completion = runtime.get("completion") if isinstance(runtime, Mapping) else None
+    return not (
+        isinstance(completion, Mapping)
+        and completion.get("status") == "source_verified"
+    )
+
+
+def _model_structured_prefix(text):
+    """Keep model-facing structured lanes, never runtime-only step widths."""
+    raw = str(text or "")
+    if not raw.startswith((
+        "[STRUCTURED INSTRUCTION RECORD]",
+        "[STRUCTURED LOCAL INSTRUCTION RECORD]",
+    )):
+        return ""
+    cut = raw.find("\n\n")
+    prefix = raw if cut < 0 else raw[:cut]
+    return "\n".join(
+        line
+        for line in prefix.splitlines()
+        if line.strip()
+        and not line.startswith((
+            "STEP_WIDTH:",
+            "STEP_WIDTH_SOURCE:",
+            "STEP_WIDTH_REASON:",
+        ))
+    ).rstrip()
 
 
 def _sha(text):
@@ -176,7 +232,10 @@ def _related_units(seed, plc_model, task_type):
 
 def _units(text):
     """Offsets into original text; tables and structured records stay indivisible."""
-    markers = list(re.finditer(r"(?m)^\[(?:PAGE|TABLE|STRUCTURED INSTRUCTION RECORD)\b[^\n]*", text))
+    markers = list(re.finditer(
+        r"(?m)^\[(?:PAGE|TABLE|STRUCTURED(?: LOCAL)? INSTRUCTION RECORD)\b[^\n]*",
+        text,
+    ))
     starts = sorted({0, *(match.start() for match in markers), len(text)})
     for left, right in zip(starts, starts[1:]):
         block = text[left:right]
@@ -212,10 +271,7 @@ def _render_units(result, selected):
     selected = sorted(selected, key=lambda unit: unit[0])
     source_text = "\n\n".join(text[start:end].rstrip() for start, end, _ in selected)
 
-    structured_prefix = ""
-    if text.startswith("[STRUCTURED INSTRUCTION RECORD]"):
-        cut = text.find("\n\n")
-        structured_prefix = (text if cut < 0 else text[:cut]).rstrip()
+    structured_prefix = _model_structured_prefix(text)
     if structured_prefix:
         source_text = structured_prefix + ("\n\n" + source_text if source_text else "")
 
@@ -289,7 +345,7 @@ def _completion_sources(seed, plc_model, task_type):
                 break
     return results
 
-def _pack_target(results, allowance):
+def _pack_target(results, allowance, *, needed_categories=None):
     """Pack definition, tables and cautions together before any top-k truncation.
 
     Prefer the first ranked manual revision. Different programming syntaxes are
@@ -299,6 +355,15 @@ def _pack_target(results, allowance):
     from knowledge import core
     if not results or allowance <= 0:
         return []
+    needed = (
+        None
+        if needed_categories is None
+        else {
+            str(item)
+            for item in needed_categories
+            if str(item) in FACT_QUESTIONS
+        }
+    )
     document_key = lambda value: (value.get("manual_id") or value.get("source") or value.get("id"), value.get("revision"))
     primary = document_key(results[0])
     sources = [r for r in results if document_key(r) == primary]
@@ -331,6 +396,10 @@ def _pack_target(results, allowance):
             if focus and not result.get("instruction_opcode"):
                 priority += 5  # The referenced flag definition precedes opcode examples.
             cats = [key for key, pattern in _FACT_TERMS.items() if pattern.search(raw)]
+            if needed is not None:
+                cats = [key for key in cats if key in needed]
+                if not cats:
+                    continue
             candidates.append((source_index, (start, end, cats), priority))
     selected, rendered, covered = {}, {}, set()
     while candidates:
@@ -349,6 +418,12 @@ def _pack_target(results, allowance):
             continue
         selected[source_index], rendered[source_index] = trial_units, trial
         covered.update(unit[2])
+    if not rendered:
+        prefix = _model_structured_prefix(sources[0].get("text"))
+        if prefix:
+            trial = _render_units(sources[0], [])
+            if len(core._format_result_block(trial)) + 40 <= allowance:
+                rendered[0] = trial
     return [rendered[index] for index in sorted(rendered)]
 
 
@@ -412,21 +487,44 @@ def retrieve_instruction_facts(
                 seen.add(marker)
                 sources.append(result)
 
-        companions = _completion_sources(seeds[0], plc_model, task_type) if seeds else []
+        structured_owner = seeds[0] if seeds else {}
+        manual_gaps = _manual_fact_gaps(structured_owner)
+        report["lookups"][-1]["manual_gaps"] = sorted(manual_gaps)
+        report["lookups"][-1]["structured_dimensions"] = sorted(
+            _structured_fact_dimensions(structured_owner)
+        )
+
+        companions = (
+            _completion_sources(seeds[0], plc_model, task_type)
+            if seeds and _needs_completion_manual(structured_owner)
+            else []
+        )
         companion_pool = [
-            row for row in _pack_target(companions, min(allowance * 2 // 3, 2200))
+            row for row in _pack_target(
+                companions,
+                min(allowance * 2 // 3, 2200),
+            )
             if row["id"] not in companion_seen
         ]
         companion_seen.update(row["id"] for row in companion_pool)
-        companion_cost = sum(len(core._format_result_block(row)) + 40 for row in companion_pool)
-        primary_pool = _pack_target(sources, allowance - companion_cost)
+        companion_cost = sum(
+            len(core._format_result_block(row)) + 40
+            for row in companion_pool
+        )
+        primary_pool = _pack_target(
+            sources,
+            allowance - companion_cost,
+            needed_categories=manual_gaps,
+        )
         pool = primary_pool[:1] + companion_pool + primary_pool[1:]
         for value in pool:
             value["fact_kind"] = "instruction"
             value["fact_target"] = target["opcode"]
-            value["fact_dimensions"] = list(
-                value.get("candidate_fact_categories") or ()
+            value["fact_dimensions"] = sorted(
+                set(value.get("candidate_fact_categories") or ())
+                | set(_structured_fact_dimensions(value))
             )
+            value["manual_fact_gaps"] = sorted(_manual_fact_gaps(value))
         groups.append(pool)
 
     results = []
