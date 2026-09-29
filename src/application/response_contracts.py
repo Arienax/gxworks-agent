@@ -20,8 +20,8 @@ ANALYSIS_RESPONSE = ResponseContract("analysis", "json", (
     *(f"suggested_io.{kind}.*" for kind in ("X", "Y", "M", "D", "T", "C", "S", "SM", "SD", "special_relays", "special_registers")),
 ))
 # options/default/required_when are
-# interdependent comparison values. execution_intent_claims.*.evidence is
-# source evidence, not model-authored prose, and is intentionally outside the
+# interdependent comparison values. execution_intent_claims.*.evidence and
+# explicit_constraint_claims.*.evidence are source evidence, not model-authored prose, and are outside the
 # human-path language filter. None may be translated or treated as prose.
 # io_binding.label is optional purpose metadata, not response prose. Core
 # ignores non-string labels; short/user-supplied names must not trigger repair.
