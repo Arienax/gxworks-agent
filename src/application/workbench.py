@@ -707,7 +707,8 @@ class WorkbenchService:
                     allowed_rung_ids=snapshot.get("allowed_rung_ids"),
                     allowed_addresses=snapshot.get("allowed_addresses"), repair_plan=repair_plan,
                     source_handoff=(version or {}).get("generation_handoff"),
-                    image_attachments=images, model_name=snapshot.get("model", {}).get("model"), response_language=language)
+                    image_attachments=images, model_name=snapshot.get("model", {}).get("model"),
+                    response_language=language, construction_examples=snapshot.get("construction_examples"))
                 metadata = GenerationWorkflow(request, out_dir, ctx.emit, GenerationDependencies(
                     provider=provider, check_cancelled=ctx.checkpoint, preserve_rejected_candidate=True
                 )).run()

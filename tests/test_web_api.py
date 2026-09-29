@@ -593,3 +593,52 @@ def test_cancel_approved_job_waiting_for_engineering_lock_never_calls_executor(t
         assert client.get("/api/jobs/" + job).json()["status"] == "cancelled"
         assert executor_calls == []
         assert client.get("/api/proposals/" + proposal).json()["status"] == "pending"
+
+
+
+def test_web_generation_developer_header_is_explicit_job_input(tmp_path):
+    workspace, state = tmp_path / "workspace", tmp_path / "state"
+    service = WorkbenchService(
+        workspace, state, model_factory=lambda: pytest.fail("Header routing must not initialize a model")
+    )
+    captured = []
+    timestamp = "2026-09-29T00:00:00+00:00"
+
+    def capture(command):
+        captured.append(command)
+        return {
+            "id": f"captured-{len(captured)}",
+            "kind": command["kind"],
+            "status": "queued",
+            "last_sequence": 0,
+            "project_id": command.get("project_id"),
+            "version_id": command.get("version_id"),
+            "created_at": timestamp,
+        }
+
+    with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
+        headers = _login(client)
+        service.submit = capture
+        command = {
+            "kind": "generation",
+            "project_id": "developer-setting-test",
+            "version_id": None,
+            "text": "Generate",
+            "response_language": "zh-CN",
+        }
+        for index, (wire, expected) in enumerate((("0", False), ("1", True)), start=1):
+            response = client.post(
+                "/api/jobs",
+                json={**command, "request_id": f"developer-{index}"},
+                headers={**headers, "X-GX-Construction-Examples": wire},
+            )
+            assert response.status_code == 202, response.text
+            assert captured[-1]["construction_examples"] is expected
+
+        invalid = client.post(
+            "/api/jobs",
+            json={**command, "request_id": "developer-invalid"},
+            headers={**headers, "X-GX-Construction-Examples": "maybe"},
+        )
+        assert invalid.status_code == 400
+        assert len(captured) == 2

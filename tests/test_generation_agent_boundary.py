@@ -486,3 +486,46 @@ def test_actual_agent_request_budget_handoff_and_retrieval_are_isolated(monkeypa
     assert on == off
     assert calls[0][1] == calls[1][1]
     assert results[1]["generation_handoff"]["budget_report"]["compiled_budget_payload_tokens"] > results[0]["generation_handoff"]["budget_report"]["compiled_budget_payload_tokens"]
+
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_generation_workflow_forwards_explicit_construction_example_arm(monkeypatch, tmp_path, enabled):
+    import application.generation_agent as agent_b
+    import application.model_api as api
+
+    captured = []
+
+    def fake_generate(spec, plc_model="FX3U", **kwargs):
+        captured.append(kwargs.get("construction_examples"))
+        return {
+            "ladder": _ladder(),
+            "model_calls": 1,
+            "generation_handoff": {
+                "construction_examples": {"enabled": bool(kwargs.get("construction_examples"))}
+            },
+        }
+
+    monkeypatch.setattr(agent_b, "generate_confirmed_ladder", fake_generate)
+    provider = OneShotProvider()
+    with api.provider_scope(provider, model_name="offline-one-shot"):
+        metadata = GenerationWorkflow(
+            GenerationRequest(
+                "Generate confirmed program",
+                confirmed_context=_spec(),
+                plc_model="FX3U",
+                model_name="offline-one-shot",
+                construction_examples=enabled,
+            ),
+            tmp_path,
+            dependencies=GenerationDependencies(provider=provider),
+        ).run()
+
+    assert captured == [enabled]
+    assert metadata["generation_handoff"]["construction_examples"]["enabled"] is enabled
+
+
+@pytest.mark.parametrize("value", ["1", "false", 0, 1, {}, []])
+def test_generation_request_rejects_non_boolean_construction_example_arm(value):
+    with pytest.raises(TypeError, match="construction_examples"):
+        GenerationRequest("Generate", construction_examples=value)

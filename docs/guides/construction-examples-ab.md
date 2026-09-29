@@ -16,25 +16,18 @@ result = generate_confirmed_ladder(
 
 显式布尔参数优先于环境变量。参数不接受字符串 `"false"` 或整数，避免真假值隐式转换。
 
-通过现有 Web 启动入口测试时，在启动后端的 PowerShell 中设置：
+Web 对照试验直接使用 **设置 → 开发者 → Agent B 构造范例**。界面明确显示“下一次 Web 生成的实际设置：ON/OFF”，切换立即保存在当前浏览器。每个新的 generation job 都会显式携带该布尔值，后端在提交时把它冻结进 job snapshot；之后再切换设置不会改变已经提交或正在运行的任务。Web 因此不再依赖后端进程是否成功继承环境变量。
+
+程序调用仍可直接传 `construction_examples=True/False`。未显式传值的脚本或其他非 Web 入口继续兼容环境变量：
 
 ```powershell
-# A 组：不注入新增构造范例，也是未设置时的默认行为
-$env:GXWORKS_CONSTRUCTION_EXAMPLES = "0"
-
-# B 组：注入固定范例集
-$env:GXWORKS_CONSTRUCTION_EXAMPLES = "1"
+$env:GXWORKS_CONSTRUCTION_EXAMPLES = "0"  # OFF
+$env:GXWORKS_CONSTRUCTION_EXAMPLES = "1"  # ON
 ```
 
-设置对应组别后，在同一 PowerShell 中按原方式启动后端。已经运行的后端不会获得父终端后来修改的环境变量；切换组别需要停止旧后端并重新启动，刷新浏览器不足以切换。删除变量恢复默认：
+开关解析和环境变量后备由 [`resolve_construction_examples`](../../src/application/construction_examples.py) 持有。环境变量也支持 `true/false`、`on/off`、`yes/no`，不区分大小写。非法值会明确报错，不会被静默解释为开启。
 
-```powershell
-Remove-Item Env:GXWORKS_CONSTRUCTION_EXAMPLES -ErrorAction SilentlyContinue
-```
-
-开关解析和默认值由 [`resolve_construction_examples`](../../src/application/construction_examples.py) 持有。环境变量也支持 `true/false`、`on/off`、`yes/no`，不区分大小写。非法值会明确报错，不会被静默解释为开启。
-
-这次提供后端接口和进程级实验开关，没有增加 Web 设置项。范围是内置确认规格生成的 Agent B；Agent A、外部上下文准备、调试及修复提示词不增加该范例块。
+范围仍然只是内置确认规格生成的 Agent B；Agent A、外部上下文准备、调试及修复提示词不增加该范例块。
 
 ## 范例及格式
 
