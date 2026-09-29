@@ -116,8 +116,9 @@ def test_structured_instruction_record_merges_registry_contract(opcode):
     expected = DEFAULT_INSTRUCTION_REGISTRY.describe_contract(opcode, cpu="FX3U")
     assert rows[0]["instruction_contract"] == expected
     assert "OPERAND_SEMANTICS:" in rows[0]["text"]
-    assert "TARGET_APPLICABILITY:" in rows[0]["text"]
-    assert "RUNTIME_SEMANTICS:" in rows[0]["text"]
+    # Target/runtime lanes are sparse and appear only when they add a decision.
+    assert rows[0]["target_applicability"]["target_model"] == "FX3U"
+    assert "runtime_semantics" in rows[0]
     assert rows[0]["instruction_contract"]["contract_level"] == "signature_verified"
 
 
@@ -591,8 +592,7 @@ def test_fact_aware_row_api_keeps_exact_instruction_out_of_broad_retrieval(monke
     assert rows[0]["structured_text_compacted"] is True
     assert rows[0]["instruction_contract"]["opcode"] == "SFTL"
     assert "OPERAND_SEMANTICS:" in rows[0]["text"]
-    assert "TARGET_APPLICABILITY:" in rows[0]["text"]
-    assert "RUNTIME_SEMANTICS:" in rows[0]["text"]
+    assert "STEP_WIDTH:" not in rows[0]["text"]
 
 
 def test_application_runtime_cannot_bypass_fact_aware_retrieval():
@@ -728,8 +728,7 @@ def test_compact_row_view_does_not_mutate_full_manual_backed_record():
     assert compact["instruction_contract"] == full["instruction_contract"]
     assert len(compact["text"]) < len(full["text"])
     assert "OPERAND_SEMANTICS:" in compact["text"]
-    assert "TARGET_APPLICABILITY:" in compact["text"]
-    assert "RUNTIME_SEMANTICS:" in compact["text"]
+    assert "STEP_WIDTH:" not in compact["text"]
     assert "INSTRUCTION_CONTRACT:" not in compact["text"]
     assert full["text"].startswith("[STRUCTURED INSTRUCTION RECORD]")
 
