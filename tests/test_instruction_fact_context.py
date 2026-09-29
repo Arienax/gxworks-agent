@@ -240,6 +240,33 @@ def test_bundled_index_delivers_instruction_definitions_inside_existing_budget(o
     assert set(included_knowledge_ids(context, report["records"])) == {r["id"] for r in report["records"] if r["included"]}
 
 
+def test_source_verified_cold_operand_semantics_do_not_reenter_via_companion():
+    if core._index_identity(core._index_path())[0] == "missing":
+        pytest.skip("Bundled index is not installed")
+    query = KnowledgeQuery(
+        "DADDP",
+        precompiled=True,
+        metadata={"instruction_fact_mode": "targeted"},
+    )
+    context = build_knowledge_context(
+        query,
+        plc_model="FX3U",
+        task_type="generate",
+        char_budget=24000,
+        top_k=8,
+    )
+    report = context.manifest["instruction_facts"]
+    lookup = next(row for row in report["lookups"] if row["opcode"] == "DADDP")
+    assert "operands" not in lookup["manual_gaps"]
+    assert "operands" in lookup["structured_dimensions"]
+    included = [row for row in report["records"] if row.get("included")]
+    assert included
+    assert all(
+        "operands" not in (row.get("candidate_fact_categories") or ())
+        for row in included
+    )
+
+
 def test_generation_packer_delivers_structured_contract_with_manual_evidence():
     if core._index_identity(core._index_path())[0] == "missing":
         pytest.skip("Bundled index is not installed")

@@ -511,6 +511,10 @@ def retrieve_instruction_facts(
             row for row in _pack_target(
                 companions,
                 min(allowance * 2 // 3, 2200),
+                # Completion companions exist only to explain runtime completion
+                # state. Never let an adjacent instruction operand table re-enter
+                # after structured operand semantics have closed that dimension.
+                needed_categories={"execution"},
             )
             if row["id"] not in companion_seen
         ]
