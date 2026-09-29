@@ -24,7 +24,7 @@ from application.generation_support import _build_model_context
 from application.generation_support import public_generation_value
 from application.generation_support import public_generation_ladder
 from application.generation_support import public_generation_specification
-from application.generation_support import _KNOWLEDGE_TASK_SETTINGS
+from application.generation_support import _KNOWLEDGE_TASK_TOP_K
 
 ST_SYSTEM_PROMPT = """# Role
 你是三菱 PLC ST 生成器。把当前确认规格转换为所选 PLC 型号可执行的 ST，并只返回协议 JSON。
@@ -168,8 +168,8 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
                                      "reason": reason, "records": [], "plc_model": plc_model, **metadata})
     if normalized_task in {"contract_repair", "format_repair"}:
         return absent("excluded", "repair_scope_only")
-    base_top_k, fallback_char_budget = _KNOWLEDGE_TASK_SETTINGS.get(
-        normalized_task, _KNOWLEDGE_TASK_SETTINGS["generate"]
+    base_top_k = _KNOWLEDGE_TASK_TOP_K.get(
+        normalized_task, _KNOWLEDGE_TASK_TOP_K["generate"]
     )
     engineering = retrieval_projection(confirmed_context)
     if getattr(primary_query, "precompiled", False):
@@ -208,14 +208,17 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
         # the retriever's token accounting remains the real ceiling.
         if isinstance(token_budget, (int, float)) and not isinstance(token_budget, bool):
             token_budget = max(0, int(token_budget))
-            retrieval_char_budget = token_budget * 8
-            top_k = max(
-                int(base_top_k),
-                (token_budget + 4095) // 4096 if token_budget else 0,
-            )
         else:
-            retrieval_char_budget = int(fallback_char_budget)
-            top_k = int(base_top_k)
+            # Legacy/direct callers without a compiled model budget use the
+            # same conservative token fallback as ContextCompiler's unknown
+            # model path. Production confirmed generation always supplies the
+            # model-aware value.
+            token_budget = 12000
+        retrieval_char_budget = token_budget * 8
+        top_k = max(
+            int(base_top_k),
+            (token_budget + 4095) // 4096 if token_budget else 0,
+        )
         analysis_options = ({"include_design": bool(include_design), "design_query": design_query}
                             if normalized_task == "analysis" else {})
         context = retrieve_context(query, plc_model=plc_model, task_type=normalized_task,

@@ -188,6 +188,14 @@ def test_unknown_context_window_is_not_treated_as_low_pressure():
     assert compiled.budget_report["context_utilization"] is None
 
 
+def test_small_known_window_never_allocates_more_retrieval_than_usable_input():
+    model = profile(20_000, output=8192)
+    budget = model_budget(model)
+    assert budget["usable_input_tokens"] > 0
+    assert budget["retrieval_query_token_budget"] <= budget["usable_input_tokens"]
+    assert budget["rag_evidence_token_budget"] <= budget["usable_input_tokens"]
+
+
 def test_known_zero_usable_budget_is_not_treated_as_unknown():
     model = profile(12_000, output=8192)
     budget = model_budget(model)

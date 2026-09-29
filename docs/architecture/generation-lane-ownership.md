@@ -60,9 +60,10 @@ or target facts remain visible through their existing coverage status.
 The four lanes do not receive fixed prompt slices. `ContextCompiler.model_budget`
 owns the model-aware token envelope. Generation evidence uses
 `rag_evidence_token_budget` as the authoritative ceiling; the old 7000-character
-generation cap is not allowed to reduce it. The character budget is only a loose
-8-chars-per-token compatibility guard and the final retriever still enforces the
-token ceiling.
+generation cap is not allowed to reduce it. The character budget is derived from that token envelope as a loose
+8-chars-per-token compatibility guard; there is no independent fixed character
+allowance in the production generation path. The final retriever still enforces
+the token ceiling.
 
 For large-context models the evidence allowance remains bounded to one eighth of
 usable input, up to 131072 tokens. This leaves room for confirmed specification,

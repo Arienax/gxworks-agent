@@ -61,6 +61,23 @@ def test_whole_table_and_offsets_are_preserved():
     assert _pack_target([source(text=text)], 50) == []  # never cut table rows
 
 
+def test_gap_directed_manual_packing_drops_already_covered_operand_only_units():
+    rows = [
+        source(
+            "operation",
+            text="[PAGE 1 PROSE]\nOperation copies the source into the destination.",
+        ),
+        source(
+            "operands",
+            text="[TABLE page=1]\nOperand | Description\nS | source\nD | destination",
+        ),
+    ]
+    output = _pack_target(rows, 2500, needed_categories={"operation"})
+    text = "\n".join(row["text"] for row in output)
+    assert "Operation copies" in text
+    assert "Operand | Description" not in text
+
+
 def test_pack_across_definition_table_and_caution_without_duplicate_layout():
     rows = [source("definition", text="[PAGE 1 PROSE]\nOperation transfers a word.\n\n[PAGE 1 LAYOUT]\nDUPLICATE LAYOUT"),
             source("table", text="[TABLE page=1]\nOperand | Description\nS | source\nD | destination"),
