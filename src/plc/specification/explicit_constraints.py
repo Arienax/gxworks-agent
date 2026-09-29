@@ -201,7 +201,7 @@ def _directive_groups(source, plc_model):
             if not _direct_gap(gap):
                 break
             objects.append(item)
-            cursor = item.end()
+            cursor = item.end
 
         scoped = False
         action = _directive_action(directive.group(0))
