@@ -21,7 +21,10 @@ from plc.device_identity import DEVICE_TOKEN_RE, canonical_device
 
 
 TRIGGER_KINDS = frozenset({"level", "transition", "first_scan", "cyclic", "interrupt", "clear"})
-EFFECT_KINDS = frozenset({"while_true", "one_shot", "event", "state_change", "unspecified"})
+# effect.kind and rearm are explanatory Agent-A metadata, not hard semantic
+# enums.  Core preserves bounded strings/booleans but never rejects a whole
+# analysis because a model calls an effect "pulse", "set", "count", etc.
+EFFECT_KINDS = frozenset()
 REARM_VALUES = frozenset({"required", "not_required", "unspecified"})
 
 _CLAUSE_END = re.compile(r"[。！？!?；;\n]+")
@@ -143,6 +146,20 @@ def _state(value):
     return None
 
 
+def _normalize_rearm(value):
+    if value is True:
+        return "required"
+    if value is False:
+        return "not_required"
+    token = str(value or "").strip().casefold()
+    return token if token in REARM_VALUES else "unspecified"
+
+
+def _normalize_effect_kind(value):
+    token = str(value or "").strip().casefold()
+    return token[:64] if token else "unspecified"
+
+
 def execution_intent_claim_violations(value, path="$.execution_intent_claims"):
     """Validate only the Agent-A claim protocol shape, never sentence meaning."""
     if value is None:
@@ -173,8 +190,6 @@ def execution_intent_claim_violations(value, path="$.execution_intent_claims"):
         if kind == "transition":
             if _state(trigger.get("from")) is None or _state(trigger.get("to")) is None:
                 violations.append(root + ".trigger: transition requires binary from/to states")
-        if kind == "level" and _state(trigger.get("value")) is None:
-            violations.append(root + ".trigger.value: level requires a binary state")
         if kind == "cyclic" and trigger.get("period_ms") is not None:
             try:
                 if float(trigger.get("period_ms")) <= 0:
@@ -186,15 +201,17 @@ def execution_intent_claim_violations(value, path="$.execution_intent_claims"):
             if not isinstance(effect, Mapping):
                 violations.append(root + ".effect: expected an object")
             else:
-                effect_kind = str(effect.get("kind") or "unspecified").strip().casefold()
-                if effect_kind not in EFFECT_KINDS:
-                    violations.append(root + ".effect.kind: unsupported effect kind")
+                effect_kind = effect.get("kind")
+                if effect_kind is not None and (
+                    not isinstance(effect_kind, str) or len(effect_kind.strip()) > 64
+                ):
+                    violations.append(root + ".effect.kind: expected a short string when present")
                 devices = effect.get("devices", [])
                 if not isinstance(devices, list) or any(not isinstance(item, str) for item in devices):
                     violations.append(root + ".effect.devices: expected a string array")
-        rearm = str(claim.get("rearm") or "unspecified").strip().casefold()
-        if rearm not in REARM_VALUES:
-            violations.append(root + ".rearm: expected required, not_required, or unspecified")
+        rearm = claim.get("rearm")
+        if rearm is not None and not isinstance(rearm, (str, bool)):
+            violations.append(root + ".rearm: expected a string or boolean when present")
         evidence = claim.get("evidence")
         if (
             not isinstance(evidence, list)
@@ -251,10 +268,7 @@ def compile_execution_intent_claims(
             rejected.append({"index": index, "reason": "claimed_device_not_in_evidence"})
             continue
 
-        rearm = str(claim.get("rearm") or "unspecified").strip().casefold()
-        if trigger_kind == "level" and rearm == "required":
-            rejected.append({"index": index, "reason": "level_cannot_require_rearm"})
-            continue
+        rearm = _normalize_rearm(claim.get("rearm"))
 
         semantic = None
         if trigger_kind == "transition":
@@ -290,7 +304,7 @@ def compile_execution_intent_claims(
             "trigger": {**trigger, "kind": trigger_kind, "source_devices": source_devices},
             "effect": {
                 **effect,
-                "kind": str(effect.get("kind") or "unspecified").strip().casefold(),
+                "kind": _normalize_effect_kind(effect.get("kind")),
                 "devices": effect_devices,
             } if effect else {"kind": "unspecified", "devices": []},
             "rearm": rearm,

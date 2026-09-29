@@ -443,7 +443,7 @@ def analyze_requirement(
         print(f"阶段1 分析完成: {result.get('summary', '')[:80]}...")
         return result
 
-    except ModelProviderError:
+    except (ModelProviderError, AnalysisProtocolError):
         raise
     except Exception as e:
         print(f"阶段1 分析失败: {e}")
@@ -518,7 +518,7 @@ def analyze_requirement_streaming(
         print(f"阶段1 分析完成: {result.get('summary', '')[:80]}...")
         return result
 
-    except ModelProviderError:
+    except (ModelProviderError, AnalysisProtocolError):
         raise
     except Exception as e:
         print(f"阶段1 流式分析失败: {e}")

@@ -99,6 +99,48 @@ def test_agent_a_execution_claim_handles_paraphrase_without_keyword_growth():
     }]
 
 
+def test_execution_claim_compiler_normalizes_flexible_effect_and_rearm_metadata():
+    from plc.execution_intent import compile_execution_intent_claims
+
+    text = "X2 每次从 0 变成 1 时，M1 只产生一个扫描周期事件。"
+    receipt = compile_execution_intent_claims([{
+        "trigger": {
+            "kind": "transition",
+            "source_devices": ["X2"],
+            "from": 0,
+            "to": 1,
+        },
+        "effect": {"kind": "pulse", "devices": ["M1"]},
+        "rearm": True,
+        "evidence": [text],
+    }], text)
+
+    assert receipt["rejected"] == []
+    requirement = receipt["requirements"][0]
+    assert requirement["semantic"] == "RISING_EDGE"
+    assert requirement["effect_kind"] == "pulse"
+    assert requirement["rearm"] == "required"
+
+
+def test_level_claim_does_not_require_value_or_rearm_enum_to_be_protocol_valid():
+    from plc.execution_intent import (
+        compile_execution_intent_claims,
+        execution_intent_claim_violations,
+    )
+
+    text = "X1 动作时必须立即解除 M0。"
+    claim = {
+        "trigger": {"kind": "level", "source_devices": ["X1"]},
+        "effect": {"kind": "reset", "devices": ["M0"]},
+        "rearm": True,
+        "evidence": [text],
+    }
+    assert execution_intent_claim_violations([claim]) == []
+    receipt = compile_execution_intent_claims([claim], text)
+    assert receipt["rejected"] == []
+    assert receipt["requirements"][0]["semantic"] == "LEVEL"
+
+
 def test_agent_a_execution_claim_accepts_unique_confirmed_label_grounding():
     from plc.execution_intent import compile_execution_intent_claims
 
