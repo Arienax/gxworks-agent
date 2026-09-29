@@ -82,3 +82,24 @@ Instruction delivery is also sparse:
 Checkpoint compaction remains downstream of the actual rendered wire. Its recent
 verbatim tail and checkpoint ceiling now scale with model capacity (up to 65536
 and 32768 tokens respectively) instead of retaining the old 16K/4K ceilings.
+
+
+## Operand-semantic promotion
+
+Operand semantics are audited across every Mitsubishi registry form by
+`tools/audit_operand_semantics.py`. The existing
+`resources/knowledge/fx3u_knowledge.sqlite` remains the only evidence database
+and is opened read-only.
+
+Promotion is signature-gated. `instructions.operands_json` is never allowed to
+define arity or operand order. A form must first have an independently
+corroborated native signature in `fx3u_contract_promotions.json`; the native
+manual operand rows must then match that verified order exactly. Only
+non-conflicting role/type dimensions are eligible for target-scoped
+`source_verified` promotion.
+
+The generated operand overlay is target evidence rather than a second copy of
+the common instruction catalogue. Common semantic names remain single-source;
+the overlay records which dimensions have been verified for FX3U. Future Q/L or
+other family evidence can add their own scoped corroboration without duplicating
+the instruction definition.
