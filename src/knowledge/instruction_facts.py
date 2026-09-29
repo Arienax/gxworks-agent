@@ -356,6 +356,32 @@ def _units(text):
             yield left + cursor, right
 
 
+def _embedded_instruction_layout_offset(raw):
+    """Locate PDF diagram residue accidentally flattened into a PROSE unit.
+
+    High-fidelity pages already carry layout/diagram representations separately.
+    A suffix beginning with an FNC label and containing several glyph placeholders
+    is visual syntax, not a second prose statement of operand order. Splitting it
+    here preserves exact source offsets while letting the normal layout fallback
+    policy keep it out when prose/table evidence is available.
+    """
+    text = str(raw or "")
+    first_line = text.split("\n", 1)[0]
+    if not first_line.startswith("[PAGE") or "PROSE" not in first_line:
+        return None
+    matches = list(re.finditer(r"(?m)^FNC\s+\d+\s*$", text))
+    for match in reversed(matches):
+        tail = text[match.start():]
+        lines = [line.strip() for line in tail.splitlines() if line.strip()]
+        if (
+            tail.count("[GLYPH-") >= 2
+            and len(lines) >= 5
+            and sum(len(line) <= 48 for line in lines) >= 4
+        ):
+            return match.start()
+    return None
+
+
 def _render_units(result, selected):
     """Preserve source offsets and provenance while grouping selected units.
 
@@ -467,36 +493,49 @@ def _pack_target(results, allowance, *, needed_categories=None):
     for source_index, result in enumerate(sources):
         text = str(result.get("text") or "")
         page_markers = list(re.finditer(r"(?m)^\[PAGE[^\n]*", text))
-        for start, end in _units(text):
-            raw = text[start:end]
-            focus = result.get("fact_focus_terms", ())
-            if focus and not any(re.search(r"(?<![A-Z0-9])" + re.escape(term) + r"(?![A-Z0-9])", raw, re.I) for term in focus):
-                continue
-            if raw.startswith(("SOURCE:", "[STRUCTURED INSTRUCTION RECORD]")):
-                # Source identity is in the citation. Structured extraction can
-                # omit operand symbols, so original definition/table wins.
-                continue
-            markers = [match for match in page_markers if match.start() <= start]
-            mode = markers[-1].group() if markers else ""
-            table = raw.startswith("[TABLE")
-            if not table and ("LAYOUT" in mode or "LADDER/DIAGRAM" in mode):
-                priority = 0
-            elif table and re.search(r"(?:Operand|Oper-\s*and).*Description|操作数.*含义", raw, re.I|re.S):
-                priority = 4
-            elif "PROSE" in mode or raw.startswith("[PAGE") and "PROSE" in raw.split("\n",1)[0]:
-                priority = 3
-            elif table:
-                priority = 2
-            else:
-                priority = 1
-            if focus and not result.get("instruction_opcode"):
-                priority += 5  # The referenced flag definition precedes opcode examples.
-            cats = [key for key, pattern in _FACT_TERMS.items() if pattern.search(raw)]
-            if needed is not None:
-                cats = [key for key in cats if key in needed]
-                if not cats:
+        for unit_start, unit_end in _units(text):
+            unit_raw = text[unit_start:unit_end]
+            embedded_cut = _embedded_instruction_layout_offset(unit_raw)
+            pieces = (
+                [
+                    (unit_start, unit_start + embedded_cut, False),
+                    (unit_start + embedded_cut, unit_end, True),
+                ]
+                if embedded_cut not in (None, 0)
+                else [(unit_start, unit_end, False)]
+            )
+            for start, end, embedded_layout in pieces:
+                raw = text[start:end]
+                focus = result.get("fact_focus_terms", ())
+                if focus and not any(re.search(r"(?<![A-Z0-9])" + re.escape(term) + r"(?![A-Z0-9])", raw, re.I) for term in focus):
                     continue
-            candidates.append((source_index, (start, end, cats), priority))
+                if raw.startswith(("SOURCE:", "[STRUCTURED INSTRUCTION RECORD]")):
+                    # Source identity is in the citation. Structured extraction can
+                    # omit operand symbols, so original definition/table wins.
+                    continue
+                markers = [match for match in page_markers if match.start() <= start]
+                mode = markers[-1].group() if markers else ""
+                table = raw.startswith("[TABLE")
+                if embedded_layout or (
+                    not table and ("LAYOUT" in mode or "LADDER/DIAGRAM" in mode)
+                ):
+                    priority = 0
+                elif table and re.search(r"(?:Operand|Oper-\s*and).*Description|操作数.*含义", raw, re.I|re.S):
+                    priority = 4
+                elif "PROSE" in mode or raw.startswith("[PAGE") and "PROSE" in raw.split("\n",1)[0]:
+                    priority = 3
+                elif table:
+                    priority = 2
+                else:
+                    priority = 1
+                if focus and not result.get("instruction_opcode"):
+                    priority += 5  # The referenced flag definition precedes opcode examples.
+                cats = [key for key, pattern in _FACT_TERMS.items() if pattern.search(raw)]
+                if needed is not None:
+                    cats = [key for key in cats if key in needed]
+                    if not cats:
+                        continue
+                candidates.append((source_index, (start, end, cats), priority))
     selected, rendered, covered = {}, {}, set()
     while candidates:
         candidates.sort(key=lambda item: (-item[2], -len(set(item[1][2])-covered),
