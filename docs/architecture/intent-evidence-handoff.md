@@ -57,14 +57,21 @@ Fresh Agent A candidates use `implementation_semantics` for control-structure
 semantics only. Agent A does not own opcode selection, operand layout, or internal
 M/D/T/C allocation. `plc.specification.approach` normalizes the structure vocabulary.
 
-Caller-fixed low-level choices are extracted independently by
-`plc.specification.explicit_constraints` from the caller's own text. Only direct,
-global opcode/device directives are promoted to hard constraints; a scoped
-construction phrase such as `不使用 SET/RST 实现 M0 保持` remains structure/behavior
-semantics and does not globally ban `SET`, `RST`, or `M0`. The extracted choices are stored as
-`explicit_user_constraints`. That owner covers required/forbidden opcodes and
-devices plus exact opcode+operands instances. Pinned reanalysis merges these persisted
-constraints with the current caller amendment, so Agent A does not have to repeat them.
+Caller-fixed low-level choices use the same claim/grounding boundary as execution
+intent. Agent A emits non-authoritative `explicit_constraint_claims` with
+`operation`, `scope`, a typed PLC target, and exact spans copied from the current
+request. Core validates claim shape, exact evidence membership, opcode/device
+identity and exact instruction form. It does not classify natural-language
+required/forbidden/scoped/clear wording. Only grounded `scope=global` claims
+produce structured operations; `scoped` and `ambiguous` claims remain visible in
+the receipt but never become global hard constraints.
+
+`plc.specification.explicit_constraints` owns only canonical constraint state and
+structured mutation. It persists required/forbidden opcodes and devices plus exact
+opcode+operands instances. Pinned reanalysis starts from persisted constraints for
+the same approach and applies only grounded current-turn operations. A later global
+opcode ban removes any persisted exact instance for that opcode, preventing stale
+self-conflicts.
 
 Core projects `implementation_semantics + explicit_user_constraints` into
 `generation_contract`. Model-authored `generation_contract` is not requested for
