@@ -437,9 +437,14 @@ def _visual_operand_sequence(raw, opcode, expected):
         for _position, token in sorted(positions):
             if token in expected_set and token not in sequence:
                 sequence.append(token)
-        if len(sequence) >= 2:
+        if len(sequence) < 2:
+            continue
+        indexes = [expected.index(token) for token in sequence]
+        if any(left >= right for left, right in zip(indexes, indexes[1:])):
             return sequence
-    return []
+        if "fallback" not in locals():
+            fallback = sequence
+    return locals().get("fallback", [])
 
 
 def _conflicts_with_verified_operand_order(result, raw):
