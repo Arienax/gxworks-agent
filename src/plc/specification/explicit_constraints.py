@@ -9,6 +9,7 @@ from __future__ import annotations
 import copy
 import re
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from plc.device_identity import DEVICE_TOKEN_RE, canonical_device
 from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
@@ -22,12 +23,25 @@ _FIELDS = (
     "forbidden_devices",
     "instruction_instances",
 )
-_NEGATIVE = re.compile(
-    r"(?:不要|不使用|不采用|禁用|禁止|不得|避免|不用|do\s+not\s+use|must\s+not\s+use|avoid)",
-    re.IGNORECASE,
+_NEGATIVE_DIRECTIVE = (
+    r"(?:"
+    r"不要(?:使用|采用|新增|增加|添加|分配|调用|选用|选择|启用)?|"
+    r"不得(?:使用|采用|新增|增加|添加|分配|调用|选用|选择|启用)?|"
+    r"禁止(?:使用|采用|新增|增加|添加|分配|调用|选用|选择|启用)?|"
+    r"不使用|不采用|不用|禁用|避免(?:使用|采用)?|"
+    r"do\s+not\s+use|must\s+not\s+use|avoid(?:\s+using)?"
+    r")"
 )
-_POSITIVE = re.compile(
-    r"(?:必须|务必|明确(?:要求)?|固定|指定|采用|使用|改用|用|must\s+use|required?|use)",
+_POSITIVE_DIRECTIVE = (
+    r"(?:"
+    r"必须(?:使用|采用|指定)?|务必(?:使用|采用|指定)?|"
+    r"明确(?:要求)?(?:使用|采用|指定)?|固定(?:使用|采用)?|"
+    r"指定(?:使用|采用)?|采用|使用|改用|选用|选择|调用|用|"
+    r"must\s+use|required?|use"
+    r")"
+)
+_DIRECTIVE = re.compile(
+    rf"(?P<forbidden>{_NEGATIVE_DIRECTIVE})|(?P<required>{_POSITIVE_DIRECTIVE})",
     re.IGNORECASE,
 )
 _COMPARISON = re.compile(
@@ -44,6 +58,45 @@ _OPERAND = re.compile(
     r"^(?:K[+-]?\d+|H[0-9A-F]+|(?:SM|SD|TS|TC|CS|CC|ER|X|Y|M|S|T|C|D|R|V|Z|P|I)\d+(?:[VZ]\d+)?|[+-]?\d+(?:\.\d+)?)$",
     re.IGNORECASE,
 )
+
+# A hard opcode/device constraint is global.  Natural-language negation often is
+# not: "do not use SET/RST to hold M0" forbids one implementation strategy, not
+# every RST in the program.  Parse from the directive toward its direct objects
+# so unrelated targets later in the clause cannot inherit the directive.
+_CLAUSE_END = re.compile(r"[。；;\n]")
+_TARGET_PREFIX = re.compile(r"^\s*(?:为|对|针对|给|让|使)(?=\s|[A-Za-z0-9_]|[\u3400-\u9fff])", re.IGNORECASE)
+_PURPOSE_RELATION = re.compile(
+    r"(?:实现|用于|用来|来实现|以便|以实现|作为|保持|锁存|控制|驱动|"
+    r"完成|复位|置位|清零|初始化|计数|延时|比较|运算)",
+    re.IGNORECASE,
+)
+_ALLOCATION_WORD = re.compile(r"(?:新增|增加|添加|分配|接入)", re.IGNORECASE)
+_DISABLE_WORD = re.compile(r"(?:禁用)", re.IGNORECASE)
+_GLUE_WORDS = re.compile(
+    r"(?:使用|采用|新增|增加|添加|分配|接入|指定|改用|选用|选择|调用|启用|"
+    r"指令|软元件|设备|地址|opcode|instruction|device|以及|并且|并|和|及|与|或)",
+    re.IGNORECASE,
+)
+_OPERAND_LITERAL = re.compile(r"(?:K[+-]?\d+|H[0-9A-F]+|[+-]?\d+(?:\.\d+)?)", re.IGNORECASE)
+_TRAILING_OBJECT_NOUN = re.compile(r"^\s*(?:指令|软元件|设备|地址|opcode|instruction|device)\s*", re.IGNORECASE)
+
+
+@dataclass(frozen=True)
+class _DirectiveObject:
+    kind: str
+    value: str
+    start: int
+    end: int
+
+
+@dataclass(frozen=True)
+class _DirectiveGroup:
+    status: str
+    action: str
+    start: int
+    end: int
+    objects: tuple[_DirectiveObject, ...]
+    scoped: bool
 
 
 def normalize_explicit_user_constraints(value):
@@ -88,21 +141,95 @@ def normalize_explicit_user_constraints(value):
     return result
 
 
-def _directive_context(text, start, *, width=96):
-    prefix = text[max(0, start - width):start]
-    sentence = re.split(r"[。；;\n]", prefix)[-1]
-    return prefix, sentence
+def _clause_end(text, start):
+    match = _CLAUSE_END.search(text, start)
+    return match.start() if match else len(text)
 
 
-def _directive_kind(text, start):
-    prefix, sentence = _directive_context(text, start)
-    if _NEGATIVE.search(sentence):
-        return "forbidden"
-    if _POSITIVE.search(sentence):
-        return "required"
-    if _COMPARISON.search(sentence):
-        return "comparison"
-    return ""
+def _candidate_objects(text, start, end, plc_model):
+    result = []
+    for match in _TOKEN.finditer(text, start, end):
+        token = match.group(1)
+        opcode = token.upper()
+        resolved = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(opcode, cpu=plc_model)
+        if resolved is not None and resolved.spec.supports_cpu(str(plc_model or "").upper()):
+            result.append(_DirectiveObject("opcode", opcode, match.start(), match.end()))
+            continue
+        device = canonical_device(token.upper())
+        if isinstance(device, str) and DEVICE_TOKEN_RE.fullmatch(device):
+            result.append(_DirectiveObject("device", device, match.start(), match.end()))
+    return result
+
+
+def _direct_gap(value):
+    """True only when text between a directive/object and the next object is glue.
+
+    Unknown prose is a boundary.  This is intentionally conservative: missing a
+    hard constraint is safer than promoting a scoped sentence into a global ban.
+    """
+    text = _OPERAND_LITERAL.sub(" ", str(value or ""))
+    text = _GLUE_WORDS.sub(" ", text)
+    text = re.sub(r"[\s/、,，:：()（）\[\]{}]+", " ", text)
+    return not text.strip()
+
+
+def _directive_action(raw):
+    if _ALLOCATION_WORD.search(raw):
+        return "allocation"
+    if _DISABLE_WORD.search(raw):
+        return "disable"
+    return "use"
+
+
+def _directive_groups(source, plc_model):
+    groups = []
+    for directive in _DIRECTIVE.finditer(source):
+        status = "forbidden" if directive.lastgroup == "forbidden" else "required"
+        end = _clause_end(source, directive.end())
+        tail = source[directive.end():end]
+        if _TARGET_PREFIX.match(tail):
+            groups.append(_DirectiveGroup(
+                status, _directive_action(directive.group(0)),
+                directive.start(), directive.end(), (), True,
+            ))
+            continue
+
+        objects = []
+        cursor = directive.end()
+        for item in _candidate_objects(source, directive.end(), end, plc_model):
+            gap = source[cursor:item.start]
+            if not _direct_gap(gap):
+                break
+            objects.append(item)
+            cursor = item.end()
+
+        scoped = False
+        action = _directive_action(directive.group(0))
+        if status == "forbidden" and objects and action not in {"allocation", "disable"}:
+            suffix = source[objects[-1].end:end]
+            suffix = _TRAILING_OBJECT_NOUN.sub("", suffix)
+            # A comma begins a new explanatory clause unless it was consumed
+            # between direct objects above.  Scope relations before that boundary
+            # qualify the ban; later prose does not.
+            suffix = re.split(r"[,，]", suffix, maxsplit=1)[0]
+            suffix = _OPERAND_LITERAL.sub(" ", suffix)
+            scoped = bool(_PURPOSE_RELATION.search(suffix))
+
+        groups.append(_DirectiveGroup(
+            status, action, directive.start(), directive.end(), tuple(objects), scoped,
+        ))
+    return groups
+
+
+def _object_directive(groups, start, end, kind):
+    matched = [
+        group for group in groups
+        if any(
+            item.kind == kind and item.start == start and item.end == end
+            for item in group.objects
+        )
+    ]
+    return max(matched, key=lambda group: group.start) if matched else None
 
 
 def _operand_tokens(text):
@@ -113,21 +240,12 @@ def _operand_tokens(text):
     ]
 
 
-def _line_like_instance(text, start, end):
-    line_start = text.rfind("\n", 0, start) + 1
-    line_end = text.find("\n", end)
-    if line_end < 0:
-        line_end = len(text)
-    before = text[line_start:start].strip(" \t:-：")
-    after = text[end:line_end].strip(" \t,，;；。")
-    return not before and not after
-
-
 def extract_explicit_user_constraints(text, plc_model="FX3U"):
     """Return current-turn explicit constraints plus non-persistent clear commands."""
     source = str(text or "")
     constraints = normalize_explicit_user_constraints({})
     instance_spans = []
+    directive_groups = _directive_groups(source, plc_model)
 
     for match in _TOKEN.finditer(source):
         opcode = match.group(1).upper()
@@ -135,7 +253,9 @@ def extract_explicit_user_constraints(text, plc_model="FX3U"):
         if resolved is None or not resolved.spec.supports_cpu(str(plc_model or "").upper()):
             continue
         spec = resolved.spec
-        directive = _directive_kind(source, match.start())
+        directive = _object_directive(
+            directive_groups, match.start(), match.end(), "opcode"
+        )
         tail = source[match.end():]
         tokens = _operand_tokens(tail)
         operand_count = (
@@ -162,11 +282,9 @@ def extract_explicit_user_constraints(text, plc_model="FX3U"):
                 # mention is only comparative. Do not duplicate them as
                 # standalone required_devices.
                 instance_spans.append((match.start(), raw_end))
-                prefix, sentence = _directive_context(source, match.start())
-                explicitly_fixed = directive == "required" or (
-                    not _COMPARISON.search(sentence)
-                    and _line_like_instance(source, match.start(), raw_end)
-                    and bool(_POSITIVE.search(prefix))
+                explicitly_fixed = (
+                    directive is not None
+                    and directive.status == "required"
                 )
                 if explicitly_fixed:
                     instance = {"opcode": opcode, "operands": operands}
@@ -175,10 +293,12 @@ def extract_explicit_user_constraints(text, plc_model="FX3U"):
                         constraints["required_opcodes"].append(opcode)
         if instance is not None:
             continue
-        if directive == "forbidden":
+        if directive is None:
+            continue
+        if directive.status == "forbidden" and not directive.scoped:
             if opcode not in constraints["forbidden_opcodes"]:
                 constraints["forbidden_opcodes"].append(opcode)
-        elif directive == "required":
+        elif directive.status == "required":
             if opcode not in constraints["required_opcodes"]:
                 constraints["required_opcodes"].append(opcode)
 
@@ -188,12 +308,16 @@ def extract_explicit_user_constraints(text, plc_model="FX3U"):
     for match in DEVICE_TOKEN_RE.finditer(source):
         if inside_instance(match.start(), match.end()):
             continue
-        directive = _directive_kind(source, match.start())
+        directive = _object_directive(
+            directive_groups, match.start(), match.end(), "device"
+        )
+        if directive is None:
+            continue
         device = canonical_device(match.group(0).upper())
-        if directive == "forbidden":
+        if directive.status == "forbidden" and not directive.scoped:
             if device not in constraints["forbidden_devices"]:
                 constraints["forbidden_devices"].append(device)
-        elif directive == "required":
+        elif directive.status == "required":
             if device not in constraints["required_devices"]:
                 constraints["required_devices"].append(device)
 

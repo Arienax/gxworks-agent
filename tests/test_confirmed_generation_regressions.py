@@ -150,6 +150,59 @@ def test_comparison_text_does_not_become_a_fixed_instruction_instance():
     assert result["constraints"]["required_opcodes"] == []
 
 
+def test_explicit_constraint_scope_promotes_only_direct_global_objects():
+    from plc.specification.explicit_constraints import extract_explicit_user_constraints
+
+    cases = [
+        ("禁止使用 SET/RST。", [], ["SET", "RST"], [], []),
+        ("不要使用 M100、M101。", [], [], [], ["M100", "M101"]),
+        ("不使用 SET/RST 实现 M0 保持。", [], [], [], []),
+        ("不要为 Y1 另外增加保持状态。", [], [], [], []),
+        ("禁止使用 RST 指令，计数器通过其他方式复位。", [], ["RST"], [], []),
+        ("不要新增 X10/X11 作为外部输入。", [], [], [], ["X10", "X11"]),
+        ("指定 D10 作为状态寄存器。", [], [], ["D10"], []),
+    ]
+    for text, required_opcodes, forbidden_opcodes, required_devices, forbidden_devices in cases:
+        constraints = extract_explicit_user_constraints(text, "FX3U")["constraints"]
+        assert constraints["required_opcodes"] == required_opcodes, text
+        assert constraints["forbidden_opcodes"] == forbidden_opcodes, text
+        assert constraints["required_devices"] == required_devices, text
+        assert constraints["forbidden_devices"] == forbidden_devices, text
+
+
+def test_scoped_negative_does_not_poison_generation_contract():
+    raw = {
+        "summary": "运行保持与批次控制",
+        "approaches": [{
+            "approach_id": "direct",
+            "name": "直接结构",
+            "generation_guide": "",
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+                {"kind": "structure", "status": "forbidden", "value": "set_reset_latch"},
+            ],
+        }],
+        "missing_info": [], "suggested_io": {}, "hardware_config": {}, "assumptions": [],
+    }
+    normalized = _normalize_analysis_result(
+        raw,
+        plc_model="FX3U",
+        user_text=(
+            "M0 为系统运行保持状态，不使用 SET/RST 实现 M0 保持。"
+            "T0 到时后 Y1=ON；不要为 Y1 另外增加保持状态。"
+        ),
+    )
+    selected = normalized["approaches"][0]
+    explicit = selected["explicit_user_constraints"]
+    assert explicit["forbidden_opcodes"] == []
+    assert explicit["forbidden_devices"] == []
+    contract = selected["generation_contract"]
+    assert contract["required_structures"] == ["self_hold"]
+    assert contract["forbidden_structures"] == ["set_reset_latch"]
+    assert contract["forbidden_opcodes"] == []
+    assert contract["forbidden_devices"] == []
+
+
 def test_agent_b_frames_first_json_but_consumes_trailing_usage():
     base = _DuplicateJsonProvider()
     provider = _FirstJSONObjectProvider(base)

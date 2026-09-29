@@ -40,7 +40,10 @@ semantics only. Agent A does not own opcode selection, operand layout, or intern
 M/D/T/C allocation. `plc.specification.approach` normalizes the structure vocabulary.
 
 Caller-fixed low-level choices are extracted independently by
-`plc.specification.explicit_constraints` from the caller's own text and stored as
+`plc.specification.explicit_constraints` from the caller's own text. Only direct,
+global opcode/device directives are promoted to hard constraints; a scoped
+construction phrase such as `不使用 SET/RST 实现 M0 保持` remains structure/behavior
+semantics and does not globally ban `SET`, `RST`, or `M0`. The extracted choices are stored as
 `explicit_user_constraints`. That owner covers required/forbidden opcodes and
 devices plus exact opcode+operands instances. Pinned reanalysis merges these persisted
 constraints with the current caller amendment, so Agent A does not have to repeat them.
