@@ -1,0 +1,149 @@
+name: Cold Instruction Delivery Probe
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/cold-instruction-probe.yml'
+      - 'src/knowledge/**'
+      - 'src/plc/**'
+      - 'resources/instructions/mitsubishi/**'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Probe cold instruction delivery
+        run: |
+          PYTHONPATH=src:. python - <<'PY'
+          import copy, json
+          from pathlib import Path
+
+          import plc.instructions as instructions
+          from application.confirmed_generation_context import build_confirmed_generation_context
+          from knowledge.evidence import estimate_tokens
+          from plc.instructions import InstructionRegistry
+
+          ROOT = Path.cwd()
+          CAT = ROOT / "resources" / "instructions" / "mitsubishi"
+          CURRENT = instructions.DEFAULT_INSTRUCTION_REGISTRY
+
+          baseline = InstructionRegistry.from_files([
+              CAT / name for name in (
+                  "common.json", "fx3u.json", "fx5u.json",
+                  "fx3u_verified_opcodes.json", "modifier_rules.json",
+              )
+          ])
+          baseline.load_contract_promotions(CAT / "fx3u_contract_promotions.json")
+          cap = CAT / "instruction_capabilities.json"
+          if cap.is_file():
+              baseline.load_capability_contract(cap)
+
+          cases = {
+              "DADDP": ["D0", "D2", "D4"],
+              "DGBIN": ["D0", "D10"],
+              "DHSZ": ["D0", "D2", "D4", "D100"],
+              "UNI": ["D0", "D10", "K4"],
+              "HOUR": ["D0", "D10", "D20"],
+              "IVCK": ["D0", "K1", "D10", "K1"],
+              "ROTC": ["D0", "K1", "K2", "D10"],
+              "TCMP": ["D0", "D2", "D4", "D10", "D20"],
+          }
+
+          def run_one(registry, opcode, operands):
+              instructions.DEFAULT_INSTRUCTION_REGISTRY = registry
+              spec = {
+                  "summary": "cold instruction delivery probe",
+                  "selected_approach": {
+                      "generation_contract": {
+                          "required_opcodes": [opcode],
+                          "instruction_instances": [{
+                              "opcode": opcode,
+                              "operands": operands,
+                          }],
+                      }
+                  },
+              }
+              ctx = build_confirmed_generation_context(spec, "FX3U")
+              report = ctx.handoff.get("instruction_facts") or {}
+              lookup = next(
+                  (row for row in report.get("lookups", [])
+                   if row.get("opcode") == opcode),
+                  {},
+              )
+              record = next(
+                  (row for row in report.get("records", [])
+                   if str((row.get("instruction_instance") or {}).get("opcode") or
+                          row.get("instruction_opcode") or "").upper() == opcode),
+                  {},
+              )
+              target = record.get("target_applicability") or {}
+              included = [row for row in report.get("records", []) if row.get("included")]
+              categories = sorted({
+                  category
+                  for row in included
+                  for category in (row.get("candidate_fact_categories") or [])
+              })
+              lane_lines = [
+                  line for line in str(ctx.knowledge_context).splitlines()
+                  if line.startswith((
+                      "OPERAND_SEMANTICS:",
+                      "TARGET_APPLICABILITY:",
+                      "RUNTIME_SEMANTICS:",
+                      "STEP_WIDTH:",
+                  ))
+              ]
+              return {
+                  "operand_order_status": target.get("operand_order_status"),
+                  "operand_role_status": target.get("operand_role_status"),
+                  "operand_type_status": target.get("operand_type_status"),
+                  "manual_gaps": lookup.get("manual_gaps"),
+                  "structured_dimensions": lookup.get("structured_dimensions"),
+                  "included_manual_categories": categories,
+                  "knowledge_chars": len(ctx.knowledge_context),
+                  "knowledge_tokens": estimate_tokens(ctx.knowledge_context),
+                  "included_records": sum(bool(row.get("included")) for row in report.get("records", [])),
+                  "operand_slots": record.get("operand_slots") or [],
+                  "lane_lines": lane_lines,
+                  "contains_operand_table_terms": any(
+                      token in str(ctx.knowledge_context)
+                      for token in ("Operand Type", "Operand | Description", "Set data")
+                  ),
+              }
+
+          output = {}
+          try:
+              for opcode, operands in cases.items():
+                  before = run_one(baseline, opcode, operands)
+                  after = run_one(CURRENT, opcode, operands)
+                  output[opcode] = {
+                      "baseline": before,
+                      "promoted": after,
+                      "delta_chars": after["knowledge_chars"] - before["knowledge_chars"],
+                      "delta_tokens": after["knowledge_tokens"] - before["knowledge_tokens"],
+                  }
+          finally:
+              instructions.DEFAULT_INSTRUCTION_REGISTRY = CURRENT
+
+          Path("/tmp/cold-instruction-probe.json").write_text(
+              json.dumps(output, ensure_ascii=False, indent=2),
+              encoding="utf-8",
+          )
+          print(json.dumps(output, ensure_ascii=False, indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cold-instruction-probe
+          path: /tmp/cold-instruction-probe.json
