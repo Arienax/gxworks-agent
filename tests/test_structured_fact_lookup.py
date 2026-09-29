@@ -170,6 +170,10 @@ def test_instruction_lanes_split_common_semantics_target_overlay_and_runtime():
     assert add_fx3["operand_semantics"]["operands"] == add_fx5["operand_semantics"]["operands"]
     assert [slot["role"] for slot in add_fx3["operand_slots"]] == ["read", "read", "write"]
     assert [slot["value"] for slot in add_fx3["operand_slots"]] == ["K1", "D1", "D2"]
+    assert {slot["role_status"] for slot in add_fx3["operand_slots"]} == {"source_verified"}
+    assert {slot["symbol_status"] for slot in add_fx3["operand_slots"]} == {"source_verified"}
+    assert {slot["device_class_status"] for slot in add_fx3["operand_slots"]} == {"unresolved"}
+    assert {slot["role_status"] for slot in add_fx5["operand_slots"]} != {"source_verified"}
     assert add_fx3["target_applicability"]["target_model"] == "FX3U"
     assert add_fx5["target_applicability"]["target_model"] == "FX5U"
     assert add_fx3["runtime_semantics"]["special_devices"] == []
