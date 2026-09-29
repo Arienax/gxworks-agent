@@ -29,27 +29,115 @@ _FACT_TERMS = {
 _OFFICIAL = frozenset({"programming", "positioning", "structured_instruction", "structured_function"})
 _VERSION = "instruction-facts-v3-gap-directed"
 
+_OPERAND_SLOT_FACETS = (
+    ("operand_roles", "role_status", "operand_role_status"),
+    ("operand_types", "data_type_status", "operand_type_status"),
+    ("operand_order", "symbol_status", "operand_order_status"),
+    ("device_classes", "device_class_status", "device_class_status"),
+)
 
-def _manual_fact_gaps(record):
-    """Return only dimensions not already source-verified structurally."""
+
+def _best_status(*values):
+    normalized = [str(value or "unresolved") for value in values]
+    if "source_verified" in normalized:
+        return "source_verified"
+    for value in normalized:
+        if value not in {"", "unresolved"}:
+            return value
+    return "unresolved"
+
+
+def _operand_gap_details(record):
+    """Return unresolved operand facts at slot × facet granularity.
+
+    Manual evidence is still packed as whole source units (especially tables),
+    but one verified operand facet must not close unrelated facets or positions.
+    Slot-level status is preferred; aggregate lane status is a compatibility
+    fallback for records produced before slot status was materialized.
+    """
     record = record if isinstance(record, Mapping) else {}
-    gaps = set(FACT_QUESTIONS)
     operand = record.get("operand_semantics") or {}
     target = record.get("target_applicability") or {}
+    slots = record.get("operand_slots")
 
-    role_verified = (
-        operand.get("operand_role_status") == "source_verified"
-        or target.get("operand_role_status") == "source_verified"
-    )
-    type_verified = (
-        operand.get("operand_type_status") == "source_verified"
-        or target.get("operand_type_status") == "source_verified"
-    )
+    if isinstance(slots, list) and slots:
+        gaps = []
+        for raw_slot in slots:
+            if not isinstance(raw_slot, Mapping):
+                continue
+            position = raw_slot.get("position")
+            for facet, slot_key, _aggregate_key in _OPERAND_SLOT_FACETS:
+                status = str(raw_slot.get(slot_key) or "unresolved")
+                if status == "source_verified":
+                    continue
+                gap = {
+                    "position": position,
+                    "facet": facet,
+                    "status": status,
+                }
+                for key in ("symbol", "name"):
+                    if raw_slot.get(key):
+                        gap[key] = str(raw_slot[key])
+                gaps.append(gap)
+        return gaps
+
     if (
-        role_verified
-        and type_verified
+        target.get("min_operands") == 0
+        and target.get("max_operands") == 0
         and target.get("operand_order_status") == "source_verified"
     ):
+        return []
+
+    definitions = list(operand.get("operands") or ())
+    symbols = list(target.get("native_operand_order") or ())
+    count = max(len(definitions), len(symbols))
+    aggregate_status = {
+        "operand_roles": _best_status(
+            operand.get("operand_role_status"),
+            target.get("operand_role_status"),
+        ),
+        "operand_types": _best_status(
+            operand.get("operand_type_status"),
+            target.get("operand_type_status"),
+        ),
+        "operand_order": str(target.get("operand_order_status") or "unresolved"),
+        "device_classes": str(target.get("device_class_status") or "unresolved"),
+    }
+
+    gaps = []
+    positions = range(1, count + 1) if count else (None,)
+    for position in positions:
+        definition = (
+            definitions[position - 1]
+            if position is not None and position <= len(definitions)
+            and isinstance(definitions[position - 1], Mapping)
+            else {}
+        )
+        symbol = (
+            symbols[position - 1]
+            if position is not None and position <= len(symbols)
+            else None
+        )
+        for facet, _slot_key, _aggregate_key in _OPERAND_SLOT_FACETS:
+            status = aggregate_status[facet]
+            if status == "source_verified":
+                continue
+            gap = {"position": position, "facet": facet, "status": status}
+            if symbol:
+                gap["symbol"] = str(symbol)
+            if definition.get("name"):
+                gap["name"] = str(definition["name"])
+            gaps.append(gap)
+    return gaps
+
+
+def _manual_fact_gaps(record):
+    """Return coarse manual lanes derived from fine-grained structured gaps."""
+    record = record if isinstance(record, Mapping) else {}
+    gaps = set(FACT_QUESTIONS)
+    target = record.get("target_applicability") or {}
+
+    if not _operand_gap_details(record):
         gaps.discard("operands")
     if target.get("boundary_status") == "source_verified":
         gaps.discard("limits")
@@ -496,8 +584,12 @@ def retrieve_instruction_facts(
                 sources.append(result)
 
         structured_owner = seeds[0] if seeds else {}
+        operand_gap_details = _operand_gap_details(structured_owner)
         manual_gaps = _manual_fact_gaps(structured_owner)
         report["lookups"][-1]["manual_gaps"] = sorted(manual_gaps)
+        report["lookups"][-1]["operand_gap_details"] = copy.deepcopy(
+            operand_gap_details
+        )
         report["lookups"][-1]["structured_dimensions"] = sorted(
             _structured_fact_dimensions(structured_owner)
         )
@@ -536,7 +628,8 @@ def retrieve_instruction_facts(
                 set(value.get("candidate_fact_categories") or ())
                 | set(_structured_fact_dimensions(value))
             )
-            value["manual_fact_gaps"] = sorted(_manual_fact_gaps(value))
+            value["manual_fact_gaps"] = sorted(manual_gaps)
+            value["operand_gap_details"] = copy.deepcopy(operand_gap_details)
         groups.append(pool)
 
     results = []
@@ -552,7 +645,8 @@ def retrieve_instruction_facts(
                 "source_spans", "candidate_fact_categories", "fact_kind",
                 "fact_target", "fact_dimensions", "instruction_contract",
                 "operand_semantics", "target_applicability", "runtime_semantics",
-                "operand_slots", "instruction_step_width", "instruction_instance",
+                "operand_slots", "operand_gap_details",
+                "instruction_step_width", "instruction_instance",
             )
             if key in item
         }
