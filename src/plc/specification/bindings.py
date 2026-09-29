@@ -10,7 +10,7 @@ import copy
 import hashlib
 import re
 from plc.device_identity import canonical_device, canonical_io_rows
-from plc.comments import short_device_comment
+from plc.comments import device_purpose_label
 
 _DEVICE = re.compile(r"(?<![A-Za-z0-9_])(?:SM|SD|[XYMTCSDVZ])\d+(?![A-Za-z0-9_])", re.I)
 _ALIASES = {"start_input": ("start", "X"), "stop_input": ("stop", "X"),
@@ -48,12 +48,19 @@ _STATE_NOT_PURPOSE_RE = re.compile(
 
 
 def _declared_io_segments(user_text):
-    """Split statement punctuation plus commas that introduce another device."""
+    """Split only when every comma-separated part is itself a declaration."""
     for statement in re.split(r"[\n;；。]+", str(user_text or "")):
-        for segment in _DECLARATION_SEPARATOR_RE.split(statement):
-            segment = segment.strip()
-            if segment:
-                yield segment
+        statement = statement.strip()
+        if not statement:
+            continue
+        parts = [part.strip() for part in _DECLARATION_SEPARATOR_RE.split(statement)]
+        if (
+            len(parts) > 1
+            and all(part and _DECLARED_IO_LINE_RE.fullmatch(part) for part in parts)
+        ):
+            yield from parts
+        else:
+            yield statement
 
 
 
@@ -145,7 +152,7 @@ def extract_declared_bindings(user_text, plc_model=None):
         if "?" in raw_value or "？" in raw_value or _STATE_NOT_PURPOSE_RE.match(raw_value):
             continue
         purpose = _INPUT_QUALIFIER_RE.split(raw_value, maxsplit=1)[0].strip()
-        label = short_device_comment(purpose or raw_value)
+        label = device_purpose_label(purpose or raw_value)
         if not label:
             continue
         role = canonical_signal_role(label)

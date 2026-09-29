@@ -8,7 +8,6 @@ boundary so UI previews and CSV artifacts agree.
 from __future__ import annotations
 
 import re
-import unicodedata
 from collections.abc import Mapping
 
 from plc.device_identity import canonical_device, canonical_device_map
@@ -20,20 +19,22 @@ _COMMENT_BREAK_RE = re.compile(r"[\r\n，,；;。]+")
 _SURROUNDING_QUOTES = "\"'“”‘’「」『』"
 
 
-def short_device_comment(value, *, max_chars=GXWORKS2_DEVICE_COMMENT_MAX_CHARS):
-    """Return a compact device-purpose label without carrying behavior prose."""
+def device_purpose_label(value):
+    """Extract the first human purpose phrase without applying GX length limits."""
     if not isinstance(value, str):
         return ""
-    text = unicodedata.normalize("NFKC", value)
-    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\s+", " ", value).strip()
     if not text or text.casefold() == "null":
         return ""
     text = text.strip(_SURROUNDING_QUOTES + " ")
-    # A device comment is a name/purpose phrase. Everything after the first
-    # natural clause separator belongs in intent/semantics, not in the comment.
+    # Behavior after a natural clause separator belongs in intent/semantics.
     text = _COMMENT_BREAK_RE.split(text, maxsplit=1)[0].strip()
-    text = text.strip(_SURROUNDING_QUOTES + " ")
-    return text[:max(0, int(max_chars))]
+    return text.strip(_SURROUNDING_QUOTES + " ")
+
+
+def short_device_comment(value, *, max_chars=GXWORKS2_DEVICE_COMMENT_MAX_CHARS):
+    """Return the GX-safe view of one device-purpose label."""
+    return device_purpose_label(value)[:max(0, int(max_chars))]
 
 
 def normalize_device_comments(value):
@@ -55,6 +56,7 @@ def normalize_device_comments(value):
 
 __all__ = [
     "GXWORKS2_DEVICE_COMMENT_MAX_CHARS",
+    "device_purpose_label",
     "normalize_device_comments",
     "short_device_comment",
 ]
