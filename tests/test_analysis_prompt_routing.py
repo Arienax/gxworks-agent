@@ -225,7 +225,7 @@ def test_core_shape_and_required_parameter_instructions_remain():
     assert "default 不是已确认答案" in ANALYSIS_SYSTEM_PROMPT
     assert "完整操作数" in ANALYSIS_SYSTEM_PROMPT
     assert set(json.loads(example)) == {
-        "summary", "approaches", "execution_intent_claims", "missing_info", "suggested_io", "hardware_config", "assumptions",
+        "summary", "approaches", "execution_intent_claims", "explicit_constraint_claims", "missing_info", "suggested_io", "hardware_config", "assumptions",
     }
 
 
