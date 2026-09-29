@@ -39,121 +39,173 @@ def _units(text: str):
         yield match.group(0), text[match.start():end]
 
 
+def _tokens(value: str, expected: list[str]) -> list[str]:
+    # PDF layout can collapse adjacent visual cells (for example nS1).
+    value = re.sub(r"(?i)(?<![A-Z0-9])n(?=[SDM]\\d)", "n ", value)
+    expected_set = set(expected)
+    result = []
+    for raw in TOKEN.findall(value):
+        token = _symbol(raw)
+        if token in expected_set and token not in result:
+            result.append(token)
+    return result
+
+
 def _candidate_sequences(text: str, opcode: str, expected: list[str]):
-    boundary = r"[A-Za-z0-9_.$@+<>!=\-]"
+    boundary = r"[A-Za-z0-9_.$@+<>!=\\-]"
     pattern = re.compile(
         r"(?<!%s)%s(?!%s)" % (boundary, re.escape(opcode), boundary),
         re.I,
     )
-    expected_set = set(expected)
     arity = len(expected)
     for marker, unit in _units(text):
         mode = "table" if marker.startswith("[TABLE") else (
             "layout" if "LAYOUT" in marker or "LADDER/DIAGRAM" in marker else
             "prose" if "PROSE" in marker else "other"
         )
+        lines = unit.splitlines()
+        offsets = []
+        cursor = 0
+        for line in lines:
+            offsets.append(cursor)
+            cursor += len(line) + 1
         for match in pattern.finditer(unit):
-            # The problematic source is a flattened instruction graphic, not
-            # ordinary prose mentioning one operand. Keep the window local.
-            tail = unit[match.end():match.end() + 420]
-            visual = bool(VISUAL.search(tail))
-            short_lines = [line.strip() for line in tail.splitlines()[:14] if line.strip()]
-            layoutish = visual or (
-                len(short_lines) >= 3
-                and sum(len(line) <= 48 for line in short_lines) >= 3
+            line_index = max(
+                (index for index, offset in enumerate(offsets) if offset <= match.start()),
+                default=0,
             )
-            if not layoutish:
+            immediate = "\\n".join(lines[line_index:line_index + 4])
+            same_line = lines[line_index][match.start() - offsets[line_index]:]
+            glyphs = immediate.count("[GLYPH-")
+            immediate_tokens = _tokens(immediate[immediate.upper().find(opcode.upper()) + len(opcode):], expected)
+            same_tokens = _tokens(same_line[len(opcode):], expected)
+
+            tiers = []
+            if same_tokens and same_tokens[0] != expected[0] and glyphs >= 1:
+                tiers.append("inline_prefix_conflict")
+            if (
+                glyphs >= 2
+                and len(immediate_tokens) == arity
+                and set(immediate_tokens) == set(expected)
+                and immediate_tokens != expected
+            ):
+                tiers.append("complete_diagram_conflict")
+
+            # Broad diagnostic tier: useful for finding other flattened visual
+            # sequences, but not counted as a confirmed prompt contradiction.
+            tail = unit[match.end():match.end() + 420]
+            broad_tokens = _tokens(tail, expected)
+            indexes = [expected.index(token) for token in broad_tokens]
+            broad_conflict = (
+                len(broad_tokens) >= 2
+                and any(left >= right for left, right in zip(indexes, indexes[1:]))
+                and (
+                    bool(VISUAL.search(tail))
+                    or (
+                        len([line for line in tail.splitlines()[:14] if line.strip()]) >= 3
+                        and sum(len(line.strip()) <= 48 for line in tail.splitlines()[:14] if line.strip()) >= 3
+                    )
+                )
+            )
+            if broad_conflict:
+                tiers.append("broad_visual_conflict")
+            if not tiers:
                 continue
 
-            tokens = [_symbol(value) for value in TOKEN.findall(tail)]
-            # Keep first occurrence of each expected placeholder. The promoted
-            # native signatures are unique-symbol sequences by construction.
-            sequence = []
-            for token in tokens:
-                if token in expected_set and token not in sequence:
-                    sequence.append(token)
-                if len(sequence) == arity:
-                    break
-            if len(sequence) < 2:
-                continue
-
-            hard = len(sequence) == arity and set(sequence) == expected_set and sequence != expected
-            # Partial visual order is suspicious when its relative order cannot
-            # occur as a subsequence of the verified native order.
-            indexes = [expected.index(token) for token in sequence if token in expected_set]
-            partial_conflict = any(left >= right for left, right in zip(indexes, indexes[1:]))
-            if not hard and not partial_conflict:
-                continue
-
-            excerpt = unit[match.start():match.end() + 420]
+            excerpt = "\\n".join(lines[line_index:line_index + 8])
             yield {
                 "mode": mode,
-                "sequence": sequence,
-                "hard": hard,
-                "excerpt": excerpt[:700].replace("\u0000", ""),
+                "sequence": immediate_tokens or broad_tokens,
+                "tiers": sorted(set(tiers)),
+                "excerpt": excerpt[:900].replace("\\u0000", ""),
             }
 
 
 def build_report(database=DB, ledger_path=LEDGER):
     ledger = json.loads(Path(ledger_path).read_text(encoding="utf-8"))
-    promoted = []
-    for entry in ledger["entries"]:
-        for form in entry["forms"]:
-            promoted.append({
-                "opcode": form,
-                "expected": [str(value).upper() for value in entry["native_order"]],
-                "native_page": entry["native_page"],
-            })
-
     conflicts = []
-    missing = []
+    missing_entries = []
     with sqlite3.connect(Path(database).resolve().as_uri() + "?mode=ro", uri=True) as connection:
         connection.row_factory = sqlite3.Row
-        for item in promoted:
+        for entry_index, entry in enumerate(ledger["entries"]):
+            expected = [str(value).upper() for value in entry["native_order"]]
+            forms = [str(value).upper() for value in entry["forms"]]
+            placeholders = ",".join("?" for _ in forms)
             rows = connection.execute(
-                """
-                SELECT c.id,c.text,c.pdf_page,c.manual_id
+                f"""
+                SELECT DISTINCT c.id,c.text,c.pdf_page,c.manual_id
                 FROM instructions i
                 JOIN chunks c ON CAST(c.id AS TEXT)=CAST(i.chunk_id AS TEXT)
-                WHERE UPPER(i.opcode_norm)=? AND c.manual_id=?
-                ORDER BY CASE WHEN c.pdf_page=? THEN 0 ELSE 1 END,c.pdf_page,c.id
+                WHERE UPPER(i.opcode_norm) IN ({placeholders}) AND c.manual_id=?
+                ORDER BY c.pdf_page,c.id
                 """,
-                (item["opcode"], NATIVE, item["native_page"]),
+                (*forms, NATIVE),
             ).fetchall()
             if not rows:
-                missing.append(item)
+                missing_entries.append({"entry": entry_index, "forms": forms})
                 continue
             seen = set()
             for row in rows:
-                for candidate in _candidate_sequences(
-                    str(row["text"] or ""), item["opcode"], item["expected"]
-                ):
-                    marker = (
-                        item["opcode"], tuple(candidate["sequence"]),
-                        row["id"], candidate["excerpt"],
-                    )
-                    if marker in seen:
-                        continue
-                    seen.add(marker)
-                    conflicts.append({
-                        **item,
-                        "chunk_id": str(row["id"]),
-                        "chunk_page": row["pdf_page"],
-                        **candidate,
-                    })
+                for opcode in forms:
+                    for candidate in _candidate_sequences(
+                        str(row["text"] or ""), opcode, expected
+                    ):
+                        marker = (
+                            opcode, tuple(candidate["sequence"]),
+                            tuple(candidate["tiers"]), row["id"], candidate["excerpt"],
+                        )
+                        if marker in seen:
+                            continue
+                        seen.add(marker)
+                        conflicts.append({
+                            "entry": entry_index,
+                            "forms": forms,
+                            "opcode": opcode,
+                            "expected": expected,
+                            "native_page": entry["native_page"],
+                            "chunk_id": str(row["id"]),
+                            "chunk_page": row["pdf_page"],
+                            **candidate,
+                        })
 
-    hard_forms = sorted({row["opcode"] for row in conflicts if row["hard"]})
-    all_forms = sorted({row["opcode"] for row in conflicts})
+    high = [
+        row for row in conflicts
+        if {"inline_prefix_conflict", "complete_diagram_conflict"} & set(row["tiers"])
+    ]
+    high_entries = sorted({row["entry"] for row in high})
+    high_forms = sorted({
+        form for row in high for form in row["forms"]
+    })
+    inline_forms = sorted({
+        form for row in high
+        if "inline_prefix_conflict" in row["tiers"]
+        for form in row["forms"]
+    })
+    complete_forms = sorted({
+        form for row in high
+        if "complete_diagram_conflict" in row["tiers"]
+        for form in row["forms"]
+    })
+    broad_forms = sorted({
+        form for row in conflicts
+        if "broad_visual_conflict" in row["tiers"]
+        for form in row["forms"]
+    })
     return {
-        "schema_version": 1,
-        "promoted_forms": len(promoted),
+        "schema_version": 2,
+        "promoted_forms": sum(len(entry["forms"]) for entry in ledger["entries"]),
         "ledger_entries": len(ledger["entries"]),
-        "forms_with_rag_visible_order_conflict": len(all_forms),
-        "forms_with_complete_alternative_order": len(hard_forms),
-        "conflict_forms": all_forms,
-        "hard_conflict_forms": hard_forms,
-        "missing_forms": [row["opcode"] for row in missing],
-        "conflicts": conflicts,
+        "high_conflict_entries": len(high_entries),
+        "high_conflict_forms": len(high_forms),
+        "inline_prefix_conflict_forms": len(inline_forms),
+        "complete_diagram_conflict_forms": len(complete_forms),
+        "broad_candidate_forms": len(broad_forms),
+        "high_conflict_form_names": high_forms,
+        "inline_prefix_form_names": inline_forms,
+        "complete_diagram_form_names": complete_forms,
+        "broad_candidate_form_names": broad_forms,
+        "missing_entries": missing_entries,
+        "high_conflicts": high,
     }
 
 
