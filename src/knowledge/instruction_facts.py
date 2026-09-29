@@ -37,9 +37,17 @@ def _manual_fact_gaps(record):
     operand = record.get("operand_semantics") or {}
     target = record.get("target_applicability") or {}
 
-    if (
+    role_verified = (
         operand.get("operand_role_status") == "source_verified"
-        and operand.get("operand_type_status") == "source_verified"
+        or target.get("operand_role_status") == "source_verified"
+    )
+    type_verified = (
+        operand.get("operand_type_status") == "source_verified"
+        or target.get("operand_type_status") == "source_verified"
+    )
+    if (
+        role_verified
+        and type_verified
         and target.get("operand_order_status") == "source_verified"
     ):
         gaps.discard("operands")

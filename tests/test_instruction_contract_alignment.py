@@ -314,6 +314,44 @@ def test_promotion_ledger_is_validated_before_registry_mutation(tmp_path, mutati
     assert not registry.resolve("MOV", cpu="FX3U").verified_fields
 
 
+def test_operand_semantic_audit_covers_entire_registry_and_is_read_only():
+    from tools.audit_operand_semantics import build
+
+    ledger, report = build()
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+
+    assert report["scope"] == "all_mitsubishi_registry_forms"
+    assert report["database_mutated"] is False
+    assert report["registry_forms"] == len(
+        DEFAULT_INSTRUCTION_REGISTRY.known_mnemonics()
+    )
+    assert report["fx3u_signature_verified_forms"] > 100
+    assert report["operand_role_promotions"] > 0
+    assert ledger["entries"]
+    assert all("operand_roles" in row for row in ledger["entries"])
+
+
+def test_operand_semantic_overlay_cannot_change_declared_roles(tmp_path):
+    from plc.instructions import InstructionRegistry
+    from tools.audit_fx3u_contracts import OUTPUT as SIGNATURE_OUTPUT
+    from tools.audit_operand_semantics import OUTPUT as OPERAND_OUTPUT
+
+    registry = InstructionRegistry.from_files([
+        CATALOG / name for name in (
+            "common.json", "fx3u.json", "fx5u.json",
+            "fx3u_verified_opcodes.json", "modifier_rules.json",
+        )
+    ])
+    registry.load_contract_promotions(SIGNATURE_OUTPUT)
+    payload = json.loads(OPERAND_OUTPUT.read_text(encoding="utf-8"))
+    row = next(item for item in payload["entries"] if item["form"] == "ADD")
+    row["operand_roles"][-1] = "read"
+    broken = tmp_path / "bad-operand-promotions.json"
+    broken.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="conflicts with registry"):
+        registry.load_operand_semantic_promotions(broken)
+
+
 def test_mcp_and_compact_do_not_restore_duplicate_instruction_contract_lane(monkeypatch):
     from application.compact_protocol import compact_capability_prompt
     from agent_runtime.plc_tools import build_tool_context, build_default_tool_registry

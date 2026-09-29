@@ -61,6 +61,8 @@ def resolve_target_applicability(target, plc_model):
         "max_operands": spec.max_operands,
         "native_operand_order": list(spec.native_operand_order),
         "operand_order_status": coverage.get("operand_order", "unresolved"),
+        "operand_role_status": coverage.get("operand_roles", "unresolved"),
+        "operand_type_status": coverage.get("operand_types", "unresolved"),
         "operand_constraints": constraints,
         "device_class_status": coverage.get("device_classes", "unresolved"),
         "execution_form": spec.execution_form,

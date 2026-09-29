@@ -1,0 +1,41 @@
+name: Operand Semantic Audit
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/audit_operand_semantics.py'
+      - 'tools/audit_fx3u_contracts.py'
+      - 'src/plc/instructions.py'
+      - 'resources/instructions/mitsubishi/**'
+      - '.github/workflows/operand-semantic-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Generate operand semantic audit
+        run: |
+          python tools/audit_operand_semantics.py \
+            --promote \
+            --output /tmp/fx3u_operand_semantic_promotions.json \
+            --report /tmp/operand_semantic_coverage.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: operand-semantic-audit
+          path: |
+            /tmp/fx3u_operand_semantic_promotions.json
+            /tmp/operand_semantic_coverage.json

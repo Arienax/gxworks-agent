@@ -520,6 +520,107 @@ class InstructionRegistry:
                     execution_form=execution, instruction_width=width, contract_sources=tuple(evidence))
         self._cpu_contracts.update(pending)
 
+    def load_operand_semantic_promotions(self, path: Path) -> None:
+        """Overlay source-verified operand roles/types for one exact CPU/form.
+
+        The signature promotion must already have verified arity/order. This
+        loader therefore cannot create instructions, change arity, or invent an
+        operand position.
+        """
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if (
+            not isinstance(payload, dict)
+            or payload.get("schema_version") != 1
+            or payload.get("cpu") != "FX3U"
+            or payload.get("method") != "signature-gated-native-operands-v1"
+            or not isinstance(payload.get("entries"), list)
+        ):
+            raise ValueError("Unsupported operand-semantic promotion ledger")
+
+        pending = {}
+        for row in payload["entries"]:
+            if not isinstance(row, Mapping):
+                raise ValueError("Invalid operand-semantic promotion entry")
+            opcode = str(row.get("form") or "").strip().upper()
+            key = ("mitsubishi", opcode, "FX3U")
+            current = self._cpu_contracts.get(key)
+            if current is None:
+                raise ValueError(
+                    "Operand semantics require an existing signature promotion: "
+                    + opcode
+                )
+            order = row.get("native_order")
+            roles = row.get("operand_roles")
+            verified = row.get("verified_fields")
+            if (
+                not isinstance(order, list)
+                or tuple(order) != current.native_operand_order
+                or not isinstance(roles, list)
+                or len(roles) != len(current.operands)
+                or not isinstance(verified, list)
+                or "operand_roles" not in verified
+            ):
+                raise ValueError("Invalid operand-semantic shape: " + opcode)
+            try:
+                role_values = tuple(OperandRole(str(value)) for value in roles)
+            except ValueError as exc:
+                raise ValueError("Invalid operand role in " + opcode) from exc
+
+            types = row.get("operand_types")
+            if types is not None:
+                if (
+                    not isinstance(types, list)
+                    or len(types) != len(current.operands)
+                    or "operand_types" not in verified
+                    or any(not isinstance(value, str) or not value for value in types)
+                ):
+                    raise ValueError("Invalid operand types in " + opcode)
+            elif "operand_types" in verified:
+                raise ValueError("Verified operand types missing for " + opcode)
+
+            # Promotion is corroboration only: never overwrite a conflicting
+            # declared semantic. A conflict belongs in the audit report.
+            for index, (operand, role) in enumerate(zip(current.operands, role_values)):
+                if operand.role != role:
+                    raise ValueError(
+                        f"Operand role conflicts with registry {opcode}[{index}]"
+                    )
+                if types is not None and operand.data_type != types[index]:
+                    raise ValueError(
+                        f"Operand type conflicts with registry {opcode}[{index}]"
+                    )
+
+            evidence = {
+                "manual_id": "fx3_programming_r",
+                "pdf_page": row.get("native_page"),
+                "operand_page_start": row.get("operand_page_start"),
+                "operand_page_end": row.get("operand_page_end"),
+                "proof_sha256": row.get("operand_proof"),
+                "method": payload.get("method"),
+            }
+            if (
+                type(evidence["pdf_page"]) is not int
+                or type(evidence["operand_page_start"]) is not int
+                or type(evidence["operand_page_end"]) is not int
+                or not isinstance(evidence["proof_sha256"], str)
+                or len(evidence["proof_sha256"]) != 64
+            ):
+                raise ValueError("Operand-semantic evidence missing for " + opcode)
+
+            merged_verified = list(current.verified_fields)
+            for field_name in verified:
+                if field_name not in {"operand_roles", "operand_types"}:
+                    raise ValueError("Unsupported operand-semantic dimension")
+                if field_name not in merged_verified:
+                    merged_verified.append(field_name)
+            pending[key] = replace(
+                current,
+                verified_fields=tuple(merged_verified),
+                contract_sources=tuple(current.contract_sources) + (evidence,),
+            )
+
+        self._cpu_contracts.update(pending)
+
     def load_capability_contract(self, path: Path) -> None:
         """Overlay source-backed instruction semantics for one exact CPU/form."""
 
@@ -916,6 +1017,9 @@ def load_default_instruction_registry() -> InstructionRegistry:
             promotions = directory / "fx3u_contract_promotions.json"
             if promotions.is_file():
                 registry.load_contract_promotions(promotions)
+            operand_promotions = directory / "fx3u_operand_semantic_promotions.json"
+            if operand_promotions.is_file():
+                registry.load_operand_semantic_promotions(operand_promotions)
             capabilities = directory / "instruction_capabilities.json"
             if capabilities.is_file():
                 registry.load_capability_contract(capabilities)
