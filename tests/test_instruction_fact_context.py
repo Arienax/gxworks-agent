@@ -12,8 +12,9 @@ import pytest
 from knowledge import core
 from knowledge.evidence import KnowledgeQuery
 from knowledge.instruction_facts import (
-    _is_target, _manual_fact_gaps, _operand_gap_details, _pack_target,
-    _related_units, _units, delivered_fact_report, included_knowledge_ids,
+    _conflicts_with_verified_operand_order, _is_target, _manual_fact_gaps,
+    _operand_gap_details, _pack_target, _related_units, _units,
+    _visual_operand_sequence, delivered_fact_report, included_knowledge_ids,
     instruction_fact_targets, retrieve_instruction_facts,
 )
 from knowledge.retriever import build_knowledge_context
@@ -77,6 +78,69 @@ def test_gap_directed_manual_packing_drops_already_covered_operand_only_units():
     text = "\n".join(row["text"] for row in output)
     assert "Operation copies" in text
     assert "Operand | Description" not in text
+
+
+def test_verified_order_visual_conflict_detector_ignores_concrete_examples():
+    expected = ["S1", "S2", "D"]
+    visual = (
+        "[PAGE 1 PROSE]\n"
+        "TADD D 10 D 20 D 30\n"
+        "S1 [GLYPH-F0A0] S2 [GLYPH-F0A0] D [GLYPH-F0A0]\n"
+        "(D10,D11,D12)+(D20,D21,D22)\n"
+    )
+    assert _visual_operand_sequence(visual, "TADD", expected) == expected
+    record = {
+        "instruction_opcode": "TADD",
+        "target_applicability": {
+            "operand_order_status": "source_verified",
+            "native_operand_order": expected,
+        },
+    }
+    assert not _conflicts_with_verified_operand_order(record, visual)
+
+
+@pytest.mark.parametrize(
+    ("opcode", "expected", "visual", "sequence"),
+    [
+        (
+            "CRC", ["S", "D", "N"],
+            "[PAGE 1 PROSE]\nCRC n\nM8161\nD [GLYPH-F0A0]S [GLYPH-F0A0]\nS\n",
+            ["N", "D", "S"],
+        ),
+        (
+            "DFMOV", ["S", "D", "N"],
+            "[PAGE 1 PROSE]\nDFMOV nS [GLYPH-F0A0] D [GLYPH-F0A0]\n+1,+1\n",
+            ["N", "S", "D"],
+        ),
+        (
+            "SFTRP", ["S", "D", "N1", "N2"],
+            "[PAGE 1 PROSE]\nSFTRP n1 n2D [GLYPH-F0A0]S [GLYPH-F0A0]\nBefore\n",
+            ["N1", "N2", "D", "S"],
+        ),
+    ],
+)
+def test_verified_order_visual_conflict_detector_finds_flattened_diagrams(
+    opcode, expected, visual, sequence,
+):
+    assert _visual_operand_sequence(visual, opcode, expected) == sequence
+    record = {
+        "instruction_opcode": opcode,
+        "target_applicability": {
+            "operand_order_status": "source_verified",
+            "native_operand_order": expected,
+        },
+    }
+    assert _conflicts_with_verified_operand_order(record, visual)
+
+
+def test_verified_order_visual_conflict_detector_ignores_prose_mnemonic_collision():
+    text = (
+        "[PAGE 1 PROSE]\n"
+        "The dead band is adjusted by S2 [GLYPH-F0A0] before S1 [GLYPH-F0A0].\n"
+    )
+    assert _visual_operand_sequence(
+        text, "BAND", ["S1", "S2", "S3", "D"]
+    ) == []
 
 
 def test_embedded_pdf_layout_residue_is_not_a_second_operand_order():
