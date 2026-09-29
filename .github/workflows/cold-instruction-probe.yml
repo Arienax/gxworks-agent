@@ -1,4 +1,4 @@
-name: Cold Instruction Delivery Probe
+# Temporary diagnostic; removed after probe results are captured.\nname: Cold Instruction Delivery Probe
 
 on:
   pull_request:
