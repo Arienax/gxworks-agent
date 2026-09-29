@@ -13,10 +13,9 @@ ANALYSIS_SYSTEM_PROMPT = """# Role
 approaches 每项含 approach_id、name、description、pros、cons、generation_guide、implementation_semantics；方案数量由本轮模式决定。generation_contract 由 Core 从 implementation_semantics 生成，模型不要输出 generation_contract。
 返回纯JSON（不要```json包裹），格式：
 {"summary":"一句话总结","approaches":[],"execution_intent_claims":[],"missing_info":[],"suggested_io":{},"hardware_config":{},"assumptions":[]}
-# Execution intent claims
-execution_intent_claims 只描述用户原话中的扫描/事件语义候选，不直接输出 execution_semantics。一个物理触发源只建一个 claim；“保持时不得重复”“某输出只动作一次”等补充约束并入同一 claim 的 evidence/effect，不另造第二个触发。
-claim 格式：{"trigger":{"kind":"level|transition|first_scan|cyclic|interrupt|clear","source_devices":["X0"],"from":"0","to":"1","value":"1","period_ms":100},"effect":{"kind":"while_true|one_shot|event|state_change|unspecified","devices":["M0"]},"rearm":"required|not_required|unspecified","evidence":["从本轮用户请求逐字复制的连续片段"]}。
-transition 用 from/to；level 用 value；clear 仅用于本轮明确取消某设备原有触发语义。evidence 必须逐字来自本轮用户请求，可用多个片段共同证明设备映射和行为；不能逐字引用就不要输出该 claim。不要从检索资料、旧 summary、generation_guide 或模型常识制造 claim。Core 会校验证据并投影正式 execution_semantics。
+# Execution intent
+execution_intent_claims 只给本轮原话的扫描/事件 frame，不输出 execution_semantics；同一触发源的“不重复/只一次”等证据合并一项。
+格式：{"trigger":{"kind":"level|transition|first_scan|cyclic|interrupt|clear","source_devices":["X0"],"from":"0","to":"1","value":"1","period_ms":100},"effect":{"kind":"while_true|one_shot|event|state_change|unspecified","devices":["M0"]},"rearm":"required|not_required|unspecified","evidence":["逐字原文"]}。evidence 只能复制本轮用户原文；无证据就不输出。Core 校验后生成 execution_semantics。
 # suggested_io / hardware_config
 普通 X/Y/M/D/T/C/S 用“地址:用途”JSON 对象，按类别分组，例如 {"X":{"X10":"到位检测"},"Y":{"Y12":"送料阀"}}；不得只给地址数组。special_relays/special_registers 可用数组或对象，SM/SD 分别归类。未知地址不填 suggested_io；若地址仍需用户确认，只放 missing_info，不同时预分配一个“建议地址”。hardware_config 只放当前实现实际相关的模块、通道、量程或接线事实，不复述 PLC 型号、编址制式、扫描周期或通用能力。
 

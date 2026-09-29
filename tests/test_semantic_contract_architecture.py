@@ -232,3 +232,16 @@ def test_cpu_replacement_and_completion_review_come_from_capability_contract():
         item.category == "motion_completion" and item.address == "M8029"
         for item in findings
     )
+
+
+
+def test_fresh_execution_semantics_do_not_reconstruct_hard_constraints_from_free_prose():
+    import inspect
+    import plc.semantics as semantics
+    import plc.execution_intent as execution_intent
+
+    semantic_source = inspect.getsource(semantics)
+    assert "_RISING_PATTERNS" not in semantic_source
+    assert "_LEVEL_PATTERNS" not in semantic_source
+    assert "generation_guide" not in inspect.getsource(semantics.semantic_requirements_from_spec)
+    assert "execution_intent_claims" in inspect.getsource(execution_intent.compile_execution_intent_claims)

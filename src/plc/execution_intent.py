@@ -185,6 +185,9 @@ def compile_execution_intent_claims(value, user_text, *, source="agent_a_claim")
         source_devices = _canonical_devices(trigger.get("source_devices") or [])
         effect = dict(claim.get("effect") or {})
         effect_devices = _canonical_devices(effect.get("devices") or [])
+        if trigger_kind in {"level", "transition", "interrupt", "clear"} and not source_devices:
+            rejected.append({"index": index, "reason": "invalid_source_device"})
+            continue
         evidence_devices = set(_evidence_devices(evidence))
         if any(device not in evidence_devices for device in [*source_devices, *effect_devices]):
             rejected.append({"index": index, "reason": "claimed_device_not_in_evidence"})
