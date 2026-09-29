@@ -575,7 +575,9 @@ def test_fact_aware_row_api_keeps_exact_instruction_out_of_broad_retrieval(monke
     assert rows[0]["structured_fact_target"] == "SFTL"
     assert rows[0]["structured_text_compacted"] is True
     assert rows[0]["instruction_contract"]["opcode"] == "SFTL"
-    assert "INSTRUCTION_CONTRACT:" in rows[0]["text"]
+    assert "OPERAND_SEMANTICS:" in rows[0]["text"]
+    assert "TARGET_APPLICABILITY:" in rows[0]["text"]
+    assert "RUNTIME_SEMANTICS:" in rows[0]["text"]
 
 
 def test_application_runtime_cannot_bypass_fact_aware_retrieval():
@@ -710,7 +712,10 @@ def test_compact_row_view_does_not_mutate_full_manual_backed_record():
     assert compact is not full
     assert compact["instruction_contract"] == full["instruction_contract"]
     assert len(compact["text"]) < len(full["text"])
-    assert "INSTRUCTION_CONTRACT:" in compact["text"]
+    assert "OPERAND_SEMANTICS:" in compact["text"]
+    assert "TARGET_APPLICABILITY:" in compact["text"]
+    assert "RUNTIME_SEMANTICS:" in compact["text"]
+    assert "INSTRUCTION_CONTRACT:" not in compact["text"]
     assert full["text"].startswith("[STRUCTURED INSTRUCTION RECORD]")
 
 

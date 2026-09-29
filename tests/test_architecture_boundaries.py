@@ -234,6 +234,59 @@ def test_production_workflows_cannot_reintroduce_effort_hints():
 
 
 
+def test_generation_fact_lane_owners_do_not_cross_import():
+    lane_files = {
+        "construction": SOURCE_ROOT / "application" / "construction_routing.py",
+        "operand": SOURCE_ROOT / "plc" / "instruction_semantics.py",
+        "target": SOURCE_ROOT / "plc" / "target_capabilities.py",
+        "runtime": SOURCE_ROOT / "plc" / "runtime_semantics.py",
+    }
+    forbidden = {
+        "construction": {
+            "plc.instruction_semantics",
+            "plc.target_capabilities",
+            "plc.runtime_semantics",
+            "plc.instruction_resolution",
+            "knowledge",
+        },
+        "operand": {
+            "application.construction_routing",
+            "plc.target_capabilities",
+            "plc.runtime_semantics",
+        },
+        "target": {
+            "application.construction_routing",
+            "plc.instruction_semantics",
+            "plc.runtime_semantics",
+        },
+        "runtime": {
+            "application.construction_routing",
+            "plc.instruction_semantics",
+            "plc.target_capabilities",
+        },
+    }
+
+    violations = []
+    for lane, path in lane_files.items():
+        for imported in _imports(path):
+            if any(
+                imported == prefix or imported.startswith(prefix + ".")
+                for prefix in forbidden[lane]
+            ):
+                violations.append(
+                    f"{lane}: {path.relative_to(ROOT)} -> {imported}"
+                )
+    assert violations == []
+
+    # Only the materializer may compose the three instruction lanes.
+    composer = set(_imports(SOURCE_ROOT / "plc" / "instruction_resolution.py"))
+    assert {
+        "plc.instruction_semantics",
+        "plc.target_capabilities",
+        "plc.runtime_semantics",
+    } <= composer
+
+
 def test_capability_coverage_manifest_is_current():
     from tools.audit_capability_coverage import audit_coverage
 

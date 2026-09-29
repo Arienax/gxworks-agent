@@ -7,7 +7,7 @@ treated as ambiguous and receive no example rather than several weak matches.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 
 
 @dataclass(frozen=True)
@@ -58,7 +58,6 @@ def build_construction_need_profile(confirmed_spec):
 def route_construction_examples(profile, candidates, *, max_examples=2):
     profile = profile if isinstance(profile, ConstructionNeedProfile) else ConstructionNeedProfile()
     rows = [dict(item) for item in candidates if isinstance(item, Mapping)]
-    primary_hits = []
     scored = []
     for row in rows:
         structures = {
@@ -80,12 +79,6 @@ def route_construction_examples(profile, candidates, *, max_examples=2):
         hit_semantics = semantics & set(profile.execution_semantics)
         hit_motifs = motifs & set(profile.motifs)
         score = 5 * len(hit_motifs) + 3 * len(hit_structures) + 2 * len(hit_semantics)
-        if score:
-            primary_hits.extend(
-                [f"motif:{item}" for item in hit_motifs]
-                + [f"structure:{item}" for item in hit_structures]
-                + [f"execution:{item}" for item in hit_semantics]
-            )
         scored.append({
             "id": str(row.get("id") or ""),
             "score": score,
