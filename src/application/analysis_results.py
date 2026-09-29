@@ -175,25 +175,14 @@ def validate_current_analysis_protocol(result):
 
 
 def _extract_user_declared_io(user_text, plc_model):
-    """Preserve explicit device-purpose declarations, including inline clauses.
+    """Project Core-owned explicit declaration bindings back to suggested_io."""
+    from plc.specification.bindings import extract_declared_bindings
 
-    This bounded grammar is not intent inference: device: purpose, device 为/是
-    purpose, or device is purpose at a statement boundary. It never assigns a
-    purpose from an address number or parses instruction operands/conditions.
-    Electrical qualifiers stay in original intent, separate from the short label.
-    """
     declared = {}
-    for statement in re.split(r"[\n;；。]+", str(user_text or "")):
-        match = _DECLARED_IO_LINE_RE.fullmatch(statement)
-        if match is None:
-            continue
-        address = canonical_device(re.sub(r"\s+", "", match.group(1)).upper())
-        raw_label = match.group(2).strip()
-        # A question or state comparison is not an explicit purpose declaration.
-        if "?" in raw_label or "？" in raw_label or _STATE_NOT_PURPOSE_RE.match(raw_label):
-            continue
-        label = _INPUT_QUALIFIER_RE.split(raw_label, maxsplit=1)[0].strip()
-        if not label:
+    for item in extract_declared_bindings(user_text, plc_model):
+        address = canonical_device(str(item.get("address") or "").strip().upper())
+        label = str(item.get("label") or "").strip()
+        if not address or not label:
             continue
         try:
             parsed = parse_device_address(address, plc_model)

@@ -33,6 +33,14 @@ Saved-version delivery uses the version's specification and receipt, not the liv
 Regression coverage belongs to [test_intent_evidence_handoff.py](../../tests/test_intent_evidence_handoff.py) and [test_context_compiler.py](../../tests/test_context_compiler.py). The earlier investigation is preserved in the [process archive](../process/README.md).
 
 
+## Device-comment ownership
+
+GX Works2 device comments are display names, not requirement storage. Core derives
+them from confirmed device-purpose labels, cuts at the first natural clause
+separator, and caps generated/exported comments at 16 characters. Agent B's compact
+wire protocol does not author device comments. Behavioral requirements remain in
+intent/semantic fields instead of being copied into contact/coil annotations.
+
 ## Implementation semantics ownership
 
 Fresh Agent A candidates use `implementation_semantics` for control-structure

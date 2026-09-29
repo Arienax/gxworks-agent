@@ -9,6 +9,7 @@ from functools import lru_cache
 
 from jsonschema import Draft202012Validator
 from plc.device_identity import canonical_device_map
+from plc.comments import short_device_comment
 
 PROTOCOL_VERSION = "compact_ladder/1.1"
 _MAX_BYTES = 2 * 1024 * 1024
@@ -280,9 +281,11 @@ def _confirmed_comments(projected):
         if not isinstance(row, dict):
             continue
         address = str(row.get("address") or "").strip().upper()
-        text = str(row.get("label") or row.get("description") or "").strip()
+        text = short_device_comment(
+            str(row.get("label") or row.get("description") or "")
+        )
         if address and text:
-            comments[address] = text[:64]
+            comments[address] = text
     return canonical_device_map(comments)
 
 

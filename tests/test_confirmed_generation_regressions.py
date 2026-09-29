@@ -366,6 +366,33 @@ def test_agent_b_prompt_makes_input_or_and_single_json_rules_explicit():
     assert "不得在同一次 completion 中自检后再重写或追加第二份完整 JSON" in _GENERATION_REQUEST
 
 
+def test_confirmed_comments_are_short_server_owned_device_names():
+    from application.compact_protocol import _confirmed_comments
+    from plc.comments import GXWORKS2_DEVICE_COMMENT_MAX_CHARS
+
+    comments = _confirmed_comments({
+        "io_table": [
+            {
+                "address": "M2",
+                "label": "“不良品输出保持状态，使用普通自保持逻辑保持，不采用 SET/RST 锁存”",
+            },
+            {
+                "address": "X0",
+                "label": "启动请求",
+            },
+        ]
+    })
+
+    assert comments == {
+        "M2": "不良品输出保持状态",
+        "X0": "启动请求",
+    }
+    assert all(
+        len(value) <= GXWORKS2_DEVICE_COMMENT_MAX_CHARS
+        for value in comments.values()
+    )
+
+
 def test_compact_agent_b_expands_or_compare_timer_and_app_instruction():
     projected = {
         "io_table": [
