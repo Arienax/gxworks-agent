@@ -14,7 +14,7 @@ approaches 每项含 approach_id、name、description、pros、cons、generation
 返回纯JSON（不要```json包裹），格式：
 {"summary":"一句话总结","approaches":[],"execution_intent_claims":[],"explicit_constraint_claims":[],"missing_info":[],"suggested_io":{},"hardware_config":{},"assumptions":[]}
 # suggested_io / hardware_config
-普通 X/Y/M/D/T/C/S 用“地址:用途”对象分组，如 {"X":{"X10":"到位检测"}}；special_relays/special_registers 可用数组或对象，SM/SD 分别归类。未知地址不填；需确认的地址只放 missing_info。hardware_config 只放当前实现相关模块、通道、量程或接线事实。
+普通 X/Y/M/D/T/C/S 用“地址:用途”JSON 对象分组，如 {"X":{"X10":"到位检测"}}；不得只给地址数组。special_relays/special_registers 可用数组或对象，SM/SD 分别归类。未知地址不填 suggested_io；需确认的地址只放 missing_info，不同时预分配一个“建议地址”。hardware_config 只放当前实现相关模块、通道、量程或接线事实。
 
 # Execution intent
 execution_intent_claims：trigger{kind,source_devices,from/to|value/period_ms}、evidence[]。kind 仅 level/transition/first_scan/cyclic/interrupt/clear；evidence 逐字来自本轮；不输出 execution_semantics。
@@ -23,17 +23,17 @@ execution_intent_claims：trigger{kind,source_devices,from/to|value/period_ms}�
 Agent A 不选择 opcode、完整操作数或内部地址，只报告用户本轮明确写死/撤销的低层条件。explicit_constraint_claims 每项含 operation=require|forbid|clear、scope=global|scoped|ambiguous、target、evidence[]；evidence 逐字来自本轮。target 仅 opcode/device 的 values，instruction_instance 的 opcode+operands，或 clear 的 category(opcodes|devices|instruction_instances|all)。局部用途限制用 scoped，不确定用 ambiguous；只有 global 会被 Core 投影。
 
 # Implementation semantics
-implementation_semantics 只允许结构语义：{"kind":"structure","status":"required|forbidden|any_of","value":"..."}；any_of 用 values，结构名只能来自 Core 词表。不要在 approach 中输出 opcode、operands、device、instruction_instance、generation_contract、explicit_user_constraints。generation_guide 只写其他结构化字段无法表达的方案级差异；无则空字符串，不规划梯级或具体指令。来源元数据由应用记录。
+原始用户请求由应用另行保留。implementation_semantics 只允许结构语义：{"kind":"structure","status":"required|forbidden|any_of","value":"..."}；any_of 用 values，结构名只能来自 Core 词表。不要在 approach 中输出低层字段。generation_guide 只写其他结构化字段无法表达的方案级差异；没有这种差异就用空字符串。来源元数据由应用记录。
 
 # Missing-info minimality
-仅询问当前实现确实缺失且会改变程序的参数，不重复问已给答案。每项含稳定 id、question、required、options；有候选允许自定义，default 不是已确认答案。从属项用 required_when。缺失实际接线、极性、数值等必要输入仍为 required；内部地址分配与 PLC 通用信息不设必填，不得凭空新增硬件、停止或急停输入。非必要不确定性才放 assumptions。
+仅询问当前实现确实缺失且会改变程序的参数，不重复问已给答案。每项含稳定 id、question、required、options；default 不是已确认答案。从属项用 required_when。缺失实际接线、极性、数值等必要输入仍为 required；内部地址分配不设必填。PLC 常识、常规扫描行为不是 assumptions；不得凭空新增硬件、停止或急停输入。
 """
 
 
 ANALYSIS_DIRECT_PROMPT = """# Analysis mode: direct
 用户选择直接实现：approaches 恰好 1 项（exactly one approach），不是方案咨询。没有既有方案时确定一种满足明确需求的实现；不搜索替代架构，不比较其他数据模型或指令族，正文提及“比较/优化”也不改变本轮模式。
 可见方案保持最小：name 是短名称，description 只说明控制结构，pros 和 cons 用空字符串；明确结构写入 implementation_semantics。
-generation_guide 只补结构化字段表达不了的非显然方案差异，通常应为空字符串。不自行选择具体 opcode/operands/内部软元件；用户已写死的低层条件只报告到 explicit_constraint_claims。
+generation_guide 只补结构化字段表达不了的非显然方案差异，通常应为空字符串。不自行选择具体 opcode/operands/内部软元件；用户已写死的低层条件只报告到 explicit_constraint_claims，不展开扫描周期等通用知识。
 assumptions 无实际非必要不确定性时用 []。
 只补当前实现真正缺失的必要参数；不因缺参或复杂度切换 Design，不编造已确认答案。""" + "\n结构名：" + "、".join(sorted(SUPPORTED_STRUCTURES)) + "。无依据就留空。"
 
