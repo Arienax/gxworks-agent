@@ -79,6 +79,37 @@ def test_gap_directed_manual_packing_drops_already_covered_operand_only_units():
     assert "Operand | Description" not in text
 
 
+def test_embedded_pdf_layout_residue_is_not_a_second_operand_order():
+    text = (
+        "[PAGE 687 PROSE]\n"
+        "Operation reads the source operand and transfers the result to the destination.\n"
+        "Inverter station number and channel requirements are described here.\n"
+        "FNC 270\n"
+        "IVCK\n"
+        "9 steps IVCK\n"
+        "[GLYPH-F0BE]\n"
+        "[GLYPH-F0BE][GLYPH-F0BE]\n"
+        "FNC270\n"
+        "IVCK n\n"
+        "S1 [GLYPH-F0A0] S2 [GLYPH-F0A0] D [GLYPH-F0A0]\n"
+    )
+    output = _pack_target(
+        [source("ivck", opcode="IVCK", text=text)],
+        4000,
+        needed_categories={"operands", "operation"},
+    )
+    rendered = "\n".join(row["text"] for row in output)
+    assert "Operation reads the source operand" in rendered
+    assert "IVCK n" not in rendered
+    assert all(
+        not (
+            span["start"] <= text.index("FNC 270") < span["end"]
+        )
+        for row in output
+        for span in row["source_spans"]
+    )
+
+
 def test_operand_gap_tracking_is_slot_and_facet_granular():
     record = {
         "operand_slots": [
@@ -271,6 +302,33 @@ def test_bundled_index_delivers_instruction_definitions_inside_existing_budget(o
     if opcode == "MOV":
         assert "$MOV / Character String" not in context
     assert set(included_knowledge_ids(context, report["records"])) == {r["id"] for r in report["records"] if r["included"]}
+
+
+def test_ivck_verified_order_does_not_compete_with_flattened_page_layout():
+    if core._index_identity(core._index_path())[0] == "missing":
+        pytest.skip("Bundled index is not installed")
+    query = KnowledgeQuery(
+        "IVCK",
+        precompiled=True,
+        metadata={"instruction_fact_mode": "targeted"},
+    )
+    context = build_knowledge_context(
+        query,
+        plc_model="FX3U",
+        task_type="generate",
+        char_budget=24000,
+        top_k=8,
+    )
+    report = context.manifest["instruction_facts"]
+    lookup = next(row for row in report["lookups"] if row["opcode"] == "IVCK")
+    assert "operand_order" not in {
+        row["facet"] for row in lookup["operand_gap_details"]
+    }
+    assert '"symbol":"S1"' in context
+    assert '"symbol":"S2"' in context
+    assert '"symbol":"D"' in context
+    assert '"symbol":"N"' in context
+    assert "IVCK n\nS1" not in context
 
 
 def test_verified_role_type_order_do_not_close_unverified_device_class_gap():
