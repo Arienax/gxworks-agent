@@ -512,3 +512,11 @@ def test_rd3a_wr3a_report_precise_confirmed_module_mismatch(opcode, module):
         match=r"valid instruction.*cannot access confirmed",
     ):
         validate_ladder_full(_analog_ladder(opcode, operands), "FX3U", confirmed)
+
+
+def test_temporary_operand_order_prompt_conflict_audit():
+    from tools.audit_operand_order_prompt_conflicts import build_report
+    report = build_report()
+    # Temporary audit hook. It deliberately fails so CI preserves the complete
+    # machine-readable report in the job log; the audit PR will not be merged.
+    raise AssertionError(json.dumps(report, ensure_ascii=False, indent=2))
