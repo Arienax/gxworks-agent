@@ -661,8 +661,8 @@
       "id": "implementation_semantics_contract_projection",
       "category": "intent_handoff",
       "state": "enforced",
-      "owner": "plc.specification.approach + plc.specification.explicit_constraints",
-      "summary": "Fresh Agent A implementation_semantics is structure-only. Core independently extracts caller-fixed opcode/device/exact-instruction constraints into explicit_user_constraints, persists both owners, and projects their union into generation_contract; legacy contracts remain compatibility input.",
+      "owner": "plc.specification.approach + plc.specification.explicit_constraint_claims + plc.specification.explicit_constraints",
+      "summary": "Fresh Agent A keeps implementation_semantics structure-only and reports user-fixed low-level choices as grounded explicit_constraint_claims. Core validates exact evidence and PLC identities, applies only global structured operations into explicit_user_constraints, and projects the union into generation_contract without reparsing natural-language directive keywords.",
       "checks": [
         {
           "kind": "python_symbol",
@@ -676,28 +676,33 @@
         },
         {
           "kind": "python_symbol",
-          "path": "src/plc/specification/explicit_constraints.py",
-          "symbol": "extract_explicit_user_constraints"
+          "path": "src/plc/specification/explicit_constraint_claims.py",
+          "symbol": "compile_explicit_constraint_claims"
         },
         {
           "kind": "python_symbol",
           "path": "src/plc/specification/explicit_constraints.py",
-          "symbol": "merge_explicit_user_constraints"
+          "symbol": "apply_explicit_constraint_operations"
         },
         {
           "kind": "contains",
           "path": "src/application/prompts.py",
-          "text": "implementation_semantics 只允许结构语义"
+          "text": "explicit_constraint_claims"
         },
         {
           "kind": "contains",
           "path": "src/application/analysis_results.py",
-          "text": "_apply_explicit_user_constraints("
+          "text": "compile_explicit_constraint_claims("
         },
         {
           "kind": "contains",
           "path": "tests/test_confirmed_generation_regressions.py",
-          "text": "test_core_extracts_low_level_constraints_without_agent_a_repeating_them"
+          "text": "test_grounded_low_level_claims_project_without_prose_reparse"
+        },
+        {
+          "kind": "contains",
+          "path": "tests/test_semantic_contract_architecture.py",
+          "text": "test_fresh_explicit_constraints_use_grounded_claims_not_keyword_parser"
         }
       ],
       "tests": [
