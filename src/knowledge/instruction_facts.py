@@ -356,6 +356,109 @@ def _units(text):
             yield left + cursor, right
 
 
+def _visual_operand_sequence(raw, opcode, expected):
+    """Read only diagram-like operand placeholders near this opcode.
+
+    Concrete examples such as TADD D 10 D 20 D 30 are deliberately ignored:
+    a placeholder participates only when it is attached to a glyph, is a compact
+    n/N count token next to such placeholders, or occupies a short visual row.
+    """
+    text = str(raw or "")
+    opcode = str(opcode or "").strip().upper()
+    expected = [str(value or "").strip().upper() for value in expected or ()]
+    if not opcode or len(expected) < 2:
+        return []
+
+    boundary = r"[A-Za-z0-9_.$@+<>!=\\-]"
+    opcode_re = re.compile(
+        r"(?<!%s)%s(?!%s)" % (boundary, re.escape(opcode), boundary),
+        re.I,
+    )
+    operand_re = re.compile(r"(?i)(?<![A-Z0-9])([SDMN]\\d{0,3})(?![A-Z0-9])")
+    glyph_operand_re = re.compile(
+        r"(?i)([SDM]\\d{0,3})\\s*(?=\\[GLYPH-[0-9A-F]+\\])"
+    )
+    fused_count_re = re.compile(
+        r"(?i)(?<![A-Z0-9])(n\\d{0,3})(?=[SDM]\\d{0,3}\\s*\\[GLYPH-[0-9A-F]+\\])"
+    )
+    expected_set = set(expected)
+
+    lines = text.splitlines()
+    offsets, cursor = [], 0
+    for line in lines:
+        offsets.append(cursor)
+        cursor += len(line) + 1
+
+    for match in opcode_re.finditer(text):
+        line_index = max(
+            (index for index, offset in enumerate(offsets) if offset <= match.start()),
+            default=0,
+        )
+        line = lines[line_index] if lines else ""
+        relative = match.start() - offsets[line_index] if offsets else 0
+        # A mnemonic embedded in ordinary prose ("dead band") is not syntax.
+        if line[:relative].strip() and not re.search(
+            r"(?:FNC\\s*\\d+|input)\\s*$", line[:relative], re.I
+        ):
+            continue
+
+        region_lines = lines[line_index:line_index + 4]
+        region = "\\n".join(region_lines)
+        if "[GLYPH-" not in region:
+            continue
+
+        positions = []
+        # Glyph-bound placeholders are the strongest signal.
+        for item in glyph_operand_re.finditer(region):
+            positions.append((item.start(1), item.group(1).upper()))
+        # PDF extraction commonly fuses count placeholders with the next glyph
+        # operand: nS, nD1, n1n2D. Recover those counts without treating D10,
+        # M3, etc. from concrete examples as placeholders.
+        for item in fused_count_re.finditer(region):
+            positions.append((item.start(1), item.group(1).upper()))
+        # Standalone n/N tokens on the opcode line are also visual operands.
+        opcode_line_tail = line[relative + len(opcode):]
+        for item in operand_re.finditer(opcode_line_tail):
+            token = item.group(1).upper()
+            if token.startswith("N"):
+                positions.append((item.start(1), token))
+
+        # Very short single-token rows adjacent to glyph syntax can represent
+        # a displaced placeholder (for example GBIN's S on the next row).
+        base_offset = len(region_lines[0]) + 1 if region_lines else 0
+        running = base_offset
+        for short_line in region_lines[1:]:
+            stripped = short_line.strip()
+            if re.fullmatch(r"(?i)[SDMN]\\d{0,3}", stripped):
+                positions.append((running + short_line.find(stripped), stripped.upper()))
+            running += len(short_line) + 1
+
+        sequence = []
+        for _position, token in sorted(positions):
+            if token in expected_set and token not in sequence:
+                sequence.append(token)
+        if len(sequence) >= 2:
+            return sequence
+    return []
+
+
+def _conflicts_with_verified_operand_order(result, raw):
+    """True when manual visual residue contradicts a verified native order."""
+    result = result if isinstance(result, Mapping) else {}
+    target = result.get("target_applicability") or {}
+    if target.get("operand_order_status") != "source_verified":
+        return False
+    expected = list(target.get("native_operand_order") or ())
+    if len(expected) < 2:
+        return False
+    opcode = str(result.get("instruction_opcode") or target.get("opcode") or "")
+    sequence = _visual_operand_sequence(raw, opcode, expected)
+    if len(sequence) < 2:
+        return False
+    indexes = [expected.index(token) for token in sequence if token in expected]
+    return any(left >= right for left, right in zip(indexes, indexes[1:]))
+
+
 def _embedded_instruction_layout_offset(raw):
     """Locate PDF diagram residue accidentally flattened into a PROSE unit.
 
@@ -506,6 +609,12 @@ def _pack_target(results, allowance, *, needed_categories=None):
             )
             for start, end, embedded_layout in pieces:
                 raw = text[start:end]
+                if _conflicts_with_verified_operand_order(result, raw):
+                    # Native order already has source-verified ownership. A PDF
+                    # diagram flattened into another sequence is not useful
+                    # corroboration for any remaining operand facet and can make
+                    # the model reason against two incompatible syntaxes.
+                    continue
                 focus = result.get("fact_focus_terms", ())
                 if focus and not any(re.search(r"(?<![A-Z0-9])" + re.escape(term) + r"(?![A-Z0-9])", raw, re.I) for term in focus):
                     continue
