@@ -243,5 +243,11 @@ def test_fresh_execution_semantics_do_not_reconstruct_hard_constraints_from_free
     semantic_source = inspect.getsource(semantics)
     assert "_RISING_PATTERNS" not in semantic_source
     assert "_LEVEL_PATTERNS" not in semantic_source
-    assert "generation_guide" not in inspect.getsource(semantics.semantic_requirements_from_spec)
+    spec_source = inspect.getsource(semantics.semantic_requirements_from_spec)
+    for forbidden in (
+        'confirmed_spec.get("summary"',
+        'confirmed_spec.get("user_notes"',
+        'confirmed_spec.get("selected_approach"',
+    ):
+        assert forbidden not in spec_source
     assert "execution_intent_claims" in inspect.getsource(execution_intent.compile_execution_intent_claims)

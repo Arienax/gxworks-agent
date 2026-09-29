@@ -247,7 +247,7 @@ def test_strict_requirement_coverage_blocks_level_instead_of_requested_edge():
             outputs=[_instruction("INC", ["D0"])],
         )
     )
-    requirements = infer_semantic_requirements("每次按下 X0 一次，D0 加一")
+    requirements = infer_semantic_requirements("X0 上升沿，D0 加一")
     program = build_plc_ir(ladder, semantic_requirements=requirements)
 
     assert program["timing"]["coverage"][0]["status"] == "unresolved"
@@ -268,7 +268,7 @@ def test_first_scan_requirement_rejects_m8000_continuous_initialization_semantic
             note="上电初始化默认参数",
         )
     )
-    requirements = infer_semantic_requirements("上电初始化 D100 默认参数")
+    requirements = infer_semantic_requirements("首扫初始化 D100 默认参数")
     program = build_plc_ir(ladder, semantic_requirements=requirements)
 
     assert program["timing"]["initialization"] == [

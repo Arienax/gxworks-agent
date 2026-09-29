@@ -414,8 +414,25 @@ def extract_explicit_execution_semantics(text, *, source="explicit_syntax"):
             if x_devices:
                 candidates.append(("RISING_EDGE", _PULSE_WIDTH.search(fragment)))
 
+        explicit_x_sources = list(dict.fromkeys(
+            canonical_device(match.group(0).upper())
+            for match in DEVICE_TOKEN_RE.finditer(fragment)
+            if canonical_device(match.group(0).upper()).startswith("X")
+        ))
         for semantic, marker in candidates:
-            devices = [] if semantic in {"FIRST_SCAN", "CYCLIC"} else _nearest_device(fragment, marker)
+            if semantic in {"FIRST_SCAN", "CYCLIC"}:
+                devices = []
+            elif (
+                pulse is not None
+                and semantic in {"RISING_EDGE", "FALLING_EDGE"}
+                and len(explicit_x_sources) == 1
+            ):
+                # An explicitly dimensioned input pulse identifies its physical
+                # source more strongly than proximity to a later action target
+                # such as INC D0 in the same sentence.
+                devices = explicit_x_sources
+            else:
+                devices = _nearest_device(fragment, marker)
             record = {
                 "semantic": semantic,
                 "devices": devices,
