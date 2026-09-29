@@ -99,6 +99,54 @@ def test_agent_a_execution_claim_handles_paraphrase_without_keyword_growth():
     }]
 
 
+def test_agent_a_execution_claim_accepts_unique_confirmed_label_grounding():
+    from plc.execution_intent import compile_execution_intent_claims
+
+    text = "物料检测改成下降沿，离开后才算一次。"
+    receipt = compile_execution_intent_claims([{
+        "trigger": {
+            "kind": "transition",
+            "source_devices": ["X2"],
+            "from": "1",
+            "to": "0",
+        },
+        "effect": {"kind": "event", "devices": []},
+        "rearm": "required",
+        "evidence": [text],
+    }], text, confirmed_spec={
+        "io_table": [{"address": "X2", "label": "物料检测"}],
+    })
+
+    assert receipt["rejected"] == []
+    assert receipt["requirements"][0]["semantic"] == "FALLING_EDGE"
+    assert receipt["requirements"][0]["devices"] == ["X2"]
+
+
+def test_agent_a_execution_claim_rejects_ambiguous_confirmed_label_grounding():
+    from plc.execution_intent import compile_execution_intent_claims
+
+    text = "检测改成下降沿。"
+    receipt = compile_execution_intent_claims([{
+        "trigger": {
+            "kind": "transition",
+            "source_devices": ["X2"],
+            "from": "1",
+            "to": "0",
+        },
+        "effect": {"kind": "event", "devices": []},
+        "rearm": "required",
+        "evidence": [text],
+    }], text, confirmed_spec={
+        "io_table": [
+            {"address": "X2", "label": "检测"},
+            {"address": "X3", "label": "检测"},
+        ],
+    })
+
+    assert receipt["requirements"] == []
+    assert receipt["rejected"][0]["reason"] == "claimed_device_not_in_evidence"
+
+
 def test_agent_a_execution_claim_requires_grounded_evidence_and_devices():
     from plc.execution_intent import compile_execution_intent_claims
 

@@ -81,6 +81,59 @@ def _evidence_devices(evidence):
     return found
 
 
+def _alias_key(value):
+    return re.sub(r"[\W_]+", "", str(value or ""), flags=re.UNICODE).casefold()
+
+
+def _confirmed_device_aliases(confirmed_spec):
+    """Return only unique confirmed human labels -> canonical device identities.
+
+    This is evidence grounding, not fuzzy intent inference.  A label/name must
+    already be part of the confirmed specification and must identify exactly one
+    device.  Generic roles and model-authored summaries are deliberately ignored.
+    """
+    if not isinstance(confirmed_spec, Mapping):
+        return {}
+    owners = {}
+    for row in confirmed_spec.get("io_table", []) or []:
+        if not isinstance(row, Mapping):
+            continue
+        device = canonical_device(str(row.get("address") or "").strip().upper())
+        if not isinstance(device, str) or not DEVICE_TOKEN_RE.fullmatch(device):
+            continue
+        for field in ("label", "description"):
+            alias = str(row.get(field) or "").strip()
+            key = _alias_key(alias)
+            if len(key) >= 2:
+                owners.setdefault(key, set()).add(device)
+    for row in confirmed_spec.get("io_bindings", []) or []:
+        if not isinstance(row, Mapping):
+            continue
+        device = canonical_device(str(row.get("address") or "").strip().upper())
+        if not isinstance(device, str) or not DEVICE_TOKEN_RE.fullmatch(device):
+            continue
+        for field in ("label", "name"):
+            alias = str(row.get(field) or "").strip()
+            key = _alias_key(alias)
+            if len(key) >= 2:
+                owners.setdefault(key, set()).add(device)
+    return {
+        alias: next(iter(devices))
+        for alias, devices in owners.items()
+        if len(devices) == 1
+    }
+
+
+def _device_grounded(device, evidence, aliases):
+    if device in set(_evidence_devices(evidence)):
+        return True
+    joined = [_alias_key(item) for item in evidence]
+    return any(
+        owner == device and alias and any(alias in text for text in joined)
+        for alias, owner in aliases.items()
+    )
+
+
 def _state(value):
     token = str(value or "").strip().casefold()
     if token in {"0", "off", "false", "low", "断开", "低电平"}:
@@ -157,7 +210,9 @@ def _claim_id(frame):
     return "EC-" + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
 
 
-def compile_execution_intent_claims(value, user_text, *, source="agent_a_claim"):
+def compile_execution_intent_claims(
+    value, user_text, *, source="agent_a_claim", confirmed_spec=None
+):
     """Ground model claims against the current user request and compile safe frames.
 
     A claim is accepted only when its evidence is copied from the user request
@@ -172,6 +227,7 @@ def compile_execution_intent_claims(value, user_text, *, source="agent_a_claim")
         ], "touched_devices": []}
 
     source_text = _fold_ws(user_text)
+    confirmed_aliases = _confirmed_device_aliases(confirmed_spec)
     accepted, rejected, requirements, touched = [], [], [], []
     for index, raw in enumerate(value or []):
         claim = copy.deepcopy(dict(raw))
@@ -188,8 +244,10 @@ def compile_execution_intent_claims(value, user_text, *, source="agent_a_claim")
         if trigger_kind in {"level", "transition", "interrupt", "clear"} and not source_devices:
             rejected.append({"index": index, "reason": "invalid_source_device"})
             continue
-        evidence_devices = set(_evidence_devices(evidence))
-        if any(device not in evidence_devices for device in [*source_devices, *effect_devices]):
+        if any(
+            not _device_grounded(device, evidence, confirmed_aliases)
+            for device in [*source_devices, *effect_devices]
+        ):
             rejected.append({"index": index, "reason": "claimed_device_not_in_evidence"})
             continue
 

@@ -632,6 +632,7 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
         normalized.get("execution_intent_claims") or [],
         user_text,
         source="agent_a_claim",
+        confirmed_spec=confirmed_spec,
     )
     explicit_semantics = normalize_semantic_requirements(
         extract_explicit_execution_semantics(
@@ -639,6 +640,28 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
             source="current_request_explicit",
         )
     )
+    # A grounded Agent-A frame owns the evidence spans it interpreted.  The
+    # explicit-syntax fast path only fills uncovered formal notation; it must
+    # not independently reinterpret another device in the same claimed clause.
+    claimed_evidence = {
+        " ".join(str(item or "").split()).casefold()
+        for claim in claim_receipt.get("accepted") or []
+        for item in claim.get("evidence") or []
+        if str(item or "").strip()
+    }
+    if claimed_evidence:
+        explicit_semantics = [
+            item for item in explicit_semantics
+            if not (
+                (evidence := " ".join(
+                    str(item.get("evidence") or "").split()
+                ).casefold())
+                and any(
+                    evidence in claimed or claimed in evidence
+                    for claimed in claimed_evidence
+                )
+            )
+        ]
     current_semantics = normalize_semantic_requirements(
         [*claim_receipt["requirements"], *explicit_semantics]
     )

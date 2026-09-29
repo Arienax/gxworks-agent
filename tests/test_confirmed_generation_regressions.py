@@ -256,14 +256,21 @@ def test_analysis_execution_claim_compiles_one_grounded_event_without_duplicate_
 
 def test_pinned_execution_claim_replaces_only_touched_device_semantics():
     previous = {
+        "io_table": [
+            {"address": "X2", "label": "物料检测"},
+            {"address": "Y0", "label": "输送输出"},
+            {"address": "X7", "label": "离开检测"},
+        ],
         "execution_semantics": [
             {"semantic": "RISING_EDGE", "devices": ["X2"], "evidence": "old X2"},
             {"semantic": "FALLING_EDGE", "devices": ["X7"], "evidence": "keep X7"},
-        ]
+        ],
     }
-    text = "X2 现在只看高电平，Y0 在它为高时保持输出。"
+    # Deliberately omit X2/Y0 spellings: Agent A may understand arbitrary
+    # wording, while Core grounds those devices through unique confirmed labels.
+    text = "物料检测现在只看高电平，输送输出在它为高时保持。"
     raw = {
-        "summary": "修改 X2",
+        "summary": "修改物料检测",
         "approaches": [],
         "execution_intent_claims": [{
             "trigger": {"kind": "level", "source_devices": ["X2"], "value": "1"},
@@ -281,6 +288,10 @@ def test_pinned_execution_claim_replaces_only_touched_device_semantics():
         ("LEVEL", ("X2",)),
         ("FALLING_EDGE", ("X7",)),
     }
+    assert not any(
+        item["semantic"] == "LEVEL" and item["devices"] == ["Y0"]
+        for item in normalized["execution_semantics"]
+    )
 
 
 
