@@ -98,6 +98,7 @@ def _manual_operand_rows(database, source_lock):
                     )
                 ),
             }
+            result.setdefault("__all__", []).append(value)
             for form in forms:
                 result.setdefault(form, []).append(value)
     return result
@@ -138,7 +139,16 @@ def _select_operand_source(form, signature, manual_rows):
         row for row in rows
         if row["page_start"] <= native_page <= row["page_end"]
     ]
-    rows = page_matches or rows
+    if page_matches:
+        rows = page_matches
+    elif not rows:
+        # D/P/literal variants are frequently documented in the base
+        # instruction row. The already-corroborated native page is an exact
+        # source identity, so use only rows whose page range contains it.
+        rows = [
+            row for row in manual_rows.get("__all__", ())
+            if row["page_start"] <= native_page <= row["page_end"]
+        ]
     exact = []
     expected = [str(item).upper() for item in signature.get("native_order") or ()]
     for row in rows:
