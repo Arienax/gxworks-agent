@@ -12,8 +12,9 @@ import pytest
 from knowledge import core
 from knowledge.evidence import KnowledgeQuery
 from knowledge.instruction_facts import (
-    _is_target, _pack_target, _related_units, _units, delivered_fact_report,
-    included_knowledge_ids, instruction_fact_targets, retrieve_instruction_facts,
+    _is_target, _manual_fact_gaps, _operand_gap_details, _pack_target,
+    _related_units, _units, delivered_fact_report, included_knowledge_ids,
+    instruction_fact_targets, retrieve_instruction_facts,
 )
 from knowledge.retriever import build_knowledge_context
 
@@ -76,6 +77,38 @@ def test_gap_directed_manual_packing_drops_already_covered_operand_only_units():
     text = "\n".join(row["text"] for row in output)
     assert "Operation copies" in text
     assert "Operand | Description" not in text
+
+
+def test_operand_gap_tracking_is_slot_and_facet_granular():
+    record = {
+        "operand_slots": [
+            {
+                "position": 1, "symbol": "S1", "name": "source",
+                "role_status": "source_verified",
+                "data_type_status": "source_verified",
+                "symbol_status": "source_verified",
+                "device_class_status": "source_verified",
+            },
+            {
+                "position": 2, "symbol": "D", "name": "destination",
+                "role_status": "source_verified",
+                "data_type_status": "source_verified",
+                "symbol_status": "source_verified",
+                "device_class_status": "unresolved",
+            },
+        ],
+        "target_applicability": {"boundary_status": "source_verified"},
+    }
+    assert _operand_gap_details(record) == [{
+        "position": 2,
+        "facet": "device_classes",
+        "status": "unresolved",
+        "symbol": "D",
+        "name": "destination",
+    }]
+    assert _manual_fact_gaps(record) == frozenset({
+        "operands", "operation", "execution",
+    })
 
 
 def test_pack_across_definition_table_and_caution_without_duplicate_layout():
@@ -240,7 +273,7 @@ def test_bundled_index_delivers_instruction_definitions_inside_existing_budget(o
     assert set(included_knowledge_ids(context, report["records"])) == {r["id"] for r in report["records"] if r["included"]}
 
 
-def test_source_verified_cold_operand_semantics_do_not_reenter_via_companion():
+def test_verified_role_type_order_do_not_close_unverified_device_class_gap():
     if core._index_identity(core._index_path())[0] == "missing":
         pytest.skip("Bundled index is not installed")
     query = KnowledgeQuery(
@@ -257,12 +290,17 @@ def test_source_verified_cold_operand_semantics_do_not_reenter_via_companion():
     )
     report = context.manifest["instruction_facts"]
     lookup = next(row for row in report["lookups"] if row["opcode"] == "DADDP")
-    assert "operands" not in lookup["manual_gaps"]
-    assert "operands" in lookup["structured_dimensions"]
+    assert "operands" in lookup["manual_gaps"]
+    assert "operands" not in lookup["structured_dimensions"]
+    gaps = lookup["operand_gap_details"]
+    assert gaps
+    assert {row["facet"] for row in gaps} == {"device_classes"}
+    assert {row["position"] for row in gaps} == {1, 2, 3}
+
     included = [row for row in report["records"] if row.get("included")]
     assert included
-    assert all(
-        "operands" not in (row.get("candidate_fact_categories") or ())
+    assert any(
+        "operands" in (row.get("candidate_fact_categories") or ())
         for row in included
     )
 
