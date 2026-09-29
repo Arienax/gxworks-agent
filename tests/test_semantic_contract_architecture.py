@@ -251,3 +251,29 @@ def test_fresh_execution_semantics_do_not_reconstruct_hard_constraints_from_free
     ):
         assert forbidden not in spec_source
     assert "execution_intent_claims" in inspect.getsource(execution_intent.compile_execution_intent_claims)
+
+
+def test_fresh_explicit_constraints_use_grounded_claims_not_keyword_parser():
+    import inspect
+    import application.analysis_results as analysis_results
+    import plc.specification.explicit_constraint_claims as claim_compiler
+    import plc.specification.explicit_constraints as constraint_state
+
+    state_source = inspect.getsource(constraint_state)
+    analysis_source = inspect.getsource(analysis_results._apply_explicit_user_constraints)
+    for retired in (
+        "extract_explicit_user_constraints",
+        "_NEGATIVE_DIRECTIVE",
+        "_POSITIVE_DIRECTIVE",
+        "_PURPOSE_RELATION",
+        "_TARGET_PREFIX",
+        "_GLUE_WORDS",
+        "_CLEAR",
+    ):
+        assert retired not in state_source
+        assert retired not in analysis_source
+
+    compiler_source = inspect.getsource(claim_compiler.compile_explicit_constraint_claims)
+    assert "evidence_not_in_current_request" in compiler_source
+    assert "target_not_grounded_in_evidence" in compiler_source
+    assert 'scope == "global"' in compiler_source
