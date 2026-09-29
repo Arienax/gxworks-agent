@@ -597,8 +597,15 @@ def test_agent_b_receives_structured_approach_contract_but_not_agent_a_prose():
 
 
 def test_agent_a_low_level_opcode_survives_only_when_user_explicitly_names_it():
+    analysis = _bad_analysis()
+    analysis["explicit_constraint_claims"] = [{
+        "operation": "require",
+        "scope": "global",
+        "target": {"kind": "opcode", "values": ["DMOV"]},
+        "evidence": ["明确要求使用 DMOV"],
+    }]
     normalized = _normalize_analysis_result(
-        _bad_analysis(),
+        analysis,
         plc_model="FX3U",
         user_text="明确要求使用 DMOV；不要把其他模型建议指令当成硬要求。",
     )
@@ -671,8 +678,19 @@ def test_exact_instruction_instance_survives_agent_a_confirmation_to_agent_b():
     from plc.specification.provenance import confirm_context
 
     instance = {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
+    analysis = _structure_only_analysis()
+    analysis["explicit_constraint_claims"] = [{
+        "operation": "require",
+        "scope": "global",
+        "target": {
+            "kind": "instruction_instance",
+            "opcode": "SFTL",
+            "operands": ["M10", "M100", "K128", "K1"],
+        },
+        "evidence": ["明确使用 SFTL M10 M100 K128 K1 实现移位。"],
+    }]
     normalized = _normalize_analysis_result(
-        _structure_only_analysis(),
+        analysis,
         plc_model="FX3U",
         user_text="明确使用 SFTL M10 M100 K128 K1 实现移位。",
     )
@@ -706,8 +724,19 @@ def test_pinned_reanalysis_preserves_instances_until_explicitly_cleared():
     from plc.specification.provenance import confirm_context
 
     instance = {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
+    first_analysis = _structure_only_analysis()
+    first_analysis["explicit_constraint_claims"] = [{
+        "operation": "require",
+        "scope": "global",
+        "target": {
+            "kind": "instruction_instance",
+            "opcode": "SFTL",
+            "operands": ["M10", "M100", "K128", "K1"],
+        },
+        "evidence": ["明确使用 SFTL M10 M100 K128 K1。"],
+    }]
     first = _normalize_analysis_result(
-        _structure_only_analysis(),
+        first_analysis,
         plc_model="FX3U",
         user_text="明确使用 SFTL M10 M100 K128 K1。",
     )
@@ -721,6 +750,12 @@ def test_pinned_reanalysis_preserves_instances_until_explicitly_cleared():
     assert draft["selected_approach"]["generation_contract"]["instruction_instances"] == [instance]
 
     cleared = _structure_only_analysis()
+    cleared["explicit_constraint_claims"] = [{
+        "operation": "clear",
+        "scope": "global",
+        "target": {"kind": "category", "value": "instruction_instances"},
+        "evidence": ["清除原固定指令实例"],
+    }]
     normalized_clear = _normalize_analysis_result(
         cleared, plc_model="FX3U", user_text="清除原固定指令实例，重新开放具体调用。", confirmed_spec=previous,
     )
