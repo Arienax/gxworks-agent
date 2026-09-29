@@ -287,6 +287,20 @@ def test_generation_fact_lane_owners_do_not_cross_import():
     } <= composer
 
 
+def test_generation_retrieval_budget_has_no_fixed_character_ceiling():
+    support = (
+        SOURCE_ROOT / "application" / "generation_support.py"
+    ).read_text(encoding="utf-8")
+    context = (
+        SOURCE_ROOT / "application" / "generation_context.py"
+    ).read_text(encoding="utf-8")
+
+    assert "_KNOWLEDGE_TASK_SETTINGS" not in support
+    assert "_KNOWLEDGE_TASK_TOP_K" in support
+    assert "retrieval_char_budget = token_budget * 8" in context
+    assert "rag_evidence_token_budget" in context
+
+
 def test_capability_coverage_manifest_is_current():
     from tools.audit_capability_coverage import audit_coverage
 
