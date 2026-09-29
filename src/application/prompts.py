@@ -11,7 +11,7 @@ ANALYSIS_SYSTEM_PROMPT = """# Role
 
 # 输出要求
 approaches 每项含 approach_id、name、description、pros、cons、generation_guide、implementation_semantics；方案数量由本轮模式决定。generation_contract 由 Core 生成，模型不要输出。
-返回纯JSON（不要\`\`\`json包裹），格式：
+返回纯JSON（不要```json包裹），格式：
 {"summary":"一句话总结","approaches":[],"execution_intent_claims":[],"explicit_constraint_claims":[],"missing_info":[],"suggested_io":{},"hardware_config":{},"assumptions":[]}
 # suggested_io / hardware_config
 普通 X/Y/M/D/T/C/S 用“地址:用途”对象分组，如 {"X":{"X10":"到位检测"}}；special_relays/special_registers 可用数组或对象，SM/SD 分别归类。未知地址不填；需确认的地址只放 missing_info。hardware_config 只放当前实现相关模块、通道、量程或接线事实。
