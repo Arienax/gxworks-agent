@@ -369,17 +369,17 @@ def _visual_operand_sequence(raw, opcode, expected):
     if not opcode or len(expected) < 2:
         return []
 
-    boundary = r"[A-Za-z0-9_.$@+<>!=\\-]"
+    boundary = r"[A-Za-z0-9_.$@+<>!=\-]"
     opcode_re = re.compile(
         r"(?<!%s)%s(?!%s)" % (boundary, re.escape(opcode), boundary),
         re.I,
     )
-    operand_re = re.compile(r"(?i)(?<![A-Z0-9])([SDMN]\\d{0,3})(?![A-Z0-9])")
+    operand_re = re.compile(r"(?i)(?<![A-Z0-9])([SDMN]\d{0,3})(?![A-Z0-9])")
     glyph_operand_re = re.compile(
-        r"(?i)([SDM]\\d{0,3})\\s*(?=\\[GLYPH-[0-9A-F]+\\])"
+        r"(?i)([SDM]\d{0,3})\s*(?=\[GLYPH-[0-9A-F]+\])"
     )
     fused_count_re = re.compile(
-        r"(?i)(?<![A-Z0-9])(n\\d{0,3})(?=[SDM]\\d{0,3}\\s*\\[GLYPH-[0-9A-F]+\\])"
+        r"(?i)(?<![A-Z0-9])(n\d{0,3})(?=[SDM]\d{0,3}\s*\[GLYPH-[0-9A-F]+\])"
     )
     expected_set = set(expected)
 
@@ -398,12 +398,12 @@ def _visual_operand_sequence(raw, opcode, expected):
         relative = match.start() - offsets[line_index] if offsets else 0
         # A mnemonic embedded in ordinary prose ("dead band") is not syntax.
         if line[:relative].strip() and not re.search(
-            r"(?:FNC\\s*\\d+|input)\\s*$", line[:relative], re.I
+            r"(?:FNC\s*\d+|input)\s*$", line[:relative], re.I
         ):
             continue
 
         region_lines = lines[line_index:line_index + 4]
-        region = "\\n".join(region_lines)
+        region = "\n".join(region_lines)
         if "[GLYPH-" not in region:
             continue
 
@@ -429,7 +429,7 @@ def _visual_operand_sequence(raw, opcode, expected):
         running = base_offset
         for short_line in region_lines[1:]:
             stripped = short_line.strip()
-            if re.fullmatch(r"(?i)[SDMN]\\d{0,3}", stripped):
+            if re.fullmatch(r"(?i)[SDMN]\d{0,3}", stripped):
                 positions.append((running + short_line.find(stripped), stripped.upper()))
             running += len(short_line) + 1
 
