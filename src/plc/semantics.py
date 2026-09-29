@@ -56,18 +56,26 @@ _PULSE_WIDTH_RE = re.compile(
     re.I,
 )
 
+_RISING_TRANSITION_RE = re.compile(
+    r"(?:(?:从|由)\s*)?(?:0|OFF|FALSE|断开)"
+    r"\s*(?:变(?:成|为)|切换(?:到|为)|转(?:成|为)|到|至|→|->)\s*"
+    r"(?:1|ON|TRUE|接通)",
+    re.I,
+)
+_FALLING_TRANSITION_RE = re.compile(
+    r"(?:(?:从|由)\s*)?(?:1|ON|TRUE|接通)"
+    r"\s*(?:变(?:成|为)|切换(?:到|为)|转(?:成|为)|到|至|→|->)\s*"
+    r"(?:0|OFF|FALSE|断开)",
+    re.I,
+)
+
 _RISING_PATTERNS = (
     re.compile(r"上升沿|正沿|rising\s*edge|one[- ]?shot", re.I),
     re.compile(r"(?:每次|每当).{0,28}(?:按下|触发|到位|检测到|来料|接通)", re.I),
     re.compile(r"(?:按下|触发|到位|检测到|来料|接通).{0,12}(?:一次|瞬间)", re.I),
     # Explicit binary transition wording is edge intent even when the user never
     # says "上升沿".  Keep this separate from generic "变为1" state prose.
-    re.compile(
-        r"(?:(?:从|由)\s*)?(?:0|OFF|FALSE|断开)"
-        r"\s*(?:变(?:成|为)|切换(?:到|为)|转(?:成|为)|到|至|→|->)\s*"
-        r"(?:1|ON|TRUE|接通)",
-        re.I,
-    ),
+    _RISING_TRANSITION_RE,
     # Holding the asserted state while explicitly forbidding a repeat trigger is
     # one-shot/event intent, not LEVEL intent.
     re.compile(
@@ -81,12 +89,7 @@ _FALLING_PATTERNS = (
     re.compile(r"下降沿|负沿|falling\s*edge", re.I),
     re.compile(r"(?:每次|每当).{0,28}(?:松开|断开|释放|变为OFF)", re.I),
     re.compile(r"(?:松开|断开|释放).{0,12}(?:一次|瞬间)", re.I),
-    re.compile(
-        r"(?:(?:从|由)\s*)?(?:1|ON|TRUE|接通)"
-        r"\s*(?:变(?:成|为)|切换(?:到|为)|转(?:成|为)|到|至|→|->)\s*"
-        r"(?:0|OFF|FALSE|断开)",
-        re.I,
-    ),
+    _FALLING_TRANSITION_RE,
     re.compile(
         r"(?:持续|保持).{0,16}(?:为|是|处于)?\s*(?:0|OFF|FALSE|低电平|断开)"
         r".{0,28}(?:不得|不能|不应|不可|不会).{0,16}(?:重复|再次|连续)"
@@ -208,8 +211,45 @@ def _pulse_width_ms(fragment: str) -> Optional[float]:
     return value if value > 0 else None
 
 
+def _transition_source_devices(fragment: str, semantic: str) -> List[str]:
+    pattern = (
+        _RISING_TRANSITION_RE
+        if semantic == "RISING_EDGE"
+        else _FALLING_TRANSITION_RE
+        if semantic == "FALLING_EDGE"
+        else None
+    )
+    if pattern is None:
+        return []
+    match = pattern.search(fragment)
+    if not match:
+        return []
+
+    devices = list(_DEVICE_TOKEN_RE.finditer(fragment))
+    if not devices:
+        return []
+    boundaries = "，,。；;！？!?\n"
+    left = max((fragment.rfind(ch, 0, match.start()) for ch in boundaries), default=-1) + 1
+    before = [
+        device for device in devices
+        if device.start() >= left and device.end() <= match.start()
+    ]
+    if before:
+        nearest_end = max(device.end() for device in before)
+        return list(dict.fromkeys(
+            device.group(0).upper()
+            for device in before
+            if device.end() == nearest_end
+        ))
+    return []
+
+
 def _intent_devices(fragment: str, semantic: str) -> List[str]:
     """Return trigger devices, excluding action destinations in the sentence."""
+
+    transition_devices = _transition_source_devices(fragment, semantic)
+    if transition_devices:
+        return transition_devices
 
     semantic_markers = {
         "RISING_EDGE": (

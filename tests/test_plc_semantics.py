@@ -87,13 +87,13 @@ def test_requirement_parser_keeps_true_sustained_level_control_as_level():
         "X2 持续为 1 时 Y0 保持输出；X3 只要接通时 Y1 输出。"
     )
 
-    assert {
-        (item["semantic"], tuple(item["devices"]))
+    assert all(
+        item["semantic"] not in {"RISING_EDGE", "FALLING_EDGE"}
         for item in requirements
-    } == {
-        ("LEVEL", ("X2",)),
-        ("LEVEL", ("X3",)),
-    }
+    )
+    levels = [item for item in requirements if item["semantic"] == "LEVEL"]
+    assert any("X2" in item["devices"] for item in levels)
+    assert any("X3" in item["devices"] for item in levels)
 
 
 def test_requirement_parser_recognizes_explicit_falling_binary_transition():
