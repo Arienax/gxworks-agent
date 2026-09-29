@@ -72,8 +72,14 @@ def current_analysis_protocol_violations(result):
             + "; use execution_intent_claims instead"
         )
     from plc.execution_intent import execution_intent_claim_violations
+    from plc.specification.explicit_constraint_claims import (
+        explicit_constraint_claim_violations,
+    )
     violations.extend(
         execution_intent_claim_violations(result.get("execution_intent_claims"))
+    )
+    violations.extend(
+        explicit_constraint_claim_violations(result.get("explicit_constraint_claims"))
     )
     for index, approach in enumerate(approaches):
         path = f"$.approaches[{index}]"
@@ -270,18 +276,18 @@ def _selected_low_level_constraints(selected):
 
 
 def _apply_explicit_user_constraints(result, user_text, plc_model, confirmed_spec=None):
-    """Merge caller-fixed low-level choices independently of Agent-A output."""
-    from plc.specification.explicit_constraints import (
-        extract_explicit_user_constraints,
-        merge_explicit_user_constraints,
-    )
+    """Ground Agent-A user-constraint claims, then apply structured edits."""
+    from plc.specification.explicit_constraint_claims import compile_explicit_constraint_claims
+    from plc.specification.explicit_constraints import apply_explicit_constraint_operations
 
-    update = extract_explicit_user_constraints(user_text, plc_model)
-    previous_selected = (
-        confirmed_spec.get("selected_approach")
-        if isinstance(confirmed_spec, dict)
-        else None
+    receipt = compile_explicit_constraint_claims(
+        result.get("explicit_constraint_claims") or [], user_text, plc_model
     )
+    result["explicit_constraint_receipt"] = {
+        "accepted": copy.deepcopy(receipt.get("accepted") or []),
+        "rejected": copy.deepcopy(receipt.get("rejected") or []),
+    }
+    previous_selected = confirmed_spec.get("selected_approach") if isinstance(confirmed_spec, dict) else None
     previous_id = str((previous_selected or {}).get("approach_id") or "").strip()
     previous_constraints = _selected_low_level_constraints(previous_selected)
 
@@ -290,35 +296,19 @@ def _apply_explicit_user_constraints(result, user_text, plc_model, confirmed_spe
         if not isinstance(raw, dict):
             continue
         approach = dict(raw)
-        same_plan = (
-            previous_id
-            and str(approach.get("approach_id") or "").strip() == previous_id
-        )
+        same_plan = previous_id and str(approach.get("approach_id") or "").strip() == previous_id
         base = previous_constraints if same_plan else {}
-        merged = merge_explicit_user_constraints(
-            base,
-            update["constraints"],
-            clear_fields=update["clear_fields"],
-        )
-
+        merged = apply_explicit_constraint_operations(base, receipt["operations"])
         if "implementation_semantics" in approach:
             approach["explicit_user_constraints"] = merged
             approach = normalize_approach(approach)
         else:
-            # Non-provider compatibility only. Fresh provider responses are
-            # accepted by validate_current_analysis_protocol() before entering
-            # this normalizer; persisted old specs migrate in legacy_migration.
             approach = normalize_approach(approach)
             contract = dict(approach.get("generation_contract") or {})
-            for key in (
-                "required_opcodes", "forbidden_opcodes",
-                "required_devices", "forbidden_devices",
-                "instruction_instances",
-            ):
+            for key in ("required_opcodes", "forbidden_opcodes", "required_devices", "forbidden_devices", "instruction_instances"):
                 contract[key] = copy.deepcopy(merged[key])
             approach["generation_contract"] = contract
         approaches.append(approach)
-
     result["approaches"] = approaches
     return result
 
@@ -344,6 +334,7 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     normalized.pop("engineering_context", None)
     normalized.pop("intent_context", None)
     normalized.pop("decision_receipt", None)
+    normalized.pop("explicit_constraint_receipt", None)
     normalized.pop("declared_io_bindings", None)
     # Legacy UI/classification fields are not part of the current model contract.
     # Do not replay them into later model requests or migrate saved revisions.
