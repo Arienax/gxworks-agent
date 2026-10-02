@@ -4,7 +4,11 @@
 
 新建工程时选择 FBD。可从需求生成候选，也可在对象、连接和声明表中编辑。候选经 GXW 写入和回读校验后生成预览；修改草稿时旧预览会隐藏，避免显示与草稿不符的图。
 
-可新增的节点、调用形式和声明类型从工作台 `/api/fbd/catalog` 查询。实现入口是 [application.fbd](../../src/application/fbd.py)，模板位于 [gxw/templates](../../src/gxw/templates/)。未知调用可随源记录保留，但不能凭名称新增未登记的 ABI。
+可新增的节点、调用形式和声明类型从工作台 `/api/fbd/catalog` 查询；传入 `project_id`、`version_id` 可读取所选工程的目录。编辑器直接使用同一源码上下文返回的目录。实现入口是 [application.fbd](../../src/application/fbd.py)，基础模板位于 [gxw/templates](../../src/gxw/templates/)。新建工程仍使用 FX3U 模板。
+
+[read_project_context](../../src/gxw/object_model.py)绑定当前 GXW 字节、所选 Program、声明和工程 CPU，供目录、v2 对象投影、预览及候选校验共用。自定义 FB 的形参取自该工程的库源码或项目 FB 声明；`IN_OUT` 两侧使用 `in.NAME`／`out.NAME`，端口名、方向和类型由 Core 返回。修改声明后重新解析形参，候选写入后从新 GXW 重建上下文。重命名现有实例会同时更新图形引用和声明；重命名形参会同步更新该端口已有的取反设置和命名连线。
+
+来源缺失或接口不一致的调用保留原始记录并返回 `callable_source_gap`，不能凭名称克隆。未登记但有明确边界的记录按原始字节保留，已知对象仍可局部编辑。无法确定记录边界的输入会被拒绝。
 
 保存的 FBD 版本提供 `program.gxw`、`fbd.json`、`fbd.svg` 和写入报告。版本、产物及校验结果的关系见[生成交付](../architecture/generation-delivery.md)。
 
@@ -12,7 +16,7 @@
 
 选择“导入 GXW”，上传工程并选择目标 POU。文件大小限制与请求字段由 [Web schemas](../../src/integrations/web/schemas.py)和 [application.fbd](../../src/application/fbd.py)定义。保留原工程副本；导入后核对所选 POU、声明和连接。
 
-导入保留其他 POU、元数据及未知记录。工作台没有完整的导入 CPU 识别，项目下拉框中的型号不能替代原工程 CPU 参数检查。导入校验通过后生成新本地版本，原版本保留。
+导入保留其他 POU、元数据及未知记录。v2 模型的 `cpu` 来自原工程，用于选择源码接口；它不代表运行行为或已通过原生编译，工作台机型选择仍不能替代原工程参数检查。导入校验通过后生成新本地版本，原版本保留。读取已有版本时也从其 GXW 重建投影，旧版 JSON 不用于推断当前接口。
 
 已有 Ladder 可转换为 FBD；转换范围是已有 NO/NC/COIL 串并联结构，原注释作为源 Ladder 数据保留。复杂应用指令或未覆盖节点应使用已登记模板或原生 GX 工程，不应把转换按钮视为通用编译器。
 

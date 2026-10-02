@@ -1,0 +1,1370 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-02",
+  "module": "original source Check selection ownership and asynchronous lifetime",
+  "environment": {
+    "native_dll_version": "1.635.0.1",
+    "python": "3.13",
+    "ghidra_cli": "0.2.2",
+    "ghidra": "12.1.4",
+    "hypothesis": "6.168.3"
+  },
+  "native_menu_attempts": 73,
+  "retained_startup_collisions": 11,
+  "exact_menu_options": 55,
+  "affected_options_reobserved": 7,
+  "selected_observation_errors": 0,
+  "original_completion_outcomes": {
+    "incomplete": 54,
+    "completed": 1
+  },
+  "original_acceptance_outcomes": {
+    "rejected": 55
+  },
+  "original_error_codes_observed": [
+    "0x50030018",
+    "0x500c5150"
+  ],
+  "cpu_witnesses": [
+    {
+      "cpu_menu_option": "FX3U/FX3UC",
+      "native_initialize_cpu_keys": [
+        520
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c00-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/FX3U-FX3UC/FBD_MATRIX.Program.pou",
+        "owned-sources/FX3U-FX3UC/FBD_MATRIX.Labels.lh",
+        "owned-sources/FX3U-FX3UC/MODULE_FB.Program.pou",
+        "owned-sources/FX3U-FX3UC/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q00J",
+      "native_initialize_cpu_keys": [
+        48
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v2-affected/c00-a2",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q00J/FBD_MATRIX.Program.pou",
+        "owned-sources/Q00J/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q00J/MODULE_FB.Program.pou",
+        "owned-sources/Q00J/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q00UJ",
+      "native_initialize_cpu_keys": [
+        128
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c02-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q00UJ/FBD_MATRIX.Program.pou",
+        "owned-sources/Q00UJ/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q00UJ/MODULE_FB.Program.pou",
+        "owned-sources/Q00UJ/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q00",
+      "native_initialize_cpu_keys": [
+        49
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c03-a2",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q00/FBD_MATRIX.Program.pou",
+        "owned-sources/Q00/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q00/MODULE_FB.Program.pou",
+        "owned-sources/Q00/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q00U",
+      "native_initialize_cpu_keys": [
+        129
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c04-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q00U/FBD_MATRIX.Program.pou",
+        "owned-sources/Q00U/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q00U/MODULE_FB.Program.pou",
+        "owned-sources/Q00U/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q01",
+      "native_initialize_cpu_keys": [
+        50
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c05-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q01/FBD_MATRIX.Program.pou",
+        "owned-sources/Q01/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q01/MODULE_FB.Program.pou",
+        "owned-sources/Q01/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q01U",
+      "native_initialize_cpu_keys": [
+        130
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c06-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q01U/FBD_MATRIX.Program.pou",
+        "owned-sources/Q01U/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q01U/MODULE_FB.Program.pou",
+        "owned-sources/Q01U/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q02/Q02H",
+      "native_initialize_cpu_keys": [
+        34
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c07-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q02-Q02H/FBD_MATRIX.Program.pou",
+        "owned-sources/Q02-Q02H/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q02-Q02H/MODULE_FB.Program.pou",
+        "owned-sources/Q02-Q02H/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q02PH",
+      "native_initialize_cpu_keys": [
+        69
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c08-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q02PH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q02PH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q02PH/MODULE_FB.Program.pou",
+        "owned-sources/Q02PH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q02U",
+      "native_initialize_cpu_keys": [
+        131
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c09-a2",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q02U/FBD_MATRIX.Program.pou",
+        "owned-sources/Q02U/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q02U/MODULE_FB.Program.pou",
+        "owned-sources/Q02U/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q03UD",
+      "native_initialize_cpu_keys": [
+        112
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c10-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q03UD/FBD_MATRIX.Program.pou",
+        "owned-sources/Q03UD/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q03UD/MODULE_FB.Program.pou",
+        "owned-sources/Q03UD/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q03UDE",
+      "native_initialize_cpu_keys": [
+        144
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c11-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q03UDE/FBD_MATRIX.Program.pou",
+        "owned-sources/Q03UDE/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q03UDE/MODULE_FB.Program.pou",
+        "owned-sources/Q03UDE/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q03UDV",
+      "native_initialize_cpu_keys": [
+        209
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v2-affected/c01-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q03UDV/FBD_MATRIX.Program.pou",
+        "owned-sources/Q03UDV/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q03UDV/MODULE_FB.Program.pou",
+        "owned-sources/Q03UDV/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q04UDH",
+      "native_initialize_cpu_keys": [
+        113
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c13-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q04UDH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q04UDH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q04UDH/MODULE_FB.Program.pou",
+        "owned-sources/Q04UDH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q04UDEH",
+      "native_initialize_cpu_keys": [
+        145
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c14-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q04UDEH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q04UDEH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q04UDEH/MODULE_FB.Program.pou",
+        "owned-sources/Q04UDEH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q04UDV",
+      "native_initialize_cpu_keys": [
+        210
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c15-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q04UDV/FBD_MATRIX.Program.pou",
+        "owned-sources/Q04UDV/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q04UDV/MODULE_FB.Program.pou",
+        "owned-sources/Q04UDV/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q04UDPV",
+      "native_initialize_cpu_keys": [
+        71
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c16-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q04UDPV/FBD_MATRIX.Program.pou",
+        "owned-sources/Q04UDPV/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q04UDPV/MODULE_FB.Program.pou",
+        "owned-sources/Q04UDPV/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q06H",
+      "native_initialize_cpu_keys": [
+        35
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c17-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q06H/FBD_MATRIX.Program.pou",
+        "owned-sources/Q06H/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q06H/MODULE_FB.Program.pou",
+        "owned-sources/Q06H/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q06PH",
+      "native_initialize_cpu_keys": [
+        70
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c18-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q06PH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q06PH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q06PH/MODULE_FB.Program.pou",
+        "owned-sources/Q06PH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q06UDH",
+      "native_initialize_cpu_keys": [
+        114
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c19-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q06UDH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q06UDH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q06UDH/MODULE_FB.Program.pou",
+        "owned-sources/Q06UDH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q06UDEH",
+      "native_initialize_cpu_keys": [
+        146
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c20-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q06UDEH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q06UDEH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q06UDEH/MODULE_FB.Program.pou",
+        "owned-sources/Q06UDEH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q06UDV",
+      "native_initialize_cpu_keys": [
+        211
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c21-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q06UDV/FBD_MATRIX.Program.pou",
+        "owned-sources/Q06UDV/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q06UDV/MODULE_FB.Program.pou",
+        "owned-sources/Q06UDV/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q06UDPV",
+      "native_initialize_cpu_keys": [
+        72
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c22-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q06UDPV/FBD_MATRIX.Program.pou",
+        "owned-sources/Q06UDPV/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q06UDPV/MODULE_FB.Program.pou",
+        "owned-sources/Q06UDPV/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q10UDH",
+      "native_initialize_cpu_keys": [
+        117
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c23-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q10UDH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q10UDH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q10UDH/MODULE_FB.Program.pou",
+        "owned-sources/Q10UDH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q10UDEH",
+      "native_initialize_cpu_keys": [
+        149
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c24-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q10UDEH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q10UDEH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q10UDEH/MODULE_FB.Program.pou",
+        "owned-sources/Q10UDEH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q12H",
+      "native_initialize_cpu_keys": [
+        36
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c25-a2",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q12H/FBD_MATRIX.Program.pou",
+        "owned-sources/Q12H/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q12H/MODULE_FB.Program.pou",
+        "owned-sources/Q12H/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q12PH",
+      "native_initialize_cpu_keys": [
+        65
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c26-a2",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q12PH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q12PH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q12PH/MODULE_FB.Program.pou",
+        "owned-sources/Q12PH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q12PRH",
+      "native_initialize_cpu_keys": [
+        67
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c27-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q12PRH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q12PRH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q12PRH/MODULE_FB.Program.pou",
+        "owned-sources/Q12PRH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q13UDH",
+      "native_initialize_cpu_keys": [
+        115
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c28-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q13UDH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q13UDH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q13UDH/MODULE_FB.Program.pou",
+        "owned-sources/Q13UDH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q13UDEH",
+      "native_initialize_cpu_keys": [
+        147
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c29-a2",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q13UDEH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q13UDEH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q13UDEH/MODULE_FB.Program.pou",
+        "owned-sources/Q13UDEH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q13UDV",
+      "native_initialize_cpu_keys": [
+        212
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c30-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q13UDV/FBD_MATRIX.Program.pou",
+        "owned-sources/Q13UDV/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q13UDV/MODULE_FB.Program.pou",
+        "owned-sources/Q13UDV/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q13UDPV",
+      "native_initialize_cpu_keys": [
+        73
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c31-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q13UDPV/FBD_MATRIX.Program.pou",
+        "owned-sources/Q13UDPV/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q13UDPV/MODULE_FB.Program.pou",
+        "owned-sources/Q13UDPV/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q20UDH",
+      "native_initialize_cpu_keys": [
+        118
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c32-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q20UDH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q20UDH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q20UDH/MODULE_FB.Program.pou",
+        "owned-sources/Q20UDH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q20UDEH",
+      "native_initialize_cpu_keys": [
+        150
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c33-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q20UDEH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q20UDEH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q20UDEH/MODULE_FB.Program.pou",
+        "owned-sources/Q20UDEH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q25H",
+      "native_initialize_cpu_keys": [
+        37
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c34-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q25H/FBD_MATRIX.Program.pou",
+        "owned-sources/Q25H/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q25H/MODULE_FB.Program.pou",
+        "owned-sources/Q25H/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q25PH",
+      "native_initialize_cpu_keys": [
+        66
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c35-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q25PH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q25PH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q25PH/MODULE_FB.Program.pou",
+        "owned-sources/Q25PH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q25PRH",
+      "native_initialize_cpu_keys": [
+        68
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v2-affected/c02-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q25PRH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q25PRH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q25PRH/MODULE_FB.Program.pou",
+        "owned-sources/Q25PRH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q26UDH",
+      "native_initialize_cpu_keys": [
+        116
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c37-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q26UDH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q26UDH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q26UDH/MODULE_FB.Program.pou",
+        "owned-sources/Q26UDH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q26UDEH",
+      "native_initialize_cpu_keys": [
+        148
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v2-affected/c03-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q26UDEH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q26UDEH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q26UDEH/MODULE_FB.Program.pou",
+        "owned-sources/Q26UDEH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q26UDV",
+      "native_initialize_cpu_keys": [
+        213
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c39-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q26UDV/FBD_MATRIX.Program.pou",
+        "owned-sources/Q26UDV/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q26UDV/MODULE_FB.Program.pou",
+        "owned-sources/Q26UDV/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q26UDPV",
+      "native_initialize_cpu_keys": [
+        74
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c40-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q26UDPV/FBD_MATRIX.Program.pou",
+        "owned-sources/Q26UDPV/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q26UDPV/MODULE_FB.Program.pou",
+        "owned-sources/Q26UDPV/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q50UDEH",
+      "native_initialize_cpu_keys": [
+        152
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c41-a2",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q50UDEH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q50UDEH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q50UDEH/MODULE_FB.Program.pou",
+        "owned-sources/Q50UDEH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "Q100UDEH",
+      "native_initialize_cpu_keys": [
+        154
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c42-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/Q100UDEH/FBD_MATRIX.Program.pou",
+        "owned-sources/Q100UDEH/FBD_MATRIX.Labels.lh",
+        "owned-sources/Q100UDEH/MODULE_FB.Program.pou",
+        "owned-sources/Q100UDEH/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "L02S",
+      "native_initialize_cpu_keys": [
+        163
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v2-affected/c04-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/L02S/FBD_MATRIX.Program.pou",
+        "owned-sources/L02S/FBD_MATRIX.Labels.lh",
+        "owned-sources/L02S/MODULE_FB.Program.pou",
+        "owned-sources/L02S/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "L02",
+      "native_initialize_cpu_keys": [
+        161
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c44-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/L02/FBD_MATRIX.Program.pou",
+        "owned-sources/L02/FBD_MATRIX.Labels.lh",
+        "owned-sources/L02/MODULE_FB.Program.pou",
+        "owned-sources/L02/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "L06",
+      "native_initialize_cpu_keys": [
+        165
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c45-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/L06/FBD_MATRIX.Program.pou",
+        "owned-sources/L06/FBD_MATRIX.Labels.lh",
+        "owned-sources/L06/MODULE_FB.Program.pou",
+        "owned-sources/L06/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "L26",
+      "native_initialize_cpu_keys": [
+        164
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c46-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/L26/FBD_MATRIX.Program.pou",
+        "owned-sources/L26/FBD_MATRIX.Labels.lh",
+        "owned-sources/L26/MODULE_FB.Program.pou",
+        "owned-sources/L26/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "L26-BT",
+      "native_initialize_cpu_keys": [
+        162
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c47-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/L26-BT/FBD_MATRIX.Program.pou",
+        "owned-sources/L26-BT/FBD_MATRIX.Labels.lh",
+        "owned-sources/L26-BT/MODULE_FB.Program.pou",
+        "owned-sources/L26-BT/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "FX1N/FX1NC",
+      "native_initialize_cpu_keys": [
+        519
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c48-a2",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/FX1N-FX1NC/FBD_MATRIX.Program.pou",
+        "owned-sources/FX1N-FX1NC/FBD_MATRIX.Labels.lh",
+        "owned-sources/FX1N-FX1NC/MODULE_FB.Program.pou",
+        "owned-sources/FX1N-FX1NC/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "FX2/FX2C",
+      "native_initialize_cpu_keys": [
+        516
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c49-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/FX2-FX2C/FBD_MATRIX.Program.pou",
+        "owned-sources/FX2-FX2C/FBD_MATRIX.Labels.lh",
+        "owned-sources/FX2-FX2C/MODULE_FB.Program.pou",
+        "owned-sources/FX2-FX2C/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "FX2N/FX2NC",
+      "native_initialize_cpu_keys": [
+        517
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c50-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/FX2N-FX2NC/FBD_MATRIX.Program.pou",
+        "owned-sources/FX2N-FX2NC/FBD_MATRIX.Labels.lh",
+        "owned-sources/FX2N-FX2NC/MODULE_FB.Program.pou",
+        "owned-sources/FX2N-FX2NC/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "FX3S",
+      "native_initialize_cpu_keys": [
+        522
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v2-affected/c05-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/FX3S/FBD_MATRIX.Program.pou",
+        "owned-sources/FX3S/FBD_MATRIX.Labels.lh",
+        "owned-sources/FX3S/MODULE_FB.Program.pou",
+        "owned-sources/FX3S/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "FX3G",
+      "native_initialize_cpu_keys": [
+        521
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c52-a2",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/FX3G/FBD_MATRIX.Program.pou",
+        "owned-sources/FX3G/FBD_MATRIX.Labels.lh",
+        "owned-sources/FX3G/MODULE_FB.Program.pou",
+        "owned-sources/FX3G/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "FX1S",
+      "native_initialize_cpu_keys": [
+        518
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v2-affected/c06-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/FX1S/FBD_MATRIX.Program.pou",
+        "owned-sources/FX1S/FBD_MATRIX.Labels.lh",
+        "owned-sources/FX1S/MODULE_FB.Program.pou",
+        "owned-sources/FX1S/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "completed",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x500c5150"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    },
+    {
+      "cpu_menu_option": "FX0N",
+      "native_initialize_cpu_keys": [
+        514
+      ],
+      "selected_attempt": "research/experiments/sfc-graph-20260926/public-corpus-discovery/source-check-lifetime-cpu-20261002-v1/c54-a1",
+      "input_gxw_bytes_equal_to_recorded_option": true,
+      "owned_source_streams": [
+        "owned-sources/FX0N/FBD_MATRIX.Program.pou",
+        "owned-sources/FX0N/FBD_MATRIX.Labels.lh",
+        "owned-sources/FX0N/MODULE_FB.Program.pou",
+        "owned-sources/FX0N/MODULE_FB.Labels.lh"
+      ],
+      "original_source_check_completion": "incomplete",
+      "original_source_check_acceptance": "rejected",
+      "native_error_codes": [
+        "0x50030018"
+      ],
+      "public_program_check": "not_completed",
+      "public_check_promoted": false,
+      "assessment": "owner-released-selection-native-worker-observed-change-original-rejection-retained",
+      "observation_errors": []
+    }
+  ],
+  "original_abi": {
+    "process_unit_size": 12,
+    "selection_size": 8,
+    "selection_kind": 6,
+    "selected_rows": [
+      -1,
+      -1
+    ],
+    "selected_names": [
+      "",
+      "FBD_MATRIX"
+    ],
+    "wide_adapter_slot": 32,
+    "narrow_compiler_slot": 36,
+    "narrow_progress_slot": 44
+  },
+  "mechanism": {
+    "adapter_selection_cleanup_rva": "0x2cac",
+    "adapter_check_implementation_rva": "0xc3e5",
+    "compiler_check_rva": "0x6f2c",
+    "asynchronous_source_worker_rva": "0x2e8f6",
+    "observation": "original names exist before cleanup; the same descriptor is cleared or overwritten before the asynchronous worker reads it",
+    "native_results_replaced": false,
+    "vendor_binaries_patched": false
+  },
+  "retained_buffer_control": {
+    "kind": "standalone original native frontend source Check",
+    "cpu_engine_key": 520,
+    "case_labels": [
+      "empty-pou",
+      "empty-fb",
+      "empty-absent",
+      "pou-empty"
+    ],
+    "valid_names_finish_with_warnings": true,
+    "missing_or_swapped_names_are_rejected": true,
+    "compiled_resource_check": "not_run",
+    "public_program_check_promoted": false
+  },
+  "property_checks": {
+    "evidence_classifier": {
+      "counts": {
+        "positive": 6,
+        "foreign_target": 80,
+        "compile_rejection": 12,
+        "source_only_completion": 24
+      },
+      "failures": [],
+      "scope": "generated evidence-classifier records; not native execution"
+    },
+    "source_locator": {
+      "native_seed_locations": 10,
+      "coherent_generated": 301,
+      "contradictory_generated": 60,
+      "ambiguous_generated": 24,
+      "scope": "generated research locator records; not native or PLC execution"
+    },
+    "scope": "generated records, not native or PLC execution"
+  },
+  "retained_failed_trials": [
+    "initial incorrect selection arity and name ordering hypotheses",
+    "seven initial observer failures when the released descriptor header was already overwritten",
+    "initial validation incorrectly required one error code and incomplete progress for every model",
+    "standalone replay v1-v3 used engine key 521 and do not establish matching FX3U configuration",
+    "standalone replay v1 attempted Build before Check and failed setup",
+    "earlier Ghidra source getter entry addresses used the wrong DataManager image base; corrected entries are separate"
+  ],
+  "limits": [
+    "55 exact supported CPU menu options for one controlled two-instance FBD/FB template; not 55 independent projects",
+    "combined menu options are not separate physical model execution evidence",
+    "the descriptor reuse timing and resulting native error code are not fixed per CPU",
+    "standalone retained-buffer controls do not establish that public ProgramCheck completed",
+    "the original public ProgramCheck diagnostic projection failure 0x2d010025 remains unresolved",
+    "no PLC or simulator execution, no Web/MCP integration in this checkpoint"
+  ]
+}

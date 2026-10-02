@@ -44,6 +44,10 @@ Clients query `tools/list` for the actual tool set and schema. [ToolRegistry](..
 
 ## Generation and edits
 
+For FBD targets, `get_fbd_catalog` returns the selected project's source-bound ports and declaration tables. `read_fbd_project` reads the saved GXW or an explicitly uploaded GXW; projects with multiple programs require a program selection. `create_fbd_candidate` accepts `generate`, `edit` or `import`, prepares GXW/JSON/SVG artifacts, and uses the same candidate validation as Web. Edits require a saved base version. The v2 model carries the original project CPU and direction-qualified `IN_OUT` endpoints such as `in.STATE` and `out.STATE`.
+
+Standalone FBD candidates remain pending and do not write workspace versions. Connected candidates enter the existing proposal and approval policy. Private artifact bytes are excluded from public tool results. Structural acceptance, native compilation and behavior verification remain separate; these tools return `gx_compile=not_run`.
+
 The external client supplies model planning and output. `get_generation_context` returns the current specification, CPU-bound output contract, full-wire instructions and an optional snapshot-bound context ID. `create_program_candidate` accepts full or supported partial Ladder output. Argument fields and limits are owned by [plc_tools.py](../../src/agent_runtime/plc_tools.py), not a second MCP schema.
 
 [CandidateService](../../src/plc/candidate_service.py) owns compatibility normalization, structural checking, materialization and artifact preparation. Current intent and optional source correlation follow [intent and evidence handoff](../architecture/intent-evidence-handoff.md). Ordinary edits use this shared generation path; explicit scoped debugging uses its existing strict patch path.

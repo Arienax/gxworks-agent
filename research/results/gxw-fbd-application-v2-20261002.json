@@ -1,0 +1,141 @@
+{
+  "schema": 1,
+  "date": "2026-10-02",
+  "status": "application-integrated/native-validated-bounded-module",
+  "baseline_commit": "ef0a255a5acb227c4fab6a158ec96fa8b928d2be",
+  "scope": "Owned offline source-bound FBD v2 application module; exact native CPU options, not all physical models",
+  "application": {
+    "cases": 81,
+    "statuses": {
+      "no_native_project_input": 10,
+      "exception": 4,
+      "passed": 67
+    },
+    "final_core_byte_replay": {
+      "cases": 67,
+      "exact": 67
+    },
+    "source_gap_controls": {
+      "cases": 4,
+      "statuses": {
+        "bounded_edit_passed": 4
+      }
+    }
+  },
+  "native": {
+    "distinct_cpu_options": 55,
+    "statuses": {
+      "passed": 55
+    },
+    "cpu_options": [
+      "FX3U/FX3UC",
+      "Q00J",
+      "Q00UJ",
+      "Q00",
+      "Q00U",
+      "Q01",
+      "Q01U",
+      "Q02/Q02H",
+      "Q02PH",
+      "Q02U",
+      "Q03UD",
+      "Q03UDE",
+      "Q03UDV",
+      "Q04UDH",
+      "Q04UDEH",
+      "Q04UDV",
+      "Q04UDPV",
+      "Q06H",
+      "Q06PH",
+      "Q06UDH",
+      "Q06UDEH",
+      "Q06UDV",
+      "Q06UDPV",
+      "Q10UDH",
+      "Q10UDEH",
+      "Q12H",
+      "Q12PH",
+      "Q12PRH",
+      "Q13UDH",
+      "Q13UDEH",
+      "Q13UDV",
+      "Q13UDPV",
+      "Q20UDH",
+      "Q20UDEH",
+      "Q25H",
+      "Q25PH",
+      "Q25PRH",
+      "Q26UDH",
+      "Q26UDEH",
+      "Q26UDV",
+      "Q26UDPV",
+      "Q50UDEH",
+      "Q100UDEH",
+      "L02S",
+      "L02",
+      "L06",
+      "L26",
+      "L26-BT",
+      "FX1N/FX1NC",
+      "FX2/FX2C",
+      "FX2N/FX2NC",
+      "FX3S",
+      "FX3G",
+      "FX1S",
+      "FX0N"
+    ],
+    "phases": "Compile, publication, public targets/checks, diagnostics, save, cold-reopen code and graph/labels are separate",
+    "checker_read_trace_scope": [
+      "FX3U/FX3UC",
+      "Q03UDV",
+      "L02"
+    ],
+    "checker_read_limit": "The other 52 CPU options have compile/check/save/reopen observations without read instrumentation"
+  },
+  "diagnostic_projection": {
+    "adapter_version": "1.635.0.1",
+    "adapter_rva": "0x8e48",
+    "workspace_lookup_rva": "0x793aa",
+    "lookup_slot": 1784,
+    "backend_instance_kind": 6,
+    "lookup_kind": 32,
+    "source_collection": 25,
+    "failed_lookup_code": "0x2d010025",
+    "frozen_full_check_pairs": 26,
+    "frozen_failures_audited": 52,
+    "missing_same_name_pous": 52,
+    "name_control": "One native POU rename to MAIN; all three PCode channels identical; public check completes with rejection",
+    "owned_duplicate_output_cpu_options": [
+      "FX3U/FX3UC",
+      "Q03UDV",
+      "L02"
+    ],
+    "limit": "No vendor return value is replaced. Rename is a mechanism control; source locations are not certified."
+  },
+  "failure_chain": {
+    "tool": "research/program_check_evidence.py",
+    "public_frozen_cases": 10,
+    "q_stale_control": "Current compiler buffers differ from checker workspace reads; public check passes old code",
+    "sfc_empty_task_control": "100 percent completion plus returned cached code does not establish source conversion"
+  },
+  "verification": "Archived entries and final Core candidates compared as raw bytes; no new digest verification",
+  "archives": {
+    "public": {
+      "path": "research\\evidence\\gxw-fbd-application-v2-20261002.zip",
+      "entries": 17,
+      "bytes": 136480
+    },
+    "local": {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\gxw-fbd-application-v2-20261002-local.zip",
+      "entries": 6000,
+      "bytes": 166687210
+    }
+  },
+  "limits": [
+    "No PLC or simulator execution. BOOL runtime counterexamples are not resolved by this checkpoint.",
+    "Unknown framed record preservation is an application regression; arbitrary unknown native objects are not certified.",
+    "Full module rejects and factory failures remain in the CPU boundary witness; narrow type controls do not widen full-module claims.",
+    "Native source/task/config selection proof is not yet automatic in the generic check classifier.",
+    "FBD tools prepare candidates with gx_compile=not_run; native checks are separate offline research observations."
+  ]
+}

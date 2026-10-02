@@ -2498,7 +2498,11 @@ export interface operations {
     };
     fbd_catalog_api_fbd_catalog_get: {
         parameters: {
-            query?: never;
+            query?: {
+                project_id?: string | null;
+                version_id?: string | null;
+                program?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2512,6 +2516,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicObject"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

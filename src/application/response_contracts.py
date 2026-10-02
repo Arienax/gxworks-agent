@@ -56,6 +56,8 @@ TEST_SUITE_RESPONSE = ResponseContract("test_suite", "json", (
 
 
 def tool_argument_contract(name):
+    if name == 'create_fbd_candidate':
+        return ResponseContract('tool_fbd_candidate', 'json', ('summary',))
     if name == "create_program_candidate":
         paths = tuple("ladder." + path for path in _LADDER)
         return ResponseContract("tool_candidate", "json", paths, annotation_paths=paths)

@@ -5,13 +5,13 @@ import type { Proposal } from "../api/client";
 import { Button } from "../components/ui";
 import "./fbd.css";
 
-type Port = { name: string; x: number; y: number };
-type Node = { id: string; source_offset?: number; template: string; symbol: string; x: number; y: number; width?: number; height?: number; ports?: Port[] };
+type Port = { name: string; x: number; y: number; formal_name?: string; side?: string; data_type?: string };
+type Node = { id: string; source_offset?: number; prototype_offset?: number; template: string; symbol: string; x: number; y: number; width?: number; height?: number; ports?: Port[] };
 type Wire = { source_offset?: number; start?: number[]; end?: number[]; from?: string; to?: string; via?: number[][] };
 type Label = { name: string; data_type?: string; kind?: string; class_name?: string; initial_value?: string; device?: string; iec_address?: string; comment?: string };
 type DeclarationEdit = { upserts?: Label[]; renames?: Record<string, string>; remove?: string[] };
 export type FBDModel = { schema_version: number; program: string; canvas_height?: number; nodes: Node[]; wires: Wire[];
-  labels?: Record<string, Label[]>; declaration_edits?: Record<string, DeclarationEdit>; unknown_record_count?: number; issues?: { code: string; message: string }[] };
+  labels?: Record<string, Label[]>; declaration_edits?: Record<string, DeclarationEdit>; unknown_record_count?: number; issues?: { code: string; message: string }[]; cpu?: string };
 type CatalogNode = { template: string; kind: string; symbol: string; width: number; height: number; ports: Port[] };
 type DraftPreview = { svg: string; model: FBDModel; gx_compile: string };
 type NativeRecord = { id: string; created_at: string; operator: string; tool_version: string; outcome: string; report: string; source_gxw_sha256: string; binding_current: boolean;
@@ -128,7 +128,7 @@ export function FBDImport({ pid, vid, disabled, onProposal, t }: {
   </div>;
 }
 
-type EditorView = { model: FBDModel; presentation: { tables: string[]; rows: Record<string, Label[]>;
+type EditorView = { model: FBDModel; catalog: CatalogNode[]; presentation: { tables: string[]; rows: Record<string, Label[]>;
   nodes: { id: string; symbol_editable: boolean; ports: Port[] }[];
   endpoints: { value: string; label: string; point: number[] }[] }; gx_compile: string };
 
@@ -146,18 +146,13 @@ export function FBDPanel({ value, svg, pid, vid, readOnly, preview, onProposal, 
   const inputKey = useMemo(() => JSON.stringify(value), [value]);
   useEffect(() => {
     const current = ++generation.current;
-    pending.current = false; setBusy(false); setEditor(null); setError(""); setRendered(null);
+    pending.current = false; setBusy(false); setEditor(null); setCatalog([]); setError(""); setRendered(null);
     setPage(0); setFrom(""); setTo("");
     api<EditorView>("/fbd/editor", "POST", { project_id: pid, version_id: vid || null, model: JSON.parse(inputKey) })
-      .then(result => { if (generation.current === current) { setEditor(result); setSourceKey(JSON.stringify(result.model)); setTable(result.presentation.tables[0] || ""); } })
+      .then(result => { if (generation.current === current) { setEditor(result); setCatalog(result.catalog); setSelectedTemplate(result.catalog[0]?.template || ""); setSourceKey(JSON.stringify(result.model)); setTable(result.presentation.tables[0] || ""); } })
       .catch(e => { if (generation.current === current) setError(e.message); });
     return () => { generation.current++; };
   }, [inputKey, pid, vid]);
-  useEffect(() => { let active = true;
-    api<{ nodes: CatalogNode[] }>("/fbd/catalog").then(v => { if (active) { setCatalog(v.nodes); setSelectedTemplate(v.nodes[0]?.template || ""); } })
-      .catch(e => { if (active) setError(e.message); });
-    return () => { active = false; };
-  }, []);
   const draft = editor?.model;
   const draftKey = useMemo(() => JSON.stringify(draft), [draft]), dirty = !!draft && draftKey !== sourceKey;
   const previewIdentity = `${pid}/${vid}/${draftKey}`;
@@ -178,7 +173,10 @@ export function FBDPanel({ value, svg, pid, vid, readOnly, preview, onProposal, 
     pending.current = true; setBusy(true); setError("");
     try {
       const result = await api<EditorView>("/fbd/editor", "POST", { project_id: pid, version_id: vid || null, model: editor.model, command });
-      if (generation.current === current) setEditor(result);
+      if (generation.current === current) {
+        setEditor(result); setCatalog(result.catalog);
+        setSelectedTemplate(previous => result.catalog.some(item => item.template === previous) ? previous : result.catalog[0]?.template || "");
+      }
     } catch (e) { if (generation.current === current) setError(e instanceof Error ? e.message : String(e)); }
     finally { if (generation.current === current) { pending.current = false; setBusy(false); } }
   }
@@ -188,7 +186,7 @@ export function FBDPanel({ value, svg, pid, vid, readOnly, preview, onProposal, 
     pending.current = true; setBusy(true);
     try {
       const result = await api<EditorView>("/fbd/editor", "POST", { project_id: pid, version_id: vid || null, model: JSON.parse(sourceKey) });
-      if (generation.current === current) { setEditor(result); setError(""); }
+      if (generation.current === current) { setEditor(result); setCatalog(result.catalog); setError(""); }
     } catch (e) { if (generation.current === current) setError(e instanceof Error ? e.message : String(e)); }
     finally { if (generation.current === current) { pending.current = false; setBusy(false); } }
   }
@@ -231,10 +229,10 @@ export function FBDPanel({ value, svg, pid, vid, readOnly, preview, onProposal, 
         <td><select disabled={disabled} value={node.template} onChange={e => void edit({ action: "update_node", id: node.id, field: "template", value: e.target.value })}>{!catalog.some(c => c.template === node.template) && <option>{node.template}</option>}{catalog.map(c => <option key={c.template} value={c.template}>{templateLabel(c.template, t)}</option>)}</select></td>
         <td><input key={`${node.id}:symbol:${node.symbol}`} aria-label={`${t("设备或实例名")} ${i+1}`} disabled={disabled || !view?.symbol_editable} defaultValue={node.symbol} onBlur={e => { if (e.target.value !== node.symbol) void edit({ action: "update_node", id: node.id, field: "symbol", value: e.target.value }); }}/></td>
         {(["x","y"] as const).map(coord => <td key={coord}><input key={`${node.id}:${coord}:${node[coord]}`} aria-label={`${node.id} ${coord}`} className="fbd-number" type="number" disabled={disabled} defaultValue={node[coord]} onBlur={e => { if (e.target.value !== String(node[coord])) void edit({ action: "update_node", id: node.id, field: coord, value: number(e.target.value) }); }}/></td>)}
-        <td className="mono">{view?.ports.map(p => p.name).join(" · ")}</td>
+        <td className="mono">{view?.ports.map(p => p.data_type ? `${p.name}: ${p.data_type}` : p.name).join(" · ")}</td>
         <td><Button aria-label={`${t("删除对象")} ${i+1}`} disabled={disabled} onClick={() => void edit({ action: "delete_node", id: node.id })}><Trash2 size={14}/></Button></td></tr>;
       })}</tbody></table>
-      <p className="muted">{t("移动对象后请在连接页签检查导线坐标。更换 FB 实例名会创建相应声明；旧声明可在声明页签中重命名或删除。")}</p>
+      <p className="muted">{t("移动对象后请在连接页签检查导线坐标。重命名 FB 实例会同时更新图形引用与声明。")}</p>
     </div> : section === "wires" ? <div className="fbd-sheet"><div className="fbd-inline">
       <select aria-label={t("起点端口")} value={from} onChange={e => setFrom(e.target.value)}><option value="">{t("起点端口")}</option>{endpoints.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}</select><span>→</span>
       <select aria-label={t("终点端口")} value={to} onChange={e => setTo(e.target.value)}><option value="">{t("终点端口")}</option>{endpoints.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}</select>

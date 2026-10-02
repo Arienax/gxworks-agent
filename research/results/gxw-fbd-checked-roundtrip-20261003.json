@@ -1,0 +1,1673 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-03",
+  "environment": {
+    "native_dll_version": "1.635.0.1",
+    "python": "3.13",
+    "ghidra_cli": "0.2.2",
+    "ghidra": "12.1.4",
+    "hypothesis": "6.168.3"
+  },
+  "scenario": "Chinese instance/paired declaration rename, normalized FBD, current source and resource checks, save and cold reopen",
+  "exact_native_menu_options": 69,
+  "verified_options": 55,
+  "complete_save_phases": 55,
+  "complete_cold_reopen_phases": 55,
+  "cpu_options": [
+    {
+      "cpu": "FX3U/FX3UC",
+      "engine_key": 520,
+      "prior_scope": "full-FX3U-FX3UC"
+    },
+    {
+      "cpu": "Q00J",
+      "engine_key": 48,
+      "prior_scope": "full-Q00J"
+    },
+    {
+      "cpu": "Q00UJ",
+      "engine_key": 128,
+      "prior_scope": "full-Q00UJ"
+    },
+    {
+      "cpu": "Q00",
+      "engine_key": 49,
+      "prior_scope": "full-Q00"
+    },
+    {
+      "cpu": "Q00U",
+      "engine_key": 129,
+      "prior_scope": "full-Q00U"
+    },
+    {
+      "cpu": "Q01",
+      "engine_key": 50,
+      "prior_scope": "full-Q01"
+    },
+    {
+      "cpu": "Q01U",
+      "engine_key": 130,
+      "prior_scope": "full-Q01U"
+    },
+    {
+      "cpu": "Q02/Q02H",
+      "engine_key": 34,
+      "prior_scope": "full-Q02-Q02H"
+    },
+    {
+      "cpu": "Q02PH",
+      "engine_key": 69,
+      "prior_scope": "full-Q02PH"
+    },
+    {
+      "cpu": "Q02U",
+      "engine_key": 131,
+      "prior_scope": "full-Q02U"
+    },
+    {
+      "cpu": "Q03UD",
+      "engine_key": 112,
+      "prior_scope": "full-Q03UD"
+    },
+    {
+      "cpu": "Q03UDE",
+      "engine_key": 144,
+      "prior_scope": "full-Q03UDE"
+    },
+    {
+      "cpu": "Q03UDV",
+      "engine_key": 209,
+      "prior_scope": "full-Q03UDV"
+    },
+    {
+      "cpu": "Q04UDH",
+      "engine_key": 113,
+      "prior_scope": "full-Q04UDH"
+    },
+    {
+      "cpu": "Q04UDEH",
+      "engine_key": 145,
+      "prior_scope": "full-Q04UDEH"
+    },
+    {
+      "cpu": "Q04UDV",
+      "engine_key": 210,
+      "prior_scope": "full-Q04UDV"
+    },
+    {
+      "cpu": "Q04UDPV",
+      "engine_key": 71,
+      "prior_scope": "full-Q04UDPV"
+    },
+    {
+      "cpu": "Q06H",
+      "engine_key": 35,
+      "prior_scope": "full-Q06H"
+    },
+    {
+      "cpu": "Q06PH",
+      "engine_key": 70,
+      "prior_scope": "full-Q06PH"
+    },
+    {
+      "cpu": "Q06UDH",
+      "engine_key": 114,
+      "prior_scope": "full-Q06UDH"
+    },
+    {
+      "cpu": "Q06UDEH",
+      "engine_key": 146,
+      "prior_scope": "full-Q06UDEH"
+    },
+    {
+      "cpu": "Q06UDV",
+      "engine_key": 211,
+      "prior_scope": "full-Q06UDV"
+    },
+    {
+      "cpu": "Q06UDPV",
+      "engine_key": 72,
+      "prior_scope": "full-Q06UDPV"
+    },
+    {
+      "cpu": "Q10UDH",
+      "engine_key": 117,
+      "prior_scope": "full-Q10UDH"
+    },
+    {
+      "cpu": "Q10UDEH",
+      "engine_key": 149,
+      "prior_scope": "full-Q10UDEH"
+    },
+    {
+      "cpu": "Q12H",
+      "engine_key": 36,
+      "prior_scope": "full-Q12H"
+    },
+    {
+      "cpu": "Q12PH",
+      "engine_key": 65,
+      "prior_scope": "full-Q12PH"
+    },
+    {
+      "cpu": "Q12PRH",
+      "engine_key": 67,
+      "prior_scope": "full-Q12PRH"
+    },
+    {
+      "cpu": "Q13UDH",
+      "engine_key": 115,
+      "prior_scope": "full-Q13UDH"
+    },
+    {
+      "cpu": "Q13UDEH",
+      "engine_key": 147,
+      "prior_scope": "full-Q13UDEH"
+    },
+    {
+      "cpu": "Q13UDV",
+      "engine_key": 212,
+      "prior_scope": "full-Q13UDV"
+    },
+    {
+      "cpu": "Q13UDPV",
+      "engine_key": 73,
+      "prior_scope": "full-Q13UDPV"
+    },
+    {
+      "cpu": "Q20UDH",
+      "engine_key": 118,
+      "prior_scope": "full-Q20UDH"
+    },
+    {
+      "cpu": "Q20UDEH",
+      "engine_key": 150,
+      "prior_scope": "full-Q20UDEH"
+    },
+    {
+      "cpu": "Q25H",
+      "engine_key": 37,
+      "prior_scope": "full-Q25H"
+    },
+    {
+      "cpu": "Q25PH",
+      "engine_key": 66,
+      "prior_scope": "full-Q25PH"
+    },
+    {
+      "cpu": "Q25PRH",
+      "engine_key": 68,
+      "prior_scope": "full-Q25PRH"
+    },
+    {
+      "cpu": "Q26UDH",
+      "engine_key": 116,
+      "prior_scope": "full-Q26UDH"
+    },
+    {
+      "cpu": "Q26UDEH",
+      "engine_key": 148,
+      "prior_scope": "full-Q26UDEH"
+    },
+    {
+      "cpu": "Q26UDV",
+      "engine_key": 213,
+      "prior_scope": "full-Q26UDV"
+    },
+    {
+      "cpu": "Q26UDPV",
+      "engine_key": 74,
+      "prior_scope": "full-Q26UDPV"
+    },
+    {
+      "cpu": "Q50UDEH",
+      "engine_key": 152,
+      "prior_scope": "full-Q50UDEH"
+    },
+    {
+      "cpu": "Q100UDEH",
+      "engine_key": 154,
+      "prior_scope": "full-Q100UDEH"
+    },
+    {
+      "cpu": "L02S",
+      "engine_key": 163,
+      "prior_scope": "full-L02S"
+    },
+    {
+      "cpu": "L02",
+      "engine_key": 161,
+      "prior_scope": "full-L02"
+    },
+    {
+      "cpu": "L06",
+      "engine_key": 165,
+      "prior_scope": "full-L06"
+    },
+    {
+      "cpu": "L26",
+      "engine_key": 164,
+      "prior_scope": "full-L26"
+    },
+    {
+      "cpu": "L26-BT",
+      "engine_key": 162,
+      "prior_scope": "full-L26-BT"
+    },
+    {
+      "cpu": "FX1N/FX1NC",
+      "engine_key": 519,
+      "prior_scope": "type-control-FX1N-FX1NC"
+    },
+    {
+      "cpu": "FX2/FX2C",
+      "engine_key": 516,
+      "prior_scope": "type-control-FX2-FX2C"
+    },
+    {
+      "cpu": "FX2N/FX2NC",
+      "engine_key": 517,
+      "prior_scope": "type-control-FX2N-FX2NC"
+    },
+    {
+      "cpu": "FX3S",
+      "engine_key": 522,
+      "prior_scope": "type-control-FX3S"
+    },
+    {
+      "cpu": "FX3G",
+      "engine_key": 521,
+      "prior_scope": "type-control-FX3G"
+    },
+    {
+      "cpu": "FX1S",
+      "engine_key": 518,
+      "prior_scope": "type-control-FX1S"
+    },
+    {
+      "cpu": "FX0N",
+      "engine_key": 514,
+      "prior_scope": "project-only-FX0N"
+    }
+  ],
+  "unverified_options": [
+    {
+      "target": {
+        "cpu": "Q2A",
+        "plc_id": 32,
+        "es_cpu": 17,
+        "series": 1,
+        "source": "native catalogue API"
+      },
+      "reason": "no retained successful native FBD seed",
+      "prior_outcomes": [
+        {
+          "status": "native_factory_failed",
+          "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\cpu-fbd-matrix-20261002-v1\\factory-Q2A-module-matrix-v1"
+        }
+      ]
+    },
+    {
+      "target": {
+        "cpu": "Q2AS1",
+        "plc_id": 33,
+        "es_cpu": 18,
+        "series": 1,
+        "source": "native catalogue API"
+      },
+      "reason": "no retained successful native FBD seed",
+      "prior_outcomes": [
+        {
+          "status": "native_factory_failed",
+          "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\cpu-fbd-matrix-20261002-v1\\factory-Q2AS1-module-matrix-v1"
+        }
+      ]
+    },
+    {
+      "target": {
+        "cpu": "Q3A",
+        "plc_id": 34,
+        "es_cpu": 19,
+        "series": 1,
+        "source": "native catalogue API"
+      },
+      "reason": "no retained successful native FBD seed",
+      "prior_outcomes": [
+        {
+          "status": "native_factory_failed",
+          "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\cpu-fbd-matrix-20261002-v1\\factory-Q3A-module-matrix-v1"
+        }
+      ]
+    },
+    {
+      "target": {
+        "cpu": "Q4A",
+        "plc_id": 35,
+        "es_cpu": 20,
+        "series": 1,
+        "source": "native catalogue API"
+      },
+      "reason": "no retained successful native FBD seed",
+      "prior_outcomes": [
+        {
+          "status": "native_factory_failed",
+          "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\cpu-fbd-matrix-20261002-v1\\factory-Q4A-module-matrix-v1"
+        }
+      ]
+    },
+    {
+      "target": {
+        "cpu": "FX0S/FX0",
+        "plc_id": 48,
+        "es_cpu": 513,
+        "series": 2,
+        "source": "native catalogue API"
+      },
+      "reason": "no retained successful native FBD seed",
+      "prior_outcomes": [
+        {
+          "status": "native_compile_failed",
+          "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\cpu-fbd-matrix-20261002-v1\\factory-FX0S-FX0-module-matrix-v1"
+        }
+      ]
+    },
+    {
+      "target": {
+        "cpu": "FX1",
+        "plc_id": 50,
+        "es_cpu": 515,
+        "series": 2,
+        "source": "native catalogue API"
+      },
+      "reason": "no retained successful native FBD seed",
+      "prior_outcomes": [
+        {
+          "status": "native_compile_failed",
+          "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\cpu-fbd-matrix-20261002-v1\\factory-FX1-module-matrix-v1"
+        }
+      ]
+    },
+    {
+      "target": {
+        "cpu": "LJ72GF15-T2",
+        "plc_id": 178,
+        "es_cpu": 176,
+        "series": 9,
+        "source": "native catalogue API"
+      },
+      "reason": "no retained successful native FBD seed",
+      "prior_outcomes": [
+        {
+          "status": "native_compile_failed",
+          "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\cpu-fbd-matrix-20261002-v1\\factory-LJ72GF15-T2-module-matrix-v1"
+        }
+      ]
+    },
+    {
+      "target": {
+        "cpu": "LJ72MS15",
+        "plc_id": 183,
+        "es_cpu": 177,
+        "series": 9,
+        "source": "native catalogue API"
+      },
+      "reason": "no retained successful native FBD seed",
+      "prior_outcomes": [
+        {
+          "status": "native_compile_failed",
+          "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\cpu-fbd-matrix-20261002-v1\\factory-LJ72MS15-module-matrix-v1"
+        }
+      ]
+    },
+    {
+      "target": {
+        "cpu": "Q02(H)-A",
+        "plc_id": 28,
+        "es_cpu": 321,
+        "series": 19,
+        "source": "native catalogue API"
+      },
+      "reason": "no retained successful native FBD seed",
+      "prior_outcomes": [
+        {
+          "status": "native_factory_failed",
+          "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\cpu-fbd-matrix-20261002-v1\\factory-Q02H-A-module-matrix-v1"
+        }
+      ]
+    },
+    {
+      "target": {
+        "cpu": "Q06H-A",
+        "plc_id": 29,
+        "es_cpu": 322,
+        "series": 19,
+        "source": "native catalogue API"
+      },
+      "reason": "no retained successful native FBD seed",
+      "prior_outcomes": [
+        {
+          "status": "native_factory_failed",
+          "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\cpu-fbd-matrix-20261002-v1\\factory-Q06H-A-module-matrix-v1"
+        }
+      ]
+    },
+    {
+      "target": {
+        "cpu": "Q2AS(H)",
+        "plc_id": 32,
+        "es_cpu": 17,
+        "series": 1,
+        "source": "native CPU table",
+        "table_rva": "0xf93c0",
+        "table_row": 45
+      },
+      "reason": "no retained successful native FBD seed",
+      "prior_outcomes": [
+        {
+          "status": "native_factory_failed",
+          "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\cpu-fbd-matrix-20261002-v1\\factory-Q2ASH-module-matrix-v1"
+        }
+      ]
+    },
+    {
+      "target": {
+        "cpu": "Q2AS(H)S1",
+        "plc_id": 33,
+        "es_cpu": 18,
+        "series": 1,
+        "source": "native CPU table",
+        "table_rva": "0xf93c0",
+        "table_row": 47
+      },
+      "reason": "no retained successful native FBD seed",
+      "prior_outcomes": [
+        {
+          "status": "native_factory_failed",
+          "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\cpu-fbd-matrix-20261002-v1\\factory-Q2ASHS1-module-matrix-v1"
+        }
+      ]
+    },
+    {
+      "target": {
+        "cpu": "Q4AR",
+        "plc_id": 35,
+        "es_cpu": 20,
+        "series": 1,
+        "source": "native CPU table",
+        "table_rva": "0xf93c0",
+        "table_row": 50
+      },
+      "reason": "no retained successful native FBD seed",
+      "prior_outcomes": [
+        {
+          "status": "native_factory_failed",
+          "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\cpu-fbd-matrix-20261002-v1\\factory-Q4AR-module-matrix-v1"
+        }
+      ]
+    },
+    {
+      "target": {
+        "cpu": "FXU/FX2C",
+        "plc_id": 51,
+        "es_cpu": 516,
+        "series": 2,
+        "source": "native CPU table",
+        "table_rva": "0xfb7a0",
+        "table_row": 82
+      },
+      "reason": "no retained successful native FBD seed",
+      "prior_outcomes": [
+        {
+          "status": "native_factory_failed",
+          "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\cpu-fbd-matrix-20261002-v1\\factory-FXU-FX2C-module-matrix-v1"
+        }
+      ]
+    }
+  ],
+  "retained_attempts": 137,
+  "attempt_returncodes": {
+    "0": 110,
+    "5": 27
+  },
+  "prior_checkpoints": [
+    "gxw-fbd-application-v2-20261002",
+    "gxw-native-diagnostic-sources-20261002",
+    "gxw-current-source-check-20261002",
+    "gxw-source-check-lifetime-20261002"
+  ],
+  "header_mode": {
+    "module": "DZDataABS_DataManager_IEC.dll",
+    "get_manager_rva": "0x1f2de",
+    "get_change_flag_rva": "0x319da",
+    "enable_rva": "0x32a8a",
+    "disable_rva": "0x32a95",
+    "mechanism": "Original mode makes declaration change-flag queries return 1 during owned source Check; complete before restoring mode.",
+    "source_branch": {
+      "module": "SICConverter_IEC.dll",
+      "unit_handler_rva": "0x251cf",
+      "flag_query_return_rva": "0x253d8"
+    },
+    "gxw_bytes_changed_by_mode": false,
+    "native_returns_or_diagnostics_patched": false
+  },
+  "project_encoding": {
+    "native_project_codepage": 936,
+    "observed_conversion_codepage": 54936,
+    "setter_used_on_save": true,
+    "setter_used_on_cold_reopen": false
+  },
+  "finite_property_domain": {
+    "cpu": "FX3U/FX3UC",
+    "dll_version": "1.635.0.1",
+    "source_names_by_bit": [
+      "FBD_MATRIX.Labels.lh",
+      "FBD_MATRIX.Program.pou",
+      "MODULE_FB.Labels.lh",
+      "MODULE_FB.Program.pou"
+    ],
+    "source_check_kind": 6,
+    "source_check_names": [
+      "",
+      "FBD_MATRIX"
+    ],
+    "scope": "one native-saved project; fresh project-owned compiler; 16 source pending-marker combinations",
+    "saved_graph_records_exact": true,
+    "saved_graph_block_headers_exact": true,
+    "saved_declaration_rows_exact": true,
+    "native_body_save_reopen_differences": [
+      {
+        "offset": 68,
+        "before": 1,
+        "after": 0
+      }
+    ],
+    "all_native_payloads_match": true,
+    "complete_four_flag_domain": true,
+    "hypothesis_evaluations": [
+      0,
+      3,
+      6,
+      10,
+      14,
+      2,
+      7,
+      13,
+      11,
+      12,
+      9,
+      1,
+      5,
+      8,
+      15,
+      4
+    ],
+    "rows": [
+      {
+        "mask": 0,
+        "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fbd-project-codepage-20261002-v1\\persistence-v2\\c000-cold-reopen-cp936-a2",
+        "source_check": {
+          "operation": "CurrentSourceCheck.AcceptanceObserved",
+          "rejected": true,
+          "execution_completion": "incomplete",
+          "acceptance": "rejected",
+          "public_program_check_promoted": false
+        },
+        "source_error_codes": [
+          "0x5003000b"
+        ],
+        "native_payload_exact": true,
+        "source_getter_matches_frontend": true,
+        "native_program_status": 0,
+        "project_codepage": 936,
+        "converter_codepages": [
+          54936
+        ],
+        "public_check": {
+          "operation": "NativeProgramCheckEnumerationFinished",
+          "targets": 1,
+          "public_projection_failures": 1,
+          "public_check_status": "incomplete"
+        }
+      },
+      {
+        "mask": 1,
+        "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fbd-cold-source-status-20261003-v3\\c000-selected-labels-pending-a1",
+        "source_check": {
+          "operation": "CurrentSourceCheck.AcceptanceObserved",
+          "rejected": false,
+          "execution_completion": "completed",
+          "acceptance": "accepted",
+          "public_program_check_promoted": false
+        },
+        "source_error_codes": [],
+        "native_payload_exact": true,
+        "source_getter_matches_frontend": true,
+        "native_program_status": 0,
+        "project_codepage": 936,
+        "converter_codepages": [
+          54936
+        ],
+        "public_check": {
+          "operation": "NativeProgramCheckEnumerationFinished",
+          "targets": 1,
+          "public_projection_failures": 1,
+          "public_check_status": "incomplete"
+        }
+      },
+      {
+        "mask": 2,
+        "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fbd-cold-source-status-20261002-v1\\c000-selected-pou-pending-a1",
+        "source_check": {
+          "operation": "CurrentSourceCheck.AcceptanceObserved",
+          "rejected": true,
+          "execution_completion": "incomplete",
+          "acceptance": "rejected",
+          "public_program_check_promoted": false
+        },
+        "source_error_codes": [
+          "0x5003000b"
+        ],
+        "native_payload_exact": true,
+        "source_getter_matches_frontend": true,
+        "native_program_status": 1,
+        "project_codepage": 936,
+        "converter_codepages": [
+          54936
+        ],
+        "public_check": {
+          "operation": "NativeProgramCheckEnumerationFinished",
+          "targets": 1,
+          "public_projection_failures": 1,
+          "public_check_status": "incomplete"
+        }
+      },
+      {
+        "mask": 3,
+        "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fbd-cold-source-status-20261002-v2\\c001-selected-program-and-labels-a1",
+        "source_check": {
+          "operation": "CurrentSourceCheck.AcceptanceObserved",
+          "rejected": false,
+          "execution_completion": "completed",
+          "acceptance": "accepted",
+          "public_program_check_promoted": false
+        },
+        "source_error_codes": [],
+        "native_payload_exact": true,
+        "source_getter_matches_frontend": true,
+        "native_program_status": 1,
+        "project_codepage": 936,
+        "converter_codepages": [
+          54936
+        ],
+        "public_check": {
+          "operation": "NativeProgramCheckEnumerationFinished",
+          "targets": 1,
+          "public_projection_failures": 1,
+          "public_check_status": "incomplete"
+        }
+      },
+      {
+        "mask": 4,
+        "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fbd-cold-source-status-20261003-v3\\c001-fb-labels-pending-a1",
+        "source_check": {
+          "operation": "CurrentSourceCheck.AcceptanceObserved",
+          "rejected": true,
+          "execution_completion": "incomplete",
+          "acceptance": "rejected",
+          "public_program_check_promoted": false
+        },
+        "source_error_codes": [
+          "0x5003000b"
+        ],
+        "native_payload_exact": true,
+        "source_getter_matches_frontend": true,
+        "native_program_status": 0,
+        "project_codepage": 936,
+        "converter_codepages": [
+          54936
+        ],
+        "public_check": {
+          "operation": "NativeProgramCheckEnumerationFinished",
+          "targets": 1,
+          "public_projection_failures": 1,
+          "public_check_status": "incomplete"
+        }
+      },
+      {
+        "mask": 5,
+        "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fbd-cold-source-status-20261002-v2\\c002-both-labels-pending-a1",
+        "source_check": {
+          "operation": "CurrentSourceCheck.AcceptanceObserved",
+          "rejected": false,
+          "execution_completion": "completed",
+          "acceptance": "accepted",
+          "public_program_check_promoted": false
+        },
+        "source_error_codes": [],
+        "native_payload_exact": true,
+        "source_getter_matches_frontend": true,
+        "native_program_status": 0,
+        "project_codepage": 936,
+        "converter_codepages": [
+          54936
+        ],
+        "public_check": {
+          "operation": "NativeProgramCheckEnumerationFinished",
+          "targets": 1,
+          "public_projection_failures": 1,
+          "public_check_status": "incomplete"
+        }
+      },
+      {
+        "mask": 6,
+        "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fbd-cold-source-status-20261003-v5\\c000-pending-mask-06-a1",
+        "source_check": {
+          "operation": "CurrentSourceCheck.AcceptanceObserved",
+          "rejected": true,
+          "execution_completion": "incomplete",
+          "acceptance": "rejected",
+          "public_program_check_promoted": false
+        },
+        "source_error_codes": [
+          "0x5003000b"
+        ],
+        "native_payload_exact": true,
+        "source_getter_matches_frontend": true,
+        "native_program_status": 1,
+        "project_codepage": 936,
+        "converter_codepages": [
+          54936
+        ],
+        "public_check": {
+          "operation": "NativeProgramCheckEnumerationFinished",
+          "targets": 1,
+          "public_projection_failures": 1,
+          "public_check_status": "incomplete"
+        }
+      },
+      {
+        "mask": 7,
+        "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fbd-cold-source-status-20261003-v5\\c001-pending-mask-07-a1",
+        "source_check": {
+          "operation": "CurrentSourceCheck.AcceptanceObserved",
+          "rejected": false,
+          "execution_completion": "completed",
+          "acceptance": "accepted",
+          "public_program_check_promoted": false
+        },
+        "source_error_codes": [],
+        "native_payload_exact": true,
+        "source_getter_matches_frontend": true,
+        "native_program_status": 1,
+        "project_codepage": 936,
+        "converter_codepages": [
+          54936
+        ],
+        "public_check": {
+          "operation": "NativeProgramCheckEnumerationFinished",
+          "targets": 1,
+          "public_projection_failures": 1,
+          "public_check_status": "incomplete"
+        }
+      },
+      {
+        "mask": 8,
+        "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fbd-cold-source-status-20261003-v5\\c002-pending-mask-08-a2",
+        "source_check": {
+          "operation": "CurrentSourceCheck.AcceptanceObserved",
+          "rejected": true,
+          "execution_completion": "incomplete",
+          "acceptance": "rejected",
+          "public_program_check_promoted": false
+        },
+        "source_error_codes": [
+          "0x5003000b"
+        ],
+        "native_payload_exact": true,
+        "source_getter_matches_frontend": true,
+        "native_program_status": 0,
+        "project_codepage": 936,
+        "converter_codepages": [
+          54936
+        ],
+        "public_check": {
+          "operation": "NativeProgramCheckEnumerationFinished",
+          "targets": 1,
+          "public_projection_failures": 1,
+          "public_check_status": "incomplete"
+        }
+      },
+      {
+        "mask": 9,
+        "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fbd-cold-source-status-20261003-v5\\c003-pending-mask-09-a1",
+        "source_check": {
+          "operation": "CurrentSourceCheck.AcceptanceObserved",
+          "rejected": false,
+          "execution_completion": "completed",
+          "acceptance": "accepted",
+          "public_program_check_promoted": false
+        },
+        "source_error_codes": [],
+        "native_payload_exact": true,
+        "source_getter_matches_frontend": true,
+        "native_program_status": 0,
+        "project_codepage": 936,
+        "converter_codepages": [
+          54936
+        ],
+        "public_check": {
+          "operation": "NativeProgramCheckEnumerationFinished",
+          "targets": 1,
+          "public_projection_failures": 1,
+          "public_check_status": "incomplete"
+        }
+      },
+      {
+        "mask": 10,
+        "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fbd-cold-source-status-20261002-v2\\c000-both-programs-pending-a1",
+        "source_check": {
+          "operation": "CurrentSourceCheck.AcceptanceObserved",
+          "rejected": true,
+          "execution_completion": "incomplete",
+          "acceptance": "rejected",
+          "public_program_check_promoted": false
+        },
+        "source_error_codes": [
+          "0x5003000b"
+        ],
+        "native_payload_exact": true,
+        "source_getter_matches_frontend": true,
+        "native_program_status": 1,
+        "project_codepage": 936,
+        "converter_codepages": [
+          54936
+        ],
+        "public_check": {
+          "operation": "NativeProgramCheckEnumerationFinished",
+          "targets": 1,
+          "public_projection_failures": 1,
+          "public_check_status": "incomplete"
+        }
+      },
+      {
+        "mask": 11,
+        "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fbd-cold-source-status-20261003-v5\\c004-pending-mask-11-a1",
+        "source_check": {
+          "operation": "CurrentSourceCheck.AcceptanceObserved",
+          "rejected": false,
+          "execution_completion": "completed",
+          "acceptance": "accepted",
+          "public_program_check_promoted": false
+        },
+        "source_error_codes": [],
+        "native_payload_exact": true,
+        "source_getter_matches_frontend": true,
+        "native_program_status": 1,
+        "project_codepage": 936,
+        "converter_codepages": [
+          54936
+        ],
+        "public_check": {
+          "operation": "NativeProgramCheckEnumerationFinished",
+          "targets": 1,
+          "public_projection_failures": 1,
+          "public_check_status": "incomplete"
+        }
+      },
+      {
+        "mask": 12,
+        "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fbd-cold-source-status-20261003-v5\\c005-pending-mask-12-a1",
+        "source_check": {
+          "operation": "CurrentSourceCheck.AcceptanceObserved",
+          "rejected": true,
+          "execution_completion": "incomplete",
+          "acceptance": "rejected",
+          "public_program_check_promoted": false
+        },
+        "source_error_codes": [
+          "0x5003000b"
+        ],
+        "native_payload_exact": true,
+        "source_getter_matches_frontend": true,
+        "native_program_status": 0,
+        "project_codepage": 936,
+        "converter_codepages": [
+          54936
+        ],
+        "public_check": {
+          "operation": "NativeProgramCheckEnumerationFinished",
+          "targets": 1,
+          "public_projection_failures": 1,
+          "public_check_status": "incomplete"
+        }
+      },
+      {
+        "mask": 13,
+        "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fbd-cold-source-status-20261003-v5\\c006-pending-mask-13-a1",
+        "source_check": {
+          "operation": "CurrentSourceCheck.AcceptanceObserved",
+          "rejected": false,
+          "execution_completion": "completed",
+          "acceptance": "accepted",
+          "public_program_check_promoted": false
+        },
+        "source_error_codes": [],
+        "native_payload_exact": true,
+        "source_getter_matches_frontend": true,
+        "native_program_status": 0,
+        "project_codepage": 936,
+        "converter_codepages": [
+          54936
+        ],
+        "public_check": {
+          "operation": "NativeProgramCheckEnumerationFinished",
+          "targets": 1,
+          "public_projection_failures": 1,
+          "public_check_status": "incomplete"
+        }
+      },
+      {
+        "mask": 14,
+        "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fbd-cold-source-status-20261003-v5\\c007-pending-mask-14-a1",
+        "source_check": {
+          "operation": "CurrentSourceCheck.AcceptanceObserved",
+          "rejected": true,
+          "execution_completion": "incomplete",
+          "acceptance": "rejected",
+          "public_program_check_promoted": false
+        },
+        "source_error_codes": [
+          "0x5003000b"
+        ],
+        "native_payload_exact": true,
+        "source_getter_matches_frontend": true,
+        "native_program_status": 1,
+        "project_codepage": 936,
+        "converter_codepages": [
+          54936
+        ],
+        "public_check": {
+          "operation": "NativeProgramCheckEnumerationFinished",
+          "targets": 1,
+          "public_projection_failures": 1,
+          "public_check_status": "incomplete"
+        }
+      },
+      {
+        "mask": 15,
+        "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fbd-cold-source-status-20261002-v1\\c001-all-source-pending-a1",
+        "source_check": {
+          "operation": "CurrentSourceCheck.AcceptanceObserved",
+          "rejected": false,
+          "execution_completion": "completed",
+          "acceptance": "accepted",
+          "public_program_check_promoted": false
+        },
+        "source_error_codes": [],
+        "native_payload_exact": true,
+        "source_getter_matches_frontend": true,
+        "native_program_status": 1,
+        "project_codepage": 936,
+        "converter_codepages": [
+          54936
+        ],
+        "public_check": {
+          "operation": "NativeProgramCheckEnumerationFinished",
+          "targets": 1,
+          "public_projection_failures": 1,
+          "public_check_status": "incomplete"
+        }
+      }
+    ],
+    "source_acceptance_condition": "selected Program local-label pending marker is 1 within this finite domain",
+    "public_check_completion_promoted": false,
+    "plc_execution": "not_run"
+  },
+  "controls": {
+    "same_input_default_and_mode": [
+      {
+        "label": "unchanged-clean-control",
+        "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fbd-native-header-mode-20261003-v1\\c000-unchanged-clean-control-a1",
+        "changes": [],
+        "preservation": {
+          "allocations": [],
+          "outer_allocation": "existing_allocation",
+          "history_size_fields_updated": 0,
+          "history_allocation": "unchanged",
+          "untouched_inner_streams": 37,
+          "untouched_outer_streams": 10,
+          "unrelated_payloads_exact": true
+        },
+        "plan_overrides": {
+          "owned_current_source_selection": {
+            "kind": 6,
+            "selections": [
+              {
+                "row": -1,
+                "name": ""
+              },
+              {
+                "row": -1,
+                "name": "FBD_MATRIX"
+              }
+            ],
+            "wide_progress": true,
+            "owned_native_header_mode": false
+          }
+        },
+        "gui_compile_status": 0,
+        "native_payload_word_at_68": 0,
+        "source_check": [
+          {
+            "operation": "CurrentSourceCheck.AcceptanceObserved",
+            "rejected": true,
+            "execution_completion": "completed",
+            "acceptance": "rejected",
+            "public_program_check_promoted": false
+          }
+        ],
+        "public_check": [],
+        "project_codepage": [
+          {
+            "operation": "NativeProjectCodePage",
+            "codepage": 936
+          }
+        ],
+        "original_public_check_events": [
+          {
+            "operation": "ProgramCheckTarget",
+            "id": [
+              0,
+              3959422976,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "operation": "ProgramCheckProgress",
+            "percent": 0,
+            "count": 2,
+            "reports": [
+              {
+                "kind": 1,
+                "code": 1073741825,
+                "name": "",
+                "instance": "",
+                "step": -1,
+                "network": -1,
+                "left": -1,
+                "top": -1,
+                "right": -1,
+                "bottom": -1,
+                "arguments": [],
+                "raw_base64": "AQAAAAEAAEDU/VkJAAAAABz8WQkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////cIgVFA=="
+              },
+              {
+                "kind": 1,
+                "code": 1073741826,
+                "name": "",
+                "instance": "",
+                "step": -1,
+                "network": -1,
+                "left": -1,
+                "top": -1,
+                "right": -1,
+                "bottom": -1,
+                "arguments": [],
+                "raw_base64": "AQAAAAIAAEBs/FkJAAAAAEz+WQkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////AAAAAA=="
+              }
+            ]
+          },
+          {
+            "operation": "ProgramCheckProgress",
+            "percent": 0,
+            "count": 2,
+            "reports": [
+              {
+                "kind": 1,
+                "code": 1073741825,
+                "name": "",
+                "instance": "",
+                "step": -1,
+                "network": -1,
+                "left": -1,
+                "top": -1,
+                "right": -1,
+                "bottom": -1,
+                "arguments": [],
+                "raw_base64": "AQAAAAEAAEDU/VkJAAAAABz8WQkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////cIgVFA=="
+              },
+              {
+                "kind": 1,
+                "code": 1073741826,
+                "name": "",
+                "instance": "",
+                "step": -1,
+                "network": -1,
+                "left": -1,
+                "top": -1,
+                "right": -1,
+                "bottom": -1,
+                "arguments": [],
+                "raw_base64": "AQAAAAIAAEBs/FkJAAAAAEz+WQkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////AAAAAA=="
+              }
+            ]
+          },
+          {
+            "operation": "ProgramCheckProgress",
+            "percent": 0,
+            "count": 2,
+            "reports": [
+              {
+                "kind": 1,
+                "code": 1073741825,
+                "name": "",
+                "instance": "",
+                "step": -1,
+                "network": -1,
+                "left": -1,
+                "top": -1,
+                "right": -1,
+                "bottom": -1,
+                "arguments": [],
+                "raw_base64": "AQAAAAEAAEDU/VkJAAAAABz8WQkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////cIgVFA=="
+              },
+              {
+                "kind": 1,
+                "code": 1073741826,
+                "name": "",
+                "instance": "",
+                "step": -1,
+                "network": -1,
+                "left": -1,
+                "top": -1,
+                "right": -1,
+                "bottom": -1,
+                "arguments": [],
+                "raw_base64": "AQAAAAIAAEBs/FkJAAAAAEz+WQkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////AAAAAA=="
+              }
+            ]
+          },
+          {
+            "operation": "ProgramCheckProgress",
+            "percent": 0,
+            "count": 2,
+            "reports": [
+              {
+                "kind": 1,
+                "code": 1073741825,
+                "name": "",
+                "instance": "",
+                "step": -1,
+                "network": -1,
+                "left": -1,
+                "top": -1,
+                "right": -1,
+                "bottom": -1,
+                "arguments": [],
+                "raw_base64": "AQAAAAEAAEDU/VkJAAAAABz8WQkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////cIgVFA=="
+              },
+              {
+                "kind": 1,
+                "code": 1073741826,
+                "name": "",
+                "instance": "",
+                "step": -1,
+                "network": -1,
+                "left": -1,
+                "top": -1,
+                "right": -1,
+                "bottom": -1,
+                "arguments": [],
+                "raw_base64": "AQAAAAIAAEBs/FkJAAAAAEz+WQkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////AAAAAA=="
+              }
+            ]
+          },
+          {
+            "operation": "ProgramCheckProgress.GetProgress",
+            "hresult": -2147467259,
+            "code": 755040293,
+            "code_hex": "0x2d010025",
+            "percent": 100,
+            "count": 5,
+            "poll": 5,
+            "target": [
+              0,
+              3959422976,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "public_check_status": "incomplete",
+            "diagnostic_projection": "failed"
+          },
+          {
+            "operation": "NativeProgramCheckTargetFinished",
+            "target": [
+              0,
+              3959422976,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "native_progress": 100,
+            "polls": 5,
+            "public_diagnostic_projection": "failed",
+            "public_check_promoted": false
+          },
+          {
+            "operation": "NativeProgramCheckEnumerationFinished",
+            "targets": 1,
+            "public_projection_failures": 1,
+            "public_check_status": "incomplete"
+          }
+        ],
+        "native_errors": [
+          {
+            "operation": "ProgramCheckProgress.GetProgress",
+            "hresult": -2147467259,
+            "code": 755040293,
+            "code_hex": "0x2d010025",
+            "percent": 100,
+            "count": 5,
+            "poll": 5,
+            "target": [
+              0,
+              3959422976,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "public_check_status": "incomplete",
+            "diagnostic_projection": "failed"
+          }
+        ],
+        "owned_assertion": null
+      },
+      {
+        "label": "native-header-mode",
+        "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fbd-native-header-mode-20261003-v1\\c001-native-header-mode-a1",
+        "changes": [],
+        "preservation": {
+          "allocations": [],
+          "outer_allocation": "existing_allocation",
+          "history_size_fields_updated": 0,
+          "history_allocation": "unchanged",
+          "untouched_inner_streams": 37,
+          "untouched_outer_streams": 10,
+          "unrelated_payloads_exact": true
+        },
+        "plan_overrides": {
+          "owned_current_source_selection": {
+            "kind": 6,
+            "selections": [
+              {
+                "row": -1,
+                "name": ""
+              },
+              {
+                "row": -1,
+                "name": "FBD_MATRIX"
+              }
+            ],
+            "wide_progress": true,
+            "owned_native_header_mode": true
+          }
+        },
+        "gui_compile_status": 0,
+        "native_payload_word_at_68": 0,
+        "source_check": [
+          {
+            "operation": "CurrentSourceCheck.AcceptanceObserved",
+            "rejected": false,
+            "execution_completion": "completed",
+            "acceptance": "accepted",
+            "public_program_check_promoted": false
+          }
+        ],
+        "public_check": [],
+        "project_codepage": [
+          {
+            "operation": "NativeProjectCodePage",
+            "codepage": 936
+          }
+        ],
+        "original_public_check_events": [
+          {
+            "operation": "ProgramCheckTarget",
+            "id": [
+              0,
+              3959422976,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "operation": "ProgramCheckProgress",
+            "percent": 0,
+            "count": 2,
+            "reports": [
+              {
+                "kind": 1,
+                "code": 1073741825,
+                "name": "",
+                "instance": "",
+                "step": -1,
+                "network": -1,
+                "left": -1,
+                "top": -1,
+                "right": -1,
+                "bottom": -1,
+                "arguments": [],
+                "raw_base64": "AQAAAAEAAECUPdkIAAAAAFQ82QgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////COLLEg=="
+              },
+              {
+                "kind": 1,
+                "code": 1073741826,
+                "name": "",
+                "instance": "",
+                "step": -1,
+                "network": -1,
+                "left": -1,
+                "top": -1,
+                "right": -1,
+                "bottom": -1,
+                "arguments": [],
+                "raw_base64": "AQAAAAIAAECEPtkIAAAAAMQ62QgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////AAAAAA=="
+              }
+            ]
+          },
+          {
+            "operation": "ProgramCheckProgress",
+            "percent": 0,
+            "count": 2,
+            "reports": [
+              {
+                "kind": 1,
+                "code": 1073741825,
+                "name": "",
+                "instance": "",
+                "step": -1,
+                "network": -1,
+                "left": -1,
+                "top": -1,
+                "right": -1,
+                "bottom": -1,
+                "arguments": [],
+                "raw_base64": "AQAAAAEAAECUPdkIAAAAAFQ82QgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////COLLEg=="
+              },
+              {
+                "kind": 1,
+                "code": 1073741826,
+                "name": "",
+                "instance": "",
+                "step": -1,
+                "network": -1,
+                "left": -1,
+                "top": -1,
+                "right": -1,
+                "bottom": -1,
+                "arguments": [],
+                "raw_base64": "AQAAAAIAAECEPtkIAAAAAMQ62QgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////AAAAAA=="
+              }
+            ]
+          },
+          {
+            "operation": "ProgramCheckProgress",
+            "percent": 0,
+            "count": 2,
+            "reports": [
+              {
+                "kind": 1,
+                "code": 1073741825,
+                "name": "",
+                "instance": "",
+                "step": -1,
+                "network": -1,
+                "left": -1,
+                "top": -1,
+                "right": -1,
+                "bottom": -1,
+                "arguments": [],
+                "raw_base64": "AQAAAAEAAECUPdkIAAAAAFQ82QgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////COLLEg=="
+              },
+              {
+                "kind": 1,
+                "code": 1073741826,
+                "name": "",
+                "instance": "",
+                "step": -1,
+                "network": -1,
+                "left": -1,
+                "top": -1,
+                "right": -1,
+                "bottom": -1,
+                "arguments": [],
+                "raw_base64": "AQAAAAIAAECEPtkIAAAAAMQ62QgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////AAAAAA=="
+              }
+            ]
+          },
+          {
+            "operation": "ProgramCheckProgress",
+            "percent": 0,
+            "count": 2,
+            "reports": [
+              {
+                "kind": 1,
+                "code": 1073741825,
+                "name": "",
+                "instance": "",
+                "step": -1,
+                "network": -1,
+                "left": -1,
+                "top": -1,
+                "right": -1,
+                "bottom": -1,
+                "arguments": [],
+                "raw_base64": "AQAAAAEAAECUPdkIAAAAAFQ82QgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////COLLEg=="
+              },
+              {
+                "kind": 1,
+                "code": 1073741826,
+                "name": "",
+                "instance": "",
+                "step": -1,
+                "network": -1,
+                "left": -1,
+                "top": -1,
+                "right": -1,
+                "bottom": -1,
+                "arguments": [],
+                "raw_base64": "AQAAAAIAAECEPtkIAAAAAMQ62QgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////AAAAAA=="
+              }
+            ]
+          },
+          {
+            "operation": "ProgramCheckProgress.GetProgress",
+            "hresult": -2147467259,
+            "code": 755040293,
+            "code_hex": "0x2d010025",
+            "percent": 100,
+            "count": 5,
+            "poll": 5,
+            "target": [
+              0,
+              3959422976,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "public_check_status": "incomplete",
+            "diagnostic_projection": "failed"
+          },
+          {
+            "operation": "NativeProgramCheckTargetFinished",
+            "target": [
+              0,
+              3959422976,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "native_progress": 100,
+            "polls": 5,
+            "public_diagnostic_projection": "failed",
+            "public_check_promoted": false
+          },
+          {
+            "operation": "NativeProgramCheckEnumerationFinished",
+            "targets": 1,
+            "public_projection_failures": 1,
+            "public_check_status": "incomplete"
+          }
+        ],
+        "native_errors": [
+          {
+            "operation": "ProgramCheckProgress.GetProgress",
+            "hresult": -2147467259,
+            "code": 755040293,
+            "code_hex": "0x2d010025",
+            "percent": 100,
+            "count": 5,
+            "poll": 5,
+            "target": [
+              0,
+              3959422976,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "public_check_status": "incomplete",
+            "diagnostic_projection": "failed"
+          }
+        ],
+        "owned_assertion": null
+      }
+    ],
+    "missing_source": {
+      "label": "absent-source-remains-rejected",
+      "directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fbd-native-header-mode-20261003-v2\\c000-absent-source-remains-rejected-a1",
+      "changes": [],
+      "preservation": {
+        "allocations": [],
+        "outer_allocation": "existing_allocation",
+        "history_size_fields_updated": 0,
+        "history_allocation": "unchanged",
+        "untouched_inner_streams": 37,
+        "untouched_outer_streams": 10,
+        "unrelated_payloads_exact": true
+      },
+      "plan_overrides": {
+        "owned_current_source_selection": {
+          "kind": 6,
+          "selections": [
+            {
+              "row": -1,
+              "name": ""
+            },
+            {
+              "row": -1,
+              "name": "OWNED_ABSENT_POU"
+            }
+          ],
+          "wide_progress": true,
+          "owned_native_header_mode": true
+        }
+      },
+      "gui_compile_status": 0,
+      "native_payload_word_at_68": 0,
+      "source_check": [],
+      "public_check": [],
+      "project_codepage": [
+        {
+          "operation": "NativeProjectCodePage",
+          "codepage": 936
+        }
+      ],
+      "original_public_check_events": [],
+      "native_errors": [
+        {
+          "operation": "CurrentSourceCheck.ProgressFailure",
+          "hresult": -2147467259,
+          "code": 1342308367,
+          "code_hex": "0x5002000f",
+          "last_valid_percent": 0,
+          "output_handling": "failed output pointers are not a new diagnostic batch"
+        }
+      ],
+      "owned_assertion": null
+    },
+    "real_backend_negative": "Y1 := SIGNAL; remains a 0x050c9300 diagnostic; public projection fails 0x2d010025 and is incomplete.",
+    "positive_source": "Restored original MODULE_FB body without the added diagnostic statement; Chinese names retained."
+  },
+  "evidence": {
+    "repository_archive": "research/evidence/gxw-fbd-checked-roundtrip-20261003.zip",
+    "local_archive": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\gxw-fbd-checked-roundtrip-20261003-local.zip"
+  },
+  "limits": [
+    "One controlled project family with exact CPU-specific native fixtures and retained prior scope reductions.",
+    "Combined CPU menu choices retain their exact menu scope; individual physical variants were not separated.",
+    "The other 14 menu options have no retained successful FBD fixture; prior failures do not prove unsupported hardware.",
+    "No PLC or simulator execution. Compilation and checks do not establish runtime semantics.",
+    "Negative public diagnostic projection remains incomplete; no empty list or backend progress is promoted to success.",
+    "Private native ABI is pinned to the recorded DLL version; no application integration is implied."
+  ]
+}

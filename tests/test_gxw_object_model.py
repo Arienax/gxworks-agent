@@ -206,7 +206,8 @@ def test_verified_source_prototype_adds_a_custom_fb_and_synchronizes_its_label()
     assert [(row.name, row.type_reference) for row in generated_labels['1.Labels.lh'].rows][-1] == ('TIMER_C', 'FLOW_PORTS')
 
 
-def test_project_fb_interface_comes_from_owner_kind_and_formal_rows_without_implicit_enable():
+@pytest.mark.parametrize('endpoint', ['in.STATE', 'out.STATE'])
+def test_project_fb_interface_comes_from_owner_kind_and_formal_rows_without_implicit_enable(endpoint):
     import struct
     from src.gxw.callable_sources import ProjectCallableSources
     from src.gxw.declarations import _string, parse_declarations, edit_declarations, serialize_declarations
@@ -237,6 +238,64 @@ def test_project_fb_interface_comes_from_owner_kind_and_formal_rows_without_impl
     updated = context.with_declarations({**context.declarations,definition.logical_name:changed})
     assert [p['name'] for p in updated.callable(rebuilt.nodes[0],bind_instance=False)['ports']] == [
         'SIGNAL','in.NEXT_STATE','NUMBER','out.NEXT_STATE']
+    # The source fields stay read-only while new named connections resolve
+    # against pending formals, before a candidate is saved and reread.
+    from src.gxw.structured_pou import parse_structured_pou
+    from src.gxw.structured_pou_writer import serialize_structured_pou
+    from src.gxw.connectivity import build_connectivity_graph
+    caller = edit_declarations(declarations['1.Labels.lh'], upserts=[
+        {'name':'FLOW_A','data_type':'LOCAL_FLOW','kind':'function_block'}])
+    source = parse_structured_pou(serialize_structured_pou(rebuilt), logical_name=source.logical_name)
+    current = context.with_declarations({**context.declarations,'1.Labels.lh':caller})
+    model = export_object_model(source,current.declarations,sources=current)
+    target = model['nodes'][0]
+    port = next(p for p in target['ports'] if p['name']=='out.STATE')
+    model['nodes'].append({'id':'state_out','template':'output','symbol':'D30',
+                          'x':target['x']+port['x']+1,'y':target['y']+port['y']-1})
+    model['wires'] = [{'from':target['id']+'.out.NEXT_STATE','to':'state_out.IN'}]
+    pending = current.with_declarations({**current.declarations,definition.logical_name:changed})
+    from src.gxw.editor import edit_draft
+    from src.gxw.object_model import ProjectSourceContext
+    draft_context = ProjectSourceContext(b'', source, current.declarations, [source.logical_name], current)
+    original_draft = deepcopy(model)
+    original_draft['wires'] = []
+    port_edit = edit_draft(original_draft, {'action': 'update_port', 'id': target['id'],
+        'port': endpoint, 'negated': True}, context=draft_context)['model']
+    wired = edit_draft(port_edit, {'action': 'add_wire', 'from': target['id'] + '.' + endpoint,
+        'to': 'state_out.IN'}, context=draft_context)['model']
+    rebound = edit_draft(wired, {'action': 'update_label', 'table': definition.logical_name,
+        'name': 'STATE', 'field': 'name', 'value': 'NEXT_STATE'}, context=draft_context)
+    renamed_endpoint = endpoint.replace('STATE', 'NEXT_STATE')
+    assert rebound['model']['nodes'][0]['port_edits'] == {renamed_endpoint: {'negated': True}}
+    assert rebound['model']['wires'][0]['from'] == target['id'] + '.' + renamed_endpoint
+    assert original_draft['nodes'][0]['ports'] == target['ports']
+    rebound_program = build_object_program(source, rebound['model'], sources=pending, original_sources=current)
+    rebound_block = rebound_program.nodes[0]
+    rebound_ports = pending.callable(rebound_block)['ports']
+    assert [p['name'] for p in rebound_ports if p['negated']] == [renamed_endpoint]
+    rebound_terminal = next(n for n in rebound_program.nodes if n.symbol == 'D30')
+    rebound_index = next(i for i, p in enumerate(rebound_ports) if p['name'] == renamed_endpoint)
+    assert build_connectivity_graph(rebound_program).ports_connected(rebound_block.offset,
+        rebound_index, rebound_terminal.offset, 0)
+    model['declaration_edits'] = {definition.logical_name: {'renames': {'STATE': 'NEXT_STATE'}}}
+    model['wires'] = []
+    view = edit_draft(model, {'action': 'add_wire', 'from': target['id']+'.out.NEXT_STATE',
+        'to': 'state_out.IN'}, context=draft_context,
+        templates=draft_context.catalog(declaration_edits=model['declaration_edits']))
+    assert [p['name'] for p in view['presentation']['nodes'][0]['ports']] == [
+        'SIGNAL','in.NEXT_STATE','NUMBER','out.NEXT_STATE']
+    assert [p['name'] for p in view['model']['nodes'][0]['ports']] == [
+        'SIGNAL','in.STATE','NUMBER','out.STATE']
+    model = view['model']
+    connected = build_object_program(source,model,sources=pending,original_sources=current)
+    terminal = next(n for n in connected.nodes if n.symbol=='D30')
+    block = connected.nodes[0]
+    next_index = next(i for i,p in enumerate(pending.callable(block)['ports']) if p['name']=='out.NEXT_STATE')
+    assert build_connectivity_graph(connected).ports_connected(block.offset,next_index,terminal.offset,0)
+    incompatible = current.with_declarations({**current.declarations,
+        definition.logical_name:edit_declarations(definition,remove=['STATE'])})
+    with pytest.raises(GXWFormatError,match='source formal interface differs'):
+        build_object_program(source,model,sources=incompatible,original_sources=current)
     # Formal classes do not turn an ordinary program into a callable POU.
     as_program = replace(definition,owner_pou_type=0x1000000)
     unavailable = context.with_declarations({**context.declarations,definition.logical_name:as_program})

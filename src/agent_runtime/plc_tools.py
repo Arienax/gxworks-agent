@@ -28,6 +28,9 @@ SAFE_TOOL_NAMES = (
     "patch_program",
     "validate_current_program",
     "import_current_program_to_gxworks2",
+    "get_fbd_catalog",
+    "read_fbd_project",
+    "create_fbd_candidate",
 )
 
 FORBIDDEN_TOOL_NAMES = frozenset(
@@ -51,6 +54,7 @@ class ToolContext:
     version: Optional[Mapping[str, Any]] = None
     ladder: Optional[Mapping[str, Any]] = None
     program_ir: Optional[Mapping[str, Any]] = None
+    fbd_baseline: Optional[bytes] = None
 
     @property
     def project_id(self) -> str:
@@ -75,6 +79,7 @@ def build_tool_context(
     version: Optional[Mapping[str, Any]] = None,
     ladder: Optional[Mapping[str, Any]] = None,
     program_ir: Optional[Mapping[str, Any]] = None,
+    fbd_baseline: Optional[bytes] = None,
 ) -> ToolContext:
     """Copy mutable UI/session state before handing it to a worker thread."""
 
@@ -89,6 +94,7 @@ def build_tool_context(
             if isinstance(program_ir, Mapping)
             else None
         ),
+        fbd_baseline=bytes(fbd_baseline) if fbd_baseline is not None else None,
     )
 
 
@@ -294,6 +300,19 @@ def _get_generation_context(
         CONFIRMED_GENERATION_REQUEST, project_confirmed_specification,
     )
     public_spec = public_generation_specification(confirmed_spec)
+    if context.project.get('target_mode') == 'fbd' or (context.version or {}).get('target_mode') == 'fbd':
+        from gxw.generation_contract import FBD_GENERATION_PROMPT
+        catalog = _get_fbd_catalog(context, {})
+        previous = _read_fbd_project(context, {})['model'] if context.fbd_baseline is not None else None
+        return {'project_id': context.project_id, 'plc_model': context.plc_model, 'cpu': catalog['cpu'], 'target_mode': 'fbd',
+                'workflow_mode': str(context.project.get('workflow_mode') or 'generate'),
+                'has_confirmed_spec': isinstance(confirmed_spec, Mapping), 'confirmed_spec': public_spec,
+                'current_version_id': context.version_id or None,
+                'generation_instructions': FBD_GENERATION_PROMPT,
+                'generation_request': str(arguments.get('user_requirement') or ''),
+                'output_contract': {'tool': 'create_fbd_candidate', 'schema_version': 2,
+                                    'operation': 'edit' if previous is not None else 'generate'},
+                'catalog': catalog, 'current_model': previous}
     source = context.ladder
     if isinstance(context.program_ir, Mapping):
         from plc.ir import ir_to_ladder
@@ -429,7 +448,7 @@ def _get_current_program_info(
     artifact_flags = {
         name: bool(value)
         for name, value in artifacts.items()
-        if name in {"json", "ir", "program_csv", "comment_csv", "svg", "st", "st_from_ir"}
+        if name in {"json", "ir", "program_csv", "comment_csv", "svg", "st", "st_from_ir", "fbd", "gxw", "write_report"}
     } if isinstance(artifacts, Mapping) else {}
     result: Dict[str, Any] = {
         "available": True,
@@ -736,6 +755,74 @@ def _request_gxworks2_import(
     }
 
 
+def _get_fbd_catalog(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
+    from application.fbd import catalog_snapshot
+    from gxw.object_model import default_baseline
+
+    raw = context.fbd_baseline if context.fbd_baseline is not None else default_baseline()
+    return catalog_snapshot(raw, arguments.get('program') or (context.version or {}).get('program_name')) | {
+        'limitations': ['New projects use the FX3U native baseline.',
+                        'Callable ports are bound to this project CPU and source declarations.',
+                        'GX Works2 compilation is a separate validation step.']}
+
+
+def _read_fbd_project(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
+    from application.fbd import decode_upload, inspect_upload, read_snapshot
+
+    uploaded = arguments.get('data_base64')
+    raw = decode_upload(uploaded) if uploaded is not None else context.fbd_baseline
+    if raw is None:
+        raise ValueError('当前没有绑定的 FBD 工程；请提供 GXW 文件的 data_base64。')
+    if uploaded is not None and arguments.get('program') is None:
+        names = inspect_upload(uploaded)['programs']
+        if len(names) != 1:
+            return {'available': False, 'programs': names, 'message': '请指定要读取的 Program.pou。'}
+    return {'available': True, 'version_id': context.version_id or None,
+            **read_snapshot(raw, arguments.get('program') or ((context.version or {}).get('program_name') if uploaded is None else None))}
+
+
+def _create_fbd_candidate(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
+    from pathlib import Path
+    import tempfile
+    from application.fbd import decode_upload, pack_candidate, prepare_candidate
+
+    if context.project.get('target_mode') != 'fbd' and (context.version or {}).get('target_mode') != 'fbd':
+        raise ValueError('FBD 候选需要绑定 FBD 目标工程。')
+    operation = arguments['operation']
+    if operation == 'generate':
+        if context.version is not None or context.fbd_baseline is not None:
+            raise ValueError('已有版本的 FBD 工程请使用 edit 并绑定基础版本。')
+        if 'data_base64' in arguments or 'program' in arguments:
+            raise ValueError('generate 只接受 model 和 summary。')
+        kwargs = {'model': arguments.get('model')}
+    elif operation == 'edit':
+        if not context.version_id or context.fbd_baseline is None:
+            raise ValueError('edit 需要绑定已保存的 FBD 基础版本。')
+        if 'data_base64' in arguments or 'program' in arguments:
+            raise ValueError('edit 的 Program.pou 由 model.program 指定。')
+        kwargs = {'model': arguments.get('model'), 'baseline': context.fbd_baseline}
+    else:
+        if 'model' in arguments:
+            raise ValueError('import 使用原始 GXW，不接受 model。')
+        kwargs = {'imported': decode_upload(arguments.get('data_base64')),
+                  'program_name': arguments.get('program')}
+    with tempfile.TemporaryDirectory(prefix='gxw-fbd-candidate-') as directory:
+        payload = prepare_candidate(directory, **kwargs, plc_model=context.plc_model,
+                                    summary=arguments.get('summary') or 'Agent 提出的 FBD 候选')
+        graph = json.loads((Path(directory) / 'fbd.json').read_bytes())
+        svg = (Path(directory) / 'fbd.svg').read_text(encoding='utf-8')
+        snapshot = pack_candidate(payload, directory)
+    action = {'type': 'accept_fbd_candidate', 'project_id': context.project_id,
+              'base_version_id': context.version_id or None, 'target_mode': 'fbd',
+              'summary': payload['metadata']['summary'], 'validation': payload['metadata']['validation'],
+              '_confirmed_spec': copy.deepcopy(_confirmed_spec(context)), '_fbd_candidate': snapshot}
+    return {'requires_confirmation': True, 'model': graph, 'svg': svg,
+            'verification': {'structural_checks_passed': True, 'native_verified': False,
+                             'gx_compile': 'not_run'},
+            'message': 'FBD 候选已完成结构、声明与预览校验，等待工程确认；GX Works2 编译尚未执行。',
+            'pending_action': action}
+
+
 def build_default_tool_registry() -> ToolRegistry:
     from application.generation_receipts import GenerationReceiptCache
     from plc.ir import canonical_sha256
@@ -977,6 +1064,20 @@ def build_default_tool_registry() -> ToolRegistry:
             confirmation_required=True,
         )
     )
+    registry.register(ToolDefinition('get_fbd_catalog',
+        '读取原生 FBD 模板、工程源码引脚和声明表；新建工程目前使用 FX3U 模板。',
+        {'type': 'object', 'properties': {'program': {'type': 'string'}}, 'additionalProperties': False},
+        _get_fbd_catalog))
+    registry.register(ToolDefinition('read_fbd_project',
+        '读取当前已保存 GXW 或上传 GXW 的 FBD 图形、标签、具名引脚和 SVG；不运行 GX Works2。',
+        {'type': 'object', 'properties': {'program': {'type': 'string'}, 'data_base64': {'type': 'string'}},
+         'additionalProperties': False}, _read_fbd_project))
+    registry.register(ToolDefinition('create_fbd_candidate',
+        '在原生对象和声明副本上生成、编辑或导入 FBD，校验 GXW 与预览后提出工程候选。',
+        {'type': 'object', 'properties': {'operation': {'type': 'string', 'enum': ['generate', 'edit', 'import']},
+         'model': {'type': 'object'}, 'data_base64': {'type': 'string'}, 'program': {'type': 'string'},
+         'summary': {'type': 'string'}}, 'required': ['operation'], 'additionalProperties': False},
+        _create_fbd_candidate, confirmation_required=True))
     if tuple(registry.names) != SAFE_TOOL_NAMES:
         raise RuntimeError("default PLC tool registry does not match its allow-list")
     return registry

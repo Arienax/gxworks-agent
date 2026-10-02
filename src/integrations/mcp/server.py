@@ -30,6 +30,9 @@ WORKFLOW_INSTRUCTIONS = (
     "without a second model call or an automatic semantic repair loop. "
     "If a submission fails, report the returned error; do not start an automatic repeated-submission loop. "
     "Use read_network and patch_program for explicit scoped Debug patches. "
+    "For an FBD target call get_fbd_catalog and read_fbd_project, then submit the native object model "
+    "with create_fbd_candidate. Use the supplied source-bound ports and declaration tables, including "
+    "direction-qualified IN_OUT endpoints. This path produces a GXW and SVG; it does not run GX Works2 compilation. "
     "Report only actual tool results: structural acceptance is distinct from behavior, simulation and native validation. "
     "Never generate canonical IR or override server-owned project, profile, revision or approval fields. "
 )
@@ -37,7 +40,7 @@ WORKFLOW_INSTRUCTIONS = (
 
 SERVER_INSTRUCTIONS = WORKFLOW_INSTRUCTIONS + (
     "GXWorks tools inspect the configured saved PLC project through ToolRuntime. "
-    "create_program_candidate, patch_program and import_current_program_to_gxworks2 return confirmation_required; "
+    "create_program_candidate, create_fbd_candidate, patch_program and import_current_program_to_gxworks2 return confirmation_required; "
     "they do not save a version, change active_version_id or import into GX Works2. "
     "This standalone server has no approval or desktop bridge. MCP tool approval is not engineering confirmation. "
     "Report pending actions as pending. Never edit workspace records to bypass these tools. "

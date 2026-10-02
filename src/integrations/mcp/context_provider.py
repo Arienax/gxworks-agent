@@ -33,6 +33,7 @@ class StaticToolContextProvider:
             version=context.version,
             ladder=context.ladder,
             program_ir=context.program_ir,
+            fbd_baseline=context.fbd_baseline,
         )
 
     def get_context(self) -> ToolContext:
@@ -82,6 +83,7 @@ class SessionToolContextProvider:
         version = None
         ladder = None
         program_ir = None
+        fbd_baseline = None
         if selected:
             selected = _record_id(selected, "version")
             version = next(
@@ -107,8 +109,21 @@ class SessionToolContextProvider:
                 )
                 if program_ir is None or ladder is None:
                     raise ContextUnavailableError("Selected ladder version has no readable program.")
+            elif version.get('target_mode') == 'fbd':
+                from application.workspace import artifact_relative_path
+                artifacts = version.get('artifacts') or {}
+                if not isinstance(artifacts, dict) or not isinstance(artifacts.get('gxw'), str):
+                    raise ContextUnavailableError('Selected FBD version has no GXW artifact.')
+                try:
+                    path = version_dir / artifact_relative_path(artifacts['gxw'])
+                except ValueError as error:
+                    raise ContextUnavailableError('Invalid GXW artifact path.') from error
+                _contained(path, version_dir)
+                if not path.is_file():
+                    raise ContextUnavailableError('Selected FBD version has no readable GXW artifact.')
+                fbd_baseline = path.read_bytes()
         if store.get_project(self.project_id) != project:
             raise ContextUnavailableError("Project changed while loading; retry the call.")
         return build_tool_context(
-            project, version=version, ladder=ladder, program_ir=program_ir
+            project, version=version, ladder=ladder, program_ir=program_ir, fbd_baseline=fbd_baseline
         )

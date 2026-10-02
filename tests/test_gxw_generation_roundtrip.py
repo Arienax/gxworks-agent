@@ -83,3 +83,35 @@ def test_archive_declaration_fixtures_are_native_streams():
     for name, tables in fixture.items():
         _, documents, _ = read_project(evidence(name + ".gxw"))
         assert {key: d.raw.hex() for key, d in documents.items()} == tables
+
+
+def test_source_bound_application_candidates_keep_graph_and_labels_after_native_save_and_cold_reopen():
+    import base64
+    from gxw.declarations import parse_declarations
+    from gxw.structured_pou import parse_structured_pou
+    with zipfile.ZipFile(ROOT/'research/evidence/gxw-fbd-application-v2-20261002.zip') as archive:
+        cases = json.loads(archive.read('application-source-witnesses.json'))
+    native_count = 0
+    for case in cases:
+        candidate = case['candidate']
+        program = parse_structured_pou(base64.b64decode(candidate['program_base64']),
+            logical_name=candidate['program'],preserve_unsupported_records=True)
+        assert candidate['projection']['schema_version']==2
+        assert candidate['cpu']==case['cpu']
+        assert any(node.symbol=='APP_MODULE_STAGE_A' for node in program.nodes)
+        declarations = {name:parse_declarations(base64.b64decode(raw),logical_name=name)
+                        for name,raw in candidate['declarations'].items()}
+        assert any(row.name=='APP_MODULE_STAGE_A' for row in declarations['FBD_MATRIX.Labels.lh'].rows)
+        if 'native_cold' not in case:
+            continue
+        native_count += 1
+        for name in ('native_saved','native_cold'):
+            observed = case[name]
+            actual = parse_structured_pou(base64.b64decode(observed['program_base64']),
+                logical_name=observed['program'],preserve_unsupported_records=True)
+            assert [record.raw for record in actual.iter_records()]==[record.raw for record in program.iter_records()]
+            actual_labels = {key:parse_declarations(base64.b64decode(raw),logical_name=key)
+                             for key,raw in observed['declarations'].items()}
+            assert {key:[row.raw for row in doc.rows] for key,doc in actual_labels.items()} == {
+                key:[row.raw for row in doc.rows] for key,doc in declarations.items()}
+    assert len(cases)==67 and native_count==55

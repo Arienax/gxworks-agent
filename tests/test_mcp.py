@@ -114,6 +114,41 @@ def _files(root):
     return {str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()}
 
 
+def test_fbd_tools_bind_native_sources_and_keep_standalone_candidate_pending(tmp_path):
+    from application.fbd import prepare_candidate
+    from gxw.editor import edit_draft
+    from tests.test_gxw_object_model import source_binding_baseline
+
+    store = SessionStore(base_dir=tmp_path / 'workspace', legacy_dir=tmp_path)
+    project = store.create_project('Custom FBD', target_mode='fbd')
+    version_id, directory = store.prepare_version(project['id'])
+    raw = source_binding_baseline()
+    prepared = prepare_candidate(directory, imported=raw)
+    store.complete_version(project['id'], version_id, {**prepared['metadata'],
+        'artifacts': {name: entry['path'] for name, entry in prepared['artifacts'].items()}}, activate=True)
+    provider = SessionToolContextProvider(store.base_dir, project['id'], version_id)
+    assert StaticToolContextProvider(provider.get_context()).get_context().fbd_baseline == raw
+    before = _files(store.base_dir)
+    adapter = MCPToolAdapter(build_default_tool_runtime(), provider)
+    catalog = adapter.call_tool('get_fbd_catalog', {}, 'catalog').structured_content['data']
+    assert (catalog['schema_version'], catalog['cpu']) == (2, 'FX3U/FX3UC')
+    read = adapter.call_tool('read_fbd_project', {}, 'read').structured_content['data']
+    graph = read['model']
+    assert graph['schema_version'] == 2
+    assert [p['name'] for p in graph['nodes'][0]['ports']] == ['SIGNAL', 'in.STATE', 'RESULT', 'out.STATE']
+    changed = edit_draft(graph, {'action': 'update_node', 'id': graph['nodes'][0]['id'],
+        'field': 'symbol', 'value': 'MCP_STAGE_A'}, templates=catalog['nodes'])['model']
+    result = adapter.call_tool('create_fbd_candidate', {'operation': 'edit', 'model': changed}, 'edit')
+    assert not result.is_error
+    assert result.structured_content['status'] == 'confirmation_required'
+    data = result.structured_content['data']
+    assert data['model']['schema_version'] == 2 and 'MCP_STAGE_A' in data['svg']
+    assert data['pending_action']['base_version_id'] == version_id
+    assert data['verification']['native_verified'] is False
+    assert '"_fbd_candidate"' not in result.content[0].text
+    assert _files(store.base_dir) == before
+
+
 def test_discovery_and_schemas_come_from_the_runtime(saved_project):
     runtime = build_default_tool_runtime()
     adapter = MCPToolAdapter(runtime, _provider(saved_project))

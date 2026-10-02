@@ -751,3 +751,114 @@ def test_source_added_declarations_bind_only_after_archived_native_compile():
         assert len(generated) == 1000
         states.append({b.status for b in generated})
     assert states == [{"no-compiled-component"}, {"name-match"}]
+
+
+@pytest.mark.parametrize('name', [
+    *(cpu+suffix for cpu in ('FX3U-FX3UC','Q03UDV','L02') for suffix in ('-current','-duplicate-output')),
+    'Q03UDV-current-compiler-stale-workspace', 'FX3G-duplicate-coil-legacy',
+    'FX3G-duplicate-coil-fresh', 'SFC-empty-task-cache',
+])
+def test_current_code_checks_preserve_stale_reads_incomplete_diagnostics_and_empty_tasks(monkeypatch, name):
+    monkeypatch.syspath_prepend(str(ROOT/'research'))
+    from program_check_evidence import analyze_check
+    with zipfile.ZipFile(ROOT/'research/evidence/gxw-fbd-application-v2-20261002.zip') as archive:
+        case = next(row for row in json.loads(archive.read('check-witnesses.json')) if row['case']==name)
+    generated = {tuple(row['id']): tuple(base64.b64decode(b) for b in row['channels_base64'])
+                 for row in case['generated']}
+    result = analyze_check(case['native_events'],case['observations'],generated,selection=case['selection'])
+    assert result['compilation']['completed']
+    assert result['checker_resources']['correspondence'] == case['expected']['correspondence']
+    assert result['public_check']['status'] == case['expected']['public_check']
+    assert result['diagnostic_projection']['status'] == case['expected']['projection']
+    assert result['current_source_check'] == 'not_established'
+    if name.endswith('-duplicate-output'):
+        assert result['targets']['backend_completed'] == result['targets']['planned']
+        assert any(d['kind']==2 for d in result['diagnostic_projection']['backend_diagnostics'])
+        assert not result['diagnostic_projection']['public_diagnostics']
+        assert not result['diagnostic_projection']['empty_public_list_means_no_errors']
+        assert not result['public_check']['completed']
+    if 'stale' in name or name.endswith('-legacy'):
+        assert result['public_check']['status']=='passed'
+        assert any(r['status']=='stale' for r in result['checker_resources']['reads'])
+    if name=='SFC-empty-task-cache':
+        assert result['compilation']['returned_resources']==1
+        assert base64.b64decode(case['selection']['task_base64'])[-4:]==b'\0'*4
+        assert case['selection']['empty_task'] and not case['selection']['selected_sources']
+
+
+def diagnostic_source_witnesses():
+    with zipfile.ZipFile(ROOT/'research/evidence/gxw-native-diagnostic-sources-20261002.zip') as archive:
+        return json.loads(archive.read('cpu-source-witnesses.json'))
+
+
+@pytest.mark.parametrize('case', diagnostic_source_witnesses(), ids=lambda case: case['cpu'])
+def test_native_fb_diagnostics_correlate_only_unique_current_instance_ranges(monkeypatch, case):
+    monkeypatch.syspath_prepend(str(ROOT/'research'))
+    from program_check_evidence import correlate_st_diagnostic
+    result = case['phase_result']
+    references = result['source_references']['queries'][0]['rows']
+    actual = [correlate_st_diagnostic(query, result['link_witness']['rows'], references,
+        case['source_texts'], case['caller_nodes']) for query in result['diagnostic_locations']]
+    assert actual == case['projections']
+    assert all(row['status'] == case['expected_status'] and not row['public_check_promoted'] for row in actual)
+    phases = case['phase_classification']
+    assert phases['checker_resources']['correspondence'] == 'current'
+    assert phases['public_check']['status'] == 'incomplete'
+    assert phases['diagnostic_projection']['status'] == 'failed'
+    assert phases['current_source_check'] == 'not_established'
+    if case['cpu'] == 'FX0N':
+        assert all(row['source_instance_candidates'] == [
+            'FBD_MATRIX.APP_MODULE_STAGE_A', 'FBD_MATRIX.APP_MODULE_STAGE_B'] for row in actual)
+        assert all(row['compiled_interval_name'] == 'TASK_MATRIX.FBD_MATRIX' for row in actual)
+    else:
+        assert {row['instance'] for row in actual} == {
+            'FBD_MATRIX.APP_MODULE_STAGE_A', 'FBD_MATRIX.APP_MODULE_STAGE_B'}
+        assert all(row['source']['text'] == 'Y1 := SIGNAL;' for row in actual)
+
+
+@pytest.mark.parametrize('damage', ['native_failure', 'empty_location', 'library', 'coarse_fbd',
+    'duplicate_interval', 'range_boundary', 'duplicate_reference', 'missing_object'])
+def test_diagnostic_source_mapping_keeps_missing_and_ambiguous_evidence_unresolved(monkeypatch, damage):
+    from copy import deepcopy
+    monkeypatch.syspath_prepend(str(ROOT/'research'))
+    from program_check_evidence import correlate_st_diagnostic
+    case = diagnostic_source_witnesses()[0]
+    result = case['phase_result']
+    query = deepcopy(result['diagnostic_locations'][0])
+    links = deepcopy(result['link_witness']['rows'])
+    references = deepcopy(result['source_references']['queries'][0]['rows'])
+    nodes = deepcopy(case['caller_nodes'])
+    if damage == 'native_failure':
+        query['hresult'] = -2147467259
+    elif damage == 'empty_location':
+        query['location'] = None
+    elif damage == 'library':
+        query['location']['library'] = 'UNRELATED_LIBRARY'
+    elif damage == 'coarse_fbd':
+        query['location']['program_kind'] = 208
+    elif damage in ('duplicate_interval', 'range_boundary'):
+        interval = next(row for row in links if row['name'] == 'TASK_MATRIX.FBD_MATRIX.APP_MODULE_STAGE_A')
+        if damage == 'duplicate_interval':
+            links.append(deepcopy(interval))
+        else:
+            query['query']['start_step'] = interval['step_start'] + interval['step_count']
+            links = [interval]
+    elif damage == 'duplicate_reference':
+        reference = next(row for row in references if row['name'] == 'Y1' and row['instance'] == 'FBD_MATRIX.APP_MODULE_STAGE_A')
+        references.append(deepcopy(reference))
+    else:
+        nodes = []
+    actual = correlate_st_diagnostic(query, links, references, case['source_texts'], nodes)
+    assert actual['status'] == 'unresolved' and not actual['public_check_promoted']
+
+
+def test_native_debug_range_rejection_keeps_original_error_and_does_not_replace_public_check():
+    with zipfile.ZipFile(ROOT/'research/evidence/gxw-native-diagnostic-sources-20261002.zip') as archive:
+        cases = json.loads(archive.read('native-debug-boundary.json'))
+    assert len(cases) == 3
+    for case in cases:
+        assert case['returncode'] == 0 and case['public_check']
+        assert len(case['debug_observations']) == 12
+        assert all(row['hresult'] == -2147467259 and row['code'] == 0x50010006
+            and row['initialized'] and row['count'] == 0 and not row['ranges_present']
+            for row in case['debug_observations'])

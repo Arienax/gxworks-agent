@@ -11,6 +11,8 @@
 
 ## GXW 与原生实验
 
+- [原生诊断源码映射与技能实测（2026-10-02）](gxw/2026-10-02-native-diagnostic-source-mapping.md)
+- [FBD v2 应用贯通与当前代码检查（2026-10-02）](gxw/2026-10-02-fbd-v2-application-native-check.md)
 - [临时分配与 ST 参数转移快照（2026-09-30）](gxw/2026-09-30-st-transfer-checkpoint.md)
 - [当前代码检查与分配边界快照（2026-09-30）](gxw/2026-09-30-check-allocation-checkpoint.md)
 - [源声明重建与 SFC 源图阶段快照（2026-09-27）](gxw/2026-09-27-source-sfc-checkpoint.md)

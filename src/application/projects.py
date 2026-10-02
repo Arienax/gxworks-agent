@@ -142,7 +142,7 @@ class ProjectService:
         # FBD has its own stylesheet. The legacy ladder recoloring changes its
         # background without changing class-based text, making labels unreadable.
         if self.raw_version(project_id, version_id).get("target_mode") == "fbd":
-            return text
+            return self._fbd_context(project_id, version_id).svg()
         return self.themed_svg(text, theme)
 
     def artifacts(self, project_id: str, version_id: str) -> list[dict]:
@@ -161,11 +161,19 @@ class ProjectService:
     def program(self, project_id: str, version_id: str) -> dict | None:
         version = self.raw_version(project_id, version_id)
         if version.get("target_mode") == "fbd":
-            return json.loads(self.artifact(project_id, version_id, "fbd").read_text(encoding="utf-8"))
+            return self._fbd_context(project_id, version_id).object_model()
         for key in ("ir", "json"):
             if (version.get("artifacts") or {}).get(key):
                 self.artifact(project_id, version_id, key)
         return self.store.load_program_ir(project_id, version_id, persist_legacy=False)
+
+    def _fbd_context(self, project_id, version_id):
+        from gxw.object_model import read_project_context
+        version = self.raw_version(project_id, version_id)
+        selected = version.get('program_name')
+        if not selected:
+            selected = json.loads(self.artifact(project_id, version_id, 'fbd').read_bytes())['program']
+        return read_project_context(self.artifact(project_id, version_id, 'gxw').read_bytes(), selected)
 
     def tool_context(self, project_id: str, version_id: str | None = None):
         from agent_runtime.plc_tools import build_tool_context
@@ -174,10 +182,11 @@ class ProjectService:
         selected = version_id or project.get("active_version_id")
         version = self.raw_version(project_id, selected) if selected else None
         program = self.program(project_id, selected) if version and version.get("target_mode") == "ladder" else None
+        fbd_baseline = self.artifact(project_id, selected, 'gxw').read_bytes() if version and version.get('target_mode') == 'fbd' else None
         if self.raw_project(project_id) != project:
             raise ProjectError("Project changed during read; retry")
         return build_tool_context(project, version=version, program_ir=program,
-                                  ladder=ir_to_ladder(program) if program else None)
+                                  ladder=ir_to_ladder(program) if program else None, fbd_baseline=fbd_baseline)
 
     def verified_program(self, project_id: str, version_id: str) -> dict | None:
         """Bind navigation and evidence to the saved IR without semantic revalidation."""

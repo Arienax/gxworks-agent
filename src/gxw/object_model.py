@@ -5,7 +5,7 @@ layout and opaque fields; geometry is the already verified editor grid.
 """
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 import hashlib
 import json
@@ -15,9 +15,9 @@ import struct
 
 from .container_writer import validate_cfb_streams
 from .callable_sources import ProjectCallableSources
-from .declarations import parse_declarations, edit_declarations, CLASS_CODES
+from .declarations import DeclarationDocument, parse_declarations, edit_declarations, CLASS_CODES
 from .models import (
-    COIL_NODE_KINDS, CONTACT_NODE_KINDS, GXWFormatError, NodeKind, Point, PortDescriptor, Rect, StructuredBlock,
+    COIL_NODE_KINDS, CONTACT_NODE_KINDS, GXWFormatError, NodeKind, Point, PortDescriptor, Rect, StructuredBlock, StructuredProgram,
 )
 from .project_metadata import logical_mapping
 from .project_writer import build_gxw_project
@@ -159,6 +159,52 @@ def read_project(raw, logical_name=None):
     return program, declarations, names
 
 
+@dataclass(frozen=True)
+class ProjectSourceContext:
+    """One selected source snapshot; rebuild after changing project bytes."""
+
+    raw: bytes = field(repr=False)
+    program: StructuredProgram
+    declarations: dict[str, DeclarationDocument]
+    programs: list[str]
+    sources: ProjectCallableSources = field(repr=False)
+
+    def object_model(self):
+        return export_object_model(self.program, self.declarations, sources=self.sources)
+
+    def catalog(self, *, declaration_edits=None):
+        sources = self.draft_sources(declaration_edits)
+        # A client selects a template by name. Prefer an existing source
+        # prototype when present, retaining its offset for a bounded clone.
+        return list({item['template']: item for item in
+            catalog_description(sources=sources, program=self.program)}.values())
+
+    def draft_sources(self, declaration_edits=None):
+        """Resolve pending declaration edits without rebasing source offsets."""
+        documents = dict(self.declarations)
+        for name, patch in (declaration_edits or {}).items():
+            if name not in documents or not isinstance(patch, dict) or set(patch) - {'upserts', 'renames', 'remove'}:
+                raise GXWFormatError('invalid declaration table edit')
+            documents[name] = edit_declarations(documents[name], **patch)
+        return self.sources.with_declarations(documents) if declaration_edits else self.sources
+
+    def svg(self):
+        from .render import render_structured_svg
+        return render_structured_svg(self.program, sources=self.sources)
+
+    def empty_model(self):
+        return {'schema_version': 2, 'program': self.program.logical_name,
+                'canvas_height': 12, 'nodes': [], 'wires': []}
+
+
+def read_project_context(raw, logical_name=None):
+    """Bind GXW bytes, selected Program, declarations and its own CPU."""
+    raw = bytes(raw)
+    program, declarations, names = read_project(raw, logical_name)
+    sources = ProjectCallableSources.from_project(raw, program.logical_name, declarations)
+    return ProjectSourceContext(raw, program, declarations, names, sources)
+
+
 def export_object_model(program, declarations=None, *, sources=None):
     nodes = []
     for n in program.nodes:
@@ -210,7 +256,7 @@ def _point(value):
     return Point(*map(_uint, value))
 
 
-def build_object_program(source, model, *, sources=None):
+def build_object_program(source, model, *, sources=None, original_sources=None):
     if not isinstance(model, dict) or model.get("schema_version") not in (1, 2):
         raise GXWFormatError("unsupported GXW object model version")
     if model['schema_version'] == 2 and sources is None:
@@ -284,7 +330,7 @@ def build_object_program(source, model, *, sources=None):
             template = old_nodes[prototype]
             if _key(template) != key or template.kind not in (NodeKind.FUNCTION, NodeKind.FUNCTION_BLOCK):
                 raise GXWFormatError('callable prototype must have the same template key')
-            sources.callable(template)
+            (original_sources or sources).callable(template)
         elif old and _key(old) == key:
             template = old
         elif key in catalog:
@@ -300,8 +346,19 @@ def build_object_program(source, model, *, sources=None):
         bbox = Rect(x, y, _uint(x + template.bbox.right - template.bbox.left),
                     _uint(y + template.bbox.bottom - template.bbox.top))
         derived = {"width": bbox.right-bbox.left, "height": bbox.bottom-bbox.top,
-                   "ports": _ports(template, sources, bind_instance=old is not None and _key(old) == key)}
-        if any(field in item and item[field] != value for field, value in derived.items()):
+                   "ports": _ports(template, sources, bind_instance=False)}
+        original_derived = derived
+        if old is not None or prototype is not None:
+            original_derived = {**derived, 'ports': _ports(template, original_sources or sources,
+                bind_instance=old is not None and _key(old) == key)}
+            if original_sources is not None and template.kind in (NodeKind.FUNCTION, NodeKind.FUNCTION_BLOCK):
+                try:
+                    original_sources.callable(template, bind_instance=False)
+                except GXWFormatError:
+                    pass  # An unresolved original interface remains opaque.
+                else:
+                    sources.callable(template, bind_instance=False)
+        if any(field in item and item[field] != value for field, value in original_derived.items()):
             raise GXWFormatError("node dimensions/ports are derived from its native ABI template")
         if old:
             used.add(offset)
@@ -394,12 +451,15 @@ def generate_object_project(model, *, baseline=None):
     if not isinstance(model, dict):
         raise GXWFormatError("GXW object model must be an object")
     raw = default_baseline() if baseline is None else baseline
-    source, documents, program_names = read_project(raw, model.get("program"))
-    sources = ProjectCallableSources.from_project(raw, source.logical_name, documents) if model.get('schema_version') == 2 else None
+    if model.get('schema_version') == 2:
+        context = read_project_context(raw, model.get('program'))
+        source, documents, program_names, sources = context.program, context.declarations, context.programs, context.sources
+    else:
+        source, documents, program_names = read_project(raw, model.get('program'))
+        sources = None
     projection = export_object_model(source, documents, sources=sources)
     if any(key in model and model[key] != projection.get(key) for key in ("labels", "unknown_record_count", "issues", "cpu")):
         raise GXWFormatError("labels/issues are read-only source data; use declaration_edits to modify declarations")
-    program = build_object_program(source, model, sources=sources)
     edits = model.get("declaration_edits", {})
     if not isinstance(edits, dict):
         raise GXWFormatError("declaration edits must map table names to edits")
@@ -410,6 +470,13 @@ def generate_object_project(model, *, baseline=None):
         changed[logical] = edit_declarations(documents[logical], **patch)
         if patch.get('renames') and documents[logical].scope == 'global' and len(program_names) > 1:
             raise GXWFormatError('global label rename requires all program references; this edit is bound to one Program.pou')
+    context = (sources or ProjectCallableSources.from_project(raw, source.logical_name, documents)).with_declarations(
+        {**documents, **changed}) if changed else sources
+    program = build_object_program(source, model, sources=context if sources is not None else None,
+                                   original_sources=sources if changed else None)
+    for logical, patch in edits.items():
+        if documents[logical].scope != 'global' and logical != source.logical_name.removesuffix('.Program.pou') + '.Labels.lh':
+            continue
         for old_name in patch.get('renames', {}):
             if patch['renames'][old_name].casefold() == old_name.casefold():
                 continue
@@ -419,8 +486,6 @@ def generate_object_project(model, *, baseline=None):
     # Reject edits that would silently re-create a removed/renamed FB instance,
     # or overwrite an explicitly edited type during automatic FB synchronization.
     if changed:
-        context = (sources or ProjectCallableSources.from_project(raw, source.logical_name, documents)).with_declarations(
-            {**documents, **changed})
         for node in program.nodes:
             if node.kind == NodeKind.FUNCTION_BLOCK:
                 prior = (sources or context.with_declarations(documents)).label(node.symbol)

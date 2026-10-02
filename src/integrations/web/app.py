@@ -140,9 +140,8 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
         return service.create_project(**command.model_dump())
 
     @app.get("/api/fbd/catalog", response_model=dto.PublicObject)
-    def fbd_catalog():
-        from gxw.editor import editor_catalog
-        return editor_catalog()
+    def fbd_catalog(project_id: str | None = None, version_id: str | None = None, program: str | None = None):
+        return service.fbd.catalog(project_id, version_id, program)
 
     @app.post("/api/fbd/inspect", response_model=dto.PublicObject)
     def fbd_inspect(command: AttachmentUpload):

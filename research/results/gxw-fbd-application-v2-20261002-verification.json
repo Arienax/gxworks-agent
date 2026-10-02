@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-02",
+  "checks": [
+    {
+      "command": "python -m pytest tests/test_gxw_object_model.py tests/test_gxw_declarations.py tests/test_gxw_structured_writer.py tests/test_gxw_semantic_model.py tests/test_gxw_project_writer.py tests/test_gxw_generation_roundtrip.py tests/test_gxw_function_blocks.py tests/test_gxw_function_abi.py tests/test_web_fbd.py tests/test_mcp.py tests/test_native_validation.py -q",
+      "passed": 390,
+      "seconds": 63.68
+    },
+    {
+      "command": "python -m pytest tests/test_gxw_object_model.py tests/test_gxw_compiler.py tests/test_gxw_generation_roundtrip.py tests/test_source_layout.py -q",
+      "passed": 201,
+      "seconds": 10.22
+    },
+    {
+      "command": "node --experimental-strip-types --test web/tests/*.test.mjs",
+      "passed": 41
+    },
+    {
+      "command": "npm run build --prefix web",
+      "status": "passed"
+    },
+    {
+      "command": "python scripts/export_web_schema.py and npm run types --prefix web",
+      "status": "passed"
+    },
+    {
+      "command": "verify_application_fbd_v2_final.py",
+      "core_cases": 67,
+      "candidate_bytes_exact": 67,
+      "source_gap_controls_passed": 4
+    },
+    {
+      "command": "validate_application_fbd_v2.py",
+      "native_cpu_options": 55,
+      "compile_check_save_cold_reopen_passed": 55
+    },
+    {
+      "command": "freeze_gxw_fbd_application.py and source snapshot supplement",
+      "status": "archive entries byte-identical to selected files"
+    }
+  ],
+  "counting": "Python check groups overlap and must not be added as unique coverage",
+  "retained_initial_failures": [
+    "A planned test invocation named nonexistent test files; it ran no tests and was corrected using the test registry.",
+    "Early application assertions used FX3U instead of the native combined option FX3U/FX3UC.",
+    "An early private-payload assertion matched the public tool name create_fbd_candidate; the assertion now checks the JSON key.",
+    "An early preview test expected a nonexistent validation field; the native state is checked on the candidate result.",
+    "Four corpus inputs lacked MODULE_FB; original exceptions retained and bounded edits recorded separately.",
+    "Trace size queries initially appeared as unmatched reads; raw observations are unchanged and supplemental analysis separates size queries.",
+    "The first public capsule omitted source files because Windows path separators did not match the prefix filter; a separate source supplement is frozen.",
+    "Owned native temporary-directory collisions and their successful retries are retained."
+  ],
+  "not_run": [
+    "PLC or simulator execution",
+    "Full Python repository suite",
+    "All-physical-model tests",
+    "Automatic full native source/task/config selection proof"
+  ],
+  "verification_method": "Raw bytes and structural records; no new digest verification"
+}

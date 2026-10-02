@@ -7,10 +7,11 @@ owned by gxw. Every client sends edit intent rather than implementing PLC rules.
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 from uuid import uuid4
 
 from .models import GXWFormatError
-from .object_model import catalog_description, default_baseline, read_project
+from .object_model import catalog_description, default_baseline, read_project, read_project_context
 
 
 GENERATION_PLC_MODELS = ("FX3U",)
@@ -22,9 +23,12 @@ def empty_model():
             "canvas_height": 12, "nodes": [], "wires": []}
 
 
-def editor_catalog():
-    return {"nodes": catalog_description(), "generation_plc_models": list(GENERATION_PLC_MODELS),
-            "empty_model": empty_model()}
+def editor_catalog(context=None):
+    context = context or read_project_context(default_baseline())
+    return {'nodes': context.catalog(), 'generation_plc_models': list(GENERATION_PLC_MODELS),
+            'empty_model': context.empty_model(), 'program': context.program.logical_name,
+            'programs': context.programs, 'schema_version': 2, 'cpu': context.sources.cpu,
+            'declaration_tables': {name: doc.scope for name, doc in context.declarations.items()}}
 
 
 def declaration_rows(model, table):
@@ -41,15 +45,24 @@ def declaration_rows(model, table):
     return rows
 
 
-def presentation(model, *, templates=None):
+def presentation(model, *, templates=None, context=None):
     catalog = {item["template"]: item for item in (templates if templates is not None else catalog_description())}
     tables = list(dict.fromkeys([*model.get("labels", {"1.Labels.lh": [], "Global1.gh": []}),
                                 *model.get("declaration_edits", {})]))
     nodes = []
     endpoints = []
+    sources = context.draft_sources(model.get('declaration_edits')) if context else None
+    source_nodes = {node.offset: node for node in context.program.nodes} if context else {}
     for node in model["nodes"]:
         spec = catalog.get(node["template"], {})
         ports = node.get("ports", spec.get("ports", []))
+        source = source_nodes.get(node.get('source_offset'))
+        if sources and source and node['template'].startswith(('function:', 'function_block:')):
+            try:
+                ports = sources.callable(replace(source, symbol=node['symbol']))['ports']
+            except GXWFormatError:
+                pass  # Keep unbound source ports visible with the source gap.
+        ports = [{**port, **node.get('port_edits', {}).get(port['name'], {})} for port in ports]
         nodes.append({"id": node["id"], "symbol_editable": not node['template'].startswith('function:'), "ports": ports})
         for port in ports:
             endpoints.append({"value": f'{node["id"]}.{port["name"]}',
@@ -63,7 +76,51 @@ def _patch(model, table):
     return model.setdefault("declaration_edits", {}).setdefault(table, {})
 
 
-def edit_draft(value, command=None, *, templates=None):
+def _rebind_formal_references(model, table, before, context):
+    """Keep draft port edits and named wires on the same source formal slot."""
+    after = context.draft_sources(model.get('declaration_edits'))
+    source_nodes = {node.offset: node for node in context.program.nodes}
+    old_catalog = new_catalog = None
+    endpoints = {}
+    for node in model['nodes']:
+        key = node['template']
+        if not key.startswith(('function:', 'function_block:')):
+            continue
+        kind = 'FUNCTION_BLOCK' if key.startswith('function_block:') else 'FUNCTION'
+        try:
+            stream, _ = before.definition(key.split(':', 1)[1], kind)
+        except GXWFormatError:
+            continue  # An unbound source object supplies no formal identity.
+        if stream != table:
+            continue
+        source = source_nodes.get(node.get('source_offset', node.get('prototype_offset')))
+        if source is not None and (source.type_name if kind == 'FUNCTION_BLOCK' else source.symbol) != key.split(':', 1)[1]:
+            source = None
+        if source is not None:
+            old_ports = before.callable(source, bind_instance=False)['ports']
+            new_ports = after.callable(source, bind_instance=False)['ports']
+        else:
+            if old_catalog is None:
+                old_catalog = {item['template']: item for item in catalog_description(sources=before)}
+                new_catalog = {item['template']: item for item in catalog_description(sources=after)}
+            if key not in old_catalog or key not in new_catalog:
+                raise GXWFormatError('formal rename requires a resolved callable interface')
+            old_ports, new_ports = old_catalog[key]['ports'], new_catalog[key]['ports']
+        if len(old_ports) != len(new_ports) or any(a['side'] != b['side'] for a, b in zip(old_ports, new_ports)):
+            raise GXWFormatError('formal rename changed callable port layout')
+        names = {a['name']: b['name'] for a, b in zip(old_ports, new_ports)}
+        if 'port_edits' in node:
+            if any(name not in names for name in node['port_edits']):
+                raise GXWFormatError('formal rename requires current source endpoints for port edits')
+            node['port_edits'] = {names.get(name, name): patch for name, patch in node['port_edits'].items()}
+        endpoints.update({node['id'] + '.' + a: node['id'] + '.' + b for a, b in names.items()})
+    for wire in model['wires']:
+        for end in ('from', 'to'):
+            if end in wire:
+                wire[end] = endpoints.get(wire[end], wire[end])
+
+
+def edit_draft(value, command=None, *, templates=None, context=None):
     """Apply one atomic command to a copy; never mutate the caller's document."""
     model = empty_model() if value is None else deepcopy(value)
     command = command or {}
@@ -78,6 +135,8 @@ def edit_draft(value, command=None, *, templates=None):
                                    else "Y0" if spec["kind"] in {"coil", "output"} else "X0")
         node = {"id": "node_" + uuid4().hex, "template": spec["template"], "symbol": symbol,
                 "x": 3, "y": 2 + len(model["nodes"]) * 5}
+        if spec.get('prototype_offset') is not None:
+            node['prototype_offset'] = spec['prototype_offset']
         if model.get("blocks"):
             node["block"] = 0
         model["nodes"].append(node)
@@ -105,6 +164,18 @@ def edit_draft(value, command=None, *, templates=None):
             elif field == "symbol":
                 if node['template'].startswith('function:'):
                     raise GXWFormatError("select a native function template to change a function")
+                old_symbol = node['symbol']
+                if node['template'].startswith('function_block:') and old_symbol != new:
+                    local = model['program'].removesuffix('.Program.pou') + '.Labels.lh'
+                    hits = [(table, row['name']) for table in model.get('labels', {})
+                            if table == local or table.endswith('.gh')
+                            for row in declaration_rows(model, table)
+                            if row['name'].casefold() == old_symbol.casefold()]
+                    if len(hits) > 1:
+                        raise GXWFormatError('ambiguous FB instance declaration')
+                    if hits:
+                        return edit_draft(model, {'action': 'update_label', 'table': hits[0][0],
+                            'name': hits[0][1], 'field': 'name', 'value': new}, templates=templates, context=context)
                 node[field] = new
             else:
                 raise GXWFormatError("unsupported node edit")
@@ -112,12 +183,13 @@ def edit_draft(value, command=None, *, templates=None):
         node = next((item for item in model['nodes'] if item['id'] == command['id']), None)
         if node is None or model.get('schema_version') != 2 or not node['template'].startswith(('function:', 'function_block:')):
             raise GXWFormatError('port edit requires a source-bound callable node')
-        ports = node.get('ports', catalog.get(node['template'], {}).get('ports', []))
+        ports = next(item['ports'] for item in presentation(model, templates=templates, context=context)['nodes']
+                     if item['id'] == node['id'])
         if sum(port['name'] == command['port'] for port in ports) != 1 or type(command['negated']) is not bool:
             raise GXWFormatError('port edit requires an existing endpoint and boolean negated')
         node.setdefault('port_edits', {})[command['port']] = {'negated': command['negated']}
     elif action == "add_wire":
-        endpoints = {row["value"]: row["point"] for row in presentation(model, templates=templates)["endpoints"]}
+        endpoints = {row["value"]: row["point"] for row in presentation(model, templates=templates, context=context)["endpoints"]}
         source, target = command["from"], command["to"]
         if source not in endpoints or target not in endpoints or source == target:
             raise GXWFormatError("select two existing, distinct endpoints")
@@ -173,6 +245,7 @@ def edit_draft(value, command=None, *, templates=None):
                 if field not in {"name", "data_type", "kind", "class_name", "initial_value", "device", "iec_address", "comment"} or not isinstance(new, str):
                     raise GXWFormatError("unsupported declaration edit")
                 if field == "name":
+                    previous_sources = context.draft_sources(model.get('declaration_edits')) if context else None
                     if source:
                         patch.setdefault("renames", {})[source["name"]] = new
                     if item:
@@ -187,6 +260,8 @@ def edit_draft(value, command=None, *, templates=None):
                             node['symbol'] = new
                         elif node['symbol'].casefold().startswith(name.casefold() + '.'):
                             node['symbol'] = new + node['symbol'][len(name):]
+                    if context:
+                        _rebind_formal_references(model, table, previous_sources, context)
                 else:
                     if item is None:
                         item = {"name": name}
@@ -194,4 +269,6 @@ def edit_draft(value, command=None, *, templates=None):
                     item[field] = new
     elif action != "inspect":
         raise GXWFormatError("unsupported FBD editor command")
-    return {"model": model, "presentation": presentation(model, templates=templates), "gx_compile": "not_run"}
+    if context:
+        templates = context.catalog(declaration_edits=model.get('declaration_edits'))
+    return {"model": model, "presentation": presentation(model, templates=templates, context=context), "gx_compile": "not_run"}

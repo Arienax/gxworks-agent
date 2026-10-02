@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-02",
+  "base_commit": "ef0a255",
+  "property_trial": {
+    "library": "Hypothesis 6.168.3 in an isolated experiment directory",
+    "initial_result": "2 passed, 1 failed",
+    "generated_failure_replay": "one property failed; minimal parameters P_0, input side, negated False",
+    "after_fix": "3 passed; 300 generated cases plus 3 explicit cases",
+    "final_reference_guard_recheck": "1 passed; 100 generated cases, overlapping the prior run",
+    "project_dependency_changed": false,
+    "logs": "research/experiments/sfc-graph-20260926/public-corpus-discovery/skill-trial-20261002-v1"
+  },
+  "pytest": {
+    "command": "python -m pytest tests/test_gxw_compiler.py tests/test_gxw_object_model.py tests/test_web_fbd.py tests/test_mcp.py tests/test_gxw_generation_roundtrip.py -q --tb=short",
+    "result": "313 passed in 35.29s",
+    "exit_code": 0
+  },
+  "native": {
+    "cpu_options": 55,
+    "retained_attempts": 61,
+    "retained_startup_collisions": 6,
+    "current_checker_resource_correspondence": 55,
+    "public_check_complete": 0,
+    "unique_instance_correlations": 108,
+    "unresolved_instance_correlations": 2,
+    "unresolved_option": "FX0N",
+    "debug_range_calls": 36,
+    "debug_range_original_code": "0x50010006",
+    "plc_or_simulator_execution": "not_run"
+  },
+  "freeze": {
+    "public_entries": 183,
+    "local_entries": 6613,
+    "comparison": "direct archive-entry byte equality; no new digest verification",
+    "exit_code": 0
+  },
+  "git_diff_check": {
+    "exit_code": 0,
+    "note": "Existing Windows line-ending warnings only; no whitespace errors"
+  }
+}

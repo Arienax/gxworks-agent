@@ -161,7 +161,7 @@ def run_tool_agent(
             tools=tuple(runtime.list_tools(context)),
             tool_response_contracts=tuple(
                 (name, tool_argument_contract(name))
-                for name in ("create_program_candidate", "patch_program")
+                for name in ("create_program_candidate", "patch_program", "create_fbd_candidate")
             ),
             preserved_annotations=preserved_annotations(
                 getattr(context, "program_ir", None),

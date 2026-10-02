@@ -81,15 +81,14 @@ class NativeValidationService:
                     "outcome": command["outcome"]}
             upload = command.get("native_gxw")
             if upload:
-                from gxw.object_model import export_object_model, read_project
+                from .fbd import read_snapshot
                 filename = upload.get("filename", "")
                 if not filename.lower().endswith(".gxw") or "/" in filename or "\\" in filename or ":" in filename:
                     raise ValueError("Upload a GXW filename without a directory")
                 raw = decode_upload(upload.get("data_base64", ""))
                 program_name = wb.projects.program(project_id, version_id)["program"]
-                a, da, _ = read_project(source, program_name)
-                b, db, _ = read_project(raw, program_name)
-                same_program = not graph_diff(export_object_model(a, da), export_object_model(b, db))["has_changes"]
+                same_program = not graph_diff(read_snapshot(source, program_name)['model'],
+                                              read_snapshot(raw, program_name)['model'])['has_changes']
                 native_hash = hashlib.sha256(raw).hexdigest()
                 item["native_gxw"] = {"filename": filename, "sha256": native_hash, "size": len(raw),
                     "matches_source_bytes": native_hash == digest, "selected_program_matches": same_program}

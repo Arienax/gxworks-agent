@@ -800,6 +800,16 @@ class WorkbenchService:
 
     def _pending_proposal(self, pending, request_id, *, base_version_id=None, consent=None, direct_request=False,
                           change_scope=None):
+        if pending.get('type') == 'accept_fbd_candidate':
+            from application.fbd import unpack_candidate
+            # Runtime artifacts remain private; materialize them only inside
+            # managed state while the existing proposal service freezes them.
+            with tempfile.TemporaryDirectory(dir=self.state_dir, prefix='fbd-tool-') as directory:
+                prepared = unpack_candidate(pending['_fbd_candidate'], directory)
+                payload = {key: value for key, value in pending.items() if key != '_fbd_candidate'}
+                payload.update(prepared, type='accept_generated_program')
+                return self._pending_proposal(payload, request_id, base_version_id=base_version_id,
+                    consent=consent, direct_request=direct_request, change_scope=change_scope)
         kind = pending.get("type")
         if kind in ("accept_candidate_patch", "accept_generated_program"):
             action = "accept_local"
@@ -846,7 +856,7 @@ class WorkbenchService:
                        last_call_at=datetime.now(timezone.utc).isoformat())
         if name == "get_generation_context":
             current["generation_context_observed"] = True
-        if name in {"create_program_candidate", "patch_program"} and response.get("proposal_id"):
+        if name in {"create_program_candidate", "patch_program", "create_fbd_candidate"} and response.get("proposal_id"):
             current["candidate_proposal_id"] = response["proposal_id"]
         self._mcp_activity[project_id] = current
 
