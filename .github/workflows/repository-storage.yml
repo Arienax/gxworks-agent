@@ -16,8 +16,12 @@ concurrency:
 
 jobs:
   storage:
-    name: Git object size and evidence LFS policy
-    runs-on: ubuntu-latest
+    name: Git object size and evidence LFS policy (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 5
     env:
       GIT_LFS_SKIP_SMUDGE: '1'

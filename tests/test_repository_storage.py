@@ -1,5 +1,6 @@
 """Storage checks use real disposable Git repositories; no LFS/network needed."""
 from pathlib import Path
+import os
 import subprocess
 import tempfile
 import unittest
@@ -107,7 +108,8 @@ class RepositoryStorageTests(unittest.TestCase):
         self.assertEqual(storage.check(self.repo, base=self.base), [])
 
     def test_paths_with_spaces_and_newlines(self):
-        path = "research/evidence/a b\nc.zip"
+        # NTFS/Win32 forbids newline filenames; still exercise spaces there.
+        path = "research/evidence/a b.zip" if os.name == "nt" else "research/evidence/a b\nc.zip"
         self.add(path, b"PKsmall")
         self.commit()
         self.assertIn(repr(path), storage.check(self.repo, base=self.base)[0])
