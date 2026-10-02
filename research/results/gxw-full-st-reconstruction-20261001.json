@@ -1,0 +1,1411 @@
+{
+  "name": "gxw-full-st-reconstruction-20261001",
+  "scope": "Complete emitted Q03UDV ST program and selected inline FB bodies; source declarations/configuration only; research model",
+  "evidence_level": "verified within measured native profile",
+  "handling": "native-validated experimental compiler-output reproduction",
+  "production_safe": false,
+  "environment": {
+    "cpu": "Q03UDV",
+    "compiler_iec": "15.50",
+    "q_code_generator": "15.41",
+    "native_cpu": 209,
+    "native_versions": [
+      25
+    ]
+  },
+  "previous_checkpoint": "research/results/gxw-st-reference-contexts-20261001.json",
+  "after_fit": {
+    "stage": "after-fit; does not replace prospective evidence",
+    "summary": {
+      "total_cases": 18,
+      "byte_identical_cases": 18,
+      "native_accepted_cases": 17,
+      "bytes": 21199,
+      "instructions": 2168
+    },
+    "cases": [
+      {
+        "case": "original",
+        "source": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-original-st-source-20261001\\input.gxw",
+        "native": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-original-st-source-map-20261001\\native-1",
+        "bytes": 1375,
+        "instructions": 144,
+        "byte_identical": true,
+        "native_accepted": false
+      },
+      {
+        "case": "two-instances",
+        "source": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-reference-contexts-20261001\\two-instances\\input.gxw",
+        "native": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-reference-contexts-20261001\\two-instances\\native-1",
+        "bytes": 1075,
+        "instructions": 94,
+        "byte_identical": true,
+        "native_accepted": true
+      },
+      {
+        "case": "st-full-source-20261001-v1/word-string-compound",
+        "source": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v1\\word-string-compound\\input.gxw",
+        "native": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v1\\word-string-compound\\native-1",
+        "bytes": 840,
+        "instructions": 74,
+        "byte_identical": true,
+        "native_accepted": true
+      },
+      {
+        "case": "st-full-source-20261001-v1/boolean-blocks",
+        "source": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v1\\boolean-blocks\\input.gxw",
+        "native": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v1\\boolean-blocks\\native-1",
+        "bytes": 764,
+        "instructions": 79,
+        "byte_identical": true,
+        "native_accepted": true
+      },
+      {
+        "case": "st-full-source-20261001-v1/empty-branches",
+        "source": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v1\\empty-branches\\input.gxw",
+        "native": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v1\\empty-branches\\native-1",
+        "bytes": 394,
+        "instructions": 44,
+        "byte_identical": true,
+        "native_accepted": true
+      },
+      {
+        "case": "st-full-source-20261001-v1/reversed-two-instances",
+        "source": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v1\\reversed-two-instances\\input.gxw",
+        "native": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v1\\reversed-two-instances\\native-1",
+        "bytes": 1178,
+        "instructions": 104,
+        "byte_identical": true,
+        "native_accepted": true
+      },
+      {
+        "case": "st-unsigned-order-20261001-v1/word-with-else",
+        "source": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-unsigned-order-20261001-v1\\word-with-else\\input.gxw",
+        "native": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-unsigned-order-20261001-v1\\word-with-else\\native-1",
+        "bytes": 3196,
+        "instructions": 301,
+        "byte_identical": true,
+        "native_accepted": true
+      },
+      {
+        "case": "st-unsigned-order-20261001-v1/word-without-else",
+        "source": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-unsigned-order-20261001-v1\\word-without-else\\input.gxw",
+        "native": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-unsigned-order-20261001-v1\\word-without-else\\native-1",
+        "bytes": 2329,
+        "instructions": 228,
+        "byte_identical": true,
+        "native_accepted": true
+      },
+      {
+        "case": "st-unsigned-order-20261001-v1/boolean-evaluation-order",
+        "source": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-unsigned-order-20261001-v1\\boolean-evaluation-order\\input.gxw",
+        "native": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-unsigned-order-20261001-v1\\boolean-evaluation-order\\native-1",
+        "bytes": 1395,
+        "instructions": 203,
+        "byte_identical": true,
+        "native_accepted": true
+      },
+      {
+        "case": "st-full-source-20261001-v2/new-boundaries",
+        "source": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v2\\new-boundaries\\input.gxw",
+        "native": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v2\\new-boundaries\\native-1",
+        "bytes": 2529,
+        "instructions": 235,
+        "byte_identical": true,
+        "native_accepted": true
+      },
+      {
+        "case": "st-full-source-20261001-v2/mixed-full-source",
+        "source": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v2\\mixed-full-source\\input.gxw",
+        "native": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v2\\mixed-full-source\\native-1",
+        "bytes": 1118,
+        "instructions": 113,
+        "byte_identical": true,
+        "native_accepted": true
+      },
+      {
+        "case": "st-full-source-20261001-v2/empty-compound-branches",
+        "source": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v2\\empty-compound-branches\\input.gxw",
+        "native": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v2\\empty-compound-branches\\native-1",
+        "bytes": 416,
+        "instructions": 52,
+        "byte_identical": true,
+        "native_accepted": true
+      },
+      {
+        "case": "st-full-source-20261001-v3/timer-capture-lifetimes",
+        "source": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v3\\timer-capture-lifetimes\\input.gxw",
+        "native": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v3\\timer-capture-lifetimes\\native-1",
+        "bytes": 278,
+        "instructions": 33,
+        "byte_identical": true,
+        "native_accepted": true
+      },
+      {
+        "case": "st-full-source-20261001-v3/associated-logical-blocks",
+        "source": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v3\\associated-logical-blocks\\input.gxw",
+        "native": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v3\\associated-logical-blocks\\native-1",
+        "bytes": 1418,
+        "instructions": 189,
+        "byte_identical": true,
+        "native_accepted": true
+      },
+      {
+        "case": "st-full-source-20261001-v3/complete-two-instances",
+        "source": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v3\\complete-two-instances\\input.gxw",
+        "native": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v3\\complete-two-instances\\native-1",
+        "bytes": 1194,
+        "instructions": 106,
+        "byte_identical": true,
+        "native_accepted": true
+      },
+      {
+        "case": "st-full-source-20261001-v4/fresh-timer-arguments",
+        "source": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v4\\fresh-timer-arguments\\input.gxw",
+        "native": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v4\\fresh-timer-arguments\\native-1",
+        "bytes": 260,
+        "instructions": 31,
+        "byte_identical": true,
+        "native_accepted": true
+      },
+      {
+        "case": "st-full-source-20261001-v4/out-enable-arguments",
+        "source": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v4\\out-enable-arguments\\input.gxw",
+        "native": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v4\\out-enable-arguments\\native-1",
+        "bytes": 194,
+        "instructions": 26,
+        "byte_identical": true,
+        "native_accepted": true
+      },
+      {
+        "case": "st-full-source-20261001-v4/whole-program-new",
+        "source": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v4\\whole-program-new\\input.gxw",
+        "native": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v4\\whole-program-new\\native-1",
+        "bytes": 1246,
+        "instructions": 112,
+        "byte_identical": true,
+        "native_accepted": true
+      }
+    ]
+  },
+  "prospective": {
+    "total_cases": 16,
+    "predicted_cases": 15,
+    "complete_byte_matches": 7,
+    "counterexamples": 8,
+    "initially_unsupported": 1,
+    "accepted_saved_reopened_cases": 16,
+    "cases": [
+      {
+        "group": "st-full-source-20261001-v1",
+        "case": "word-string-compound",
+        "before_native_handling": "predicted",
+        "before_native_bytes": 748,
+        "reason": null,
+        "comparison": {
+          "byte_identical": false,
+          "predicted_bytes": 748,
+          "native_bytes": 840,
+          "predicted_instructions": 66,
+          "native_instructions": 74,
+          "first_difference": {
+            "index": 0,
+            "predicted": {
+              "offset": 0,
+              "raw": "06400303100604b40c0405ea008005",
+              "kind": "instruction",
+              "op": "LD>=",
+              "args": [
+                "W0C",
+                "H8000"
+              ]
+            },
+            "native": {
+              "offset": 0,
+              "raw": "06400304100604b40c0404e80004",
+              "kind": "instruction",
+              "op": "LD<",
+              "args": [
+                "W0C",
+                "K0"
+              ]
+            }
+          }
+        },
+        "native_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_counts": {
+          "3": 4
+        },
+        "diagnostic_codes": [
+          84709414,
+          84869513
+        ],
+        "reopen_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "reopen_channels": [
+          {
+            "file": "pcode-0-0.bin",
+            "bytes": 840,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-1.bin",
+            "bytes": 0,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-2.bin",
+            "bytes": 0,
+            "byte_identical": true
+          }
+        ]
+      },
+      {
+        "group": "st-full-source-20261001-v1",
+        "case": "boolean-blocks",
+        "before_native_handling": "predicted",
+        "before_native_bytes": 767,
+        "reason": null,
+        "comparison": {
+          "byte_identical": false,
+          "predicted_bytes": 767,
+          "native_bytes": 764,
+          "predicted_instructions": 80,
+          "native_instructions": 79,
+          "first_difference": {
+            "index": 0,
+            "predicted": {
+              "offset": 0,
+              "raw": "03000304a00604",
+              "kind": "instruction",
+              "op": "LD",
+              "args": [
+                "B6"
+              ]
+            },
+            "native": {
+              "offset": 0,
+              "raw": "03000304a00104",
+              "kind": "instruction",
+              "op": "LD",
+              "args": [
+                "B1"
+              ]
+            }
+          }
+        },
+        "native_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_counts": {
+          "3": 3
+        },
+        "diagnostic_codes": [
+          84869513
+        ],
+        "reopen_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "reopen_channels": [
+          {
+            "file": "pcode-0-0.bin",
+            "bytes": 764,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-1.bin",
+            "bytes": 0,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-2.bin",
+            "bytes": 0,
+            "byte_identical": true
+          }
+        ]
+      },
+      {
+        "group": "st-full-source-20261001-v1",
+        "case": "empty-branches",
+        "before_native_handling": "predicted",
+        "before_native_bytes": 322,
+        "reason": null,
+        "comparison": {
+          "byte_identical": false,
+          "predicted_bytes": 322,
+          "native_bytes": 394,
+          "predicted_instructions": 37,
+          "native_instructions": 44,
+          "first_difference": {
+            "index": 16,
+            "predicted": {
+              "offset": 127,
+              "raw": "06400303100604b4270405eaffff05",
+              "kind": "instruction",
+              "op": "LD>=",
+              "args": [
+                "W27",
+                "H0FFFF"
+              ]
+            },
+            "native": {
+              "offset": 127,
+              "raw": "06400303100604b4270404e80004",
+              "kind": "instruction",
+              "op": "LD>=",
+              "args": [
+                "W27",
+                "K0"
+              ]
+            }
+          }
+        },
+        "native_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_counts": {
+          "3": 2
+        },
+        "diagnostic_codes": [
+          84709414
+        ],
+        "reopen_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "reopen_channels": [
+          {
+            "file": "pcode-0-0.bin",
+            "bytes": 394,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-1.bin",
+            "bytes": 0,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-2.bin",
+            "bytes": 0,
+            "byte_identical": true
+          }
+        ]
+      },
+      {
+        "group": "st-full-source-20261001-v1",
+        "case": "reversed-two-instances",
+        "before_native_handling": "predicted",
+        "before_native_bytes": 1178,
+        "reason": null,
+        "comparison": {
+          "byte_identical": true,
+          "predicted_bytes": 1178,
+          "native_bytes": 1178,
+          "predicted_instructions": 104,
+          "native_instructions": 104,
+          "first_difference": null
+        },
+        "native_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_counts": {
+          "3": 4
+        },
+        "diagnostic_codes": [
+          84869513
+        ],
+        "reopen_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "reopen_channels": [
+          {
+            "file": "pcode-0-0.bin",
+            "bytes": 1178,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-1.bin",
+            "bytes": 0,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-2.bin",
+            "bytes": 0,
+            "byte_identical": true
+          }
+        ]
+      },
+      {
+        "group": "st-unsigned-order-20261001-v1",
+        "case": "word-with-else",
+        "before_native_handling": "predicted",
+        "before_native_bytes": 2233,
+        "reason": null,
+        "comparison": {
+          "byte_identical": false,
+          "predicted_bytes": 2233,
+          "native_bytes": 3196,
+          "predicted_instructions": 219,
+          "native_instructions": 301,
+          "first_difference": {
+            "index": 0,
+            "predicted": {
+              "offset": 0,
+              "raw": "06400304100604b4270404e80004",
+              "kind": "instruction",
+              "op": "LD<",
+              "args": [
+                "W27",
+                "K0"
+              ]
+            },
+            "native": {
+              "offset": 0,
+              "raw": "06400303100604b4270404e80004",
+              "kind": "instruction",
+              "op": "LD>=",
+              "args": [
+                "W27",
+                "K0"
+              ]
+            }
+          }
+        },
+        "native_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_counts": {
+          "3": 26
+        },
+        "diagnostic_codes": [
+          84709414
+        ],
+        "reopen_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "reopen_channels": [
+          {
+            "file": "pcode-0-0.bin",
+            "bytes": 3196,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-1.bin",
+            "bytes": 0,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-2.bin",
+            "bytes": 0,
+            "byte_identical": true
+          }
+        ]
+      },
+      {
+        "group": "st-unsigned-order-20261001-v1",
+        "case": "word-without-else",
+        "before_native_handling": "predicted",
+        "before_native_bytes": 1297,
+        "reason": null,
+        "comparison": {
+          "byte_identical": false,
+          "predicted_bytes": 1297,
+          "native_bytes": 2329,
+          "predicted_instructions": 123,
+          "native_instructions": 228,
+          "first_difference": {
+            "index": 1,
+            "predicted": {
+              "offset": 14,
+              "raw": "054d02000505d0000805",
+              "kind": "instruction",
+              "op": "CJ",
+              "args": [
+                "P2048"
+              ]
+            },
+            "native": {
+              "offset": 14,
+              "raw": "06400304110604b4270404e80004",
+              "kind": "instruction",
+              "op": "AND<",
+              "args": [
+                "W27",
+                "K0"
+              ]
+            }
+          }
+        },
+        "native_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_counts": {
+          "3": 27
+        },
+        "diagnostic_codes": [
+          84709414
+        ],
+        "reopen_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "reopen_channels": [
+          {
+            "file": "pcode-0-0.bin",
+            "bytes": 2329,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-1.bin",
+            "bytes": 0,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-2.bin",
+            "bytes": 0,
+            "byte_identical": true
+          }
+        ]
+      },
+      {
+        "group": "st-unsigned-order-20261001-v1",
+        "case": "boolean-evaluation-order",
+        "before_native_handling": "unsupported",
+        "before_native_bytes": null,
+        "reason": "enabled instruction requires BOOL, a comparison, or literal 0/1",
+        "comparison": null,
+        "native_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_counts": {},
+        "diagnostic_codes": [],
+        "reopen_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "reopen_channels": [
+          {
+            "file": "pcode-0-0.bin",
+            "bytes": 1395,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-1.bin",
+            "bytes": 0,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-2.bin",
+            "bytes": 0,
+            "byte_identical": true
+          }
+        ]
+      },
+      {
+        "group": "st-full-source-20261001-v2",
+        "case": "new-boundaries",
+        "before_native_handling": "predicted",
+        "before_native_bytes": 2529,
+        "reason": null,
+        "comparison": {
+          "byte_identical": true,
+          "predicted_bytes": 2529,
+          "native_bytes": 2529,
+          "predicted_instructions": 235,
+          "native_instructions": 235,
+          "first_difference": null
+        },
+        "native_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_counts": {
+          "3": 22
+        },
+        "diagnostic_codes": [
+          84709414
+        ],
+        "reopen_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "reopen_channels": [
+          {
+            "file": "pcode-0-0.bin",
+            "bytes": 2529,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-1.bin",
+            "bytes": 0,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-2.bin",
+            "bytes": 0,
+            "byte_identical": true
+          }
+        ]
+      },
+      {
+        "group": "st-full-source-20261001-v2",
+        "case": "mixed-full-source",
+        "before_native_handling": "predicted",
+        "before_native_bytes": 1107,
+        "reason": null,
+        "comparison": {
+          "byte_identical": false,
+          "predicted_bytes": 1107,
+          "native_bytes": 1118,
+          "predicted_instructions": 111,
+          "native_instructions": 113,
+          "first_difference": {
+            "index": 44,
+            "predicted": {
+              "offset": 448,
+              "raw": "03000304a00604",
+              "kind": "instruction",
+              "op": "LD",
+              "args": [
+                "B6"
+              ]
+            },
+            "native": {
+              "offset": 448,
+              "raw": "03000304a00204",
+              "kind": "instruction",
+              "op": "LD",
+              "args": [
+                "B2"
+              ]
+            }
+          }
+        },
+        "native_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_counts": {
+          "3": 7
+        },
+        "diagnostic_codes": [
+          84709414,
+          84869513
+        ],
+        "reopen_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "reopen_channels": [
+          {
+            "file": "pcode-0-0.bin",
+            "bytes": 1118,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-1.bin",
+            "bytes": 0,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-2.bin",
+            "bytes": 0,
+            "byte_identical": true
+          }
+        ]
+      },
+      {
+        "group": "st-full-source-20261001-v2",
+        "case": "empty-compound-branches",
+        "before_native_handling": "predicted",
+        "before_native_bytes": 416,
+        "reason": null,
+        "comparison": {
+          "byte_identical": false,
+          "predicted_bytes": 416,
+          "native_bytes": 416,
+          "predicted_instructions": 52,
+          "native_instructions": 52,
+          "first_difference": {
+            "index": 22,
+            "predicted": {
+              "offset": 186,
+              "raw": "06400303100604b40c0404e80004",
+              "kind": "instruction",
+              "op": "LD>=",
+              "args": [
+                "W0C",
+                "K0"
+              ]
+            },
+            "native": {
+              "offset": 186,
+              "raw": "031903",
+              "kind": "instruction",
+              "op": "ANB",
+              "args": []
+            }
+          }
+        },
+        "native_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_counts": {
+          "3": 4
+        },
+        "diagnostic_codes": [
+          84709414
+        ],
+        "reopen_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "reopen_channels": [
+          {
+            "file": "pcode-0-0.bin",
+            "bytes": 416,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-1.bin",
+            "bytes": 0,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-2.bin",
+            "bytes": 0,
+            "byte_identical": true
+          }
+        ]
+      },
+      {
+        "group": "st-full-source-20261001-v3",
+        "case": "timer-capture-lifetimes",
+        "before_native_handling": "predicted",
+        "before_native_bytes": 286,
+        "reason": null,
+        "comparison": {
+          "byte_identical": false,
+          "predicted_bytes": 286,
+          "native_bytes": 278,
+          "predicted_instructions": 34,
+          "native_instructions": 33,
+          "first_difference": {
+            "index": 6,
+            "predicted": {
+              "offset": 48,
+              "raw": "0320030590fb2305",
+              "kind": "instruction",
+              "op": "OUT",
+              "args": [
+                "M9211"
+              ]
+            },
+            "native": {
+              "offset": 48,
+              "raw": "0320030590fa2305",
+              "kind": "instruction",
+              "op": "OUT",
+              "args": [
+                "M9210"
+              ]
+            }
+          }
+        },
+        "native_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_counts": {
+          "3": 1
+        },
+        "diagnostic_codes": [
+          84709414
+        ],
+        "reopen_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "reopen_channels": [
+          {
+            "file": "pcode-0-0.bin",
+            "bytes": 278,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-1.bin",
+            "bytes": 0,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-2.bin",
+            "bytes": 0,
+            "byte_identical": true
+          }
+        ]
+      },
+      {
+        "group": "st-full-source-20261001-v3",
+        "case": "associated-logical-blocks",
+        "before_native_handling": "predicted",
+        "before_native_bytes": 1418,
+        "reason": null,
+        "comparison": {
+          "byte_identical": true,
+          "predicted_bytes": 1418,
+          "native_bytes": 1418,
+          "predicted_instructions": 189,
+          "native_instructions": 189,
+          "first_difference": null
+        },
+        "native_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_counts": {
+          "3": 8
+        },
+        "diagnostic_codes": [
+          84709414
+        ],
+        "reopen_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "reopen_channels": [
+          {
+            "file": "pcode-0-0.bin",
+            "bytes": 1418,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-1.bin",
+            "bytes": 0,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-2.bin",
+            "bytes": 0,
+            "byte_identical": true
+          }
+        ]
+      },
+      {
+        "group": "st-full-source-20261001-v3",
+        "case": "complete-two-instances",
+        "before_native_handling": "predicted",
+        "before_native_bytes": 1194,
+        "reason": null,
+        "comparison": {
+          "byte_identical": true,
+          "predicted_bytes": 1194,
+          "native_bytes": 1194,
+          "predicted_instructions": 106,
+          "native_instructions": 106,
+          "first_difference": null
+        },
+        "native_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_counts": {
+          "3": 7
+        },
+        "diagnostic_codes": [
+          84709414,
+          84869513
+        ],
+        "reopen_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "reopen_channels": [
+          {
+            "file": "pcode-0-0.bin",
+            "bytes": 1194,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-1.bin",
+            "bytes": 0,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-2.bin",
+            "bytes": 0,
+            "byte_identical": true
+          }
+        ]
+      },
+      {
+        "group": "st-full-source-20261001-v4",
+        "case": "fresh-timer-arguments",
+        "before_native_handling": "predicted",
+        "before_native_bytes": 260,
+        "reason": null,
+        "comparison": {
+          "byte_identical": true,
+          "predicted_bytes": 260,
+          "native_bytes": 260,
+          "predicted_instructions": 31,
+          "native_instructions": 31,
+          "first_difference": null
+        },
+        "native_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_counts": {
+          "3": 2
+        },
+        "diagnostic_codes": [
+          84709414
+        ],
+        "reopen_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "reopen_channels": [
+          {
+            "file": "pcode-0-0.bin",
+            "bytes": 260,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-1.bin",
+            "bytes": 0,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-2.bin",
+            "bytes": 0,
+            "byte_identical": true
+          }
+        ]
+      },
+      {
+        "group": "st-full-source-20261001-v4",
+        "case": "out-enable-arguments",
+        "before_native_handling": "predicted",
+        "before_native_bytes": 194,
+        "reason": null,
+        "comparison": {
+          "byte_identical": true,
+          "predicted_bytes": 194,
+          "native_bytes": 194,
+          "predicted_instructions": 26,
+          "native_instructions": 26,
+          "first_difference": null
+        },
+        "native_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_counts": {
+          "3": 1
+        },
+        "diagnostic_codes": [
+          84709414
+        ],
+        "reopen_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "reopen_channels": [
+          {
+            "file": "pcode-0-0.bin",
+            "bytes": 194,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-1.bin",
+            "bytes": 0,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-2.bin",
+            "bytes": 0,
+            "byte_identical": true
+          }
+        ]
+      },
+      {
+        "group": "st-full-source-20261001-v4",
+        "case": "whole-program-new",
+        "before_native_handling": "predicted",
+        "before_native_bytes": 1246,
+        "reason": null,
+        "comparison": {
+          "byte_identical": true,
+          "predicted_bytes": 1246,
+          "native_bytes": 1246,
+          "predicted_instructions": 112,
+          "native_instructions": 112,
+          "first_difference": null
+        },
+        "native_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_counts": {
+          "3": 6
+        },
+        "diagnostic_codes": [
+          84709414,
+          84869513
+        ],
+        "reopen_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "reopen_channels": [
+          {
+            "file": "pcode-0-0.bin",
+            "bytes": 1246,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-1.bin",
+            "bytes": 0,
+            "byte_identical": true
+          },
+          {
+            "file": "pcode-0-2.bin",
+            "bytes": 0,
+            "byte_identical": true
+          }
+        ]
+      }
+    ]
+  },
+  "final_unseen_holdouts": [
+    {
+      "group": "st-full-source-20261001-v4",
+      "case": "fresh-timer-arguments",
+      "before_native_handling": "predicted",
+      "before_native_bytes": 260,
+      "reason": null,
+      "comparison": {
+        "byte_identical": true,
+        "predicted_bytes": 260,
+        "native_bytes": 260,
+        "predicted_instructions": 31,
+        "native_instructions": 31,
+        "first_difference": null
+      },
+      "native_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "backend_rejected": false,
+      "diagnostic_counts": {
+        "3": 2
+      },
+      "diagnostic_codes": [
+        84709414
+      ],
+      "reopen_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_channels": [
+        {
+          "file": "pcode-0-0.bin",
+          "bytes": 260,
+          "byte_identical": true
+        },
+        {
+          "file": "pcode-0-1.bin",
+          "bytes": 0,
+          "byte_identical": true
+        },
+        {
+          "file": "pcode-0-2.bin",
+          "bytes": 0,
+          "byte_identical": true
+        }
+      ]
+    },
+    {
+      "group": "st-full-source-20261001-v4",
+      "case": "out-enable-arguments",
+      "before_native_handling": "predicted",
+      "before_native_bytes": 194,
+      "reason": null,
+      "comparison": {
+        "byte_identical": true,
+        "predicted_bytes": 194,
+        "native_bytes": 194,
+        "predicted_instructions": 26,
+        "native_instructions": 26,
+        "first_difference": null
+      },
+      "native_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "backend_rejected": false,
+      "diagnostic_counts": {
+        "3": 1
+      },
+      "diagnostic_codes": [
+        84709414
+      ],
+      "reopen_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_channels": [
+        {
+          "file": "pcode-0-0.bin",
+          "bytes": 194,
+          "byte_identical": true
+        },
+        {
+          "file": "pcode-0-1.bin",
+          "bytes": 0,
+          "byte_identical": true
+        },
+        {
+          "file": "pcode-0-2.bin",
+          "bytes": 0,
+          "byte_identical": true
+        }
+      ]
+    },
+    {
+      "group": "st-full-source-20261001-v4",
+      "case": "whole-program-new",
+      "before_native_handling": "predicted",
+      "before_native_bytes": 1246,
+      "reason": null,
+      "comparison": {
+        "byte_identical": true,
+        "predicted_bytes": 1246,
+        "native_bytes": 1246,
+        "predicted_instructions": 112,
+        "native_instructions": 112,
+        "first_difference": null
+      },
+      "native_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "backend_rejected": false,
+      "diagnostic_counts": {
+        "3": 6
+      },
+      "diagnostic_codes": [
+        84709414,
+        84869513
+      ],
+      "reopen_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_channels": [
+        {
+          "file": "pcode-0-0.bin",
+          "bytes": 1246,
+          "byte_identical": true
+        },
+        {
+          "file": "pcode-0-1.bin",
+          "bytes": 0,
+          "byte_identical": true
+        },
+        {
+          "file": "pcode-0-2.bin",
+          "bytes": 0,
+          "byte_identical": true
+        }
+      ]
+    }
+  ],
+  "source_inventory_isolation": [
+    {
+      "case": "original",
+      "input": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-original-st-source-20261001\\input.gxw",
+      "source_payload_count": 10,
+      "source_payload_names": [
+        "BoxID_sample_project.prj",
+        "Control.gh",
+        "Keypad.gh",
+        "Lcd.gh",
+        "POU_01.Labels.lh",
+        "POU_01.Program.pou",
+        "User_editor.gh",
+        "Keypad.Labels.lh",
+        "Keypad.Program.pou",
+        "User_help_var.gh"
+      ],
+      "excluded_payload_count": 42,
+      "bytes": 1375,
+      "detached_inventory_byte_exact": true,
+      "unreadable_cache_objects_ignored": true
+    },
+    {
+      "case": "two-instances",
+      "input": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-reference-contexts-20261001\\two-instances\\input.gxw",
+      "source_payload_count": 10,
+      "source_payload_names": [
+        "BoxID_sample_project.prj",
+        "Control.gh",
+        "Keypad.gh",
+        "Lcd.gh",
+        "POU_01.Labels.lh",
+        "POU_01.Program.pou",
+        "User_editor.gh",
+        "Keypad.Labels.lh",
+        "Keypad.Program.pou",
+        "User_help_var.gh"
+      ],
+      "excluded_payload_count": 42,
+      "bytes": 1075,
+      "detached_inventory_byte_exact": true,
+      "unreadable_cache_objects_ignored": true
+    },
+    {
+      "case": "whole-program-new",
+      "input": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-full-source-20261001-v4\\whole-program-new\\input.gxw",
+      "source_payload_count": 10,
+      "source_payload_names": [
+        "BoxID_sample_project.prj",
+        "Control.gh",
+        "Keypad.gh",
+        "Lcd.gh",
+        "POU_01.Labels.lh",
+        "POU_01.Program.pou",
+        "User_editor.gh",
+        "Keypad.Labels.lh",
+        "Keypad.Program.pou",
+        "User_help_var.gh"
+      ],
+      "excluded_payload_count": 42,
+      "bytes": 1246,
+      "detached_inventory_byte_exact": true,
+      "unreadable_cache_objects_ignored": true
+    }
+  ],
+  "independent_native_steps": {
+    "prefix_step_queries": 112,
+    "prefix_step_matches": 112,
+    "whole_code_native_listing_exact": true,
+    "whole_code_instructions": 112,
+    "post_compile_source_points": 48,
+    "saved_source_point_matches": 48,
+    "debug_reconstruction_exact": true
+  },
+  "rules": [
+    "Only source metadata, declaration and POU payloads are admitted; detached inventory produces the same complete code.",
+    "Local/global names must be unique; native same-name refusal remains preserved by the previous checkpoint.",
+    "BOOL equality retains literal SM400/SM401 contacts and expanded Boolean blocks.",
+    "Scalar WORD ordering expands through signed comparisons/sign tests; 32767 greater-than has an observed sign-only form.",
+    "Same logical operators associate left; a right logical subtree is prepared before an atomic left term, while two atomic comparisons retain source order.",
+    "Empty branches alter predicate polarity and label allocation; STRING comparisons and quoted punctuation remain typed.",
+    "Computed OUT_T enables allocate fresh static bit buffers at each call; scalar NOT remains direct. OUT Boolean destination uses the condition directly."
+  ],
+  "method_reference": {
+    "repository": "https://github.com/purinzan/gx3-cli-mcp",
+    "reviewed_files": [
+      "gx3cli/gx3_intermediate_tool.py",
+      "gx3cli/gx3_roundtrip.py",
+      "gx3cli/gx3_analysis_state.py",
+      "gx3cli/gx3_validation_ledger.py"
+    ],
+    "applied": [
+      "Preserve raw payloads outside targeted edits.",
+      "Keep unavailable/unsupported/failed checks separate from successful zero findings.",
+      "Freeze predictions and failure inputs before native comparison; retain counterexamples after repair.",
+      "Use direct complete bytes and a separate native decoder/step reader rather than decoder self-status."
+    ],
+    "boundary": "No GX3 container, SQLite, ladder or instruction format facts transferred. GX3 equivalent access sets alone do not certify Boolean semantics."
+  },
+  "limitations": [
+    "One Q03UDV source-project origin; native-supported authored variants do not establish independent origin coverage.",
+    "The original unmodified program still fails the observed 11 duplicate-coil checks despite exact complete code reproduction.",
+    "Other CPU families/versions, full project/compiler-state regeneration, arbitrary libraries/types and generic PLC runtime equivalence remain unsupported.",
+    "ASCII literals only; no escaped quotes, indexed timer enable or generic standard-library lowering claim.",
+    "After-fit matches are separate from prospective matches; eight failed predictions and one initial unsupported case remain intact.",
+    "Source points with multiple observations on one physical line can be ambiguous; no arbitrary choice of native marker is made.",
+    "Original project/FB source and full native traces remain local. Vendor DLLs and helper executables are excluded from the public archive."
+  ],
+  "public_archive": "research/evidence/gxw-full-st-reconstruction-20261001.zip",
+  "local_archive": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\gxw-full-st-reconstruction-20261001-local.zip",
+  "archive_contents": {
+    "public_files": 22,
+    "local_files": 3242,
+    "public_bytes": 82427,
+    "local_bytes": 31239427,
+    "archived_file_bytes_verified": true
+  }
+}

@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-01",
+  "evidence_level": "verified original native boundaries and machine-byte observations within recorded scope",
+  "handling": "raw-preserved PCode tokens; decoded native cell projection and bounded mode-9 emission; unsupported and undefined cases retained",
+  "environment": {
+    "os": "Windows",
+    "converter": "ECCodeGeneratorFX2.dll",
+    "file_version": "15.31",
+    "adapter_cpu": 521,
+    "cpu_class": 32,
+    "open_mode": 0,
+    "versions": [],
+    "emission_mode": 9
+  },
+  "static_tables": {
+    "opcode_mapping_rows": 451,
+    "device_mapping_rows": 112,
+    "state_bytes": 88,
+    "cell_bytes": 8,
+    "cells": 11,
+    "auxiliary_bytes": 68,
+    "dispatch_rows": 36,
+    "operation_rows": 77,
+    "application_rows": 310
+  },
+  "full_project": {
+    "independent_original_projects": 1,
+    "source": "https://github.com/Serhioromano/gxw2-libraries",
+    "prior_acceptance": "research/results/gxw-fx-accepted-semantics-20261001.json",
+    "raw_records": 4196,
+    "operand_tokens": 6672,
+    "native_cells_exact": 4196,
+    "native_machine_bytes_exact": 4196,
+    "header_rewrites_byte_exact": 4196
+  },
+  "fresh_raw_cases": {
+    "requests": 3798,
+    "earlier_cell_probe": {
+      "requests": 1727,
+      "observed_emitters": 1483,
+      "cells_exact": 1483,
+      "model_saved_before_native_calls": true
+    },
+    "prospective_machine_probe": {
+      "requests": 2071,
+      "model_saved_before_native_calls": true,
+      "observed_emitters": 1637,
+      "machine_bytes_exact": 1637,
+      "explicit_unsupported_unmapped_headers": 359,
+      "unpredicted_public_accepts": 0
+    },
+    "frozen_replay": {
+      "counts": {
+        "source-projections": 3439,
+        "machine-bytes-exact": 3119,
+        "native-emission-exact": 3120,
+        "header-rewrite-exact": 3090,
+        "native-emitter-refusals": 30,
+        "pre-emission-refusals": 319,
+        "undefined-output-words": 1,
+        "explicit-unsupported": 359
+      },
+      "reached_instruction_keys": 306,
+      "observed_kinds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        9,
+        17,
+        18,
+        21,
+        22,
+        23,
+        25,
+        26,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        48,
+        49
+      ]
+    }
+  },
+  "earlier_model_failure": {
+    "machine_encoding_attempt": 1,
+    "differences": 22,
+    "repairs": [
+      "Corrected S versus T compact encoding branches.",
+      "Corrected M8000..M8255 and M8256..M8511 boundaries.",
+      "Restored the C000 flag for one-word OUT."
+    ],
+    "original_differences_local": "fx-source-machine-crosscheck-20261001-v1/differences.json"
+  },
+  "header_rewrite": {
+    "public_accepted_records": 7286,
+    "exact_outputs": 7286,
+    "all_operand_bytes_preserved": true,
+    "earlier_canonical_short_header_failures": 122,
+    "native_short_header_preserves_uninterpreted_last_byte": true,
+    "evidence_kind": "Static native routine and post-hoc comparison; earlier public checks are not predicted"
+  },
+  "discoveries": [
+    "Native 88-byte instruction state consists of eleven eight-byte cells; double-word operands consume pairs and retain Z/V identity.",
+    "Mode-9 emission uses a 36-row dispatch table, 77 operation rows and 310 two-byte application entries.",
+    "Complete raw records predict all 4196 full-project native machine bytes and word counts without native calls.",
+    "DTBL function 152 in double-word mode inserts four K0 cells before emission; input operand-cell count alone does not determine its width.",
+    "Original D0, D65536 and D16777216 raw tokens can yield identical native cells and machine bytes. Native conversion is not lossless or a numeric-range validator.",
+    "A public-accepted comparative-header case reaches uninitialized operand cells. Undefined emitted words remain explicit rather than normalized to zero.",
+    "A native one-word short header retains its raw final byte. Only the observed width/header rewrite is reconstructed; operand bytes remain exact."
+  ],
+  "limitations": [
+    "Converter 15.31, CPU 521/class32 and mode9 only; no other FX or Q formats inferred.",
+    "Only one independent original full-project source. Fresh raw cases widen grammar coverage, not project diversity.",
+    "No strings, opaque reference operands, M./U. headers or other unmeasured operand categories are decoded by this cell model.",
+    "A positive emitter width or public raw check does not establish address range, source validity, whole-project acceptance or execution equivalence.",
+    "One synthetic emission has undefined output words; its raw state, count and public output are retained without claiming complete machine-byte decoding.",
+    "The width-rewrite model is conditional on earlier checks reaching the inspected path; earlier refusal statuses remain native observations.",
+    "No PLC execution or product writer permission expanded. Product code does not import the research models."
+  ],
+  "proof": {
+    "public_archive": "research/evidence/gxw-fx-machine-grammar-20261001.zip",
+    "local_archive": "research/experiments/sfc-graph-20260926/public-corpus-discovery/gxw-fx-machine-grammar-20261001-local.zip",
+    "portable_witnesses": 3798,
+    "frozen_replay": {
+      "counts": {
+        "source-projections": 3439,
+        "machine-bytes-exact": 3119,
+        "native-emission-exact": 3120,
+        "header-rewrite-exact": 3090,
+        "native-emitter-refusals": 30,
+        "pre-emission-refusals": 319,
+        "undefined-output-words": 1,
+        "explicit-unsupported": 359
+      },
+      "reached_instruction_keys": 306,
+      "observed_kinds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        9,
+        17,
+        18,
+        21,
+        22,
+        23,
+        25,
+        26,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        48,
+        49
+      ]
+    }
+  }
+}

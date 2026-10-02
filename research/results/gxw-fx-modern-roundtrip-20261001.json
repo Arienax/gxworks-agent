@@ -1,0 +1,79 @@
+{
+  "converter": "15.31",
+  "cpus": [
+    520,
+    521
+  ],
+  "modes": [
+    8,
+    9
+  ],
+  "scope": "Independent machine decoding and separate public reemission; GX Works3 methods only, no format transfer",
+  "original_instruction_pcode_machine_pcode_byte_exact": 4625,
+  "original_public_machine_roundtrip_exact": 4625,
+  "native_independent_synthetic_decoder_records_exact": 5934,
+  "native_public_reemission_predictions_exact": 10333,
+  "synthetic_canonical_machine_changes": 62,
+  "synthetic_changed_machine_groups": 31,
+  "synthetic_native_reverse_refusals": 66,
+  "opaque_source_gaps": 36,
+  "opaque_public_output_changes": 36,
+  "prior_valid_address_propagation_rejected": true,
+  "project_patches": {
+    "projects": 7,
+    "cpu": 520,
+    "source_proposals": {
+      "one_byte_contact_changes": 6,
+      "empty_body_insertion": 1
+    },
+    "original_instruction_records": 429,
+    "original_opaque_metadata_records": 17,
+    "compiled_pcode_exact": 7,
+    "saved_source_body_exact": 7,
+    "fresh_reopen_completed": 7,
+    "full_program_check_accepted": 4,
+    "original_full_check_rejections_retained": 3,
+    "error_diagnostics_unchanged_from_original": 7,
+    "corrected_reader_false_negatives": 1,
+    "opaque_nonzero_trailer_extents": [
+      20,
+      24
+    ],
+    "native_opaque_footer_recompile_full_check_save_reopen": 2,
+    "product_reader_verification": {
+      "test_owner": "tests/test_gxw_lossless.py",
+      "passed": 326
+    },
+    "scope": "Specific offline copied-project proposals. Six retain file extent and change one byte; one inserts LD M0 / OUT M1 before unchanged END. Unrelated stream payloads preserved. Fresh reopen was observed separately and does not imply a second compilation or controller execution."
+  },
+  "cold_replay": {
+    "decoder_groups": 5810,
+    "complete_decoder_groups": 5774,
+    "native_decoder_records_exact": 5934,
+    "native_reverse_refusals": 66,
+    "opaque_source_gaps": 36,
+    "opaque_public_output_changes": 36,
+    "native_reemission_records_exact": 5708,
+    "canonical_reemission_groups": 5708,
+    "canonical_machine_roundtrip_exact": 5646,
+    "canonical_native_machine_changes": 62,
+    "opaque_trailer_witnesses": 2
+  },
+  "public_archive": {
+    "entries": 62,
+    "bytes": 1016163,
+    "entry_bytes_exact": true
+  },
+  "local_archive": {
+    "entries": 705,
+    "bytes": 17627507,
+    "entry_bytes_exact": true
+  },
+  "limitations": [
+    "Opaque uninitialized branches stay unsupported despite native success; changed outputs retained verbatim",
+    "Canonical machine/PCode conversion cannot replace original raw tokens for lossless editing",
+    "Three modified original projects retain their original complete-check error diagnostics",
+    "No controller execution, device-range certification or whole-family writer validation"
+  ],
+  "original_distribution": "Original third-party project bodies and native project work remain in the local archive"
+}

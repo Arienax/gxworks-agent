@@ -105,9 +105,8 @@ def _bind_function_blocks(programs, declarations, mapping, payloads):
                 raise GXWFormatError(f"missing local declaration table: {local_name}")
             local = documents[local_name]
             hits = [(local_name, r) for r in local.rows if r.name.casefold() == key]
-            if not hits:
-                hits = [(name, row) for name, doc in documents.items() if doc.scope == "global"
-                        for row in doc.rows if row.name.casefold() == key]
+            hits += [(name, row) for name, doc in documents.items() if doc.scope == "global"
+                     for row in doc.rows if row.name.casefold() == key]
             if len(hits) > 1:
                 raise GXWFormatError(f"ambiguous FB declaration: {node.symbol}")
             target = hits[0][0] if hits else local_name
@@ -153,13 +152,13 @@ def build_gxw_project(baseline: bytes, programs: StructuredProgram | Mapping[str
         original = nested_payloads[stream]
         if model.raw != original:
             raise GXWFormatError(f"stale or foreign model source: {logical}")
-        parsed = parse_structured_pou(original, logical_name=logical)
+        parsed = parse_structured_pou(original, logical_name=logical, preserve_unsupported_records=True)
         # Guarantee opaque source bytes survive a no-op serialization. This
         # rejects parser-accepted layouts that the serializer would normalize.
         if serialize_structured_pou(parsed) != original:
             raise GXWFormatError(f"source is not losslessly serializable: {logical}")
         new = serialize_structured_pou(model)
-        rebuilt = parse_structured_pou(new, logical_name=logical)
+        rebuilt = parse_structured_pou(new, logical_name=logical, preserve_unsupported_records=True)
         replacements[logical] = (stream, original, new)
         objects.append({"object": logical, "stream": stream,
                         "old_length": len(original), "new_length": len(new),

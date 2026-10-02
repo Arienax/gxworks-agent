@@ -129,7 +129,10 @@ def test_model_budget_reserves_output_and_keeps_retrieval_separate():
     assert budget["reserved_output_tokens"] == 32_768
     assert budget["usable_input_tokens"] < budget["context_window"]
     assert budget["retrieval_query_token_budget"] <= 24_000
-    assert budget["rag_evidence_token_budget"] <= 32_000
+    assert 32_000 < budget["rag_evidence_token_budget"] <= 131_072
+    assert budget["rag_evidence_token_budget"] == min(
+        131_072, budget["usable_input_tokens"] // 8
+    )
 
 
 
@@ -183,6 +186,14 @@ def test_unknown_context_window_is_not_treated_as_low_pressure():
     assert compiled.budget_report["context_pressure"] == "unknown"
     assert compiled.budget_report["compression_mode"] == "dedupe_only"
     assert compiled.budget_report["context_utilization"] is None
+
+
+def test_small_known_window_never_allocates_more_retrieval_than_usable_input():
+    model = profile(20_000, output=8192)
+    budget = model_budget(model)
+    assert budget["usable_input_tokens"] > 0
+    assert budget["retrieval_query_token_budget"] <= budget["usable_input_tokens"]
+    assert budget["rag_evidence_token_budget"] <= budget["usable_input_tokens"]
 
 
 def test_known_zero_usable_budget_is_not_treated_as_unknown():

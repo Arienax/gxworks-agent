@@ -218,7 +218,9 @@ def _build_agent_b_prompt(projected, plc_model, *, context=None, construction_ex
     renderer = None
     if context is None or not context.wire_packet:
         renderer = _compact_wire_renderer(
-            model, example_block=prepare_construction_examples(model, construction_examples),
+            model, example_block=prepare_construction_examples(
+                model, construction_examples, projected
+            ),
         )
     context = context or build_confirmed_generation_context(
         projected,
@@ -265,7 +267,9 @@ def generate_confirmed_ladder(
     if not projected:
         raise ValueError("confirmed generation specification is empty")
 
-    examples = prepare_construction_examples(model, construction_examples)
+    examples = prepare_construction_examples(
+        model, construction_examples, projected
+    )
     audit_section(
         "construction_examples", examples.text,
         status="included" if examples.text else "excluded",
@@ -287,8 +291,12 @@ def generate_confirmed_ladder(
     system_prompt = _build_agent_b_prompt(projected, model, context=context)
     if on_stage:
         if examples.requested:
-            on_stage("construction_examples",
-                     "本次生成已加入构造范例" if examples.text else "构造范例未注入：当前范例集仅适用 FX3U")
+            on_stage(
+                "construction_examples",
+                "本次生成已加入路由后的构造范例"
+                if examples.text
+                else "构造范例未注入：" + examples.reason,
+            )
         on_stage("confirmed_spec_generation", "正在根据已确认规格生成梯形图")
 
     provider = _FirstJSONObjectProvider(base_provider)

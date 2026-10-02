@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "date": "2026-10-01",
+  "status": "native-validated/research-prototype",
+  "counts": {
+    "source_graphs_exact": 10,
+    "prospective_graphs_exact": 6,
+    "native_work_records_exact": 31,
+    "encoded_reference_bytes_exact": 1261,
+    "unsupported_graphs_preserved": 2,
+    "full_resource_predictions_exact": 6,
+    "retained_native_full_checks_accepted": 6,
+    "local_project_candidates_preserved": 3
+  },
+  "versions": {
+    "graph_provider": "ECCodeGeneratorFX2.dll 15.31",
+    "gxworks2_components": "1.635.0.1",
+    "cpu": 520,
+    "plc": "FX3U/FX3UC"
+  },
+  "source_model": "21512-byte source grid -> native intermediate work records -> reference-only tokens -> first registered owned child bodies",
+  "evidence": {
+    "retrofitted_graphs": 4,
+    "prospective_graphs": 6,
+    "full_project_candidates": 3,
+    "full_project_changes": [
+      "unchanged pending source",
+      "swap indirect action indexes",
+      "action reference 256 with matching declaration"
+    ]
+  },
+  "corrected_hypotheses": [
+    "SJMP opcode is 0x6200",
+    "Step number indexes an indirect action-record table; it does not directly select the action record"
+  ],
+  "retained_counterexamples": [
+    "Four early SJMP header predictions differed",
+    "Four early source edits omitted indirect action indexes",
+    "Incomplete source is rejected by the native graph checker",
+    "Missing action index passes the graph checker but leaves a native output field unwritten"
+  ],
+  "handling": "Unmeasured kinds, missing indexes and unmeasured traversal are refused; source, cache and opaque bytes remain raw",
+  "limits": [
+    "FX3U/FX3UC and the measured simple-SFC profile only",
+    "Reference-only graph model excludes external ladder buffers; child expansion is checked separately",
+    "Grid branches are controlled experiments, not broad real-corpus coverage",
+    "Three full-project controls are derived from one pending native project",
+    "Core mode-01 parsing has not been extended and no PLC execution is claimed"
+  ],
+  "archive_scope": {
+    "public": "Models, pinned parser dependencies, native trace tools and offline validator; no third-party raw source or projects",
+    "local": "Full source/native controls, proposed projects, fresh saved-project checks and all listed failed attempts"
+  },
+  "local_archive": {
+    "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/gxw-sfc-pending-grid-20261001-local.zip",
+    "entries": 2716,
+    "bytes": 17384515,
+    "entry_bytes_exact": true
+  },
+  "verification": "Direct source/native byte comparison and offline replay; no new digests",
+  "public_archive": {
+    "path": "research/evidence/gxw-sfc-pending-grid-20261001.zip",
+    "entries": 50,
+    "bytes": 194865,
+    "entry_bytes_exact": true
+  },
+  "cold_replay_counts": {
+    "source_graphs_exact": 10,
+    "native_work_records_exact": 31,
+    "encoded_reference_bytes_exact": 1261,
+    "prospective_graphs_exact": 6,
+    "unsupported_graphs_preserved": 2,
+    "full_resource_predictions_exact": 6,
+    "retained_native_full_checks_accepted": 6,
+    "local_project_candidates_preserved": 3
+  }
+}

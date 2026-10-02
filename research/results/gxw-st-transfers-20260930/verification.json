@@ -1,0 +1,927 @@
+{
+  "files_verified": 19518,
+  "missing_archives": [],
+  "comparisons": [
+    {
+      "case": "st-fb-index-capture-20260930/inout-scalar/inout-scalar/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 190
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-scalar/inout-scalar/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-scalar/inout-scalar/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-scalar/inout-scalar/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 190
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-scalar/inout-scalar/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-scalar/inout-scalar/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-scalar/inout-scalar/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 190
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-scalar/inout-scalar/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-scalar/inout-scalar/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-scalar/inout-scalar/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 190
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-scalar/inout-scalar/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-scalar/inout-scalar/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-dynamic/inout-dynamic/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 264
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-dynamic/inout-dynamic/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-dynamic/inout-dynamic/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-dynamic/inout-dynamic/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 264
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-dynamic/inout-dynamic/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-dynamic/inout-dynamic/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-dynamic/inout-dynamic/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 264
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-dynamic/inout-dynamic/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-dynamic/inout-dynamic/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-dynamic/inout-dynamic/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 264
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-dynamic/inout-dynamic/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-dynamic/inout-dynamic/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-frozen-index/inout-frozen-index/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 264
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-frozen-index/inout-frozen-index/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-frozen-index/inout-frozen-index/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-frozen-index/inout-frozen-index/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 264
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-frozen-index/inout-frozen-index/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-frozen-index/inout-frozen-index/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-frozen-index/inout-frozen-index/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 264
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-frozen-index/inout-frozen-index/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-frozen-index/inout-frozen-index/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-frozen-index/inout-frozen-index/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 264
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-frozen-index/inout-frozen-index/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-frozen-index/inout-frozen-index/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-value-first/inout-value-first/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 264
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-value-first/inout-value-first/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-value-first/inout-value-first/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-value-first/inout-value-first/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 264
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-value-first/inout-value-first/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-value-first/inout-value-first/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-value-first/inout-value-first/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 264
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-value-first/inout-value-first/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-value-first/inout-value-first/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-value-first/inout-value-first/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 264
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-value-first/inout-value-first/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/inout-value-first/inout-value-first/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-dynamic/output-dynamic/native-2/read-3-0",
+      "status": "byte-identical",
+      "bytes": 212
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-dynamic/output-dynamic/native-2/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-dynamic/output-dynamic/native-2/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-dynamic/output-dynamic/native-2/read-5-0",
+      "status": "byte-identical",
+      "bytes": 212
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-dynamic/output-dynamic/native-2/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-dynamic/output-dynamic/native-2/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-dynamic/output-dynamic/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 212
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-dynamic/output-dynamic/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-dynamic/output-dynamic/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-dynamic/output-dynamic/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 212
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-dynamic/output-dynamic/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-dynamic/output-dynamic/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-frozen-index/output-frozen-index/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 212
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-frozen-index/output-frozen-index/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-frozen-index/output-frozen-index/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-frozen-index/output-frozen-index/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 212
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-frozen-index/output-frozen-index/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-frozen-index/output-frozen-index/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-frozen-index/output-frozen-index/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 212
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-frozen-index/output-frozen-index/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-frozen-index/output-frozen-index/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-frozen-index/output-frozen-index/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 212
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-frozen-index/output-frozen-index/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-capture-20260930/output-frozen-index/output-frozen-index/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-inner-index/output-inner-index/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 277
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-inner-index/output-inner-index/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-inner-index/output-inner-index/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-inner-index/output-inner-index/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 277
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-inner-index/output-inner-index/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-inner-index/output-inner-index/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-inner-index/output-inner-index/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 277
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-inner-index/output-inner-index/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-inner-index/output-inner-index/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-inner-index/output-inner-index/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 277
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-inner-index/output-inner-index/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-inner-index/output-inner-index/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-two-inner-indices/output-two-inner-indices/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 338
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-two-inner-indices/output-two-inner-indices/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-two-inner-indices/output-two-inner-indices/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-two-inner-indices/output-two-inner-indices/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 338
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-two-inner-indices/output-two-inner-indices/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-two-inner-indices/output-two-inner-indices/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-two-inner-indices/output-two-inner-indices/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 338
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-two-inner-indices/output-two-inner-indices/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-two-inner-indices/output-two-inner-indices/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-two-inner-indices/output-two-inner-indices/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 338
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-two-inner-indices/output-two-inner-indices/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-two-inner-indices/output-two-inner-indices/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-inner-index/inout-inner-index/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 329
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-inner-index/inout-inner-index/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-inner-index/inout-inner-index/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-inner-index/inout-inner-index/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 329
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-inner-index/inout-inner-index/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-inner-index/inout-inner-index/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-inner-index/inout-inner-index/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 329
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-inner-index/inout-inner-index/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-inner-index/inout-inner-index/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-inner-index/inout-inner-index/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 329
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-inner-index/inout-inner-index/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-inner-index/inout-inner-index/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-repeated-dynamic/output-repeated-dynamic/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 277
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-repeated-dynamic/output-repeated-dynamic/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-repeated-dynamic/output-repeated-dynamic/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-repeated-dynamic/output-repeated-dynamic/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 277
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-repeated-dynamic/output-repeated-dynamic/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-repeated-dynamic/output-repeated-dynamic/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-repeated-dynamic/output-repeated-dynamic/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 277
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-repeated-dynamic/output-repeated-dynamic/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-repeated-dynamic/output-repeated-dynamic/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-repeated-dynamic/output-repeated-dynamic/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 277
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-repeated-dynamic/output-repeated-dynamic/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/output-repeated-dynamic/output-repeated-dynamic/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-dynamic-then-frozen/inout-dynamic-then-frozen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 381
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-dynamic-then-frozen/inout-dynamic-then-frozen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-dynamic-then-frozen/inout-dynamic-then-frozen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-dynamic-then-frozen/inout-dynamic-then-frozen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 381
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-dynamic-then-frozen/inout-dynamic-then-frozen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-dynamic-then-frozen/inout-dynamic-then-frozen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-dynamic-then-frozen/inout-dynamic-then-frozen/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 381
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-dynamic-then-frozen/inout-dynamic-then-frozen/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-dynamic-then-frozen/inout-dynamic-then-frozen/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-dynamic-then-frozen/inout-dynamic-then-frozen/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 381
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-dynamic-then-frozen/inout-dynamic-then-frozen/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-liveness-20260930/inout-dynamic-then-frozen/inout-dynamic-then-frozen/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-before-write/prediction",
+      "status": "byte-identical",
+      "bytes": 268
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-before-write/output-read-before-write/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 268
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-before-write/output-read-before-write/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-before-write/output-read-before-write/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-before-write/output-read-before-write/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 268
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-before-write/output-read-before-write/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-before-write/output-read-before-write/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-before-write/output-read-before-write/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 268
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-before-write/output-read-before-write/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-before-write/output-read-before-write/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-before-write/output-read-before-write/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 268
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-before-write/output-read-before-write/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-before-write/output-read-before-write/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-after-write/prediction",
+      "status": "byte-identical",
+      "bytes": 268
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-after-write/output-read-after-write/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 268
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-after-write/output-read-after-write/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-after-write/output-read-after-write/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-after-write/output-read-after-write/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 268
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-after-write/output-read-after-write/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-after-write/output-read-after-write/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-after-write/output-read-after-write/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 268
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-after-write/output-read-after-write/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-after-write/output-read-after-write/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-after-write/output-read-after-write/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 268
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-after-write/output-read-after-write/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/output-read-after-write/output-read-after-write/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/inout-read-before-write/prediction",
+      "status": "byte-identical",
+      "bytes": 320
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/inout-read-before-write/inout-read-before-write/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 320
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/inout-read-before-write/inout-read-before-write/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/inout-read-before-write/inout-read-before-write/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/inout-read-before-write/inout-read-before-write/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 320
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/inout-read-before-write/inout-read-before-write/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/inout-read-before-write/inout-read-before-write/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/inout-read-before-write/inout-read-before-write/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 320
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/inout-read-before-write/inout-read-before-write/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/inout-read-before-write/inout-read-before-write/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/inout-read-before-write/inout-read-before-write/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 320
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/inout-read-before-write/inout-read-before-write/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/inout-read-before-write/inout-read-before-write/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/two-instances-inout/prediction",
+      "status": "byte-identical",
+      "bytes": 381
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/two-instances-inout/two-instances-inout/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 381
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/two-instances-inout/two-instances-inout/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/two-instances-inout/two-instances-inout/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/two-instances-inout/two-instances-inout/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 381
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/two-instances-inout/two-instances-inout/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/two-instances-inout/two-instances-inout/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/two-instances-inout/two-instances-inout/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 381
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/two-instances-inout/two-instances-inout/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/two-instances-inout/two-instances-inout/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/two-instances-inout/two-instances-inout/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 381
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/two-instances-inout/two-instances-inout/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-fb-index-predictions-20260930/two-instances-inout/two-instances-inout/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    }
+  ],
+  "scope": "Archive integrity and saved byte equality only; native compiler was not rerun."
+}

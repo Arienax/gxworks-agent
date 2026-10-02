@@ -1,0 +1,218 @@
+{
+  "files_verified": 36974,
+  "missing_archives": [],
+  "comparisons": [
+    {
+      "case": "library-false/compile/read-3-0",
+      "status": "byte-identical",
+      "bytes": 101
+    },
+    {
+      "case": "library-false/compile/read-5-0",
+      "status": "byte-identical",
+      "bytes": 101
+    },
+    {
+      "case": "library-false/reopen/read-3-0",
+      "status": "byte-identical",
+      "bytes": 101
+    },
+    {
+      "case": "library-false/reopen/read-5-0",
+      "status": "byte-identical",
+      "bytes": 101
+    },
+    {
+      "case": "library-false/reopen/pcode-0-0.bin",
+      "status": "byte-identical",
+      "bytes": 101
+    },
+    {
+      "case": "library-true/compile/read-3-0",
+      "status": "byte-identical",
+      "bytes": 101
+    },
+    {
+      "case": "library-true/compile/read-5-0",
+      "status": "byte-identical",
+      "bytes": 101
+    },
+    {
+      "case": "library-true/reopen/read-3-0",
+      "status": "byte-identical",
+      "bytes": 101
+    },
+    {
+      "case": "library-true/reopen/read-5-0",
+      "status": "byte-identical",
+      "bytes": 101
+    },
+    {
+      "case": "library-true/reopen/pcode-0-0.bin",
+      "status": "byte-identical",
+      "bytes": 101
+    },
+    {
+      "case": "sfc-transition-swap/compile/read-5-0",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "sfc-transition-swap/compile/read-7-0",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "sfc-transition-swap/compile/prediction",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "sfc-transition-swap/reopen/read-5-0",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "sfc-transition-swap/reopen/read-7-0",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "sfc-transition-swap/reopen/prediction",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "sfc-transition-swap/reopen/pcode-0-0.bin",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "sfc-pending-action30/compile/read-5-0",
+      "status": "byte-identical",
+      "bytes": 177
+    },
+    {
+      "case": "sfc-pending-action30/compile/read-7-0",
+      "status": "byte-identical",
+      "bytes": 177
+    },
+    {
+      "case": "sfc-pending-action30/compile/prediction",
+      "status": "byte-identical",
+      "bytes": 177
+    },
+    {
+      "case": "sfc-pending-action30/reopen/read-5-0",
+      "status": "byte-identical",
+      "bytes": 177
+    },
+    {
+      "case": "sfc-pending-action30/reopen/read-7-0",
+      "status": "byte-identical",
+      "bytes": 177
+    },
+    {
+      "case": "sfc-pending-action30/reopen/prediction",
+      "status": "byte-identical",
+      "bytes": 177
+    },
+    {
+      "case": "sfc-pending-action30/reopen/pcode-0-0.bin",
+      "status": "byte-identical",
+      "bytes": 177
+    },
+    {
+      "case": "repeated-int-ABA/compile/read-3-0",
+      "status": "byte-identical",
+      "bytes": 5723
+    },
+    {
+      "case": "repeated-int-ABA/compile/read-5-0",
+      "status": "byte-identical",
+      "bytes": 5723
+    },
+    {
+      "case": "repeated-int-ABA/compile/read-8-0",
+      "status": "byte-identical",
+      "bytes": 9
+    },
+    {
+      "case": "repeated-int-ABA/compile/read-10-0",
+      "status": "byte-identical",
+      "bytes": 9
+    },
+    {
+      "case": "repeated-int-ABA/compile/prediction",
+      "status": "byte-identical",
+      "bytes": 5723
+    },
+    {
+      "case": "repeated-string-BABA/compile/read-3-0",
+      "status": "byte-identical",
+      "bytes": 7706
+    },
+    {
+      "case": "repeated-string-BABA/compile/read-5-0",
+      "status": "byte-identical",
+      "bytes": 7706
+    },
+    {
+      "case": "repeated-string-BABA/compile/read-8-0",
+      "status": "byte-identical",
+      "bytes": 9
+    },
+    {
+      "case": "repeated-string-BABA/compile/read-10-0",
+      "status": "byte-identical",
+      "bytes": 9
+    },
+    {
+      "case": "repeated-string-BABA/compile/prediction",
+      "status": "byte-identical",
+      "bytes": 7706
+    },
+    {
+      "case": "source-replacement/compile/read-3-0",
+      "status": "byte-identical",
+      "bytes": 22
+    },
+    {
+      "case": "source-replacement/compile/read-5-0",
+      "status": "byte-identical",
+      "bytes": 22
+    },
+    {
+      "case": "source-replacement/reopen/read-3-0",
+      "status": "byte-identical",
+      "bytes": 22
+    },
+    {
+      "case": "source-replacement/reopen/read-5-0",
+      "status": "byte-identical",
+      "bytes": 22
+    },
+    {
+      "case": "source-replacement/reopen/pcode-0-0.bin",
+      "status": "byte-identical",
+      "bytes": 22
+    },
+    {
+      "case": "duplicate-coil-fresh/compile/read-3-0",
+      "status": "byte-identical",
+      "bytes": 36
+    },
+    {
+      "case": "duplicate-coil-fresh/compile/read-5-0",
+      "status": "byte-identical",
+      "bytes": 36
+    }
+  ],
+  "scope": "Archive integrity and saved byte equality only; native compiler was not rerun.",
+  "checkpoint_checks": {
+    "python_syntax": "3 changed research scripts parsed",
+    "git_diff_check": "passed",
+    "targeted_cache_counterexample": "1 passed, 318 deselected; pytest cache write warning only",
+    "native_rerun": false
+  }
+}

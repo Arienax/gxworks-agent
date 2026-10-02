@@ -379,14 +379,19 @@ def test_all_examples_are_current_valid_ir_and_round_trip_exactly():
 
 
 def test_ir_exports_and_manifests_cannot_mutate_cached_examples():
-    before = examples.prepare_construction_examples("FX3U", True)
+    routed_spec = {
+        "selected_approach": {
+            "generation_contract": {"required_structures": ["self_hold"]}
+        }
+    }
+    before = examples.prepare_construction_examples("FX3U", True, routed_spec)
     exported = examples.construction_examples_ir()
     exported[0]["program_ir"]["networks"].clear()
     assert examples.construction_examples_ir()[0]["program_ir"]["networks"]
     manifest = before.manifest()
     manifest["example_ids"].clear()
-    assert len(before.manifest()["example_ids"]) == 6
-    assert before == examples.prepare_construction_examples("fx3u", True)
+    assert before.manifest()["example_ids"] == ["reset_dominant_hold"]
+    assert before == examples.prepare_construction_examples("fx3u", True, routed_spec)
     assert before.manifest()["sha256"] == hashlib.sha256(before.text.encode()).hexdigest()
 
 
@@ -399,7 +404,7 @@ def _construction_spec():
         "selected_approach": {
             "approach_id": "direct", "name": "direct",
             "generation_contract": {
-                "required_structures": ["direct_logic"], "forbidden_structures": [],
+                "required_structures": ["self_hold"], "forbidden_structures": [],
                 "required_opcodes": ["OUT"], "forbidden_opcodes": [],
                 "required_devices": ["X5", "Y5"], "forbidden_devices": [],
             },
@@ -416,19 +421,19 @@ def test_wire_renderer_changes_only_the_example_block_and_freezes_flag(monkeypat
 
     spec, evidence, request = _construction_spec(), "\nEVIDENCE_CONTROL_SENTINEL\n", "Generate confirmed program"
     args = (spec, evidence, request, None, "", [])
-    monkeypatch.setenv(examples.ENV_NAME, "0")
-    off = _compact_wire_renderer("FX3U")
+    off_block = examples.prepare_construction_examples("FX3U", False, spec)
+    on_block = examples.prepare_construction_examples("FX3U", True, spec)
+    off = _compact_wire_renderer("FX3U", example_block=off_block)
     expected = (_COMPACT_PROTOCOL + SOURCE_PRECEDENCE + "\n# Selected PLC\nFX3U\n"
                 + "\n# Confirmed project specification\n"
                 + json.dumps(spec, ensure_ascii=False, separators=(",", ":"))
                 + compact_capability_prompt("FX3U", spec) + render_context_checkpoint("")
                 + evidence + generation_execution_prompt(spec, evidence_text=evidence, task_type="generate"))
     assert off(*args) == {"messages": render_wire_messages(expected, [{"role": "user", "content": request}])}
-    monkeypatch.setenv(examples.ENV_NAME, "1")
-    on = _compact_wire_renderer("FX3U")
-    monkeypatch.setenv(examples.ENV_NAME, "0")
+    on = _compact_wire_renderer("FX3U", example_block=on_block)
     off_packet, on_packet = off(*args), on(*args)
-    block = examples.prepare_construction_examples("FX3U", True)
+    block = on_block
+    assert block.example_ids == ("reset_dominant_hold",)
     assert on_packet["messages"][0]["content"].count(block.text) == 1
     on_packet["messages"][0]["content"] = on_packet["messages"][0]["content"].replace(block.text, "", 1)
     assert on_packet == off_packet
@@ -481,7 +486,8 @@ def test_actual_agent_request_budget_handoff_and_retrieval_are_isolated(monkeypa
     assert len(lookups) == 2
     assert "C0" not in lookups[0][0] and "compound_condition" not in lookups[0][0]
     off, on = copy.deepcopy(calls[0][0]), copy.deepcopy(calls[1][0])
-    block = examples.prepare_construction_examples("FX3U", True)
+    block = examples.prepare_construction_examples("FX3U", True, specification)
+    assert block.example_ids == ("reset_dominant_hold",)
     on[0]["content"] = on[0]["content"].replace(block.text, "", 1)
     assert on == off
     assert calls[0][1] == calls[1][1]

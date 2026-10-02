@@ -1,0 +1,399 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-01",
+  "evidence_level": "verified original lexical reader boundaries/public output within recorded scope",
+  "handling": "decoded names and raw-bound operand spans; opaque metadata/unknown records/unframed remainders preserved",
+  "environment": {
+    "os": "Windows",
+    "converter": "ECCodeGeneratorFX2.dll",
+    "file_version": "15.31",
+    "cpus": [
+      520,
+      521
+    ],
+    "descriptor_class": 32,
+    "open_mode": 0,
+    "versions": [],
+    "fresh_native_object_per_read": true
+  },
+  "static_readers": {
+    "header_rva": "0x3d9d5",
+    "operand_group_rva": "0x3d7b9",
+    "operand_atom_rva": "0x3d514",
+    "reachable_header_descriptors": 435,
+    "operand_text_descriptor_rows": 32,
+    "native_descriptor_arity_field": "First byte at descriptor+4, observed at the original header-reader write"
+  },
+  "prospective_header": {
+    "requests": 5535,
+    "predictions": 5534,
+    "source_generation_gaps": 1,
+    "counts": {
+      "observed": 5534,
+      "raw": 5534,
+      "result": 5534,
+      "arity": 5534,
+      "native_text_token": 5534,
+      "context": 5534
+    },
+    "reached_descriptors": 435,
+    "differences": 0,
+    "unavailable": 1,
+    "public_codes": {
+      "0": 5534,
+      "67244035": 1
+    },
+    "all_guards_intact": true,
+    "all_original_inputs_preserved": true,
+    "baseline_traced_exact": true,
+    "hook_errors": [],
+    "scope": "Predictions and model snapshots precede native calls. Original header reader invoked by public read only; no replacement/private native calls. Header arity/name is a lexical projection; public full record failures retained separately."
+  },
+  "prospective_operands": {
+    "requests": 7901,
+    "predictions": 7900,
+    "source_generation_gaps": 1,
+    "counts": {
+      "groups": 12150,
+      "group_result": 12150,
+      "group_consumed": 12150,
+      "group_output": 12150,
+      "group_context": 12150,
+      "atoms": 13391,
+      "atom_raw": 13391,
+      "atom_result": 13391,
+      "atom_output": 13391,
+      "atom_descriptor": 13391,
+      "atom_context": 13391,
+      "full_records": 7667,
+      "full_record_exact": 7667,
+      "native-operand-text-refused": 233
+    },
+    "reached_text_descriptors": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+    ],
+    "differences": 0,
+    "unavailable": 1,
+    "public_codes": {
+      "0": 7667,
+      "67244035": 1,
+      "67244036": 233
+    },
+    "all_guards_intact": true,
+    "all_inputs_preserved": true,
+    "baseline_traced_exact": true,
+    "hook_errors": [],
+    "scope": "Every prediction/model snapshot precedes these native calls. Lexical read does not establish instruction/type/project validity. Reader refusals, prediction differences and generation gaps retained."
+  },
+  "whole_body_corpus": {
+    "projects": 8,
+    "comparisons": [
+      {
+        "case": "full-fx3g",
+        "cpu": 521,
+        "repository": "accepted copied FX3G source",
+        "coverage": {
+          "raw_bytes": 54203,
+          "raw_regions": 11812,
+          "records": 4196,
+          "decoded_instructions": 4196,
+          "opaque_metadata": 0,
+          "critical_gaps": 0
+        },
+        "native_text_exact": 4196,
+        "byte_identical": true
+      },
+      {
+        "case": "case-00",
+        "cpu": 520,
+        "repository": "cmz269/-plc-gxworks2-",
+        "coverage": {
+          "raw_bytes": 1436,
+          "raw_regions": 369,
+          "records": 172,
+          "decoded_instructions": 172,
+          "opaque_metadata": 0,
+          "critical_gaps": 0
+        },
+        "native_text_exact": 172,
+        "byte_identical": true
+      },
+      {
+        "case": "case-01",
+        "cpu": 520,
+        "repository": "cmz269/-plc-gxworks2-",
+        "coverage": {
+          "raw_bytes": 110,
+          "raw_regions": 30,
+          "records": 15,
+          "decoded_instructions": 15,
+          "opaque_metadata": 0,
+          "critical_gaps": 0
+        },
+        "native_text_exact": 15,
+        "byte_identical": true
+      },
+      {
+        "case": "case-02",
+        "cpu": 520,
+        "repository": "cmz269/-plc-gxworks2-",
+        "coverage": {
+          "raw_bytes": 370,
+          "raw_regions": 105,
+          "records": 55,
+          "decoded_instructions": 55,
+          "opaque_metadata": 0,
+          "critical_gaps": 0
+        },
+        "native_text_exact": 55,
+        "byte_identical": true
+      },
+      {
+        "case": "case-04",
+        "cpu": 520,
+        "repository": "cmz269/-plc-gxworks2-",
+        "coverage": {
+          "raw_bytes": 3,
+          "raw_regions": 1,
+          "records": 1,
+          "decoded_instructions": 1,
+          "opaque_metadata": 0,
+          "critical_gaps": 0
+        },
+        "native_text_exact": 1,
+        "byte_identical": true
+      },
+      {
+        "case": "case-05",
+        "cpu": 520,
+        "repository": "cmz269/-plc-gxworks2-",
+        "coverage": {
+          "raw_bytes": 1418,
+          "raw_regions": 302,
+          "records": 133,
+          "decoded_instructions": 116,
+          "opaque_metadata": 17,
+          "critical_gaps": 0
+        },
+        "native_text_exact": 116,
+        "byte_identical": true
+      },
+      {
+        "case": "case-06",
+        "cpu": 520,
+        "repository": "cmz269/-plc-gxworks2-",
+        "coverage": {
+          "raw_bytes": 384,
+          "raw_regions": 104,
+          "records": 48,
+          "decoded_instructions": 48,
+          "opaque_metadata": 0,
+          "critical_gaps": 0
+        },
+        "native_text_exact": 48,
+        "byte_identical": true
+      },
+      {
+        "case": "case-07",
+        "cpu": 520,
+        "repository": "factonation/modbus-rs485-fundamentals",
+        "coverage": {
+          "raw_bytes": 199,
+          "raw_regions": 47,
+          "records": 22,
+          "decoded_instructions": 22,
+          "opaque_metadata": 0,
+          "critical_gaps": 0
+        },
+        "native_text_exact": 22,
+        "byte_identical": true
+      }
+    ],
+    "total": {
+      "raw_bytes": 58123,
+      "raw_regions": 12770,
+      "records": 4642,
+      "decoded_instructions": 4625,
+      "opaque_metadata": 17,
+      "critical_gaps": 0
+    },
+    "differences": 0,
+    "all_round_trips_byte_identical": true,
+    "all_instruction_text_native_exact": true,
+    "scope": "Whole compiler bodies and source-bound physical offsets, not re-encoded strings. Original metadata is opaque-preserved. Full FX3G is an accepted copied variant, seven FX3U projects are original independent sources. No new project mutation or PLC execution."
+  },
+  "original_fx3u_machine": {
+    "original_projects": 7,
+    "independent_repositories": 2,
+    "original_records": 429,
+    "predictions": 429,
+    "source_generation_gaps": 0,
+    "gap_reasons": {},
+    "raw_metadata_tokens_preserved": 17,
+    "counts": {
+      "observed": 429,
+      "cells_before": 429,
+      "auxiliary": 429,
+      "words": 429,
+      "cells_after": 429,
+      "context": 429,
+      "machine_bytes": 429
+    },
+    "differences": 0,
+    "no_emitter_observation": 0,
+    "public_accepted": 429,
+    "original_records_byte_exact": 429,
+    "public_statuses": {
+      "0": 429
+    },
+    "baseline_traced_exact": true,
+    "hook_errors": [],
+    "scope": "Separately tagged CPU520/mode8 predictions saved before fresh original-function observations. Existing independently sourced unchanged GXW compiler bodies; native raw-record acceptance, full-project acceptance and execution remain separate. Frozen mode9 evidence unchanged."
+  },
+  "raw_byte_proposals": {
+    "proposals": 9,
+    "original_bodies": 7,
+    "synthetic_opaque_witnesses": 2,
+    "skipped": [
+      {
+        "case": "case-04",
+        "reason": "No measured single plain D/M operand to change"
+      }
+    ],
+    "changed_bytes": 9,
+    "untouched_regions_preserved": true,
+    "counts": {
+      "public_accepted": 9,
+      "public_rewrite_exact": 9,
+      "native_cells_exact": 9,
+      "auxiliary_exact": 9,
+      "native_width_exact": 9,
+      "native_cells_after_exact": 9,
+      "machine_bytes_exact": 9,
+      "context": 9,
+      "guards_intact": 9
+    },
+    "differences": 0,
+    "hook_errors": [],
+    "scope": "Source-bound local byte proposals, independently checked only at the native raw-record/type/emission layer. Unknown regions are preserved. No full GXW project mutation, compile/save/reopen or PLC execution."
+  },
+  "changed_record_independent_text": {
+    "changed_record_reads": 9,
+    "native_text_exact": 9,
+    "predictions_precede_native": true,
+    "scope": "Fresh public PCode-to-text reads of the local changed records; whole GXW acceptance remains separate."
+  },
+  "discoveries": [
+    "One native descriptor graph explains ordinary, pulse, LD/AND/OR comparative and embedded M./U. header names and arities.",
+    "The lexical operand reader uses its own name/format table and grouping rules, distinct from the nine-byte type parser and machine-cell lowering.",
+    "Repeated index and bit modifiers overwrite earlier display slots; ordered group/prefix tokens and every overwritten original token stay bound to raw offsets.",
+    "Native octal display pads to three digits. Word K text reads at most the first WORD, while plain device text reads one-to-four-byte values.",
+    "Float display can round or discard a zero sign, and decimal negative zero is refused on the inspected path. Display text is never used to reconstruct raw values.",
+    "All twelve M./U. descriptor shapes decode bounded embedded-name controls; this establishes lexical headers rather than valid FB calls or machine emission.",
+    "The original RET record 056c012405 is recognized generically. Seven independent FX3U originals have zero critical lexical gaps and retain all seventeen metadata records.",
+    "A local same-extent proposal changes one selected parameter byte while unknown framed records and a broken framing remainder remain byte-identical."
+  ],
+  "source_provenance": {
+    "method_reference": "https://github.com/purinzan/gx3-cli-mcp",
+    "method_usage": "Raw-preserved IR, independent native decoding, failure corpus and scope-separated coverage only; no GX3 formats transferred.",
+    "originals": [
+      "https://github.com/Serhioromano/gxw2-libraries",
+      "https://github.com/cmz269/-plc-gxworks2-",
+      "https://github.com/factonation/modbus-rs485-fundamentals"
+    ],
+    "original_material_distribution": "Local only; portable archive contains synthetic controls and derived static reader facts, not source GXW projects or the vendor DLL."
+  },
+  "limitations": [
+    "Converter 15.31, class32, CPU520/521 lexical scope only; no Q or other CPU formats inferred.",
+    "Full FX3G body comes from an accepted copied variant; seven FX3U bodies are unchanged independent originals. Repeated runs and synthetic cases are not extra project sources.",
+    "Interior NUL payloads, unmeasured name-lookup edges, overlong modifier/text chains and invalid physical framing stay unsupported or opaque.",
+    "Header names, arities and public lexical acceptance do not establish operand roles, address ranges, stored machine widths, project validity or execution equivalence.",
+    "Nine changed records were independently checked/read; whole GXW compile/save/reopen after these proposals was not performed.",
+    "The same-extent proposal helper is a research byte operation, not expanded product writer permission. Product code does not import this model."
+  ],
+  "proof": {
+    "portable_witnesses": 3276,
+    "portable_opaque_proposals": 2,
+    "replay": {
+      "counts": {
+        "raw-round-trips": 3276,
+        "header-exact": 909,
+        "groups-exact": 4966,
+        "atoms-exact": 5263,
+        "full-records-exact": 3042,
+        "explicit-unsupported": 1,
+        "native-refusals-exact": 233,
+        "opaque-preserving-proposals": 2,
+        "unframed-edit-refused": 1
+      },
+      "reached_header_descriptors": 435,
+      "reached_text_descriptors": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ]
+    },
+    "public_archive": "research/evidence/gxw-fx-lossless-reader-20261001.zip",
+    "local_archive": "research/experiments/sfc-graph-20260926/public-corpus-discovery/gxw-fx-lossless-reader-20261001-local.zip"
+  }
+}

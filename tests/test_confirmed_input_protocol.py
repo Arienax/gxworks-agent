@@ -248,7 +248,7 @@ def test_edit_request_contributes_new_fact_target():
     assert "SFTL M10 M100 K128 K1" in output.retrieval_packet["query"]
 
 
-def test_model_window_does_not_override_task_evidence_allowance(monkeypatch):
+def test_model_window_drives_evidence_allowance_without_fixed_char_cap(monkeypatch):
     import knowledge.retriever as retriever
     from application.generation_context import _build_knowledge_context
     from knowledge.evidence import KnowledgeQuery
@@ -259,7 +259,9 @@ def test_model_window_does_not_override_task_evidence_allowance(monkeypatch):
     monkeypatch.setattr(retriever, "build_knowledge_context", capture)
     _build_knowledge_context(KnowledgeQuery("SFTL M10 M100 K128 K1", precompiled=True,
         metadata={"rag_evidence_token_budget": 32000}), plc_model="FX3U")
-    assert seen["char_budget"] == 7000 and seen["token_budget"] == 32000
+    assert seen["token_budget"] == 32000
+    assert seen["char_budget"] == 256000
+    assert seen["top_k"] == 8
 
 
 class OneResponse:

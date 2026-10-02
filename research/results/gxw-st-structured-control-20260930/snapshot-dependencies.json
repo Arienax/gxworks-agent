@@ -1,0 +1,12 @@
+{
+  "scope": "Supplement the fixed structured-control snapshot with its untracked native-check adapter dependency. Original archives and predictions are unchanged.",
+  "created_for": "gxw-st-structured-control-20260930",
+  "archive": "research\\evidence\\gxw-st-structured-control-dependencies-20260930.zip",
+  "files": [
+    {
+      "path": "research\\probe_gxw_program_check_resources.py",
+      "bytes": 12868
+    }
+  ],
+  "verification": "Central-directory names/sizes only; no new hashes or native compilation."
+}

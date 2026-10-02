@@ -1,0 +1,1851 @@
+{
+  "scope": "Saved Q03UDV native pool observations in one real project; no new execution during freezing.",
+  "evidence_level": "observed",
+  "handling": "partially-decoded; source-model support remains unsupported",
+  "findings": [
+    "Ordinary word selector 4 searches descriptors 24..27; isolated R and ZR pools allocate descending addresses.",
+    "With R and ZR configured together, the measured constructor leaves descriptor 27 empty; R suppresses ZR in this control.",
+    "Without R, D then W then ZR are used. Configuring all four banks is not a four-bank fallback in this project.",
+    "Latch D1 or D2 initializes descriptor 28; when both exist, D1 is selected. W1/W2 independently initialize descriptor 29.",
+    "Source class 6 survives the frontend snapshot but SICConverter rejects it with 0x500c5046. No retain variable allocation was established.",
+    "Allocator categories 6/13 select retain pools in static code; their source representation is still unresolved."
+  ],
+  "cases": [
+    {
+      "case": "extended-allocation-pools-20260930/all-banks",
+      "evidence": {
+        "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/extended-allocation-pools-20260930/comparison.json",
+        "sha256": "96c5a51f04e659e2170da49ad97c256db1f40b60175501c5e3a7fb402110c683"
+      },
+      "native_directory": "research/experiments/sfc-graph-20260926/public-corpus-discovery/extended-allocation-pools-20260930/all-banks/native-1",
+      "input_sha256": "9a733e9a0a239e37c066f8e34d11d65f5934800f4b43a6f498e6d9ea7f7df5e3",
+      "source_class": null,
+      "changed_pools": {
+        "D": [
+          7000,
+          7000
+        ],
+        "W": [
+          256,
+          256
+        ],
+        "R": [
+          1000,
+          1000
+        ],
+        "ZR": [
+          2000,
+          2005
+        ]
+      },
+      "trace": {
+        "pid": 56092,
+        "timed_out": false,
+        "detached": [
+          "('process-terminated', None)"
+        ]
+      },
+      "trace_errors": [],
+      "check": null,
+      "diagnostics": [
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 84873269,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": 0,
+          "network": -1,
+          "left": -1,
+          "top": -1,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "METAL"
+          ],
+          "raw_base64": "AgAAADUQDwWUI9kL/////0wg2QsBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////////////////////CNP2Cw=="
+        },
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 84873269,
+          "name": "\ud14c\uc2a4\ud2b8",
+          "instance": "\ud14c\uc2a4\ud2b8",
+          "step": 0,
+          "network": -1,
+          "left": -1,
+          "top": -1,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "STATE"
+          ],
+          "raw_base64": "AgAAADUQDwVECtkL/////9QK2QsBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////////////////////UNo5Bw=="
+        },
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1342242816,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": -1,
+          "network": -1,
+          "left": -1,
+          "top": -1,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [],
+          "raw_base64": "AgAAAAAAAVAsNNoLAwAAADQ12gsAAAAAAAAAAAAAAOwBAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////AAAAAA=="
+        },
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1342242816,
+          "name": "\ud14c\uc2a4\ud2b8",
+          "instance": "\ud14c\uc2a4\ud2b8",
+          "step": -1,
+          "network": -1,
+          "left": -1,
+          "top": -1,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [],
+          "raw_base64": "AgAAAAAAAVCMNNoLAwAAAGQ12gsAAAAAAAAAAAAAAOwBAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////AAAAAA=="
+        }
+      ],
+      "generated": [
+        {
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "index": 0,
+          "channels": [
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        },
+        {
+          "name": "\ud14c\uc2a4\ud2b8",
+          "index": 1,
+          "channels": [
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        }
+      ],
+      "initial_word_pools": [
+        {
+          "index": 24,
+          "code": 5,
+          "end": 7000,
+          "limit": 1
+        },
+        {
+          "index": 25,
+          "code": 6,
+          "end": 256,
+          "limit": 1
+        },
+        {
+          "index": 26,
+          "code": 7,
+          "end": 1000,
+          "limit": 1
+        },
+        {
+          "index": 27,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 28,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 29,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 30,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        }
+      ],
+      "allocations": [
+        {
+          "compile_id": 4,
+          "allocation_id": 1,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2405581b00000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 2,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2406000100000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 3,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2407e80300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 4,
+          "type": 2,
+          "category": 1,
+          "result": 0,
+          "after": "2100ffffff000000000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 8,
+          "allocation_id": 5,
+          "type": 2,
+          "category": 1,
+          "result": 0,
+          "after": "2100ffffff000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "case": "extended-allocation-pools-20260930/R-only",
+      "evidence": {
+        "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/extended-allocation-pools-20260930/comparison.json",
+        "sha256": "96c5a51f04e659e2170da49ad97c256db1f40b60175501c5e3a7fb402110c683"
+      },
+      "native_directory": "research/experiments/sfc-graph-20260926/public-corpus-discovery/extended-allocation-pools-20260930/R-only/native-1",
+      "input_sha256": "c15bdf7023377528977291808a5c24496d1fb2f60ed0cc39859a408ffe0fede8",
+      "source_class": null,
+      "changed_pools": {
+        "D": [
+          4294967295,
+          4294967295
+        ],
+        "W": [
+          4294967295,
+          4294967295
+        ],
+        "R": [
+          1000,
+          1007
+        ],
+        "ZR": [
+          4294967295,
+          4294967295
+        ]
+      },
+      "trace": {
+        "pid": 49012,
+        "timed_out": false,
+        "detached": [
+          "('process-terminated', None)"
+        ]
+      },
+      "trace_errors": [],
+      "check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 2,
+        "rejected": true
+      },
+      "diagnostics": [
+        {
+          "phase": "ProgramCheckProgress",
+          "kind": 2,
+          "code": 84710144,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": 198,
+          "network": -1,
+          "left": -1,
+          "top": 198,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y21"
+          ],
+          "raw_base64": "AgAAAACTDAX8868JBgAAAJT1rwkBAAAAAAAAAAQhAOABAAAAAAAAAQEAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAxgAAAP//////////xgAAAP//////////CAi0CQ=="
+        },
+        {
+          "phase": "ProgramCheckProgress",
+          "kind": 2,
+          "code": 84710144,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": 206,
+          "network": -1,
+          "left": -1,
+          "top": 206,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y21"
+          ],
+          "raw_base64": "AgAAAACTDAVU9q8JBgAAAMT1rwkBAAAAAAAAAAQhAOABAAAAAAAAAQEAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAzgAAAP//////////zgAAAP//////////KAi0CQ=="
+        }
+      ],
+      "generated": [
+        {
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "index": 0,
+          "channels": [
+            {
+              "size": 1717,
+              "sha256": "241b8969ebdc1eff3f0f489c4cb6369d31e1d1ff5fb80b18d47473b773cf1989"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        },
+        {
+          "name": "\ud14c\uc2a4\ud2b8",
+          "index": 1,
+          "channels": [
+            {
+              "size": 490,
+              "sha256": "80dd3a18972d21bdad4c3c0667a5e3b9c78fec7e394661fbc485a120a9ab35e0"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        }
+      ],
+      "initial_word_pools": [
+        {
+          "index": 24,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 25,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 26,
+          "code": 7,
+          "end": 1007,
+          "limit": 8
+        },
+        {
+          "index": 27,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 28,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 29,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 30,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        }
+      ],
+      "allocations": [
+        {
+          "compile_id": 4,
+          "allocation_id": 1,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2407ef0300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 2,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2407ee0300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 3,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2407ed0300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 4,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2407ec0300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 5,
+          "type": 51,
+          "category": 1,
+          "result": 1,
+          "after": "2100fc2300000400000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 6,
+          "type": 51,
+          "category": 1,
+          "result": 1,
+          "after": "2100f82300000400000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 7,
+          "type": 0,
+          "category": 1,
+          "result": 1,
+          "after": "2100f72300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 8,
+          "type": 0,
+          "category": 1,
+          "result": 1,
+          "after": "2100f62300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 9,
+          "type": 0,
+          "category": 1,
+          "result": 1,
+          "after": "2100f52300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 10,
+          "type": 0,
+          "category": 1,
+          "result": 1,
+          "after": "2100f42300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 11,
+          "type": 0,
+          "category": 1,
+          "result": 1,
+          "after": "2100f32300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 12,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2407eb0300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 10,
+          "allocation_id": 13,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2407ea0300000100000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "case": "extended-allocation-pools-20260930/ZR-only",
+      "evidence": {
+        "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/extended-allocation-pools-20260930/comparison.json",
+        "sha256": "96c5a51f04e659e2170da49ad97c256db1f40b60175501c5e3a7fb402110c683"
+      },
+      "native_directory": "research/experiments/sfc-graph-20260926/public-corpus-discovery/extended-allocation-pools-20260930/ZR-only/native-1",
+      "input_sha256": "7a67a3636edbfe889ec4161dc82f4df806dc1c1f70542887574a8e2ce40030a0",
+      "source_class": null,
+      "changed_pools": {
+        "D": [
+          4294967295,
+          4294967295
+        ],
+        "W": [
+          4294967295,
+          4294967295
+        ],
+        "R": [
+          4294967295,
+          4294967295
+        ],
+        "ZR": [
+          2000,
+          2007
+        ]
+      },
+      "trace": {
+        "pid": 75456,
+        "timed_out": false,
+        "detached": [
+          "('process-terminated', None)"
+        ]
+      },
+      "trace_errors": [],
+      "check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 2,
+        "rejected": true
+      },
+      "diagnostics": [
+        {
+          "phase": "ProgramCheckProgress",
+          "kind": 2,
+          "code": 84710144,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": 198,
+          "network": -1,
+          "left": -1,
+          "top": 198,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y21"
+          ],
+          "raw_base64": "AgAAAACTDAXERM4JBgAAAJxFzgkBAAAAAAAAAAQhAOABAAAAAAAAAQEAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAxgAAAP//////////xgAAAP//////////qHjVCQ=="
+        },
+        {
+          "phase": "ProgramCheckProgress",
+          "kind": 2,
+          "code": 84710144,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": 206,
+          "network": -1,
+          "left": -1,
+          "top": 206,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y21"
+          ],
+          "raw_base64": "AgAAAACTDAXMRc4JBgAAAEy00gkBAAAAAAAAAAQhAOABAAAAAAAAAQEAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAzgAAAP//////////zgAAAP//////////GHfVCQ=="
+        }
+      ],
+      "generated": [
+        {
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "index": 0,
+          "channels": [
+            {
+              "size": 1717,
+              "sha256": "14faef101007648628b8d4a635bf58324ccb9c5e8be69046f3dffa87371aa144"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        },
+        {
+          "name": "\ud14c\uc2a4\ud2b8",
+          "index": 1,
+          "channels": [
+            {
+              "size": 490,
+              "sha256": "008c5eebef73527fbdd9d6a02ee743bbf010fc328764879be653d19b1eb1028b"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        }
+      ],
+      "initial_word_pools": [
+        {
+          "index": 24,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 25,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 26,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 27,
+          "code": 25,
+          "end": 2007,
+          "limit": 8
+        },
+        {
+          "index": 28,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 29,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 30,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        }
+      ],
+      "allocations": [
+        {
+          "compile_id": 4,
+          "allocation_id": 1,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2419d70700000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 2,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2419d60700000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 3,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2419d50700000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 4,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2419d40700000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 5,
+          "type": 51,
+          "category": 1,
+          "result": 1,
+          "after": "2100fc2300000400000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 6,
+          "type": 51,
+          "category": 1,
+          "result": 1,
+          "after": "2100f82300000400000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 7,
+          "type": 0,
+          "category": 1,
+          "result": 1,
+          "after": "2100f72300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 8,
+          "type": 0,
+          "category": 1,
+          "result": 1,
+          "after": "2100f62300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 9,
+          "type": 0,
+          "category": 1,
+          "result": 1,
+          "after": "2100f52300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 10,
+          "type": 0,
+          "category": 1,
+          "result": 1,
+          "after": "2100f42300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 11,
+          "type": 0,
+          "category": 1,
+          "result": 1,
+          "after": "2100f32300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 12,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2419d30700000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 10,
+          "allocation_id": 13,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2419d20700000100000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "case": "retain-pool-selection-20260930/ordinary-D-W-ZR",
+      "evidence": {
+        "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/retain-pool-selection-20260930/comparison.json",
+        "sha256": "5502e05b7a61bdd03ee090debcaf85182f333ccb8aad27e535d3302d1e09dc33"
+      },
+      "native_directory": "research/experiments/sfc-graph-20260926/public-corpus-discovery/retain-pool-selection-20260930/ordinary-D-W-ZR/native-1",
+      "input_sha256": "98c3e7efd769fe21a53cfab2e2668885661fc83f6bd2e36d9e666ab3acb371c1",
+      "source_class": null,
+      "changed_pools": {
+        "D": [
+          7000,
+          7000
+        ],
+        "W": [
+          256,
+          256
+        ],
+        "R": [
+          4294967295,
+          4294967295
+        ],
+        "ZR": [
+          2000,
+          2007
+        ]
+      },
+      "trace": {
+        "pid": 29664,
+        "timed_out": false,
+        "detached": [
+          "('process-terminated', None)"
+        ]
+      },
+      "trace_errors": [],
+      "check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 2,
+        "rejected": true
+      },
+      "diagnostics": [
+        {
+          "phase": "ProgramCheckProgress",
+          "kind": 2,
+          "code": 84710144,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": 198,
+          "network": -1,
+          "left": -1,
+          "top": 198,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y21"
+          ],
+          "raw_base64": "AgAAAACTDAWMeeAJBgAAAHR54AkBAAAAAAAAAAQhAOABAAAAAAAAAQEAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAxgAAAP//////////xgAAAP//////////aJjTCg=="
+        },
+        {
+          "phase": "ProgramCheckProgress",
+          "kind": 2,
+          "code": 84710144,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": 206,
+          "network": -1,
+          "left": -1,
+          "top": 206,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y21"
+          ],
+          "raw_base64": "AgAAAACTDAW8eeAJBgAAAPx74AkBAAAAAAAAAAQhAOABAAAAAAAAAQEAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAzgAAAP//////////zgAAAP//////////uJjTCg=="
+        }
+      ],
+      "generated": [
+        {
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "index": 0,
+          "channels": [
+            {
+              "size": 1717,
+              "sha256": "953c29aff60e294d01e91630bc95338eb9670e80c85683615094120a741bc0c8"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        },
+        {
+          "name": "\ud14c\uc2a4\ud2b8",
+          "index": 1,
+          "channels": [
+            {
+              "size": 490,
+              "sha256": "c1b3644a47a92d2bd486b8e2b669d0f26029d03043fdee53fcb386dfaba8b197"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        }
+      ],
+      "initial_word_pools": [
+        {
+          "index": 24,
+          "code": 5,
+          "end": 7000,
+          "limit": 1
+        },
+        {
+          "index": 25,
+          "code": 6,
+          "end": 256,
+          "limit": 1
+        },
+        {
+          "index": 26,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 27,
+          "code": 25,
+          "end": 2007,
+          "limit": 8
+        },
+        {
+          "index": 28,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 29,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 30,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        }
+      ],
+      "allocations": [
+        {
+          "compile_id": 4,
+          "allocation_id": 1,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2405581b00000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 2,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2406000100000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 3,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2419d70700000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 4,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2419d60700000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 5,
+          "type": 51,
+          "category": 1,
+          "result": 1,
+          "after": "2100fc2300000400000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 6,
+          "type": 51,
+          "category": 1,
+          "result": 1,
+          "after": "2100f82300000400000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 7,
+          "type": 0,
+          "category": 1,
+          "result": 1,
+          "after": "2100f72300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 8,
+          "type": 0,
+          "category": 1,
+          "result": 1,
+          "after": "2100f62300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 9,
+          "type": 0,
+          "category": 1,
+          "result": 1,
+          "after": "2100f52300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 10,
+          "type": 0,
+          "category": 1,
+          "result": 1,
+          "after": "2100f42300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 11,
+          "type": 0,
+          "category": 1,
+          "result": 1,
+          "after": "2100f32300000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 4,
+          "allocation_id": 12,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2419d50700000100000000000000000000000000000000000000"
+        },
+        {
+          "compile_id": 10,
+          "allocation_id": 13,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2419d40700000100000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "case": "retain-pool-selection-20260930/local6-D1",
+      "evidence": {
+        "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/retain-pool-selection-20260930/comparison.json",
+        "sha256": "5502e05b7a61bdd03ee090debcaf85182f333ccb8aad27e535d3302d1e09dc33"
+      },
+      "native_directory": "research/experiments/sfc-graph-20260926/public-corpus-discovery/retain-pool-selection-20260930/local6-D1/native-1",
+      "input_sha256": "cd7dced84815bfe261cef44f6ee71300b0309e319e726f5aa71221734c504cdf",
+      "source_class": 6,
+      "changed_pools": {
+        "latch_D1": [
+          6000,
+          6007
+        ]
+      },
+      "trace": {
+        "pid": 67360,
+        "timed_out": false,
+        "detached": [
+          "('process-terminated', None)"
+        ]
+      },
+      "trace_errors": [],
+      "check": null,
+      "diagnostics": [
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1342984262,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": -1,
+          "network": -1,
+          "left": 0,
+          "top": 5,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [],
+          "raw_base64": "AgAAAEZQDFBUd8wMBQAAAHx2zAwAAAAAAAAAAMAhAOABAAAAAAAAAQEAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8AAAAABQAAAP//////////AAAAAA=="
+        },
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1342242816,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": -1,
+          "network": -1,
+          "left": -1,
+          "top": -1,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [],
+          "raw_base64": "AgAAAAAAAVA89OMMAwAAADT24wwAAAAAAAAAAAAAAOwBAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////AAAAAA=="
+        }
+      ],
+      "generated": [
+        {
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "index": 0,
+          "channels": [
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        },
+        {
+          "name": "\ud14c\uc2a4\ud2b8",
+          "index": 1,
+          "channels": [
+            {
+              "size": 490,
+              "sha256": "f929d3a5c82521c5e9a0814aaab2c65656a1f6682b1e38bc8010009a221d9e09"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        }
+      ],
+      "initial_word_pools": [
+        {
+          "index": 24,
+          "code": 5,
+          "end": 13311,
+          "limit": 6656
+        },
+        {
+          "index": 25,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 26,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 27,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 28,
+          "code": 5,
+          "end": 6007,
+          "limit": 8
+        },
+        {
+          "index": 29,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 30,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        }
+      ],
+      "allocations": [
+        {
+          "compile_id": 7,
+          "allocation_id": 1,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2405ff3300000100000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "case": "retain-pool-selection-20260930/local6-D2",
+      "evidence": {
+        "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/retain-pool-selection-20260930/comparison.json",
+        "sha256": "5502e05b7a61bdd03ee090debcaf85182f333ccb8aad27e535d3302d1e09dc33"
+      },
+      "native_directory": "research/experiments/sfc-graph-20260926/public-corpus-discovery/retain-pool-selection-20260930/local6-D2/native-1",
+      "input_sha256": "f4008919aff7fa0f18190de3df1e6884f4ef361b41a01dbd0091cb569cc7afe6",
+      "source_class": 6,
+      "changed_pools": {
+        "latch_D2": [
+          6100,
+          6107
+        ]
+      },
+      "trace": {
+        "pid": 44188,
+        "timed_out": false,
+        "detached": [
+          "('process-terminated', None)"
+        ]
+      },
+      "trace_errors": [],
+      "check": null,
+      "diagnostics": [
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1342984262,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": -1,
+          "network": -1,
+          "left": 0,
+          "top": 5,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [],
+          "raw_base64": "AgAAAEZQDFBENnkKBQAAACw2eQoAAAAAAAAAAMAhAOABAAAAAAAAAQEAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8AAAAABQAAAP//////////AAAAAA=="
+        },
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1342984262,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": -1,
+          "network": -1,
+          "left": 0,
+          "top": 5,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [],
+          "raw_base64": "AgAAAEZQDFBENnkKBQAAACw2eQoAAAAAAAAAAMAhAOABAAAAAAAAAQEAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8AAAAABQAAAP//////////AAAAAA=="
+        },
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1342242816,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": -1,
+          "network": -1,
+          "left": -1,
+          "top": -1,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [],
+          "raw_base64": "AgAAAAAAAVD8wXcKAwAAAFS+dwoAAAAAAAAAAAAAAOwBAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////AAAAAA=="
+        }
+      ],
+      "generated": [
+        {
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "index": 0,
+          "channels": [
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        },
+        {
+          "name": "\ud14c\uc2a4\ud2b8",
+          "index": 1,
+          "channels": [
+            {
+              "size": 490,
+              "sha256": "f929d3a5c82521c5e9a0814aaab2c65656a1f6682b1e38bc8010009a221d9e09"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        }
+      ],
+      "initial_word_pools": [
+        {
+          "index": 24,
+          "code": 5,
+          "end": 13311,
+          "limit": 6656
+        },
+        {
+          "index": 25,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 26,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 27,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 28,
+          "code": 5,
+          "end": 6107,
+          "limit": 8
+        },
+        {
+          "index": 29,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 30,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        }
+      ],
+      "allocations": [
+        {
+          "compile_id": 7,
+          "allocation_id": 1,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2405ff3300000100000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "case": "retain-pool-selection-20260930/local6-both",
+      "evidence": {
+        "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/retain-pool-selection-20260930/comparison.json",
+        "sha256": "5502e05b7a61bdd03ee090debcaf85182f333ccb8aad27e535d3302d1e09dc33"
+      },
+      "native_directory": "research/experiments/sfc-graph-20260926/public-corpus-discovery/retain-pool-selection-20260930/local6-both/native-1",
+      "input_sha256": "3e18692cf338b6e375f585d7abb84c5adbdbcd9845baaa342bf4fdf18e088e3a",
+      "source_class": 6,
+      "changed_pools": {
+        "latch_D1": [
+          6000,
+          6007
+        ],
+        "latch_D2": [
+          6100,
+          6107
+        ]
+      },
+      "trace": {
+        "pid": 10696,
+        "timed_out": false,
+        "detached": [
+          "('process-terminated', None)"
+        ]
+      },
+      "trace_errors": [],
+      "check": null,
+      "diagnostics": [
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1342984262,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": -1,
+          "network": -1,
+          "left": 0,
+          "top": 5,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [],
+          "raw_base64": "AgAAAEZQDFA0SqwMBQAAAGRKrAwAAAAAAAAAAMAhAOABAAAAAAAAAQEAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8AAAAABQAAAP//////////AAAAAA=="
+        },
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1342984262,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": -1,
+          "network": -1,
+          "left": 0,
+          "top": 5,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [],
+          "raw_base64": "AgAAAEZQDFA0SqwMBQAAAGRKrAwAAAAAAAAAAMAhAOABAAAAAAAAAQEAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8AAAAABQAAAP//////////AAAAAA=="
+        },
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1342242816,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": -1,
+          "network": -1,
+          "left": -1,
+          "top": -1,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [],
+          "raw_base64": "AgAAAAAAAVAE6qoMAwAAAIzpqgwAAAAAAAAAAAAAAOwBAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////AAAAAA=="
+        }
+      ],
+      "generated": [
+        {
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "index": 0,
+          "channels": [
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        },
+        {
+          "name": "\ud14c\uc2a4\ud2b8",
+          "index": 1,
+          "channels": [
+            {
+              "size": 490,
+              "sha256": "f929d3a5c82521c5e9a0814aaab2c65656a1f6682b1e38bc8010009a221d9e09"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        }
+      ],
+      "initial_word_pools": [
+        {
+          "index": 24,
+          "code": 5,
+          "end": 13311,
+          "limit": 6656
+        },
+        {
+          "index": 25,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 26,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 27,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 28,
+          "code": 5,
+          "end": 6007,
+          "limit": 8
+        },
+        {
+          "index": 29,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 30,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        }
+      ],
+      "allocations": [
+        {
+          "compile_id": 7,
+          "allocation_id": 1,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2405ff3300000100000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "case": "retain-pool-selection-20260930/local6-W1",
+      "evidence": {
+        "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/retain-pool-selection-20260930/comparison.json",
+        "sha256": "5502e05b7a61bdd03ee090debcaf85182f333ccb8aad27e535d3302d1e09dc33"
+      },
+      "native_directory": "research/experiments/sfc-graph-20260926/public-corpus-discovery/retain-pool-selection-20260930/local6-W1/native-1",
+      "input_sha256": "3caebf108b6769f31712e4ca33263c133196759e1da9defddd2cf51b8da76af5",
+      "source_class": 6,
+      "changed_pools": {
+        "latch_W1": [
+          512,
+          519
+        ]
+      },
+      "trace": {
+        "pid": 25268,
+        "timed_out": false,
+        "detached": [
+          "('process-terminated', None)"
+        ]
+      },
+      "trace_errors": [],
+      "check": null,
+      "diagnostics": [
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1342984262,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": -1,
+          "network": -1,
+          "left": 0,
+          "top": 5,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [],
+          "raw_base64": "AgAAAEZQDFBEuLQJBQAAAIy4tAkAAAAAAAAAAMAhAOABAAAAAAAAAQEAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8AAAAABQAAAP//////////AAAAAA=="
+        },
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1342984262,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": -1,
+          "network": -1,
+          "left": 0,
+          "top": 5,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [],
+          "raw_base64": "AgAAAEZQDFBEuLQJBQAAAIy4tAkAAAAAAAAAAMAhAOABAAAAAAAAAQEAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8AAAAABQAAAP//////////AAAAAA=="
+        },
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1342242816,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": -1,
+          "network": -1,
+          "left": -1,
+          "top": -1,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [],
+          "raw_base64": "AgAAAAAAAVB01rIJAwAAAJRF/AAAAAAAAAAAAAAAAOwBAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////AAAAAA=="
+        }
+      ],
+      "generated": [
+        {
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "index": 0,
+          "channels": [
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        },
+        {
+          "name": "\ud14c\uc2a4\ud2b8",
+          "index": 1,
+          "channels": [
+            {
+              "size": 490,
+              "sha256": "f929d3a5c82521c5e9a0814aaab2c65656a1f6682b1e38bc8010009a221d9e09"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        }
+      ],
+      "initial_word_pools": [
+        {
+          "index": 24,
+          "code": 5,
+          "end": 13311,
+          "limit": 6656
+        },
+        {
+          "index": 25,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 26,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 27,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 28,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 29,
+          "code": 6,
+          "end": 519,
+          "limit": 8
+        },
+        {
+          "index": 30,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        }
+      ],
+      "allocations": [
+        {
+          "compile_id": 7,
+          "allocation_id": 1,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2405ff3300000100000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "case": "retain-pool-selection-20260930/local6-W2",
+      "evidence": {
+        "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/retain-pool-selection-20260930/comparison.json",
+        "sha256": "5502e05b7a61bdd03ee090debcaf85182f333ccb8aad27e535d3302d1e09dc33"
+      },
+      "native_directory": "research/experiments/sfc-graph-20260926/public-corpus-discovery/retain-pool-selection-20260930/local6-W2/native-1",
+      "input_sha256": "89a624a699f17796dc43a5f6ed6ab9bf57fdb6f7a796fab6364a519acd3fba61",
+      "source_class": 6,
+      "changed_pools": {
+        "latch_W2": [
+          768,
+          775
+        ]
+      },
+      "trace": {
+        "pid": 65072,
+        "timed_out": false,
+        "detached": [
+          "('process-terminated', None)"
+        ]
+      },
+      "trace_errors": [],
+      "check": null,
+      "diagnostics": [
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1342984262,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": -1,
+          "network": -1,
+          "left": 0,
+          "top": 5,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [],
+          "raw_base64": "AgAAAEZQDFC8rakJBQAAACSsqQkAAAAAAAAAAMAhAOABAAAAAAAAAQEAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8AAAAABQAAAP//////////AAAAAA=="
+        },
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1342984262,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": -1,
+          "network": -1,
+          "left": 0,
+          "top": 5,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [],
+          "raw_base64": "AgAAAEZQDFC8rakJBQAAACSsqQkAAAAAAAAAAMAhAOABAAAAAAAAAQEAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8AAAAABQAAAP//////////AAAAAA=="
+        },
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1342242816,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": -1,
+          "network": -1,
+          "left": -1,
+          "top": -1,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [],
+          "raw_base64": "AgAAAAAAAVC0sqkJAwAAAPS0qQkAAAAAAAAAAAAAAOwBAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////////////////////AAAAAA=="
+        }
+      ],
+      "generated": [
+        {
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "index": 0,
+          "channels": [
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        },
+        {
+          "name": "\ud14c\uc2a4\ud2b8",
+          "index": 1,
+          "channels": [
+            {
+              "size": 490,
+              "sha256": "f929d3a5c82521c5e9a0814aaab2c65656a1f6682b1e38bc8010009a221d9e09"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        }
+      ],
+      "initial_word_pools": [
+        {
+          "index": 24,
+          "code": 5,
+          "end": 13311,
+          "limit": 6656
+        },
+        {
+          "index": 25,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 26,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 27,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 28,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        },
+        {
+          "index": 29,
+          "code": 6,
+          "end": 775,
+          "limit": 8
+        },
+        {
+          "index": 30,
+          "code": 0,
+          "end": 0,
+          "limit": 0
+        }
+      ],
+      "allocations": [
+        {
+          "compile_id": 7,
+          "allocation_id": 1,
+          "type": 2,
+          "category": 1,
+          "result": 1,
+          "after": "2405ff3300000100000000000000000000000000000000000000"
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "R-only, ZR-only and D/W/ZR compile but fresh checks retain the baseline duplicate-Y21 errors; these are not accepted complete projects.",
+    "Source class, compiler category and raw record fields are separate namespaces.",
+    "Other PLC families, retain variables, pool-constructor cause, general temporaries and arbitrary FB locals remain unverified."
+  ]
+}

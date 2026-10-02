@@ -1,0 +1,2662 @@
+{
+  "files_verified": 9270,
+  "missing_archives": [],
+  "comparisons": [
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-store-before-enable-B2/current-fit",
+      "status": "byte-identical",
+      "bytes": 343
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-store-before-enable-B2/before-native",
+      "status": "byte-identical",
+      "bytes": 343
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-store-before-enable-B2/BOOL-store-before-enable-B2/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 343
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-store-before-enable-B2/BOOL-store-before-enable-B2/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-store-before-enable-B2/BOOL-store-before-enable-B2/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-store-before-enable-B2/BOOL-store-before-enable-B2/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 343
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-store-before-enable-B2/BOOL-store-before-enable-B2/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-store-before-enable-B2/BOOL-store-before-enable-B2/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-store-before-enable-B2/BOOL-store-before-enable-B2/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 343
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-store-before-enable-B2/BOOL-store-before-enable-B2/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-store-before-enable-B2/BOOL-store-before-enable-B2/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-store-before-enable-B2/BOOL-store-before-enable-B2/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 343
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-store-before-enable-B2/BOOL-store-before-enable-B2/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-store-before-enable-B2/BOOL-store-before-enable-B2/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-enable-before-store-B1/current-fit",
+      "status": "byte-identical",
+      "bytes": 343
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-enable-before-store-B1/before-native",
+      "status": "byte-identical",
+      "bytes": 343
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-enable-before-store-B1/BOOL-enable-before-store-B1/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 343
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-enable-before-store-B1/BOOL-enable-before-store-B1/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-enable-before-store-B1/BOOL-enable-before-store-B1/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-enable-before-store-B1/BOOL-enable-before-store-B1/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 343
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-enable-before-store-B1/BOOL-enable-before-store-B1/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-enable-before-store-B1/BOOL-enable-before-store-B1/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-enable-before-store-B1/BOOL-enable-before-store-B1/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 343
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-enable-before-store-B1/BOOL-enable-before-store-B1/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-enable-before-store-B1/BOOL-enable-before-store-B1/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-enable-before-store-B1/BOOL-enable-before-store-B1/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 343
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-enable-before-store-B1/BOOL-enable-before-store-B1/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-direct-store-order-entry-forward-20260930/BOOL-enable-before-store-B1/BOOL-enable-before-store-B1/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-OR-AND/current-fit",
+      "status": "byte-identical",
+      "bytes": 249
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-OR-AND/BOOL-nested-OR-AND/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 249
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-OR-AND/BOOL-nested-OR-AND/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-OR-AND/BOOL-nested-OR-AND/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-OR-AND/BOOL-nested-OR-AND/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 249
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-OR-AND/BOOL-nested-OR-AND/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-OR-AND/BOOL-nested-OR-AND/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-OR-AND/BOOL-nested-OR-AND/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 249
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-OR-AND/BOOL-nested-OR-AND/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-OR-AND/BOOL-nested-OR-AND/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-OR-AND/BOOL-nested-OR-AND/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 249
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-OR-AND/BOOL-nested-OR-AND/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-OR-AND/BOOL-nested-OR-AND/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-XOR-OR/current-fit",
+      "status": "byte-identical",
+      "bytes": 280
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-XOR-OR/BOOL-nested-XOR-OR/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 280
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-XOR-OR/BOOL-nested-XOR-OR/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-XOR-OR/BOOL-nested-XOR-OR/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-XOR-OR/BOOL-nested-XOR-OR/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 280
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-XOR-OR/BOOL-nested-XOR-OR/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-XOR-OR/BOOL-nested-XOR-OR/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-XOR-OR/BOOL-nested-XOR-OR/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 280
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-XOR-OR/BOOL-nested-XOR-OR/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-XOR-OR/BOOL-nested-XOR-OR/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-XOR-OR/BOOL-nested-XOR-OR/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 280
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-XOR-OR/BOOL-nested-XOR-OR/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-XOR-OR/BOOL-nested-XOR-OR/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-mixed-compare/current-fit",
+      "status": "byte-identical",
+      "bytes": 306
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-mixed-compare/BOOL-nested-mixed-compare/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 306
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-mixed-compare/BOOL-nested-mixed-compare/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-mixed-compare/BOOL-nested-mixed-compare/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-mixed-compare/BOOL-nested-mixed-compare/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 306
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-mixed-compare/BOOL-nested-mixed-compare/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-mixed-compare/BOOL-nested-mixed-compare/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-mixed-compare/BOOL-nested-mixed-compare/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 306
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-mixed-compare/BOOL-nested-mixed-compare/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-mixed-compare/BOOL-nested-mixed-compare/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-mixed-compare/BOOL-nested-mixed-compare/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 306
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-mixed-compare/BOOL-nested-mixed-compare/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-graph-discovery-20260930/BOOL-nested-mixed-compare/BOOL-nested-mixed-compare/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-chain-B2/current-fit",
+      "status": "byte-identical",
+      "bytes": 302
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-chain-B2/before-native",
+      "status": "byte-identical",
+      "bytes": 302
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-chain-B2/BOOL-recursive-left-chain-B2/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 302
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-chain-B2/BOOL-recursive-left-chain-B2/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-chain-B2/BOOL-recursive-left-chain-B2/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-chain-B2/BOOL-recursive-left-chain-B2/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 302
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-chain-B2/BOOL-recursive-left-chain-B2/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-chain-B2/BOOL-recursive-left-chain-B2/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-chain-B2/BOOL-recursive-left-chain-B2/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 302
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-chain-B2/BOOL-recursive-left-chain-B2/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-chain-B2/BOOL-recursive-left-chain-B2/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-chain-B2/BOOL-recursive-left-chain-B2/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 302
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-chain-B2/BOOL-recursive-left-chain-B2/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-chain-B2/BOOL-recursive-left-chain-B2/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-stable-capture/current-fit",
+      "status": "byte-identical",
+      "bytes": 188
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-stable-capture/before-native",
+      "status": "byte-identical",
+      "bytes": 188
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-stable-capture/BOOL-recursive-left-stable-capture/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 188
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-stable-capture/BOOL-recursive-left-stable-capture/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-stable-capture/BOOL-recursive-left-stable-capture/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-stable-capture/BOOL-recursive-left-stable-capture/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 188
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-stable-capture/BOOL-recursive-left-stable-capture/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-stable-capture/BOOL-recursive-left-stable-capture/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-stable-capture/BOOL-recursive-left-stable-capture/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 188
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-stable-capture/BOOL-recursive-left-stable-capture/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-stable-capture/BOOL-recursive-left-stable-capture/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-stable-capture/BOOL-recursive-left-stable-capture/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 188
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-stable-capture/BOOL-recursive-left-stable-capture/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-left-stable-capture/BOOL-recursive-left-stable-capture/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-right-stable-block/current-fit",
+      "status": "byte-identical",
+      "bytes": 185
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-right-stable-block/before-native",
+      "status": "byte-identical",
+      "bytes": 185
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-right-stable-block/BOOL-recursive-right-stable-block/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 185
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-right-stable-block/BOOL-recursive-right-stable-block/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-right-stable-block/BOOL-recursive-right-stable-block/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-right-stable-block/BOOL-recursive-right-stable-block/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 185
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-right-stable-block/BOOL-recursive-right-stable-block/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-right-stable-block/BOOL-recursive-right-stable-block/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-right-stable-block/BOOL-recursive-right-stable-block/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 185
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-right-stable-block/BOOL-recursive-right-stable-block/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-right-stable-block/BOOL-recursive-right-stable-block/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-right-stable-block/BOOL-recursive-right-stable-block/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 185
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-right-stable-block/BOOL-recursive-right-stable-block/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-right-stable-block/BOOL-recursive-right-stable-block/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-ORI/current-fit",
+      "status": "byte-identical",
+      "bytes": 166
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-ORI/before-native",
+      "status": "byte-identical",
+      "bytes": 166
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-ORI/BOOL-recursive-ORI/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 166
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-ORI/BOOL-recursive-ORI/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-ORI/BOOL-recursive-ORI/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-ORI/BOOL-recursive-ORI/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 166
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-ORI/BOOL-recursive-ORI/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-ORI/BOOL-recursive-ORI/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-ORI/BOOL-recursive-ORI/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 166
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-ORI/BOOL-recursive-ORI/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-ORI/BOOL-recursive-ORI/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-ORI/BOOL-recursive-ORI/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 166
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-ORI/BOOL-recursive-ORI/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-ORI/BOOL-recursive-ORI/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-indexed-comparison/current-fit",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-indexed-comparison/before-native",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-indexed-comparison/BOOL-recursive-indexed-comparison/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-indexed-comparison/BOOL-recursive-indexed-comparison/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-indexed-comparison/BOOL-recursive-indexed-comparison/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-indexed-comparison/BOOL-recursive-indexed-comparison/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-indexed-comparison/BOOL-recursive-indexed-comparison/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-indexed-comparison/BOOL-recursive-indexed-comparison/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-indexed-comparison/BOOL-recursive-indexed-comparison/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-indexed-comparison/BOOL-recursive-indexed-comparison/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-indexed-comparison/BOOL-recursive-indexed-comparison/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-indexed-comparison/BOOL-recursive-indexed-comparison/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-indexed-comparison/BOOL-recursive-indexed-comparison/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-recursive-forward-20260930/BOOL-recursive-indexed-comparison/BOOL-recursive-indexed-comparison/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-scalar/current-fit",
+      "status": "byte-identical",
+      "bytes": 138
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-scalar/BOOL-XOR-scalar/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 138
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-scalar/BOOL-XOR-scalar/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-scalar/BOOL-XOR-scalar/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-scalar/BOOL-XOR-scalar/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 138
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-scalar/BOOL-XOR-scalar/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-scalar/BOOL-XOR-scalar/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-scalar/BOOL-XOR-scalar/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 138
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-scalar/BOOL-XOR-scalar/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-scalar/BOOL-XOR-scalar/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-scalar/BOOL-XOR-scalar/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 138
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-scalar/BOOL-XOR-scalar/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-scalar/BOOL-XOR-scalar/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-left-index/current-fit",
+      "status": "byte-identical",
+      "bytes": 174
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-left-index/BOOL-XOR-left-index/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 174
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-left-index/BOOL-XOR-left-index/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-left-index/BOOL-XOR-left-index/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-left-index/BOOL-XOR-left-index/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 174
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-left-index/BOOL-XOR-left-index/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-left-index/BOOL-XOR-left-index/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-left-index/BOOL-XOR-left-index/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 174
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-left-index/BOOL-XOR-left-index/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-left-index/BOOL-XOR-left-index/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-left-index/BOOL-XOR-left-index/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 174
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-left-index/BOOL-XOR-left-index/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-left-index/BOOL-XOR-left-index/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-right-index/current-fit",
+      "status": "byte-identical",
+      "bytes": 182
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-right-index/BOOL-XOR-right-index/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 182
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-right-index/BOOL-XOR-right-index/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-right-index/BOOL-XOR-right-index/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-right-index/BOOL-XOR-right-index/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 182
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-right-index/BOOL-XOR-right-index/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-right-index/BOOL-XOR-right-index/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-right-index/BOOL-XOR-right-index/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 182
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-right-index/BOOL-XOR-right-index/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-right-index/BOOL-XOR-right-index/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-right-index/BOOL-XOR-right-index/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 182
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-right-index/BOOL-XOR-right-index/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-right-index/BOOL-XOR-right-index/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-NOT-scalar/current-fit",
+      "status": "byte-identical",
+      "bytes": 138
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-NOT-scalar/BOOL-XOR-NOT-scalar/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 138
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-NOT-scalar/BOOL-XOR-NOT-scalar/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-NOT-scalar/BOOL-XOR-NOT-scalar/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-NOT-scalar/BOOL-XOR-NOT-scalar/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 138
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-NOT-scalar/BOOL-XOR-NOT-scalar/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-NOT-scalar/BOOL-XOR-NOT-scalar/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-NOT-scalar/BOOL-XOR-NOT-scalar/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 138
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-NOT-scalar/BOOL-XOR-NOT-scalar/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-NOT-scalar/BOOL-XOR-NOT-scalar/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-NOT-scalar/BOOL-XOR-NOT-scalar/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 138
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-NOT-scalar/BOOL-XOR-NOT-scalar/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-NOT-scalar/BOOL-XOR-NOT-scalar/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-comparison/current-fit",
+      "status": "byte-identical",
+      "bytes": 152
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-comparison/BOOL-XOR-comparison/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 152
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-comparison/BOOL-XOR-comparison/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-comparison/BOOL-XOR-comparison/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-comparison/BOOL-XOR-comparison/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 152
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-comparison/BOOL-XOR-comparison/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-comparison/BOOL-XOR-comparison/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-comparison/BOOL-XOR-comparison/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 152
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-comparison/BOOL-XOR-comparison/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-comparison/BOOL-XOR-comparison/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-comparison/BOOL-XOR-comparison/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 152
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-comparison/BOOL-XOR-comparison/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-XOR-discovery-20260930/BOOL-XOR-comparison/BOOL-XOR-comparison/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-NOT/current-fit",
+      "status": "byte-identical",
+      "bytes": 174
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-NOT/before-native",
+      "status": "byte-identical",
+      "bytes": 174
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-NOT/BOOL-XOR-right-NOT/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 174
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-NOT/BOOL-XOR-right-NOT/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-NOT/BOOL-XOR-right-NOT/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-NOT/BOOL-XOR-right-NOT/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 174
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-NOT/BOOL-XOR-right-NOT/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-NOT/BOOL-XOR-right-NOT/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-NOT/BOOL-XOR-right-NOT/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 174
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-NOT/BOOL-XOR-right-NOT/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-NOT/BOOL-XOR-right-NOT/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-NOT/BOOL-XOR-right-NOT/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 174
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-NOT/BOOL-XOR-right-NOT/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-NOT/BOOL-XOR-right-NOT/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-comparison-index/current-fit",
+      "status": "byte-identical",
+      "bytes": 202
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-comparison-index/before-native",
+      "status": "byte-identical",
+      "bytes": 202
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-comparison-index/BOOL-XOR-comparison-index/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 202
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-comparison-index/BOOL-XOR-comparison-index/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-comparison-index/BOOL-XOR-comparison-index/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-comparison-index/BOOL-XOR-comparison-index/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 202
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-comparison-index/BOOL-XOR-comparison-index/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-comparison-index/BOOL-XOR-comparison-index/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-comparison-index/BOOL-XOR-comparison-index/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 202
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-comparison-index/BOOL-XOR-comparison-index/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-comparison-index/BOOL-XOR-comparison-index/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-comparison-index/BOOL-XOR-comparison-index/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 202
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-comparison-index/BOOL-XOR-comparison-index/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-comparison-index/BOOL-XOR-comparison-index/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-pair-B2/current-fit",
+      "status": "byte-identical",
+      "bytes": 245
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-pair-B2/before-native",
+      "status": "byte-identical",
+      "bytes": 245
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-pair-B2/BOOL-XOR-pair-B2/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 245
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-pair-B2/BOOL-XOR-pair-B2/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-pair-B2/BOOL-XOR-pair-B2/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-pair-B2/BOOL-XOR-pair-B2/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 245
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-pair-B2/BOOL-XOR-pair-B2/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-pair-B2/BOOL-XOR-pair-B2/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-pair-B2/BOOL-XOR-pair-B2/reopen/native-2/read-3-0",
+      "status": "byte-identical",
+      "bytes": 245
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-pair-B2/BOOL-XOR-pair-B2/reopen/native-2/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-pair-B2/BOOL-XOR-pair-B2/reopen/native-2/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-pair-B2/BOOL-XOR-pair-B2/reopen/native-2/read-5-0",
+      "status": "byte-identical",
+      "bytes": 245
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-pair-B2/BOOL-XOR-pair-B2/reopen/native-2/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-pair-B2/BOOL-XOR-pair-B2/reopen/native-2/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-comparison/current-fit",
+      "status": "byte-identical",
+      "bytes": 152
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-comparison/before-native",
+      "status": "byte-identical",
+      "bytes": 152
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-comparison/BOOL-XOR-right-comparison/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 152
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-comparison/BOOL-XOR-right-comparison/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-comparison/BOOL-XOR-right-comparison/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-comparison/BOOL-XOR-right-comparison/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 152
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-comparison/BOOL-XOR-right-comparison/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-comparison/BOOL-XOR-right-comparison/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-comparison/BOOL-XOR-right-comparison/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 152
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-comparison/BOOL-XOR-right-comparison/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-comparison/BOOL-XOR-right-comparison/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-comparison/BOOL-XOR-right-comparison/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 152
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-comparison/BOOL-XOR-right-comparison/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-right-comparison/BOOL-XOR-right-comparison/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-enable-B2/current-fit",
+      "status": "byte-identical",
+      "bytes": 253
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-enable-B2/before-native",
+      "status": "byte-identical",
+      "bytes": 253
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-enable-B2/BOOL-XOR-enable-B2/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 253
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-enable-B2/BOOL-XOR-enable-B2/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-enable-B2/BOOL-XOR-enable-B2/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-enable-B2/BOOL-XOR-enable-B2/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 253
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-enable-B2/BOOL-XOR-enable-B2/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-enable-B2/BOOL-XOR-enable-B2/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-enable-B2/BOOL-XOR-enable-B2/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 253
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-enable-B2/BOOL-XOR-enable-B2/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-enable-B2/BOOL-XOR-enable-B2/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-enable-B2/BOOL-XOR-enable-B2/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 253
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-enable-B2/BOOL-XOR-enable-B2/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-enable-B2/BOOL-XOR-enable-B2/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-dynamic-store-B2/current-fit",
+      "status": "byte-identical",
+      "bytes": 262
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-dynamic-store-B2/before-native",
+      "status": "byte-identical",
+      "bytes": 262
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-dynamic-store-B2/BOOL-XOR-dynamic-store-B2/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 262
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-dynamic-store-B2/BOOL-XOR-dynamic-store-B2/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-dynamic-store-B2/BOOL-XOR-dynamic-store-B2/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-dynamic-store-B2/BOOL-XOR-dynamic-store-B2/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 262
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-dynamic-store-B2/BOOL-XOR-dynamic-store-B2/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-dynamic-store-B2/BOOL-XOR-dynamic-store-B2/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-dynamic-store-B2/BOOL-XOR-dynamic-store-B2/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 262
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-dynamic-store-B2/BOOL-XOR-dynamic-store-B2/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-dynamic-store-B2/BOOL-XOR-dynamic-store-B2/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-dynamic-store-B2/BOOL-XOR-dynamic-store-B2/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 262
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-dynamic-store-B2/BOOL-XOR-dynamic-store-B2/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-forward-20260930/BOOL-XOR-dynamic-store-B2/BOOL-XOR-dynamic-store-B2/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-input-forward-20260930/BOOL-XOR-input-corrected-B2/current-fit",
+      "status": "byte-identical",
+      "bytes": 202
+    },
+    {
+      "case": "st-bool-port-XOR-input-forward-20260930/BOOL-XOR-input-corrected-B2/before-native",
+      "status": "byte-identical",
+      "bytes": 202
+    },
+    {
+      "case": "st-bool-port-XOR-input-forward-20260930/BOOL-XOR-input-corrected-B2/BOOL-XOR-input-corrected-B2/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 202
+    },
+    {
+      "case": "st-bool-port-XOR-input-forward-20260930/BOOL-XOR-input-corrected-B2/BOOL-XOR-input-corrected-B2/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-input-forward-20260930/BOOL-XOR-input-corrected-B2/BOOL-XOR-input-corrected-B2/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-input-forward-20260930/BOOL-XOR-input-corrected-B2/BOOL-XOR-input-corrected-B2/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 202
+    },
+    {
+      "case": "st-bool-port-XOR-input-forward-20260930/BOOL-XOR-input-corrected-B2/BOOL-XOR-input-corrected-B2/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-input-forward-20260930/BOOL-XOR-input-corrected-B2/BOOL-XOR-input-corrected-B2/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-input-forward-20260930/BOOL-XOR-input-corrected-B2/BOOL-XOR-input-corrected-B2/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 202
+    },
+    {
+      "case": "st-bool-port-XOR-input-forward-20260930/BOOL-XOR-input-corrected-B2/BOOL-XOR-input-corrected-B2/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-input-forward-20260930/BOOL-XOR-input-corrected-B2/BOOL-XOR-input-corrected-B2/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-input-forward-20260930/BOOL-XOR-input-corrected-B2/BOOL-XOR-input-corrected-B2/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 202
+    },
+    {
+      "case": "st-bool-port-XOR-input-forward-20260930/BOOL-XOR-input-corrected-B2/BOOL-XOR-input-corrected-B2/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-XOR-input-forward-20260930/BOOL-XOR-input-corrected-B2/BOOL-XOR-input-corrected-B2/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-index-B2/current-fit",
+      "status": "byte-identical",
+      "bytes": 302
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-index-B2/BOOL-right-tree-left-index-B2/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 302
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-index-B2/BOOL-right-tree-left-index-B2/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-index-B2/BOOL-right-tree-left-index-B2/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-index-B2/BOOL-right-tree-left-index-B2/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 302
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-index-B2/BOOL-right-tree-left-index-B2/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-index-B2/BOOL-right-tree-left-index-B2/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-index-B2/BOOL-right-tree-left-index-B2/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 302
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-index-B2/BOOL-right-tree-left-index-B2/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-index-B2/BOOL-right-tree-left-index-B2/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-index-B2/BOOL-right-tree-left-index-B2/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 302
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-index-B2/BOOL-right-tree-left-index-B2/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-index-B2/BOOL-right-tree-left-index-B2/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-both-B3/current-fit",
+      "status": "byte-identical",
+      "bytes": 374
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-both-B3/BOOL-right-tree-both-B3/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 374
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-both-B3/BOOL-right-tree-both-B3/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-both-B3/BOOL-right-tree-both-B3/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-both-B3/BOOL-right-tree-both-B3/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 374
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-both-B3/BOOL-right-tree-both-B3/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-both-B3/BOOL-right-tree-both-B3/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-both-B3/BOOL-right-tree-both-B3/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 374
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-both-B3/BOOL-right-tree-both-B3/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-both-B3/BOOL-right-tree-both-B3/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-both-B3/BOOL-right-tree-both-B3/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 374
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-both-B3/BOOL-right-tree-both-B3/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-both-B3/BOOL-right-tree-both-B3/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-scalar-B1/current-fit",
+      "status": "byte-identical",
+      "bytes": 238
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-scalar-B1/BOOL-right-tree-left-scalar-B1/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 238
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-scalar-B1/BOOL-right-tree-left-scalar-B1/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-scalar-B1/BOOL-right-tree-left-scalar-B1/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-scalar-B1/BOOL-right-tree-left-scalar-B1/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 238
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-scalar-B1/BOOL-right-tree-left-scalar-B1/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-scalar-B1/BOOL-right-tree-left-scalar-B1/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-scalar-B1/BOOL-right-tree-left-scalar-B1/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 238
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-scalar-B1/BOOL-right-tree-left-scalar-B1/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-scalar-B1/BOOL-right-tree-left-scalar-B1/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-scalar-B1/BOOL-right-tree-left-scalar-B1/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 238
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-scalar-B1/BOOL-right-tree-left-scalar-B1/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-expression-right-tree-discovery-20260930/BOOL-right-tree-left-scalar-B1/BOOL-right-tree-left-scalar-B1/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-AND-OR-B3/current-fit",
+      "status": "byte-identical",
+      "bytes": 374
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-AND-OR-B3/before-native",
+      "status": "byte-identical",
+      "bytes": 374
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-AND-OR-B3/BOOL-right-tree-AND-OR-B3/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 374
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-AND-OR-B3/BOOL-right-tree-AND-OR-B3/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-AND-OR-B3/BOOL-right-tree-AND-OR-B3/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-AND-OR-B3/BOOL-right-tree-AND-OR-B3/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 374
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-AND-OR-B3/BOOL-right-tree-AND-OR-B3/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-AND-OR-B3/BOOL-right-tree-AND-OR-B3/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-AND-OR-B3/BOOL-right-tree-AND-OR-B3/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 374
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-AND-OR-B3/BOOL-right-tree-AND-OR-B3/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-AND-OR-B3/BOOL-right-tree-AND-OR-B3/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-AND-OR-B3/BOOL-right-tree-AND-OR-B3/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 374
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-AND-OR-B3/BOOL-right-tree-AND-OR-B3/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-AND-OR-B3/BOOL-right-tree-AND-OR-B3/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-scalar-OR-B1/current-fit",
+      "status": "byte-identical",
+      "bytes": 238
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-scalar-OR-B1/before-native",
+      "status": "byte-identical",
+      "bytes": 238
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-scalar-OR-B1/BOOL-right-tree-scalar-OR-B1/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 238
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-scalar-OR-B1/BOOL-right-tree-scalar-OR-B1/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-scalar-OR-B1/BOOL-right-tree-scalar-OR-B1/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-scalar-OR-B1/BOOL-right-tree-scalar-OR-B1/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 238
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-scalar-OR-B1/BOOL-right-tree-scalar-OR-B1/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-scalar-OR-B1/BOOL-right-tree-scalar-OR-B1/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-scalar-OR-B1/BOOL-right-tree-scalar-OR-B1/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 238
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-scalar-OR-B1/BOOL-right-tree-scalar-OR-B1/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-scalar-OR-B1/BOOL-right-tree-scalar-OR-B1/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-scalar-OR-B1/BOOL-right-tree-scalar-OR-B1/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 238
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-scalar-OR-B1/BOOL-right-tree-scalar-OR-B1/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-scalar-OR-B1/BOOL-right-tree-scalar-OR-B1/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-XOR-B2/current-fit",
+      "status": "byte-identical",
+      "bytes": 270
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-XOR-B2/before-native",
+      "status": "byte-identical",
+      "bytes": 270
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-XOR-B2/BOOL-right-tree-XOR-B2/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 270
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-XOR-B2/BOOL-right-tree-XOR-B2/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-XOR-B2/BOOL-right-tree-XOR-B2/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-XOR-B2/BOOL-right-tree-XOR-B2/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 270
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-XOR-B2/BOOL-right-tree-XOR-B2/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-XOR-B2/BOOL-right-tree-XOR-B2/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-XOR-B2/BOOL-right-tree-XOR-B2/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 270
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-XOR-B2/BOOL-right-tree-XOR-B2/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-XOR-B2/BOOL-right-tree-XOR-B2/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-XOR-B2/BOOL-right-tree-XOR-B2/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 270
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-XOR-B2/BOOL-right-tree-XOR-B2/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-XOR-B2/BOOL-right-tree-XOR-B2/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-OR-AND-B2/current-fit",
+      "status": "byte-identical",
+      "bytes": 302
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-OR-AND-B2/before-native",
+      "status": "byte-identical",
+      "bytes": 302
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-OR-AND-B2/BOOL-right-tree-OR-AND-B2/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 302
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-OR-AND-B2/BOOL-right-tree-OR-AND-B2/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-OR-AND-B2/BOOL-right-tree-OR-AND-B2/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-OR-AND-B2/BOOL-right-tree-OR-AND-B2/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 302
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-OR-AND-B2/BOOL-right-tree-OR-AND-B2/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-OR-AND-B2/BOOL-right-tree-OR-AND-B2/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-OR-AND-B2/BOOL-right-tree-OR-AND-B2/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 302
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-OR-AND-B2/BOOL-right-tree-OR-AND-B2/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-OR-AND-B2/BOOL-right-tree-OR-AND-B2/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-OR-AND-B2/BOOL-right-tree-OR-AND-B2/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 302
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-OR-AND-B2/BOOL-right-tree-OR-AND-B2/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-bool-port-right-tree-forward-20260930/BOOL-right-tree-OR-AND-B2/BOOL-right-tree-OR-AND-B2/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-scalar/current-fit",
+      "status": "byte-identical",
+      "bytes": 165
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-scalar/IF-BOOL-scalar/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 165
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-scalar/IF-BOOL-scalar/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-scalar/IF-BOOL-scalar/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-scalar/IF-BOOL-scalar/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 165
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-scalar/IF-BOOL-scalar/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-scalar/IF-BOOL-scalar/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-scalar/IF-BOOL-scalar/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 165
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-scalar/IF-BOOL-scalar/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-scalar/IF-BOOL-scalar/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-scalar/IF-BOOL-scalar/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 165
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-scalar/IF-BOOL-scalar/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-scalar/IF-BOOL-scalar/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-recursive-indexed/current-fit",
+      "status": "byte-identical",
+      "bytes": 279
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-recursive-indexed/IF-BOOL-recursive-indexed/native-2/read-3-0",
+      "status": "byte-identical",
+      "bytes": 279
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-recursive-indexed/IF-BOOL-recursive-indexed/native-2/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-recursive-indexed/IF-BOOL-recursive-indexed/native-2/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-recursive-indexed/IF-BOOL-recursive-indexed/native-2/read-5-0",
+      "status": "byte-identical",
+      "bytes": 279
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-recursive-indexed/IF-BOOL-recursive-indexed/native-2/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-recursive-indexed/IF-BOOL-recursive-indexed/native-2/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-recursive-indexed/IF-BOOL-recursive-indexed/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 279
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-recursive-indexed/IF-BOOL-recursive-indexed/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-recursive-indexed/IF-BOOL-recursive-indexed/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-recursive-indexed/IF-BOOL-recursive-indexed/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 279
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-recursive-indexed/IF-BOOL-recursive-indexed/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-BOOL-recursive-indexed/IF-BOOL-recursive-indexed/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-49/current-fit",
+      "status": "byte-identical",
+      "bytes": 230
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-49/IF-Keypad-WORD-guard-49/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 230
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-49/IF-Keypad-WORD-guard-49/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-49/IF-Keypad-WORD-guard-49/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-49/IF-Keypad-WORD-guard-49/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 230
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-49/IF-Keypad-WORD-guard-49/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-49/IF-Keypad-WORD-guard-49/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-49/IF-Keypad-WORD-guard-49/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 230
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-49/IF-Keypad-WORD-guard-49/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-49/IF-Keypad-WORD-guard-49/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-49/IF-Keypad-WORD-guard-49/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 230
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-49/IF-Keypad-WORD-guard-49/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-49/IF-Keypad-WORD-guard-49/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-67/current-fit",
+      "status": "byte-identical",
+      "bytes": 230
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-67/IF-Keypad-WORD-guard-67/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 230
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-67/IF-Keypad-WORD-guard-67/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-67/IF-Keypad-WORD-guard-67/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-67/IF-Keypad-WORD-guard-67/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 230
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-67/IF-Keypad-WORD-guard-67/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-67/IF-Keypad-WORD-guard-67/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-67/IF-Keypad-WORD-guard-67/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 230
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-67/IF-Keypad-WORD-guard-67/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-67/IF-Keypad-WORD-guard-67/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-67/IF-Keypad-WORD-guard-67/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 230
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-67/IF-Keypad-WORD-guard-67/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-pointer-discovery-20260930/IF-Keypad-WORD-guard-67/IF-Keypad-WORD-guard-67/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-BOOL-false/current-fit",
+      "status": "byte-identical",
+      "bytes": 165
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-BOOL-false/before-native",
+      "status": "byte-identical",
+      "bytes": 165
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-BOOL-false/IF-forward-BOOL-false/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 165
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-BOOL-false/IF-forward-BOOL-false/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-BOOL-false/IF-forward-BOOL-false/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-BOOL-false/IF-forward-BOOL-false/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 165
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-BOOL-false/IF-forward-BOOL-false/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-BOOL-false/IF-forward-BOOL-false/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-BOOL-false/IF-forward-BOOL-false/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 165
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-BOOL-false/IF-forward-BOOL-false/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-BOOL-false/IF-forward-BOOL-false/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-BOOL-false/IF-forward-BOOL-false/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 165
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-BOOL-false/IF-forward-BOOL-false/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-BOOL-false/IF-forward-BOOL-false/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-NOT-scalar/current-fit",
+      "status": "byte-identical",
+      "bytes": 165
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-NOT-scalar/before-native",
+      "status": "byte-identical",
+      "bytes": 165
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-NOT-scalar/IF-forward-NOT-scalar/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 165
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-NOT-scalar/IF-forward-NOT-scalar/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-NOT-scalar/IF-forward-NOT-scalar/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-NOT-scalar/IF-forward-NOT-scalar/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 165
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-NOT-scalar/IF-forward-NOT-scalar/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-NOT-scalar/IF-forward-NOT-scalar/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-NOT-scalar/IF-forward-NOT-scalar/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 165
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-NOT-scalar/IF-forward-NOT-scalar/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-NOT-scalar/IF-forward-NOT-scalar/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-NOT-scalar/IF-forward-NOT-scalar/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 165
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-NOT-scalar/IF-forward-NOT-scalar/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-NOT-scalar/IF-forward-NOT-scalar/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-INT-less-equal/current-fit",
+      "status": "byte-identical",
+      "bytes": 172
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-INT-less-equal/before-native",
+      "status": "byte-identical",
+      "bytes": 172
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-INT-less-equal/IF-forward-INT-less-equal/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 172
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-INT-less-equal/IF-forward-INT-less-equal/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-INT-less-equal/IF-forward-INT-less-equal/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-INT-less-equal/IF-forward-INT-less-equal/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 172
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-INT-less-equal/IF-forward-INT-less-equal/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-INT-less-equal/IF-forward-INT-less-equal/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-INT-less-equal/IF-forward-INT-less-equal/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 172
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-INT-less-equal/IF-forward-INT-less-equal/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-INT-less-equal/IF-forward-INT-less-equal/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-INT-less-equal/IF-forward-INT-less-equal/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 172
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-INT-less-equal/IF-forward-INT-less-equal/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-INT-less-equal/IF-forward-INT-less-equal/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-WORD-equal/current-fit",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-WORD-equal/before-native",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-WORD-equal/IF-forward-WORD-equal/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-WORD-equal/IF-forward-WORD-equal/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-WORD-equal/IF-forward-WORD-equal/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-WORD-equal/IF-forward-WORD-equal/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-WORD-equal/IF-forward-WORD-equal/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-WORD-equal/IF-forward-WORD-equal/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-WORD-equal/IF-forward-WORD-equal/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-WORD-equal/IF-forward-WORD-equal/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-WORD-equal/IF-forward-WORD-equal/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-WORD-equal/IF-forward-WORD-equal/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 170
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-WORD-equal/IF-forward-WORD-equal/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-WORD-equal/IF-forward-WORD-equal/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-mixed-OR/current-fit",
+      "status": "byte-identical",
+      "bytes": 214
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-mixed-OR/before-native",
+      "status": "byte-identical",
+      "bytes": 214
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-mixed-OR/IF-forward-mixed-OR/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 214
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-mixed-OR/IF-forward-mixed-OR/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-mixed-OR/IF-forward-mixed-OR/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-mixed-OR/IF-forward-mixed-OR/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 214
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-mixed-OR/IF-forward-mixed-OR/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-mixed-OR/IF-forward-mixed-OR/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-mixed-OR/IF-forward-mixed-OR/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 214
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-mixed-OR/IF-forward-mixed-OR/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-mixed-OR/IF-forward-mixed-OR/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-mixed-OR/IF-forward-mixed-OR/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 214
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-mixed-OR/IF-forward-mixed-OR/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-mixed-OR/IF-forward-mixed-OR/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-two-labels-P2/current-fit",
+      "status": "byte-identical",
+      "bytes": 252
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-two-labels-P2/before-native",
+      "status": "byte-identical",
+      "bytes": 252
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-two-labels-P2/IF-forward-two-labels-P2/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 252
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-two-labels-P2/IF-forward-two-labels-P2/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-two-labels-P2/IF-forward-two-labels-P2/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-two-labels-P2/IF-forward-two-labels-P2/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 252
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-two-labels-P2/IF-forward-two-labels-P2/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-two-labels-P2/IF-forward-two-labels-P2/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-two-labels-P2/IF-forward-two-labels-P2/reopen/native-1/read-3-0",
+      "status": "byte-identical",
+      "bytes": 252
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-two-labels-P2/IF-forward-two-labels-P2/reopen/native-1/read-3-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-two-labels-P2/IF-forward-two-labels-P2/reopen/native-1/read-3-2",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-two-labels-P2/IF-forward-two-labels-P2/reopen/native-1/read-5-0",
+      "status": "byte-identical",
+      "bytes": 252
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-two-labels-P2/IF-forward-two-labels-P2/reopen/native-1/read-5-1",
+      "status": "byte-identical",
+      "bytes": 0
+    },
+    {
+      "case": "st-condition-branch-forward-20260930/IF-forward-two-labels-P2/IF-forward-two-labels-P2/reopen/native-1/read-5-2",
+      "status": "byte-identical",
+      "bytes": 0
+    }
+  ],
+  "scope": "Archive integrity and saved byte equality only; native compiler was not rerun."
+}

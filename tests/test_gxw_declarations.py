@@ -31,6 +31,28 @@ def baseline(case):
         return archive.read(case + ".gxw")
 
 
+def test_source_library_decoding_is_bounded_and_framing_preserves_every_byte():
+    import base64
+    from src.gxw.library_sources import decode_library_archive, parse_library_source, parse_library_declarations
+    fixture = json.loads((ROOT / 'tests/fixtures/gxw_fbd_source_library.json').read_text())
+    archive = base64.b64decode(fixture['archive_base64'])
+    original = base64.b64decode(fixture['source_base64'])
+    result = decode_library_archive(archive + b'opaque tail')
+    assert result.decoded == original
+    assert result.trailing_bytes == b'opaque tail'
+    framed = parse_library_source(original)
+    assert b''.join(region['raw'] for region in framed['regions']) == original
+    rows = parse_library_declarations(framed['definitions'][0])
+    assert not rows['gaps']
+    assert [(row['name'], row['source_class'], row['data_type_raw']) for row in rows['rows']] == [
+        ('SIGNAL', 'VAR_INPUT', 'BOOL'), ('RESULT', 'VAR_OUTPUT', 'BOOL'), ('STATE', 'VAR_IN_OUT', 'INT')]
+    assert all(row['annotation_raw'] and row['raw'] == original[row['offset']:row['end']] for row in rows['rows'])
+    with pytest.raises(ValueError, match='bound'):
+        decode_library_archive(archive, maximum_output=len(original) - 1)
+    with pytest.raises(ValueError, match='truncated'):
+        decode_library_archive(archive[:-5])
+
+
 @pytest.mark.parametrize("case", list(NATIVE))
 @pytest.mark.parametrize("logical", ["1.Labels.lh", "Global1.gh"])
 def test_native_tables_are_lossless(case, logical):
@@ -137,6 +159,22 @@ def test_function_header_return_type_and_description_move_the_label_rows():
     assert parsed.owner_name == base.owner_name and parsed.owner_return_type == "BOOL"
     assert parsed.count_offset == base.count_offset + len(description)-6 + 8
     assert serialize_declarations(parsed) == raw
+
+
+@pytest.mark.parametrize('kind,status', [(0x1000000,0),(0x1000001,1),(0x1000002,1),(0xabcdef,0x76543210)])
+def test_owner_kind_and_status_remain_lossless_during_row_edits(kind,status):
+    from src.gxw.declarations import _string
+    base = document('d0')
+    owner_end = 54 + len(_string(base.owner_name))
+    raw = base.raw[:owner_end] + struct.pack('<II',kind,status) + base.raw[owner_end+8:]
+    parsed = parse_declarations(raw,logical_name=base.logical_name)
+    assert (parsed.owner_pou_type,parsed.owner_pou_status)==(kind,status)
+    edited = edit_declarations(parsed,upserts=[{'name':'work','data_type':'WORD'}])
+    assert edited.header == parsed.header
+    assert serialize_declarations(parsed)==raw
+    if kind not in (0x1000001,0x1000002):
+        with pytest.raises(GXWFormatError,match='function or function-block'):
+            edit_declarations(parsed,upserts=[{'name':'signal','data_type':'BOOL','class_name':'VAR_INPUT'}])
 
 
 def test_structure_source_member_boundaries_are_not_ordinary_label_rows():

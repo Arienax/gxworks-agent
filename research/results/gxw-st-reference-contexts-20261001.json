@@ -1,0 +1,316 @@
+{
+  "name": "gxw-st-reference-contexts-20261001",
+  "scope": "GX Works2 project format, binding and compiler compatibility research; owned offline copies only",
+  "environment": {
+    "cpu": "Q03UDV",
+    "compiler_iec": "15.50",
+    "q_code_generator": "15.41",
+    "native_cpu": 209,
+    "native_versions": [
+      25
+    ]
+  },
+  "product_api": "gxw.compiler_debug.compiler_st_source_points",
+  "original_project": {
+    "validation": {
+      "table_snapshots": 8,
+      "normalized_sources": 2,
+      "source_reconstruction": true,
+      "reference_occurrences": 185,
+      "source_markers": 67,
+      "native_sink_instructions": 144,
+      "generated_instructions": 144,
+      "sink_names_and_arities_exact": true,
+      "native_operand_matches": 179,
+      "instructions_by_definition": {
+        "POU_01": 105,
+        "Keypad": 36,
+        "@generated": 3
+      },
+      "transient_offset_reinterpretations": 52
+    },
+    "independent_steps": {
+      "prefix_step_queries": 144,
+      "prefix_step_matches": 144,
+      "whole_code_native_listing_exact": true,
+      "whole_code_instructions": 144,
+      "post_compile_source_points": 67,
+      "saved_source_point_matches": 0,
+      "debug_reconstruction_exact": null
+    },
+    "backend_rejected": true,
+    "backend_diagnostics": [
+      {
+        "code": 84710144,
+        "step": 20,
+        "kind": 2,
+        "arguments": [
+          "B0"
+        ],
+        "source": [
+          {
+            "definition": "POU_01",
+            "line": 11
+          }
+        ]
+      },
+      {
+        "code": 84710144,
+        "step": 26,
+        "kind": 2,
+        "arguments": [
+          "B0"
+        ],
+        "source": [
+          {
+            "definition": "POU_01",
+            "line": 15
+          }
+        ]
+      },
+      {
+        "code": 84710144,
+        "step": 32,
+        "kind": 2,
+        "arguments": [
+          "B9"
+        ],
+        "source": [
+          {
+            "definition": "POU_01",
+            "line": 20
+          }
+        ]
+      },
+      {
+        "code": 84710144,
+        "step": 47,
+        "kind": 2,
+        "arguments": [
+          "B9"
+        ],
+        "source": [
+          {
+            "definition": "POU_01",
+            "line": 30
+          }
+        ]
+      },
+      {
+        "code": 84710144,
+        "step": 70,
+        "kind": 2,
+        "arguments": [
+          "B7"
+        ],
+        "source": [
+          {
+            "definition": "POU_01",
+            "line": 37
+          }
+        ]
+      },
+      {
+        "code": 84710144,
+        "step": 91,
+        "kind": 2,
+        "arguments": [
+          "B7"
+        ],
+        "source": [
+          {
+            "definition": "POU_01",
+            "line": 51
+          }
+        ]
+      },
+      {
+        "code": 84710144,
+        "step": 49,
+        "kind": 2,
+        "arguments": [
+          "B0E"
+        ],
+        "source": [
+          {
+            "definition": "POU_01",
+            "line": 32
+          }
+        ]
+      },
+      {
+        "code": 84710144,
+        "step": 93,
+        "kind": 2,
+        "arguments": [
+          "B0E"
+        ],
+        "source": [
+          {
+            "definition": "POU_01",
+            "line": 53
+          }
+        ]
+      },
+      {
+        "code": 84710144,
+        "step": 51,
+        "kind": 2,
+        "arguments": [
+          "B0D"
+        ],
+        "source": [
+          {
+            "definition": "POU_01",
+            "line": 33
+          }
+        ]
+      },
+      {
+        "code": 84710144,
+        "step": 95,
+        "kind": 2,
+        "arguments": [
+          "B0D"
+        ],
+        "source": [
+          {
+            "definition": "POU_01",
+            "line": 54
+          }
+        ]
+      },
+      {
+        "code": 84710144,
+        "step": 97,
+        "kind": 2,
+        "arguments": [
+          "B9"
+        ],
+        "source": [
+          {
+            "definition": "POU_01",
+            "line": 55
+          }
+        ]
+      }
+    ]
+  },
+  "two_instances": {
+    "validation": {
+      "table_snapshots": 8,
+      "normalized_sources": 3,
+      "source_reconstruction": true,
+      "reference_occurrences": 163,
+      "source_markers": 45,
+      "native_sink_instructions": 94,
+      "generated_instructions": 94,
+      "sink_names_and_arities_exact": true,
+      "native_operand_matches": 145,
+      "instructions_by_definition": {
+        "POU_01": 19,
+        "Keypad": 72,
+        "@generated": 3
+      },
+      "transient_offset_reinterpretations": 43
+    },
+    "native_check": {
+      "operation": "ProgramCheckCompleted",
+      "targets": 1,
+      "rejected": false
+    },
+    "reopen_check": {
+      "operation": "ProgramCheckCompleted",
+      "targets": 1,
+      "rejected": false
+    },
+    "reopen_channels": [
+      {
+        "file": "pcode-0-0.bin",
+        "bytes": 1075,
+        "equal": true
+      },
+      {
+        "file": "pcode-0-1.bin",
+        "bytes": 0,
+        "equal": true
+      },
+      {
+        "file": "pcode-0-2.bin",
+        "bytes": 0,
+        "equal": true
+      }
+    ],
+    "independent_steps": {
+      "prefix_step_queries": 94,
+      "prefix_step_matches": 94,
+      "whole_code_native_listing_exact": true,
+      "whole_code_instructions": 94,
+      "post_compile_source_points": 45,
+      "saved_source_point_matches": 45,
+      "debug_reconstruction_exact": true
+    },
+    "useLcd_binding": {
+      "start": 9,
+      "end": 13,
+      "spelling": "K933",
+      "binding": {
+        "table": 2,
+        "name": "useLcd",
+        "scope_code": 9,
+        "type_code": 0,
+        "raw_base64": "LQAAAAZ1c2VMY2QJAAAA/QIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+        "declared_address": "%MX1.12"
+      }
+    }
+  },
+  "local_global_collision": {
+    "frontend_rejected": true,
+    "diagnostics": [
+      {
+        "phase": "Progress",
+        "kind": 2,
+        "code": 1343164501,
+        "name": "Lcd",
+        "instance": "Lcd",
+        "top": 1,
+        "left": 1,
+        "arguments": [
+          "useLcd"
+        ]
+      }
+    ]
+  },
+  "real_cached_project_reading": {
+    "projects": 65,
+    "debug_present": 65,
+    "exact_reconstruction": 65,
+    "st_points": 943,
+    "st_elements": 103,
+    "definition_contexts": 66,
+    "unsupported": []
+  },
+  "verification": {
+    "compiler_owner_tests_passed": 123,
+    "diff_check_passed": true
+  },
+  "limitations": [
+    "Native ST references use the snapshot accompanying that source; transient source-table offsets can change during compilation.",
+    "Source points are physical coordinates and preserve each expansion identity. Multiline extents and statement ownership are not inferred.",
+    "A caller point and an FB point can refer to the same code; stored endpoints can reach another expansion or FEND.",
+    "The original project failed duplicate-coil checks; complete code emission does not turn that refusal into acceptance.",
+    "The local/global same-name declaration was refused by this measured frontend; local shadowing was not adopted.",
+    "Cached-coordinate coverage does not establish source freshness, project acceptance or runtime semantics.",
+    "Portable whole-project recompilation is not completed by this checkpoint."
+  ],
+  "public_archive": "research/evidence/gxw-st-reference-contexts-20261001.zip",
+  "local_archive": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\gxw-st-reference-contexts-20261001-local.zip",
+  "original_and_vendor_content": "Original GXW copies, normalized FB source, full traces and binaries are retained in the local archive only.",
+  "archive_contents": {
+    "public_files": 14,
+    "local_files": 535,
+    "public_bytes": 37243,
+    "local_bytes": 4653574,
+    "archived_file_bytes_verified": true
+  }
+}

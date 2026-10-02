@@ -1,0 +1,27 @@
+{
+  "status": "archive-contents-verified",
+  "archives": [
+    {
+      "file": "D:\\gxworks-agent\\research\\evidence\\gxw-primitive-array-geometry-20261001.zip",
+      "files": 29,
+      "bytes": 75776
+    },
+    {
+      "file": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\gxw-primitive-array-geometry-20261001-local.zip",
+      "files": 1046,
+      "bytes": 9684156
+    }
+  ],
+  "summary": {
+    "observations": 7,
+    "native_accepted": 4,
+    "frontend_refused": 2,
+    "backend_rejected": 1,
+    "accepted_array_instances": 15,
+    "extent_matches": 15,
+    "independent_literal_addresses": 47,
+    "bit_presence_only": 3
+  },
+  "validation": "python -m pytest -q tests/test_gxw_compiler.py: 114 passed",
+  "freeze_console_correction": "The original archive writer verified both archives and wrote the result manifest, then its final size print raised TypeError. The current authored tool fixes that print. Frozen archive contents retain the original attempt."
+}

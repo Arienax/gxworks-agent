@@ -27,7 +27,159 @@ _FACT_TERMS = {
     "limits": re.compile(r"range|limit|restrict|overflow|overlap|outside|exceed|maximum|minimum|caution|supported|≤|≥|范围|边界|限制|溢出|重叠|最大|最小", re.I),
 }
 _OFFICIAL = frozenset({"programming", "positioning", "structured_instruction", "structured_function"})
-_VERSION = "instruction-facts-v2-direct-structured"
+_VERSION = "instruction-facts-v3-gap-directed"
+
+_OPERAND_SLOT_FACETS = (
+    ("operand_roles", "role_status", "operand_role_status"),
+    ("operand_types", "data_type_status", "operand_type_status"),
+    ("operand_order", "symbol_status", "operand_order_status"),
+    ("device_classes", "device_class_status", "device_class_status"),
+)
+
+
+def _best_status(*values):
+    normalized = [str(value or "unresolved") for value in values]
+    if "source_verified" in normalized:
+        return "source_verified"
+    for value in normalized:
+        if value not in {"", "unresolved"}:
+            return value
+    return "unresolved"
+
+
+def _operand_gap_details(record):
+    """Return unresolved operand facts at slot × facet granularity.
+
+    Manual evidence is still packed as whole source units (especially tables),
+    but one verified operand facet must not close unrelated facets or positions.
+    Slot-level status is preferred; aggregate lane status is a compatibility
+    fallback for records produced before slot status was materialized.
+    """
+    record = record if isinstance(record, Mapping) else {}
+    operand = record.get("operand_semantics") or {}
+    target = record.get("target_applicability") or {}
+    slots = record.get("operand_slots")
+
+    if isinstance(slots, list) and slots:
+        gaps = []
+        for raw_slot in slots:
+            if not isinstance(raw_slot, Mapping):
+                continue
+            position = raw_slot.get("position")
+            for facet, slot_key, _aggregate_key in _OPERAND_SLOT_FACETS:
+                status = str(raw_slot.get(slot_key) or "unresolved")
+                if status == "source_verified":
+                    continue
+                gap = {
+                    "position": position,
+                    "facet": facet,
+                    "status": status,
+                }
+                for key in ("symbol", "name"):
+                    if raw_slot.get(key):
+                        gap[key] = str(raw_slot[key])
+                gaps.append(gap)
+        return gaps
+
+    if (
+        target.get("min_operands") == 0
+        and target.get("max_operands") == 0
+        and target.get("operand_order_status") == "source_verified"
+    ):
+        return []
+
+    definitions = list(operand.get("operands") or ())
+    symbols = list(target.get("native_operand_order") or ())
+    count = max(len(definitions), len(symbols))
+    aggregate_status = {
+        "operand_roles": _best_status(
+            operand.get("operand_role_status"),
+            target.get("operand_role_status"),
+        ),
+        "operand_types": _best_status(
+            operand.get("operand_type_status"),
+            target.get("operand_type_status"),
+        ),
+        "operand_order": str(target.get("operand_order_status") or "unresolved"),
+        "device_classes": str(target.get("device_class_status") or "unresolved"),
+    }
+
+    gaps = []
+    positions = range(1, count + 1) if count else (None,)
+    for position in positions:
+        definition = (
+            definitions[position - 1]
+            if position is not None and position <= len(definitions)
+            and isinstance(definitions[position - 1], Mapping)
+            else {}
+        )
+        symbol = (
+            symbols[position - 1]
+            if position is not None and position <= len(symbols)
+            else None
+        )
+        for facet, _slot_key, _aggregate_key in _OPERAND_SLOT_FACETS:
+            status = aggregate_status[facet]
+            if status == "source_verified":
+                continue
+            gap = {"position": position, "facet": facet, "status": status}
+            if symbol:
+                gap["symbol"] = str(symbol)
+            if definition.get("name"):
+                gap["name"] = str(definition["name"])
+            gaps.append(gap)
+    return gaps
+
+
+def _manual_fact_gaps(record):
+    """Return coarse manual lanes derived from fine-grained structured gaps."""
+    record = record if isinstance(record, Mapping) else {}
+    gaps = set(FACT_QUESTIONS)
+    target = record.get("target_applicability") or {}
+
+    if not _operand_gap_details(record):
+        gaps.discard("operands")
+    if target.get("boundary_status") == "source_verified":
+        gaps.discard("limits")
+
+    # Operation/execution remain manual gaps until dedicated structured owners
+    # prove those dimensions; a mnemonic or canonical-op label is insufficient.
+    return frozenset(gaps)
+
+
+def _structured_fact_dimensions(record):
+    return frozenset(FACT_QUESTIONS) - _manual_fact_gaps(record)
+
+
+def _needs_completion_manual(record):
+    runtime = record.get("runtime_semantics") if isinstance(record, Mapping) else None
+    completion = runtime.get("completion") if isinstance(runtime, Mapping) else None
+    return not (
+        isinstance(completion, Mapping)
+        and completion.get("status") == "source_verified"
+    )
+
+
+def _model_structured_prefix(text):
+    """Keep model-facing structured lanes, never runtime-only step widths."""
+    raw = str(text or "")
+    if not raw.startswith((
+        "[STRUCTURED INSTRUCTION RECORD]",
+        "[STRUCTURED LOCAL INSTRUCTION RECORD]",
+    )):
+        return ""
+    cut = raw.find("\n\n")
+    prefix = raw if cut < 0 else raw[:cut]
+    return "\n".join(
+        line
+        for line in prefix.splitlines()
+        if line.strip()
+        and not line.startswith((
+            "STEP_WIDTH:",
+            "STEP_WIDTH_SOURCE:",
+            "STEP_WIDTH_REASON:",
+        ))
+    ).rstrip()
 
 
 def _sha(text):
@@ -176,7 +328,10 @@ def _related_units(seed, plc_model, task_type):
 
 def _units(text):
     """Offsets into original text; tables and structured records stay indivisible."""
-    markers = list(re.finditer(r"(?m)^\[(?:PAGE|TABLE|STRUCTURED INSTRUCTION RECORD)\b[^\n]*", text))
+    markers = list(re.finditer(
+        r"(?m)^\[(?:PAGE|TABLE|STRUCTURED(?: LOCAL)? INSTRUCTION RECORD)\b[^\n]*",
+        text,
+    ))
     starts = sorted({0, *(match.start() for match in markers), len(text)})
     for left, right in zip(starts, starts[1:]):
         block = text[left:right]
@@ -201,6 +356,162 @@ def _units(text):
             yield left + cursor, right
 
 
+def _visual_operand_sequence(raw, opcode, expected):
+    """Read only diagram-like operand placeholders near this opcode.
+
+    Concrete examples such as TADD D 10 D 20 D 30 are deliberately ignored:
+    a placeholder participates only when it is attached to a glyph, is a compact
+    n/N count token next to such placeholders, or occupies a short visual row.
+    """
+    text = str(raw or "")
+    opcode = str(opcode or "").strip().upper()
+    expected = [str(value or "").strip().upper() for value in expected or ()]
+    if not opcode or len(expected) < 2:
+        return []
+
+    boundary = r"[A-Za-z0-9_.$@+<>!=\-]"
+    opcode_re = re.compile(
+        r"(?<!%s)%s(?!%s)" % (boundary, re.escape(opcode), boundary),
+        re.I,
+    )
+    operand_re = re.compile(r"(?i)(?<![A-Z0-9])([SDMN]\d{0,3})(?![A-Z0-9])")
+    glyph_operand_re = re.compile(
+        r"(?i)([SDM]\d{0,3})\s*(?=\[GLYPH-[0-9A-F]+\])"
+    )
+    fused_count_re = re.compile(
+        r"(?i)(?<![A-Z0-9])(n\d{0,3})(?=[SDM]\d{0,3}\s*\[GLYPH-[0-9A-F]+\])"
+    )
+    expected_set = set(expected)
+
+    lines = text.splitlines()
+    offsets, cursor = [], 0
+    for line in lines:
+        offsets.append(cursor)
+        cursor += len(line) + 1
+
+    fallback = []
+    for match in opcode_re.finditer(text):
+        line_index = max(
+            (index for index, offset in enumerate(offsets) if offset <= match.start()),
+            default=0,
+        )
+        line = lines[line_index] if lines else ""
+        relative = match.start() - offsets[line_index] if offsets else 0
+        # A mnemonic embedded in ordinary prose ("dead band") is not syntax.
+        if line[:relative].strip() and not re.search(
+            r"(?:FNC\s*\d+|input)\s*$", line[:relative], re.I
+        ):
+            continue
+
+        region_lines = lines[line_index:line_index + 4]
+        region = "\n".join(region_lines)
+        if "[GLYPH-" not in region:
+            continue
+
+        positions = []
+        # Glyph-bound placeholders are the strongest signal.
+        for item in glyph_operand_re.finditer(region):
+            positions.append((item.start(1), item.group(1).upper()))
+        # PDF extraction commonly fuses count placeholders with the next glyph
+        # operand: nS, nD1, n1n2D. Recover those counts without treating D10,
+        # M3, etc. from concrete examples as placeholders.
+        for item in fused_count_re.finditer(region):
+            positions.append((item.start(1), item.group(1).upper()))
+        # Standalone n/N tokens on the opcode line are also visual operands.
+        opcode_line_tail = line[relative + len(opcode):]
+        for item in operand_re.finditer(opcode_line_tail):
+            token = item.group(1).upper()
+            if token.startswith("N"):
+                positions.append((item.start(1), token))
+
+        # Very short single-token rows adjacent to glyph syntax can represent
+        # a displaced placeholder (for example GBIN's S on the next row).
+        base_offset = len(region_lines[0]) + 1 if region_lines else 0
+        running = base_offset
+        for short_line in region_lines[1:]:
+            stripped = short_line.strip()
+            if re.fullmatch(r"(?i)[SDMN]\d{0,3}", stripped):
+                positions.append((running + short_line.find(stripped), stripped.upper()))
+            running += len(short_line) + 1
+
+        sequence = []
+        for _position, token in sorted(positions):
+            if token in expected_set and token not in sequence:
+                sequence.append(token)
+        if len(sequence) < 2:
+            continue
+        indexes = [expected.index(token) for token in sequence]
+        if any(left >= right for left, right in zip(indexes, indexes[1:])):
+            return sequence
+        if not fallback:
+            fallback = sequence
+    return fallback
+
+
+def _conflicts_with_verified_operand_order(
+    result, raw, *, expected_order=None, opcodes=None,
+):
+    """True when manual visual residue contradicts a verified native order."""
+    result = result if isinstance(result, Mapping) else {}
+    target = result.get("target_applicability") or {}
+    if expected_order is None:
+        if target.get("operand_order_status") != "source_verified":
+            return False
+        expected = list(target.get("native_operand_order") or ())
+    else:
+        expected = [str(value or "").strip().upper() for value in expected_order]
+    if len(expected) < 2:
+        return False
+
+    names = [
+        str(value or "").strip().upper()
+        for value in (
+            opcodes
+            if opcodes is not None
+            else (
+                result.get("instruction_opcode"),
+                target.get("opcode"),
+                target.get("base_mnemonic"),
+            )
+        )
+        if str(value or "").strip()
+    ]
+    for opcode in dict.fromkeys(names):
+        sequence = _visual_operand_sequence(raw, opcode, expected)
+        if len(sequence) < 2:
+            continue
+        indexes = [expected.index(token) for token in sequence if token in expected]
+        if any(left >= right for left, right in zip(indexes, indexes[1:])):
+            return True
+    return False
+
+
+def _embedded_instruction_layout_offset(raw):
+    """Locate PDF diagram residue accidentally flattened into a PROSE unit.
+
+    High-fidelity pages already carry layout/diagram representations separately.
+    A suffix beginning with an FNC label and containing several glyph placeholders
+    is visual syntax, not a second prose statement of operand order. Splitting it
+    here preserves exact source offsets while letting the normal layout fallback
+    policy keep it out when prose/table evidence is available.
+    """
+    text = str(raw or "")
+    first_line = text.split("\n", 1)[0]
+    if not first_line.startswith("[PAGE") or "PROSE" not in first_line:
+        return None
+    matches = list(re.finditer(r"(?m)^FNC\s+\d+\s*$", text))
+    for match in reversed(matches):
+        tail = text[match.start():]
+        lines = [line.strip() for line in tail.splitlines() if line.strip()]
+        if (
+            tail.count("[GLYPH-") >= 2
+            and len(lines) >= 5
+            and sum(len(line) <= 48 for line in lines) >= 4
+        ):
+            return match.start()
+    return None
+
+
 def _render_units(result, selected):
     """Preserve source offsets and provenance while grouping selected units.
 
@@ -212,10 +523,7 @@ def _render_units(result, selected):
     selected = sorted(selected, key=lambda unit: unit[0])
     source_text = "\n\n".join(text[start:end].rstrip() for start, end, _ in selected)
 
-    structured_prefix = ""
-    if text.startswith("[STRUCTURED INSTRUCTION RECORD]"):
-        cut = text.find("\n\n")
-        structured_prefix = (text if cut < 0 else text[:cut]).rstrip()
+    structured_prefix = _model_structured_prefix(text)
     if structured_prefix:
         source_text = structured_prefix + ("\n\n" + source_text if source_text else "")
 
@@ -289,7 +597,10 @@ def _completion_sources(seed, plc_model, task_type):
                 break
     return results
 
-def _pack_target(results, allowance):
+def _pack_target(
+    results, allowance, *, needed_categories=None,
+    verified_operand_order=None, verified_opcodes=(),
+):
     """Pack definition, tables and cautions together before any top-k truncation.
 
     Prefer the first ranked manual revision. Different programming syntaxes are
@@ -299,6 +610,15 @@ def _pack_target(results, allowance):
     from knowledge import core
     if not results or allowance <= 0:
         return []
+    needed = (
+        None
+        if needed_categories is None
+        else {
+            str(item)
+            for item in needed_categories
+            if str(item) in FACT_QUESTIONS
+        }
+    )
     document_key = lambda value: (value.get("manual_id") or value.get("source") or value.get("id"), value.get("revision"))
     primary = document_key(results[0])
     sources = [r for r in results if document_key(r) == primary]
@@ -306,32 +626,60 @@ def _pack_target(results, allowance):
     for source_index, result in enumerate(sources):
         text = str(result.get("text") or "")
         page_markers = list(re.finditer(r"(?m)^\[PAGE[^\n]*", text))
-        for start, end in _units(text):
-            raw = text[start:end]
-            focus = result.get("fact_focus_terms", ())
-            if focus and not any(re.search(r"(?<![A-Z0-9])" + re.escape(term) + r"(?![A-Z0-9])", raw, re.I) for term in focus):
-                continue
-            if raw.startswith(("SOURCE:", "[STRUCTURED INSTRUCTION RECORD]")):
-                # Source identity is in the citation. Structured extraction can
-                # omit operand symbols, so original definition/table wins.
-                continue
-            markers = [match for match in page_markers if match.start() <= start]
-            mode = markers[-1].group() if markers else ""
-            table = raw.startswith("[TABLE")
-            if not table and ("LAYOUT" in mode or "LADDER/DIAGRAM" in mode):
-                priority = 0
-            elif table and re.search(r"(?:Operand|Oper-\s*and).*Description|操作数.*含义", raw, re.I|re.S):
-                priority = 4
-            elif "PROSE" in mode or raw.startswith("[PAGE") and "PROSE" in raw.split("\n",1)[0]:
-                priority = 3
-            elif table:
-                priority = 2
-            else:
-                priority = 1
-            if focus and not result.get("instruction_opcode"):
-                priority += 5  # The referenced flag definition precedes opcode examples.
-            cats = [key for key, pattern in _FACT_TERMS.items() if pattern.search(raw)]
-            candidates.append((source_index, (start, end, cats), priority))
+        for unit_start, unit_end in _units(text):
+            unit_raw = text[unit_start:unit_end]
+            embedded_cut = _embedded_instruction_layout_offset(unit_raw)
+            pieces = (
+                [
+                    (unit_start, unit_start + embedded_cut, False),
+                    (unit_start + embedded_cut, unit_end, True),
+                ]
+                if embedded_cut not in (None, 0)
+                else [(unit_start, unit_end, False)]
+            )
+            for start, end, embedded_layout in pieces:
+                raw = text[start:end]
+                if _conflicts_with_verified_operand_order(
+                    result,
+                    raw,
+                    expected_order=verified_operand_order,
+                    opcodes=verified_opcodes or None,
+                ):
+                    # Native order already has source-verified ownership. A PDF
+                    # diagram flattened into another sequence is not useful
+                    # corroboration for any remaining operand facet and can make
+                    # the model reason against two incompatible syntaxes.
+                    continue
+                focus = result.get("fact_focus_terms", ())
+                if focus and not any(re.search(r"(?<![A-Z0-9])" + re.escape(term) + r"(?![A-Z0-9])", raw, re.I) for term in focus):
+                    continue
+                if raw.startswith(("SOURCE:", "[STRUCTURED INSTRUCTION RECORD]")):
+                    # Source identity is in the citation. Structured extraction can
+                    # omit operand symbols, so original definition/table wins.
+                    continue
+                markers = [match for match in page_markers if match.start() <= start]
+                mode = markers[-1].group() if markers else ""
+                table = raw.startswith("[TABLE")
+                if embedded_layout or (
+                    not table and ("LAYOUT" in mode or "LADDER/DIAGRAM" in mode)
+                ):
+                    priority = 0
+                elif table and re.search(r"(?:Operand|Oper-\s*and).*Description|操作数.*含义", raw, re.I|re.S):
+                    priority = 4
+                elif "PROSE" in mode or raw.startswith("[PAGE") and "PROSE" in raw.split("\n",1)[0]:
+                    priority = 3
+                elif table:
+                    priority = 2
+                else:
+                    priority = 1
+                if focus and not result.get("instruction_opcode"):
+                    priority += 5  # The referenced flag definition precedes opcode examples.
+                cats = [key for key, pattern in _FACT_TERMS.items() if pattern.search(raw)]
+                if needed is not None:
+                    cats = [key for key in cats if key in needed]
+                    if not cats:
+                        continue
+                candidates.append((source_index, (start, end, cats), priority))
     selected, rendered, covered = {}, {}, set()
     while candidates:
         candidates.sort(key=lambda item: (-item[2], -len(set(item[1][2])-covered),
@@ -349,6 +697,12 @@ def _pack_target(results, allowance):
             continue
         selected[source_index], rendered[source_index] = trial_units, trial
         covered.update(unit[2])
+    if not rendered:
+        prefix = _model_structured_prefix(sources[0].get("text"))
+        if prefix:
+            trial = _render_units(sources[0], [])
+            if len(core._format_result_block(trial)) + 40 <= allowance:
+                rendered[0] = trial
     return [rendered[index] for index in sorted(rendered)]
 
 
@@ -412,21 +766,68 @@ def retrieve_instruction_facts(
                 seen.add(marker)
                 sources.append(result)
 
-        companions = _completion_sources(seeds[0], plc_model, task_type) if seeds else []
+        structured_owner = seeds[0] if seeds else {}
+        operand_gap_details = _operand_gap_details(structured_owner)
+        manual_gaps = _manual_fact_gaps(structured_owner)
+        report["lookups"][-1]["manual_gaps"] = sorted(manual_gaps)
+        report["lookups"][-1]["operand_gap_details"] = copy.deepcopy(
+            operand_gap_details
+        )
+        report["lookups"][-1]["structured_dimensions"] = sorted(
+            _structured_fact_dimensions(structured_owner)
+        )
+
+        companions = (
+            _completion_sources(seeds[0], plc_model, task_type)
+            if seeds and _needs_completion_manual(structured_owner)
+            else []
+        )
         companion_pool = [
-            row for row in _pack_target(companions, min(allowance * 2 // 3, 2200))
+            row for row in _pack_target(
+                companions,
+                min(allowance * 2 // 3, 2200),
+                # Completion companions exist only to explain runtime completion
+                # state. Never let an adjacent instruction operand table re-enter
+                # after structured operand semantics have closed that dimension.
+                needed_categories={"execution"},
+            )
             if row["id"] not in companion_seen
         ]
         companion_seen.update(row["id"] for row in companion_pool)
-        companion_cost = sum(len(core._format_result_block(row)) + 40 for row in companion_pool)
-        primary_pool = _pack_target(sources, allowance - companion_cost)
+        companion_cost = sum(
+            len(core._format_result_block(row)) + 40
+            for row in companion_pool
+        )
+        target_overlay = (
+            structured_owner.get("target_applicability")
+            if isinstance(structured_owner, Mapping)
+            else {}
+        ) or {}
+        verified_operand_order = (
+            list(target_overlay.get("native_operand_order") or ())
+            if target_overlay.get("operand_order_status") == "source_verified"
+            else None
+        )
+        primary_pool = _pack_target(
+            sources,
+            allowance - companion_cost,
+            needed_categories=manual_gaps,
+            verified_operand_order=verified_operand_order,
+            verified_opcodes=(
+                target.get("opcode"),
+                target.get("base_opcode"),
+            ),
+        )
         pool = primary_pool[:1] + companion_pool + primary_pool[1:]
         for value in pool:
             value["fact_kind"] = "instruction"
             value["fact_target"] = target["opcode"]
-            value["fact_dimensions"] = list(
-                value.get("candidate_fact_categories") or ()
+            value["fact_dimensions"] = sorted(
+                set(value.get("candidate_fact_categories") or ())
+                | set(_structured_fact_dimensions(value))
             )
+            value["manual_fact_gaps"] = sorted(manual_gaps)
+            value["operand_gap_details"] = copy.deepcopy(operand_gap_details)
         groups.append(pool)
 
     results = []
@@ -441,6 +842,8 @@ def retrieve_instruction_facts(
                 "id", "original_id", "source_text_sha256", "content_sha256",
                 "source_spans", "candidate_fact_categories", "fact_kind",
                 "fact_target", "fact_dimensions", "instruction_contract",
+                "operand_semantics", "target_applicability", "runtime_semantics",
+                "operand_slots", "operand_gap_details",
                 "instruction_step_width", "instruction_instance",
             )
             if key in item

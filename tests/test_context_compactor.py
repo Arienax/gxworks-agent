@@ -172,3 +172,38 @@ def test_under_budget_context_does_not_call_compactor(monkeypatch):
     result, returned_input = compact_if_needed(compiler, value, initial)
     assert result == initial
     assert returned_input == value
+
+
+def test_large_context_scales_recent_tail_and_checkpoint_caps():
+    from application.context_compactor import select_compactable_context
+    from types import SimpleNamespace
+
+    usable = 900_000
+    compiled = SimpleNamespace(
+        budget_report={
+            "usable_input_tokens": usable,
+            "compiled_budget_payload_tokens": 950_000,
+            "estimated_input_tokens": 950_000,
+        },
+        generation_packet={
+            "confirmed_spec": {
+                "intent_context": {
+                    "requests": [
+                        {"id": f"r{i}", "text": ("history " * 500)}
+                        for i in range(6)
+                    ]
+                }
+            }
+        },
+    )
+    compiler_input = SimpleNamespace(
+        wire_history=[
+            {"role": "user", "content": "recent " * 4000},
+            {"role": "assistant", "content": "answer " * 4000},
+        ]
+    )
+    selection = select_compactable_context(compiled, compiler_input)
+    assert selection is not None
+    assert selection["recent_budget_tokens"] == 65536
+    assert selection["checkpoint_cap_tokens"] == 32768
+    assert selection["target_tokens"] <= 32768

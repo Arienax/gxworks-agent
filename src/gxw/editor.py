@@ -41,8 +41,8 @@ def declaration_rows(model, table):
     return rows
 
 
-def presentation(model):
-    catalog = {item["template"]: item for item in catalog_description()}
+def presentation(model, *, templates=None):
+    catalog = {item["template"]: item for item in (templates if templates is not None else catalog_description())}
     tables = list(dict.fromkeys([*model.get("labels", {"1.Labels.lh": [], "Global1.gh": []}),
                                 *model.get("declaration_edits", {})]))
     nodes = []
@@ -50,7 +50,7 @@ def presentation(model):
     for node in model["nodes"]:
         spec = catalog.get(node["template"], {})
         ports = node.get("ports", spec.get("ports", []))
-        nodes.append({"id": node["id"], "symbol_editable": spec.get("kind") != "function", "ports": ports})
+        nodes.append({"id": node["id"], "symbol_editable": not node['template'].startswith('function:'), "ports": ports})
         for port in ports:
             endpoints.append({"value": f'{node["id"]}.{port["name"]}',
                               "label": f'{node["symbol"]} · {port["name"]} ({node["id"]})',
@@ -63,12 +63,12 @@ def _patch(model, table):
     return model.setdefault("declaration_edits", {}).setdefault(table, {})
 
 
-def edit_draft(value, command=None):
+def edit_draft(value, command=None, *, templates=None):
     """Apply one atomic command to a copy; never mutate the caller's document."""
     model = empty_model() if value is None else deepcopy(value)
     command = command or {}
     action = command.get("action", "inspect")
-    catalog = {item["template"]: item for item in catalog_description()}
+    catalog = {item["template"]: item for item in (templates if templates is not None else catalog_description())}
     if action == "add_node":
         spec = catalog.get(command["template"])
         if not spec:
@@ -103,13 +103,21 @@ def edit_draft(value, command=None):
                 for key in ("ports", "width", "height"):
                     node.pop(key, None)
             elif field == "symbol":
-                if catalog.get(node["template"], {}).get("kind") == "function":
+                if node['template'].startswith('function:'):
                     raise GXWFormatError("select a native function template to change a function")
                 node[field] = new
             else:
                 raise GXWFormatError("unsupported node edit")
+    elif action == 'update_port':
+        node = next((item for item in model['nodes'] if item['id'] == command['id']), None)
+        if node is None or model.get('schema_version') != 2 or not node['template'].startswith(('function:', 'function_block:')):
+            raise GXWFormatError('port edit requires a source-bound callable node')
+        ports = node.get('ports', catalog.get(node['template'], {}).get('ports', []))
+        if sum(port['name'] == command['port'] for port in ports) != 1 or type(command['negated']) is not bool:
+            raise GXWFormatError('port edit requires an existing endpoint and boolean negated')
+        node.setdefault('port_edits', {})[command['port']] = {'negated': command['negated']}
     elif action == "add_wire":
-        endpoints = {row["value"]: row["point"] for row in presentation(model)["endpoints"]}
+        endpoints = {row["value"]: row["point"] for row in presentation(model, templates=templates)["endpoints"]}
         source, target = command["from"], command["to"]
         if source not in endpoints or target not in endpoints or source == target:
             raise GXWFormatError("select two existing, distinct endpoints")
@@ -169,6 +177,16 @@ def edit_draft(value, command=None):
                         patch.setdefault("renames", {})[source["name"]] = new
                     if item:
                         item["name"] = new
+                    # The graph and its source declaration are one edit. Direct
+                    # terminals and instance/member references keep their binding.
+                    current_local = model['program'].removesuffix('.Program.pou') + '.Labels.lh'
+                    for node in model['nodes'] if table == current_local or table.endswith('.gh') else ():
+                        if node['template'].startswith('function:'):
+                            continue
+                        if node['symbol'].casefold() == name.casefold():
+                            node['symbol'] = new
+                        elif node['symbol'].casefold().startswith(name.casefold() + '.'):
+                            node['symbol'] = new + node['symbol'][len(name):]
                 else:
                     if item is None:
                         item = {"name": name}
@@ -176,4 +194,4 @@ def edit_draft(value, command=None):
                     item[field] = new
     elif action != "inspect":
         raise GXWFormatError("unsupported FBD editor command")
-    return {"model": model, "presentation": presentation(model), "gx_compile": "not_run"}
+    return {"model": model, "presentation": presentation(model, templates=templates), "gx_compile": "not_run"}

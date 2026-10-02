@@ -1,0 +1,94 @@
+{
+  "schema": 1,
+  "date": "2026-10-01",
+  "status": "native-validated/research-prototype",
+  "versions": {
+    "provider": "ECCodeGenerator2.dll",
+    "file_version": "15.41",
+    "adapter_cpu": 209,
+    "internal_cpu_word": 113,
+    "versions": [
+      25
+    ],
+    "observed_plc": "Q03UDV"
+  },
+  "model": "Independent reverse boundary scanner, reverse opcode tables and explicit initialized device ranges; raw machine words remain preserved",
+  "counts": {
+    "original_source_bodies": 60,
+    "distinct_nonempty_original_bodies": 55,
+    "original_instruction_occurrences": 6062,
+    "whole_body_instruction_occurrences_exact": 6062,
+    "isolated_unique_instructions": 468,
+    "isolated_independent_native_source_exact": 467,
+    "isolated_weighted_native_source_exact": 6060,
+    "configured_full_bodies_native_source_exact": 55,
+    "default_full_bodies_native_source_exact": 50,
+    "synthetic_controls": 1556,
+    "synthetic_independent_native_exact": 1550,
+    "synthetic_opaque_preserved": 6,
+    "configured_alias_counterexamples": 4,
+    "wrong_context_machine_reemission_exact": 3
+  },
+  "context": {
+    "default": "Null public project context: 21 ranges, no ST allocation",
+    "observed": "Unmodified 70-byte parameter input from an owned case-16 compiler call: 23 ranges; initialized config matches the actual compiler call",
+    "binding": "The observed profile is a conversion control for all 55 bodies, not an assertion that their saved project caches share the same allocation"
+  },
+  "retained_failures": [
+    "Early reverse kind-2 boundary test used the wrong bit field",
+    "Initial Frida observer used a reserved property and failed before a clean replacement run",
+    "36 ST fragments are refused in a null context with native code 0x4010004",
+    "Isolated terminal ANB remains opaque because its lookahead is outside input; complete bodies decode it",
+    "Six malformed, truncated or unmeasured machine controls preserve opaque bytes",
+    "Native reverse accepts odd parity and the sentinel address without proving forward acceptance",
+    "Four ST examples decode to T devices under the wrong context; three re-emit identical machine bytes",
+    "643 synthetic re-emissions change machine encoding and 133 are refused"
+  ],
+  "limits": [
+    "Only the pinned Q compiler profile and inspected instruction branches",
+    "Machine inputs for the original corpus are fresh forward-conversion outputs, not verified saved machine caches",
+    "Project parameter to read-table construction still uses retained native initialization observations",
+    "No whole-project modification, complete program check, PLC execution or product parser extension is claimed"
+  ],
+  "archive_scope": {
+    "public": "Pure reader, reverse tables, initialized profiles, synthetic and minimal instruction controls, memory-only native helper and offline validator",
+    "local": "Original Q projects/PCode bodies, complete listed experiments, refused output arenas, old failures and static inspection records"
+  },
+  "local_archive": {
+    "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/gxw-q-machine-reader-20261001-local.zip",
+    "entries": 1025,
+    "bytes": 15219355,
+    "entry_bytes_exact": true
+  },
+  "verification": "Direct preserved-byte comparison and cold replay of the archived pure reader; no new digests",
+  "public_archive": {
+    "path": "research/evidence/gxw-q-machine-reader-20261001.zip",
+    "entries": 20,
+    "bytes": 105893,
+    "entry_bytes_exact": true
+  },
+  "cold_replay_counts": {
+    "public": {
+      "synthetic_controls": 1556,
+      "synthetic_raw_preserved": 1556,
+      "synthetic_decoded_native_exact": 1550,
+      "synthetic_opaque_preserved": 6,
+      "synthetic_native_forward_accepted": 1419,
+      "synthetic_native_forward_refused": 133,
+      "synthetic_machine_reemission_exact": 776,
+      "synthetic_machine_reemission_changed": 643,
+      "configuration_aliases_preserved": 4,
+      "wrong_context_machine_reemission_exact": 3
+    },
+    "local": {
+      "instructions_inputs": 468,
+      "instructions_raw_preserved": 468,
+      "instructions_decoded_native_source_exact": 467,
+      "full_bodies_inputs": 55,
+      "full_bodies_raw_preserved": 55,
+      "full_bodies_decoded_native_source_exact": 55,
+      "weighted_original_instructions": 6062,
+      "weighted_decoded_native_source_exact": 6060
+    }
+  }
+}

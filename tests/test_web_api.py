@@ -712,7 +712,13 @@ def test_fresh_confirmed_ab_rerun_ignores_existing_version_and_reenters_compact_
 
         assert second_output["generation"]["first_pass_pipeline"]["mode"] == "confirmed_spec"
         handoff = second_output["generation"]["generation_handoff"]
-        assert handoff["construction_examples"]["enabled"] is True
+        # The header enables routing, not unconditional example injection.
+        # direct_logic has no high-confidence archetype in the current corpus,
+        # so a fresh rerun is valid with zero routed examples.
+        assert handoff["construction_examples"]["requested"] is True
+        assert handoff["construction_examples"]["enabled"] is False
+        assert handoff["construction_examples"]["reason"] == "no_primary_match"
+        assert handoff["construction_examples"]["route"]["selected_ids"] == []
         assert handoff["confirmed_spec_sha256"] == first_output["generation"]["generation_handoff"]["confirmed_spec_sha256"]
         assert client.get(f"/api/projects/{project}").json()["version_count"] == 2
 
@@ -720,5 +726,6 @@ def test_fresh_confirmed_ab_rerun_ignores_existing_version_and_reenters_compact_
     assert [request.response_contract.name for request in provider.requests] == ["compact_ladder", "compact_ladder"]
     off_prompt = provider.requests[0].messages[0].content
     on_prompt = provider.requests[1].messages[0].content
-    assert "# Optional construction examples" not in off_prompt
-    assert "# Optional construction examples" in on_prompt
+    assert "# Routed construction examples" not in off_prompt
+    assert "# Routed construction examples" not in on_prompt
+    assert off_prompt == on_prompt

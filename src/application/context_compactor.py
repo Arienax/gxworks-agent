@@ -103,7 +103,9 @@ def select_compactable_context(compiled, compiler_input):
         and str(row.get("id") or "") not in recent_request_ids
     ]
 
-    recent_budget = max(1024, min(16000, int(usable * 0.16)))
+    # Retain ratio scales with model capacity. The old 16K ceiling made a
+    # 1M-token model preserve the same recent tail as a 128K model.
+    recent_budget = max(1024, min(65536, int(usable * 0.16)))
     old_history, recent_history = _recent_history(
         compiler_input.wire_history, recent_budget,
     )
@@ -158,9 +160,13 @@ def select_compactable_context(compiled, compiler_input):
     pre_tokens = int(report.get("compiled_budget_payload_tokens") or 0)
     estimated_input = int(report.get("estimated_input_tokens") or pre_tokens)
     required_reduction = max(0, estimated_input - usable)
+    checkpoint_cap = max(4096, min(32768, int(usable * 0.04)))
     target_tokens = max(
         256,
-        min(4096, max(256, source_tokens - required_reduction - 512)),
+        min(
+            checkpoint_cap,
+            max(256, source_tokens - required_reduction - 512),
+        ),
     )
     return {
         "version": COMPACTION_VERSION,
@@ -174,6 +180,8 @@ def select_compactable_context(compiled, compiler_input):
         "old_history_messages": len(old_history),
         "source_tokens": source_tokens,
         "target_tokens": target_tokens,
+        "recent_budget_tokens": recent_budget,
+        "checkpoint_cap_tokens": checkpoint_cap,
         "pre_wire_tokens": pre_tokens,
         "usable_input_tokens": usable,
     }

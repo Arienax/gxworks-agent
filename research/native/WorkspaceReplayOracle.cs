@@ -29,6 +29,20 @@ partial class WorkspaceReplayOracle {
     [StructLayout(LayoutKind.Sequential)] struct ApplicationParameter {
         public int kind; public IntPtr language; public uint codePage; public uint projectCodePage;
     }
+    [StructLayout(LayoutKind.Sequential)] struct ApplicationParameterEx4 {
+        public int kind; public IntPtr language; public uint codePage; public uint projectCodePage;
+        public uint limitCpuSeries; public uint limitCpuType; public uint crossRefInfoMaxCount;
+    }
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int ApplicationEx4Fn(IntPtr self,IntPtr parameter,ref IntPtr extra,out int code);
+    static uint InstalledApplicationDword(string subkey,string name,uint fallback) {
+        using(var machine=Microsoft.Win32.RegistryKey.OpenBaseKey(Microsoft.Win32.RegistryHive.LocalMachine,Microsoft.Win32.RegistryView.Registry32))
+        using(var key=machine.OpenSubKey("SOFTWARE\\MITSUBISHI\\SWnDN-GPPW2\\"+subkey,false)) {
+            if(key==null)return fallback;
+            object value=key.GetValue(name,null);
+            if(value==null||key.GetValueKind(name)!=Microsoft.Win32.RegistryValueKind.DWord)return fallback;
+            return unchecked((uint)(int)value);
+        }
+    }
     [StructLayout(LayoutKind.Sequential)] struct ProjectParameter {
         public IntPtr cpu; public IntPtr name; public IntPtr extra; public int kind; public int mode;
     }
@@ -102,8 +116,9 @@ partial class WorkspaceReplayOracle {
     static void Record(object value){log.WriteLine(json.Serialize(value));log.Flush();}
     static void Check(string operation,int hr,int code){Record(new {operation=operation,hresult=hr,code=code,code_hex="0x"+code.ToString("x8")});if(hr<0||code!=0)Environment.Exit(2);}
     static IntPtr Create(string name,string clsid,string iid){Guid c=new Guid(clsid),i=new Guid(iid);IntPtr p;int hr=CoCreateInstance(ref c,IntPtr.Zero,1,ref i,out p);Check("Create:"+name,hr,0);return p;}
-    static bool WaitReports(IntPtr compiler,int progressSlot,string operation,bool allowAnalysisIdle=false) {
+    static bool WaitReports(IntPtr compiler,int progressSlot,string operation,bool allowAnalysisIdle=false,bool sfcConversion=false) {
         var watch=Stopwatch.StartNew();int last=-1;bool rejected=false;
+        var sfcReportCodes=new List<int>();
         while(watch.ElapsedMilliseconds<35000) {
             Application.DoEvents();int percent,count,code;IntPtr reports;
             int hr=Slot<ProgressFn>(compiler,progressSlot)(compiler,out percent,out count,out reports,out code);
@@ -122,7 +137,21 @@ partial class WorkspaceReplayOracle {
                 var rows=new List<object>();
                 for(int i=0;i<count;i++) {
                     IntPtr row=IntPtr.Add(reports,i*100);byte[] data=new byte[100];Marshal.Copy(row,data,0,100);
-                    int kind=Marshal.ReadInt32(row);if(kind==2)rejected=true;
+                    int kind=Marshal.ReadInt32(row),reportCode=Marshal.ReadInt32(row,4);if(kind==2)rejected=true;
+                    if(sfcConversion) {
+                        if(!sfcReportCodes.Contains(reportCode))sfcReportCodes.Add(reportCode);
+                        // Converter 1.635.0.1's source load/assembly failure
+                        // emits type 0x20 through 0x112eae, clears its error
+                        // output, and returns S_OK. The public adapter reports
+                        // kind 1/code 0x20 and Progress 100 without publishing
+                        // new code. Retained empty-action trace proves this;
+                        // GetPCode then returns the previous resource bytes.
+                        if(kind==1&&reportCode==0x20) {
+                            rejected=true;
+                            Record(new {operation="SFCConversionFailure",kind=kind,code=reportCode,
+                                handling="conversion failed; returned resource code is not verified against this source"});
+                        }
+                    }
                     rows.Add(new {kind=kind,code=Marshal.ReadInt32(row,4),name=ReadBStr(Marshal.ReadIntPtr(row,8)),
                         instance=ReadBStr(Marshal.ReadIntPtr(row,16)),step=Marshal.ReadInt32(row,72),network=Marshal.ReadInt32(row,76),
                         left=Marshal.ReadInt32(row,80),top=Marshal.ReadInt32(row,84),right=Marshal.ReadInt32(row,88),bottom=Marshal.ReadInt32(row,92),
@@ -131,7 +160,12 @@ partial class WorkspaceReplayOracle {
                 }
                 Record(new {operation=operation,percent=percent,count=count,reports=rows});last=percent;
             }
-            if(percent==100)return rejected;
+            if(percent==100) {
+                if(sfcConversion)Record(new {operation="SFCConversionCompleted",rejected=rejected,
+                    report_codes=sfcReportCodes.ToArray(),
+                    output_handling=rejected?"cached-or-unverified":"requires-source-binding"});
+                return rejected;
+            }
             Thread.Sleep(10);
         }
         Record(new {operation=operation+"Timeout"});Environment.Exit(3);return true;
@@ -230,13 +264,30 @@ partial class WorkspaceReplayOracle {
             navigator=Create("DZNavigatorManager","0bf65a7e-5f7d-4c34-927a-a24ef88a7c8a","00020400-0000-0000-c000-000000000046");
             Check("Navigator.Initialize",Slot<SelfFn>(navigator,28)(navigator),0);
             int code;
-            // Four-word layout from _DNavi Set/GetApplicationParameter; values
-            // observed in the GUI on this installed language/version.
-            IntPtr parameter=Marshal.AllocCoTaskMem(16);
+            // The GX Works2 bootstrap calls SetApplicationParameterEX4 through
+            // DNaviZeroClient. Match its seven-word layout and read the same
+            // installed registry values; the native CPU checker stays active.
+            bool extendedApplication=plan.ContainsKey("gui_bootstrap")&&Convert.ToBoolean(plan["gui_bootstrap"]);
+            IntPtr parameter=Marshal.AllocCoTaskMem(extendedApplication?28:16);
             try {
-                var app=new ApplicationParameter{kind=1,language=BStr("SimpleChinese"),codePage=936,projectCodePage=936};
-                Marshal.StructureToPtr(app,parameter,false);
-                Check("Navigator.SetApplicationParameter",Slot<PtrCodeFn>(navigator,280)(navigator,parameter,out code),code);
+                if(extendedApplication) {
+                    var app=new ApplicationParameterEx4{kind=1,language=BStr("SimpleChinese"),codePage=936,projectCodePage=936,
+                        limitCpuSeries=InstalledApplicationDword("CurrentVersion","LimitCPUSeries",0),
+                        limitCpuType=InstalledApplicationDword("CurrentVersion","LimitCPUType",0),
+                        crossRefInfoMaxCount=InstalledApplicationDword("App","CrossRefInfoMaxCount",80000)};
+                    Marshal.StructureToPtr(app,parameter,false);
+                    // The second native argument is BSTR*, as passed by the
+                    // client at RVA 0x60a55; it is not a direct BSTR value.
+                    IntPtr extra=BStr("");
+                    try {Check("Navigator.SetApplicationParameterEX4",Slot<ApplicationEx4Fn>(navigator,400)(navigator,parameter,ref extra,out code),code);}
+                    finally {Marshal.FreeBSTR(extra);Marshal.FreeBSTR(app.language);}
+                    Record(new {operation="NativeInstalledApplicationParameters",registry_view=32,
+                        limit_cpu_series=app.limitCpuSeries,limit_cpu_type=app.limitCpuType,cross_ref_info_max_count=app.crossRefInfoMaxCount});
+                } else {
+                    var app=new ApplicationParameter{kind=1,language=BStr("SimpleChinese"),codePage=936,projectCodePage=936};
+                    Marshal.StructureToPtr(app,parameter,false);
+                    Check("Navigator.SetApplicationParameter",Slot<PtrCodeFn>(navigator,280)(navigator,parameter,out code),code);
+                }
             } finally {Marshal.FreeCoTaskMem(parameter);}
             if(plan.ContainsKey("support_flags")) {
                 IntPtr flags=Marshal.AllocCoTaskMem(4);
@@ -434,7 +485,7 @@ partial class WorkspaceReplayOracle {
                 hr=Slot<BuildFn>(compiler,28)(compiler,Convert.ToInt32(plan["build_identifier"]),Convert.ToInt32(plan["report_kind"]),out code);
                 Check("Compiler.Build",hr,code);
             }
-            bool compilerRejected=WaitReports(compiler,changeSfc?168:40,"Progress");
+            bool compilerRejected=WaitReports(compiler,changeSfc?168:40,"Progress",false,changeSfc);
             bool buildRejected=compilerRejected;
             if(!changeSfc)VerifyNativeCharacterCase("after-build");
             if(plan.ContainsKey("remake_call_tree")&&Convert.ToBoolean(plan["remake_call_tree"])&&!compilerRejected&&!changeSfc)

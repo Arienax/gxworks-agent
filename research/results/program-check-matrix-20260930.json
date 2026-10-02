@@ -1,0 +1,5591 @@
+{
+  "scope": "Selected fresh-check correspondence, offline owned project copies; no PLC or simulator execution.",
+  "findings": [
+    "The checker actual workspace reads are captured at slot 1720 and bound to its resource IDs, generated GetPCode buffers, task/source selection and exported resource spans.",
+    "Five positive source mutations each pass current-resource checks, export and fresh reopen with identical generated code.",
+    "Two repeated-call cases reproduce predicted PCode exactly but fail fresh ProgramCheck; export is skipped.",
+    "The duplicate-coil legacy control reads old bytes and falsely accepts, then exports different current bytes; the fresh control reads current bytes and rejects."
+  ],
+  "summary": {
+    "cases": 9,
+    "phases": 14,
+    "fresh_phases": 13,
+    "fresh_accepted_phases": 10,
+    "fresh_rejected_phases": 3,
+    "legacy_false_acceptance": 1,
+    "positive_reopen_pairs": 5
+  },
+  "native": {
+    "../GPPW2/GD2DataMng.dll": "2d85260f10db34ec4852c6279b17a6788aae65f6b59f9d7b7a8acab8595c042f",
+    "DataAbsorber/DZDataABS_Workspace.dll": "861c1e25aebb05f6f6ef972f721bcff047c01679b89fe9922abd4743e137676f",
+    "DataAbsorber/DZDataABS_ProjectOperation.dll": "74e4cd0fd98215eb36a7c5df7103fdb3cc917d636e036f7f8b774a89b01dcfdb",
+    "DataAbsorber/DZDataABS_CompilerAdapter.dll": "4a048e05c189d903d1f8384fd9730c3094d4ef98c795259ba07496fb381b3959",
+    "DataAbsorber/DZDataABS_Converter.dll": "d0ad723422b1ca63f35bfe3a4eea57a13f7c7142395cfc419ffb43ca3a859e6f",
+    "DataAbsorber/DZDataABS_DataManager_IEC.dll": "4e6785f6797f4b621b0df3876172e45b43bb8f60a85abe715b1edbba05fc2b6d",
+    "DataAbsorber/DZDataABS_SICConverter_IEC.dll": "670fd037852287e4c99de6aa58d19ea0ba9505f10bb46969d2e17d1e54b863f6",
+    "DataAbsorber/DZDataABS_Inside.dll": "914a9cd0fc1b82578dfd5ec62d58124bd7851ea6fa8c8fa3ed488241715e776f",
+    "DataAbsorber/DZDataABS_CodeGenerator.dll": "b3424970d2d206bd92068b9b8d22eaa8ee3589b5ddf9692652f9e2b6da31f74e",
+    "DZDataNavigatorServer/DZDataNavigatorServer.dll": "c8b073657846d8841ffc99f32f1598fc3c1046c451f88d2deef2503f3e5e6a68",
+    "DZDataNavigatorServer/_DNAVI.dll": "e1bf88580a3f22a196fced795cc0a46d218188285a89a09bd5d9fd5a48d3e106",
+    "CommunicationAbsorber/DZCommABS.dll": "57619ebc3ffc296f4d032ee904d9ef05a5987fb06833c8c28fcf68818a89e92a",
+    "CommunicationAbsorber/DZCommABS_Inside.dll": "f76188f214f26f963206d17d7dd4431ff4bb08059268fbbf8ca7a612cacbbaea"
+  },
+  "observation_corrections": [
+    "Frontend ST length includes one terminal NUL; compared explicitly.",
+    "SFC resource second span is empty; compare all nonempty code spans and retain empty spans explicitly."
+  ],
+  "cases": [
+    {
+      "case": "library-false",
+      "legacy_control": false,
+      "phases": [
+        {
+          "input_sha256": "35d440876705b4988c854a4d8095de8eebd945a8f92b81fb6fd8614a78c61af2",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "check_resources": [
+            {
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "names": [
+                "MAIN"
+              ],
+              "read_count": 2,
+              "all_current": true
+            }
+          ],
+          "current_code": [
+            {
+              "name": "MAIN",
+              "index": 0,
+              "channels": [
+                {
+                  "size": 101,
+                  "sha256": "fa3a8b217dbbdacc6f7f0a7ebe8fb8b54f67c6143b07e12762736ecb849736bd"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ]
+            }
+          ],
+          "exported_resources": [
+            {
+              "resource": "MAIN",
+              "regions": [
+                {
+                  "offset": 58,
+                  "size": 101,
+                  "sha256": "fa3a8b217dbbdacc6f7f0a7ebe8fb8b54f67c6143b07e12762736ecb849736bd"
+                },
+                {
+                  "offset": 171,
+                  "size": 101,
+                  "sha256": "fa3a8b217dbbdacc6f7f0a7ebe8fb8b54f67c6143b07e12762736ecb849736bd"
+                }
+              ],
+              "empty_region_count": 0,
+              "all_current": true
+            }
+          ],
+          "export_sha256": "9d87f8506adc7d33433c0df8e26f1226b2f79e61ae5a64e10d2580562884e7e4",
+          "source_prediction": null,
+          "trace_errors": [],
+          "phase": "compile",
+          "source_binding": {
+            "project_sha256": "35d440876705b4988c854a4d8095de8eebd945a8f92b81fb6fd8614a78c61af2",
+            "frontend_sha256": "940df8b68f621fc069f6671c76a53397cc796b9a82487f03236e26ed887d7c14",
+            "touched_sources": [
+              {
+                "name": "MAIN.Program.pou",
+                "sha256": "6f3728c2e856843fd89d892b109f798c172ccc40f73085efe10704e089664868",
+                "bytes": 167
+              },
+              {
+                "name": "F_DISBON.Program\\UtilsV5.lnb",
+                "sha256": "bb7640fa17d499e529b33a74e07b3f1d08eba413c74653eb665360580b2270bf",
+                "bytes": 215
+              }
+            ],
+            "text": [
+              {
+                "source": "MAIN.Program.pou",
+                "text": "Y0 := F_DISBON(16#00000004, 2);\r\n",
+                "native_text": "Y0 := F_DISBON(16#00000004, 2);\r\n\u0000",
+                "native_envelope": "length includes one terminal NUL",
+                "byte_identical": true
+              },
+              {
+                "source": "F_DISBON.Program\\UtilsV5.lnb",
+                "text": "F_DISBON := FALSE;\r\n",
+                "native_text": "F_DISBON := FALSE;\r\n\u0000",
+                "native_envelope": "length includes one terminal NUL",
+                "byte_identical": true
+              }
+            ]
+          },
+          "diagnostics": [],
+          "checked_reads": [
+            {
+              "event": "workspace-pcode-read",
+              "serial": 3,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c0e"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x7894acc"
+                },
+                {
+                  "address": "0x3ff9557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                101,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 101,
+                  "sha256": "fa3a8b217dbbdacc6f7f0a7ebe8fb8b54f67c6143b07e12762736ecb849736bd",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            },
+            {
+              "event": "workspace-pcode-read",
+              "serial": 5,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c82"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x7894acc"
+                },
+                {
+                  "address": "0x3ff9557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                101,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 101,
+                  "sha256": "fa3a8b217dbbdacc6f7f0a7ebe8fb8b54f67c6143b07e12762736ecb849736bd",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            }
+          ],
+          "native_evidence": {
+            "directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fresh-check-matrix-20260930-library-false-v2\\native-1",
+            "input_sha256": "35d440876705b4988c854a4d8095de8eebd945a8f92b81fb6fd8614a78c61af2",
+            "helper_source_sha256": "e4eda1471bb00402d1d3d66b190446279bc9748d9fad4f03358d025b7f79a0a8",
+            "refresh_program_check": true,
+            "files": {
+              "request.json": "71e50d1621b06ef593464ec1b17c37c7b37d8d0a4e449c6a2ad617fda019bebd",
+              "plan.json": "27441d0139ac44f57aacf36b832dd1134487f4ee3ca42e42cd4b9a6c5b6a68d4",
+              "native-events.jsonl": "922e94762fc07b51195de869eebdb07e612d21b72028523d155a0ff7af01d024",
+              "events.jsonl": "e24cabcf3f8bf1f79c9c7f9df31d97560352f12de361626b0b38371105d12cb9",
+              "frontend-snapshot.json": "940df8b68f621fc069f6671c76a53397cc796b9a82487f03236e26ed887d7c14",
+              "resource-correspondence.json": "fd9c13ec8f3947117d8c91e21ea3f7301fd80eee6bbc00ff869bdd8f2dc4f0fc"
+            }
+          }
+        },
+        {
+          "input_sha256": "9d87f8506adc7d33433c0df8e26f1226b2f79e61ae5a64e10d2580562884e7e4",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "check_resources": [
+            {
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "names": [
+                "MAIN"
+              ],
+              "read_count": 2,
+              "all_current": true
+            }
+          ],
+          "current_code": [
+            {
+              "name": "MAIN",
+              "index": 0,
+              "channels": [
+                {
+                  "size": 101,
+                  "sha256": "fa3a8b217dbbdacc6f7f0a7ebe8fb8b54f67c6143b07e12762736ecb849736bd"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ]
+            }
+          ],
+          "exported_resources": [
+            {
+              "resource": "MAIN",
+              "regions": [
+                {
+                  "offset": 58,
+                  "size": 101,
+                  "sha256": "fa3a8b217dbbdacc6f7f0a7ebe8fb8b54f67c6143b07e12762736ecb849736bd"
+                },
+                {
+                  "offset": 171,
+                  "size": 101,
+                  "sha256": "fa3a8b217dbbdacc6f7f0a7ebe8fb8b54f67c6143b07e12762736ecb849736bd"
+                }
+              ],
+              "empty_region_count": 0,
+              "all_current": true
+            }
+          ],
+          "export_sha256": "914eb848376da4b17636237e969d551acd8a0991e2163df4118badedb32b76c7",
+          "source_prediction": null,
+          "trace_errors": [],
+          "phase": "reopen",
+          "reopen_code_identical": true,
+          "source_binding": {
+            "project_sha256": "9d87f8506adc7d33433c0df8e26f1226b2f79e61ae5a64e10d2580562884e7e4",
+            "frontend_sha256": "facdde487cca13731ace0267bb2f19c5a99c4ec7ea99f0db93b7f0be5d50af1a",
+            "touched_sources": [
+              {
+                "name": "MAIN.Program.pou",
+                "sha256": "6f3728c2e856843fd89d892b109f798c172ccc40f73085efe10704e089664868",
+                "bytes": 167
+              },
+              {
+                "name": "F_DISBON.Program\\UtilsV5.lnb",
+                "sha256": "4ec1fdf7bc2b475a3dced97e28e240a15e0f8ef62aaddcddd6721fc3d2a76835",
+                "bytes": 215
+              }
+            ],
+            "text": [
+              {
+                "source": "MAIN.Program.pou",
+                "text": "Y0 := F_DISBON(16#00000004, 2);\r\n",
+                "native_text": "Y0 := F_DISBON(16#00000004, 2);\r\n\u0000",
+                "native_envelope": "length includes one terminal NUL",
+                "byte_identical": true
+              },
+              {
+                "source": "F_DISBON.Program\\UtilsV5.lnb",
+                "text": "F_DISBON := FALSE;\r\n",
+                "native_text": "F_DISBON := FALSE;\r\n\u0000",
+                "native_envelope": "length includes one terminal NUL",
+                "byte_identical": true
+              }
+            ]
+          },
+          "diagnostics": [],
+          "checked_reads": [
+            {
+              "event": "workspace-pcode-read",
+              "serial": 3,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c0e"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x85e418c"
+                },
+                {
+                  "address": "0x3cf9557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                101,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 101,
+                  "sha256": "fa3a8b217dbbdacc6f7f0a7ebe8fb8b54f67c6143b07e12762736ecb849736bd",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            },
+            {
+              "event": "workspace-pcode-read",
+              "serial": 5,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c82"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x85e418c"
+                },
+                {
+                  "address": "0x3cf9557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                101,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 101,
+                  "sha256": "fa3a8b217dbbdacc6f7f0a7ebe8fb8b54f67c6143b07e12762736ecb849736bd",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            }
+          ],
+          "native_evidence": {
+            "directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fresh-check-matrix-20260930\\library-false\\reopen\\native-1",
+            "input_sha256": "9d87f8506adc7d33433c0df8e26f1226b2f79e61ae5a64e10d2580562884e7e4",
+            "helper_source_sha256": "e4eda1471bb00402d1d3d66b190446279bc9748d9fad4f03358d025b7f79a0a8",
+            "refresh_program_check": true,
+            "files": {
+              "request.json": "cff4d6bb272f20e817df003c94eef6f945bef718dd6f129d60bc90a5ae3d1183",
+              "plan.json": "14bfc9128115826c1187a36e96cec068d9f5ff30ee497caad46ed81e8bbc43c8",
+              "native-events.jsonl": "a0b4f9af0712cfe938ea3627f75916c07e5bbc1e1f82c1c43295d74e87e80695",
+              "events.jsonl": "cc21ea17b9597f7133edf8b19cbe6cbbeab1e025bf3ab5bbb5b96163f965970b",
+              "frontend-snapshot.json": "facdde487cca13731ace0267bb2f19c5a99c4ec7ea99f0db93b7f0be5d50af1a",
+              "resource-correspondence.json": "0724ffc5f5608b1272a578453bf7104c5752d76a33dcca2abf53fab17885dbc0"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "library-true",
+      "legacy_control": false,
+      "phases": [
+        {
+          "input_sha256": "c1343d2c32ea8776c3bade5013f36e2c237b3c0586c0f774a1a427c0be7b68e6",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "check_resources": [
+            {
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "names": [
+                "MAIN"
+              ],
+              "read_count": 2,
+              "all_current": true
+            }
+          ],
+          "current_code": [
+            {
+              "name": "MAIN",
+              "index": 0,
+              "channels": [
+                {
+                  "size": 101,
+                  "sha256": "1aefe69c8065115610933814a17de1ca4a6293a85bbaeddb3e4d797107c8a680"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ]
+            }
+          ],
+          "exported_resources": [
+            {
+              "resource": "MAIN",
+              "regions": [
+                {
+                  "offset": 58,
+                  "size": 101,
+                  "sha256": "1aefe69c8065115610933814a17de1ca4a6293a85bbaeddb3e4d797107c8a680"
+                },
+                {
+                  "offset": 171,
+                  "size": 101,
+                  "sha256": "1aefe69c8065115610933814a17de1ca4a6293a85bbaeddb3e4d797107c8a680"
+                }
+              ],
+              "empty_region_count": 0,
+              "all_current": true
+            }
+          ],
+          "export_sha256": "3724b87b9e21378a84475e5c42083cbd26d771055ec8569e7d5ba707a2a8209e",
+          "source_prediction": null,
+          "trace_errors": [],
+          "phase": "compile",
+          "source_binding": {
+            "project_sha256": "c1343d2c32ea8776c3bade5013f36e2c237b3c0586c0f774a1a427c0be7b68e6",
+            "frontend_sha256": "151b6459b9246e87a5c66021362fd2e53604a338d9a88f8a63650fee9b31cb47",
+            "touched_sources": [
+              {
+                "name": "MAIN.Program.pou",
+                "sha256": "6f3728c2e856843fd89d892b109f798c172ccc40f73085efe10704e089664868",
+                "bytes": 167
+              },
+              {
+                "name": "F_DISBON.Program\\UtilsV5.lnb",
+                "sha256": "97332521c7791faa874d87f7d6ed7dbb3a42f17389e42594ed005a209ebf8828",
+                "bytes": 213
+              }
+            ],
+            "text": [
+              {
+                "source": "MAIN.Program.pou",
+                "text": "Y0 := F_DISBON(16#00000004, 2);\r\n",
+                "native_text": "Y0 := F_DISBON(16#00000004, 2);\r\n\u0000",
+                "native_envelope": "length includes one terminal NUL",
+                "byte_identical": true
+              },
+              {
+                "source": "F_DISBON.Program\\UtilsV5.lnb",
+                "text": "F_DISBON := TRUE;\r\n",
+                "native_text": "F_DISBON := TRUE;\r\n\u0000",
+                "native_envelope": "length includes one terminal NUL",
+                "byte_identical": true
+              }
+            ]
+          },
+          "diagnostics": [],
+          "checked_reads": [
+            {
+              "event": "workspace-pcode-read",
+              "serial": 3,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c0e"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x86a4acc"
+                },
+                {
+                  "address": "0x3dd9557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                101,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 101,
+                  "sha256": "1aefe69c8065115610933814a17de1ca4a6293a85bbaeddb3e4d797107c8a680",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            },
+            {
+              "event": "workspace-pcode-read",
+              "serial": 5,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c82"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x86a4acc"
+                },
+                {
+                  "address": "0x3dd9557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                101,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 101,
+                  "sha256": "1aefe69c8065115610933814a17de1ca4a6293a85bbaeddb3e4d797107c8a680",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            }
+          ],
+          "native_evidence": {
+            "directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fresh-check-matrix-20260930\\library-true\\compile\\native-1",
+            "input_sha256": "c1343d2c32ea8776c3bade5013f36e2c237b3c0586c0f774a1a427c0be7b68e6",
+            "helper_source_sha256": "e4eda1471bb00402d1d3d66b190446279bc9748d9fad4f03358d025b7f79a0a8",
+            "refresh_program_check": true,
+            "files": {
+              "request.json": "4c46ba4d0d7ce7878a5d1aac5d10fa79b72b46609f0d8c60f2b2335c702ab6bf",
+              "plan.json": "103650777cd3ad0a8c0680449c5922fcf2b200956722703ff139709b28435249",
+              "native-events.jsonl": "498a90cc167e4037f683d5a8997077f4b832b35939ae367209769a926b89ea49",
+              "events.jsonl": "3dcc1127c72075d9ef4fef61243831216a37bbff8465fde9f6e03ab9835902f8",
+              "frontend-snapshot.json": "151b6459b9246e87a5c66021362fd2e53604a338d9a88f8a63650fee9b31cb47",
+              "resource-correspondence.json": "04814be603e651d921b39ddf12de812bffeaa18bef82d4195a7933960fdacf8a"
+            }
+          }
+        },
+        {
+          "input_sha256": "3724b87b9e21378a84475e5c42083cbd26d771055ec8569e7d5ba707a2a8209e",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "check_resources": [
+            {
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "names": [
+                "MAIN"
+              ],
+              "read_count": 2,
+              "all_current": true
+            }
+          ],
+          "current_code": [
+            {
+              "name": "MAIN",
+              "index": 0,
+              "channels": [
+                {
+                  "size": 101,
+                  "sha256": "1aefe69c8065115610933814a17de1ca4a6293a85bbaeddb3e4d797107c8a680"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ]
+            }
+          ],
+          "exported_resources": [
+            {
+              "resource": "MAIN",
+              "regions": [
+                {
+                  "offset": 58,
+                  "size": 101,
+                  "sha256": "1aefe69c8065115610933814a17de1ca4a6293a85bbaeddb3e4d797107c8a680"
+                },
+                {
+                  "offset": 171,
+                  "size": 101,
+                  "sha256": "1aefe69c8065115610933814a17de1ca4a6293a85bbaeddb3e4d797107c8a680"
+                }
+              ],
+              "empty_region_count": 0,
+              "all_current": true
+            }
+          ],
+          "export_sha256": "2544839702b072af8d783bea68fff5778c9045eccebc0162a7229b3a37b69006",
+          "source_prediction": null,
+          "trace_errors": [],
+          "phase": "reopen",
+          "reopen_code_identical": true,
+          "source_binding": {
+            "project_sha256": "3724b87b9e21378a84475e5c42083cbd26d771055ec8569e7d5ba707a2a8209e",
+            "frontend_sha256": "cefef377836272591375ad74cd240b1d60ad11f75983bc880df5c2192b109b29",
+            "touched_sources": [
+              {
+                "name": "MAIN.Program.pou",
+                "sha256": "6f3728c2e856843fd89d892b109f798c172ccc40f73085efe10704e089664868",
+                "bytes": 167
+              },
+              {
+                "name": "F_DISBON.Program\\UtilsV5.lnb",
+                "sha256": "6b470370dc93c102585e60d59b59c61a3b43d005bd46429296d063f852390c48",
+                "bytes": 213
+              }
+            ],
+            "text": [
+              {
+                "source": "MAIN.Program.pou",
+                "text": "Y0 := F_DISBON(16#00000004, 2);\r\n",
+                "native_text": "Y0 := F_DISBON(16#00000004, 2);\r\n\u0000",
+                "native_envelope": "length includes one terminal NUL",
+                "byte_identical": true
+              },
+              {
+                "source": "F_DISBON.Program\\UtilsV5.lnb",
+                "text": "F_DISBON := TRUE;\r\n",
+                "native_text": "F_DISBON := TRUE;\r\n\u0000",
+                "native_envelope": "length includes one terminal NUL",
+                "byte_identical": true
+              }
+            ]
+          },
+          "diagnostics": [],
+          "checked_reads": [
+            {
+              "event": "workspace-pcode-read",
+              "serial": 3,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c0e"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x811418c"
+                },
+                {
+                  "address": "0x3929557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                101,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 101,
+                  "sha256": "1aefe69c8065115610933814a17de1ca4a6293a85bbaeddb3e4d797107c8a680",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            },
+            {
+              "event": "workspace-pcode-read",
+              "serial": 5,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c82"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x811418c"
+                },
+                {
+                  "address": "0x3929557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                101,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 101,
+                  "sha256": "1aefe69c8065115610933814a17de1ca4a6293a85bbaeddb3e4d797107c8a680",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            }
+          ],
+          "native_evidence": {
+            "directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fresh-check-matrix-20260930\\library-true\\reopen\\native-1",
+            "input_sha256": "3724b87b9e21378a84475e5c42083cbd26d771055ec8569e7d5ba707a2a8209e",
+            "helper_source_sha256": "e4eda1471bb00402d1d3d66b190446279bc9748d9fad4f03358d025b7f79a0a8",
+            "refresh_program_check": true,
+            "files": {
+              "request.json": "41cff432112b924f5d16124bf64d2b4851410232b9b0ffb6bdf6798ed81f1cc7",
+              "plan.json": "a78c0c9c2567129a54846732180c36fcefac9a95de9e188837cdbe36ad00be01",
+              "native-events.jsonl": "bae94b778401436f6db84249cc4f14ee8dadd394c3333b1855ec8134dec62913",
+              "events.jsonl": "14489fcb9d9c7382de5d8e3bf9f62fd0732e68ee898f12bc2017986ee136019b",
+              "frontend-snapshot.json": "cefef377836272591375ad74cd240b1d60ad11f75983bc880df5c2192b109b29",
+              "resource-correspondence.json": "5231367ae10d70f21f5f5a9caa87b97e5cb5fab1fb927a8e1ba15c132e94f67c"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "sfc-transition-swap",
+      "legacy_control": false,
+      "phases": [
+        {
+          "input_sha256": "46aee27a8fc237dbe3c61c67e6b8c591951512b9b797937174ee104da5787b6b",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "check_resources": [
+            {
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "names": [
+                "MAIN"
+              ],
+              "read_count": 2,
+              "all_current": true
+            }
+          ],
+          "current_code": [
+            {
+              "name": "MAIN",
+              "index": 0,
+              "channels": [
+                {
+                  "size": 170,
+                  "sha256": "c4a7af562b044ac9275ba51d614dcde9cc6c701da87e2170c15456022e125424"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ]
+            }
+          ],
+          "exported_resources": [
+            {
+              "resource": "MAIN",
+              "regions": [
+                {
+                  "offset": 58,
+                  "size": 170,
+                  "sha256": "c4a7af562b044ac9275ba51d614dcde9cc6c701da87e2170c15456022e125424"
+                },
+                {
+                  "offset": 240,
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ],
+              "empty_region_count": 1,
+              "all_current": true
+            }
+          ],
+          "export_sha256": "8793d9c50545d6cca843e55aeaedc07f6ce192cc3a351a43b0500605a02c1407",
+          "source_prediction": {
+            "path": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\sfc-source-targeted-mutations\\parallel-swap-transition-references\\candidate.bin",
+            "sha256": "c4a7af562b044ac9275ba51d614dcde9cc6c701da87e2170c15456022e125424",
+            "byte_identical": true
+          },
+          "trace_errors": [],
+          "phase": "compile",
+          "source_binding": {
+            "project_sha256": "46aee27a8fc237dbe3c61c67e6b8c591951512b9b797937174ee104da5787b6b",
+            "frontend_sha256": "ad04ce06ba0b00b97b6f7b6394d986a56826bf7188b5eaf83392ee92167a6c6b",
+            "touched_sources": [
+              {
+                "name": "Block.Program.pou",
+                "sha256": "15ec6b33567d361e6967124d6e626dc89691875aa747f5c0bc993d607677cff3",
+                "bytes": 17079
+              }
+            ],
+            "text": []
+          },
+          "diagnostics": [],
+          "checked_reads": [
+            {
+              "event": "workspace-pcode-read",
+              "serial": 5,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c0e"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x8693c4c"
+                },
+                {
+                  "address": "0x3dd9557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                170,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 170,
+                  "sha256": "c4a7af562b044ac9275ba51d614dcde9cc6c701da87e2170c15456022e125424",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            },
+            {
+              "event": "workspace-pcode-read",
+              "serial": 7,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c82"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x8693c4c"
+                },
+                {
+                  "address": "0x3dd9557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                170,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 170,
+                  "sha256": "c4a7af562b044ac9275ba51d614dcde9cc6c701da87e2170c15456022e125424",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            }
+          ],
+          "native_evidence": {
+            "directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fresh-check-matrix-20260930\\sfc-transition-swap\\compile\\native-1",
+            "input_sha256": "46aee27a8fc237dbe3c61c67e6b8c591951512b9b797937174ee104da5787b6b",
+            "helper_source_sha256": "e4eda1471bb00402d1d3d66b190446279bc9748d9fad4f03358d025b7f79a0a8",
+            "refresh_program_check": true,
+            "files": {
+              "request.json": "9aafa29947ac86096b8502e11fc327dab943a0b7dd75c17515e465504e0d2585",
+              "plan.json": "9f880ce39a25b466e89b04f4ed5e9c4787c337c08b03e5008b26502e6dabc8c5",
+              "native-events.jsonl": "4a1eb515026753dc23407e2cf11dd888174d82bc863dfd959218a17155a13b9c",
+              "events.jsonl": "427c8ee4f4c19f1fba685700fc1de58840e4cd2cab9860c8c17f45e183d41a03",
+              "frontend-snapshot.json": "ad04ce06ba0b00b97b6f7b6394d986a56826bf7188b5eaf83392ee92167a6c6b",
+              "resource-correspondence.json": "68880956bea0f9a0fdf9d7d3e742d457f0ec3aa47ef5541576bfd3618195b1b0"
+            }
+          }
+        },
+        {
+          "input_sha256": "8793d9c50545d6cca843e55aeaedc07f6ce192cc3a351a43b0500605a02c1407",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "check_resources": [
+            {
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "names": [
+                "MAIN"
+              ],
+              "read_count": 2,
+              "all_current": true
+            }
+          ],
+          "current_code": [
+            {
+              "name": "MAIN",
+              "index": 0,
+              "channels": [
+                {
+                  "size": 170,
+                  "sha256": "c4a7af562b044ac9275ba51d614dcde9cc6c701da87e2170c15456022e125424"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ]
+            }
+          ],
+          "exported_resources": [
+            {
+              "resource": "MAIN",
+              "regions": [
+                {
+                  "offset": 58,
+                  "size": 170,
+                  "sha256": "c4a7af562b044ac9275ba51d614dcde9cc6c701da87e2170c15456022e125424"
+                },
+                {
+                  "offset": 240,
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ],
+              "empty_region_count": 1,
+              "all_current": true
+            }
+          ],
+          "export_sha256": "9b8a39b2c5cafc918943235aa5ab173722571efe56c75675500cecb44ca6c5bc",
+          "source_prediction": {
+            "path": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\sfc-source-targeted-mutations\\parallel-swap-transition-references\\candidate.bin",
+            "sha256": "c4a7af562b044ac9275ba51d614dcde9cc6c701da87e2170c15456022e125424",
+            "byte_identical": true
+          },
+          "trace_errors": [],
+          "phase": "reopen",
+          "reopen_code_identical": true,
+          "source_binding": {
+            "project_sha256": "8793d9c50545d6cca843e55aeaedc07f6ce192cc3a351a43b0500605a02c1407",
+            "frontend_sha256": "ad04ce06ba0b00b97b6f7b6394d986a56826bf7188b5eaf83392ee92167a6c6b",
+            "touched_sources": [
+              {
+                "name": "Block.Program.pou",
+                "sha256": "15ec6b33567d361e6967124d6e626dc89691875aa747f5c0bc993d607677cff3",
+                "bytes": 17079
+              }
+            ],
+            "text": []
+          },
+          "diagnostics": [],
+          "checked_reads": [
+            {
+              "event": "workspace-pcode-read",
+              "serial": 5,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c0e"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x7fe330c"
+                },
+                {
+                  "address": "0x37d9557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                170,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 170,
+                  "sha256": "c4a7af562b044ac9275ba51d614dcde9cc6c701da87e2170c15456022e125424",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            },
+            {
+              "event": "workspace-pcode-read",
+              "serial": 7,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c82"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x7fe330c"
+                },
+                {
+                  "address": "0x37d9557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                170,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 170,
+                  "sha256": "c4a7af562b044ac9275ba51d614dcde9cc6c701da87e2170c15456022e125424",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            }
+          ],
+          "native_evidence": {
+            "directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fresh-check-matrix-20260930\\sfc-transition-swap\\reopen\\native-1",
+            "input_sha256": "8793d9c50545d6cca843e55aeaedc07f6ce192cc3a351a43b0500605a02c1407",
+            "helper_source_sha256": "e4eda1471bb00402d1d3d66b190446279bc9748d9fad4f03358d025b7f79a0a8",
+            "refresh_program_check": true,
+            "files": {
+              "request.json": "2b254d8f6be6586e471480a63dd773997becd5bcba732181a9dc489483331a94",
+              "plan.json": "741604aa931d34207a63919146198f380418fc4b573c5e309eac36e797f83c64",
+              "native-events.jsonl": "ee9029e1a99318e2f9380c5ac299fe774c8115db3bb3e75f2c463ab2a7dc5dda",
+              "events.jsonl": "dd038657830a3b8294fa62662abded720958e201e22f4aa076c2463735b5312e",
+              "frontend-snapshot.json": "ad04ce06ba0b00b97b6f7b6394d986a56826bf7188b5eaf83392ee92167a6c6b",
+              "resource-correspondence.json": "948c4031b16ec8afbe6f982d74ca5823c5beb6711fcffbeaef92f8d65fb9306d"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "sfc-pending-action30",
+      "legacy_control": false,
+      "phases": [
+        {
+          "input_sha256": "80c13ca52d1524cc8d0b7ac8e8098a133a12714f36f090b2481c72cb556c0fcf",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "check_resources": [
+            {
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "names": [
+                "MAIN"
+              ],
+              "read_count": 2,
+              "all_current": true
+            }
+          ],
+          "current_code": [
+            {
+              "name": "MAIN",
+              "index": 0,
+              "channels": [
+                {
+                  "size": 177,
+                  "sha256": "0ce5230bcb149f5bb590dcbc518e777922262073b7c85f8f296403c1aca4d44a"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ]
+            }
+          ],
+          "exported_resources": [
+            {
+              "resource": "MAIN",
+              "regions": [
+                {
+                  "offset": 58,
+                  "size": 177,
+                  "sha256": "0ce5230bcb149f5bb590dcbc518e777922262073b7c85f8f296403c1aca4d44a"
+                },
+                {
+                  "offset": 247,
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ],
+              "empty_region_count": 1,
+              "all_current": true
+            }
+          ],
+          "export_sha256": "b5a9919482cede1b95af5b10557ace59cdec387fe09ec1bffc4ebcd393373c2e",
+          "source_prediction": {
+            "path": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\sfc-source-targeted-mutations\\pending-FX-action30\\candidate.bin",
+            "sha256": "0ce5230bcb149f5bb590dcbc518e777922262073b7c85f8f296403c1aca4d44a",
+            "byte_identical": true
+          },
+          "trace_errors": [],
+          "phase": "compile",
+          "source_binding": {
+            "project_sha256": "80c13ca52d1524cc8d0b7ac8e8098a133a12714f36f090b2481c72cb556c0fcf",
+            "frontend_sha256": "7e176af23d127af908151dc1b3af68e7117d6fd9ee81cf24a8e57c9e62b3460d",
+            "touched_sources": [
+              {
+                "name": "Block.Program.pou",
+                "sha256": "4104167c52c2d344140395e384a42fe2e564adf6bedef4fba1da3868f67c31de",
+                "bytes": 38604
+              }
+            ],
+            "text": []
+          },
+          "diagnostics": [],
+          "checked_reads": [
+            {
+              "event": "workspace-pcode-read",
+              "serial": 5,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c0e"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x827692c"
+                },
+                {
+                  "address": "0x5c99557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                177,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 177,
+                  "sha256": "0ce5230bcb149f5bb590dcbc518e777922262073b7c85f8f296403c1aca4d44a",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            },
+            {
+              "event": "workspace-pcode-read",
+              "serial": 7,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c82"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x827692c"
+                },
+                {
+                  "address": "0x5c99557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                177,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 177,
+                  "sha256": "0ce5230bcb149f5bb590dcbc518e777922262073b7c85f8f296403c1aca4d44a",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            }
+          ],
+          "native_evidence": {
+            "directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fresh-check-matrix-20260930\\sfc-pending-action30\\compile\\native-1",
+            "input_sha256": "80c13ca52d1524cc8d0b7ac8e8098a133a12714f36f090b2481c72cb556c0fcf",
+            "helper_source_sha256": "e4eda1471bb00402d1d3d66b190446279bc9748d9fad4f03358d025b7f79a0a8",
+            "refresh_program_check": true,
+            "files": {
+              "request.json": "316362885273c6da80e02cfeeb57c031ec46d9d15c6c9cbc02a53028873e87f9",
+              "plan.json": "5a29bd5d060dfaaff010e68a852c4ec36e69b39fdeac86bac9a082664c3dec35",
+              "native-events.jsonl": "ed9f4603d9bcd7b94a7a6a6968e207af9c021716a3242b32b2aebcabf9abbf74",
+              "events.jsonl": "07503dbcb9243ad98a3789d7150b4b1620cd6e340d0b915e51e31f1dcd644715",
+              "frontend-snapshot.json": "7e176af23d127af908151dc1b3af68e7117d6fd9ee81cf24a8e57c9e62b3460d",
+              "resource-correspondence.json": "1f57d913b720cb1d01b8186f611f3d9a19e4f764ef52f326516eef747b34b16c"
+            }
+          }
+        },
+        {
+          "input_sha256": "b5a9919482cede1b95af5b10557ace59cdec387fe09ec1bffc4ebcd393373c2e",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "check_resources": [
+            {
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "names": [
+                "MAIN"
+              ],
+              "read_count": 2,
+              "all_current": true
+            }
+          ],
+          "current_code": [
+            {
+              "name": "MAIN",
+              "index": 0,
+              "channels": [
+                {
+                  "size": 177,
+                  "sha256": "0ce5230bcb149f5bb590dcbc518e777922262073b7c85f8f296403c1aca4d44a"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ]
+            }
+          ],
+          "exported_resources": [
+            {
+              "resource": "MAIN",
+              "regions": [
+                {
+                  "offset": 58,
+                  "size": 177,
+                  "sha256": "0ce5230bcb149f5bb590dcbc518e777922262073b7c85f8f296403c1aca4d44a"
+                },
+                {
+                  "offset": 247,
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ],
+              "empty_region_count": 1,
+              "all_current": true
+            }
+          ],
+          "export_sha256": "d6dad1ae7c190934b85593b2be1f5d50a56f3fe5f18157ac3e3ef5b69847a17f",
+          "source_prediction": {
+            "path": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\sfc-source-targeted-mutations\\pending-FX-action30\\candidate.bin",
+            "sha256": "0ce5230bcb149f5bb590dcbc518e777922262073b7c85f8f296403c1aca4d44a",
+            "byte_identical": true
+          },
+          "trace_errors": [],
+          "phase": "reopen",
+          "reopen_code_identical": true,
+          "source_binding": {
+            "project_sha256": "b5a9919482cede1b95af5b10557ace59cdec387fe09ec1bffc4ebcd393373c2e",
+            "frontend_sha256": "87f2cd251223ae0efa91fcbbe7d9db083622b235a3d7c6ceceb54c4d30170203",
+            "touched_sources": [
+              {
+                "name": "Block.Program.pou",
+                "sha256": "84f36c20c9d65b4c17f94eefb3ffd78038066f04ddd03f56f612669fbb60ea27",
+                "bytes": 17192
+              }
+            ],
+            "text": []
+          },
+          "diagnostics": [],
+          "checked_reads": [
+            {
+              "event": "workspace-pcode-read",
+              "serial": 5,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c0e"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x7d0330c"
+                },
+                {
+                  "address": "0x3429557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                177,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 177,
+                  "sha256": "0ce5230bcb149f5bb590dcbc518e777922262073b7c85f8f296403c1aca4d44a",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            },
+            {
+              "event": "workspace-pcode-read",
+              "serial": 7,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c82"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x7d0330c"
+                },
+                {
+                  "address": "0x3429557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                177,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 177,
+                  "sha256": "0ce5230bcb149f5bb590dcbc518e777922262073b7c85f8f296403c1aca4d44a",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            }
+          ],
+          "native_evidence": {
+            "directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fresh-check-matrix-20260930\\sfc-pending-action30\\reopen\\native-1",
+            "input_sha256": "b5a9919482cede1b95af5b10557ace59cdec387fe09ec1bffc4ebcd393373c2e",
+            "helper_source_sha256": "e4eda1471bb00402d1d3d66b190446279bc9748d9fad4f03358d025b7f79a0a8",
+            "refresh_program_check": true,
+            "files": {
+              "request.json": "eba4f5a2b92a268c9ac82f02163d8fc9b69f9f781822db3dcbac1fc92a699bfe",
+              "plan.json": "2f6cfaac46f5efde61c06a505674a1de2cfad5d64effbf0a824c1478d66c4a71",
+              "native-events.jsonl": "21c47774de51c09c34f652f9bf47e7ad2548f334a481737ab016eeb02cc44115",
+              "events.jsonl": "a4f1e9b929a5dd2d2eaa3a15da0c681657939f8f58618f2f05fa463e18c3ce4e",
+              "frontend-snapshot.json": "87f2cd251223ae0efa91fcbbe7d9db083622b235a3d7c6ceceb54c4d30170203",
+              "resource-correspondence.json": "dc756b353f216a6c4b3834bbe278de5ab4907f4e9f29a8d7dffeff6df62f4ce3"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "repeated-int-ABA",
+      "legacy_control": false,
+      "phases": [
+        {
+          "input_sha256": "8d36cdc7ea0662ea82964c4f8898b627a885ab53cce5bf06f6bad10c1115cdfc",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 2,
+            "rejected": true
+          },
+          "check_resources": [
+            {
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "names": [
+                "MAIN"
+              ],
+              "read_count": 2,
+              "all_current": true
+            },
+            {
+              "target": [
+                0,
+                3959422976,
+                1,
+                2,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "names": [
+                "SCPIProb"
+              ],
+              "read_count": 2,
+              "all_current": true
+            }
+          ],
+          "current_code": [
+            {
+              "name": "MAIN",
+              "index": 0,
+              "channels": [
+                {
+                  "size": 5723,
+                  "sha256": "dac332cb2cd1b712a67d8abb6fc4a3a883c075ec15430fbef8830682f1d1e636"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ]
+            },
+            {
+              "name": "SCPIProb",
+              "index": 1,
+              "channels": [
+                {
+                  "size": 9,
+                  "sha256": "a1d722024dddae035147665801c9b9d293ee1d46d7b442e18b103db992ae7849"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ]
+            }
+          ],
+          "exported_resources": [],
+          "export_sha256": null,
+          "source_prediction": {
+            "path": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-repeated-materialization-lifetimes\\int-ABA\\predicted-0.bin",
+            "sha256": "dac332cb2cd1b712a67d8abb6fc4a3a883c075ec15430fbef8830682f1d1e636",
+            "byte_identical": true
+          },
+          "trace_errors": [],
+          "phase": "compile",
+          "source_binding": {
+            "project_sha256": "8d36cdc7ea0662ea82964c4f8898b627a885ab53cce5bf06f6bad10c1115cdfc",
+            "frontend_sha256": "48376faea505238ce477344dad8df133798d4aaa65f4e5854a0981403822e406",
+            "touched_sources": [
+              {
+                "name": "MAIN.Program.pou",
+                "sha256": "a3242f396ff6fe53e41e2a187fcaaf94fe18efaa3fb535bcb0e870cc1c101c5d",
+                "bytes": 1625
+              }
+            ],
+            "text": []
+          },
+          "diagnostics": [
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710169,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 86,
+              "network": -1,
+              "left": -1,
+              "top": 86,
+              "right": -1,
+              "bottom": -1,
+              "arguments": []
+            },
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710169,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 87,
+              "network": -1,
+              "left": -1,
+              "top": 87,
+              "right": -1,
+              "bottom": -1,
+              "arguments": []
+            },
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710169,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 472,
+              "network": -1,
+              "left": -1,
+              "top": 472,
+              "right": -1,
+              "bottom": -1,
+              "arguments": []
+            },
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710169,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 473,
+              "network": -1,
+              "left": -1,
+              "top": 473,
+              "right": -1,
+              "bottom": -1,
+              "arguments": []
+            },
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710169,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 861,
+              "network": -1,
+              "left": -1,
+              "top": 861,
+              "right": -1,
+              "bottom": -1,
+              "arguments": []
+            },
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710169,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 862,
+              "network": -1,
+              "left": -1,
+              "top": 862,
+              "right": -1,
+              "bottom": -1,
+              "arguments": []
+            },
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710144,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 113,
+              "network": -1,
+              "left": -1,
+              "top": 113,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "M50"
+              ]
+            },
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710144,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 888,
+              "network": -1,
+              "left": -1,
+              "top": 888,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "M50"
+              ]
+            }
+          ],
+          "checked_reads": [
+            {
+              "event": "workspace-pcode-read",
+              "serial": 3,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c0e"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x9274acc"
+                },
+                {
+                  "address": "0x33e9557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                5723,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 5723,
+                  "sha256": "dac332cb2cd1b712a67d8abb6fc4a3a883c075ec15430fbef8830682f1d1e636",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            },
+            {
+              "event": "workspace-pcode-read",
+              "serial": 5,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c82"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x9274acc"
+                },
+                {
+                  "address": "0x33e9557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                5723,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 5723,
+                  "sha256": "dac332cb2cd1b712a67d8abb6fc4a3a883c075ec15430fbef8830682f1d1e636",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            },
+            {
+              "event": "workspace-pcode-read",
+              "serial": 8,
+              "phase": "check",
+              "check_index": 1,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                2,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                2,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c0e"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x9274acc"
+                },
+                {
+                  "address": "0x33e9557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                9,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "SCPIProb",
+              "buffers": [
+                {
+                  "size": 9,
+                  "sha256": "a1d722024dddae035147665801c9b9d293ee1d46d7b442e18b103db992ae7849",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            },
+            {
+              "event": "workspace-pcode-read",
+              "serial": 10,
+              "phase": "check",
+              "check_index": 1,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                2,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                2,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c82"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x9274acc"
+                },
+                {
+                  "address": "0x33e9557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                9,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "SCPIProb",
+              "buffers": [
+                {
+                  "size": 9,
+                  "sha256": "a1d722024dddae035147665801c9b9d293ee1d46d7b442e18b103db992ae7849",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            }
+          ],
+          "native_evidence": {
+            "directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fresh-check-matrix-20260930\\repeated-int-ABA\\compile\\native-1",
+            "input_sha256": "8d36cdc7ea0662ea82964c4f8898b627a885ab53cce5bf06f6bad10c1115cdfc",
+            "helper_source_sha256": "e4eda1471bb00402d1d3d66b190446279bc9748d9fad4f03358d025b7f79a0a8",
+            "refresh_program_check": true,
+            "files": {
+              "request.json": "9d32fa41a503b9970ccac8fbf7f131833894a5f57ebd8e2634ad31ab83257d02",
+              "plan.json": "b564fdcfa2069f3b73159982e02e7c2e30b95024879791f8d2eb3eb3b19d653b",
+              "native-events.jsonl": "257888b31a6c7269e6c9f90fa78dbad95ea146782283f483c462d925a0fabe88",
+              "events.jsonl": "d0ba4329541fd56f1427fb36a9b8ff25ae8391771e044dfc3959d35b11d0226a",
+              "frontend-snapshot.json": "48376faea505238ce477344dad8df133798d4aaa65f4e5854a0981403822e406",
+              "resource-correspondence.json": "777686498c6da9ff37c7fd0aaebc36841ac96b879d8370a5a7bb0fef49461884"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "repeated-string-BABA",
+      "legacy_control": false,
+      "phases": [
+        {
+          "input_sha256": "c8452312c697fca9ec97e6568c9cad192bb1bbe06f4e933d5efd17dbe4a70143",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 2,
+            "rejected": true
+          },
+          "check_resources": [
+            {
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "names": [
+                "MAIN"
+              ],
+              "read_count": 2,
+              "all_current": true
+            },
+            {
+              "target": [
+                0,
+                3959422976,
+                1,
+                2,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "names": [
+                "SCPIProb"
+              ],
+              "read_count": 2,
+              "all_current": true
+            }
+          ],
+          "current_code": [
+            {
+              "name": "MAIN",
+              "index": 0,
+              "channels": [
+                {
+                  "size": 7706,
+                  "sha256": "230af3e3ce49b09e8a8baa67800a6224f38f18dc9f080698b86225f32f1a0e29"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ]
+            },
+            {
+              "name": "SCPIProb",
+              "index": 1,
+              "channels": [
+                {
+                  "size": 9,
+                  "sha256": "a1d722024dddae035147665801c9b9d293ee1d46d7b442e18b103db992ae7849"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ]
+            }
+          ],
+          "exported_resources": [],
+          "export_sha256": null,
+          "source_prediction": {
+            "path": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-repeated-materialization-lifetimes\\string-BABA\\predicted-0.bin",
+            "sha256": "230af3e3ce49b09e8a8baa67800a6224f38f18dc9f080698b86225f32f1a0e29",
+            "byte_identical": true
+          },
+          "trace_errors": [],
+          "phase": "compile",
+          "source_binding": {
+            "project_sha256": "c8452312c697fca9ec97e6568c9cad192bb1bbe06f4e933d5efd17dbe4a70143",
+            "frontend_sha256": "96988db239a5611ca442a4646bd1bdb8026f46043e61a2cc3451a57157c7db5b",
+            "touched_sources": [
+              {
+                "name": "MAIN.Program.pou",
+                "sha256": "dc99c7d4105bfbe3d3b6bcfe68a7f3819a35e1720c4c773a59a8ab5f9a046218",
+                "bytes": 2263
+              }
+            ],
+            "text": []
+          },
+          "diagnostics": [
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710169,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 86,
+              "network": -1,
+              "left": -1,
+              "top": 86,
+              "right": -1,
+              "bottom": -1,
+              "arguments": []
+            },
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710169,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 87,
+              "network": -1,
+              "left": -1,
+              "top": 87,
+              "right": -1,
+              "bottom": -1,
+              "arguments": []
+            },
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710169,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 481,
+              "network": -1,
+              "left": -1,
+              "top": 481,
+              "right": -1,
+              "bottom": -1,
+              "arguments": []
+            },
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710169,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 482,
+              "network": -1,
+              "left": -1,
+              "top": 482,
+              "right": -1,
+              "bottom": -1,
+              "arguments": []
+            },
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710169,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 870,
+              "network": -1,
+              "left": -1,
+              "top": 870,
+              "right": -1,
+              "bottom": -1,
+              "arguments": []
+            },
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710169,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 871,
+              "network": -1,
+              "left": -1,
+              "top": 871,
+              "right": -1,
+              "bottom": -1,
+              "arguments": []
+            },
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710169,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 1265,
+              "network": -1,
+              "left": -1,
+              "top": 1265,
+              "right": -1,
+              "bottom": -1,
+              "arguments": []
+            },
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710169,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 1266,
+              "network": -1,
+              "left": -1,
+              "top": 1266,
+              "right": -1,
+              "bottom": -1,
+              "arguments": []
+            },
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710144,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 113,
+              "network": -1,
+              "left": -1,
+              "top": 113,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "M51"
+              ]
+            },
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710144,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 897,
+              "network": -1,
+              "left": -1,
+              "top": 897,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "M51"
+              ]
+            },
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710144,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 508,
+              "network": -1,
+              "left": -1,
+              "top": 508,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "M50"
+              ]
+            },
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710144,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 1292,
+              "network": -1,
+              "left": -1,
+              "top": 1292,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "M50"
+              ]
+            }
+          ],
+          "checked_reads": [
+            {
+              "event": "workspace-pcode-read",
+              "serial": 3,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c0e"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x94f4acc"
+                },
+                {
+                  "address": "0x3329557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                7706,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 7706,
+                  "sha256": "230af3e3ce49b09e8a8baa67800a6224f38f18dc9f080698b86225f32f1a0e29",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            },
+            {
+              "event": "workspace-pcode-read",
+              "serial": 5,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c82"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x94f4acc"
+                },
+                {
+                  "address": "0x3329557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                7706,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 7706,
+                  "sha256": "230af3e3ce49b09e8a8baa67800a6224f38f18dc9f080698b86225f32f1a0e29",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            },
+            {
+              "event": "workspace-pcode-read",
+              "serial": 8,
+              "phase": "check",
+              "check_index": 1,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                2,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                2,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c0e"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x94f4acc"
+                },
+                {
+                  "address": "0x3329557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                9,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "SCPIProb",
+              "buffers": [
+                {
+                  "size": 9,
+                  "sha256": "a1d722024dddae035147665801c9b9d293ee1d46d7b442e18b103db992ae7849",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            },
+            {
+              "event": "workspace-pcode-read",
+              "serial": 10,
+              "phase": "check",
+              "check_index": 1,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                2,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                2,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c82"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x94f4acc"
+                },
+                {
+                  "address": "0x3329557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                9,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "SCPIProb",
+              "buffers": [
+                {
+                  "size": 9,
+                  "sha256": "a1d722024dddae035147665801c9b9d293ee1d46d7b442e18b103db992ae7849",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            }
+          ],
+          "native_evidence": {
+            "directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fresh-check-matrix-20260930\\repeated-string-BABA\\compile\\native-1",
+            "input_sha256": "c8452312c697fca9ec97e6568c9cad192bb1bbe06f4e933d5efd17dbe4a70143",
+            "helper_source_sha256": "e4eda1471bb00402d1d3d66b190446279bc9748d9fad4f03358d025b7f79a0a8",
+            "refresh_program_check": true,
+            "files": {
+              "request.json": "f2f1c5ee52aa38cf502bbe941f5ee3140824b88db0dbd2f83378a89979b966b5",
+              "plan.json": "905fb838760c7f4da54df29b6cc9e7d6f298cb5d25632686487b30aa698504a6",
+              "native-events.jsonl": "9ae1470cdcee8cae7aeebfc29277859b1337fbe7a8dd54f17833133ef97181ce",
+              "events.jsonl": "fc77b9e5494ce9b0f3a2a819755dc1f4ce859abb5c0644f88d6b34cb84563656",
+              "frontend-snapshot.json": "96988db239a5611ca442a4646bd1bdb8026f46043e61a2cc3451a57157c7db5b",
+              "resource-correspondence.json": "948e585a605d14dfdf21bd21b5b33f98a51dcfefd233469bad30036e5bf2b31f"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "source-replacement",
+      "legacy_control": false,
+      "phases": [
+        {
+          "input_sha256": "2c28a42519722fb446d98521d4ed4d5f5d128fc9c4fbc860cf337364181b478c",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "check_resources": [
+            {
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "names": [
+                "MAIN"
+              ],
+              "read_count": 2,
+              "all_current": true
+            }
+          ],
+          "current_code": [
+            {
+              "name": "MAIN",
+              "index": 0,
+              "channels": [
+                {
+                  "size": 22,
+                  "sha256": "21be27b29133b3a847cec3f52e0fca8e6756c5042824e65430885777c021391d"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ]
+            }
+          ],
+          "exported_resources": [
+            {
+              "resource": "MAIN",
+              "regions": [
+                {
+                  "offset": 58,
+                  "size": 22,
+                  "sha256": "21be27b29133b3a847cec3f52e0fca8e6756c5042824e65430885777c021391d"
+                },
+                {
+                  "offset": 92,
+                  "size": 22,
+                  "sha256": "21be27b29133b3a847cec3f52e0fca8e6756c5042824e65430885777c021391d"
+                }
+              ],
+              "empty_region_count": 0,
+              "all_current": true
+            }
+          ],
+          "export_sha256": "1257d528e88c286667a32db70ddc5fcb8908d3a57e94e73190f8485a8d9296b3",
+          "source_prediction": null,
+          "trace_errors": [],
+          "phase": "compile",
+          "source_binding": {
+            "project_sha256": "2c28a42519722fb446d98521d4ed4d5f5d128fc9c4fbc860cf337364181b478c",
+            "frontend_sha256": "470a1f9f44e9037ebdebf50d1eee48341074fcf1ddb6846db50909bbb81b7c83",
+            "touched_sources": [
+              {
+                "name": "MAIN.Program.pou",
+                "sha256": "0559e8225be8f30058618064d6330498e88bff21ea6bf5d914b1544c2d442a0f",
+                "bytes": 123
+              }
+            ],
+            "text": [
+              {
+                "source": "MAIN.Program.pou",
+                "text": "Y0 := X1;\r\n",
+                "native_text": "Y0 := X1;\r\n\u0000",
+                "native_envelope": "length includes one terminal NUL",
+                "byte_identical": true
+              }
+            ]
+          },
+          "diagnostics": [],
+          "checked_reads": [
+            {
+              "event": "workspace-pcode-read",
+              "serial": 3,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c0e"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x7a54acc"
+                },
+                {
+                  "address": "0x54d9557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                22,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 22,
+                  "sha256": "21be27b29133b3a847cec3f52e0fca8e6756c5042824e65430885777c021391d",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            },
+            {
+              "event": "workspace-pcode-read",
+              "serial": 5,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c82"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x7a54acc"
+                },
+                {
+                  "address": "0x54d9557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                22,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 22,
+                  "sha256": "21be27b29133b3a847cec3f52e0fca8e6756c5042824e65430885777c021391d",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            }
+          ],
+          "native_evidence": {
+            "directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fresh-check-matrix-20260930\\source-replacement\\compile\\native-1",
+            "input_sha256": "2c28a42519722fb446d98521d4ed4d5f5d128fc9c4fbc860cf337364181b478c",
+            "helper_source_sha256": "e4eda1471bb00402d1d3d66b190446279bc9748d9fad4f03358d025b7f79a0a8",
+            "refresh_program_check": true,
+            "files": {
+              "request.json": "32423181d509f77a07c14747b2768056ffb2ad507b1defb296e0fb621dadf321",
+              "plan.json": "76aff7e53ffba5117116be5e741d06664800aee02ad12c889159d15ad18fdc1b",
+              "native-events.jsonl": "e7eac934677b1886aa002815d867dcad35d292941999c29b829cc460cfdb0f6b",
+              "events.jsonl": "b60283847665840a78f2845cf225720a25c303f9342da0071b79f5c474480f28",
+              "frontend-snapshot.json": "470a1f9f44e9037ebdebf50d1eee48341074fcf1ddb6846db50909bbb81b7c83",
+              "resource-correspondence.json": "23440d78b79fc400a9a36aacdd7c9fd76c956d656d9fc755f85353b65f003da2"
+            }
+          }
+        },
+        {
+          "input_sha256": "1257d528e88c286667a32db70ddc5fcb8908d3a57e94e73190f8485a8d9296b3",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "check_resources": [
+            {
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "names": [
+                "MAIN"
+              ],
+              "read_count": 2,
+              "all_current": true
+            }
+          ],
+          "current_code": [
+            {
+              "name": "MAIN",
+              "index": 0,
+              "channels": [
+                {
+                  "size": 22,
+                  "sha256": "21be27b29133b3a847cec3f52e0fca8e6756c5042824e65430885777c021391d"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ]
+            }
+          ],
+          "exported_resources": [
+            {
+              "resource": "MAIN",
+              "regions": [
+                {
+                  "offset": 58,
+                  "size": 22,
+                  "sha256": "21be27b29133b3a847cec3f52e0fca8e6756c5042824e65430885777c021391d"
+                },
+                {
+                  "offset": 92,
+                  "size": 22,
+                  "sha256": "21be27b29133b3a847cec3f52e0fca8e6756c5042824e65430885777c021391d"
+                }
+              ],
+              "empty_region_count": 0,
+              "all_current": true
+            }
+          ],
+          "export_sha256": "ac65d664396a25aa1c7ccb01403e689d21728d6fce73b735205b82c2ef4ac7f9",
+          "source_prediction": null,
+          "trace_errors": [],
+          "phase": "reopen",
+          "reopen_code_identical": true,
+          "source_binding": {
+            "project_sha256": "1257d528e88c286667a32db70ddc5fcb8908d3a57e94e73190f8485a8d9296b3",
+            "frontend_sha256": "470a1f9f44e9037ebdebf50d1eee48341074fcf1ddb6846db50909bbb81b7c83",
+            "touched_sources": [
+              {
+                "name": "MAIN.Program.pou",
+                "sha256": "0559e8225be8f30058618064d6330498e88bff21ea6bf5d914b1544c2d442a0f",
+                "bytes": 123
+              }
+            ],
+            "text": [
+              {
+                "source": "MAIN.Program.pou",
+                "text": "Y0 := X1;\r\n",
+                "native_text": "Y0 := X1;\r\n\u0000",
+                "native_envelope": "length includes one terminal NUL",
+                "byte_identical": true
+              }
+            ]
+          },
+          "diagnostics": [],
+          "checked_reads": [
+            {
+              "event": "workspace-pcode-read",
+              "serial": 3,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c0e"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x7b5418c"
+                },
+                {
+                  "address": "0x33f9557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                22,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 22,
+                  "sha256": "21be27b29133b3a847cec3f52e0fca8e6756c5042824e65430885777c021391d",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            },
+            {
+              "event": "workspace-pcode-read",
+              "serial": 5,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c82"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x7b5418c"
+                },
+                {
+                  "address": "0x33f9557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                22,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 22,
+                  "sha256": "21be27b29133b3a847cec3f52e0fca8e6756c5042824e65430885777c021391d",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            }
+          ],
+          "native_evidence": {
+            "directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fresh-check-matrix-20260930\\source-replacement\\reopen\\native-1",
+            "input_sha256": "1257d528e88c286667a32db70ddc5fcb8908d3a57e94e73190f8485a8d9296b3",
+            "helper_source_sha256": "e4eda1471bb00402d1d3d66b190446279bc9748d9fad4f03358d025b7f79a0a8",
+            "refresh_program_check": true,
+            "files": {
+              "request.json": "d82c024f5b009f817cb5898d30bf30d6f0f1e199dd0fca6879752abb3fc16ac3",
+              "plan.json": "f3fdfbe0655e96a3231f38e665204b1c6a7701240c7d9c076052e7f2fb3e8d04",
+              "native-events.jsonl": "8eaafe145682e0ed13f7be832ee3b969159585ece8650899875202186a462cfb",
+              "events.jsonl": "1ed1e3c63031e43673b18133cf197d2fbbe0df9a7f1499e930c617f878090799",
+              "frontend-snapshot.json": "470a1f9f44e9037ebdebf50d1eee48341074fcf1ddb6846db50909bbb81b7c83",
+              "resource-correspondence.json": "830aa8d935ea5ecdfe5489505074e66620d1f2720ed09c92f37bb784fbe6d3f5"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "duplicate-coil-legacy",
+      "legacy_control": true,
+      "phases": [
+        {
+          "input_sha256": "386a069277ecaba5e5ad4cbeeca042f5290ac3e364e29b7cb68624e4975b397a",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "check_resources": [
+            {
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "names": [
+                "MAIN"
+              ],
+              "read_count": 2,
+              "all_current": false
+            }
+          ],
+          "current_code": [
+            {
+              "name": "MAIN",
+              "index": 0,
+              "channels": [
+                {
+                  "size": 36,
+                  "sha256": "9bce0c2911caaa8c16de0b21b537e327ae8ccde4bbf0eb8a4688289a4170ed85"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ]
+            }
+          ],
+          "exported_resources": [
+            {
+              "resource": "MAIN",
+              "regions": [
+                {
+                  "offset": 58,
+                  "size": 36,
+                  "sha256": "9bce0c2911caaa8c16de0b21b537e327ae8ccde4bbf0eb8a4688289a4170ed85"
+                },
+                {
+                  "offset": 106,
+                  "size": 36,
+                  "sha256": "9bce0c2911caaa8c16de0b21b537e327ae8ccde4bbf0eb8a4688289a4170ed85"
+                }
+              ],
+              "empty_region_count": 0,
+              "all_current": true
+            }
+          ],
+          "export_sha256": "f95814a9da01ed2577f397c8c8b907d8fedf85279285b62b86574b236879eb86",
+          "source_prediction": null,
+          "trace_errors": [],
+          "phase": "compile",
+          "source_binding": {
+            "project_sha256": "386a069277ecaba5e5ad4cbeeca042f5290ac3e364e29b7cb68624e4975b397a",
+            "frontend_sha256": "e8d47189e1ea9bbb8c41be06eab2306fb691ede6dfa8215fd8780d0c8a795979",
+            "touched_sources": [
+              {
+                "name": "MAIN.Program.pou",
+                "sha256": "72a16e4e3ed0e12d2225230cd2772a65dd43af25377d63a6cf0baf0c0596a4b5",
+                "bytes": 145
+              }
+            ],
+            "text": [
+              {
+                "source": "MAIN.Program.pou",
+                "text": "Y0 := X0;\r\nY0 := X1;\r\n",
+                "native_text": "Y0 := X0;\r\nY0 := X1;\r\n\u0000",
+                "native_envelope": "length includes one terminal NUL",
+                "byte_identical": true
+              }
+            ]
+          },
+          "diagnostics": [],
+          "checked_reads": [
+            {
+              "event": "workspace-pcode-read",
+              "serial": 2,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c0e"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x7fe4acc"
+                },
+                {
+                  "address": "0x3799557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                101,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 101,
+                  "sha256": "1aefe69c8065115610933814a17de1ca4a6293a85bbaeddb3e4d797107c8a680",
+                  "matches_current": false
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            },
+            {
+              "event": "workspace-pcode-read",
+              "serial": 4,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c82"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x7fe4acc"
+                },
+                {
+                  "address": "0x3799557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                101,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 101,
+                  "sha256": "1aefe69c8065115610933814a17de1ca4a6293a85bbaeddb3e4d797107c8a680",
+                  "matches_current": false
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            }
+          ],
+          "native_evidence": {
+            "directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fresh-check-matrix-20260930\\duplicate-coil-legacy\\compile\\native-1",
+            "input_sha256": "386a069277ecaba5e5ad4cbeeca042f5290ac3e364e29b7cb68624e4975b397a",
+            "helper_source_sha256": "e4eda1471bb00402d1d3d66b190446279bc9748d9fad4f03358d025b7f79a0a8",
+            "refresh_program_check": false,
+            "files": {
+              "request.json": "d7baf1fb49f7371d84902fc2294c9331555e48dd46a4495c3d6fb33a8d045558",
+              "plan.json": "a12aefdf057f86ea90fc16578bf05cc65ce702b8c047609814f9e02e5e58cde4",
+              "native-events.jsonl": "64e0261efa4c60680d9c95cae98d6fd538a6147d9f56f04f27cbdfe63719c6e4",
+              "events.jsonl": "726da041addc16fbc5f8384e534b0f6c1028bd1ece276b8b03cdba9a20a1710e",
+              "frontend-snapshot.json": "e8d47189e1ea9bbb8c41be06eab2306fb691ede6dfa8215fd8780d0c8a795979",
+              "resource-correspondence.json": "d6a557b651c6f1996f7dfcd45bb87952a50169e21137a3ed375069dfb02cbf8e"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "duplicate-coil-fresh",
+      "legacy_control": false,
+      "phases": [
+        {
+          "input_sha256": "386a069277ecaba5e5ad4cbeeca042f5290ac3e364e29b7cb68624e4975b397a",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": true
+          },
+          "check_resources": [
+            {
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "names": [
+                "MAIN"
+              ],
+              "read_count": 2,
+              "all_current": true
+            }
+          ],
+          "current_code": [
+            {
+              "name": "MAIN",
+              "index": 0,
+              "channels": [
+                {
+                  "size": 36,
+                  "sha256": "9bce0c2911caaa8c16de0b21b537e327ae8ccde4bbf0eb8a4688289a4170ed85"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                }
+              ]
+            }
+          ],
+          "exported_resources": [],
+          "export_sha256": null,
+          "source_prediction": null,
+          "trace_errors": [],
+          "phase": "compile",
+          "source_binding": {
+            "project_sha256": "386a069277ecaba5e5ad4cbeeca042f5290ac3e364e29b7cb68624e4975b397a",
+            "frontend_sha256": "e8d47189e1ea9bbb8c41be06eab2306fb691ede6dfa8215fd8780d0c8a795979",
+            "touched_sources": [
+              {
+                "name": "MAIN.Program.pou",
+                "sha256": "72a16e4e3ed0e12d2225230cd2772a65dd43af25377d63a6cf0baf0c0596a4b5",
+                "bytes": 145
+              }
+            ],
+            "text": [
+              {
+                "source": "MAIN.Program.pou",
+                "text": "Y0 := X0;\r\nY0 := X1;\r\n",
+                "native_text": "Y0 := X0;\r\nY0 := X1;\r\n\u0000",
+                "native_envelope": "length includes one terminal NUL",
+                "byte_identical": true
+              }
+            ]
+          },
+          "diagnostics": [
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710144,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 1,
+              "network": -1,
+              "left": -1,
+              "top": 1,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "Y000"
+              ]
+            },
+            {
+              "phase": "ProgramCheckProgress",
+              "kind": 2,
+              "code": 84710144,
+              "name": "MAIN",
+              "instance": "MAIN",
+              "step": 3,
+              "network": -1,
+              "left": -1,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "Y000"
+              ]
+            }
+          ],
+          "checked_reads": [
+            {
+              "event": "workspace-pcode-read",
+              "serial": 3,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c0e"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x8244acc"
+                },
+                {
+                  "address": "0x3c69557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                36,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 36,
+                  "sha256": "9bce0c2911caaa8c16de0b21b537e327ae8ccde4bbf0eb8a4688289a4170ed85",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            },
+            {
+              "event": "workspace-pcode-read",
+              "serial": 5,
+              "phase": "check",
+              "check_index": 0,
+              "check_target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "caller": {
+                "module": "DZDataABS_Converter.dll",
+                "rva": "0x82a34"
+              },
+              "stack": [
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x82a34"
+                },
+                {
+                  "module": "DZDataABS_Workspace.dll",
+                  "rva": "0x78d08"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x1e946"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x22591"
+                },
+                {
+                  "module": "DZDataABS_Converter.dll",
+                  "rva": "0x3fa01"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x6c82"
+                },
+                {
+                  "module": "DZDataABS_CompilerAdapter.dll",
+                  "rva": "0x150c0"
+                },
+                {
+                  "address": "0x8244acc"
+                },
+                {
+                  "address": "0x3c69557"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x12526"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1e549"
+                },
+                {
+                  "module": "clr.dll",
+                  "rva": "0x1f217"
+                }
+              ],
+              "requested_sizes": [
+                36,
+                0,
+                0
+              ],
+              "hresult": 0,
+              "code": 0,
+              "resource_name": "MAIN",
+              "buffers": [
+                {
+                  "size": 36,
+                  "sha256": "9bce0c2911caaa8c16de0b21b537e327ae8ccde4bbf0eb8a4688289a4170ed85",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                },
+                {
+                  "size": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "matches_current": true
+                }
+              ]
+            }
+          ],
+          "native_evidence": {
+            "directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fresh-check-matrix-20260930\\duplicate-coil-fresh\\compile\\native-1",
+            "input_sha256": "386a069277ecaba5e5ad4cbeeca042f5290ac3e364e29b7cb68624e4975b397a",
+            "helper_source_sha256": "e4eda1471bb00402d1d3d66b190446279bc9748d9fad4f03358d025b7f79a0a8",
+            "refresh_program_check": true,
+            "files": {
+              "request.json": "d7baf1fb49f7371d84902fc2294c9331555e48dd46a4495c3d6fb33a8d045558",
+              "plan.json": "6c28e7224bfa24f69f3aca8b022362194d1a815822f2d61ed9111a6d8fbea10f",
+              "native-events.jsonl": "36cdd1a50bc2f398bf5071c9b9723db255f351915928406f9908c533425f1295",
+              "events.jsonl": "c6101925a96d09996746d75937391c5f636737de9bc3203cc6d3c19a981f2f8e",
+              "frontend-snapshot.json": "e8d47189e1ea9bbb8c41be06eab2306fb691ede6dfa8215fd8780d0c8a795979",
+              "resource-correspondence.json": "98141c53d2b4db12e42b091db020b7281a9bcb4bcd61a9158b44b8b70d013e58"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "reproduction": {
+    "tool": "research/probe_gxw_program_check_resources.py",
+    "matrix_script": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fresh-check-matrix-20260930\\run_fresh_check_matrix-v2.py",
+    "matrix_sha256": "4ada5625e7d612ec0a00ff2cc48a54918f9390c9c8e997a0d298ac7c6e450e4d"
+  },
+  "limits": [
+    "Fresh ProgramCheck is distinct from hardware execution or general source-semantic correctness.",
+    "Repeated-call allocation/output equality claims remain compilation-reproduction evidence, not full-check acceptance.",
+    "R/ZR pools, latch pools, overlapping explicit ranges and general temporary lifetimes remain excluded by the current source models.",
+    "Source ownership is taken from task references and selected raw source hashes, never from cached resource suffix names.",
+    "The first restricted run exited before native temporary-directory creation and supplies no compiler result. The successful runs use the authorized isolated native environment."
+  ]
+}

@@ -14,7 +14,7 @@ import json
 import os
 
 ENV_NAME = "GXWORKS_CONSTRUCTION_EXAMPLES"
-PACK_VERSION = "basic_construction/1"
+PACK_VERSION = "routed_construction/2"
 # Applicability is explicit; do not relabel an FX example as another CPU's facts.
 SUPPORTED_MODELS = ("FX3U",)
 
@@ -41,6 +41,7 @@ class ConstructionExampleBlock:
     example_ids: tuple[str, ...] = ()
     ir_hashes: tuple[str, ...] = ()
     reason: str = "disabled"
+    route: dict | None = None
 
     def manifest(self) -> dict:
         """Metadata only, safe to attach to the existing generation handoff."""
@@ -55,6 +56,7 @@ class ConstructionExampleBlock:
             "ir_sha256": list(self.ir_hashes),
             "chars": len(self.text),
             "sha256": hashlib.sha256(self.text.encode("utf-8")).hexdigest(),
+            "route": copy.deepcopy(self.route) if isinstance(self.route, dict) else None,
         }
 
 
@@ -145,6 +147,28 @@ def _definitions():
     )
 
 
+_ROUTING_METADATA = {
+    # Only high-confidence mappings are active in this first router pass.
+    # Generic direct_logic examples intentionally have no primary key.
+    "compound_condition": {},
+    "reset_dominant_hold": {"primary_structures": ["self_hold"]},
+    "shared_permit_fanout": {},
+    "edge_and_level": {
+        "primary_structures": ["edge_trigger"],
+        "primary_execution_semantics": ["RISING_EDGE", "FALLING_EDGE"],
+    },
+    "calculate_then_compare": {},
+    "counter_reset_priority": {"primary_structures": ["hardware_counter"]},
+}
+
+
+def _route_candidates():
+    return [
+        {"id": identifier, **copy.deepcopy(_ROUTING_METADATA.get(identifier, {}))}
+        for identifier, _requirement, _comments, _rungs in _definitions()
+    ]
+
+
 @lru_cache(maxsize=1)
 def _ir_examples() -> tuple[dict, ...]:
     # Lazy: disabled generation does not import/build/validate any example IR.
@@ -210,45 +234,69 @@ def _compact_from_ir(program: dict) -> dict:
     return result
 
 
-@lru_cache(maxsize=1)
-def _enabled_block() -> ConstructionExampleBlock:
+@lru_cache(maxsize=16)
+def _routed_block(example_ids: tuple[str, ...], route_json: str) -> ConstructionExampleBlock:
     from application.compact_protocol import PROTOCOL_VERSION
     from plc.ir import canonical_sha256
 
-    examples = _ir_examples()
-    parts = [
-        f"\n# Optional construction examples ({PACK_VERSION})\n"
-        "以下是相互独立的构造范例，不是本项目需求、地址分配或必须采用的方案。"
-        "仅学习条件、状态、扫描顺序与分支的组织；不要照搬设备地址、数值或新增I/O。"
-        "当前确认规格、输出协议及当前型号事实优先。不要输出范例清单，只输出本题程序。\n"
+    selected = [
+        example for example in _ir_examples()
+        if example["id"] in set(example_ids)
     ]
-    for example in examples:
+    route = json.loads(route_json)
+    if not selected:
+        return ConstructionExampleBlock(
+            requested=True,
+            plc_model="FX3U",
+            reason=str(route.get("reason") or "no_primary_match"),
+            route=route,
+        )
+
+    parts = [
+        f"\n# Routed construction examples ({PACK_VERSION})\n"
+        "以下是按已确认结构需求选择的独立构造范例，不是本项目需求、地址分配或必须采用的方案。"
+        "仅学习条件、状态、扫描顺序与分支组织；当前确认规格及型号事实优先。\n"
+    ]
+    for example in selected:
         parts.append(
             f"\n## {example['id']}\n需求：{example['requirement']}\n"
             f"输出（{PROTOCOL_VERSION}）：\n"
             + json.dumps(_compact_from_ir(example["program_ir"]), ensure_ascii=False, separators=(",", ":"))
             + "\n"
         )
-    parts.append("\n# End optional construction examples\n")
+    parts.append("\n# End routed construction examples\n")
     return ConstructionExampleBlock(
-        requested=True, plc_model="FX3U", text="".join(parts),
-        example_ids=tuple(example["id"] for example in examples),
-        ir_hashes=tuple(canonical_sha256(example["program_ir"]) for example in examples),
-        reason="explicit_opt_in",
+        requested=True,
+        plc_model="FX3U",
+        text="".join(parts),
+        example_ids=tuple(example["id"] for example in selected),
+        ir_hashes=tuple(canonical_sha256(example["program_ir"]) for example in selected),
+        reason="routed_primary_match",
+        route=route,
     )
 
-
 def prepare_construction_examples(
-    plc_model: str, enabled: bool | None = None,
+    plc_model: str, enabled: bool | None = None, confirmed_spec=None,
 ) -> ConstructionExampleBlock:
-    """Resolve once per request, before context compilation and token counting."""
+    """Route once from the confirmed structured spec before token counting."""
+    from application.construction_routing import (
+        build_construction_need_profile,
+        route_construction_examples,
+    )
+
     requested = resolve_construction_examples(enabled)
     model = str(plc_model or "FX3U").strip().upper() or "FX3U"
     if not requested:
         return ConstructionExampleBlock(False, model)
     if model not in SUPPORTED_MODELS:
         return ConstructionExampleBlock(True, model, reason="unsupported_model")
-    return _enabled_block()
+    profile = build_construction_need_profile(confirmed_spec)
+    route = route_construction_examples(profile, _route_candidates(), max_examples=2)
+    selected = tuple(route.get("selected_ids") or ())
+    return _routed_block(
+        selected,
+        json.dumps(route, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+    )
 
 
 if __name__ == "__main__":

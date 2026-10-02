@@ -1,0 +1,135 @@
+{
+  "created_utc": "2026-09-30T15:50:58.262815+00:00",
+  "scope": "Stored compiler UserInfo operands only, two original cache lineages within 65 inventoried projects. Not source freshness, generation safety or PLC execution evidence.",
+  "native": {
+    "module": "ECCompiler.dll",
+    "version": "15.22",
+    "formatter_rva": "0x51650",
+    "operand_formatter_rva": "0x51130",
+    "initialization": "ObjectNew -> ChangeInit -> InitializeAddressConverter; wrapper+0x164 contains formatter core+0x4c with native CPUInfo",
+    "contexts": {
+      "FX3G": {
+        "actual_cpu_code": 521,
+        "format_process": {
+          "returncode": 0,
+          "stdout": "ChangeInit=0\r\nInitializeAddressConverter=0\r\nCPUInfo.code=521\r\n",
+          "stderr": ""
+        },
+        "context_capture_count": 16,
+        "context_project_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        }
+      },
+      "Q03UDV": {
+        "actual_cpu_code": 209,
+        "format_process": {
+          "returncode": 0,
+          "stdout": "ChangeInit=0\r\nInitializeAddressConverter=0\r\nCPUInfo.code=209\r\n",
+          "stderr": ""
+        },
+        "context_capture_count": 2,
+        "context_project_check": null
+      }
+    }
+  },
+  "counts": {
+    "original_projects": 65,
+    "opaque_before": 69,
+    "opaque_after": 4,
+    "newly_decoded_real_records": 65,
+    "real_constants": 34,
+    "real_device_references": 31,
+    "native_fixture_records": 310,
+    "numeric_control_records": 245,
+    "original_numeric_prediction_differences": 30,
+    "special_numeric_prediction_differences": 31,
+    "prospective_cpu_boundary_matches": 49
+  },
+  "handling_after": [
+    {
+      "cpu": "Q03UDV",
+      "handling": "unassigned",
+      "count": 988
+    },
+    {
+      "cpu": "FX3G",
+      "handling": "decoded",
+      "count": 531
+    },
+    {
+      "cpu": "Q03UDV",
+      "handling": "decoded",
+      "count": 267
+    },
+    {
+      "cpu": "FX3G",
+      "handling": "unassigned",
+      "count": 218
+    },
+    {
+      "cpu": "FX3G",
+      "handling": "opaque",
+      "count": 3
+    },
+    {
+      "cpu": "Q03UDV",
+      "handling": "opaque",
+      "count": 1
+    }
+  ],
+  "remaining_opaque": [
+    {
+      "cpu": "FX3G",
+      "prefix": "0c00",
+      "type": 51,
+      "count": 3
+    },
+    {
+      "cpu": "Q03UDV",
+      "prefix": "0a0e",
+      "type": 67,
+      "count": 1
+    }
+  ],
+  "findings": [
+    "Form 0x07 holds an embedded operand; the simple no-modifier form uses value bytes 9..12 and prefix byte 21.",
+    "K is signed 32-bit and has no device address; M/D are decimal device spellings; W operand spelling is hexadecimal while IEC address index is decimal.",
+    "Native address formatting uppercases its private operand copy. Product parsing preserves original raw bytes.",
+    "No reservation count is established by this inline form.",
+    "M7680..M7999 address conversion differs between FX3G and Q03UDV; the CPU-free product projection leaves this interval opaque. Larger numbers and unknown modifiers remain opaque."
+  ],
+  "product_projection": "M/D/W unsigned numbers at most 8191, excluding M7680..M7999 without CPU context; K signed 32-bit. This conservative read profile is not a hardware capacity or write-permission rule.",
+  "validation": {
+    "command": "python -m pytest -q tests/test_gxw_compiler.py",
+    "result": "84 passed",
+    "corpus_scan_errors": []
+  },
+  "evidence": {
+    "fixture": "tests/fixtures/gxw_inline_assignments_native.json",
+    "public_archive": "research/evidence/gxw-inline-assignments-20260930.zip",
+    "local_experiments": [
+      "research/experiments/sfc-graph-20260926/public-corpus-discovery/assignment-address-context-capture-20260930",
+      "research/experiments/sfc-graph-20260926/public-corpus-discovery/inline-assignment-owned-native-v3-20260930",
+      "research/experiments/sfc-graph-20260926/public-corpus-discovery/inline-assignment-number-controls-v2-20260930",
+      "research/experiments/sfc-graph-20260926/public-corpus-discovery/inline-assignment-special-number-controls-20260930",
+      "research/experiments/sfc-graph-20260926/public-corpus-discovery/inline-assignment-m-range-boundary-20260930"
+    ],
+    "failed_attempts": [
+      "inline-assignment-native-20260930",
+      "inline-assignment-native-v2-20260930",
+      "inline-assignment-context-20260930",
+      "inline-assignment-initialized-native-20260930",
+      "inline-assignment-owned-native-20260930",
+      "inline-assignment-number-controls-20260930"
+    ]
+  },
+  "limitations": [
+    "65 records are concentrated in two original engineering-project lineages; this is not 65 independently compiled projects.",
+    "Q context capture has no completed project-check result. The separate native formatter initialized successfully and checked CPUInfo.code=209; no project-acceptance claim follows.",
+    "Native operand/address formatting is an independent read oracle, not compiler generation or device execution verification.",
+    "Parameter snapshots, original projects and raw failed traces remain local; rerunning native calls requires the installed pinned DLL and captured parameters.",
+    "No commits, pushes, releases or new hash verification."
+  ]
+}

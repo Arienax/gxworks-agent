@@ -1,0 +1,2972 @@
+{
+  "native": {
+    "module": "ECCompiler.dll",
+    "version": "15.22",
+    "formatter_rva": "0x51650",
+    "operand_formatter_rva": "0x51130",
+    "context": "ObjectNew/ChangeInit/InitializeAddressConverter; actual CPUInfo codes 521 and 209, parameters captured from copied offline projects",
+    "adapter": "research/experiments/sfc-graph-20260926/public-corpus-discovery/InitializedAssignmentOracle.cs"
+  },
+  "scope": "Original UserInfo records and bounded numeric controls only. No source compilation equivalence or current-cache freshness claim. Unknown modifiers remain opaque. No original project/source/name data included.",
+  "cases": [
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 0,
+      "input_base64": "BwAAAAAAAAAAAgAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzI=",
+      "after_base64": "BwAAAAAAAAAAAgAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 1,
+      "input_base64": "BwAAAAAAAAAA+RwAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43NDE3",
+      "operand_base64": "TTc0MTc=",
+      "after_base64": "BwAAAAAAAAAA+RwAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 2,
+      "input_base64": "BwAAAAAAAAAAAgAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzI=",
+      "after_base64": "BwAAAAAAAAAAAgAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 3,
+      "input_base64": "BwAAAAAAAAAAAwAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzM=",
+      "after_base64": "BwAAAAAAAAAAAwAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 4,
+      "input_base64": "BwAAAAAAAAAA4BwAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC43Mzky",
+      "operand_base64": "RDczOTI=",
+      "after_base64": "BwAAAAAAAAAA4BwAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 5,
+      "input_base64": "BwAAAAAAAAAA9RwAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43NDEz",
+      "operand_base64": "TTc0MTM=",
+      "after_base64": "BwAAAAAAAAAA9RwAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 6,
+      "input_base64": "BwAAAAAAAAAAAgAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzI=",
+      "after_base64": "BwAAAAAAAAAAAgAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 7,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 8,
+      "input_base64": "BwAAAAAAAAAA3hwAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC43Mzkw",
+      "operand_base64": "RDczOTA=",
+      "after_base64": "BwAAAAAAAAAA3hwAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 9,
+      "input_base64": "BwAAAAAAAAAA8xwAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43NDEx",
+      "operand_base64": "TTc0MTE=",
+      "after_base64": "BwAAAAAAAAAA8xwAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 10,
+      "input_base64": "BwAAAAAAAAAA8hwAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43NDEw",
+      "operand_base64": "TTc0MTA=",
+      "after_base64": "BwAAAAAAAAAA8hwAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 11,
+      "input_base64": "BwAAAAAAAAAA8RwAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43NDA5",
+      "operand_base64": "TTc0MDk=",
+      "after_base64": "BwAAAAAAAAAA8RwAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 12,
+      "input_base64": "BwAAAAAAAAAA3RwAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC43Mzg5",
+      "operand_base64": "RDczODk=",
+      "after_base64": "BwAAAAAAAAAA3RwAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 13,
+      "input_base64": "BwAAAAAAAAAAWAIAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzYwMA==",
+      "after_base64": "BwAAAAAAAAAAWAIAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 14,
+      "input_base64": "BwAAAAAAAAAAAgAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzI=",
+      "after_base64": "BwAAAAAAAAAAAgAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 15,
+      "input_base64": "BwAAAAAAAAAAAwAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzM=",
+      "after_base64": "BwAAAAAAAAAAAwAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 16,
+      "input_base64": "BwAAAAAAAAAA5RwAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43Mzk3",
+      "operand_base64": "TTczOTc=",
+      "after_base64": "BwAAAAAAAAAA5RwAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 17,
+      "input_base64": "BwAAAAAAAAAAQR8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MDAx",
+      "operand_base64": "TTgwMDE=",
+      "after_base64": "BwAAAAAAAAAAQR8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 18,
+      "input_base64": "BwAAAAAAAAAA5BwAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43Mzk2",
+      "operand_base64": "TTczOTY=",
+      "after_base64": "BwAAAAAAAAAA5BwAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 19,
+      "input_base64": "BwAAAAAAAAAA1BcAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzYxMDA=",
+      "after_base64": "BwAAAAAAAAAA1BcAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 20,
+      "input_base64": "BwAAAAAAAAAAAgAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzI=",
+      "after_base64": "BwAAAAAAAAAAAgAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 21,
+      "input_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MDAw",
+      "operand_base64": "TTgwMDA=",
+      "after_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 22,
+      "input_base64": "BwAAAAAAAAAA+gAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzI1MA==",
+      "after_base64": "BwAAAAAAAAAA+gAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 23,
+      "input_base64": "BwAAAAAAAAAAyAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzIwMA==",
+      "after_base64": "BwAAAAAAAAAAyAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 24,
+      "input_base64": "BwAAAAAAAAAABQAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzU=",
+      "after_base64": "BwAAAAAAAAAABQAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 25,
+      "input_base64": "BwAAAAAAAAAAtxwAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43MzUx",
+      "operand_base64": "TTczNTE=",
+      "after_base64": "BwAAAAAAAAAAtxwAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 26,
+      "input_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MDAw",
+      "operand_base64": "TTgwMDA=",
+      "after_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 27,
+      "input_base64": "BwAAAAAAAAAA+gAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzI1MA==",
+      "after_base64": "BwAAAAAAAAAA+gAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 28,
+      "input_base64": "BwAAAAAAAAAAyAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzIwMA==",
+      "after_base64": "BwAAAAAAAAAAyAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 29,
+      "input_base64": "BwAAAAAAAAAABQAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzU=",
+      "after_base64": "BwAAAAAAAAAABQAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 30,
+      "input_base64": "BwAAAAAAAAAAthwAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43MzUw",
+      "operand_base64": "TTczNTA=",
+      "after_base64": "BwAAAAAAAAAAthwAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 31,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 32,
+      "input_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzE=",
+      "after_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 33,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 34,
+      "input_base64": "BwAAAAAAAAAAoAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzE2MA==",
+      "after_base64": "BwAAAAAAAAAAoAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 35,
+      "input_base64": "BwAAAAAAAAAACgAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzEw",
+      "after_base64": "BwAAAAAAAAAACgAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 36,
+      "input_base64": "BwAAAAAAAAAAZAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzEwMA==",
+      "after_base64": "BwAAAAAAAAAAZAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 37,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 38,
+      "input_base64": "BwAAAAAAAAAAIxwAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC43MjAz",
+      "operand_base64": "RDcyMDM=",
+      "after_base64": "BwAAAAAAAAAAIxwAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 39,
+      "input_base64": "BwAAAAAAAAAAtRwAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43MzQ5",
+      "operand_base64": "TTczNDk=",
+      "after_base64": "BwAAAAAAAAAAtRwAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 40,
+      "input_base64": "BwAAAAAAAAAAtBwAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43MzQ4",
+      "operand_base64": "TTczNDg=",
+      "after_base64": "BwAAAAAAAAAAtBwAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 41,
+      "input_base64": "BwAAAAAAAAAAsxwAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43MzQ3",
+      "operand_base64": "TTczNDc=",
+      "after_base64": "BwAAAAAAAAAAsxwAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 42,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 43,
+      "input_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzE=",
+      "after_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 44,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 45,
+      "input_base64": "BwAAAAAAAAAAoAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzE2MA==",
+      "after_base64": "BwAAAAAAAAAAoAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 46,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 47,
+      "input_base64": "BwAAAAAAAAAAIhwAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC43MjAy",
+      "operand_base64": "RDcyMDI=",
+      "after_base64": "BwAAAAAAAAAAIhwAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 48,
+      "input_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MDAw",
+      "operand_base64": "TTgwMDA=",
+      "after_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 49,
+      "input_base64": "BwAAAAAAAAAAyAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzIwMA==",
+      "after_base64": "BwAAAAAAAAAAyAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 50,
+      "input_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzE=",
+      "after_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 51,
+      "input_base64": "BwAAAAAAAAAAAgAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzI=",
+      "after_base64": "BwAAAAAAAAAAAgAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 52,
+      "input_base64": "BwAAAAAAAAAAUAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Szgw",
+      "after_base64": "BwAAAAAAAAAAUAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 53,
+      "input_base64": "BwAAAAAAAAAABAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzQ=",
+      "after_base64": "BwAAAAAAAAAABAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 54,
+      "input_base64": "BwAAAAAAAAAAiBMAAAAAAAAAAAAAawAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzUwMDA=",
+      "after_base64": "BwAAAAAAAAAAiBMAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 55,
+      "input_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MDAw",
+      "operand_base64": "TTgwMDA=",
+      "after_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 56,
+      "input_base64": "BwAAAAAAAAAAahsAAAAAAAAAAAAAZAAAAAA=",
+      "output_base64": "JU1XMC43MDE4",
+      "operand_base64": "RDcwMTg=",
+      "after_base64": "BwAAAAAAAAAAahsAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 57,
+      "input_base64": "BwAAAAAAAAAAahsAAAAAAAAAAAAAZAAAAAA=",
+      "output_base64": "JU1XMC43MDE4",
+      "operand_base64": "RDcwMTg=",
+      "after_base64": "BwAAAAAAAAAAahsAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 58,
+      "input_base64": "BwAAAAAAAAAAhRwAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43MzAx",
+      "operand_base64": "TTczMDE=",
+      "after_base64": "BwAAAAAAAAAAhRwAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 59,
+      "input_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MDAw",
+      "operand_base64": "TTgwMDA=",
+      "after_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 60,
+      "input_base64": "BwAAAAAAAAAAaBsAAAAAAAAAAAAAZAAAAAA=",
+      "output_base64": "JU1XMC43MDE2",
+      "operand_base64": "RDcwMTY=",
+      "after_base64": "BwAAAAAAAAAAaBsAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 61,
+      "input_base64": "BwAAAAAAAAAAaBsAAAAAAAAAAAAAZAAAAAA=",
+      "output_base64": "JU1XMC43MDE2",
+      "operand_base64": "RDcwMTY=",
+      "after_base64": "BwAAAAAAAAAAaBsAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "original-stored-cache",
+      "index": 62,
+      "input_base64": "BwAAAAAAAAAAhBwAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43MzAw",
+      "operand_base64": "TTczMDA=",
+      "after_base64": "BwAAAAAAAAAAhBwAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "original-stored-cache",
+      "index": 0,
+      "input_base64": "BwAAAAAAAAAAdgAAAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS4xMTg=",
+      "operand_base64": "Vzc2",
+      "after_base64": "BwAAAAAAAAAAdgAAAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "original-stored-cache",
+      "index": 1,
+      "input_base64": "BwAAAAAAAAAASgAAAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS43NA==",
+      "operand_base64": "VzRB",
+      "after_base64": "BwAAAAAAAAAASgAAAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 0,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 1,
+      "input_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzE=",
+      "after_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 2,
+      "input_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzE1",
+      "after_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 3,
+      "input_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzE2",
+      "after_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 4,
+      "input_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgxOTE=",
+      "after_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 5,
+      "input_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgxOTI=",
+      "after_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 6,
+      "input_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzY1NTM1",
+      "after_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 7,
+      "input_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzY1NTM2",
+      "after_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 8,
+      "input_base64": "BwAAAAAAAAAA////fwAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzIxNDc0ODM2NDc=",
+      "after_base64": "BwAAAAAAAAAA////fwAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 9,
+      "input_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Sy0yMTQ3NDgzNjQ4",
+      "after_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 10,
+      "input_base64": "BwAAAAAAAAAA/////wAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Sy0x",
+      "after_base64": "BwAAAAAAAAAA/////wAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 11,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC4w",
+      "operand_base64": "TTA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 12,
+      "input_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC4x",
+      "operand_base64": "TTE=",
+      "after_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 13,
+      "input_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC4xNQ==",
+      "operand_base64": "TTE1",
+      "after_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 14,
+      "input_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC4xNg==",
+      "operand_base64": "TTE2",
+      "after_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 15,
+      "input_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MTkx",
+      "operand_base64": "TTgxOTE=",
+      "after_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 16,
+      "input_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MTky",
+      "operand_base64": "TTgxOTI=",
+      "after_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 17,
+      "input_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TTY1NTM1",
+      "after_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 18,
+      "input_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TTY1NTM2",
+      "after_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 19,
+      "input_base64": "BwAAAAAAAAAA////fwAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TTIxNDc0ODM2NDc=",
+      "after_base64": "BwAAAAAAAAAA////fwAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 20,
+      "input_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TS0yMTQ3NDgzNjQ4",
+      "after_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 21,
+      "input_base64": "BwAAAAAAAAAA/////wAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TS0x",
+      "after_base64": "BwAAAAAAAAAA/////wAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 22,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC4w",
+      "operand_base64": "RDA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 23,
+      "input_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC4x",
+      "operand_base64": "RDE=",
+      "after_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 24,
+      "input_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC4xNQ==",
+      "operand_base64": "RDE1",
+      "after_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 25,
+      "input_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC4xNg==",
+      "operand_base64": "RDE2",
+      "after_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 26,
+      "input_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MTkx",
+      "operand_base64": "RDgxOTE=",
+      "after_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 27,
+      "input_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MTky",
+      "operand_base64": "RDgxOTI=",
+      "after_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 28,
+      "input_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RDY1NTM1",
+      "after_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 29,
+      "input_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RDY1NTM2",
+      "after_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 30,
+      "input_base64": "BwAAAAAAAAAA////fwAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RDIxNDc0ODM2NDc=",
+      "after_base64": "BwAAAAAAAAAA////fwAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 31,
+      "input_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RC0yMTQ3NDgzNjQ4",
+      "after_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "index": 32,
+      "input_base64": "BwAAAAAAAAAA/////wAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RC0x",
+      "after_base64": "BwAAAAAAAAAA/////wAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 0,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 1,
+      "input_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzE=",
+      "after_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 2,
+      "input_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzE1",
+      "after_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 3,
+      "input_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzE2",
+      "after_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 4,
+      "input_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgxOTE=",
+      "after_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 5,
+      "input_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgxOTI=",
+      "after_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 6,
+      "input_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzY1NTM1",
+      "after_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 7,
+      "input_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzY1NTM2",
+      "after_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 8,
+      "input_base64": "BwAAAAAAAAAA////fwAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzIxNDc0ODM2NDc=",
+      "after_base64": "BwAAAAAAAAAA////fwAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 9,
+      "input_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Sy0yMTQ3NDgzNjQ4",
+      "after_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 10,
+      "input_base64": "BwAAAAAAAAAA/////wAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Sy0x",
+      "after_base64": "BwAAAAAAAAAA/////wAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 11,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC4w",
+      "operand_base64": "TTA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 12,
+      "input_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC4x",
+      "operand_base64": "TTE=",
+      "after_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 13,
+      "input_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC4xNQ==",
+      "operand_base64": "TTE1",
+      "after_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 14,
+      "input_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC4xNg==",
+      "operand_base64": "TTE2",
+      "after_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 15,
+      "input_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MTkx",
+      "operand_base64": "TTgxOTE=",
+      "after_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 16,
+      "input_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MTky",
+      "operand_base64": "TTgxOTI=",
+      "after_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 17,
+      "input_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TTY1NTM1",
+      "after_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 18,
+      "input_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TTY1NTM2",
+      "after_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 19,
+      "input_base64": "BwAAAAAAAAAA////fwAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TTIxNDc0ODM2NDc=",
+      "after_base64": "BwAAAAAAAAAA////fwAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 20,
+      "input_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TS0yMTQ3NDgzNjQ4",
+      "after_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 21,
+      "input_base64": "BwAAAAAAAAAA/////wAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TS0x",
+      "after_base64": "BwAAAAAAAAAA/////wAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 22,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC4w",
+      "operand_base64": "RDA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 23,
+      "input_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC4x",
+      "operand_base64": "RDE=",
+      "after_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 24,
+      "input_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC4xNQ==",
+      "operand_base64": "RDE1",
+      "after_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 25,
+      "input_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC4xNg==",
+      "operand_base64": "RDE2",
+      "after_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 26,
+      "input_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MTkx",
+      "operand_base64": "RDgxOTE=",
+      "after_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 27,
+      "input_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MTky",
+      "operand_base64": "RDgxOTI=",
+      "after_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 28,
+      "input_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RDY1NTM1",
+      "after_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 29,
+      "input_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RDY1NTM2",
+      "after_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 30,
+      "input_base64": "BwAAAAAAAAAA////fwAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RDIxNDc0ODM2NDc=",
+      "after_base64": "BwAAAAAAAAAA////fwAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 31,
+      "input_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RC0yMTQ3NDgzNjQ4",
+      "after_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 32,
+      "input_base64": "BwAAAAAAAAAA/////wAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RC0x",
+      "after_base64": "BwAAAAAAAAAA/////wAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 33,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS4w",
+      "operand_base64": "VzA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 34,
+      "input_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS4x",
+      "operand_base64": "VzE=",
+      "after_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 35,
+      "input_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS4xNQ==",
+      "operand_base64": "V0Y=",
+      "after_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 36,
+      "input_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS4xNg==",
+      "operand_base64": "VzEw",
+      "after_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 37,
+      "input_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS44MTkx",
+      "operand_base64": "VzFGRkY=",
+      "after_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 38,
+      "input_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "VzIwMDA=",
+      "after_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 39,
+      "input_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "V0ZGRkY=",
+      "after_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 40,
+      "input_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "VzEwMDAw",
+      "after_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 41,
+      "input_base64": "BwAAAAAAAAAA////fwAAAAAAAAAAVwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "VzdGRkZGRkZG",
+      "after_base64": "BwAAAAAAAAAA////fwAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 42,
+      "input_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "VzgwMDAwMDAw",
+      "after_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "index": 43,
+      "input_base64": "BwAAAAAAAAAA/////wAAAAAAAAAAVwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "V0ZGRkZGRkZG",
+      "after_base64": "BwAAAAAAAAAA/////wAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 0,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 1,
+      "input_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzE=",
+      "after_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 2,
+      "input_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzE1",
+      "after_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 3,
+      "input_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzE2",
+      "after_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 4,
+      "input_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Szc5OTk=",
+      "after_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 5,
+      "input_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgwMDA=",
+      "after_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 6,
+      "input_base64": "BwAAAAAAAAAAQR8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgwMDE=",
+      "after_base64": "BwAAAAAAAAAAQR8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 7,
+      "input_base64": "BwAAAAAAAAAAXB8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgwMjg=",
+      "after_base64": "BwAAAAAAAAAAXB8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 8,
+      "input_base64": "BwAAAAAAAAAAXR8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgwMjk=",
+      "after_base64": "BwAAAAAAAAAAXR8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 9,
+      "input_base64": "BwAAAAAAAAAA9B8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgxODA=",
+      "after_base64": "BwAAAAAAAAAA9B8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 10,
+      "input_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgxOTE=",
+      "after_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 11,
+      "input_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgxOTI=",
+      "after_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 12,
+      "input_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzY1NTM1",
+      "after_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 13,
+      "input_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzY1NTM2",
+      "after_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 14,
+      "input_base64": "BwAAAAAAAAAA////fwAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzIxNDc0ODM2NDc=",
+      "after_base64": "BwAAAAAAAAAA////fwAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 15,
+      "input_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Sy0yMTQ3NDgzNjQ4",
+      "after_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 16,
+      "input_base64": "BwAAAAAAAAAA/////wAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Sy0x",
+      "after_base64": "BwAAAAAAAAAA/////wAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 17,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC4w",
+      "operand_base64": "TTA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 18,
+      "input_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC4x",
+      "operand_base64": "TTE=",
+      "after_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 19,
+      "input_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC4xNQ==",
+      "operand_base64": "TTE1",
+      "after_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 20,
+      "input_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC4xNg==",
+      "operand_base64": "TTE2",
+      "after_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 21,
+      "input_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TTc5OTk=",
+      "after_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 22,
+      "input_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MDAw",
+      "operand_base64": "TTgwMDA=",
+      "after_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 23,
+      "input_base64": "BwAAAAAAAAAAQR8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MDAx",
+      "operand_base64": "TTgwMDE=",
+      "after_base64": "BwAAAAAAAAAAQR8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 24,
+      "input_base64": "BwAAAAAAAAAAXB8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MDI4",
+      "operand_base64": "TTgwMjg=",
+      "after_base64": "BwAAAAAAAAAAXB8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 25,
+      "input_base64": "BwAAAAAAAAAAXR8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MDI5",
+      "operand_base64": "TTgwMjk=",
+      "after_base64": "BwAAAAAAAAAAXR8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 26,
+      "input_base64": "BwAAAAAAAAAA9B8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MTgw",
+      "operand_base64": "TTgxODA=",
+      "after_base64": "BwAAAAAAAAAA9B8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 27,
+      "input_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MTkx",
+      "operand_base64": "TTgxOTE=",
+      "after_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 28,
+      "input_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MTky",
+      "operand_base64": "TTgxOTI=",
+      "after_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 29,
+      "input_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TTY1NTM1",
+      "after_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 30,
+      "input_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TTY1NTM2",
+      "after_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 31,
+      "input_base64": "BwAAAAAAAAAA////fwAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TTIxNDc0ODM2NDc=",
+      "after_base64": "BwAAAAAAAAAA////fwAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 32,
+      "input_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TS0yMTQ3NDgzNjQ4",
+      "after_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 33,
+      "input_base64": "BwAAAAAAAAAA/////wAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TS0x",
+      "after_base64": "BwAAAAAAAAAA/////wAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 34,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC4w",
+      "operand_base64": "RDA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 35,
+      "input_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC4x",
+      "operand_base64": "RDE=",
+      "after_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 36,
+      "input_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC4xNQ==",
+      "operand_base64": "RDE1",
+      "after_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 37,
+      "input_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC4xNg==",
+      "operand_base64": "RDE2",
+      "after_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 38,
+      "input_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC43OTk5",
+      "operand_base64": "RDc5OTk=",
+      "after_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 39,
+      "input_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MDAw",
+      "operand_base64": "RDgwMDA=",
+      "after_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 40,
+      "input_base64": "BwAAAAAAAAAAQR8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MDAx",
+      "operand_base64": "RDgwMDE=",
+      "after_base64": "BwAAAAAAAAAAQR8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 41,
+      "input_base64": "BwAAAAAAAAAAXB8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MDI4",
+      "operand_base64": "RDgwMjg=",
+      "after_base64": "BwAAAAAAAAAAXB8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 42,
+      "input_base64": "BwAAAAAAAAAAXR8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MDI5",
+      "operand_base64": "RDgwMjk=",
+      "after_base64": "BwAAAAAAAAAAXR8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 43,
+      "input_base64": "BwAAAAAAAAAA9B8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MTgw",
+      "operand_base64": "RDgxODA=",
+      "after_base64": "BwAAAAAAAAAA9B8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 44,
+      "input_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MTkx",
+      "operand_base64": "RDgxOTE=",
+      "after_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 45,
+      "input_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MTky",
+      "operand_base64": "RDgxOTI=",
+      "after_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 46,
+      "input_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RDY1NTM1",
+      "after_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 47,
+      "input_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RDY1NTM2",
+      "after_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 48,
+      "input_base64": "BwAAAAAAAAAA////fwAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RDIxNDc0ODM2NDc=",
+      "after_base64": "BwAAAAAAAAAA////fwAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 49,
+      "input_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RC0yMTQ3NDgzNjQ4",
+      "after_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 50,
+      "input_base64": "BwAAAAAAAAAA/////wAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RC0x",
+      "after_base64": "BwAAAAAAAAAA/////wAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 0,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 1,
+      "input_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzE=",
+      "after_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 2,
+      "input_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzE1",
+      "after_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 3,
+      "input_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzE2",
+      "after_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 4,
+      "input_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Szc5OTk=",
+      "after_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 5,
+      "input_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgwMDA=",
+      "after_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 6,
+      "input_base64": "BwAAAAAAAAAAQR8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgwMDE=",
+      "after_base64": "BwAAAAAAAAAAQR8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 7,
+      "input_base64": "BwAAAAAAAAAAXB8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgwMjg=",
+      "after_base64": "BwAAAAAAAAAAXB8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 8,
+      "input_base64": "BwAAAAAAAAAAXR8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgwMjk=",
+      "after_base64": "BwAAAAAAAAAAXR8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 9,
+      "input_base64": "BwAAAAAAAAAA9B8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgxODA=",
+      "after_base64": "BwAAAAAAAAAA9B8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 10,
+      "input_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgxOTE=",
+      "after_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 11,
+      "input_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgxOTI=",
+      "after_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 12,
+      "input_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzY1NTM1",
+      "after_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 13,
+      "input_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzY1NTM2",
+      "after_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 14,
+      "input_base64": "BwAAAAAAAAAA////fwAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzIxNDc0ODM2NDc=",
+      "after_base64": "BwAAAAAAAAAA////fwAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 15,
+      "input_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Sy0yMTQ3NDgzNjQ4",
+      "after_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 16,
+      "input_base64": "BwAAAAAAAAAA/////wAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Sy0x",
+      "after_base64": "BwAAAAAAAAAA/////wAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 17,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC4w",
+      "operand_base64": "TTA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 18,
+      "input_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC4x",
+      "operand_base64": "TTE=",
+      "after_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 19,
+      "input_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC4xNQ==",
+      "operand_base64": "TTE1",
+      "after_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 20,
+      "input_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC4xNg==",
+      "operand_base64": "TTE2",
+      "after_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 21,
+      "input_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43OTk5",
+      "operand_base64": "TTc5OTk=",
+      "after_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 22,
+      "input_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MDAw",
+      "operand_base64": "TTgwMDA=",
+      "after_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 23,
+      "input_base64": "BwAAAAAAAAAAQR8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MDAx",
+      "operand_base64": "TTgwMDE=",
+      "after_base64": "BwAAAAAAAAAAQR8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 24,
+      "input_base64": "BwAAAAAAAAAAXB8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MDI4",
+      "operand_base64": "TTgwMjg=",
+      "after_base64": "BwAAAAAAAAAAXB8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 25,
+      "input_base64": "BwAAAAAAAAAAXR8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MDI5",
+      "operand_base64": "TTgwMjk=",
+      "after_base64": "BwAAAAAAAAAAXR8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 26,
+      "input_base64": "BwAAAAAAAAAA9B8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MTgw",
+      "operand_base64": "TTgxODA=",
+      "after_base64": "BwAAAAAAAAAA9B8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 27,
+      "input_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MTkx",
+      "operand_base64": "TTgxOTE=",
+      "after_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 28,
+      "input_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MTky",
+      "operand_base64": "TTgxOTI=",
+      "after_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 29,
+      "input_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TTY1NTM1",
+      "after_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 30,
+      "input_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TTY1NTM2",
+      "after_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 31,
+      "input_base64": "BwAAAAAAAAAA////fwAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TTIxNDc0ODM2NDc=",
+      "after_base64": "BwAAAAAAAAAA////fwAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 32,
+      "input_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TS0yMTQ3NDgzNjQ4",
+      "after_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 33,
+      "input_base64": "BwAAAAAAAAAA/////wAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TS0x",
+      "after_base64": "BwAAAAAAAAAA/////wAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 34,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC4w",
+      "operand_base64": "RDA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 35,
+      "input_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC4x",
+      "operand_base64": "RDE=",
+      "after_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 36,
+      "input_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC4xNQ==",
+      "operand_base64": "RDE1",
+      "after_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 37,
+      "input_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC4xNg==",
+      "operand_base64": "RDE2",
+      "after_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 38,
+      "input_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC43OTk5",
+      "operand_base64": "RDc5OTk=",
+      "after_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 39,
+      "input_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MDAw",
+      "operand_base64": "RDgwMDA=",
+      "after_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 40,
+      "input_base64": "BwAAAAAAAAAAQR8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MDAx",
+      "operand_base64": "RDgwMDE=",
+      "after_base64": "BwAAAAAAAAAAQR8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 41,
+      "input_base64": "BwAAAAAAAAAAXB8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MDI4",
+      "operand_base64": "RDgwMjg=",
+      "after_base64": "BwAAAAAAAAAAXB8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 42,
+      "input_base64": "BwAAAAAAAAAAXR8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MDI5",
+      "operand_base64": "RDgwMjk=",
+      "after_base64": "BwAAAAAAAAAAXR8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 43,
+      "input_base64": "BwAAAAAAAAAA9B8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MTgw",
+      "operand_base64": "RDgxODA=",
+      "after_base64": "BwAAAAAAAAAA9B8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 44,
+      "input_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MTkx",
+      "operand_base64": "RDgxOTE=",
+      "after_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 45,
+      "input_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MTky",
+      "operand_base64": "RDgxOTI=",
+      "after_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 46,
+      "input_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RDY1NTM1",
+      "after_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 47,
+      "input_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RDY1NTM2",
+      "after_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 48,
+      "input_base64": "BwAAAAAAAAAA////fwAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RDIxNDc0ODM2NDc=",
+      "after_base64": "BwAAAAAAAAAA////fwAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 49,
+      "input_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RC0yMTQ3NDgzNjQ4",
+      "after_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 50,
+      "input_base64": "BwAAAAAAAAAA/////wAAAAAAAAAARAAAAAA=",
+      "output_base64": "",
+      "operand_base64": "RC0x",
+      "after_base64": "BwAAAAAAAAAA/////wAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 51,
+      "input_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS4w",
+      "operand_base64": "VzA=",
+      "after_base64": "BwAAAAAAAAAAAAAAAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 52,
+      "input_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS4x",
+      "operand_base64": "VzE=",
+      "after_base64": "BwAAAAAAAAAAAQAAAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 53,
+      "input_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS4xNQ==",
+      "operand_base64": "V0Y=",
+      "after_base64": "BwAAAAAAAAAADwAAAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 54,
+      "input_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS4xNg==",
+      "operand_base64": "VzEw",
+      "after_base64": "BwAAAAAAAAAAEAAAAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 55,
+      "input_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS43OTk5",
+      "operand_base64": "VzFGM0Y=",
+      "after_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 56,
+      "input_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS44MDAw",
+      "operand_base64": "VzFGNDA=",
+      "after_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 57,
+      "input_base64": "BwAAAAAAAAAAQR8AAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS44MDAx",
+      "operand_base64": "VzFGNDE=",
+      "after_base64": "BwAAAAAAAAAAQR8AAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 58,
+      "input_base64": "BwAAAAAAAAAAXB8AAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS44MDI4",
+      "operand_base64": "VzFGNUM=",
+      "after_base64": "BwAAAAAAAAAAXB8AAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 59,
+      "input_base64": "BwAAAAAAAAAAXR8AAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS44MDI5",
+      "operand_base64": "VzFGNUQ=",
+      "after_base64": "BwAAAAAAAAAAXR8AAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 60,
+      "input_base64": "BwAAAAAAAAAA9B8AAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS44MTgw",
+      "operand_base64": "VzFGRjQ=",
+      "after_base64": "BwAAAAAAAAAA9B8AAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 61,
+      "input_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS44MTkx",
+      "operand_base64": "VzFGRkY=",
+      "after_base64": "BwAAAAAAAAAA/x8AAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 62,
+      "input_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "VzIwMDA=",
+      "after_base64": "BwAAAAAAAAAAACAAAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 63,
+      "input_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "V0ZGRkY=",
+      "after_base64": "BwAAAAAAAAAA//8AAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 64,
+      "input_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "VzEwMDAw",
+      "after_base64": "BwAAAAAAAAAAAAABAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 65,
+      "input_base64": "BwAAAAAAAAAA////fwAAAAAAAAAAVwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "VzdGRkZGRkZG",
+      "after_base64": "BwAAAAAAAAAA////fwAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 66,
+      "input_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "VzgwMDAwMDAw",
+      "after_base64": "BwAAAAAAAAAAAAAAgAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-special-number-controls-20260930",
+      "index": 67,
+      "input_base64": "BwAAAAAAAAAA/////wAAAAAAAAAAVwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "V0ZGRkZGRkZG",
+      "after_base64": "BwAAAAAAAAAA/////wAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 0,
+      "input_base64": "BwAAAAAAAAAA/h0AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Szc2Nzg=",
+      "after_base64": "BwAAAAAAAAAA/h0AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 1,
+      "input_base64": "BwAAAAAAAAAA/x0AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Szc2Nzk=",
+      "after_base64": "BwAAAAAAAAAA/x0AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 2,
+      "input_base64": "BwAAAAAAAAAAAB4AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Szc2ODA=",
+      "after_base64": "BwAAAAAAAAAAAB4AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 3,
+      "input_base64": "BwAAAAAAAAAAAR4AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Szc2ODE=",
+      "after_base64": "BwAAAAAAAAAAAR4AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 4,
+      "input_base64": "BwAAAAAAAAAAPh8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Szc5OTg=",
+      "after_base64": "BwAAAAAAAAAAPh8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 5,
+      "input_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Szc5OTk=",
+      "after_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 6,
+      "input_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgwMDA=",
+      "after_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 7,
+      "input_base64": "BwAAAAAAAAAA/h0AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43Njc4",
+      "operand_base64": "TTc2Nzg=",
+      "after_base64": "BwAAAAAAAAAA/h0AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 8,
+      "input_base64": "BwAAAAAAAAAA/x0AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43Njc5",
+      "operand_base64": "TTc2Nzk=",
+      "after_base64": "BwAAAAAAAAAA/x0AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 9,
+      "input_base64": "BwAAAAAAAAAAAB4AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TTc2ODA=",
+      "after_base64": "BwAAAAAAAAAAAB4AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 10,
+      "input_base64": "BwAAAAAAAAAAAR4AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TTc2ODE=",
+      "after_base64": "BwAAAAAAAAAAAR4AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 11,
+      "input_base64": "BwAAAAAAAAAAPh8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TTc5OTg=",
+      "after_base64": "BwAAAAAAAAAAPh8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 12,
+      "input_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "",
+      "operand_base64": "TTc5OTk=",
+      "after_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 13,
+      "input_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MDAw",
+      "operand_base64": "TTgwMDA=",
+      "after_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 14,
+      "input_base64": "BwAAAAAAAAAA/h0AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC43Njc4",
+      "operand_base64": "RDc2Nzg=",
+      "after_base64": "BwAAAAAAAAAA/h0AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 15,
+      "input_base64": "BwAAAAAAAAAA/x0AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC43Njc5",
+      "operand_base64": "RDc2Nzk=",
+      "after_base64": "BwAAAAAAAAAA/x0AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 16,
+      "input_base64": "BwAAAAAAAAAAAB4AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC43Njgw",
+      "operand_base64": "RDc2ODA=",
+      "after_base64": "BwAAAAAAAAAAAB4AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 17,
+      "input_base64": "BwAAAAAAAAAAAR4AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC43Njgx",
+      "operand_base64": "RDc2ODE=",
+      "after_base64": "BwAAAAAAAAAAAR4AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 18,
+      "input_base64": "BwAAAAAAAAAAPh8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC43OTk4",
+      "operand_base64": "RDc5OTg=",
+      "after_base64": "BwAAAAAAAAAAPh8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 19,
+      "input_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC43OTk5",
+      "operand_base64": "RDc5OTk=",
+      "after_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "FX3G",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 20,
+      "input_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MDAw",
+      "operand_base64": "RDgwMDA=",
+      "after_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 0,
+      "input_base64": "BwAAAAAAAAAA/h0AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Szc2Nzg=",
+      "after_base64": "BwAAAAAAAAAA/h0AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 1,
+      "input_base64": "BwAAAAAAAAAA/x0AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Szc2Nzk=",
+      "after_base64": "BwAAAAAAAAAA/x0AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 2,
+      "input_base64": "BwAAAAAAAAAAAB4AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Szc2ODA=",
+      "after_base64": "BwAAAAAAAAAAAB4AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 3,
+      "input_base64": "BwAAAAAAAAAAAR4AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Szc2ODE=",
+      "after_base64": "BwAAAAAAAAAAAR4AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 4,
+      "input_base64": "BwAAAAAAAAAAPh8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Szc5OTg=",
+      "after_base64": "BwAAAAAAAAAAPh8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 5,
+      "input_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "Szc5OTk=",
+      "after_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 6,
+      "input_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAASwAAAAA=",
+      "output_base64": "",
+      "operand_base64": "SzgwMDA=",
+      "after_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAASwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 7,
+      "input_base64": "BwAAAAAAAAAA/h0AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43Njc4",
+      "operand_base64": "TTc2Nzg=",
+      "after_base64": "BwAAAAAAAAAA/h0AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 8,
+      "input_base64": "BwAAAAAAAAAA/x0AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43Njc5",
+      "operand_base64": "TTc2Nzk=",
+      "after_base64": "BwAAAAAAAAAA/x0AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 9,
+      "input_base64": "BwAAAAAAAAAAAB4AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43Njgw",
+      "operand_base64": "TTc2ODA=",
+      "after_base64": "BwAAAAAAAAAAAB4AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 10,
+      "input_base64": "BwAAAAAAAAAAAR4AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43Njgx",
+      "operand_base64": "TTc2ODE=",
+      "after_base64": "BwAAAAAAAAAAAR4AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 11,
+      "input_base64": "BwAAAAAAAAAAPh8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43OTk4",
+      "operand_base64": "TTc5OTg=",
+      "after_base64": "BwAAAAAAAAAAPh8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 12,
+      "input_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC43OTk5",
+      "operand_base64": "TTc5OTk=",
+      "after_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 13,
+      "input_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAATQAAAAA=",
+      "output_base64": "JU1YMC44MDAw",
+      "operand_base64": "TTgwMDA=",
+      "after_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAATQAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 14,
+      "input_base64": "BwAAAAAAAAAA/h0AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC43Njc4",
+      "operand_base64": "RDc2Nzg=",
+      "after_base64": "BwAAAAAAAAAA/h0AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 15,
+      "input_base64": "BwAAAAAAAAAA/x0AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC43Njc5",
+      "operand_base64": "RDc2Nzk=",
+      "after_base64": "BwAAAAAAAAAA/x0AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 16,
+      "input_base64": "BwAAAAAAAAAAAB4AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC43Njgw",
+      "operand_base64": "RDc2ODA=",
+      "after_base64": "BwAAAAAAAAAAAB4AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 17,
+      "input_base64": "BwAAAAAAAAAAAR4AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC43Njgx",
+      "operand_base64": "RDc2ODE=",
+      "after_base64": "BwAAAAAAAAAAAR4AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 18,
+      "input_base64": "BwAAAAAAAAAAPh8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC43OTk4",
+      "operand_base64": "RDc5OTg=",
+      "after_base64": "BwAAAAAAAAAAPh8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 19,
+      "input_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC43OTk5",
+      "operand_base64": "RDc5OTk=",
+      "after_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 20,
+      "input_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAARAAAAAA=",
+      "output_base64": "JU1XMC44MDAw",
+      "operand_base64": "RDgwMDA=",
+      "after_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAARAAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 21,
+      "input_base64": "BwAAAAAAAAAA/h0AAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS43Njc4",
+      "operand_base64": "VzFERkU=",
+      "after_base64": "BwAAAAAAAAAA/h0AAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 22,
+      "input_base64": "BwAAAAAAAAAA/x0AAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS43Njc5",
+      "operand_base64": "VzFERkY=",
+      "after_base64": "BwAAAAAAAAAA/x0AAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 23,
+      "input_base64": "BwAAAAAAAAAAAB4AAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS43Njgw",
+      "operand_base64": "VzFFMDA=",
+      "after_base64": "BwAAAAAAAAAAAB4AAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 24,
+      "input_base64": "BwAAAAAAAAAAAR4AAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS43Njgx",
+      "operand_base64": "VzFFMDE=",
+      "after_base64": "BwAAAAAAAAAAAR4AAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 25,
+      "input_base64": "BwAAAAAAAAAAPh8AAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS43OTk4",
+      "operand_base64": "VzFGM0U=",
+      "after_base64": "BwAAAAAAAAAAPh8AAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 26,
+      "input_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS43OTk5",
+      "operand_base64": "VzFGM0Y=",
+      "after_base64": "BwAAAAAAAAAAPx8AAAAAAAAAAAAAVwAAAAA="
+    },
+    {
+      "cpu": "Q03UDV",
+      "origin": "prospective-number-controls",
+      "experiment": "inline-assignment-m-range-boundary-20260930",
+      "index": 27,
+      "input_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAAVwAAAAA=",
+      "output_base64": "JU1XMS44MDAw",
+      "operand_base64": "VzFGNDA=",
+      "after_base64": "BwAAAAAAAAAAQB8AAAAAAAAAAAAAVwAAAAA="
+    }
+  ],
+  "projection_profile": "M/D/W unsigned numbers at most 8191, excluding M7680..M7999 without CPU context; K signed 32-bit. This conservative read profile is not a hardware capacity or write-permission rule."
+}

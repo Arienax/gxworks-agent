@@ -12,8 +12,10 @@ import pytest
 from knowledge import core
 from knowledge.evidence import KnowledgeQuery
 from knowledge.instruction_facts import (
-    _is_target, _pack_target, _related_units, _units, delivered_fact_report,
-    included_knowledge_ids, instruction_fact_targets, retrieve_instruction_facts,
+    _conflicts_with_verified_operand_order, _is_target, _manual_fact_gaps,
+    _operand_gap_details, _pack_target, _related_units, _units,
+    _visual_operand_sequence, delivered_fact_report, included_knowledge_ids,
+    instruction_fact_targets, retrieve_instruction_facts,
 )
 from knowledge.retriever import build_knowledge_context
 
@@ -59,6 +61,175 @@ def test_whole_table_and_offsets_are_preserved():
     assert text.rstrip() in result["text"]
     assert result["source_spans"] == [{"start": 0, "end": len(text)}]
     assert _pack_target([source(text=text)], 50) == []  # never cut table rows
+
+
+def test_gap_directed_manual_packing_drops_already_covered_operand_only_units():
+    rows = [
+        source(
+            "operation",
+            text="[PAGE 1 PROSE]\nOperation copies the source into the destination.",
+        ),
+        source(
+            "operands",
+            text="[TABLE page=1]\nOperand | Description\nS | source\nD | destination",
+        ),
+    ]
+    output = _pack_target(rows, 2500, needed_categories={"operation"})
+    text = "\n".join(row["text"] for row in output)
+    assert "Operation copies" in text
+    assert "Operand | Description" not in text
+
+
+def test_verified_order_visual_conflict_detector_ignores_concrete_examples():
+    expected = ["S1", "S2", "D"]
+    visual = (
+        "[PAGE 1 PROSE]\n"
+        "TADD D 10 D 20 D 30\n"
+        "S1 [GLYPH-F0A0] S2 [GLYPH-F0A0] D [GLYPH-F0A0]\n"
+        "(D10,D11,D12)+(D20,D21,D22)\n"
+    )
+    assert _visual_operand_sequence(visual, "TADD", expected) == expected
+    record = {
+        "instruction_opcode": "TADD",
+        "target_applicability": {
+            "operand_order_status": "source_verified",
+            "native_operand_order": expected,
+        },
+    }
+    assert not _conflicts_with_verified_operand_order(record, visual)
+
+
+@pytest.mark.parametrize(
+    ("opcode", "expected", "visual", "sequence"),
+    [
+        (
+            "CRC", ["S", "D", "N"],
+            "[PAGE 1 PROSE]\nCRC n\nM8161\nD [GLYPH-F0A0]S [GLYPH-F0A0]\nS\n",
+            ["N", "D", "S"],
+        ),
+        (
+            "DFMOV", ["S", "D", "N"],
+            "[PAGE 1 PROSE]\nDFMOV nS [GLYPH-F0A0] D [GLYPH-F0A0]\n+1,+1\n",
+            ["N", "S", "D"],
+        ),
+        (
+            "SFTRP", ["S", "D", "N1", "N2"],
+            "[PAGE 1 PROSE]\nSFTRP n1 n2D [GLYPH-F0A0]S [GLYPH-F0A0]\nBefore\n",
+            ["N1", "N2", "D", "S"],
+        ),
+    ],
+)
+def test_verified_order_visual_conflict_detector_finds_flattened_diagrams(
+    opcode, expected, visual, sequence,
+):
+    assert _visual_operand_sequence(visual, opcode, expected) == sequence
+    record = {
+        "instruction_opcode": opcode,
+        "target_applicability": {
+            "operand_order_status": "source_verified",
+            "native_operand_order": expected,
+        },
+    }
+    assert _conflicts_with_verified_operand_order(record, visual)
+
+
+def test_verified_order_visual_conflict_detector_ignores_prose_mnemonic_collision():
+    text = (
+        "[PAGE 1 PROSE]\n"
+        "The dead band is adjusted by S2 [GLYPH-F0A0] before S1 [GLYPH-F0A0].\n"
+    )
+    assert _visual_operand_sequence(
+        text, "BAND", ["S1", "S2", "S3", "D"]
+    ) == []
+
+
+def test_verified_order_filter_applies_to_related_manual_units():
+    rows = [
+        source(
+            "safe", opcode="CRC",
+            text="[PAGE 1 PROSE]\nOperation calculates a CRC from source data.\n",
+        ),
+        source(
+            "visual", opcode="CRC",
+            text=(
+                "[PAGE 1 PROSE]\nCRC n\nM8161\n"
+                "D [GLYPH-F0A0]S [GLYPH-F0A0]\nS\n"
+            ),
+        ),
+    ]
+    output = _pack_target(
+        rows,
+        4000,
+        needed_categories={"operands", "operation"},
+        verified_operand_order=["S", "D", "N"],
+        verified_opcodes=("CRC",),
+    )
+    rendered = "\n".join(row["text"] for row in output)
+    assert "Operation calculates a CRC" in rendered
+    assert "CRC n" not in rendered
+
+
+def test_embedded_pdf_layout_residue_is_not_a_second_operand_order():
+    text = (
+        "[PAGE 687 PROSE]\n"
+        "Operation reads the source operand and transfers the result to the destination.\n"
+        "Inverter station number and channel requirements are described here.\n"
+        "FNC 270\n"
+        "IVCK\n"
+        "9 steps IVCK\n"
+        "[GLYPH-F0BE]\n"
+        "[GLYPH-F0BE][GLYPH-F0BE]\n"
+        "FNC270\n"
+        "IVCK n\n"
+        "S1 [GLYPH-F0A0] S2 [GLYPH-F0A0] D [GLYPH-F0A0]\n"
+    )
+    output = _pack_target(
+        [source("ivck", opcode="IVCK", text=text)],
+        4000,
+        needed_categories={"operands", "operation"},
+    )
+    rendered = "\n".join(row["text"] for row in output)
+    assert "Operation reads the source operand" in rendered
+    assert "IVCK n" not in rendered
+    assert all(
+        not (
+            span["start"] <= text.index("FNC 270") < span["end"]
+        )
+        for row in output
+        for span in row["source_spans"]
+    )
+
+
+def test_operand_gap_tracking_is_slot_and_facet_granular():
+    record = {
+        "operand_slots": [
+            {
+                "position": 1, "symbol": "S1", "name": "source",
+                "role_status": "source_verified",
+                "data_type_status": "source_verified",
+                "symbol_status": "source_verified",
+                "device_class_status": "source_verified",
+            },
+            {
+                "position": 2, "symbol": "D", "name": "destination",
+                "role_status": "source_verified",
+                "data_type_status": "source_verified",
+                "symbol_status": "source_verified",
+                "device_class_status": "unresolved",
+            },
+        ],
+        "target_applicability": {"boundary_status": "source_verified"},
+    }
+    assert _operand_gap_details(record) == [{
+        "position": 2,
+        "facet": "device_classes",
+        "status": "unresolved",
+        "symbol": "D",
+        "name": "destination",
+    }]
+    assert _manual_fact_gaps(record) == frozenset({
+        "operands", "operation", "execution",
+    })
 
 
 def test_pack_across_definition_table_and_caution_without_duplicate_layout():
@@ -223,6 +394,65 @@ def test_bundled_index_delivers_instruction_definitions_inside_existing_budget(o
     assert set(included_knowledge_ids(context, report["records"])) == {r["id"] for r in report["records"] if r["included"]}
 
 
+def test_ivck_verified_order_does_not_compete_with_flattened_page_layout():
+    if core._index_identity(core._index_path())[0] == "missing":
+        pytest.skip("Bundled index is not installed")
+    query = KnowledgeQuery(
+        "IVCK",
+        precompiled=True,
+        metadata={"instruction_fact_mode": "targeted"},
+    )
+    context = build_knowledge_context(
+        query,
+        plc_model="FX3U",
+        task_type="generate",
+        char_budget=24000,
+        top_k=8,
+    )
+    report = context.manifest["instruction_facts"]
+    lookup = next(row for row in report["lookups"] if row["opcode"] == "IVCK")
+    assert "operand_order" not in {
+        row["facet"] for row in lookup["operand_gap_details"]
+    }
+    assert '"symbol":"S1"' in context
+    assert '"symbol":"S2"' in context
+    assert '"symbol":"D"' in context
+    assert '"symbol":"N"' in context
+    assert "IVCK n\nS1" not in context
+
+
+def test_verified_role_type_order_do_not_close_unverified_device_class_gap():
+    if core._index_identity(core._index_path())[0] == "missing":
+        pytest.skip("Bundled index is not installed")
+    query = KnowledgeQuery(
+        "DADDP",
+        precompiled=True,
+        metadata={"instruction_fact_mode": "targeted"},
+    )
+    context = build_knowledge_context(
+        query,
+        plc_model="FX3U",
+        task_type="generate",
+        char_budget=24000,
+        top_k=8,
+    )
+    report = context.manifest["instruction_facts"]
+    lookup = next(row for row in report["lookups"] if row["opcode"] == "DADDP")
+    assert "operands" in lookup["manual_gaps"]
+    assert "operands" not in lookup["structured_dimensions"]
+    gaps = lookup["operand_gap_details"]
+    assert gaps
+    assert {row["facet"] for row in gaps} == {"device_classes"}
+    assert {row["position"] for row in gaps} == {1, 2, 3}
+
+    included = [row for row in report["records"] if row.get("included")]
+    assert included
+    assert any(
+        "operands" in (row.get("candidate_fact_categories") or ())
+        for row in included
+    )
+
+
 def test_generation_packer_delivers_structured_contract_with_manual_evidence():
     if core._index_identity(core._index_path())[0] == "missing":
         pytest.skip("Bundled index is not installed")
@@ -235,12 +465,15 @@ def test_generation_packer_delivers_structured_contract_with_manual_evidence():
     }}}
     from application.confirmed_generation_context import build_confirmed_generation_context
     context = build_confirmed_generation_context(spec, "FX3U")
-    assert "INSTRUCTION_CONTRACT:" in context.knowledge_context
-    assert "STEP_WIDTH: 9 program step(s)" in context.knowledge_context
+    assert "OPERAND_SEMANTICS:" in context.knowledge_context
+    assert "INSTRUCTION_CONTRACT:" not in context.knowledge_context
+    assert "STEP_WIDTH:" not in context.knowledge_context
     report = context.handoff["instruction_facts"]
     record = next(row for row in report["records"] if row.get("instruction_contract"))
     assert record["instruction_contract"]["native_operand_order"] == ["S", "D", "N1", "N2"]
     assert record["instruction_contract"]["confirmed_operands"] == ["D0", "D10", "K56", "K1"]
+    assert [slot["value"] for slot in record["operand_slots"]] == ["D0", "D10", "K56", "K1"]
+    assert record["target_applicability"]["target_model"] == "FX3U"
     assert record["instruction_step_width"]["steps"] == 9
 
 

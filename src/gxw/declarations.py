@@ -18,7 +18,9 @@ from .source_header import source_payload_offset
 BASIC_TYPES = {"BOOL": (1, "FALSE"), "INT": (2, "0"), "DINT": (3, "0"),
                "WORD": (4, "0"), "DWORD": (5, "0"), "REAL": (6, "0.0"),
                "TIME": (7, "T#0s"), "STRING": (8, "''")}
-CLASS_CODES = {"VAR": 1, "VAR_CONSTANT": 2, "VAR_GLOBAL": 8, "VAR_GLOBAL_CONSTANT": 9}
+CLASS_CODES = {"VAR": 1, "VAR_CONSTANT": 2, "VAR_INPUT": 3, "VAR_OUTPUT": 4,
+               "VAR_IN_OUT": 5, "VAR_GLOBAL": 8, "VAR_GLOBAL_CONSTANT": 9,
+               "VAR_INPUT_CONSTANT": 11, "VAR_IN_EXT": 12}
 
 
 class _Reader:
@@ -91,6 +93,10 @@ class DeclarationDocument:
     trailer: bytes = field(repr=False)
     raw: bytes = field(repr=False)
     owner_return_type: str | None = None
+    # Workspace GetPOUType/GetPOUStatus correspondence. These describe the
+    # declaration owner, independently of the source compile-pending header.
+    owner_pou_type: int | None = None
+    owner_pou_status: int | None = None
 
 
 @dataclass(frozen=True)
@@ -149,9 +155,9 @@ def parse_declarations(raw: bytes, *, logical_name: str) -> DeclarationDocument:
     # Common native header; the timestamp/status bytes remain opaque.
     reader.take(source_payload_offset(raw))
     owner = reader.string() if scope == "local" else None
-    return_type = None
+    return_type = pou_type = pou_status = None
     if scope == "local":
-        reader.take(8)
+        pou_type, pou_status = reader.uint(), reader.uint()
         reader.string()  # Retained in header; no meaning assigned.
         return_type = reader.string() or None
     count_offset = reader.offset
@@ -187,7 +193,7 @@ def parse_declarations(raw: bytes, *, logical_name: str) -> DeclarationDocument:
             raise GXWFormatError("address extension outside observed structure declaration types")
         rows.append(LabelRecord(*values, offset=start, raw=raw[start:reader.offset], value_extension=extension))
     result = DeclarationDocument(logical_name, scope, owner, count_offset, tuple(rows),
-                                 header, raw[reader.offset:], raw, return_type)
+                                 header, raw[reader.offset:], raw, return_type, pou_type, pou_status)
     if serialize_declarations(result) != raw:
         raise GXWFormatError("declaration table is not losslessly serializable")
     return result
@@ -312,6 +318,8 @@ def edit_declarations(document: DeclarationDocument, *, upserts=(), renames=None
         class_code = CLASS_CODES.get(class_name) if class_name else old.class_code if old else CLASS_CODES["VAR" if document.scope == "local" else "VAR_GLOBAL"]
         if class_code is None:
             raise GXWFormatError("unsupported declaration class")
+        if class_name and class_code in (3, 4, 5, 11, 12) and document.owner_pou_type not in (0x1000001, 0x1000002):
+            raise GXWFormatError('formal declaration class requires a function or function-block owner')
         # Zero/empty opaque defaults are repeated across all native type controls.
         row = old or LabelRecord(name, data_type, class_code, "", "", 0, initial, "", next_id, "", array_marker, code, reference)
         row = replace(row, name=name, data_type=data_type, class_code=class_code,

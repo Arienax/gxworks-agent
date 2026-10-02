@@ -1,0 +1,631 @@
+{
+  "source": "installed DZDataABS_Workspace.dll native CPU string initializer",
+  "selection_scope": "Library source SECTION only. Compilation acceptance remains per CPU.",
+  "image_base": "0x61d20000",
+  "cases": [
+    {
+      "cpu": "FX0S/FX0",
+      "section": "FX0",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de704",
+          "literal_rva": "0x197b40",
+          "value": "FX0",
+          "constructor_rva": "0x4768f"
+        },
+        "short_name": {
+          "target_rva": "0x1de708",
+          "literal_rva": "0x197b38",
+          "value": "FX0(S)",
+          "constructor_rva": "0x476a2"
+        },
+        "display_name": {
+          "target_rva": "0x1de70c",
+          "literal_rva": "0x197b2c",
+          "value": "FX0S/FX0",
+          "constructor_rva": "0x476b5"
+        }
+      }
+    },
+    {
+      "cpu": "FX1",
+      "section": "FX1N",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de974",
+          "literal_rva": "0x197b08",
+          "value": "FX1N",
+          "constructor_rva": "0x481e0"
+        },
+        "short_name": {
+          "target_rva": "0x1de978",
+          "literal_rva": "0x1978e4",
+          "value": "FX1",
+          "constructor_rva": "0x481f3"
+        },
+        "display_name": {
+          "target_rva": "0x1de97c",
+          "literal_rva": "0x197b08",
+          "value": "FX1N",
+          "constructor_rva": "0x48202"
+        }
+      }
+    },
+    {
+      "cpu": "FX1N/FX1NC",
+      "section": "FX1N",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de740",
+          "literal_rva": "0x197b08",
+          "value": "FX1N",
+          "constructor_rva": "0x477ac"
+        },
+        "short_name": {
+          "target_rva": "0x1de744",
+          "literal_rva": "0x197b00",
+          "value": "FX1N(C)",
+          "constructor_rva": "0x477bf"
+        },
+        "display_name": {
+          "target_rva": "0x1de748",
+          "literal_rva": "0x197af4",
+          "value": "FX1N/FX1NC",
+          "constructor_rva": "0x477d2"
+        }
+      }
+    },
+    {
+      "cpu": "FX2/FX2C",
+      "section": "FX2C",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de770",
+          "literal_rva": "0x197b5c",
+          "value": "FX2C",
+          "constructor_rva": "0x47890"
+        },
+        "short_name": {
+          "target_rva": "0x1de774",
+          "literal_rva": "0x197b50",
+          "value": "FXU/FX2C",
+          "constructor_rva": "0x478a3"
+        },
+        "display_name": {
+          "target_rva": "0x1de778",
+          "literal_rva": "0x197aa8",
+          "value": "FX2/FX2C",
+          "constructor_rva": "0x478b6"
+        }
+      }
+    },
+    {
+      "cpu": "FX2N/FX2NC",
+      "section": "FX2N",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de758",
+          "literal_rva": "0x197aec",
+          "value": "FX2N",
+          "constructor_rva": "0x4781e"
+        },
+        "short_name": {
+          "target_rva": "0x1de75c",
+          "literal_rva": "0x197ae4",
+          "value": "FX2N(C)",
+          "constructor_rva": "0x47831"
+        },
+        "display_name": {
+          "target_rva": "0x1de760",
+          "literal_rva": "0x197ac8",
+          "value": "FX2N/FX2NC",
+          "constructor_rva": "0x47844"
+        }
+      }
+    },
+    {
+      "cpu": "FX3U/FX3UC",
+      "section": "FX3U",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de788",
+          "literal_rva": "0x197aa0",
+          "value": "FX3U",
+          "constructor_rva": "0x47902"
+        },
+        "short_name": {
+          "target_rva": "0x1de78c",
+          "literal_rva": "0x197a98",
+          "value": "FX3UC",
+          "constructor_rva": "0x47915"
+        },
+        "display_name": {
+          "target_rva": "0x1de790",
+          "literal_rva": "0x197a8c",
+          "value": "FX3U/FX3UC",
+          "constructor_rva": "0x47928"
+        }
+      }
+    },
+    {
+      "cpu": "Q2A",
+      "section": "QnA",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de7ac",
+          "literal_rva": "0x197a78",
+          "value": "QnA",
+          "constructor_rva": "0x479ad"
+        },
+        "short_name": {
+          "target_rva": "0x1de7b0",
+          "literal_rva": "0x197a74",
+          "value": "Q2A",
+          "constructor_rva": "0x479c0"
+        },
+        "display_name": {
+          "target_rva": "0x1de7b4",
+          "literal_rva": "0x197a6c",
+          "value": "Q2A(H)",
+          "constructor_rva": "0x479d3"
+        }
+      }
+    },
+    {
+      "cpu": "Q2AS1",
+      "section": "QnA",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de7c4",
+          "literal_rva": "0x197a78",
+          "value": "QnA",
+          "constructor_rva": "0x47a1f"
+        },
+        "short_name": {
+          "target_rva": "0x1de7c8",
+          "literal_rva": "0x197a5c",
+          "value": "Q2AS1",
+          "constructor_rva": "0x47a32"
+        },
+        "display_name": {
+          "target_rva": "0x1de7cc",
+          "literal_rva": "0x197a50",
+          "value": "Q2A(H)-S1",
+          "constructor_rva": "0x47a45"
+        }
+      }
+    },
+    {
+      "cpu": "Q2AS(H)",
+      "section": "QnA",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de7b8",
+          "literal_rva": "0x197a78",
+          "value": "QnA",
+          "constructor_rva": "0x479e6"
+        },
+        "short_name": {
+          "target_rva": "0x1de7bc",
+          "literal_rva": "0x197a64",
+          "value": "Q2AS(H)",
+          "constructor_rva": "0x479f9"
+        },
+        "display_name": {
+          "target_rva": "0x1de7c0",
+          "literal_rva": "0x197a64",
+          "value": "Q2AS(H)",
+          "constructor_rva": "0x47a0c"
+        }
+      }
+    },
+    {
+      "cpu": "Q2AS(H)S1",
+      "section": "QnA",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de7d0",
+          "literal_rva": "0x197a78",
+          "value": "QnA",
+          "constructor_rva": "0x47a58"
+        },
+        "short_name": {
+          "target_rva": "0x1de7d4",
+          "literal_rva": "0x197a44",
+          "value": "Q2AS(H)S1",
+          "constructor_rva": "0x47a6b"
+        },
+        "display_name": {
+          "target_rva": "0x1de7d8",
+          "literal_rva": "0x197a38",
+          "value": "Q2AS(H)-S1",
+          "constructor_rva": "0x47a7e"
+        }
+      }
+    },
+    {
+      "cpu": "Q3A",
+      "section": "QnA",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de7dc",
+          "literal_rva": "0x197a78",
+          "value": "QnA",
+          "constructor_rva": "0x47a91"
+        },
+        "short_name": {
+          "target_rva": "0x1de7e0",
+          "literal_rva": "0x197a34",
+          "value": "Q3A",
+          "constructor_rva": "0x47aa4"
+        },
+        "display_name": {
+          "target_rva": "0x1de7e4",
+          "literal_rva": "0x197a34",
+          "value": "Q3A",
+          "constructor_rva": "0x47ab7"
+        }
+      }
+    },
+    {
+      "cpu": "Q4A",
+      "section": "QnA",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de7e8",
+          "literal_rva": "0x197a78",
+          "value": "QnA",
+          "constructor_rva": "0x47aca"
+        },
+        "short_name": {
+          "target_rva": "0x1de7ec",
+          "literal_rva": "0x197a30",
+          "value": "Q4A",
+          "constructor_rva": "0x47add"
+        },
+        "display_name": {
+          "target_rva": "0x1de7f0",
+          "literal_rva": "0x197a30",
+          "value": "Q4A",
+          "constructor_rva": "0x47af0"
+        }
+      }
+    },
+    {
+      "cpu": "Q00",
+      "section": "Q00_Q01",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de800",
+          "literal_rva": "0x197a20",
+          "value": "Q00_Q01",
+          "constructor_rva": "0x47b3c"
+        },
+        "short_name": {
+          "target_rva": "0x1de804",
+          "literal_rva": "0x197a1c",
+          "value": "Q00",
+          "constructor_rva": "0x47b4f"
+        },
+        "display_name": {
+          "target_rva": "0x1de808",
+          "literal_rva": "0x197a1c",
+          "value": "Q00",
+          "constructor_rva": "0x47b62"
+        }
+      }
+    },
+    {
+      "cpu": "Q01",
+      "section": "Q00_Q01",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de818",
+          "literal_rva": "0x197a20",
+          "value": "Q00_Q01",
+          "constructor_rva": "0x47bae"
+        },
+        "short_name": {
+          "target_rva": "0x1de81c",
+          "literal_rva": "0x197a10",
+          "value": "Q01",
+          "constructor_rva": "0x47bc1"
+        },
+        "display_name": {
+          "target_rva": "0x1de820",
+          "literal_rva": "0x197a10",
+          "value": "Q01",
+          "constructor_rva": "0x47bd4"
+        }
+      }
+    },
+    {
+      "cpu": "Q02/Q02H",
+      "section": "Q",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de830",
+          "literal_rva": "0x197a0c",
+          "value": "Q",
+          "constructor_rva": "0x47c20"
+        },
+        "short_name": {
+          "target_rva": "0x1de834",
+          "literal_rva": "0x197a04",
+          "value": "Q02(H)",
+          "constructor_rva": "0x47c33"
+        },
+        "display_name": {
+          "target_rva": "0x1de838",
+          "literal_rva": "0x1979f8",
+          "value": "Q02/Q02H",
+          "constructor_rva": "0x47c46"
+        }
+      }
+    },
+    {
+      "cpu": "Q06H",
+      "section": "Q",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de83c",
+          "literal_rva": "0x197a0c",
+          "value": "Q",
+          "constructor_rva": "0x47c59"
+        },
+        "short_name": {
+          "target_rva": "0x1de840",
+          "literal_rva": "0x1979f0",
+          "value": "Q06H",
+          "constructor_rva": "0x47c6c"
+        },
+        "display_name": {
+          "target_rva": "0x1de844",
+          "literal_rva": "0x1979f0",
+          "value": "Q06H",
+          "constructor_rva": "0x47c7f"
+        }
+      }
+    },
+    {
+      "cpu": "Q12H",
+      "section": "Q",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de848",
+          "literal_rva": "0x197a0c",
+          "value": "Q",
+          "constructor_rva": "0x47c92"
+        },
+        "short_name": {
+          "target_rva": "0x1de84c",
+          "literal_rva": "0x1979e8",
+          "value": "Q12H",
+          "constructor_rva": "0x47ca5"
+        },
+        "display_name": {
+          "target_rva": "0x1de850",
+          "literal_rva": "0x1979e8",
+          "value": "Q12H",
+          "constructor_rva": "0x47cb8"
+        }
+      }
+    },
+    {
+      "cpu": "Q25H",
+      "section": "Q",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de854",
+          "literal_rva": "0x197a0c",
+          "value": "Q",
+          "constructor_rva": "0x47ccb"
+        },
+        "short_name": {
+          "target_rva": "0x1de858",
+          "literal_rva": "0x1979e0",
+          "value": "Q25H",
+          "constructor_rva": "0x47cde"
+        },
+        "display_name": {
+          "target_rva": "0x1de85c",
+          "literal_rva": "0x1979e0",
+          "value": "Q25H",
+          "constructor_rva": "0x47cf1"
+        }
+      }
+    },
+    {
+      "cpu": "Q02PH",
+      "section": "QnPH",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de8b4",
+          "literal_rva": "0x197974",
+          "value": "QnPH",
+          "constructor_rva": "0x47e93"
+        },
+        "short_name": {
+          "target_rva": "0x1de8b8",
+          "literal_rva": "0x19795c",
+          "value": "Q02PH",
+          "constructor_rva": "0x47ea6"
+        },
+        "display_name": {
+          "target_rva": "0x1de8bc",
+          "literal_rva": "0x19795c",
+          "value": "Q02PH",
+          "constructor_rva": "0x47eb9"
+        }
+      }
+    },
+    {
+      "cpu": "Q06PH",
+      "section": "QnPH",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de8c0",
+          "literal_rva": "0x197974",
+          "value": "QnPH",
+          "constructor_rva": "0x47ecc"
+        },
+        "short_name": {
+          "target_rva": "0x1de8c4",
+          "literal_rva": "0x197954",
+          "value": "Q06PH",
+          "constructor_rva": "0x47edf"
+        },
+        "display_name": {
+          "target_rva": "0x1de8c8",
+          "literal_rva": "0x197954",
+          "value": "Q06PH",
+          "constructor_rva": "0x47ef2"
+        }
+      }
+    },
+    {
+      "cpu": "Q12PH",
+      "section": "QnPH",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de89c",
+          "literal_rva": "0x197974",
+          "value": "QnPH",
+          "constructor_rva": "0x47e21"
+        },
+        "short_name": {
+          "target_rva": "0x1de8a0",
+          "literal_rva": "0x19796c",
+          "value": "Q12PH",
+          "constructor_rva": "0x47e34"
+        },
+        "display_name": {
+          "target_rva": "0x1de8a4",
+          "literal_rva": "0x19796c",
+          "value": "Q12PH",
+          "constructor_rva": "0x47e47"
+        }
+      }
+    },
+    {
+      "cpu": "Q25PH",
+      "section": "QnPH",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de8a8",
+          "literal_rva": "0x197974",
+          "value": "QnPH",
+          "constructor_rva": "0x47e5a"
+        },
+        "short_name": {
+          "target_rva": "0x1de8ac",
+          "literal_rva": "0x197964",
+          "value": "Q25PH",
+          "constructor_rva": "0x47e6d"
+        },
+        "display_name": {
+          "target_rva": "0x1de8b0",
+          "literal_rva": "0x197964",
+          "value": "Q25PH",
+          "constructor_rva": "0x47e80"
+        }
+      }
+    },
+    {
+      "cpu": "Q12PRH",
+      "section": "QnPRH",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de8cc",
+          "literal_rva": "0x19794c",
+          "value": "QnPRH",
+          "constructor_rva": "0x47f05"
+        },
+        "short_name": {
+          "target_rva": "0x1de8d0",
+          "literal_rva": "0x197944",
+          "value": "Q12PRH",
+          "constructor_rva": "0x47f18"
+        },
+        "display_name": {
+          "target_rva": "0x1de8d4",
+          "literal_rva": "0x197944",
+          "value": "Q12PRH",
+          "constructor_rva": "0x47f2b"
+        }
+      }
+    },
+    {
+      "cpu": "Q25PRH",
+      "section": "QnPRH",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de8d8",
+          "literal_rva": "0x19794c",
+          "value": "QnPRH",
+          "constructor_rva": "0x47f3e"
+        },
+        "short_name": {
+          "target_rva": "0x1de8dc",
+          "literal_rva": "0x19793c",
+          "value": "Q25PRH",
+          "constructor_rva": "0x47f51"
+        },
+        "display_name": {
+          "target_rva": "0x1de8e0",
+          "literal_rva": "0x19793c",
+          "value": "Q25PRH",
+          "constructor_rva": "0x47f64"
+        }
+      }
+    },
+    {
+      "cpu": "Q02(H)-A",
+      "section": "Q02_H_A",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de86c",
+          "literal_rva": "0x1979cc",
+          "value": "Q02_H_A",
+          "constructor_rva": "0x47d3d"
+        },
+        "short_name": {
+          "target_rva": "0x1de870",
+          "literal_rva": "0x1979c0",
+          "value": "Q02(H)-A",
+          "constructor_rva": "0x47d50"
+        },
+        "display_name": {
+          "target_rva": "0x1de874",
+          "literal_rva": "0x1979c0",
+          "value": "Q02(H)-A",
+          "constructor_rva": "0x47d63"
+        }
+      }
+    },
+    {
+      "cpu": "Q06H-A",
+      "section": "Q06H_A",
+      "native_row": {
+        "selector": {
+          "target_rva": "0x1de878",
+          "literal_rva": "0x1979b8",
+          "value": "Q06H_A",
+          "constructor_rva": "0x47d76"
+        },
+        "short_name": {
+          "target_rva": "0x1de87c",
+          "literal_rva": "0x1979b0",
+          "value": "Q06H-A",
+          "constructor_rva": "0x47d89"
+        },
+        "display_name": {
+          "target_rva": "0x1de880",
+          "literal_rva": "0x1979b0",
+          "value": "Q06H-A",
+          "constructor_rva": "0x47d9c"
+        }
+      }
+    }
+  ]
+}

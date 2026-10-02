@@ -5,7 +5,9 @@ FBD_GENERATION_PROMPT = """Generate a GX Works2 structured ladder/FBD object mod
 Honor the confirmed specification and explicit I/O; never invent stop/emergency addresses.
 Use only the supplied native templates and ports. If the requested behavior needs an unsupported
 ABI, return {"unsupported":"explanation"} instead of approximating it.
-Model: schema_version=1, program=the supplied name, canvas_height=integer,
+Model: use the supplied schema_version; preserve the previous schema_version for edits.
+If no version is supplied, use schema_version=1.
+program=the supplied name, canvas_height=integer,
 nodes=[{id,template,symbol,x,y}], wires=[{from:"node_id.port",to:"node_id.port",via:[[x,y],...]}]
 or wires=[{start:[x,y],end:[x,y]}]. Coordinates are nonnegative editor grid integers.
 Dimensions and local port offsets come from the catalog. Port point=(node x+port x,node y+port y).
@@ -20,6 +22,10 @@ Known basic types: BOOL INT DINT WORD DWORD REAL TIME STRING; ARRAY [a..b] OF ba
 Local classes VAR/VAR_CONSTANT; global VAR_GLOBAL/VAR_GLOBAL_CONSTANT.
 For edits preserve source_offset on existing nodes/wires and all unrelated objects.
 labels,issues,unknown_record_count are read-only source projections; do not change them.
+Version 2 ports come from CPU-selected source declarations. Use their supplied endpoint
+names exactly, including in.STATE/out.STATE for IN_OUT and indexes on repeated inputs.
+Port names, types and geometry are read-only. Rename a label and all of its direct graph
+references together. A removed or differently typed instance must not remain in the graph.
 Unknown source objects are retained only when their source_offset/template are unchanged.
 Do not assert semantic equivalence or compilation merely because a model was generated.
 """

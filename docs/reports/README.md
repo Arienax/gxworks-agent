@@ -11,6 +11,8 @@
 
 ## GXW 与原生实验
 
+- [临时分配与 ST 参数转移快照（2026-09-30）](gxw/2026-09-30-st-transfer-checkpoint.md)
+- [当前代码检查与分配边界快照（2026-09-30）](gxw/2026-09-30-check-allocation-checkpoint.md)
 - [源声明重建与 SFC 源图阶段快照（2026-09-27）](gxw/2026-09-27-source-sfc-checkpoint.md)
 - [Q 系列源声明分配与 MAIN 重建快照（2026-09-27）](gxw/2026-09-27-source-allocation-checkpoint.md)
 - [GX Works2 调用位置、数组与 REAL 转换阶段快照（2026-09-27）](gxw/2026-09-27-callsite-array-real-checkpoint.md)

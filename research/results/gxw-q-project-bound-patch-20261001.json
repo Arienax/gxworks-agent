@@ -1,0 +1,176 @@
+{
+  "schema": 1,
+  "date": "2026-10-01",
+  "status": "native-validated/research-prototype",
+  "versions": {
+    "provider": "ECCodeGenerator2.dll",
+    "file_version": "15.41",
+    "public_cpu": 209,
+    "internal_cpu_word": 113,
+    "native_versions": [
+      25
+    ],
+    "plc": "Q03UDV",
+    "compiler_adapter_version": "1.635.0.1"
+  },
+  "model": "Construct reverse device ranges from the same project Param.wpa/2000 record; preserve raw source and machine bytes around one contact mutation.",
+  "counts": {
+    "original_projects_bound": 31,
+    "parameter_profiles": 2,
+    "prospective_context_tables_exact": 95,
+    "unsupported_parameters_preserved": 4,
+    "isolated_parameter_pcode_pairs": 626,
+    "isolated_independent_native_source_exact": 625,
+    "isolated_opaque_preserved": 1,
+    "complete_nonempty_bodies_exact": 55,
+    "original_instruction_occurrences": 6062,
+    "isolated_weighted_exact": 6060,
+    "original_projects_locally_modified": 5,
+    "physical_changed_bytes_per_input": 1,
+    "whole_machine_controls_exact": 20,
+    "fresh_compile_resource_bodies_exact": 20,
+    "saved_resource_code_copies_exact": 20,
+    "reopened_resource_bodies_exact": 10,
+    "backend_targets_completed": 20,
+    "backend_rejected_project_stages": 10,
+    "preserved_backend_errors": 66,
+    "public_check_projection_failures": 10
+  },
+  "project_patches": [
+    {
+      "case": "case-16",
+      "before": "ST1",
+      "after": "ST2",
+      "physical_changed_offsets": [
+        1001163
+      ],
+      "unchanged_inner_streams": 49,
+      "unchanged_outer_streams": 11,
+      "native_resources": 2,
+      "backend_errors_per_stage": 9,
+      "source_machine_prediction": "exact",
+      "native_compile_save_reopen": "passed",
+      "backend_check": "rejected with unchanged original diagnostics",
+      "public_check": "incomplete: 0x2d010025"
+    },
+    {
+      "case": "case-18",
+      "before": "ST0",
+      "after": "ST1",
+      "physical_changed_offsets": [
+        1003673
+      ],
+      "unchanged_inner_streams": 49,
+      "unchanged_outer_streams": 11,
+      "native_resources": 2,
+      "backend_errors_per_stage": 5,
+      "source_machine_prediction": "exact",
+      "native_compile_save_reopen": "passed",
+      "backend_check": "rejected with unchanged original diagnostics",
+      "public_check": "incomplete: 0x2d010025"
+    },
+    {
+      "case": "case-23",
+      "before": "ST5",
+      "after": "ST6",
+      "physical_changed_offsets": [
+        501395
+      ],
+      "unchanged_inner_streams": 48,
+      "unchanged_outer_streams": 11,
+      "native_resources": 2,
+      "backend_errors_per_stage": 9,
+      "source_machine_prediction": "exact",
+      "native_compile_save_reopen": "passed",
+      "backend_check": "rejected with unchanged original diagnostics",
+      "public_check": "incomplete: 0x2d010025"
+    },
+    {
+      "case": "case-30",
+      "before": "ST2",
+      "after": "ST3",
+      "physical_changed_offsets": [
+        503599
+      ],
+      "unchanged_inner_streams": 49,
+      "unchanged_outer_streams": 11,
+      "native_resources": 2,
+      "backend_errors_per_stage": 3,
+      "source_machine_prediction": "exact",
+      "native_compile_save_reopen": "passed",
+      "backend_check": "rejected with unchanged original diagnostics",
+      "public_check": "incomplete: 0x2d010025"
+    },
+    {
+      "case": "case-31",
+      "before": "ST6",
+      "after": "ST7",
+      "physical_changed_offsets": [
+        508775
+      ],
+      "unchanged_inner_streams": 49,
+      "unchanged_outer_streams": 11,
+      "native_resources": 2,
+      "backend_errors_per_stage": 7,
+      "source_machine_prediction": "exact",
+      "native_compile_save_reopen": "passed",
+      "backend_check": "rejected with unchanged original diagnostics",
+      "public_check": "incomplete: 0x2d010025"
+    }
+  ],
+  "retained_failures": [
+    "Early context probe had a wrong END constant and failed before native conversion.",
+    "Four malformed/unmeasured parameter records remain unsupported with raw bytes retained.",
+    "The first check observer did not support the non-IEC backend; static GetProgress inspection confirmed 68-byte records.",
+    "Initial Native/logical resource-name mismatch produced a false correspondence flag; both records remain retained.",
+    "A separate compiler produced changed code while workspace checks still read original ST1 at offset 296. Project-owned compiler controls bind fresh code before checking.",
+    "Two empty projected report sets were initially marked unchanged; a retained correction marks that comparison not-checkable.",
+    "All five original and changed projects retain the same full-mask duplicate-coil errors. Backend checks complete, then public diagnostic projection fails with 0x2d010025."
+  ],
+  "limits": [
+    "Pinned Q03UDV/CPU209/version25 only; unmeasured parameter banks and framing are refused.",
+    "Context equivalence is a decoder convention, not proof of legally usable project allocations.",
+    "Only one same-width plain ST contact per original project; no claim about larger or different edits.",
+    "Whole-project acceptance is not established. Separate save/reopen does not suppress or resolve full-check errors.",
+    "Original machine inputs are fresh memory conversions, not saved machine-cache freshness evidence.",
+    "No PLC execution or product parser/writer integration is claimed."
+  ],
+  "archive_scope": {
+    "public": "Pure context/reader/patch models, 95 numeric context controls, four raw refusals, five minimal instruction witnesses, tools and cold verifier.",
+    "local": "31 original GXW projects, full PCode and machine bodies, five changed GXW inputs, complete native helper runs, saved projects, old failures and static inspection."
+  },
+  "local_archive": {
+    "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/gxw-q-project-bound-patch-20261001-local.zip",
+    "entries": 2591,
+    "bytes": 26906505,
+    "entry_bytes_exact": true
+  },
+  "verification": "Direct archive-byte comparison and isolated replay of archived models/readers; no native rerun or new digest verification.",
+  "public_archive": {
+    "path": "research/evidence/gxw-q-project-bound-patch-20261001.zip",
+    "entries": 19,
+    "bytes": 53238,
+    "entry_bytes_exact": true
+  },
+  "cold_replay_counts": {
+    "context_tables_exact": 95,
+    "unsupported_parameters": 4,
+    "minimal_contact_patches_exact": 5,
+    "projects_bound": 31,
+    "isolated_native_source_exact": 625,
+    "full_bodies_native_source_exact": 55,
+    "isolated_opaque_preserved": 1,
+    "physical_one_byte_patches": 5,
+    "untouched_inner_streams": 244,
+    "untouched_outer_streams": 55,
+    "machine_mutations_exact": 5,
+    "current_check_resources_exact": 20,
+    "backend_check_targets_complete": 20,
+    "public_check_projection_failures": 10,
+    "preserved_backend_errors": 66,
+    "saved_resources_exact": 10,
+    "reopened_pcode_bodies_exact": 10,
+    "whole_machine_controls_exact": 20,
+    "separate_compiler_stale_reads_preserved": 2
+  }
+}
