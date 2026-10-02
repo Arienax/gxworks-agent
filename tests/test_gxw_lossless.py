@@ -1511,8 +1511,14 @@ def test_unsupported_known_class_record_is_opaque_but_does_not_hide_neighbor():
     assert len(image.projection.unknown_records) == 1
     assert any(n.offset == node.offset for n in image.projection.nodes)
     assert image.reconstruct() == mutant
-    with pytest.raises(GXWFormatError):
-        serialize_structured_pou(image.projection)  # strict production writer unchanged
+    # The writer preserves safely framed unsupported layouts as opaque bytes;
+    # round-trip support does not promote them to strict semantic support.
+    serialized = serialize_structured_pou(image.projection)
+    assert serialized == bytes(mutant)
+    with pytest.raises(GXWFormatError, match="port size"):
+        parse_structured_pou(serialized)
+    reparsed = inspect_program(serialized).projection
+    assert reparsed.unknown_records[0].raw == image.projection.unknown_records[0].raw
     outer = CompoundFile(source)
     inner = replace_stream_within_allocation(outer.read_stream("_hdb"), name, bytes(mutant))
     source = replace_stream_within_allocation(source, "_hdb", inner)
@@ -1520,6 +1526,30 @@ def test_unsupported_known_class_record_is_opaque_but_does_not_hide_neighbor():
         logical_name=logical, node_offset=node.offset, old_symbol=node.symbol, new_symbol="X2")
     patched = inspect_program(pou(result.data)[2]).projection
     assert patched.unknown_records[0].raw == image.projection.unknown_records[0].raw
+    assert next(n for n in patched.nodes if n.offset == node.offset).symbol == "X2"
+
+
+@pytest.mark.parametrize("damage", ["length", "class", "truncated"])
+def test_structured_writer_rejects_invalid_opaque_record_framing(damage):
+    from dataclasses import replace
+
+    _, _, raw = pou(native_source())
+    program = parse_structured_pou(raw)
+    unsupported = next(n for n in program.nodes if n.kind_code == 7)
+    mutant = bytearray(raw)
+    struct.pack_into("<I", mutant, unsupported.offset + unsupported.record_length - 32, 20)
+    projection = inspect_program(bytes(mutant)).projection
+    opaque, = projection.unknown_records
+    damaged_raw = bytearray(opaque.raw)
+    if damage == "length":
+        struct.pack_into("<I", damaged_raw, 0, opaque.record_length + 4)
+    elif damage == "class":
+        struct.pack_into("<I", damaged_raw, 4, opaque.record_class + 1)
+    else:
+        del damaged_raw[-1:]
+    damaged = replace(projection, unknown_records=(replace(opaque, raw=bytes(damaged_raw)),))
+    with pytest.raises(GXWFormatError, match="opaque record framing"):
+        serialize_structured_pou(damaged)
 
 
 @pytest.mark.parametrize("override", [{"expected_sha256": "bad"}, {"new_symbol": "X100"}, {"node_offset": 0}, {"new_symbol": "X\0"}])
