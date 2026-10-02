@@ -4,6 +4,7 @@ from dataclasses import replace
 import json
 from pathlib import Path
 import xml.etree.ElementTree as ET
+import zipfile
 
 import pytest
 
@@ -14,6 +15,54 @@ from src.gxw.ladder_lowering import ladder_to_object_model
 from src.gxw.render import render_structured_svg
 from src.gxw.fb_connectivity import fb_connectivity_model
 from tests.test_gxw_declarations import baseline
+
+
+def source_binding_witness(index=0):
+    from src.gxw.callable_sources import ProjectCallableSources
+    from src.gxw.declarations import parse_declarations
+    from src.gxw.structured_pou import parse_structured_pou
+    with zipfile.ZipFile(Path(__file__).parents[1] / 'research/evidence/gxw-fbd-source-binding-20261001.zip') as archive:
+        case = json.loads(archive.read('witnesses.json'))['interfaces'][index]
+    declarations = {name: parse_declarations(base64.b64decode(value), logical_name=name)
+                    for name, value in case['declarations'].items()}
+    libraries = {}
+    for definition in case['definitions']:
+        sections = definition['sections']
+        text = (('(*$SECTION:' + ','.join(sections) + '*)\n').encode() if sections else b'')
+        text += base64.b64decode(definition['declaration_prefix_base64'])
+        text += ('END_' + definition['kind'] + '\n').encode()
+        name = definition['source_stream']
+        libraries[name] = libraries.get(name, b'') + text
+    sources = ProjectCallableSources(case['cpu'], case['logical'], declarations, libraries)
+    program = parse_structured_pou(base64.b64decode(case['program_base64']), logical_name=case['logical'],
+                                   preserve_unsupported_records=True)
+    return program, declarations, sources, case
+
+
+def source_binding_baseline():
+    """Owned graph/declarations plus a minimal declaration-only source library."""
+    from src.gxw.container_writer import validate_cfb_streams
+    from src.gxw.declarations import serialize_declarations
+    from src.gxw.project_metadata import logical_mapping, synchronize_history
+    from src.gxw.project_writer import replace_project_stream
+    from src.gxw.structured_pou_writer import serialize_structured_pou
+    program, declarations, _, _ = source_binding_witness()
+    raw = default_baseline()
+    outer = validate_cfb_streams(raw)
+    mapping = logical_mapping(outer['projectdatalist.xml'])
+    inner = validate_cfb_streams(outer['_hdb'])
+    fixture = json.loads((Path(__file__).parent / 'fixtures/gxw_fbd_source_library.json').read_text())
+    changes = {program.logical_name: serialize_structured_pou(program),
+               **{name: serialize_declarations(doc) for name, doc in declarations.items()},
+               'IECFunction.lif': inner[mapping['IECFunction.lif']][:20] + base64.b64decode(fixture['archive_base64'])}
+    hdb = outer['_hdb']
+    for name, data in changes.items():
+        hdb, _ = replace_project_stream(hdb, mapping[name], data)
+    history, _, _ = synchronize_history(outer['history.xml'],
+        {name: (mapping[name], inner[mapping[name]], data) for name, data in changes.items()})
+    raw, _ = replace_project_stream(raw, '_hdb', hdb)
+    raw, _ = replace_project_stream(raw, 'history.xml', history)
+    return raw
 
 
 @pytest.mark.parametrize("case", ["s", "fn", "f2", "t2c"])
@@ -44,6 +93,230 @@ def test_named_port_link_creates_native_wire_and_local_fb_bindings():
     assert net["connection"] == "wire_network"
     assert (net["sources"][0]["instance"], net["sinks"][0]["instance"]) == ("TIMER_A", "TIMER_B")
     assert [(r.name, r.type_reference) for r in labels['1.Labels.lh'].rows] == [("TIMER_A", "TON"), ("TIMER_B", "TON")]
+
+
+@pytest.mark.parametrize('index', range(29))
+def test_source_ports_match_frozen_native_formals_and_preserve_source_geometry(index):
+    from src.gxw.structured_pou_writer import serialize_structured_pou
+    from src.gxw.semantic import build_semantic_model
+    program, declarations, sources, case = source_binding_witness(index)
+    model = export_object_model(program, declarations, sources=sources)
+    assert serialize_structured_pou(build_object_program(program, model, sources=sources)) == program.raw
+    by_offset = {node.offset: node for node in program.nodes}
+    for node in case['final_source_view']['nodes']:
+        if 'interface' not in node:
+            continue
+        ports = sources.callable(by_offset[node['offset']])['ports']
+        assert len({port['name'] for port in ports}) == len(ports)
+        for expected in node['interface']['ports']:
+            actual = ports[expected['index']]
+            assert (actual['formal_name'], actual['side'], actual['data_type'], actual['class_code'], actual['occurrence']) == (
+                expected['name'], expected['side'], expected['declared_type'], expected['class_code'], expected['occurrence'])
+    semantics = build_semantic_model(program, function_block_instances=sources.semantic_specs(program))
+    for block in semantics.function_blocks:
+        assert block.type_known
+        assert all(port.formal_name is not None for port in block.ports)
+
+
+@pytest.mark.parametrize('case', json.loads((Path(__file__).parent /
+    'fixtures/gxw_fbd_library_cpu_sections_native.json').read_text())['cases'],
+    ids=lambda case: case['cpu'])
+def test_native_cpu_name_selects_its_source_section_without_family_fallback(case):
+    from src.gxw.callable_sources import ProjectCallableSources
+    template = ('(*$SECTION:{section}*)\nFUNCTION_BLOCK CPU_BOUND\n'
+        'VAR_INPUT\n{formal}: {data_type};\nEND_VAR\nEND_FUNCTION_BLOCK\n')
+    library = (template.format(section=case['section'],formal='MATCHED',data_type='BOOL') +
+        template.format(section='UNRELATED_CPU',formal='WRONG',data_type='WORD')).encode()
+    sources = ProjectCallableSources(case['cpu'],'MAIN.Program.pou',{}, {'cpu.lif':library})
+    formals = sources.fixed_interface('CPU_BOUND')
+    assert [(p['name'],p['declared_type']) for p in formals['inputs']] == [('MATCHED','BOOL')]
+    unknown = ProjectCallableSources(case['cpu'] + '_UNTESTED','MAIN.Program.pou',{}, {'cpu.lif':library})
+    with pytest.raises(GXWFormatError,match='missing or ambiguous'):
+        unknown.fixed_interface('CPU_BOUND')
+
+
+@pytest.mark.parametrize('endpoint', ['in.STATE', 'out.STATE'])
+def test_source_inout_endpoints_bind_distinct_native_sides(endpoint):
+    from src.gxw.connectivity import build_connectivity_graph
+    program, declarations, sources, _ = source_binding_witness()
+    model = export_object_model(program, declarations, sources=sources)
+    fb = model['nodes'][0]
+    selected = next(port for port in fb['ports'] if port['name'] == endpoint)
+    model['nodes'].append({'id': 'target', 'template': 'output', 'symbol': 'D30',
+                           'x': fb['x'] + selected['x'], 'y': fb['y'] + selected['y'] - 1})
+    model['wires'].append({'from': fb['id'] + '.' + endpoint, 'to': 'target.IN'})
+    result = build_object_program(program, model, sources=sources)
+    target = next(node for node in result.nodes if node.symbol == 'D30')
+    index = fb['ports'].index(selected)
+    graph = build_connectivity_graph(result)
+    assert graph.ports_connected(fb['source_offset'], index, target.offset, 0)
+    assert not graph.ports_connected(fb['source_offset'], 3 if index == 1 else 1, target.offset, 0)
+    model['wires'][-1]['from'] = fb['id'] + '.STATE'
+    with pytest.raises(GXWFormatError, match='unknown wire endpoint'):
+        build_object_program(program, model, sources=sources)
+
+
+def test_source_bound_instance_rename_is_atomic_and_foreign_type_edit_is_rejected():
+    from src.gxw.callable_sources import ProjectCallableSources
+    from src.gxw.editor import edit_draft
+    raw = source_binding_baseline()
+    program, declarations, _ = read_project(raw)
+    sources = ProjectCallableSources.from_project(raw, program.logical_name, declarations)
+    original = export_object_model(program, declarations, sources=sources)
+    assert generate_object_project(original, baseline=raw).data == raw
+    renamed = edit_draft(original, {'action': 'update_label', 'table': '1.Labels.lh', 'name': 'TIMER_A',
+                                   'field': 'name', 'value': 'SEQUENCE_DELAY_STAGE_A'})['model']
+    assert original['nodes'][0]['symbol'] == 'TIMER_A'
+    changed = generate_object_project(renamed, baseline=raw).data
+    after, labels, _ = read_project(changed)
+    assert after.nodes[0].symbol == 'SEQUENCE_DELAY_STAGE_A'
+    assert [row.name for row in labels['1.Labels.lh'].rows] == ['SEQUENCE_DELAY_STAGE_A', 'TIMER_B']
+    label_only = deepcopy(original)
+    label_only['declaration_edits'] = {'1.Labels.lh': {'renames': {'TIMER_A': 'NEW_NAME'}}}
+    with pytest.raises(GXWFormatError, match='update graph and declaration together'):
+        generate_object_project(label_only, baseline=raw)
+    wrong_type = deepcopy(original)
+    wrong_type['declaration_edits'] = {'1.Labels.lh': {'upserts': [
+        {'name': 'TIMER_A', 'kind': 'function_block', 'data_type': 'TON'}]}}
+    with pytest.raises(GXWFormatError, match='same instance name and type'):
+        generate_object_project(wrong_type, baseline=raw)
+
+
+def test_verified_source_prototype_adds_a_custom_fb_and_synchronizes_its_label():
+    from src.gxw.callable_sources import ProjectCallableSources
+    raw = source_binding_baseline()
+    program, declarations, _ = read_project(raw)
+    sources = ProjectCallableSources.from_project(raw, program.logical_name, declarations)
+    model = export_object_model(program, declarations, sources=sources)
+    prototype = model['nodes'][0]
+    model['nodes'].append({'id': 'clone', 'template': prototype['template'],
+        'prototype_offset': prototype['source_offset'], 'symbol': 'TIMER_C', 'x': 35, 'y': 2})
+    clone = next(item for item in catalog_description(sources=sources, program=program)
+                 if item.get('prototype_offset') == prototype['source_offset'])
+    assert [port['name'] for port in clone['ports']] == ['SIGNAL', 'in.STATE', 'RESULT', 'out.STATE']
+    result = generate_object_project(model, baseline=raw)
+    after, labels, _ = read_project(result.data)
+    assert after.nodes[-1].type_name == 'FLOW_PORTS'
+    assert [(row.name, row.type_reference) for row in labels['1.Labels.lh'].rows][-1] == ('TIMER_C', 'FLOW_PORTS')
+    model['nodes'][-1].pop('prototype_offset')
+    generated, generated_labels, _ = read_project(generate_object_project(model, baseline=raw).data)
+    generic = generated.nodes[-1]
+    assert generic.type_name == 'FLOW_PORTS'
+    assert [port.port_kind_code for port in generic.ports] == [1, 1, 0, 0]
+    assert [(row.name, row.type_reference) for row in generated_labels['1.Labels.lh'].rows][-1] == ('TIMER_C', 'FLOW_PORTS')
+
+
+def test_project_fb_interface_comes_from_owner_kind_and_formal_rows_without_implicit_enable():
+    import struct
+    from src.gxw.callable_sources import ProjectCallableSources
+    from src.gxw.declarations import _string, parse_declarations, edit_declarations, serialize_declarations
+    from tests.test_gxw_declarations import document
+    base = document('d0')
+    owner_end = 54 + len(_string(base.owner_name))
+    raw = (base.raw[:54] + _string('LOCAL_FLOW') + struct.pack('<II',0x1000002,1)
+           + base.raw[owner_end+8:])
+    definition = parse_declarations(raw, logical_name='LOCAL_FLOW.Labels.lh')
+    definition = edit_declarations(definition, upserts=[
+        {'name':'SIGNAL','data_type':'BOOL','class_name':'VAR_INPUT'},
+        {'name':'NUMBER','data_type':'STRING[20]','class_name':'VAR_OUTPUT'},
+        {'name':'STATE','data_type':'WORD','class_name':'VAR_IN_OUT'},
+        {'name':'WORK','data_type':'ARRAY [0..3] OF INT'}])
+    definition = parse_declarations(serialize_declarations(definition),logical_name=definition.logical_name)
+    source, declarations, _ = read_project(default_baseline())
+    context = ProjectCallableSources('Q03UDV',source.logical_name,
+        {**declarations, definition.logical_name:definition},{})
+    model = export_object_model(source,declarations,sources=context)
+    model['nodes'] = [{'id':'flow','template':'function_block:LOCAL_FLOW','symbol':'FLOW_A','x':8,'y':2}]
+    model['wires'] = []
+    rebuilt = build_object_program(source,model,sources=context)
+    ports = context.callable(rebuilt.nodes[0],bind_instance=False)['ports']
+    assert [(p['name'],p['side'],p['data_type'],p['class_code'],p['negated']) for p in ports] == [
+        ('SIGNAL','in','BOOL',3,False),('in.STATE','in','WORD',5,False),
+        ('NUMBER','out','STRING[20]',4,False),('out.STATE','out','WORD',5,False)]
+    changed = edit_declarations(definition,renames={'STATE':'NEXT_STATE'})
+    updated = context.with_declarations({**context.declarations,definition.logical_name:changed})
+    assert [p['name'] for p in updated.callable(rebuilt.nodes[0],bind_instance=False)['ports']] == [
+        'SIGNAL','in.NEXT_STATE','NUMBER','out.NEXT_STATE']
+    # Formal classes do not turn an ordinary program into a callable POU.
+    as_program = replace(definition,owner_pou_type=0x1000000)
+    unavailable = context.with_declarations({**context.declarations,definition.logical_name:as_program})
+    with pytest.raises(GXWFormatError,match='missing or ambiguous'):
+        unavailable.callable(rebuilt.nodes[0],bind_instance=False)
+
+
+@pytest.mark.parametrize('endpoint', ['in.STATE','out.STATE'])
+def test_callable_negation_is_explicit_and_independent_of_inout_binding(endpoint):
+    from src.gxw.callable_sources import ProjectCallableSources
+    from src.gxw.editor import edit_draft
+    raw = source_binding_baseline()
+    source, docs, _ = read_project(raw)
+    context = ProjectCallableSources.from_project(raw,source.logical_name,docs)
+    model = export_object_model(source,docs,sources=context)
+    target = model['nodes'][0]
+    assert not next(p for p in target['ports'] if p['name']==endpoint)['negated']
+    edited = edit_draft(model,{'action':'update_port','id':target['id'],'port':endpoint,'negated':True})['model']
+    output = generate_object_project(edited,baseline=raw).data
+    after, after_docs, _ = read_project(output)
+    updated = ProjectCallableSources.from_project(output,after.logical_name,after_docs)
+    actual = updated.callable(after.nodes[0])['ports']
+    old_ports = context.callable(source.nodes[0])['ports']
+    assert [(p['name'],p['class_code'],p['side']) for p in actual] == [(p['name'],p['class_code'],p['side']) for p in old_ports]
+    assert [p['negated'] for p in actual] == [True if p['name']==endpoint else p['negated'] for p in old_ports]
+    assert docs['1.Labels.lh'].rows == after_docs['1.Labels.lh'].rows
+    invalid = deepcopy(edited)
+    invalid['nodes'][0]['port_edits'] = {'STATE':{'negated':False}}
+    with pytest.raises(GXWFormatError,match='source endpoint'):
+        generate_object_project(invalid,baseline=raw)
+
+
+@pytest.mark.parametrize('damage', ['missing', 'type', 'local_global', 'cpu', 'duplicate_library'])
+def test_unresolved_source_bindings_remain_explicit_and_cannot_be_cloned(damage):
+    from src.gxw.callable_sources import ProjectCallableSources
+    from src.gxw.declarations import edit_declarations
+    program, declarations, sources, case = source_binding_witness()
+    if damage == 'missing':
+        declarations['1.Labels.lh'] = edit_declarations(declarations['1.Labels.lh'], remove=['TIMER_A'])
+    elif damage == 'type':
+        declarations['1.Labels.lh'] = edit_declarations(declarations['1.Labels.lh'], upserts=[
+            {'name': 'TIMER_A', 'data_type': 'TON', 'kind': 'function_block'}])
+    elif damage == 'local_global':
+        declarations['Global1.gh'] = edit_declarations(declarations['Global1.gh'], upserts=[
+            {'name': 'TIMER_A', 'data_type': 'FLOW_PORTS', 'kind': 'function_block', 'class_name': 'VAR_GLOBAL'}])
+    elif damage == 'cpu':
+        definition = case['definitions'][0]
+        text = b'(*$SECTION:FX3U*)\n' + base64.b64decode(definition['declaration_prefix_base64']) + b'END_FUNCTION_BLOCK\n'
+        sources = ProjectCallableSources('UNOBSERVED_CPU', program.logical_name, declarations, {'library.lif': text})
+    else:
+        name = program.nodes[0].type_name.casefold()
+        sources.catalog[name].append(sources.catalog[name][0])
+    sources = sources.with_declarations(declarations)
+    model = export_object_model(program, declarations, sources=sources)
+    node = model['nodes'][0]
+    assert [port['name'] for port in node['ports']] == ['0', '1', '2', '3']
+    assert any(issue['code'] == 'callable_source_gap' and issue.get('node_offset') == node['source_offset']
+               for issue in model['issues'])
+    model['nodes'].append({'id': 'clone', 'template': node['template'], 'prototype_offset': node['source_offset'],
+                           'symbol': 'TIMER_C', 'x': 35, 'y': 2})
+    with pytest.raises(GXWFormatError):
+        build_object_program(program, model, sources=sources)
+
+
+def test_unregistered_framed_source_record_is_preserved_during_known_object_edits():
+    import struct
+    from src.gxw.models import UnknownRecord
+    from src.gxw.structured_pou import parse_structured_pou
+    from src.gxw.structured_pou_writer import serialize_structured_pou
+    source, declarations, _ = read_project(default_baseline())
+    opaque = UnknownRecord(max(record.offset for record in source.iter_records()) + 1, 12, 99,
+                           struct.pack('<III', 12, 99, 0x12345678))
+    with_unknown = replace(source, unknown_records=(opaque,), record_count=source.record_count + 1)
+    encoded = serialize_structured_pou(with_unknown)
+    program = parse_structured_pou(encoded, logical_name=source.logical_name, preserve_unsupported_records=True)
+    model = export_object_model(program, declarations)
+    model['nodes'][0]['symbol'] = 'X3'
+    changed = build_object_program(program, model)
+    assert changed.unknown_records[0].raw == opaque.raw
+    assert parse_structured_pou(serialize_structured_pou(changed), preserve_unsupported_records=True).unknown_records[0].raw == opaque.raw
 
 
 @pytest.mark.parametrize("damage", ["node_id", "offset", "template", "port", "diagonal", "dimensions"])

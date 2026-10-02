@@ -1,0 +1,63 @@
+diff --git a/docs/reports/README.md b/docs/reports/README.md
+index 4d75462..398ea22 100644
+--- a/docs/reports/README.md
++++ b/docs/reports/README.md
+@@ -11,6 +11,8 @@
+ 
+ ## GXW 与原生实验
+ 
++- [临时分配与 ST 参数转移快照（2026-09-30）](gxw/2026-09-30-st-transfer-checkpoint.md)
++- [当前代码检查与分配边界快照（2026-09-30）](gxw/2026-09-30-check-allocation-checkpoint.md)
+ - [源声明重建与 SFC 源图阶段快照（2026-09-27）](gxw/2026-09-27-source-sfc-checkpoint.md)
+ - [Q 系列源声明分配与 MAIN 重建快照（2026-09-27）](gxw/2026-09-27-source-allocation-checkpoint.md)
+ - [GX Works2 调用位置、数组与 REAL 转换阶段快照（2026-09-27）](gxw/2026-09-27-callsite-array-real-checkpoint.md)
+diff --git a/research/README.md b/research/README.md
+index 015781e..b3959ad 100644
+--- a/research/README.md
++++ b/research/README.md
+@@ -4,12 +4,18 @@
+ 
+ ## 阅读路径
+ 
++[临时分配与 ST 参数转移快照（2026-09-30）](../docs/reports/gxw/2026-09-30-st-transfer-checkpoint.md)固定保持区源类别、临时槽生命周期、数组索引复用及参数写回反例；[清单](results/gxw-st-transfers-20260930/manifest.json)区分提前预测、事后拟合、原生检查与离线见证，并保留失败尝试。
++
++[当前代码检查与分配边界快照（2026-09-30）](../docs/reports/gxw/2026-09-30-check-allocation-checkpoint.md)固定新鲜检查矩阵、分配反例、R／ZR 与保持池观察及此前快照之后的完整实验目录；[清单](results/gxw-check-allocation-20260930/manifest.json)关联源码、原生结果、失败记录与本地证据包。
++
+ [源声明重建与 SFC 源图快照（2026-09-27）](../docs/reports/gxw/2026-09-27-source-sfc-checkpoint.md)固定后续 Q 源码重建、真实工程覆盖、SFC 图读取与局部修改成果；[清单](results/gxw-source-sfc-20260927/manifest.json)保留失败记录及源码／本地证据包的逐文件身份。
+ 
+ 当前编辑、导入及原生验证步骤见 [FBD 指南](../docs/guides/fbd.md)。已完成的实验从[报告索引](../docs/reports/README.md)进入；假设、预注册及下一步采样见[过程索引](../docs/process/README.md)。
+ 
+ [原生检查缓存反例（2026-09-28）](results/program-check-freshness-20260928.json)确认 `ProgramCheck` 可读取工作区中的旧资源：同一份新生成的双线圈代码在旧顺序下误判通过，检查前调用 `Workspace.UpdatePCode` 后被正确拒绝。[隔离复跑工具](replay_gxw_workspace.py)现在默认先更新代码，并在结果中记录 `program_check_target`。历史 `program_check_completed` 或检查通过记录本身不能证明被修改的代码接受过检查；应核对资源字节与本次编译输出，或按新顺序复跑。冻结输入、输出和旧报告不改写。
+ 
++[新鲜检查复核矩阵（2026-09-30）](results/program-check-matrix-20260930.json)覆盖库体修改、SFC 局部修改、重复调用、源码替换及旧缓存反例，共 9 个样本、14 个阶段。[资源读取采样工具](probe_gxw_program_check_resources.py)直接记录检查器读取的资源 ID 和字节，并关联当前 PCode、源码及导出资源。5 个正向样本完成检查、导出和重开；两个重复调用样本虽与源码重建预测逐字节一致，仍被新鲜检查拒绝并阻止导出。编译复现与完整检查接受范围须分别使用。
++
+ [原生 PCode 转梯形图工具](native_gxw_ladder.py)独立重放 FX3G 编译器的转换调用，保留块边界、返回码和原始布局缓冲区。[对照数据](results/pcode-ladder-native-20260928.json)包括真实工程的 454 次调用全字段一致结果、32 个生成对照及 24／25 条赋值的源码编译边界。成功调用可能只消耗输入前缀；局部转换、完整检查、保存和重开分别记录。
+ 
+ [2026-09-27 阶段快照](../docs/reports/gxw/2026-09-27-callsite-array-real-checkpoint.md)固定调用位置绑定、数组调用转移和 REAL 原生转换证据；[清单](results/gxw-checkpoint-20260927/manifest.json)区分可分发的 SCPI 证据与仅保留本地的 BoxID 衍生材料。
+diff --git a/research/replay_gxw_workspace.py b/research/replay_gxw_workspace.py
+index 1f9031d..290089b 100644
+--- a/research/replay_gxw_workspace.py
++++ b/research/replay_gxw_workspace.py
+@@ -375,6 +375,14 @@ def trace_prepared(output, script, *, timeout=45):
+     pid = device.spawn([str(output / 'WorkspaceReplayOracle.exe'), str(output / 'plan.json')],
+                        cwd=str(output), stdio='pipe')
+     ended = []
++    # Keep managed/native startup exceptions as evidence too. Frida's pipe
++    # output is otherwise discarded when the process exits before COM setup.
++    def record_output(process_id, descriptor, data):
++        if process_id == pid and descriptor in (1, 2) and data:
++            path = output / ('trace-stdout.bin' if descriptor == 1 else 'trace-stderr.bin')
++            with path.open('ab') as stream:
++                stream.write(data)
++    device.on('output', record_output)
+     try:
+         session = device.attach(pid)
+         session.on('detached', lambda *args: ended.append(str(args)))
+@@ -399,6 +407,7 @@ def trace_prepared(output, script, *, timeout=45):
+         (output / 'trace-failure.json').write_text(json.dumps(dict(pid=pid, error=repr(exc)), indent=2) + '\n')
+         raise
+     finally:
++        device.off('output', record_output)
+         # A failed script load leaves a newly spawned process suspended. Only
+         # this invocation's owned PID may be stopped, including attach failure.
+         if not ended:

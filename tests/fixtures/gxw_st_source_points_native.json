@@ -1,0 +1,671 @@
+{
+  "scope": "stored source coordinates; no source freshness or statement ownership claim",
+  "environment": {
+    "cpu": "Q03UDV",
+    "compiler_iec": "15.50",
+    "q_code_generator": "15.41",
+    "native_cpu": 209,
+    "native_versions": [
+      25
+    ]
+  },
+  "provenance": {
+    "original_project": "research/experiments/sfc-graph-20260926/public-corpus-discovery/native-allocation-inventory/case-00/input.gxw",
+    "controlled_project": "st-reference-contexts-20261001/two-instances",
+    "changed_sources": [
+      "POU_01.Labels.lh",
+      "POU_01.Program.pou"
+    ],
+    "original_keypad_body_unchanged": true,
+    "native_check_accepted": true,
+    "native_saved_reopen_check_accepted": true,
+    "three_reopened_channel_buffers_byte_exact": true
+  },
+  "validation": {
+    "prefix_step_queries": 94,
+    "prefix_step_matches": 94,
+    "whole_code_native_listing_exact": true,
+    "whole_code_instructions": 94,
+    "post_compile_source_points": 45,
+    "saved_source_point_matches": 45,
+    "debug_reconstruction_exact": true
+  },
+  "debug_base64": "AwAAAAQAAADBAAAACAAAAAAAAAAAAAAAAQAAAP////8PAAAA/////wEAAAACAAAACAAAAP////8PAAAA/////wQAAAAJAAAADgAAAP////8PAAAA/////wIAAAAPAAAAFwAAAP////8PAAAA/////wUAAAAYAAAAGAAAAP////8PAAAA/////wYAAAAYAAAAHAAAAP////8PAAAA/////wcAAAAdAAAAHgAAAP////8PAAAA/////wgAAAAfAAAAcwAAAP////8PAAAA/////////////////////////////////////8EAAAASAAAAAAAAAAAAAAAXAAAA/////w8AAAD/////AQAAABgAAAAbAAAA/////w8AAAD/////AgAAABwAAAAgAAAA/////w8AAAD/////AwAAACEAAAAoAAAA/////w8AAAD/////BAAAACkAAAAqAAAA/////w8AAAD/////BQAAACsAAAA0AAAA/////w8AAAD/////BgAAADUAAAA4AAAA/////w8AAAD/////CAAAADkAAAA5AAAA/////w8AAAD/////DwAAADkAAAA9AAAA/////w8AAAD/////EAAAAD4AAABAAAAA/////w8AAAD/////EQAAAEEAAABDAAAA/////w8AAAD/////EgAAAEQAAABGAAAA/////w8AAAD/////FAAAAEcAAABHAAAA/////w8AAAD/////FgAAAEcAAABLAAAA/////w8AAAD/////FwAAAEwAAABOAAAA/////w8AAAD/////GAAAAE8AAABRAAAA/////w8AAAD/////GQAAAFIAAABUAAAA/////w8AAAD/////GwAAAFUAAABVAAAA/////w8AAAD/////////////////////////////////////wQAAAAEAAAAAAAAAAAAAAFQAAAD/////DwAAAP/////////////////////////////////////BAAAAEgAAAAAAAAAAAAAAFwAAAP////8PAAAA/////wEAAAAYAAAAGwAAAP////8PAAAA/////wIAAAAcAAAAIAAAAP////8PAAAA/////wMAAAAhAAAAKAAAAP////8PAAAA/////wQAAAApAAAAKgAAAP////8PAAAA/////wUAAAArAAAANAAAAP////8PAAAA/////wYAAAA1AAAAOAAAAP////8PAAAA/////wgAAAA5AAAAOQAAAP////8PAAAA/////w8AAAA5AAAAPQAAAP////8PAAAA/////xAAAAA+AAAAQAAAAP////8PAAAA/////xEAAABBAAAAQwAAAP////8PAAAA/////xIAAABEAAAARgAAAP////8PAAAA/////xQAAABHAAAARwAAAP////8PAAAA/////xYAAABHAAAASwAAAP////8PAAAA/////xcAAABMAAAATgAAAP////8PAAAA/////xgAAABPAAAAUQAAAP////8PAAAA/////xkAAABSAAAAVAAAAP////8PAAAA/////xsAAABVAAAAVQAAAP////8PAAAA/////////////////////////////////////wQAAAAFAAAATUFJTgAAAAAACAAAAAAAAABzAAAAAAAAAHMAAAABAAAAAAcAAABQT1VfMDEABwAAAFBPVV8wMQAHAAAAUE9VXzAxAAEAAAAAwQAAAAEAAAAAAAAAAAUAAABNQUlOAAQAAAAfAAAAHwAAAHQAAAAfAAAAdAAAAAEAAAAABwAAAFBPVV8wMQAHAAAAS2V5cGFkAAcAAABQT1VfMDEACQAAAEtleXBhZF8xAMEAAAABAAAAAAEAAAAFAAAATUFJTgAJAAAACQAAAHQAAADIAAAAdAAAAMgAAAABAAAAAAcAAABQT1VfMDEABwAAAFBPVV8wMQAHAAAAUE9VXzAxAAEAAAAAwQAAAAEAAAAAAgAAAAUAAABNQUlOAAQAAAAfAAAAdAAAAMkAAAB0AAAAyQAAAAEAAAAABwAAAFBPVV8wMQAHAAAAS2V5cGFkAAcAAABQT1VfMDEACQAAAEtleXBhZF8yAMEAAAABAAAAAAMAAAADAAAAEAAAAFBPVV8wMS5LRVlQQURfMQABAAAAAQAAAAEAAAAQAAAAUE9VXzAxLktFWVBBRF8yAAEAAAABAAAAAwAAAAcAAABQT1VfMDEAAQAAAAIAAAAAAAAAAgAAAAEAAAAFAAAATUFJTgABAAAABAAAAAAAAAABAAAAAgAAAAMAAADNAAAAyQAAAMkAAADKAAAAzAAAAAEAAAAMAAAATUFJTi5QT1VfMDEAAQAAAAQAAAAAAAAAAQAAAAIAAAADAAAAAAAAAMgAAAAFAAAATUFJTgACAAAABwAAAEtFWVBBRAABAAAAAgAAAAEAAAADAAAABwAAAFBPVV8wMQABAAAAAgAAAAAAAAACAAAAAAAAAA==",
+  "expected": [
+    {
+      "element_index": 0,
+      "row_index": 0,
+      "source_line": 0,
+      "compiled_step_start": 0,
+      "context_names": [
+        "",
+        "POU_01",
+        "POU_01",
+        "POU_01",
+        ""
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 0,
+      "row_index": 1,
+      "source_line": 1,
+      "compiled_step_start": 2,
+      "context_names": [
+        "",
+        "POU_01",
+        "POU_01",
+        "POU_01",
+        ""
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 0,
+      "row_index": 2,
+      "source_line": 4,
+      "compiled_step_start": 9,
+      "context_names": [
+        "",
+        "POU_01",
+        "POU_01",
+        "POU_01",
+        ""
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 0,
+      "row_index": 3,
+      "source_line": 2,
+      "compiled_step_start": 15,
+      "context_names": [
+        "",
+        "POU_01",
+        "POU_01",
+        "POU_01",
+        ""
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 0,
+      "row_index": 4,
+      "source_line": 5,
+      "compiled_step_start": 24,
+      "context_names": [
+        "",
+        "POU_01",
+        "POU_01",
+        "POU_01",
+        ""
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 0,
+      "row_index": 5,
+      "source_line": 6,
+      "compiled_step_start": 24,
+      "context_names": [
+        "",
+        "POU_01",
+        "POU_01",
+        "POU_01",
+        ""
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 0,
+      "row_index": 6,
+      "source_line": 7,
+      "compiled_step_start": 29,
+      "context_names": [
+        "",
+        "POU_01",
+        "POU_01",
+        "POU_01",
+        ""
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 0,
+      "row_index": 7,
+      "source_line": 8,
+      "compiled_step_start": 31,
+      "context_names": [
+        "",
+        "POU_01",
+        "POU_01",
+        "POU_01",
+        ""
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 1,
+      "row_index": 0,
+      "source_line": 4,
+      "compiled_step_start": 31,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_1"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 1,
+      "row_index": 1,
+      "source_line": 5,
+      "compiled_step_start": 55,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_1"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 1,
+      "row_index": 2,
+      "source_line": 6,
+      "compiled_step_start": 59,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_1"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 1,
+      "row_index": 3,
+      "source_line": 7,
+      "compiled_step_start": 64,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_1"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 1,
+      "row_index": 4,
+      "source_line": 8,
+      "compiled_step_start": 72,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_1"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 1,
+      "row_index": 5,
+      "source_line": 9,
+      "compiled_step_start": 74,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_1"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 1,
+      "row_index": 6,
+      "source_line": 10,
+      "compiled_step_start": 84,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_1"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 1,
+      "row_index": 7,
+      "source_line": 12,
+      "compiled_step_start": 88,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_1"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 1,
+      "row_index": 8,
+      "source_line": 19,
+      "compiled_step_start": 88,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_1"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 1,
+      "row_index": 9,
+      "source_line": 20,
+      "compiled_step_start": 93,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_1"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 1,
+      "row_index": 10,
+      "source_line": 21,
+      "compiled_step_start": 96,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_1"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 1,
+      "row_index": 11,
+      "source_line": 22,
+      "compiled_step_start": 99,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_1"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 1,
+      "row_index": 12,
+      "source_line": 24,
+      "compiled_step_start": 102,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_1"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 1,
+      "row_index": 13,
+      "source_line": 26,
+      "compiled_step_start": 102,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_1"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 1,
+      "row_index": 14,
+      "source_line": 27,
+      "compiled_step_start": 107,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_1"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 1,
+      "row_index": 15,
+      "source_line": 28,
+      "compiled_step_start": 110,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_1"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 1,
+      "row_index": 16,
+      "source_line": 29,
+      "compiled_step_start": 113,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_1"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 1,
+      "row_index": 17,
+      "source_line": 31,
+      "compiled_step_start": 116,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_1"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 2,
+      "row_index": 0,
+      "source_line": 9,
+      "compiled_step_start": 116,
+      "context_names": [
+        "",
+        "POU_01",
+        "POU_01",
+        "POU_01",
+        ""
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 3,
+      "row_index": 0,
+      "source_line": 4,
+      "compiled_step_start": 116,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_2"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 3,
+      "row_index": 1,
+      "source_line": 5,
+      "compiled_step_start": 140,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_2"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 3,
+      "row_index": 2,
+      "source_line": 6,
+      "compiled_step_start": 144,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_2"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 3,
+      "row_index": 3,
+      "source_line": 7,
+      "compiled_step_start": 149,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_2"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 3,
+      "row_index": 4,
+      "source_line": 8,
+      "compiled_step_start": 157,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_2"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 3,
+      "row_index": 5,
+      "source_line": 9,
+      "compiled_step_start": 159,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_2"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 3,
+      "row_index": 6,
+      "source_line": 10,
+      "compiled_step_start": 169,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_2"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 3,
+      "row_index": 7,
+      "source_line": 12,
+      "compiled_step_start": 173,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_2"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 3,
+      "row_index": 8,
+      "source_line": 19,
+      "compiled_step_start": 173,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_2"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 3,
+      "row_index": 9,
+      "source_line": 20,
+      "compiled_step_start": 178,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_2"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 3,
+      "row_index": 10,
+      "source_line": 21,
+      "compiled_step_start": 181,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_2"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 3,
+      "row_index": 11,
+      "source_line": 22,
+      "compiled_step_start": 184,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_2"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 3,
+      "row_index": 12,
+      "source_line": 24,
+      "compiled_step_start": 187,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_2"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 3,
+      "row_index": 13,
+      "source_line": 26,
+      "compiled_step_start": 187,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_2"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 3,
+      "row_index": 14,
+      "source_line": 27,
+      "compiled_step_start": 192,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_2"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 3,
+      "row_index": 15,
+      "source_line": 28,
+      "compiled_step_start": 195,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_2"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 3,
+      "row_index": 16,
+      "source_line": 29,
+      "compiled_step_start": 198,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_2"
+      ],
+      "resource": "MAIN"
+    },
+    {
+      "element_index": 3,
+      "row_index": 17,
+      "source_line": 31,
+      "compiled_step_start": 201,
+      "context_names": [
+        "",
+        "POU_01",
+        "Keypad",
+        "POU_01",
+        "Keypad_2"
+      ],
+      "resource": "MAIN"
+    }
+  ],
+  "limitations": [
+    "Compiler offsets and instance identities are preserved; same-name FB types are not merged.",
+    "The native first-generation source position table changes offsets during compilation.",
+    "Stored endpoints can reach another expansion or FEND and are not asserted as statement-owned ranges."
+  ]
+}

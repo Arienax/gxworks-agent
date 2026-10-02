@@ -112,6 +112,7 @@ class FunctionBlockPortSpec:
     formal_name: str
     role: SemanticPortRole
     local_y: int
+    port_kind_code: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -579,9 +580,9 @@ def _matches_function_block_port(
     ):
         return False
     if spec.role in {SemanticPortRole.ENABLE_IN, SemanticPortRole.DATA_IN}:
-        return port.port_kind_code == 1 and point.x == node.bbox.left
+        return port.port_kind_code == (1 if spec.port_kind_code is None else spec.port_kind_code) and point.x == node.bbox.left
     if spec.role in {SemanticPortRole.ENABLE_OUT, SemanticPortRole.DATA_OUT}:
-        return port.port_kind_code == 0 and point.x == node.bbox.right
+        return port.port_kind_code == (0 if spec.port_kind_code is None else spec.port_kind_code) and point.x == node.bbox.right
     return False
 
 
@@ -634,6 +635,7 @@ def _function_block_semantics(
     graph: ConnectivityGraph,
     terminals: Tuple[SemanticTerminal, ...],
     registry: Mapping[str, FunctionBlockSpec],
+    instance_specs: Optional[Mapping[int, Optional[FunctionBlockSpec]]] = None,
 ) -> Tuple[Tuple[SemanticFunctionBlock, ...], Tuple[SemanticIssue, ...]]:
     terminal_by_offset = {terminal.node_offset: terminal for terminal in terminals}
     blocks = []
@@ -642,6 +644,8 @@ def _function_block_semantics(
         if node.kind != NodeKind.FUNCTION_BLOCK:
             continue
         spec = registry.get(node.type_name) if node.type_name is not None else None
+        if instance_specs is not None:
+            spec = instance_specs.get(node.offset)
         port_specs, port_issues = _resolve_function_block_ports(node, spec)
         issues.extend(port_issues)
         ports = []
@@ -918,6 +922,7 @@ def build_semantic_model(
     connectivity: Optional[ConnectivityGraph] = None,
     function_registry: Mapping[str, FunctionFamilySpec] = DEFAULT_FUNCTION_FAMILY_REGISTRY,
     function_block_registry: Mapping[str, FunctionBlockSpec] = DEFAULT_FUNCTION_BLOCK_REGISTRY,
+    function_block_instances: Optional[Mapping[int, Optional[FunctionBlockSpec]]] = None,
 ) -> StructuredSemanticModel:
     """Build the first read-only semantic layer above GXW geometry.
 
@@ -941,7 +946,7 @@ def build_semantic_model(
     )
     contacts, coils, ladder_issues = _ladder_semantics(program, graph, terminals)
     function_blocks, block_issues = _function_block_semantics(
-        program, graph, terminals, function_block_registry,
+        program, graph, terminals, function_block_registry, function_block_instances,
     )
 
     unmodeled = tuple(

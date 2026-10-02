@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-01",
+  "evidence_level": "accepted copied full FX3G project; independent source coordinates and bounded Boolean semantic witnesses",
+  "environment": {
+    "os": "Windows",
+    "compiler_iec": "15.50",
+    "fx_code_generator": "15.31",
+    "adapter_cpu": 521,
+    "mode": 0,
+    "versions": []
+  },
+  "source": {
+    "repository": "https://github.com/Serhioromano/gxw2-libraries",
+    "independent_original_projects": 1,
+    "original_project": "cross-family-source-holdouts/case-00/input.gxw",
+    "original_bytes": "retained locally"
+  },
+  "minimal_controls": {
+    "cases": 6,
+    "fresh_native_accepted": 6,
+    "saved_reopen_accepted": 6,
+    "truth_table_exact": 4,
+    "retained_semantic_counterexamples": 2
+  },
+  "independent_contact_graphs": {
+    "exact_native_fragments": 10,
+    "input_assignments": 40,
+    "truth_tables_matching_intended_source": 8,
+    "counterexample_truth_tables": 2,
+    "fresh_converter_object_per_request": true,
+    "all_native_requests_accepted": true
+  },
+  "full_project": {
+    "check": {
+      "operation": "ProgramCheckCompleted",
+      "targets": 1,
+      "rejected": false
+    },
+    "backend_rejected": false,
+    "reopen": {
+      "check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "backend_rejected": false,
+      "channels": [
+        {
+          "channel": 0,
+          "byte_identical": true
+        },
+        {
+          "channel": 1,
+          "byte_identical": true
+        },
+        {
+          "channel": 2,
+          "byte_identical": true
+        }
+      ]
+    },
+    "warning_counts": {
+      "0x50c9026": 33,
+      "0x50f0207": 7
+    },
+    "native_reading": {
+      "raw_bytes": 54203,
+      "lexical_records": 4196,
+      "native_records": 4196,
+      "native_decode_consumed": 54203,
+      "whole_listing_exact": true,
+      "individual_step_queries": 4196,
+      "individual_step_matches": 4196,
+      "error_prefix_queries": 0,
+      "error_prefix_matches": 0
+    },
+    "source_correspondence": {
+      "compile_snapshots": 64,
+      "normalized_st_sources": 59,
+      "normalized_source_roundtrip_exact": true,
+      "reference_occurrences": 3961,
+      "resolved_references": 3883,
+      "opaque_references": 0,
+      "synthetic_sentinels": 78,
+      "whole_compiler_groups": 59,
+      "all_groups_unique": true,
+      "native_sink_instructions": 4196,
+      "all_instructions_matched": true,
+      "native_operand_matches": 6672,
+      "preceding_source_reads": 1055,
+      "finalized_source_points": 1055,
+      "native_check_accepted": true,
+      "errors": 0
+    },
+    "independent_source_prefixes": {
+      "finalized_source_points": 1055,
+      "distinct_prefix_queries": 917,
+      "exact_prefix_matches": 917,
+      "source_points_verified": 1055
+    },
+    "saved_source_coordinates": {
+      "debug_bytes": 48741,
+      "debug_elements": 109,
+      "debug_offset_tables": 109,
+      "saved_st_points": 1055,
+      "live_st_points": 1055,
+      "saved_live_unique_matches": 1055,
+      "independent_start_coordinates": 1055,
+      "saved_debug_reconstruction_exact": true,
+      "reopen_debug_bytes_exact": true,
+      "reopen_complete_point_multiset_exact": true
+    },
+    "converter_calls": 1223,
+    "converter_refusals": 0,
+    "changed_source_payloads_preserved_after_save": true
+  },
+  "modifications": [
+    "Select master port 2 instead of the six mutually competing protocol demo initialization calls.",
+    "Capture each of two indexed BOOL operands in a distinct declared BOOL local before either comparison site.",
+    "Preserve all flat structure members while partitioning oversized channel and alarm copies into tautological branch blocks.",
+    "Partition the eight alarm initialization writes and ten adjacent ticker/duration conversion calls without deleting a call or assignment."
+  ],
+  "discoveries": [
+    "Fresh native check, save, reopen and byte-identical code do not establish the intended source truth table.",
+    "For two indexed BOOL operands, the compiler retains the first sampled value but emits the second branch against the overwritten shared temporary.",
+    "The assignment NE fragment represents left AND NOT right; EQ represents (left AND right) OR NOT right, instead of XOR/XNOR.",
+    "An independent native contact grid agrees with the bounded instruction evaluator for both counterexamples and all scalar, one-indexed-operand and two-local controls.",
+    "Distinct explicit operand captures remove both observed full-project comparison conversion failures. Separate branch partitioning removes seven remaining size refusals.",
+    "All 4196 full-project records, 6672 operands and 1055 live source coordinates are independently checked; all 1055 saved debug starts agree and survive reopen unchanged."
+  ],
+  "limitations": [
+    "All original full-project evidence comes from one FX3G project source and the recorded native versions.",
+    "Boolean witnesses describe sampled operand values and bounded ordinary operations; they are not PLC or simulator execution tests.",
+    "The independent contact-graph check covers assignment comparisons; the indexed IF counterexample has the separate instruction-level witness.",
+    "The accepted full project is the single-protocol copied configuration, not the original six-protocol demo accepted unchanged.",
+    "Whole-program runtime equivalence, complete source-only compilation prediction, hardware behavior and index-address execution semantics are not established.",
+    "Forty native warnings remain as recorded; native acceptance does not resolve them.",
+    "Stored expansion names and endpoints remain separate from live outlined-body identity and exclusive instruction ownership.",
+    "Ordered conversion coverage retains 31 ambiguous packet positions and is not universal validation coverage.",
+    "The new completed-check projection is in source-reference-correspondence-v2.json; older derived views and all raw observations are retained.",
+    "No PLC, simulator, commit, push, release or public distribution occurred."
+  ],
+  "archives": {
+    "public": "research/evidence/gxw-fx-accepted-semantics-20261001.zip",
+    "local": "research/experiments/sfc-graph-20260926/public-corpus-discovery/gxw-fx-accepted-semantics-20261001-local.zip"
+  }
+}

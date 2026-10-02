@@ -1,0 +1,3390 @@
+{
+  "created_utc": "2026-09-30T12:10:26.103818+00:00",
+  "base_commit": "1b04dc145ecdf773001b3d2e6a932527c8df64ba",
+  "scope": "Bounded source-only ST output research; offline copied Q03UDV and FX3UC projects, native compiler 15.50. Source transplants are not independent real-project lineages.",
+  "groups": [
+    "fx-st-branch-tree-forward-20260930",
+    "fx-st-case-context-disc-20260930",
+    "fx-st-case-context-forward-20260930",
+    "fx-st-case-forward-20260930",
+    "fx-st-case-int-disc-20260930",
+    "fx-st-case-lifetime-forward-20260930",
+    "fx-st-case-ranges-forward-20260930",
+    "fx-st-if-else-discovery-20260930",
+    "fx-st-loop-exits-disc-20260930",
+    "fx-st-loop-exits-forward-20260930",
+    "fx-st-loop-forward-20260930",
+    "fx-st-nested-for-forward-20260930",
+    "q-st-branch-tree-forward-20260930",
+    "q-st-case-context-disc-20260930",
+    "q-st-case-context-forward-20260930",
+    "q-st-case-disc-20260930",
+    "q-st-case-forward-20260930",
+    "q-st-case-int-disc-20260930",
+    "q-st-case-lifetime-forward-20260930",
+    "q-st-case-path-disc-20260930",
+    "q-st-case-ranges-forward-20260930",
+    "q-st-for-boundary-discovery-20260930",
+    "q-st-for-control-forward-20260930",
+    "q-st-if-else-discovery-20260930",
+    "q-st-loop-exits-disc-20260930",
+    "q-st-loop-exits-disc2-20260930",
+    "q-st-loop-exits-forward-20260930",
+    "q-st-loop-forward-20260930",
+    "q-st-return-tail-disc-20260930"
+  ],
+  "counts": {
+    "native-check-and-reopen-accepted": 89,
+    "frontend-rejected": 8,
+    "experiment-preparation-failure": 4,
+    "native-generated-check-rejected": 2,
+    "prospective_byte_matches": 53
+  },
+  "observations": [
+    {
+      "group": "fx-st-branch-tree-forward-20260930",
+      "case": "Else-nested",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-branch-tree-forward-20260930\\Else-nested\\native-1",
+      "generated_bytes": [
+        436,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-branch-tree-forward-20260930",
+      "case": "Non-tail",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-branch-tree-forward-20260930\\Non-tail\\native-1",
+      "generated_bytes": [
+        553,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-branch-tree-forward-20260930",
+      "case": "Tail-no-else",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-branch-tree-forward-20260930\\Tail-no-else\\native-1",
+      "generated_bytes": [
+        350,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-branch-tree-forward-20260930",
+      "case": "Loop",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-branch-tree-forward-20260930\\Loop\\native-1",
+      "generated_bytes": [
+        385,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-case-context-disc-20260930",
+      "case": "If",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-context-disc-20260930\\If\\native-1",
+      "generated_bytes": [
+        456,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {
+        "case": "If",
+        "generated_bytes": 456,
+        "before_native_status": "unmeasured branch control statement",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "current_model_status": {
+          "unsupported": "unmeasured branch control statement"
+        },
+        "embedded_case_nodes": [
+          {
+            "id": 79,
+            "type": 371,
+            "link12": 26,
+            "link16": 78,
+            "field20": 80,
+            "field24": 4294967295,
+            "field28": 175,
+            "field32": 0,
+            "field56": 0,
+            "field60": 0,
+            "raw": "0000000073010000060000001a0000004e00000050000000ffffffffaf0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "post_observation_context_fit": true,
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "TX",
+          "key_iterator": 0
+        },
+        "labels": [
+          "P2049",
+          "P2051",
+          "P2050",
+          "P2048"
+        ],
+        "selection_entry_types": [
+          "0x2c",
+          "0x2c",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "fx-st-case-context-disc-20260930",
+      "case": "For",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-context-disc-20260930\\For\\native-1",
+      "generated_bytes": [
+        518,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {
+        "case": "For",
+        "generated_bytes": 518,
+        "before_native_status": "CASE inside another control block unmeasured",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "current_model_status": {
+          "unsupported": "CASE inside another control block outside selected profile"
+        },
+        "embedded_case_nodes": [
+          {
+            "id": 76,
+            "type": 371,
+            "link12": 23,
+            "link16": 75,
+            "field20": 77,
+            "field24": 4294967295,
+            "field28": 150,
+            "field32": 0,
+            "field56": 0,
+            "field60": 0,
+            "raw": "000000007301000006000000170000004b0000004d000000ffffffff960000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "post_observation_context_fit": true,
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "FX",
+          "key_iterator": 2
+        },
+        "labels": [
+          "P2048",
+          "P2050",
+          "P2052",
+          "P2051",
+          "P2049"
+        ],
+        "selection_entry_types": [
+          "0x2c",
+          "0x2c",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "fx-st-case-context-disc-20260930",
+      "case": "Case",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-context-disc-20260930\\Case\\native-1",
+      "generated_bytes": [
+        558,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {
+        "case": "Case",
+        "generated_bytes": 558,
+        "before_native_status": "control statement in CASE outside selected flat profile",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "current_model_status": {
+          "unsupported": "control statement in CASE outside selected flat profile"
+        },
+        "embedded_case_nodes": [
+          {
+            "id": 60,
+            "type": 371,
+            "link12": 25,
+            "link16": 59,
+            "field20": 61,
+            "field24": 4294967295,
+            "field28": 200,
+            "field32": 0,
+            "field56": 0,
+            "field60": 0,
+            "raw": "000000007301000005000000190000003b0000003d000000ffffffffc80000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "post_observation_context_fit": true,
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "IX",
+          "key_iterator": 0
+        },
+        "labels": [
+          "P2049",
+          "P2050",
+          "P2048",
+          "P2052",
+          "P2051"
+        ],
+        "selection_entry_types": [
+          "0x3a",
+          "0x2c",
+          "0x175",
+          "0x3a",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "fx-st-case-context-forward-20260930",
+      "case": "If-3",
+      "handling": "frontend-rejected",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-context-forward-20260930\\If-3\\native-1",
+      "generated_bytes": [
+        0,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": null,
+      "reopen_identical": null,
+      "diagnostics": [
+        "0x50010000",
+        "0x50f1218"
+      ],
+      "case_evidence": {
+        "case": "If-3",
+        "generated_bytes": 0,
+        "before_native_status": "fixed temporary pool exhausted",
+        "fresh_check": null,
+        "current_model_status": {
+          "unsupported": "fixed temporary pool exhausted"
+        },
+        "handling": "frontend-rejected-temporary-capacity"
+      }
+    },
+    {
+      "group": "fx-st-case-context-forward-20260930",
+      "case": "If-4",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-context-forward-20260930\\If-4\\native-1",
+      "generated_bytes": [
+        518,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {
+        "case": "If-4",
+        "generated_bytes": 518,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "embedded_case_nodes": [
+          {
+            "id": 92,
+            "type": 371,
+            "link12": 37,
+            "link16": 91,
+            "field20": 93,
+            "field24": 4294967295,
+            "field28": 250,
+            "field32": 0,
+            "field56": 0,
+            "field60": 0,
+            "raw": "000000007301000006000000250000005b0000005d000000fffffffffa0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "TY",
+          "key_iterator": 0
+        },
+        "labels": [
+          "P2049",
+          "P2051",
+          "P2050",
+          "P2048"
+        ],
+        "selection_entry_types": [
+          "0x2c",
+          "0x2c",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "fx-st-case-context-forward-20260930",
+      "case": "For",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-context-forward-20260930\\For\\native-1",
+      "generated_bytes": [
+        580,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {
+        "case": "For",
+        "generated_bytes": 580,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "embedded_case_nodes": [
+          {
+            "id": 89,
+            "type": 371,
+            "link12": 34,
+            "link16": 88,
+            "field20": 90,
+            "field24": 4294967295,
+            "field28": 225,
+            "field32": 0,
+            "field56": 0,
+            "field60": 0,
+            "raw": "00000000730100000600000022000000580000005a000000ffffffffe10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "FX",
+          "key_iterator": 2
+        },
+        "labels": [
+          "P2048",
+          "P2050",
+          "P2052",
+          "P2051",
+          "P2049"
+        ],
+        "selection_entry_types": [
+          "0x2c",
+          "0x2c",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "fx-st-case-context-forward-20260930",
+      "case": "Nested",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-context-forward-20260930\\Nested\\native-1",
+      "generated_bytes": [
+        620,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {
+        "case": "Nested",
+        "generated_bytes": 620,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "embedded_case_nodes": [
+          {
+            "id": 73,
+            "type": 371,
+            "link12": 36,
+            "link16": 72,
+            "field20": 74,
+            "field24": 4294967295,
+            "field28": 275,
+            "field32": 0,
+            "field56": 0,
+            "field60": 0,
+            "raw": "00000000730100000500000024000000480000004a000000ffffffff130100000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "IY",
+          "key_iterator": 0
+        },
+        "labels": [
+          "P2049",
+          "P2050",
+          "P2048",
+          "P2052",
+          "P2051"
+        ],
+        "selection_entry_types": [
+          "0x3a",
+          "0x2c",
+          "0x175",
+          "0x3a",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "fx-st-case-forward-20260930",
+      "case": "Three",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-forward-20260930\\Three\\native-1",
+      "generated_bytes": [
+        541,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {
+        "case": "Three",
+        "generated_bytes": 541,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "FX",
+          "key_iterator": 0
+        },
+        "labels": [
+          "P2048",
+          "P2050",
+          "P2051",
+          "P2049"
+        ],
+        "selection_entry_types": []
+      }
+    },
+    {
+      "group": "fx-st-case-forward-20260930",
+      "case": "Expr",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-forward-20260930\\Expr\\native-1",
+      "generated_bytes": [
+        455,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {
+        "case": "Expr",
+        "generated_bytes": 455,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "FX",
+          "key_iterator": 0,
+          "for_iterator": 88
+        },
+        "labels": [
+          "P2048",
+          "P2050",
+          "P2049"
+        ],
+        "selection_entry_types": []
+      }
+    },
+    {
+      "group": "fx-st-case-forward-20260930",
+      "case": "Reuse",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-forward-20260930\\Reuse\\native-1",
+      "generated_bytes": [
+        809,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {
+        "case": "Reuse",
+        "generated_bytes": 809,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "TXY",
+          "key_iterator": 0,
+          "for_iterator": 66
+        },
+        "labels": [
+          "P2048",
+          "P2050",
+          "P2049",
+          "P2051",
+          "P2053",
+          "P2052"
+        ],
+        "selection_entry_types": []
+      }
+    },
+    {
+      "group": "fx-st-case-forward-20260930",
+      "case": "Few",
+      "handling": "frontend-rejected",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-forward-20260930\\Few\\native-1",
+      "generated_bytes": [
+        0,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": null,
+      "reopen_identical": null,
+      "diagnostics": [
+        "0x50010000",
+        "0x50f1218"
+      ],
+      "case_evidence": {
+        "case": "Few",
+        "generated_bytes": 0,
+        "before_native_status": "fixed temporary pool exhausted",
+        "fresh_check": null,
+        "current_model_status": {
+          "unsupported": "fixed temporary pool exhausted"
+        },
+        "handling": "frontend-rejected-temporary-capacity"
+      }
+    },
+    {
+      "group": "fx-st-case-forward-20260930",
+      "case": "Range",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-forward-20260930\\Range\\native-1",
+      "generated_bytes": [
+        455,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {
+        "case": "Range",
+        "generated_bytes": 455,
+        "before_native_status": "multiple/range/negative CASE selections unmeasured",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "TX",
+          "key_iterator": 0
+        },
+        "labels": [
+          "P2048",
+          "P2050",
+          "P2049"
+        ],
+        "selection_entry_types": []
+      }
+    },
+    {
+      "group": "fx-st-case-forward-20260930",
+      "case": "Duplicate",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-forward-20260930\\Duplicate\\native-1",
+      "generated_bytes": [
+        422,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {
+        "case": "Duplicate",
+        "generated_bytes": 422,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "TX",
+          "key_iterator": 0
+        },
+        "labels": [
+          "P2048",
+          "P2050",
+          "P2049"
+        ],
+        "selection_entry_types": []
+      }
+    },
+    {
+      "group": "fx-st-case-int-disc-20260930",
+      "case": "Int-T",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-int-disc-20260930\\Int-T\\native-1",
+      "generated_bytes": [
+        422,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-case-int-disc-20260930",
+      "case": "Int-D",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-int-disc-20260930\\Int-D\\native-2",
+      "generated_bytes": [
+        422,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-case-lifetime-forward-20260930",
+      "case": "Three-words",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-lifetime-forward-20260930\\Three-words\\native-1",
+      "generated_bytes": [
+        470,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {
+        "case": "Three-words",
+        "generated_bytes": 470,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "TY",
+          "key_iterator": 0
+        },
+        "labels": [
+          "P2048",
+          "P2050",
+          "P2049"
+        ],
+        "selection_entry_types": [
+          "0x3a",
+          "0x3a",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "fx-st-case-lifetime-forward-20260930",
+      "case": "Four-words",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-lifetime-forward-20260930\\Four-words\\native-2",
+      "generated_bytes": [
+        470,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {
+        "case": "Four-words",
+        "generated_bytes": 470,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "TY",
+          "key_iterator": 0
+        },
+        "labels": [
+          "P2048",
+          "P2050",
+          "P2049"
+        ],
+        "selection_entry_types": [
+          "0x3a",
+          "0x3a",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "fx-st-case-lifetime-forward-20260930",
+      "case": "False",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-lifetime-forward-20260930\\False\\native-1",
+      "generated_bytes": [
+        470,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {
+        "case": "False",
+        "generated_bytes": 470,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "FX",
+          "key_iterator": 0
+        },
+        "labels": [
+          "P2048",
+          "P2050",
+          "P2049"
+        ],
+        "selection_entry_types": [
+          "0x3a",
+          "0x3a",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "fx-st-case-ranges-forward-20260930",
+      "case": "Range-first",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-ranges-forward-20260930\\Range-first\\native-1",
+      "generated_bytes": [
+        452,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {
+        "case": "Range-first",
+        "generated_bytes": 452,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "TX",
+          "key_iterator": 0
+        },
+        "labels": [
+          "P2048",
+          "P2050",
+          "P2049"
+        ],
+        "selection_entry_types": [
+          "0x3a",
+          "0x3a",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "fx-st-case-ranges-forward-20260930",
+      "case": "Two-ranges",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-ranges-forward-20260930\\Two-ranges\\native-1",
+      "generated_bytes": [
+        485,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {
+        "case": "Two-ranges",
+        "generated_bytes": 485,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "TX",
+          "key_iterator": 0
+        },
+        "labels": [
+          "P2048",
+          "P2050",
+          "P2049"
+        ],
+        "selection_entry_types": [
+          "0x3a",
+          "0x3a",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "fx-st-case-ranges-forward-20260930",
+      "case": "No-else",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-case-ranges-forward-20260930\\No-else\\native-1",
+      "generated_bytes": [
+        337,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {
+        "case": "No-else",
+        "generated_bytes": 337,
+        "before_native_status": "CASE requires measured arms and ELSE",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "",
+          "key_iterator": 0
+        },
+        "labels": [
+          "P2048",
+          "P2050",
+          "P2049"
+        ],
+        "selection_entry_types": [
+          "0x3a",
+          "0x3a"
+        ]
+      }
+    },
+    {
+      "group": "fx-st-if-else-discovery-20260930",
+      "case": "D1",
+      "handling": "frontend-rejected",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-if-else-discovery-20260930\\D1\\native-1",
+      "generated_bytes": [
+        0,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": null,
+      "reopen_identical": null,
+      "diagnostics": [
+        "0x50010000",
+        "0x50f1218"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-if-else-discovery-20260930",
+      "case": "D2-T",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-if-else-discovery-20260930\\D2-T\\native-1",
+      "generated_bytes": [
+        303,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-if-else-discovery-20260930",
+      "case": "D2-F",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-if-else-discovery-20260930\\D2-F\\native-2",
+      "generated_bytes": [
+        303,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-if-else-discovery-20260930",
+      "case": "Nested",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-if-else-discovery-20260930\\Nested\\native-1",
+      "generated_bytes": [
+        436,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-loop-exits-disc-20260930",
+      "case": "Repeat",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-loop-exits-disc-20260930\\Repeat\\native-1",
+      "generated_bytes": [
+        200,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-loop-exits-disc-20260930",
+      "case": "While-exit",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-loop-exits-disc-20260930\\While-exit\\native-1",
+      "generated_bytes": [
+        287,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-loop-exits-disc-20260930",
+      "case": "Nested-exit",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-loop-exits-disc-20260930\\Nested-exit\\native-1",
+      "generated_bytes": [
+        450,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-loop-exits-disc-20260930",
+      "case": "Return",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-loop-exits-disc-20260930\\Return\\native-1",
+      "generated_bytes": [
+        291,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-loop-exits-forward-20260930",
+      "case": "Repeat-once",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-loop-exits-forward-20260930\\Repeat-once\\native-1",
+      "generated_bytes": [
+        200,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-loop-exits-forward-20260930",
+      "case": "Repeat-exit",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-loop-exits-forward-20260930\\Repeat-exit\\native-1",
+      "generated_bytes": [
+        269,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-loop-exits-forward-20260930",
+      "case": "For-direct",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-loop-exits-forward-20260930\\For-direct\\native-1",
+      "generated_bytes": [
+        237,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-loop-exits-forward-20260930",
+      "case": "Nested",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-loop-exits-forward-20260930\\Nested\\native-1",
+      "generated_bytes": [
+        450,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-loop-forward-20260930",
+      "case": "L3",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-loop-forward-20260930\\L3\\native-1",
+      "generated_bytes": [
+        383,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-loop-forward-20260930",
+      "case": "F2",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-loop-forward-20260930\\F2\\native-1",
+      "generated_bytes": [
+        280,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-loop-forward-20260930",
+      "case": "Seq",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-loop-forward-20260930\\Seq\\native-1",
+      "generated_bytes": [
+        404,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-nested-for-forward-20260930",
+      "case": "Nested",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-nested-for-forward-20260930\\Nested\\native-2",
+      "generated_bytes": [
+        337,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "fx-st-nested-for-forward-20260930",
+      "case": "Outer-inner-outer",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-nested-for-forward-20260930\\Outer-inner-outer\\native-1",
+      "generated_bytes": [
+        476,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-branch-tree-forward-20260930",
+      "case": "Else-nested",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-branch-tree-forward-20260930\\Else-nested\\native-1",
+      "generated_bytes": [
+        477,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-branch-tree-forward-20260930",
+      "case": "Non-tail",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-branch-tree-forward-20260930\\Non-tail\\native-1",
+      "generated_bytes": [
+        596,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-branch-tree-forward-20260930",
+      "case": "Tail-no-else",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-branch-tree-forward-20260930\\Tail-no-else\\native-1",
+      "generated_bytes": [
+        393,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-branch-tree-forward-20260930",
+      "case": "Loop",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-branch-tree-forward-20260930\\Loop\\native-1",
+      "generated_bytes": [
+        449,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-case-context-disc-20260930",
+      "case": "If",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-context-disc-20260930\\If\\native-1",
+      "generated_bytes": [
+        524,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {
+        "case": "If",
+        "generated_bytes": 524,
+        "before_native_status": "unmeasured branch control statement",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "current_model_status": {
+          "unsupported": "unmeasured branch control statement"
+        },
+        "embedded_case_nodes": [
+          {
+            "id": 81,
+            "type": 371,
+            "link12": 28,
+            "link16": 80,
+            "field20": 82,
+            "field24": 4294967295,
+            "field28": 275,
+            "field32": 0,
+            "field56": 0,
+            "field60": 0,
+            "raw": "0000000073010000060000001c0000005000000052000000ffffffff130100000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "post_observation_context_fit": true,
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "TX",
+          "key_iterator": 0,
+          "copied": "TX"
+        },
+        "labels": [
+          "P2401",
+          "P2403",
+          "P2402",
+          "P2400"
+        ],
+        "selection_entry_types": [
+          "0x2c",
+          "0x2c",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "q-st-case-context-disc-20260930",
+      "case": "For",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-context-disc-20260930\\For\\native-1",
+      "generated_bytes": [
+        580,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {
+        "case": "For",
+        "generated_bytes": 580,
+        "before_native_status": "CASE inside another control block unmeasured",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "current_model_status": {
+          "unsupported": "CASE inside another control block outside selected profile"
+        },
+        "embedded_case_nodes": [
+          {
+            "id": 78,
+            "type": 371,
+            "link12": 25,
+            "link16": 77,
+            "field20": 79,
+            "field24": 4294967295,
+            "field28": 250,
+            "field32": 0,
+            "field56": 0,
+            "field60": 0,
+            "raw": "000000007301000006000000190000004d0000004f000000fffffffffa0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "post_observation_context_fit": true,
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "FX",
+          "key_iterator": 2,
+          "copied": "FX"
+        },
+        "labels": [
+          "P2400",
+          "P2402",
+          "P2404",
+          "P2403",
+          "P2401"
+        ],
+        "selection_entry_types": [
+          "0x2c",
+          "0x2c",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "q-st-case-context-disc-20260930",
+      "case": "Case",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-context-disc-20260930\\Case\\native-1",
+      "generated_bytes": [
+        616,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {
+        "case": "Case",
+        "generated_bytes": 616,
+        "before_native_status": "control statement in CASE outside selected flat profile",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "current_model_status": {
+          "unsupported": "control statement in CASE outside selected flat profile"
+        },
+        "embedded_case_nodes": [
+          {
+            "id": 62,
+            "type": 371,
+            "link12": 27,
+            "link16": 61,
+            "field20": 63,
+            "field24": 4294967295,
+            "field28": 300,
+            "field32": 0,
+            "field56": 0,
+            "field60": 0,
+            "raw": "0000000073010000050000001b0000003d0000003f000000ffffffff2c0100000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "post_observation_context_fit": true,
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "IX",
+          "key_iterator": 0,
+          "copied": "IX"
+        },
+        "labels": [
+          "P2401",
+          "P2402",
+          "P2400",
+          "P2404",
+          "P2403"
+        ],
+        "selection_entry_types": [
+          "0x3a",
+          "0x2c",
+          "0x175",
+          "0x3a",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "q-st-case-context-forward-20260930",
+      "case": "If-3",
+      "handling": "frontend-rejected",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-context-forward-20260930\\If-3\\native-1",
+      "generated_bytes": [
+        0,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": null,
+      "reopen_identical": null,
+      "diagnostics": [
+        "0x50010000",
+        "0x500c5065",
+        "0x50f1218"
+      ],
+      "case_evidence": {
+        "case": "If-3",
+        "generated_bytes": 0,
+        "before_native_status": "fixed temporary pool exhausted",
+        "fresh_check": null,
+        "current_model_status": {
+          "unsupported": "fixed temporary pool exhausted"
+        },
+        "handling": "frontend-rejected-temporary-capacity"
+      }
+    },
+    {
+      "group": "q-st-case-context-forward-20260930",
+      "case": "If-4",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-context-forward-20260930\\If-4\\native-1",
+      "generated_bytes": [
+        586,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {
+        "case": "If-4",
+        "generated_bytes": 586,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "embedded_case_nodes": [
+          {
+            "id": 94,
+            "type": 371,
+            "link12": 39,
+            "link16": 93,
+            "field20": 95,
+            "field24": 4294967295,
+            "field28": 350,
+            "field32": 0,
+            "field56": 0,
+            "field60": 0,
+            "raw": "000000007301000006000000270000005d0000005f000000ffffffff5e0100000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "TY",
+          "key_iterator": 0,
+          "copied": "TY"
+        },
+        "labels": [
+          "P2401",
+          "P2403",
+          "P2402",
+          "P2400"
+        ],
+        "selection_entry_types": [
+          "0x2c",
+          "0x2c",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "q-st-case-context-forward-20260930",
+      "case": "For",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-context-forward-20260930\\For\\native-1",
+      "generated_bytes": [
+        642,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {
+        "case": "For",
+        "generated_bytes": 642,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "embedded_case_nodes": [
+          {
+            "id": 91,
+            "type": 371,
+            "link12": 36,
+            "link16": 90,
+            "field20": 92,
+            "field24": 4294967295,
+            "field28": 325,
+            "field32": 0,
+            "field56": 0,
+            "field60": 0,
+            "raw": "000000007301000006000000240000005a0000005c000000ffffffff450100000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "FX",
+          "key_iterator": 2,
+          "copied": "FX"
+        },
+        "labels": [
+          "P2400",
+          "P2402",
+          "P2404",
+          "P2403",
+          "P2401"
+        ],
+        "selection_entry_types": [
+          "0x2c",
+          "0x2c",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "q-st-case-context-forward-20260930",
+      "case": "Nested",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-context-forward-20260930\\Nested\\native-1",
+      "generated_bytes": [
+        678,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {
+        "case": "Nested",
+        "generated_bytes": 678,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "embedded_case_nodes": [
+          {
+            "id": 75,
+            "type": 371,
+            "link12": 38,
+            "link16": 74,
+            "field20": 76,
+            "field24": 4294967295,
+            "field28": 375,
+            "field32": 0,
+            "field56": 0,
+            "field60": 0,
+            "raw": "000000007301000005000000260000004a0000004c000000ffffffff770100000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "IY",
+          "key_iterator": 0,
+          "copied": "IY"
+        },
+        "labels": [
+          "P2401",
+          "P2402",
+          "P2400",
+          "P2404",
+          "P2403"
+        ],
+        "selection_entry_types": [
+          "0x3a",
+          "0x2c",
+          "0x175",
+          "0x3a",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "q-st-case-disc-20260930",
+      "case": "Word-T",
+      "handling": "frontend-rejected",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-disc-20260930\\Word-T\\native-1",
+      "generated_bytes": [
+        0,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": null,
+      "reopen_identical": null,
+      "diagnostics": [
+        "0x50010000",
+        "0x500c5065",
+        "0x500c8032"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-case-disc-20260930",
+      "case": "Word-D",
+      "handling": "frontend-rejected",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-disc-20260930\\Word-D\\native-1",
+      "generated_bytes": [
+        0,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": null,
+      "reopen_identical": null,
+      "diagnostics": [
+        "0x50010000",
+        "0x500c5065",
+        "0x500c8032"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-case-forward-20260930",
+      "case": "Three",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-forward-20260930\\Three\\native-1",
+      "generated_bytes": [
+        594,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {
+        "case": "Three",
+        "generated_bytes": 594,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "FX",
+          "key_iterator": 0,
+          "copied": "FX"
+        },
+        "labels": [
+          "P2400",
+          "P2402",
+          "P2403",
+          "P2401"
+        ],
+        "selection_entry_types": []
+      }
+    },
+    {
+      "group": "q-st-case-forward-20260930",
+      "case": "Expr",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-forward-20260930\\Expr\\native-1",
+      "generated_bytes": [
+        524,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {
+        "case": "Expr",
+        "generated_bytes": 524,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "FX",
+          "key_iterator": 0,
+          "copied": "FX",
+          "for_iterator": 88
+        },
+        "labels": [
+          "P2400",
+          "P2402",
+          "P2401"
+        ],
+        "selection_entry_types": []
+      }
+    },
+    {
+      "group": "q-st-case-forward-20260930",
+      "case": "Reuse",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-forward-20260930\\Reuse\\native-1",
+      "generated_bytes": [
+        876,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {
+        "case": "Reuse",
+        "generated_bytes": 876,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "TXY",
+          "key_iterator": 0,
+          "copied": "TXY",
+          "for_iterator": 66
+        },
+        "labels": [
+          "P2400",
+          "P2402",
+          "P2401",
+          "P2403",
+          "P2405",
+          "P2404"
+        ],
+        "selection_entry_types": []
+      }
+    },
+    {
+      "group": "q-st-case-forward-20260930",
+      "case": "Few",
+      "handling": "frontend-rejected",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-forward-20260930\\Few\\native-1",
+      "generated_bytes": [
+        0,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": null,
+      "reopen_identical": null,
+      "diagnostics": [
+        "0x50010000",
+        "0x500c5065",
+        "0x50f1218"
+      ],
+      "case_evidence": {
+        "case": "Few",
+        "generated_bytes": 0,
+        "before_native_status": "fixed temporary pool exhausted",
+        "fresh_check": null,
+        "current_model_status": {
+          "unsupported": "fixed temporary pool exhausted"
+        },
+        "handling": "frontend-rejected-temporary-capacity"
+      }
+    },
+    {
+      "group": "q-st-case-forward-20260930",
+      "case": "Range",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-forward-20260930\\Range\\native-1",
+      "generated_bytes": [
+        510,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {
+        "case": "Range",
+        "generated_bytes": 510,
+        "before_native_status": "multiple/range/negative CASE selections unmeasured",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "TX",
+          "key_iterator": 0,
+          "copied": "TX"
+        },
+        "labels": [
+          "P2400",
+          "P2402",
+          "P2401"
+        ],
+        "selection_entry_types": []
+      }
+    },
+    {
+      "group": "q-st-case-forward-20260930",
+      "case": "Duplicate",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-forward-20260930\\Duplicate\\native-1",
+      "generated_bytes": [
+        477,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {
+        "case": "Duplicate",
+        "generated_bytes": 477,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "TX",
+          "key_iterator": 0,
+          "copied": "TX"
+        },
+        "labels": [
+          "P2400",
+          "P2402",
+          "P2401"
+        ],
+        "selection_entry_types": []
+      }
+    },
+    {
+      "group": "q-st-case-int-disc-20260930",
+      "case": "Int-T",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-int-disc-20260930\\Int-T\\native-2",
+      "generated_bytes": [
+        477,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-case-int-disc-20260930",
+      "case": "Int-D",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-int-disc-20260930\\Int-D\\native-1",
+      "generated_bytes": [
+        477,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-case-lifetime-forward-20260930",
+      "case": "Three-words",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-lifetime-forward-20260930\\Three-words\\native-1",
+      "generated_bytes": [
+        525,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {
+        "case": "Three-words",
+        "generated_bytes": 525,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "TY",
+          "key_iterator": 0,
+          "copied": "TY"
+        },
+        "labels": [
+          "P2400",
+          "P2402",
+          "P2401"
+        ],
+        "selection_entry_types": [
+          "0x3a",
+          "0x3a",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "q-st-case-lifetime-forward-20260930",
+      "case": "Four-words",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-lifetime-forward-20260930\\Four-words\\native-1",
+      "generated_bytes": [
+        525,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {
+        "case": "Four-words",
+        "generated_bytes": 525,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "TY",
+          "key_iterator": 0,
+          "copied": "TY"
+        },
+        "labels": [
+          "P2400",
+          "P2402",
+          "P2401"
+        ],
+        "selection_entry_types": [
+          "0x3a",
+          "0x3a",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "q-st-case-lifetime-forward-20260930",
+      "case": "False",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-lifetime-forward-20260930\\False\\native-1",
+      "generated_bytes": [
+        525,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {
+        "case": "False",
+        "generated_bytes": 525,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "FX",
+          "key_iterator": 0,
+          "copied": "FX"
+        },
+        "labels": [
+          "P2400",
+          "P2402",
+          "P2401"
+        ],
+        "selection_entry_types": [
+          "0x3a",
+          "0x3a",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "q-st-case-path-disc-20260930",
+      "case": "Case",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-path-disc-20260930\\Case\\native-1",
+      "generated_bytes": [
+        477,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-case-path-disc-20260930",
+      "case": "Expression",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-path-disc-20260930\\Expression\\native-1",
+      "generated_bytes": [
+        524,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-case-path-disc-20260930",
+      "case": "Elsif",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-path-disc-20260930\\Elsif\\native-1",
+      "generated_bytes": [
+        477,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-case-ranges-forward-20260930",
+      "case": "Range-first",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-ranges-forward-20260930\\Range-first\\native-1",
+      "generated_bytes": [
+        507,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {
+        "case": "Range-first",
+        "generated_bytes": 507,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "TX",
+          "key_iterator": 0,
+          "copied": "TX"
+        },
+        "labels": [
+          "P2400",
+          "P2402",
+          "P2401"
+        ],
+        "selection_entry_types": [
+          "0x3a",
+          "0x3a",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "q-st-case-ranges-forward-20260930",
+      "case": "Two-ranges",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-ranges-forward-20260930\\Two-ranges\\native-1",
+      "generated_bytes": [
+        540,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {
+        "case": "Two-ranges",
+        "generated_bytes": 540,
+        "before_native_status": "byte-prediction",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "before_native_byte_match": true,
+        "current_model_status": "byte-match",
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "TX",
+          "key_iterator": 0,
+          "copied": "TX"
+        },
+        "labels": [
+          "P2400",
+          "P2402",
+          "P2401"
+        ],
+        "selection_entry_types": [
+          "0x3a",
+          "0x3a",
+          "0x175"
+        ]
+      }
+    },
+    {
+      "group": "q-st-case-ranges-forward-20260930",
+      "case": "No-else",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-case-ranges-forward-20260930\\No-else\\native-1",
+      "generated_bytes": [
+        393,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {
+        "case": "No-else",
+        "generated_bytes": 393,
+        "before_native_status": "CASE requires measured arms and ELSE",
+        "fresh_check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "current_model_status": {
+          "unsupported": "CASE requires measured arms and ELSE"
+        },
+        "handling": "native-check-and-reopen-accepted",
+        "independent_lexical_match": true,
+        "witness": {
+          "result": "",
+          "key_iterator": 0,
+          "copied": ""
+        },
+        "labels": [
+          "P2400",
+          "P2402",
+          "P2401"
+        ],
+        "selection_entry_types": [
+          "0x3a",
+          "0x3a"
+        ]
+      }
+    },
+    {
+      "group": "q-st-for-boundary-discovery-20260930",
+      "case": "TO-expr",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-for-boundary-discovery-20260930\\TO-expr\\native-2",
+      "generated_bytes": [
+        350,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-for-boundary-discovery-20260930",
+      "case": "BY-scalar",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-for-boundary-discovery-20260930\\BY-scalar\\native-1",
+      "generated_bytes": [
+        378,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-for-boundary-discovery-20260930",
+      "case": "BY-expr",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-for-boundary-discovery-20260930\\BY-expr\\native-1",
+      "generated_bytes": [
+        405,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-for-boundary-discovery-20260930",
+      "case": "Nested",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-for-boundary-discovery-20260930\\Nested\\native-1",
+      "generated_bytes": [
+        397,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-for-control-forward-20260930",
+      "case": "TO-expr",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-for-control-forward-20260930\\TO-expr\\native-1",
+      "generated_bytes": [
+        350,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-for-control-forward-20260930",
+      "case": "BY-scalar",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-for-control-forward-20260930\\BY-scalar\\native-1",
+      "generated_bytes": [
+        378,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-for-control-forward-20260930",
+      "case": "BY-expr",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-for-control-forward-20260930\\BY-expr\\native-1",
+      "generated_bytes": [
+        405,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-for-control-forward-20260930",
+      "case": "Nested",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-for-control-forward-20260930\\Nested\\native-1",
+      "generated_bytes": [
+        397,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-for-control-forward-20260930",
+      "case": "Nested-TO",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-for-control-forward-20260930\\Nested-TO\\native-1",
+      "generated_bytes": [
+        425,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-for-control-forward-20260930",
+      "case": "Nested-BY",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-for-control-forward-20260930\\Nested-BY\\native-1",
+      "generated_bytes": [
+        480,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-if-else-discovery-20260930",
+      "case": "D1",
+      "handling": "frontend-rejected",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-if-else-discovery-20260930\\D1\\native-1",
+      "generated_bytes": [
+        0,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": null,
+      "reopen_identical": null,
+      "diagnostics": [
+        "0x50010000",
+        "0x500c5065",
+        "0x50f1218"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-if-else-discovery-20260930",
+      "case": "D2-then",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-if-else-discovery-20260930\\D2-then\\native-1",
+      "generated_bytes": [
+        360,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-if-else-discovery-20260930",
+      "case": "D2-else",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-if-else-discovery-20260930\\D2-else\\native-1",
+      "generated_bytes": [
+        360,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-if-else-discovery-20260930",
+      "case": "Nested",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-if-else-discovery-20260930\\Nested\\native-1",
+      "generated_bytes": [
+        477,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-loop-exits-disc-20260930",
+      "case": "Repeat",
+      "handling": "experiment-preparation-failure",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-exits-disc-20260930\\Repeat\\native-1",
+      "generated_bytes": [
+        0,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": null,
+      "reopen_identical": null,
+      "diagnostics": [
+        "0x50010000",
+        "0x500c5065",
+        "0x500c9004"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-loop-exits-disc-20260930",
+      "case": "While-exit",
+      "handling": "experiment-preparation-failure",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-exits-disc-20260930\\While-exit\\native-3",
+      "generated_bytes": [
+        0,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": null,
+      "reopen_identical": null,
+      "diagnostics": [
+        "0x50010000",
+        "0x500c5065",
+        "0x500c9004"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-loop-exits-disc-20260930",
+      "case": "Nested-exit",
+      "handling": "experiment-preparation-failure",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-exits-disc-20260930\\Nested-exit\\native-1",
+      "generated_bytes": [
+        0,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": null,
+      "reopen_identical": null,
+      "diagnostics": [
+        "0x50010000",
+        "0x500c5065",
+        "0x500c9004"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-loop-exits-disc-20260930",
+      "case": "Return",
+      "handling": "experiment-preparation-failure",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-exits-disc-20260930\\Return\\native-1",
+      "generated_bytes": [
+        0,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": null,
+      "reopen_identical": null,
+      "diagnostics": [
+        "0x50010000",
+        "0x500c5065",
+        "0x500c9004"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-loop-exits-disc2-20260930",
+      "case": "Repeat",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-exits-disc2-20260930\\Repeat\\native-1",
+      "generated_bytes": [
+        268,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-loop-exits-disc2-20260930",
+      "case": "While-exit",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-exits-disc2-20260930\\While-exit\\native-1",
+      "generated_bytes": [
+        345,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-loop-exits-disc2-20260930",
+      "case": "Nested-exit",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-exits-disc2-20260930\\Nested-exit\\native-1",
+      "generated_bytes": [
+        500,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-loop-exits-disc2-20260930",
+      "case": "Return",
+      "handling": "native-generated-check-rejected",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-exits-disc2-20260930\\Return\\native-1",
+      "generated_bytes": [
+        340,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": true
+      },
+      "reopen_identical": null,
+      "diagnostics": [
+        "0x500c5065",
+        "0x50c9322"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-loop-exits-forward-20260930",
+      "case": "Repeat-once",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-exits-forward-20260930\\Repeat-once\\native-1",
+      "generated_bytes": [
+        268,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-loop-exits-forward-20260930",
+      "case": "Repeat-exit",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-exits-forward-20260930\\Repeat-exit\\native-1",
+      "generated_bytes": [
+        327,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-loop-exits-forward-20260930",
+      "case": "For-direct",
+      "handling": "native-generated-check-rejected",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-exits-forward-20260930\\For-direct\\native-1",
+      "generated_bytes": [
+        304,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": true
+      },
+      "reopen_identical": null,
+      "diagnostics": [
+        "0x500c5065",
+        "0x50c9322"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-loop-exits-forward-20260930",
+      "case": "Nested",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-exits-forward-20260930\\Nested\\native-1",
+      "generated_bytes": [
+        500,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-loop-forward-20260930",
+      "case": "L3",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-forward-20260930\\L3\\native-1",
+      "generated_bytes": [
+        447,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-loop-forward-20260930",
+      "case": "F2",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-forward-20260930\\F2\\native-1",
+      "generated_bytes": [
+        346,
+        0,
+        0
+      ],
+      "prospective_byte_match": true,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-return-tail-disc-20260930",
+      "case": "Last",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-return-tail-disc-20260930\\Last\\native-1",
+      "generated_bytes": [
+        325,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-return-tail-disc-20260930",
+      "case": "Guard",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-return-tail-disc-20260930\\Guard\\native-1",
+      "generated_bytes": [
+        381,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    },
+    {
+      "group": "q-st-return-tail-disc-20260930",
+      "case": "Main",
+      "handling": "native-check-and-reopen-accepted",
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-return-tail-disc-20260930\\Main\\native-1",
+      "generated_bytes": [
+        381,
+        0,
+        0
+      ],
+      "prospective_byte_match": null,
+      "fresh_check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "reopen_identical": true,
+      "diagnostics": [
+        "0x500c5065"
+      ],
+      "case_evidence": {}
+    }
+  ],
+  "findings": [
+    "FOR 17d links init155 and bounds15e; bounds link TO and step/body172. Scalar BY stays live, arithmetic BY is captured at the measured loop head.",
+    "IF/ELSE captures are prepared in source order; ELSE is emitted first. Tail IF continuations can share end labels. Untouched source and raw native cells are retained.",
+    "REPEAT checks after its body. EXIT targets the nearest loop; its end label is allocated when needed. Q JMP and measured FX true-condition CJ remain separate dialects.",
+    "Measured Q RETURN followed by immediate caller data, and FOR ending directly in EXIT, generate code rejected by fresh ProgramCheck with 0x050c9322. Generation is not acceptance.",
+    "Standalone CASE streams frontend arms. CASE under measured IF/FOR/CASE builds 173 (selector L12, arm list L16) and uses generator d8f10. This resolves the earlier stage index that left 173 opaque.",
+    "Context-bound selection projection: 3a choices L12/body L16; 175 default body L16; positive INT112, range189 and ordered selection-list2c. Other fields and uses of 2c remain opaque.",
+    "Standalone CASE retains captures progressively per arm. Released arithmetic-index scratch can become the next arm capture. Enclosing IF/FOR instead prepares subtree captures first: measured three-word standalone cases accept while three-word IF rejects and four-word IF accepts.",
+    "CASE end label is allocated at its first emitted arm exit, after the first arm body. Nested CASE labels therefore precede the enclosing CASE end. No-ELSE retains separate failed-arm and common-end labels.",
+    "Current CASE stage has 38 native observations: 34 check/reopen accepted, 4 frontend capacity rejections; 24 source predictions saved before native all match bytes. Independent lexical decode and finite initialized witnesses are separate from PLC execution."
+  ],
+  "preservation": "No native rerun, hash computation or rewriting of earlier predictions/indexes. Preparation failures, compiler rejections and post-observation fits remain distinct.",
+  "archives": {
+    "public": "research\\evidence\\gxw-st-structured-control-20260930.zip",
+    "local": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\gxw-st-structured-control-local-20260930.zip"
+  },
+  "limitations": [
+    "No PLC/device/simulator execution and no production-safe promotion.",
+    "Opt-in source model covers bounded INT choices, initialized ASCII string assignments and measured control forms; unsupported leaves fail closed.",
+    "Earlier IF snapshots may truncate unused-cell inventory; original truncation indicators are preserved.",
+    "Local archive contains third-party engineering projects and source; redistribution rights are not established.",
+    "Existing event files may contain historical fingerprint metadata; this snapshot computes no new hashes."
+  ]
+}

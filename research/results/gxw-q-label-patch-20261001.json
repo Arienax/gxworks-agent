@@ -1,0 +1,101 @@
+{
+  "schema": 1,
+  "date": "2026-10-01",
+  "status": "native-validated/research-prototype",
+  "versions": {
+    "plc": "Q03UDV",
+    "provider": "ECCodeGenerator2.dll",
+    "file_version": "15.41",
+    "public_cpu": 209,
+    "internal_cpu_word": 113,
+    "native_versions": [
+      25
+    ],
+    "compiler_adapter_version": "1.635.0.1"
+  },
+  "model": "Source-only declaration binding predicts one label-reference contact change. In-place CFB patching preserves every other input payload; independent project-bound machine reading verifies the generated change.",
+  "counts": {
+    "projects_modified": 30,
+    "physical_changed_bytes": 60,
+    "untouched_inner_streams": 1473,
+    "untouched_outer_streams": 330,
+    "full_machine_mutations_exact": 30,
+    "whole_machine_controls_exact": 60,
+    "compiled_check_resources_exact": 116,
+    "own_backend_targets_completed": 116,
+    "backend_diagnostics_unchanged_projects": 30,
+    "saved_resource_copies_exact": 116,
+    "reopened_pcode_bodies_exact": 58,
+    "public_passed_projects": 3,
+    "public_rejected_projects": 1,
+    "public_incomplete_projects": 26,
+    "projection_failures": 58,
+    "completed_supplemental_targets": 7,
+    "preserved_backend_errors": 262,
+    "unsupported_source_projects_preserved": 1
+  },
+  "device_codes": {
+    "157": 5,
+    "156": 25
+  },
+  "physical_byte_changes": {
+    "1": 3,
+    "4": 1,
+    "2": 25,
+    "3": 1
+  },
+  "retained_failures": [
+    "One original project has two untyped local declaration rows; direct source projection remains unsupported and its raw project is retained.",
+    "An initial batch selected an absent case-03 and stopped after case-00; the invocation failure is retained.",
+    "Owned helper temporary-directory collisions are retained with successful fresh retries.",
+    "Twenty-six original/candidate public full-check pairs remain incomplete after original backend diagnostics and 0x2d010025 projection failure.",
+    "A PCode dependency read does not prove completion of its own resource check. Separate selected-target invocations cover missing completed targets.",
+    "Supplemental v2 read attempt-1 for candidate case-22 rather than the final retry, causing two redundant controls. Both are retained and agree with the completed original invocation."
+  ],
+  "limits": [
+    "Pinned Q03UDV/CPU209/version25 only, with measured project parameter banks.",
+    "One same-length existing label reference in a plain X/Y bit contact per original project; no claim about larger edits or declaration rewrites.",
+    "Compile/save/reopen succeeds for all thirty edits. Public full-check passes for three projects, completes with rejection for one and remains incomplete for twenty-six.",
+    "Selected-target checks establish per-resource correspondence across separate invocations; they do not complete or accept the failed full invocation.",
+    "Cold replay rechecks raw source edits, independent machine reading, current Native buffers, diagnostics and saved resources. It does not recompile original source declarations.",
+    "No PLC execution or product parser/writer integration is claimed."
+  ],
+  "archive_scope": {
+    "public": "Thirty numeric contact witnesses, bounded context/reader/patch models, tools, cold verifier and counts.",
+    "local": "Thirty original/changed GXW projects, full source/PCode/machine predictions, native check/save/reopen helpers, reused controls, raw failures and target supplements."
+  },
+  "verification": "Direct archived-byte comparison and isolated replay; no native rerun or new digest verification.",
+  "public_archive": {
+    "path": "research/evidence/gxw-q-label-patch-20261001.zip",
+    "entries": 15,
+    "bytes": 46198,
+    "entry_bytes_exact": true
+  },
+  "local_archive": {
+    "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/gxw-q-label-patch-20261001-local.zip",
+    "entries": 12800,
+    "bytes": 106338156,
+    "entry_bytes_exact": true
+  },
+  "cold_replay_counts": {
+    "minimal_contact_patches_exact": 30,
+    "projects_modified": 30,
+    "physical_changed_bytes": 60,
+    "untouched_inner_streams": 1473,
+    "untouched_outer_streams": 330,
+    "full_machine_mutations_exact": 30,
+    "whole_machine_controls_exact": 60,
+    "compiled_check_resources_exact": 116,
+    "own_backend_targets_completed": 116,
+    "backend_diagnostics_unchanged_projects": 30,
+    "saved_resource_copies_exact": 116,
+    "reopened_pcode_bodies_exact": 58,
+    "public_passed_projects": 3,
+    "public_rejected_projects": 1,
+    "public_incomplete_projects": 26,
+    "projection_failures": 58,
+    "completed_supplemental_targets": 7,
+    "preserved_backend_errors": 262,
+    "unsupported_source_projects_preserved": 1
+  }
+}

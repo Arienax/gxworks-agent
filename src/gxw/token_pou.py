@@ -143,11 +143,12 @@ def parse_token_pou(raw: bytes) -> TokenProgram:
     """Recognize the observed envelope; never search past a broken boundary.
 
     Matching lengths alone do not establish a format. Require both size fields,
-    the exact trailer, complete consumption, and the observed terminal END.
+    the 24-byte trailer extent, complete consumption, and the observed terminal
+    END. Native-saved trailer contents can be nonzero and remain opaque.
     Unknown layouts must be preserved by the caller as a whole opaque stream.
     """
     raw = bytes(raw)
-    if len(raw) < 106 or any(raw[-24:]):
+    if len(raw) < 106:
         raise GXWFormatError("unsupported token Program.pou envelope/trailer")
     if struct.unpack_from("<II", raw, 55) != (len(raw) - 83,) * 2:
         raise GXWFormatError("unsupported token Program.pou size fields")
@@ -157,9 +158,10 @@ def parse_token_pou(raw: bytes) -> TokenProgram:
 def frame_token_pou(raw: bytes) -> TokenProgram:
     """Frame simple-ladder source without selecting a CPU's lexical grammar.
 
-    Native FX and Q sources share these length fields. Older public projects
-    have 20 zero trailer bytes; the inspected native save appends four zeros
-    without changing the body or its stored lengths. Q END differs from FX,
+    Native FX and Q sources share these length fields. Observed trailer extents
+    are 20 and 24 bytes; their contents, including nonzero native-saved bytes,
+    are preserved as opaque data. Saving can change the trailer extent without
+    changing the body or its stored lengths. Q END differs from FX,
     and native ladder FB bodies need not contain END. Consequently this entry
     point proves boundaries and byte preservation only: do not feed its result
     to an FX lexical decoder without separate CPU/format evidence.
@@ -178,7 +180,7 @@ def frame_token_pou(raw: bytes) -> TokenProgram:
         raise GXWFormatError("unsupported ladder-token source prefix")
     body_length = size - 20
     end = 79 + body_length
-    if end > len(raw) or len(raw) - end not in (20, 24) or any(raw[end:]):
+    if end > len(raw) or len(raw) - end not in (20, 24):
         raise GXWFormatError("unsupported ladder-token source trailer")
     return parse_token_fragment(raw, 79, body_length)
 

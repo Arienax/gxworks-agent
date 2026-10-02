@@ -80,7 +80,8 @@ def project_allocation_ranges(raw: bytes) -> dict:
     The pinned Workspace type library names all 28 pairs. Its native getters
     agree byte-for-byte in 37 Q03UDV/FX3U/FX1S public projects. A controlled
     disagreement proves the extended record, not the earlier 88-byte copy,
-    supplies the compiler's ranges. The intervening count can be 11 or 12;
+    supplies the compiler's ranges. The intervening count can be 10, 11 or 12;
+    the count-10 real Keypad FX3U project matches the native 28-pair getter.
     its entries and remaining project bytes are still opaque.
     """
     from probe_gxw_native_listing import project_text_context
@@ -89,7 +90,7 @@ def project_allocation_ranges(raw: bytes) -> dict:
     if start + 92 > len(raw):
         raise ValueError('truncated project range prefix')
     count = struct.unpack_from('<I', raw, start + 88)[0]
-    if count not in (11, 12):
+    if count not in (10, 11, 12):
         raise ValueError('intervening project record count outside observed layouts')
     extended = start + 138 + 4 * count
     if extended + 228 > len(raw) or struct.unpack_from('<I', raw, extended)[0] != 228:

@@ -333,7 +333,9 @@ def run(input_path, output, *, compile=False, snapshot_frontend=False, snapshot_
                               and e.get('hresult') == e.get('code') == 0 for e in events)
     outcome['program_check_target'] = ('freshly-published-pcode' if published_for_check else
         'existing-workspace-resource') if outcome['program_check_completed'] else 'not-checked'
-    outcome['compiler_rejected'] = any(d['kind'] == 2 for d in diagnostics.values())
+    outcome['sfc_conversion'] = next((e for e in events if e.get('operation') == 'SFCConversionCompleted'), None)
+    outcome['compiler_rejected'] = (any(d['kind'] == 2 for d in diagnostics.values())
+        or any(e.get('operation') == 'SFCConversionFailure' for e in events))
     if compile:
         returned = {}
         for event in events:
@@ -375,6 +377,14 @@ def trace_prepared(output, script, *, timeout=45):
     pid = device.spawn([str(output / 'WorkspaceReplayOracle.exe'), str(output / 'plan.json')],
                        cwd=str(output), stdio='pipe')
     ended = []
+    # Keep managed/native startup exceptions as evidence too. Frida's pipe
+    # output is otherwise discarded when the process exits before COM setup.
+    def record_output(process_id, descriptor, data):
+        if process_id == pid and descriptor in (1, 2) and data:
+            path = output / ('trace-stdout.bin' if descriptor == 1 else 'trace-stderr.bin')
+            with path.open('ab') as stream:
+                stream.write(data)
+    device.on('output', record_output)
     try:
         session = device.attach(pid)
         session.on('detached', lambda *args: ended.append(str(args)))
@@ -399,6 +409,7 @@ def trace_prepared(output, script, *, timeout=45):
         (output / 'trace-failure.json').write_text(json.dumps(dict(pid=pid, error=repr(exc)), indent=2) + '\n')
         raise
     finally:
+        device.off('output', record_output)
         # A failed script load leaves a newly spawned process suspended. Only
         # this invocation's owned PID may be stopped, including attach failure.
         if not ended:

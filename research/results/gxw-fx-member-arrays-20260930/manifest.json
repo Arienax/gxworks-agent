@@ -1,0 +1,470 @@
+{
+  "created_utc": "2026-09-30T14:34:52.785323+00:00",
+  "base_commit": "1b04dc145ecdf773001b3d2e6a932527c8df64ba",
+  "previous_checkpoint": "research/results/gxw-fx-function-layout-20260930/manifest.json",
+  "scope": "One real FX3G library lineage, compiler 15.50; copied offline compile/check/save/reopen only.",
+  "counts": {
+    "native-check-and-reopen-accepted": 3,
+    "native-declaration-refusal": 3,
+    "native_observations": 6,
+    "prospective_full_byte_matches": 3,
+    "independent_cache_member_references": 15
+  },
+  "observations": [
+    {
+      "group": "fx3g-member-arrays-forward-20260930",
+      "case": "Mixed-word-bit-arrays",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 478,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "process": {
+        "pid": 40476,
+        "timed_out": false,
+        "detached": [
+          "('process-terminated', None)"
+        ]
+      },
+      "reopen_identical": true,
+      "evidence_directory": "research/experiments/sfc-graph-20260926/public-corpus-discovery/fx3g-member-arrays-forward-20260930/Mixed-word-bit-arrays"
+    },
+    {
+      "group": "fx3g-member-arrays-forward-20260930",
+      "case": "DWORD-member-array",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 494,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "process": {
+        "pid": 96868,
+        "timed_out": false,
+        "detached": [
+          "('process-terminated', None)"
+        ]
+      },
+      "reopen_identical": true,
+      "evidence_directory": "research/experiments/sfc-graph-20260926/public-corpus-discovery/fx3g-member-arrays-forward-20260930/DWORD-member-array"
+    },
+    {
+      "group": "fx3g-member-arrays-forward-20260930",
+      "case": "Rank-two-member",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 493,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "process": {
+        "pid": 93468,
+        "timed_out": false,
+        "detached": [
+          "('process-terminated', None)"
+        ]
+      },
+      "reopen_identical": true,
+      "evidence_directory": "research/experiments/sfc-graph-20260926/public-corpus-discovery/fx3g-member-arrays-forward-20260930/Rank-two-member"
+    },
+    {
+      "group": "fx3g-nested-structure-discovery-20260930",
+      "case": "Scalar-bit-structure",
+      "status": "native-declaration-refusal",
+      "generated_bytes": null,
+      "original_prospective_equal": null,
+      "original_source_model_refusal": "nested/nonprimitive structure member outside profile",
+      "diagnostics": [
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1342984274,
+          "name": "ST_MB_REG_50",
+          "instance": "ST_MB_REG_50",
+          "step": -1,
+          "network": -1,
+          "left": 2,
+          "top": 12,
+          "right": -1,
+          "bottom": -1,
+          "arguments": []
+        }
+      ],
+      "process": {
+        "pid": 65716,
+        "timed_out": false,
+        "detached": [
+          "('process-terminated', None)"
+        ]
+      },
+      "reopen_identical": null,
+      "evidence_directory": "research/experiments/sfc-graph-20260926/public-corpus-discovery/fx3g-nested-structure-discovery-20260930/Scalar-bit-structure"
+    },
+    {
+      "group": "fx3g-nested-structure-discovery-20260930",
+      "case": "Scalar-mixed-structure",
+      "status": "native-declaration-refusal",
+      "generated_bytes": null,
+      "original_prospective_equal": null,
+      "original_source_model_refusal": "nested/nonprimitive structure member outside profile",
+      "diagnostics": [
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1342984274,
+          "name": "ST_MB_REG_50",
+          "instance": "ST_MB_REG_50",
+          "step": -1,
+          "network": -1,
+          "left": 2,
+          "top": 8,
+          "right": -1,
+          "bottom": -1,
+          "arguments": []
+        }
+      ],
+      "process": {
+        "pid": 97264,
+        "timed_out": false,
+        "detached": [
+          "('process-terminated', None)"
+        ]
+      },
+      "reopen_identical": null,
+      "evidence_directory": "research/experiments/sfc-graph-20260926/public-corpus-discovery/fx3g-nested-structure-discovery-20260930/Scalar-mixed-structure"
+    },
+    {
+      "group": "fx3g-nested-structure-discovery-20260930",
+      "case": "Array-bit-structure",
+      "status": "native-declaration-refusal",
+      "generated_bytes": null,
+      "original_prospective_equal": null,
+      "original_source_model_refusal": "nested/nonprimitive structure member outside profile",
+      "diagnostics": [
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1342984274,
+          "name": "ST_MB_REG_50",
+          "instance": "ST_MB_REG_50",
+          "step": -1,
+          "network": -1,
+          "left": 2,
+          "top": 12,
+          "right": -1,
+          "bottom": -1,
+          "arguments": []
+        }
+      ],
+      "process": {
+        "pid": 40164,
+        "timed_out": false,
+        "detached": [
+          "('process-terminated', None)"
+        ]
+      },
+      "reopen_identical": null,
+      "evidence_directory": "research/experiments/sfc-graph-20260926/public-corpus-discovery/fx3g-nested-structure-discovery-20260930/Array-bit-structure"
+    }
+  ],
+  "array_layout": {
+    "scope": "Source-only original FX3G global layout, separate same-type instances, static literal structure-array member references and primitive user functions.",
+    "observations": 3,
+    "prospective_full_byte_matches": 3,
+    "prospective_failures": 0,
+    "cases": [
+      {
+        "group": "fx3g-member-arrays-forward-20260930",
+        "case": "Mixed-word-bit-arrays",
+        "prospective_equal": true,
+        "current_source_model_equal": true,
+        "fresh_check_and_reopen_accepted": true,
+        "generated_bytes": 478,
+        "independent_address_projection_match": true,
+        "global_block_projection_equal": true,
+        "global_blocks": [
+          {
+            "owner": "tco_dint_50",
+            "document": "GVL_TCO\\TimeControl.lng",
+            "family": "D",
+            "number": 5749,
+            "count": 2
+          },
+          {
+            "owner": "tco_dint_10",
+            "document": "GVL_TCO\\TimeControl.lng",
+            "family": "D",
+            "number": 5747,
+            "count": 2
+          },
+          {
+            "owner": "am_events",
+            "document": "Global1.gh",
+            "family": "M",
+            "number": 5743,
+            "count": 8
+          },
+          {
+            "owner": "am_alarms",
+            "document": "Global1.gh",
+            "family": "D",
+            "number": 5732,
+            "count": 15
+          },
+          {
+            "owner": "am_alarms",
+            "document": "Global1.gh",
+            "family": "M",
+            "number": 5722,
+            "count": 21
+          },
+          {
+            "owner": "mb_channels",
+            "document": "Global1.gh",
+            "family": "D",
+            "number": 5687,
+            "count": 45
+          },
+          {
+            "owner": "mb_channels",
+            "document": "Global1.gh",
+            "family": "M",
+            "number": 5689,
+            "count": 33
+          }
+        ],
+        "routine_order": [
+          {
+            "owner": "F_ISBON",
+            "pointer": 1850
+          },
+          {
+            "owner": "F_DISBON",
+            "pointer": 1851
+          },
+          {
+            "owner": "F_LIMIT",
+            "pointer": 1852
+          }
+        ],
+        "independent_cache_member_reference_matches": 6,
+        "native_type_pou_identities": [
+          {
+            "name": "ST_AM_EVENT",
+            "offset": 0
+          },
+          {
+            "name": "ST_AM_ALARM",
+            "offset": 72
+          },
+          {
+            "name": "ST_MB_REG_50",
+            "offset": 144
+          }
+        ]
+      },
+      {
+        "group": "fx3g-member-arrays-forward-20260930",
+        "case": "DWORD-member-array",
+        "prospective_equal": true,
+        "current_source_model_equal": true,
+        "fresh_check_and_reopen_accepted": true,
+        "generated_bytes": 494,
+        "independent_address_projection_match": true,
+        "global_block_projection_equal": true,
+        "global_blocks": [
+          {
+            "owner": "tco_dint_50",
+            "document": "GVL_TCO\\TimeControl.lng",
+            "family": "D",
+            "number": 5749,
+            "count": 2
+          },
+          {
+            "owner": "tco_dint_10",
+            "document": "GVL_TCO\\TimeControl.lng",
+            "family": "D",
+            "number": 5747,
+            "count": 2
+          },
+          {
+            "owner": "am_events",
+            "document": "Global1.gh",
+            "family": "M",
+            "number": 5743,
+            "count": 8
+          },
+          {
+            "owner": "am_alarms",
+            "document": "Global1.gh",
+            "family": "D",
+            "number": 5732,
+            "count": 15
+          },
+          {
+            "owner": "am_alarms",
+            "document": "Global1.gh",
+            "family": "M",
+            "number": 5722,
+            "count": 21
+          },
+          {
+            "owner": "mb_channels",
+            "document": "Global1.gh",
+            "family": "D",
+            "number": 5684,
+            "count": 48
+          },
+          {
+            "owner": "mb_channels",
+            "document": "Global1.gh",
+            "family": "M",
+            "number": 5698,
+            "count": 24
+          }
+        ],
+        "routine_order": [
+          {
+            "owner": "F_DISBON",
+            "pointer": 1850
+          },
+          {
+            "owner": "F_ISBON",
+            "pointer": 1851
+          },
+          {
+            "owner": "F_LIMIT",
+            "pointer": 1852
+          }
+        ],
+        "independent_cache_member_reference_matches": 5,
+        "native_type_pou_identities": [
+          {
+            "name": "ST_AM_EVENT",
+            "offset": 0
+          },
+          {
+            "name": "ST_AM_ALARM",
+            "offset": 72
+          },
+          {
+            "name": "ST_MB_REG_50",
+            "offset": 144
+          }
+        ]
+      },
+      {
+        "group": "fx3g-member-arrays-forward-20260930",
+        "case": "Rank-two-member",
+        "prospective_equal": true,
+        "current_source_model_equal": true,
+        "fresh_check_and_reopen_accepted": true,
+        "generated_bytes": 493,
+        "independent_address_projection_match": true,
+        "global_block_projection_equal": true,
+        "global_blocks": [
+          {
+            "owner": "tco_dint_50",
+            "document": "GVL_TCO\\TimeControl.lng",
+            "family": "D",
+            "number": 5749,
+            "count": 2
+          },
+          {
+            "owner": "tco_dint_10",
+            "document": "GVL_TCO\\TimeControl.lng",
+            "family": "D",
+            "number": 5747,
+            "count": 2
+          },
+          {
+            "owner": "am_events",
+            "document": "Global1.gh",
+            "family": "M",
+            "number": 5743,
+            "count": 8
+          },
+          {
+            "owner": "am_alarms",
+            "document": "Global1.gh",
+            "family": "D",
+            "number": 5732,
+            "count": 15
+          },
+          {
+            "owner": "am_alarms",
+            "document": "Global1.gh",
+            "family": "M",
+            "number": 5722,
+            "count": 21
+          },
+          {
+            "owner": "mb_channels",
+            "document": "Global1.gh",
+            "family": "D",
+            "number": 5687,
+            "count": 45
+          },
+          {
+            "owner": "mb_channels",
+            "document": "Global1.gh",
+            "family": "M",
+            "number": 5698,
+            "count": 24
+          }
+        ],
+        "routine_order": [
+          {
+            "owner": "F_ISBON",
+            "pointer": 1850
+          },
+          {
+            "owner": "F_DISBON",
+            "pointer": 1851
+          },
+          {
+            "owner": "F_LIMIT",
+            "pointer": 1852
+          }
+        ],
+        "independent_cache_member_reference_matches": 4,
+        "native_type_pou_identities": [
+          {
+            "name": "ST_AM_EVENT",
+            "offset": 0
+          },
+          {
+            "name": "ST_AM_ALARM",
+            "offset": 72
+          },
+          {
+            "name": "ST_MB_REG_50",
+            "offset": 144
+          }
+        ]
+      }
+    ],
+    "boundaries": [
+      "One real FX3G library lineage.",
+      "No nested structures, explicit member locations or dynamically indexed members. Primitive member arrays require a separate source-model opt-in.",
+      "Multiple global documents are limited to source library catalog order, one storage document per library and one project global document.",
+      "No device/PLC execution or product integration."
+    ]
+  },
+  "findings": [
+    "Primitive member arrays extend each family stride by element count times primitive width; DWORD uses two words without alignment padding.",
+    "Outer and member array literal indices use their own declared bounds and row-major offsets, including negative origins and rank two.",
+    "Three full-byte predictions were saved before native runs and match compilation, fresh checks, save/reopen and independent cache address projections.",
+    "Three earlier positive discovery cases also match the extended model after observation; their original model refusals remain preserved in the previous checkpoint.",
+    "Nested member references from Modbus to AlarmManger types were refused at the changed declaration rows with diagnostic 0x500c5052; this does not establish general nested-structure support or prohibition."
+  ],
+  "limitations": [
+    "Research model only, no product compiler integration or general ST compilation.",
+    "Only BOOL/INT/WORD/DWORD primitive members, static literal indices, rank at most two, bounded global-document ordering.",
+    "No nested types, dynamic indices, explicit member locations or PLC execution validation.",
+    "Cross-library visibility and nested type constraints remain separate unresolved hypotheses.",
+    "Local archive contains third-party source with redistribution rights not established; existing raw evidence metadata is retained without new hashes."
+  ],
+  "archives": {
+    "public": "research/evidence/gxw-fx-member-arrays-20260930.zip",
+    "local": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\gxw-fx-member-arrays-local-20260930.zip"
+  }
+}

@@ -1,0 +1,829 @@
+{
+  "scope": "Compiler-cache array addresses and native compile/check/save/reopen. No PLC execution or new writer certification.",
+  "handling": "Decoded stored-cache references; unknown records remain raw. Generic unbound arrays and unmeasured member/allocation forms remain unsupported.",
+  "evidence_level": "Verified within the recorded native profiles; no claim of general production safety.",
+  "findings": {
+    "primitive_root_types": [
+      "BOOL",
+      "INT",
+      "WORD",
+      "DWORD",
+      "DINT",
+      "REAL",
+      "TIME",
+      "STRING"
+    ],
+    "units": "BOOL uses M bits; INT/WORD use one D word; DWORD/DINT/REAL/TIME use two D words.",
+    "string": "The stored length parameter + 1 is rounded up to words per element, before multiplication by array count. Native PCode controls cover parameters 1, 4, 5, 12.",
+    "coordinates": "Negative lower bounds and rank 2/3 row-major coordinates match native operands. The axis control distinguishes first, middle and final dimension strides.",
+    "structure_members": "BOOL/INT/WORD/DWORD only in the current reader profile; exact referenced type POU identities and separate word/bit strides.",
+    "refusals": "Typed literal syntax failed at the first WORD assignment; the 48-word-operation flat case failed its fresh backend check; branch splitting encountered the existing unset P range. Original attempts remain available.",
+    "limits": "The exact long-segment length limit and its interaction with instruction mix remain undetermined."
+  },
+  "summary": {
+    "observations": 7,
+    "native_accepted": 4,
+    "frontend_refused": 2,
+    "backend_rejected": 1,
+    "accepted_array_instances": 15,
+    "extent_matches": 15,
+    "independent_literal_addresses": 47,
+    "bit_presence_only": 3
+  },
+  "observations": [
+    {
+      "case": "primitive-array-geometry-20261001",
+      "check": null,
+      "handling": "frontend-refused",
+      "diagnostic_codes": [
+        "0x50010000",
+        "0x500c1020",
+        "0x500c1200",
+        "0x500c8030"
+      ],
+      "diagnostic_positions": [
+        -1,
+        8
+      ],
+      "source_literal_style": "typed",
+      "block_style": "flat",
+      "pointer_range": {
+        "lower": 4294967295,
+        "upper": 4294967295,
+        "handling": "unset"
+      },
+      "current_check_code": {
+        "reads": [],
+        "nonempty_reads": 0,
+        "all_match": false,
+        "published_before_check": false
+      },
+      "observed_arrays": 0,
+      "extent_matches": 0,
+      "unique_literal_addresses": 0,
+      "bit_presence_only": 0,
+      "observations": "research/experiments/sfc-graph-20260926/public-corpus-discovery/primitive-array-geometry-20261001/comparison.json"
+    },
+    {
+      "case": "primitive-array-geometry-plain-20261001",
+      "check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": true
+      },
+      "handling": "backend-rejected",
+      "diagnostic_codes": [
+        "0x50c9521"
+      ],
+      "diagnostic_positions": [
+        8
+      ],
+      "source_literal_style": "plain",
+      "block_style": "flat",
+      "pointer_range": {
+        "lower": 4294967295,
+        "upper": 4294967295,
+        "handling": "unset"
+      },
+      "current_check_code": {
+        "reads": [
+          {
+            "serial": 3,
+            "resource": "MAIN",
+            "channel": 0,
+            "bytes": 813,
+            "matches_current": true,
+            "target": [
+              0,
+              3959422976,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "serial": 5,
+            "resource": "MAIN",
+            "channel": 0,
+            "bytes": 813,
+            "matches_current": true,
+            "target": [
+              0,
+              3959422976,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "nonempty_reads": 2,
+        "all_match": true,
+        "published_before_check": true
+      },
+      "observed_arrays": 0,
+      "extent_matches": 0,
+      "unique_literal_addresses": 0,
+      "bit_presence_only": 0,
+      "observations": "research/experiments/sfc-graph-20260926/public-corpus-discovery/primitive-array-geometry-plain-20261001/comparison.json"
+    },
+    {
+      "case": "primitive-array-geometry-branches-20261001",
+      "check": null,
+      "handling": "frontend-refused",
+      "diagnostic_codes": [
+        "0x50010000",
+        "0x500c9004"
+      ],
+      "diagnostic_positions": [
+        -1,
+        4
+      ],
+      "source_literal_style": "plain",
+      "block_style": "branches",
+      "pointer_range": {
+        "lower": 4294967295,
+        "upper": 4294967295,
+        "handling": "unset"
+      },
+      "current_check_code": {
+        "reads": [],
+        "nonempty_reads": 0,
+        "all_match": false,
+        "published_before_check": false
+      },
+      "observed_arrays": 0,
+      "extent_matches": 0,
+      "unique_literal_addresses": 0,
+      "bit_presence_only": 0,
+      "observations": "research/experiments/sfc-graph-20260926/public-corpus-discovery/primitive-array-geometry-branches-20261001/comparison.json"
+    },
+    {
+      "case": "primitive-array-geometry-types-20261001",
+      "check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "handling": "native-accepted",
+      "diagnostic_codes": [],
+      "diagnostic_positions": [],
+      "source_literal_style": "plain",
+      "block_style": "flat",
+      "pointer_range": {
+        "lower": 4294967295,
+        "upper": 4294967295,
+        "handling": "unset"
+      },
+      "current_check_code": {
+        "reads": [
+          {
+            "serial": 3,
+            "resource": "MAIN",
+            "channel": 0,
+            "bytes": 327,
+            "matches_current": true,
+            "target": [
+              0,
+              3959422976,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "serial": 5,
+            "resource": "MAIN",
+            "channel": 0,
+            "bytes": 327,
+            "matches_current": true,
+            "target": [
+              0,
+              3959422976,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "nonempty_reads": 2,
+        "all_match": true,
+        "published_before_check": true
+      },
+      "observed_arrays": 5,
+      "extent_matches": 5,
+      "unique_literal_addresses": 12,
+      "bit_presence_only": 3,
+      "observations": "research/experiments/sfc-graph-20260926/public-corpus-discovery/primitive-array-geometry-types-20261001/comparison.json",
+      "reopen": {
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "pcode_identical": true,
+        "current_check_code": {
+          "reads": [
+            {
+              "serial": 3,
+              "resource": "MAIN",
+              "channel": 0,
+              "bytes": 327,
+              "matches_current": true,
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            },
+            {
+              "serial": 5,
+              "resource": "MAIN",
+              "channel": 0,
+              "bytes": 327,
+              "matches_current": true,
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            }
+          ],
+          "nonempty_reads": 2,
+          "all_match": true,
+          "published_before_check": true
+        }
+      }
+    },
+    {
+      "case": "primitive-array-geometry-strings-time-20261001",
+      "check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "handling": "native-accepted",
+      "diagnostic_codes": [],
+      "diagnostic_positions": [],
+      "source_literal_style": "plain",
+      "block_style": "flat",
+      "pointer_range": {
+        "lower": 4294967295,
+        "upper": 4294967295,
+        "handling": "unset"
+      },
+      "current_check_code": {
+        "reads": [
+          {
+            "serial": 3,
+            "resource": "MAIN",
+            "channel": 0,
+            "bytes": 320,
+            "matches_current": true,
+            "target": [
+              0,
+              3959422976,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "serial": 5,
+            "resource": "MAIN",
+            "channel": 0,
+            "bytes": 320,
+            "matches_current": true,
+            "target": [
+              0,
+              3959422976,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "nonempty_reads": 2,
+        "all_match": true,
+        "published_before_check": true
+      },
+      "observed_arrays": 5,
+      "extent_matches": 5,
+      "unique_literal_addresses": 15,
+      "bit_presence_only": 0,
+      "observations": "research/experiments/sfc-graph-20260926/public-corpus-discovery/primitive-array-geometry-strings-time-20261001/comparison.json",
+      "reopen": {
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "pcode_identical": true,
+        "current_check_code": {
+          "reads": [
+            {
+              "serial": 3,
+              "resource": "MAIN",
+              "channel": 0,
+              "bytes": 320,
+              "matches_current": true,
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            },
+            {
+              "serial": 5,
+              "resource": "MAIN",
+              "channel": 0,
+              "bytes": 320,
+              "matches_current": true,
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            }
+          ],
+          "nonempty_reads": 2,
+          "all_match": true,
+          "published_before_check": true
+        }
+      }
+    },
+    {
+      "case": "primitive-array-geometry-multirank-20261001",
+      "check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "handling": "native-accepted",
+      "diagnostic_codes": [],
+      "diagnostic_positions": [],
+      "source_literal_style": "plain",
+      "block_style": "flat",
+      "pointer_range": {
+        "lower": 4294967295,
+        "upper": 4294967295,
+        "handling": "unset"
+      },
+      "current_check_code": {
+        "reads": [
+          {
+            "serial": 3,
+            "resource": "MAIN",
+            "channel": 0,
+            "bytes": 200,
+            "matches_current": true,
+            "target": [
+              0,
+              3959422976,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "serial": 5,
+            "resource": "MAIN",
+            "channel": 0,
+            "bytes": 200,
+            "matches_current": true,
+            "target": [
+              0,
+              3959422976,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "nonempty_reads": 2,
+        "all_match": true,
+        "published_before_check": true
+      },
+      "observed_arrays": 3,
+      "extent_matches": 3,
+      "unique_literal_addresses": 9,
+      "bit_presence_only": 0,
+      "observations": "research/experiments/sfc-graph-20260926/public-corpus-discovery/primitive-array-geometry-multirank-20261001/comparison.json",
+      "reopen": {
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "pcode_identical": true,
+        "current_check_code": {
+          "reads": [
+            {
+              "serial": 3,
+              "resource": "MAIN",
+              "channel": 0,
+              "bytes": 200,
+              "matches_current": true,
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            },
+            {
+              "serial": 5,
+              "resource": "MAIN",
+              "channel": 0,
+              "bytes": 200,
+              "matches_current": true,
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            }
+          ],
+          "nonempty_reads": 2,
+          "all_match": true,
+          "published_before_check": true
+        }
+      }
+    },
+    {
+      "case": "primitive-array-geometry-axes-20261001",
+      "check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "handling": "native-accepted",
+      "diagnostic_codes": [],
+      "diagnostic_positions": [],
+      "source_literal_style": "plain",
+      "block_style": "flat",
+      "pointer_range": {
+        "lower": 4294967295,
+        "upper": 4294967295,
+        "handling": "unset"
+      },
+      "current_check_code": {
+        "reads": [
+          {
+            "serial": 3,
+            "resource": "MAIN",
+            "channel": 0,
+            "bytes": 218,
+            "matches_current": true,
+            "target": [
+              0,
+              3959422976,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "serial": 5,
+            "resource": "MAIN",
+            "channel": 0,
+            "bytes": 218,
+            "matches_current": true,
+            "target": [
+              0,
+              3959422976,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "nonempty_reads": 2,
+        "all_match": true,
+        "published_before_check": true
+      },
+      "observed_arrays": 2,
+      "extent_matches": 2,
+      "unique_literal_addresses": 11,
+      "bit_presence_only": 0,
+      "observations": "research/experiments/sfc-graph-20260926/public-corpus-discovery/primitive-array-geometry-axes-20261001/comparison.json",
+      "reopen": {
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "pcode_identical": true,
+        "current_check_code": {
+          "reads": [
+            {
+              "serial": 3,
+              "resource": "MAIN",
+              "channel": 0,
+              "bytes": 218,
+              "matches_current": true,
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            },
+            {
+              "serial": 5,
+              "resource": "MAIN",
+              "channel": 0,
+              "bytes": 218,
+              "matches_current": true,
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            }
+          ],
+          "nonempty_reads": 2,
+          "all_match": true,
+          "published_before_check": true
+        }
+      }
+    }
+  ],
+  "independence": {
+    "predictions": "Reservations and relative offsets were saved before each native invocation. Absolute bases were read after native use; complete output bytes were not predicted.",
+    "addresses": "47 unique native PCode literal writes match cache-derived addresses; 3 BOOL points are presence-only observations and excluded from the added address fixture.",
+    "decoder": "The existing Q lexical decoder has earlier independent native converter comparisons. This batch did not call the native converter again.",
+    "check_freshness": "Nonempty buffers actually read by each native checker and rechecker equal all corresponding current generated channels byte-for-byte. No hash comparison is used for this check."
+  },
+  "native_environment": {
+    "compiler": "ECCompiler_IEC.dll 15.50",
+    "cpu": "Q03UDV",
+    "host": "Windows x64; native helpers x86",
+    "isolation": "Copied engineering projects; no PLC/simulator execution. Existing native adapter initialization, version binding and fresh-check sequence retained."
+  },
+  "product": {
+    "entry": "src/gxw/compiler_symbols.py:compiler_array_reference",
+    "fixture": "tests/fixtures/gxw_array_references_native.json",
+    "cases": 22,
+    "references": 119,
+    "original_cache_queries": "172 resolved / 4 unsupported, 65 byte-identical original cache reconstructions; the 4 remaining queries are unbound generic arrays.",
+    "validation": "python -m pytest -q tests/test_gxw_compiler.py: 114 passed"
+  },
+  "preceding": "research/results/gxw-array-references-20261001.json",
+  "redistribution": "Public archive contains authored source, controlled-source PCode, selected native records and numeric observations. Original GXW containers, vendor DLLs and full native traces remain in the local archive.",
+  "archive": "research/evidence/gxw-primitive-array-geometry-20261001.zip",
+  "local_archive": "research/experiments/sfc-graph-20260926/public-corpus-discovery/gxw-primitive-array-geometry-20261001-local.zip",
+  "files": [
+    {
+      "path": "observations/analyze_primitive_array_geometry.py",
+      "bytes": 5957
+    },
+    {
+      "path": "observations/primitive-array-geometry-20261001/comparison.json",
+      "bytes": 11401
+    },
+    {
+      "path": "observations/primitive-array-geometry-20261001/prediction-before-native.json",
+      "bytes": 10747
+    },
+    {
+      "path": "observations/primitive-array-geometry-analysis-20261001.json",
+      "bytes": 17379
+    },
+    {
+      "path": "observations/primitive-array-geometry-axes-20261001/comparison.json",
+      "bytes": 13779
+    },
+    {
+      "path": "observations/primitive-array-geometry-axes-20261001/core-listing.json",
+      "bytes": 2831
+    },
+    {
+      "path": "observations/primitive-array-geometry-axes-20261001/prediction-before-native.json",
+      "bytes": 4130
+    },
+    {
+      "path": "observations/primitive-array-geometry-branches-20261001/comparison.json",
+      "bytes": 1148
+    },
+    {
+      "path": "observations/primitive-array-geometry-branches-20261001/prediction-before-native.json",
+      "bytes": 12812
+    },
+    {
+      "path": "observations/primitive-array-geometry-multirank-20261001/comparison.json",
+      "bytes": 13121
+    },
+    {
+      "path": "observations/primitive-array-geometry-multirank-20261001/core-listing.json",
+      "bytes": 2643
+    },
+    {
+      "path": "observations/primitive-array-geometry-multirank-20261001/prediction-before-native.json",
+      "bytes": 3786
+    },
+    {
+      "path": "observations/primitive-array-geometry-plain-20261001/comparison.json",
+      "bytes": 783
+    },
+    {
+      "path": "observations/primitive-array-geometry-plain-20261001/prediction-before-native.json",
+      "bytes": 12410
+    },
+    {
+      "path": "observations/primitive-array-geometry-strings-time-20261001/comparison.json",
+      "bytes": 20802
+    },
+    {
+      "path": "observations/primitive-array-geometry-strings-time-20261001/core-listing.json",
+      "bytes": 4063
+    },
+    {
+      "path": "observations/primitive-array-geometry-strings-time-20261001/prediction-before-native.json",
+      "bytes": 5295
+    },
+    {
+      "path": "observations/primitive-array-geometry-types-20261001/comparison.json",
+      "bytes": 20766
+    },
+    {
+      "path": "observations/primitive-array-geometry-types-20261001/core-listing.json",
+      "bytes": 4515
+    },
+    {
+      "path": "observations/primitive-array-geometry-types-20261001/prediction-before-native.json",
+      "bytes": 5297
+    },
+    {
+      "path": "observations/probe_primitive_array_geometry.py",
+      "bytes": 12008
+    },
+    {
+      "path": "research/extract_gxw_array_reference_cases.py",
+      "bytes": 11281
+    },
+    {
+      "path": "research/freeze_gxw_primitive_array_geometry.py",
+      "bytes": 6379
+    },
+    {
+      "path": "src/gxw/compiler_assignment.py",
+      "bytes": 3645
+    },
+    {
+      "path": "src/gxw/compiler_symbols.py",
+      "bytes": 14449
+    },
+    {
+      "path": "src/gxw/compiler_tables.py",
+      "bytes": 13087
+    },
+    {
+      "path": "tests/fixtures/gxw_array_references_native.json",
+      "bytes": 258898
+    },
+    {
+      "path": "tests/test_gxw_compiler.py",
+      "bytes": 39427
+    }
+  ]
+}

@@ -1,0 +1,4088 @@
+{
+  "created_utc": "2026-09-30T09:29:33.523963+00:00",
+  "base_commit": "1b04dc145ecdf773001b3d2e6a932527c8df64ba",
+  "scope": "Offline GX Works2 15.50 compiler observations, Q03UDV and FX3U/FX3UC; source model remains bounded research code.",
+  "findings": [
+    "CPU predicate selection explains distinct conditional delegates; measured selectors 1 (FX) and 2 (Q). Other dispatch entries are static observations only.",
+    "Two indexed CONCAT expressions in one flat IF reserve two word slots before condition generation and hold them to block end. Controlled FX one-word pool rejects; two-word pool accepts.",
+    "Six native FOR/WHILE outputs match the current source model on Q and FX. These are post-observation fits, not prospective predictions.",
+    "Original FX WORD_TO_STR is rejected; literal and decimal substitutions are separate experiments without semantic equivalence claims.",
+    "Project allocation record count 10 is recognized; observed extended range bytes agree with the native getter."
+  ],
+  "observations": [
+    {
+      "group": "st-keypad-whole-source-discovery-20260930",
+      "observation": {
+        "case": "Keypad-whole-character-49",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-keypad-whole-source-discovery-20260930\\Keypad-whole-character-49\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostics": [
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAcZdEKBQAAAJxg0QoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCUX9EKBQAAAIxe0QoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAcZdEKBQAAAJxg0QoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCUX9EKBQAAAIxe0QoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAcZdEKBQAAAJxg0QoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCUX9EKBQAAAIxe0QoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAcZdEKBQAAAJxg0QoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCUX9EKBQAAAIxe0QoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAcZdEKBQAAAJxg0QoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCUX9EKBQAAAIxe0QoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAcZdEKBQAAAJxg0QoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCUX9EKBQAAAIxe0QoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 84869513,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": 0,
+            "network": -1,
+            "left": -1,
+            "top": 5,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [
+              "WORD_TO_STR"
+            ],
+            "raw_base64": "AwAAAIkBDwVkot0KBgAAANyf3QrBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////4MvUCg=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 84869513,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": 0,
+            "network": -1,
+            "left": -1,
+            "top": 5,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [
+              "WORD_TO_STR"
+            ],
+            "raw_base64": "AwAAAIkBDwVkot0KBgAAANyf3QrBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////4MvUCg=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 84869513,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": 0,
+            "network": -1,
+            "left": -1,
+            "top": 5,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [
+              "WORD_TO_STR"
+            ],
+            "raw_base64": "AwAAAIkBDwVkot0KBgAAANyf3QrBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////4MvUCg=="
+          }
+        ],
+        "backend_diagnostics": [],
+        "process": {
+          "pid": 89704,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "predicted_equal": null,
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-keypad-whole-source-discovery-20260930\\Keypad-whole-character-49\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "diagnostics": [
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFDsVywKBQAAAHxVLAoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCsVSwKBQAAAJxWLAoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 84869513,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": 0,
+              "network": -1,
+              "left": -1,
+              "top": 5,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "WORD_TO_STR"
+              ],
+              "raw_base64": "AwAAAIkBDwU0aiwKBgAAANxnLArBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////GGw6Cg=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 84869513,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": 0,
+              "network": -1,
+              "left": -1,
+              "top": 5,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "WORD_TO_STR"
+              ],
+              "raw_base64": "AwAAAIkBDwU0aiwKBgAAANxnLArBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////GGw6Cg=="
+            }
+          ],
+          "identical": true
+        }
+      }
+    },
+    {
+      "group": "st-keypad-whole-source-discovery-20260930",
+      "observation": {
+        "case": "Keypad-whole-character-67",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-keypad-whole-source-discovery-20260930\\Keypad-whole-character-67\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostics": [
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCUz5oKBQAAAFzLmgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFBUypoKBQAAAEzJmgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCUz5oKBQAAAFzLmgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFBUypoKBQAAAEzJmgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCUz5oKBQAAAFzLmgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFBUypoKBQAAAEzJmgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCUz5oKBQAAAFzLmgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFBUypoKBQAAAEzJmgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCUz5oKBQAAAFzLmgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFBUypoKBQAAAEzJmgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCUz5oKBQAAAFzLmgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFBUypoKBQAAAEzJmgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCUz5oKBQAAAFzLmgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFBUypoKBQAAAEzJmgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCUz5oKBQAAAFzLmgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFBUypoKBQAAAEzJmgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 84869513,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": 0,
+            "network": -1,
+            "left": -1,
+            "top": 5,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [
+              "WORD_TO_STR"
+            ],
+            "raw_base64": "AwAAAIkBDwUsyJYKBgAAAFTHlgrBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////iDqbCg=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 84869513,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": 0,
+            "network": -1,
+            "left": -1,
+            "top": 5,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [
+              "WORD_TO_STR"
+            ],
+            "raw_base64": "AwAAAIkBDwUsyJYKBgAAAFTHlgrBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////iDqbCg=="
+          }
+        ],
+        "backend_diagnostics": [],
+        "process": {
+          "pid": 81120,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "predicted_equal": null,
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-keypad-whole-source-discovery-20260930\\Keypad-whole-character-67\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "diagnostics": [
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCEpFoKBQAAADSgWgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCsnVoKBQAAAASgWgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCEpFoKBQAAADSgWgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCsnVoKBQAAAASgWgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCEpFoKBQAAADSgWgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCsnVoKBQAAAASgWgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCEpFoKBQAAADSgWgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCsnVoKBQAAAASgWgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCEpFoKBQAAADSgWgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCsnVoKBQAAAASgWgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCEpFoKBQAAADSgWgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCsnVoKBQAAAASgWgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCEpFoKBQAAADSgWgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCsnVoKBQAAAASgWgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCEpFoKBQAAADSgWgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCsnVoKBQAAAASgWgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 84869513,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": 0,
+              "network": -1,
+              "left": -1,
+              "top": 5,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "WORD_TO_STR"
+              ],
+              "raw_base64": "AwAAAIkBDwXMO8AMBgAAACw8wAzBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////SP9dCg=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 84869513,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": 0,
+              "network": -1,
+              "left": -1,
+              "top": 5,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "WORD_TO_STR"
+              ],
+              "raw_base64": "AwAAAIkBDwXMO8AMBgAAACw8wAzBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////SP9dCg=="
+            }
+          ],
+          "identical": true
+        }
+      }
+    },
+    {
+      "group": "st-keypad-whole-source-discovery-20260930",
+      "observation": {
+        "case": "Keypad-whole-character-88",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-keypad-whole-source-discovery-20260930\\Keypad-whole-character-88\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostics": [
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFDELP4JBQAAABws/gkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAELP4JBQAAADQs/gkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 84869513,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": 0,
+            "network": -1,
+            "left": -1,
+            "top": 5,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [
+              "WORD_TO_STR"
+            ],
+            "raw_base64": "AwAAAIkBDwXEL/4JBgAAANws/gnBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////WJj5CQ=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 84869513,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": 0,
+            "network": -1,
+            "left": -1,
+            "top": 5,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [
+              "WORD_TO_STR"
+            ],
+            "raw_base64": "AwAAAIkBDwXEL/4JBgAAANws/gnBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////WJj5CQ=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 84869513,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": 0,
+            "network": -1,
+            "left": -1,
+            "top": 5,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [
+              "WORD_TO_STR"
+            ],
+            "raw_base64": "AwAAAIkBDwXEL/4JBgAAANws/gnBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////WJj5CQ=="
+          }
+        ],
+        "backend_diagnostics": [],
+        "process": {
+          "pid": 82752,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "predicted_equal": null,
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\st-keypad-whole-source-discovery-20260930\\Keypad-whole-character-88\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "diagnostics": [
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCcUhoKBQAAAExUGgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFB0UxoKBQAAADRUGgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCcUhoKBQAAAExUGgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFB0UxoKBQAAADRUGgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCcUhoKBQAAAExUGgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFB0UxoKBQAAADRUGgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCcUhoKBQAAAExUGgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFB0UxoKBQAAADRUGgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCcUhoKBQAAAExUGgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFB0UxoKBQAAADRUGgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCcUhoKBQAAAExUGgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFB0UxoKBQAAADRUGgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCcUhoKBQAAAExUGgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFB0UxoKBQAAADRUGgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCcUhoKBQAAAExUGgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFB0UxoKBQAAADRUGgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 84869513,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": 0,
+              "network": -1,
+              "left": -1,
+              "top": 5,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "WORD_TO_STR"
+              ],
+              "raw_base64": "AwAAAIkBDwVsVRoKBgAAANRTGgrBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////iN50Cw=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 84869513,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": 0,
+              "network": -1,
+              "left": -1,
+              "top": 5,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "WORD_TO_STR"
+              ],
+              "raw_base64": "AwAAAIkBDwVsVRoKBgAAANRTGgrBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////iN50Cw=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 84869513,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": 0,
+              "network": -1,
+              "left": -1,
+              "top": 5,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "WORD_TO_STR"
+              ],
+              "raw_base64": "AwAAAIkBDwVsVRoKBgAAANRTGgrBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////iN50Cw=="
+            }
+          ],
+          "identical": true
+        }
+      }
+    },
+    {
+      "group": "fx-keypad-intrinsic-boundary-20260930",
+      "observation": {
+        "case": "clear-only",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-intrinsic-boundary-20260930\\clear-only\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_codes": [],
+        "diagnostic_arguments": [],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 53,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 66948,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-intrinsic-boundary-20260930\\clear-only\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "backend_rejected": false,
+          "bytes_identical": true
+        }
+      }
+    },
+    {
+      "group": "fx-keypad-intrinsic-boundary-20260930",
+      "observation": {
+        "case": "WORD_TO_STR-only",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-intrinsic-boundary-20260930\\WORD_TO_STR-only\\native-1",
+        "check": null,
+        "backend_rejected": null,
+        "diagnostic_codes": [
+          "0x50010000",
+          "0x500c1049"
+        ],
+        "diagnostic_arguments": [
+          [
+            "WORD_TO_STR"
+          ],
+          [
+            "WORD_TO_STR"
+          ],
+          [
+            "WORD_TO_STR"
+          ],
+          [
+            "WORD_TO_STR"
+          ],
+          [
+            "WORD_TO_STR"
+          ],
+          [
+            "WORD_TO_STR"
+          ],
+          []
+        ],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 0,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 78408,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        }
+      }
+    },
+    {
+      "group": "fx-keypad-intrinsic-boundary-20260930",
+      "observation": {
+        "case": "RIGHT-only",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-intrinsic-boundary-20260930\\RIGHT-only\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_codes": [],
+        "diagnostic_arguments": [],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 57,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 78124,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-intrinsic-boundary-20260930\\RIGHT-only\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "backend_rejected": false,
+          "bytes_identical": true
+        }
+      }
+    },
+    {
+      "group": "fx-keypad-intrinsic-boundary-20260930",
+      "observation": {
+        "case": "CONCAT-only",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-intrinsic-boundary-20260930\\CONCAT-only\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_codes": [],
+        "diagnostic_arguments": [],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 50,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 84952,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-intrinsic-boundary-20260930\\CONCAT-only\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "backend_rejected": false,
+          "bytes_identical": true
+        }
+      }
+    },
+    {
+      "group": "fx-keypad-intrinsic-boundary-20260930",
+      "observation": {
+        "case": "whole-with-literal-conversion",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-intrinsic-boundary-20260930\\whole-with-literal-conversion\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_codes": [],
+        "diagnostic_arguments": [],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 484,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 66408,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-intrinsic-boundary-20260930\\whole-with-literal-conversion\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "backend_rejected": false,
+          "bytes_identical": true
+        }
+      }
+    },
+    {
+      "group": "fx-keypad-lowering-trace-v2-20260930",
+      "observation": {
+        "case": "WORD_TO_INT-only",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-lowering-trace-v2-20260930\\WORD_TO_INT-only\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_codes": [],
+        "diagnostic_arguments": [],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 31,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 89472,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-lowering-trace-v2-20260930\\WORD_TO_INT-only\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "backend_rejected": false,
+          "bytes_identical": true
+        }
+      }
+    },
+    {
+      "group": "fx-keypad-lowering-trace-v2-20260930",
+      "observation": {
+        "case": "INT_TO_STR-only",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-lowering-trace-v2-20260930\\INT_TO_STR-only\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_codes": [],
+        "diagnostic_arguments": [],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 31,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 43096,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-lowering-trace-v2-20260930\\INT_TO_STR-only\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "backend_rejected": false,
+          "bytes_identical": true
+        }
+      }
+    },
+    {
+      "group": "fx-keypad-lowering-trace-v2-20260930",
+      "observation": {
+        "case": "whole-decimal-conversion",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-lowering-trace-v2-20260930\\whole-decimal-conversion\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_codes": [],
+        "diagnostic_arguments": [],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 485,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 86892,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-lowering-trace-v2-20260930\\whole-decimal-conversion\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "backend_rejected": false,
+          "bytes_identical": true
+        }
+      }
+    },
+    {
+      "group": "fx-keypad-lowering-trace-v2-20260930",
+      "observation": {
+        "case": "whole-literal-traced",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-lowering-trace-v2-20260930\\whole-literal-traced\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_codes": [],
+        "diagnostic_arguments": [],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 484,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 42436,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-lowering-trace-v2-20260930\\whole-literal-traced\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "backend_rejected": false,
+          "bytes_identical": true
+        }
+      }
+    },
+    {
+      "group": "fx-st-conditional-profile-20260930",
+      "observation": {
+        "case": "whole-literal-profile",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-conditional-profile-20260930\\whole-literal-profile\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_codes": [],
+        "diagnostic_arguments": [],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 484,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 89476,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-conditional-profile-20260930\\whole-literal-profile\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "backend_rejected": false,
+          "bytes_identical": true
+        }
+      }
+    },
+    {
+      "group": "q-st-conditional-profile-v2-20260930",
+      "observation": {
+        "case": "Keypad-whole-character-49",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-conditional-profile-v2-20260930\\Keypad-whole-character-49\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostics": [
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFA0w4oJBQAAAPTDigkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAcw4oJBQAAAFTEigkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFA0w4oJBQAAAPTDigkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAcw4oJBQAAAFTEigkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFA0w4oJBQAAAPTDigkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAcw4oJBQAAAFTEigkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 84869513,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": 0,
+            "network": -1,
+            "left": -1,
+            "top": 5,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [
+              "WORD_TO_STR"
+            ],
+            "raw_base64": "AwAAAIkBDwWkQIsJBgAAAHRAiwnBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////iOGNCQ=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 84869513,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": 0,
+            "network": -1,
+            "left": -1,
+            "top": 5,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [
+              "WORD_TO_STR"
+            ],
+            "raw_base64": "AwAAAIkBDwWkQIsJBgAAAHRAiwnBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////iOGNCQ=="
+          }
+        ],
+        "backend_diagnostics": [],
+        "process": {
+          "pid": 70296,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "predicted_equal": true,
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-conditional-profile-v2-20260930\\Keypad-whole-character-49\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "diagnostics": [
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFAMHHYBBQAAALR4WwoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFB8d1sKBQAAAPR3WwoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFAMHHYBBQAAALR4WwoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFB8d1sKBQAAAPR3WwoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFAMHHYBBQAAALR4WwoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFB8d1sKBQAAAPR3WwoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFAMHHYBBQAAALR4WwoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFB8d1sKBQAAAPR3WwoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 84869513,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": 0,
+              "network": -1,
+              "left": -1,
+              "top": 5,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "WORD_TO_STR"
+              ],
+              "raw_base64": "AwAAAIkBDwXcw1AKBgAAALTEUArBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////6IxRCg=="
+            }
+          ],
+          "identical": true
+        }
+      }
+    },
+    {
+      "group": "fx-st-cpu-profile-origin-20260930",
+      "observation": {
+        "case": "whole-literal-profile",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-cpu-profile-origin-20260930\\whole-literal-profile\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_codes": [],
+        "diagnostic_arguments": [],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 484,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 34248,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-cpu-profile-origin-20260930\\whole-literal-profile\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "backend_rejected": false,
+          "bytes_identical": true
+        }
+      }
+    },
+    {
+      "group": "fx-st-cpu-profile-origin-v2-20260930",
+      "observation": {
+        "case": "whole-literal-profile",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-cpu-profile-origin-v2-20260930\\whole-literal-profile\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_codes": [],
+        "diagnostic_arguments": [],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 484,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 69212,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-cpu-profile-origin-v2-20260930\\whole-literal-profile\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "backend_rejected": false,
+          "bytes_identical": true
+        }
+      }
+    },
+    {
+      "group": "q-st-cpu-profile-origin-20260930",
+      "observation": {
+        "case": "Keypad-whole-character-49",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-cpu-profile-origin-20260930\\Keypad-whole-character-49\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostics": [
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCcg/ELBQAAAPSC8QsAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCEg/ELBQAAAFRl8QsAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCcg/ELBQAAAPSC8QsAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCEg/ELBQAAAFRl8QsAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCcg/ELBQAAAPSC8QsAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCEg/ELBQAAAFRl8QsAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCcg/ELBQAAAPSC8QsAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCEg/ELBQAAAFRl8QsAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 84869513,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": 0,
+            "network": -1,
+            "left": -1,
+            "top": 5,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [
+              "WORD_TO_STR"
+            ],
+            "raw_base64": "AwAAAIkBDwUEavELBgAAAMyD8QvBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////8LnsCQ=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 84869513,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": 0,
+            "network": -1,
+            "left": -1,
+            "top": 5,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [
+              "WORD_TO_STR"
+            ],
+            "raw_base64": "AwAAAIkBDwUEavELBgAAAMyD8QvBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////8LnsCQ=="
+          }
+        ],
+        "backend_diagnostics": [],
+        "process": {
+          "pid": 18312,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "predicted_equal": true,
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-cpu-profile-origin-20260930\\Keypad-whole-character-49\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "diagnostics": [
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFDEUKYJBQAAAFxSpgkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFD0U6YJBQAAANxTpgkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFDEUKYJBQAAAFxSpgkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFD0U6YJBQAAANxTpgkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFDEUKYJBQAAAFxSpgkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFD0U6YJBQAAANxTpgkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFDEUKYJBQAAAFxSpgkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFD0U6YJBQAAANxTpgkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 84869513,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": 0,
+              "network": -1,
+              "left": -1,
+              "top": 5,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "WORD_TO_STR"
+              ],
+              "raw_base64": "AwAAAIkBDwVMXKYJBgAAAAxRpgnBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////EPqrCQ=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 84869513,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": 0,
+              "network": -1,
+              "left": -1,
+              "top": 5,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "WORD_TO_STR"
+              ],
+              "raw_base64": "AwAAAIkBDwVMXKYJBgAAAAxRpgnBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////EPqrCQ=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 84869513,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": 0,
+              "network": -1,
+              "left": -1,
+              "top": 5,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "WORD_TO_STR"
+              ],
+              "raw_base64": "AwAAAIkBDwVMXKYJBgAAAAxRpgnBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////EPqrCQ=="
+            }
+          ],
+          "identical": true
+        }
+      }
+    },
+    {
+      "group": "fx-keypad-source-forward-20260930",
+      "observation": {
+        "case": "whole-literal-X",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-source-forward-20260930\\whole-literal-X\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_codes": [],
+        "diagnostic_arguments": [],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 484,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 86932,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "before_native_prediction_equal": true,
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-source-forward-20260930\\whole-literal-X\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "backend_rejected": false,
+          "bytes_identical": true
+        }
+      }
+    },
+    {
+      "group": "fx-keypad-source-forward-20260930",
+      "observation": {
+        "case": "whole-decimal-local-init",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-source-forward-20260930\\whole-decimal-local-init\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_codes": [],
+        "diagnostic_arguments": [],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 507,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 82268,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "before_native_prediction_equal": true,
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-source-forward-20260930\\whole-decimal-local-init\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "backend_rejected": false,
+          "bytes_identical": true
+        }
+      }
+    },
+    {
+      "group": "fx-keypad-source-forward-20260930",
+      "observation": {
+        "case": "whole-two-compound-guards",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-source-forward-20260930\\whole-two-compound-guards\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_codes": [],
+        "diagnostic_arguments": [],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 573,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 78656,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "before_native_prediction_equal": true,
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-keypad-source-forward-20260930\\whole-two-compound-guards\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "backend_rejected": false,
+          "bytes_identical": true
+        }
+      }
+    },
+    {
+      "group": "fx-st-block-temporary-discovery-20260930",
+      "observation": {
+        "case": "same-IF-two-CONCAT-D1",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-block-temporary-discovery-20260930\\same-IF-two-CONCAT-D1\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_codes": [],
+        "diagnostic_arguments": [],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 537,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 79488,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "before_native_prediction_equal": false,
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-block-temporary-discovery-20260930\\same-IF-two-CONCAT-D1\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "backend_rejected": false,
+          "bytes_identical": true
+        }
+      }
+    },
+    {
+      "group": "q-st-block-temporary-discovery-20260930",
+      "observation": {
+        "case": "same-IF-two-CONCAT",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-block-temporary-discovery-20260930\\same-IF-two-CONCAT\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostics": [
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAsH3cLBQAAANQcdwsAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAUH3cLBQAAAAQddwsAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAsH3cLBQAAANQcdwsAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAUH3cLBQAAAAQddwsAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAsH3cLBQAAANQcdwsAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAUH3cLBQAAAAQddwsAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAsH3cLBQAAANQcdwsAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAUH3cLBQAAAAQddwsAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAsH3cLBQAAANQcdwsAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAUH3cLBQAAAAQddwsAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 84869513,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": 0,
+            "network": -1,
+            "left": -1,
+            "top": 5,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [
+              "WORD_TO_STR"
+            ],
+            "raw_base64": "AwAAAIkBDwWUdsgIBgAAAGx0yAjBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////EBd7Cw=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 84869513,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": 0,
+            "network": -1,
+            "left": -1,
+            "top": 5,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [
+              "WORD_TO_STR"
+            ],
+            "raw_base64": "AwAAAIkBDwWUdsgIBgAAAGx0yAjBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////EBd7Cw=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 84869513,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": 0,
+            "network": -1,
+            "left": -1,
+            "top": 5,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [
+              "WORD_TO_STR"
+            ],
+            "raw_base64": "AwAAAIkBDwWUdsgIBgAAAGx0yAjBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////EBd7Cw=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 84869513,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": 0,
+            "network": -1,
+            "left": -1,
+            "top": 5,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [
+              "WORD_TO_STR"
+            ],
+            "raw_base64": "AwAAAIkBDwWUdsgIBgAAAGx0yAjBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////EBd7Cw=="
+          }
+        ],
+        "backend_diagnostics": [],
+        "process": {
+          "pid": 44596,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "predicted_equal": false,
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-block-temporary-discovery-20260930\\same-IF-two-CONCAT\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "diagnostics": [
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFC8k4QKBQAAAJyShAoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCMloQKBQAAAHyXhAoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 84869513,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": 0,
+              "network": -1,
+              "left": -1,
+              "top": 5,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "WORD_TO_STR"
+              ],
+              "raw_base64": "AwAAAIkBDwV0jYQKBgAAADxNhArBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////KIKFCg=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 84869513,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": 0,
+              "network": -1,
+              "left": -1,
+              "top": 5,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "WORD_TO_STR"
+              ],
+              "raw_base64": "AwAAAIkBDwV0jYQKBgAAADxNhArBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////KIKFCg=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 84869513,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": 0,
+              "network": -1,
+              "left": -1,
+              "top": 5,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "WORD_TO_STR"
+              ],
+              "raw_base64": "AwAAAIkBDwV0jYQKBgAAADxNhArBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////KIKFCg=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 84869513,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": 0,
+              "network": -1,
+              "left": -1,
+              "top": 5,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [
+                "WORD_TO_STR"
+              ],
+              "raw_base64": "AwAAAIkBDwV0jYQKBgAAADxNhArBAAAAAAAAAAQhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////BQAAAP//////////KIKFCg=="
+            }
+          ],
+          "identical": true
+        }
+      }
+    },
+    {
+      "group": "fx-st-block-temporary-pools-20260930",
+      "observation": {
+        "case": "same-IF-two-CONCAT-one-free-word",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-block-temporary-pools-20260930\\same-IF-two-CONCAT-one-free-word\\native-1",
+        "check": null,
+        "backend_rejected": null,
+        "diagnostic_codes": [
+          "0x50010000",
+          "0x50f1218"
+        ],
+        "diagnostic_arguments": [
+          [
+            "D"
+          ],
+          [
+            "D"
+          ],
+          [
+            "D"
+          ],
+          []
+        ],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 0,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 87200,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        }
+      }
+    },
+    {
+      "group": "fx-st-block-temporary-pools-20260930",
+      "observation": {
+        "case": "same-IF-two-CONCAT-two-free-words",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-block-temporary-pools-20260930\\same-IF-two-CONCAT-two-free-words\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_codes": [],
+        "diagnostic_arguments": [],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 537,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 86176,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "before_native_prediction_equal": true,
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-block-temporary-pools-20260930\\same-IF-two-CONCAT-two-free-words\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "backend_rejected": false,
+          "bytes_identical": true
+        }
+      }
+    },
+    {
+      "group": "fx-st-loop-shapes-discovery-20260930",
+      "observation": {
+        "case": "FOR-ascending",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-loop-shapes-discovery-20260930\\FOR-ascending\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_codes": [],
+        "diagnostic_arguments": [],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 165,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 62220,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-loop-shapes-discovery-20260930\\FOR-ascending\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "backend_rejected": false,
+          "bytes_identical": true
+        }
+      }
+    },
+    {
+      "group": "fx-st-loop-shapes-discovery-20260930",
+      "observation": {
+        "case": "FOR-step-two",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-loop-shapes-discovery-20260930\\FOR-step-two\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_codes": [],
+        "diagnostic_arguments": [],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 165,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 85492,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-loop-shapes-discovery-20260930\\FOR-step-two\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "backend_rejected": false,
+          "bytes_identical": true
+        }
+      }
+    },
+    {
+      "group": "fx-st-loop-shapes-discovery-20260930",
+      "observation": {
+        "case": "WHILE-indexed-store",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-loop-shapes-discovery-20260930\\WHILE-indexed-store\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostic_codes": [],
+        "diagnostic_arguments": [],
+        "pcode_sizes": {
+          "pcode-0-0.bin": 165,
+          "pcode-0-1.bin": 0,
+          "pcode-0-2.bin": 0
+        },
+        "process": {
+          "pid": 88644,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx-st-loop-shapes-discovery-20260930\\WHILE-indexed-store\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "backend_rejected": false,
+          "bytes_identical": true
+        }
+      }
+    },
+    {
+      "group": "q-st-loop-shapes-discovery-20260930",
+      "observation": {
+        "case": "FOR-ascending",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-shapes-discovery-20260930\\FOR-ascending\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostics": [
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFBMyiUKBQAAADzLJQoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFDsySUKBQAAADTKJQoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFBMyiUKBQAAADzLJQoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFDsySUKBQAAADTKJQoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFBMyiUKBQAAADzLJQoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFDsySUKBQAAADTKJQoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFBMyiUKBQAAADzLJQoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFDsySUKBQAAADTKJQoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          }
+        ],
+        "backend_diagnostics": [],
+        "process": {
+          "pid": 89936,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "predicted_equal": null,
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-shapes-discovery-20260930\\FOR-ascending\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "diagnostics": [
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFC8Hm4KBQAAAIQgbgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFC0IG4KBQAAACQgbgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFC8Hm4KBQAAAIQgbgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFC0IG4KBQAAACQgbgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFC8Hm4KBQAAAIQgbgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFC0IG4KBQAAACQgbgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFC8Hm4KBQAAAIQgbgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFC0IG4KBQAAACQgbgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            }
+          ],
+          "identical": true
+        }
+      }
+    },
+    {
+      "group": "q-st-loop-shapes-discovery-20260930",
+      "observation": {
+        "case": "FOR-step-two",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-shapes-discovery-20260930\\FOR-step-two\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostics": [
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFB0ZEwKBQAAANReTAoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAsXkwKBQAAAAxgTAoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFB0ZEwKBQAAANReTAoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAsXkwKBQAAAAxgTAoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFB0ZEwKBQAAANReTAoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAsXkwKBQAAAAxgTAoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFB0ZEwKBQAAANReTAoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAsXkwKBQAAAAxgTAoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFB0ZEwKBQAAANReTAoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAsXkwKBQAAAAxgTAoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFB0ZEwKBQAAANReTAoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFAsXkwKBQAAAAxgTAoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          }
+        ],
+        "backend_diagnostics": [],
+        "process": {
+          "pid": 86756,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "predicted_equal": null,
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-shapes-discovery-20260930\\FOR-step-two\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "diagnostics": [
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFAkMcYJBQAAAAwxxgkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFDEKsYJBQAAAEwqxgkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFAkMcYJBQAAAAwxxgkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFDEKsYJBQAAAEwqxgkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFAkMcYJBQAAAAwxxgkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFDEKsYJBQAAAEwqxgkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFAkMcYJBQAAAAwxxgkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFDEKsYJBQAAAEwqxgkAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            }
+          ],
+          "identical": true
+        }
+      }
+    },
+    {
+      "group": "q-st-loop-shapes-discovery-20260930",
+      "observation": {
+        "case": "WHILE-indexed-store",
+        "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-shapes-discovery-20260930\\WHILE-indexed-store\\native-1",
+        "check": {
+          "operation": "ProgramCheckCompleted",
+          "targets": 1,
+          "rejected": false
+        },
+        "backend_rejected": false,
+        "diagnostics": [
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFBEtI0MBQAAAHyyjQwAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCUso0MBQAAADyzjQwAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFBEtI0MBQAAAHyyjQwAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCUso0MBQAAADyzjQwAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFBEtI0MBQAAAHyyjQwAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCUso0MBQAAADyzjQwAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFBEtI0MBQAAAHyyjQwAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCUso0MBQAAADyzjQwAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 2,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFBEtI0MBQAAAHyyjQwAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+          },
+          {
+            "phase": "Progress",
+            "kind": 3,
+            "code": 1342984293,
+            "name": "SCPI",
+            "instance": "SCPI",
+            "step": -1,
+            "network": -1,
+            "left": 3,
+            "top": 3,
+            "right": -1,
+            "bottom": -1,
+            "arguments": [],
+            "raw_base64": "AwAAAGVQDFCUso0MBQAAADyzjQwAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+          }
+        ],
+        "backend_diagnostics": [],
+        "process": {
+          "pid": 34692,
+          "timed_out": false,
+          "detached": [
+            "('process-terminated', None)"
+          ]
+        },
+        "predicted_equal": null,
+        "reopen": {
+          "native_directory": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\q-st-loop-shapes-discovery-20260930\\WHILE-indexed-store\\reopen\\native-1",
+          "check": {
+            "operation": "ProgramCheckCompleted",
+            "targets": 1,
+            "rejected": false
+          },
+          "diagnostics": [
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFB0mr4KBQAAAGSYvgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCkmr4KBQAAAHyYvgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFB0mr4KBQAAAGSYvgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCkmr4KBQAAAHyYvgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFB0mr4KBQAAAGSYvgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCkmr4KBQAAAHyYvgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFB0mr4KBQAAAGSYvgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCkmr4KBQAAAHyYvgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 2,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFB0mr4KBQAAAGSYvgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAgAAAP//////////AAAAAA=="
+            },
+            {
+              "phase": "Progress",
+              "kind": 3,
+              "code": 1342984293,
+              "name": "SCPI",
+              "instance": "SCPI",
+              "step": -1,
+              "network": -1,
+              "left": 3,
+              "top": 3,
+              "right": -1,
+              "bottom": -1,
+              "arguments": [],
+              "raw_base64": "AwAAAGVQDFCkmr4KBQAAAHyYvgoAAAAAAAAAAMAhAOABAAAAAgAAAQIAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8DAAAAAwAAAP//////////AAAAAA=="
+            }
+          ],
+          "identical": true
+        }
+      }
+    }
+  ],
+  "retained_failures": "Preparation errors, instrumentation failures and frontend rejections remain separate in the selected directories.",
+  "preservation": "Original before-native files and prior checkpoints are unchanged. No native rerun or hash verification.",
+  "archives": {
+    "public": "research\\evidence\\gxw-st-cpu-blocks-20260930.zip",
+    "local": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\gxw-st-cpu-blocks-local-20260930.zip"
+  },
+  "limitations": [
+    "No PLC or simulator execution; no production-safe promotion.",
+    "Local archive contains third-party projects/source; redistribution rights are not established.",
+    "Saved native event files may contain preexisting fingerprint metadata; no new hashes are computed."
+  ]
+}

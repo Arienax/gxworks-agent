@@ -1,0 +1,52 @@
+{
+  "evidence": [
+    {
+      "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/port-check-correspondence-20260930.json",
+      "sha256": "7b0e73332bee538ea7c676318bf4eaeb657c678afe1b22fcac36c6d8ae61cd2a"
+    },
+    {
+      "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/temporary-check-correspondence-20260930.json",
+      "sha256": "788f5fe19d3fd45e767b17235d4546875025a1f38c4af69269e3af4a6dc07a35"
+    },
+    {
+      "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/st-nested-index-counterexamples-20260930/offline-witnesses.json",
+      "sha256": "174602422aa934f5354d9b7b1ed319355a9f4d8c78e222d4c30aa2293a8c53fe"
+    },
+    {
+      "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/st-fb-index-predictions-20260930/offline-transfer-witnesses.json",
+      "sha256": "f96dea550762b9d988839cd5999336ee042e156d4a2c25f4c7eb9c0f78479333"
+    },
+    {
+      "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/st-fb-index-predictions-20260930/current-check-export-correspondence.json",
+      "sha256": "3b291e94959f7db2b2ed6b31bb641a777e78ecc502ed540466b0b559de6ac3d4"
+    },
+    {
+      "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/st-index-register-lifetime-failure-notes-20260930.json",
+      "sha256": "5d2438ae81c480c379453cec0ff1b0d568be22b7e22ac67c6a4f1555ed2dda39"
+    }
+  ],
+  "fb_index_cases": 17,
+  "fb_index_accepted_compile_and_reopen": 15,
+  "fb_index_precheck_rejections": 2,
+  "complete_pcode_predictions_before_native": 4,
+  "post_observation_source_fits": 11,
+  "evidence_level": "native observations and bounded verified byte reproduction; no production-safe promotion",
+  "handling": "partially-decoded; bounded research source models; opaque unrelated logical payloads preserved",
+  "findings": [
+    "Retain source class 10 reaches native category 6; rejected source class 6 is a different namespace.",
+    "General expression slots retain physical reservations while released compatible slots can be reused; INT and DINT/REAL use distinct slot types.",
+    "Temporary word bank priority ZR > R > W > D differs from ordinary variable pools, with no exhaustion fallback in measured controls.",
+    "Nested dynamic indices can reuse Z16 before the earlier operand is consumed; initialized finite witnesses distinguish source arithmetic from emitted instructions.",
+    "Dynamic ST IN_OUT copies in then recomputes the actual index for copy-back; direct scalar IN_OUT aliases the actual.",
+    "Dynamic ST OUTPUT aliases an index register set before the body; another dynamic access in the body can redirect its target.",
+    "Four complete FB PCode outputs were saved before native execution and matched; eleven earlier fits are post-observation.",
+    "Both tested ST input writes are rejected before checking; this does not generalize Simple/FBD input behavior."
+  ],
+  "limits": [
+    "Native compile/check/export/reopen is not physical PLC execution or proof of intended source semantics.",
+    "Most new controls share one Q03UDV source lineage; sample variants are not independent real-project coverage.",
+    "IF/STRING ST calls, nested FB calls, general arrays and arbitrary generation remain outside the bounded call predictor.",
+    "Earlier original failures remain intact; the v2 index observer terminated prematurely without a captured exception, not a proven AccessViolation.",
+    "REAL text display is not binary roundtrip equivalence; the four rounding counterexamples remain."
+  ]
+}

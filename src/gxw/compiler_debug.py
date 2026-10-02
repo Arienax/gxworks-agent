@@ -63,6 +63,67 @@ class CompilerDebug:
                 + b"".join(e.raw for e in self.elements) + self.opaque_tail)
 
 
+@dataclass(frozen=True)
+class CompilerSTSourcePoint:
+    """Stored ST coordinates with their complete expansion identity.
+
+    Native DBG_INFO reads, prefix GetStepSize and a saved two-instance project
+    independently agree on these start coordinates. The stored endpoint may
+    reach the following instruction or another expansion; it does not define
+    statement ownership, a half-open range, source freshness or compilability.
+    """
+
+    element: CompilerDebugElement
+    table: CompilerDebugOffsets
+    row_index: int
+    row: tuple[int, ...]
+
+    @property
+    def source_line(self) -> int:
+        """Zero-based physical line; multiline statement extent is unknown."""
+        return self.element.fields[0] + self.row[0]
+
+    @property
+    def compiled_step_start(self) -> int:
+        return self.element.linked_step_start + self.row[1]
+
+    @property
+    def compiled_step_end(self) -> int:
+        return self.element.linked_step_start + self.row[2]
+
+    @property
+    def definition_name_bytes(self) -> bytes:
+        return self.element.names[2]
+
+    @property
+    def context_names(self) -> tuple[bytes, ...]:
+        # Keep library, root, definition, parent and instance fields separate.
+        # A type name alone cannot distinguish two instances of the same FB.
+        return self.element.names
+
+
+def compiler_st_source_points(debug: CompilerDebug) -> tuple[CompilerSTSourcePoint, ...]:
+    """Project the observed ST row form without merging overlapping contexts.
+
+    Other languages remain available in the raw debug object. Unsupported ST
+    rows refuse this projection while that object's reconstruction stays exact.
+    No source-text bounds or generated-code bounds are inferred here.
+    """
+    points = []
+    for element in debug.elements:
+        if element.kind_code != 193:
+            continue
+        table = debug.offset_tables[element.offset_table_index]
+        if table.kind_code != 193:
+            raise GXWFormatError("compiler ST element/table language differs")
+        for index, row in enumerate(table.rows):
+            if (row[0] < 0 or row[1] < 0 or row[2] < row[1]
+                    or row[3] != -1 or row[4] & 7 != 7):
+                raise GXWFormatError("unsupported compiler ST source-point row")
+            points.append(CompilerSTSourcePoint(element, table, index, row))
+    return tuple(points)
+
+
 class _Reader:
     def __init__(self, raw: bytes):
         self.raw = raw

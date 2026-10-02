@@ -1,0 +1,566 @@
+{
+  "cases": [
+    {
+      "group": "st-bool-port-direct-store-order-entry-forward-20260930",
+      "case": "BOOL-store-before-enable-B1",
+      "input_sha256": "32b68759fa2a294a169b1c528355e7c9c6b4781676ffd2a4b9b924911cfd7a35",
+      "accepted": false,
+      "before_native_byte_match": null,
+      "handling": "unsupported",
+      "model_reason": "fixed temporary pool exhausted",
+      "diagnostic_codes": [
+        "0x50010000",
+        "0x50f1217"
+      ]
+    },
+    {
+      "group": "st-bool-port-direct-store-order-entry-forward-20260930",
+      "case": "BOOL-store-before-enable-B2",
+      "input_sha256": "76f4f9f6f3cf6744b20acf86a7c2203a039a58ea66d32a2aa997130c23b4d139",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-port-direct-store-order-entry-forward-20260930",
+      "case": "BOOL-enable-before-store-B1",
+      "input_sha256": "3561f9aea60760863db9fc3fc9a6db12fedb4d8ccd118e3d419ccfd92fcbae16",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-expression-graph-discovery-20260930",
+      "case": "BOOL-nested-OR-AND",
+      "input_sha256": "75004e78b9775910ed6e9f8e1d1fe7e673630e86da73e8c5740e83e59b32241f",
+      "accepted": true,
+      "before_native_byte_match": null,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-expression-graph-discovery-20260930",
+      "case": "BOOL-nested-XOR-OR",
+      "input_sha256": "92f422e3fd974a044619cb34cc5077fff2f138abfe3aea70be8b854ab16ca758",
+      "accepted": true,
+      "before_native_byte_match": null,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-expression-graph-discovery-20260930",
+      "case": "BOOL-nested-mixed-compare",
+      "input_sha256": "c65acd68529fc151cfb720200096ab8a488c4941a5cab535efa0e59cba38801e",
+      "accepted": true,
+      "before_native_byte_match": null,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-port-recursive-forward-20260930",
+      "case": "BOOL-recursive-left-chain-B2",
+      "input_sha256": "caa1af37776da22947e6c35e34ad646652ce7cd2d1ae27dc5f0c116bfd75a4fd",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-port-recursive-forward-20260930",
+      "case": "BOOL-recursive-left-chain-B1",
+      "input_sha256": "743629e81b593cb85723c566413e2ad5739fbf37838eea6ce32c48a4e6840620",
+      "accepted": false,
+      "before_native_byte_match": null,
+      "handling": "unsupported",
+      "model_reason": "fixed temporary pool exhausted",
+      "diagnostic_codes": [
+        "0x50010000",
+        "0x50f1217"
+      ]
+    },
+    {
+      "group": "st-bool-port-recursive-forward-20260930",
+      "case": "BOOL-recursive-left-stable-capture",
+      "input_sha256": "8a958aef97efe170bde4155d4a9791d707161ab91095add3acf5dea36817fa69",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-port-recursive-forward-20260930",
+      "case": "BOOL-recursive-right-stable-block",
+      "input_sha256": "1f70fd1ef09b33a76ca40a6a7a293b2587b7dd5bd095bd5938b0f6ba29aa0f31",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-port-recursive-forward-20260930",
+      "case": "BOOL-recursive-ORI",
+      "input_sha256": "24ed77e86be26e8c4699fc63c9c6379b1c25a791e79a388fe3065293494be923",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-port-recursive-forward-20260930",
+      "case": "BOOL-recursive-indexed-comparison",
+      "input_sha256": "0d4c471ccb8131b805b584ffde6a481dfa30810d858465dbea807531dfeee103",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-expression-XOR-discovery-20260930",
+      "case": "BOOL-XOR-scalar",
+      "input_sha256": "4e08876d2af8b3a2c5783c82fed563b74fc76ec6e4ed2af87a2033b7dba661d5",
+      "accepted": true,
+      "before_native_byte_match": null,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-expression-XOR-discovery-20260930",
+      "case": "BOOL-XOR-left-index",
+      "input_sha256": "54c30fb7c8f2e2db11dd2ec6f2f827af77136e5e3d060a63d4b5d404bebea5a4",
+      "accepted": true,
+      "before_native_byte_match": null,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-expression-XOR-discovery-20260930",
+      "case": "BOOL-XOR-right-index",
+      "input_sha256": "427d526eebdc5e9bbdda4725a67bb05710a4276e1dab989b3605ddabf6411741",
+      "accepted": true,
+      "before_native_byte_match": null,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-expression-XOR-discovery-20260930",
+      "case": "BOOL-XOR-NOT-scalar",
+      "input_sha256": "ffdf21a65c41759dd30cb6134b89a651937bb4f1049f970c3fc99f974a91f770",
+      "accepted": true,
+      "before_native_byte_match": null,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-expression-XOR-discovery-20260930",
+      "case": "BOOL-XOR-comparison",
+      "input_sha256": "402c5d8603467667bcd86b26b19685a8922e0a0dfe7d16fc7770d45bc4714ea5",
+      "accepted": true,
+      "before_native_byte_match": null,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-port-XOR-forward-20260930",
+      "case": "BOOL-XOR-right-NOT",
+      "input_sha256": "3851a49deb6baf81bc5828d512a55099ee75b6c9fbc9fbf09438c0b162924ed9",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-port-XOR-forward-20260930",
+      "case": "BOOL-XOR-comparison-index",
+      "input_sha256": "fede1c22e122a771c3147b45e639bac4f58f86a903207e0fd7b6952c9afd6b62",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-port-XOR-forward-20260930",
+      "case": "BOOL-XOR-pair-B2",
+      "input_sha256": "6f114ab96594440b804d43d67651e378d6f7f26ddeea53cbe951142d35fa175e",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-port-XOR-forward-20260930",
+      "case": "BOOL-XOR-pair-B1",
+      "input_sha256": "884ae68738c219688a629b2674dc996726e8d9862c03d7d0b4ff50a7f23f80d0",
+      "accepted": false,
+      "before_native_byte_match": null,
+      "handling": "unsupported",
+      "model_reason": "fixed temporary pool exhausted",
+      "diagnostic_codes": [
+        "0x50010000",
+        "0x50f1217"
+      ]
+    },
+    {
+      "group": "st-bool-port-XOR-forward-20260930",
+      "case": "BOOL-XOR-right-comparison",
+      "input_sha256": "4251169e71563583e3af27ac7d31047bc8b6ad02df6130835ed8246a5d3e6aae",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-port-XOR-forward-20260930",
+      "case": "BOOL-XOR-enable-B2",
+      "input_sha256": "c34e1207bc09a3216ac54e8f08d55131f1d4413bdeb0a8e2f651daa4dc50df17",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-port-XOR-forward-20260930",
+      "case": "BOOL-XOR-input-B2",
+      "input_sha256": "0d1b020b846d07627a6f38c574844a7c6d26078f0f966cf0d1f80dd6d4469c04",
+      "accepted": false,
+      "before_native_byte_match": null,
+      "handling": "unsupported",
+      "model_reason": "not enough values to unpack (expected 2, got 1)",
+      "diagnostic_codes": [
+        "0x50010000",
+        "0x500c1010",
+        "0x500c1028",
+        "0x500c1200"
+      ]
+    },
+    {
+      "group": "st-bool-port-XOR-forward-20260930",
+      "case": "BOOL-XOR-dynamic-store-B2",
+      "input_sha256": "186b497e5552503b9a9623887ed8c9704ebdf74e5e41431144e6fc81e66cbcde",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-port-XOR-input-forward-20260930",
+      "case": "BOOL-XOR-input-corrected-B2",
+      "input_sha256": "c6501162f6786b0cf5b7d3b11a627b11cef79efc968147f06b776bcdbf501ed4",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-port-XOR-input-forward-20260930",
+      "case": "BOOL-XOR-input-corrected-B1",
+      "input_sha256": "1efe9a9832a5965ac910566184f2e024445e5882a33e5a40ffa6ec04a564ef05",
+      "accepted": false,
+      "before_native_byte_match": null,
+      "handling": "unsupported",
+      "model_reason": "fixed temporary pool exhausted",
+      "diagnostic_codes": [
+        "0x50010000",
+        "0x50f1217"
+      ]
+    },
+    {
+      "group": "st-bool-expression-right-tree-discovery-20260930",
+      "case": "BOOL-right-tree-left-index-B2",
+      "input_sha256": "952d3805e6a13aa30de2b419053e84b4941642044c5dbe8622781f7ab02cc160",
+      "accepted": true,
+      "before_native_byte_match": null,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-expression-right-tree-discovery-20260930",
+      "case": "BOOL-right-tree-both-B3",
+      "input_sha256": "1195761c2d56cd12d8f7f06c8882c39f222406e5f1ae71d56023b10766ec49fd",
+      "accepted": true,
+      "before_native_byte_match": null,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-expression-right-tree-discovery-20260930",
+      "case": "BOOL-right-tree-both-B2",
+      "input_sha256": "e18362b9f420b7321288a1a6cc383c56329db1039096d6bf2e16ec3ffbe81508",
+      "accepted": false,
+      "before_native_byte_match": null,
+      "handling": "unsupported",
+      "model_reason": "fixed temporary pool exhausted",
+      "diagnostic_codes": [
+        "0x50010000",
+        "0x50f1217"
+      ]
+    },
+    {
+      "group": "st-bool-expression-right-tree-discovery-20260930",
+      "case": "BOOL-right-tree-left-scalar-B1",
+      "input_sha256": "25e95b40055fe4e0e2e538ee285067f3c08c81a3c40d6df63e29e0778a1e84c5",
+      "accepted": true,
+      "before_native_byte_match": null,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-port-right-tree-forward-20260930",
+      "case": "BOOL-right-tree-AND-OR-B3",
+      "input_sha256": "bcfef451a04b1b26f12b4f9a72041953c2d18c49d0c0944837d27e7c94a97d0a",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-port-right-tree-forward-20260930",
+      "case": "BOOL-right-tree-scalar-OR-B1",
+      "input_sha256": "b77f4b468583fab8bc67ea4606e0f425c3d9a2d9473476bf6fc49e11789c445d",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-port-right-tree-forward-20260930",
+      "case": "BOOL-right-tree-XOR-B2",
+      "input_sha256": "3ffc100e246e1e691a130800d855f0effe8a76ae65cb925decd80a57ded30d75",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-bool-port-right-tree-forward-20260930",
+      "case": "BOOL-right-tree-OR-AND-B2",
+      "input_sha256": "7c61f9c74a67c21c97c261faf751a268b78f6d75800d12090645f83b4e036e9a",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-condition-branch-discovery-20260930",
+      "case": "IF-BOOL-scalar",
+      "input_sha256": "6a9dea1f04557c3f85f077d6088f79f3badfbc24e77e79e3decffe3cdf7cada9",
+      "accepted": false,
+      "before_native_byte_match": null,
+      "handling": "unsupported",
+      "model_reason": "automatic P pointer pool unavailable or exhausted",
+      "diagnostic_codes": [
+        "0x50010000",
+        "0x500c9004"
+      ]
+    },
+    {
+      "group": "st-condition-branch-discovery-20260930",
+      "case": "IF-BOOL-recursive-indexed",
+      "input_sha256": "4173d9249f1e3b52406337120fc8f1681e2d16ec7c97544f4f6c8c3dbf26b505",
+      "accepted": false,
+      "before_native_byte_match": null,
+      "handling": "unsupported",
+      "model_reason": "automatic P pointer pool unavailable or exhausted",
+      "diagnostic_codes": [
+        "0x50010000",
+        "0x500c9004"
+      ]
+    },
+    {
+      "group": "st-condition-branch-discovery-20260930",
+      "case": "IF-Keypad-WORD-guard-49",
+      "input_sha256": "ecba96fdfe2e7e8228064afe8c485646210de95dfc20254edd7f30299b77590e",
+      "accepted": false,
+      "before_native_byte_match": null,
+      "handling": "unsupported",
+      "model_reason": "automatic P pointer pool unavailable or exhausted",
+      "diagnostic_codes": [
+        "0x50010000",
+        "0x500c9004"
+      ]
+    },
+    {
+      "group": "st-condition-branch-discovery-20260930",
+      "case": "IF-Keypad-WORD-guard-67",
+      "input_sha256": "d285a3cf627e5ea632369f86751f6f65c74c0aba2ae4ee9d4c30de9abb4e0fda",
+      "accepted": false,
+      "before_native_byte_match": null,
+      "handling": "unsupported",
+      "model_reason": "automatic P pointer pool unavailable or exhausted",
+      "diagnostic_codes": [
+        "0x50010000",
+        "0x500c9004"
+      ]
+    },
+    {
+      "group": "st-condition-branch-pointer-discovery-20260930",
+      "case": "IF-BOOL-scalar",
+      "input_sha256": "2170949657ce0dc1894eeb32f84d21587f9e7b7aea1883ce3853c3633e58b235",
+      "accepted": true,
+      "before_native_byte_match": null,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-condition-branch-pointer-discovery-20260930",
+      "case": "IF-BOOL-recursive-indexed",
+      "input_sha256": "76cb1caaff576fa2b51d4659820d1ad6b64b67b7fd8f0ae4510d1390af8a7876",
+      "accepted": true,
+      "before_native_byte_match": null,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-condition-branch-pointer-discovery-20260930",
+      "case": "IF-Keypad-WORD-guard-49",
+      "input_sha256": "293a584ec1f73c05319098887b55e2a17a99a248ee0bb237509efd2ac0789c32",
+      "accepted": true,
+      "before_native_byte_match": null,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-condition-branch-pointer-discovery-20260930",
+      "case": "IF-Keypad-WORD-guard-67",
+      "input_sha256": "a91b5f7a14bf190ac4c45477f37f7dcf15cb203a87d7fa25ea3d2fbe51eaf8c1",
+      "accepted": true,
+      "before_native_byte_match": null,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-condition-branch-forward-20260930",
+      "case": "IF-forward-BOOL-false",
+      "input_sha256": "703eb6f34870fd943ff58492d9271403abb501c5a335405b63460bd194999cff",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-condition-branch-forward-20260930",
+      "case": "IF-forward-NOT-scalar",
+      "input_sha256": "74ca676044b846e972763221020737193226435fc643892a49a7421888ae522d",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-condition-branch-forward-20260930",
+      "case": "IF-forward-INT-less-equal",
+      "input_sha256": "4b8b74fb78563225f874705f3b2e6da5b5d778fd700302fbed3a42178913f893",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-condition-branch-forward-20260930",
+      "case": "IF-forward-WORD-equal",
+      "input_sha256": "59c81e1ea74e53552d4475df43e771932a2a275bef0fdff43b6666aa2c178ae8",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-condition-branch-forward-20260930",
+      "case": "IF-forward-mixed-OR",
+      "input_sha256": "ded847b1c1b83f07253e26a33146610eac358ac58725316db9bfc1f9f344de36",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-condition-branch-forward-20260930",
+      "case": "IF-forward-two-labels-P2",
+      "input_sha256": "1cf4b2ca8b970d49859c75bbe0115c23bc84b0b956ea0af9b8eef80b683b59e0",
+      "accepted": true,
+      "before_native_byte_match": true,
+      "handling": "native-byte-reproduced",
+      "model_reason": null,
+      "diagnostic_codes": []
+    },
+    {
+      "group": "st-condition-branch-forward-20260930",
+      "case": "IF-forward-two-labels-P1",
+      "input_sha256": "c0ab90ee4f72d49a6324cbaa63283387adfccbeea8b6273e40059943f3921fa2",
+      "accepted": false,
+      "before_native_byte_match": null,
+      "handling": "unsupported",
+      "model_reason": "automatic P pointer pool unavailable or exhausted",
+      "diagnostic_codes": [
+        "0x50010000",
+        "0x500c9004"
+      ]
+    }
+  ],
+  "completed_native_cases": 50,
+  "accepted_compile_and_reopen": 39,
+  "rejected_cases": 11,
+  "before_native_byte_matches": 24,
+  "current_source_byte_matches": 39,
+  "incomplete_native_attempts": [
+    {
+      "group": "st-bool-port-direct-store-order-forward-20260930",
+      "case": "BOOL-store-before-enable-B1",
+      "status": "observation-incomplete"
+    }
+  ],
+  "evidence_level": "native observations and bounded verified byte reproduction; no production-safe promotion",
+  "handling": "partially-decoded source model and opaque-preserved node observations; unsupported cases explicit",
+  "findings": [
+    "Postorder whole-tree BOOL capture reservation explains recursive OR/AND and indexed right subtrees; both-indexed trees can require three B bits before emitted arithmetic permits any release.",
+    "XOR leaf/comparison lowering expands into opposite-condition AND branches joined by ORB. Dynamic right versus left operands have different capture requirements.",
+    "Configured-bank internal/direct-store captures, original-left-bank instruction enables, fresh BOOL INPUT buffers and stored-type slot reuse remain separate contexts. Statement order can change B exhaustion.",
+    "Direct IF leaves/relations are complemented; compound conditions use INV before CJ. Sequential automatic P labels require an explicitly configured range.",
+    "The real FX3U Keypad seven-WORD-comparison guard is transplanted into controlled Q03UDV source with a recorded port rename. K0/nonzero H literal spelling, skip/take and IN_OUT clearing are reproduced; this is not whole-project or cross-CPU equivalence.",
+    "Failed non-entry instrumentation, invalid named-output argument syntax, missing P range and bit/pointer exhaustion are retained separately. Neither absent observations nor an empty generated set is acceptance."
+  ],
+  "limits": [
+    "Q03UDV CPU209/native lexical version25 only; compound XOR operands, compound NOT, ELSE and nested IF remain unsupported.",
+    "WORD relation constants are restricted to0..32767; finite initialized witnesses do not certify PLC execution.",
+    "Inputs/declarations and unknown unrelated logical payloads are preserved in local evidence; this checkpoint does not extend production writers."
+  ]
+}

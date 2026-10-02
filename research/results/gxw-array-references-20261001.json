@@ -1,0 +1,241 @@
+{
+  "scope": "Stored compiler-cache point references; no source freshness, current device capacity, PLC execution or writer certification.",
+  "handling": "decoded derived references with native raw records attached; other assignments and unknown bytes retain their previous handling",
+  "evidence": {
+    "level": "verified within the stated profiles",
+    "fixture_cases": 18,
+    "fixture_references": 72,
+    "cache_crosscheck_references": 64,
+    "native_pcode_string_references": 8,
+    "native_extent_queries": 24,
+    "native_extent_matches": 24,
+    "extent_predictions": "saved before the native helper calls",
+    "reference_checks": "retrospective comparisons against previously saved native compilations"
+  },
+  "independent_paths": {
+    "fx": "Prior source-only layout/PCode predictions versus native compile/check/save/reopen supplied the independent path. The old cache cross-check and this reader share cache-layout assumptions.",
+    "string": "Native-generated PCode operands from two accepted and reopened cases agree with cache-derived element addresses. These checks are retrospective, not prospective source compilation predictions.",
+    "extent": "ECCompiler_IEC 15.50 native scalar extent helper; separate allocator inspection rounds each element to words before multiplying array count. Special type codes 65..68 return allocation units, not ordinary scalar byte widths."
+  },
+  "boundaries": {
+    "families": [
+      "compact M",
+      "compact D"
+    ],
+    "primitive_arrays": [
+      "BOOL",
+      "INT",
+      "WORD",
+      "DWORD",
+      "STRING"
+    ],
+    "structures": "Flat structure arrays; BOOL/INT/WORD/DWORD scalar or array members. Exact type POU identity; separate bit/word strides in form 0x0c.",
+    "rank": {
+      "root_max": 3,
+      "member_max": 2
+    },
+    "fixture_origins": "One FX3G lineage and one Q03UDV lineage; STRING parameters 5, 6, 12 in native PCode checks.",
+    "original_string": "One stored Q03UDV STRING parameter 1 array now resolves; not a new fresh compilation.",
+    "unsupported": [
+      "nested aggregate members",
+      "scalar STRING members",
+      "inline operand bases",
+      "other allocation forms",
+      "unbound generic arrays"
+    ],
+    "fixture": "Sparse graph projection, not a complete CGTable. Unknown bytes in included records are preserved; omitted records have no preservation claim."
+  },
+  "coverage": {
+    "scope": "Recheck the saved original-cache point queries without native execution.",
+    "original_cache_projects": 65,
+    "raw_reconstructions": 65,
+    "counts": {
+      "resolved": 172,
+      "unsupported": 4
+    },
+    "errors": []
+  },
+  "validation": {
+    "command": "python -m pytest -q tests/test_gxw_compiler.py",
+    "result": "110 passed",
+    "diff_check": "git diff --check passed; Windows line-ending notices only"
+  },
+  "native_environment": {
+    "os": "Windows x86 native helpers on Windows x64 host",
+    "compiler": "ECCompiler_IEC.dll 15.50",
+    "guards": "FileVersion and relevant instruction bytes, no new hash verification"
+  },
+  "preceding_evidence": [
+    "research/results/gxw-fx-function-layout-20260930/manifest.json",
+    "research/results/gxw-fx-member-arrays-20260930/manifest.json",
+    "research/results/gxw-inline-assignments-20260930.json"
+  ],
+  "redistribution": "Authored adapters, numeric observations, selected native cache records and derived controlled-source PCode only. No original GXW, original source, vendor DLL or original compiler parameter block.",
+  "archive": "research/evidence/gxw-array-references-20261001.zip",
+  "files": [
+    {
+      "path": "observations/CompilerPrimitiveExtentOracle.cs",
+      "bytes": 1861
+    },
+    {
+      "path": "observations/compiler-primitive-extents-20261001/build.txt",
+      "bytes": 0
+    },
+    {
+      "path": "observations/compiler-primitive-extents-20261001/comparison.json",
+      "bytes": 2746
+    },
+    {
+      "path": "observations/compiler-primitive-extents-20261001/outputs.jsonl",
+      "bytes": 1098
+    },
+    {
+      "path": "observations/compiler-primitive-extents-20261001/prediction-before-native.json",
+      "bytes": 1823
+    },
+    {
+      "path": "observations/compiler-primitive-extents-20261001/process.json",
+      "bytes": 25
+    },
+    {
+      "path": "observations/compiler-primitive-extents-20261001/stderr.bin",
+      "bytes": 0
+    },
+    {
+      "path": "observations/compiler-primitive-extents-20261001/stdout.bin",
+      "bytes": 0
+    },
+    {
+      "path": "observations/fx3g-global-documents-forward-20260930/Library-and-project/independent-cache-member-references.json",
+      "bytes": 1461
+    },
+    {
+      "path": "observations/fx3g-global-mixed-order-forward-20260930/Library-structure-first/independent-cache-member-references.json",
+      "bytes": 2009
+    },
+    {
+      "path": "observations/fx3g-global-mixed-order-forward-20260930/Scalar-before-and-after/independent-cache-member-references.json",
+      "bytes": 1458
+    },
+    {
+      "path": "observations/fx3g-member-arrays-forward-20260930/DWORD-member-array/independent-cache-member-references.json",
+      "bytes": 3639
+    },
+    {
+      "path": "observations/fx3g-member-arrays-forward-20260930/Mixed-word-bit-arrays/independent-cache-member-references.json",
+      "bytes": 4336
+    },
+    {
+      "path": "observations/fx3g-member-arrays-forward-20260930/Rank-two-member/independent-cache-member-references.json",
+      "bytes": 3003
+    },
+    {
+      "path": "observations/fx3g-primitive-global-arrays-forward-20260930/Mixed-BOOL-DWORD-rank-three/independent-cache-member-references.json",
+      "bytes": 3214
+    },
+    {
+      "path": "observations/fx3g-primitive-global-arrays-forward-20260930/Two-DWORD-arrays/independent-cache-member-references.json",
+      "bytes": 2631
+    },
+    {
+      "path": "observations/fx3g-structure-bounds-forward-20260930/Negative-origin/independent-cache-member-references.json",
+      "bytes": 2000
+    },
+    {
+      "path": "observations/fx3g-structure-bounds-forward-20260930/Rank-two/independent-cache-member-references.json",
+      "bytes": 3188
+    },
+    {
+      "path": "observations/fx3g-structure-globals-forward-20260930/Member-endpoints/independent-cache-member-references.json",
+      "bytes": 3120
+    },
+    {
+      "path": "observations/fx3g-structure-globals-forward-20260930/Members-nested-or/independent-cache-member-references.json",
+      "bytes": 2011
+    },
+    {
+      "path": "observations/fx3g-structure-globals-forward-20260930/Reordered-members/independent-cache-member-references.json",
+      "bytes": 3157
+    },
+    {
+      "path": "observations/fx3g-structure-instances-forward-20260930/Second-alarm/independent-cache-member-references.json",
+      "bytes": 2583
+    },
+    {
+      "path": "observations/fx3g-structure-instances-forward-20260930/Second-event-id-zero/independent-cache-member-references.json",
+      "bytes": 2571
+    },
+    {
+      "path": "observations/fx3g-structure-instances-forward-20260930/Second-event/independent-cache-member-references.json",
+      "bytes": 2577
+    },
+    {
+      "path": "observations/nested-st-string-holdouts-20260930/comparison.json",
+      "bytes": 40435
+    },
+    {
+      "path": "observations/nested-st-string-holdouts-20260930/native-listings.json",
+      "bytes": 26305
+    },
+    {
+      "path": "observations/nested-st-string-holdouts-plan.json",
+      "bytes": 5025
+    },
+    {
+      "path": "observations/probe_compiler_primitive_extents.py",
+      "bytes": 2065
+    },
+    {
+      "path": "observations/real-array-reference-read-coverage-20261001.json",
+      "bytes": 89371
+    },
+    {
+      "path": "observations/real-array-reference-read-string-after-20261001.json",
+      "bytes": 89268
+    },
+    {
+      "path": "observations/recheck_array_reference_queries.py",
+      "bytes": 2666
+    },
+    {
+      "path": "observations/st-string-intrinsic-index-controls-20260930/comparison.json",
+      "bytes": 48377
+    },
+    {
+      "path": "observations/st-string-intrinsic-index-controls-20260930/native-listings.json",
+      "bytes": 17848
+    },
+    {
+      "path": "observations/st-string-intrinsic-index-controls-plan.json",
+      "bytes": 5064
+    },
+    {
+      "path": "research/extract_gxw_array_reference_cases.py",
+      "bytes": 8840
+    },
+    {
+      "path": "research/freeze_gxw_array_references_checkpoint.py",
+      "bytes": 6888
+    },
+    {
+      "path": "src/gxw/compiler_assignment.py",
+      "bytes": 3645
+    },
+    {
+      "path": "src/gxw/compiler_symbols.py",
+      "bytes": 14258
+    },
+    {
+      "path": "src/gxw/compiler_tables.py",
+      "bytes": 13087
+    },
+    {
+      "path": "tests/fixtures/gxw_array_references_native.json",
+      "bytes": 202996
+    },
+    {
+      "path": "tests/test_gxw_compiler.py",
+      "bytes": 39427
+    }
+  ]
+}
