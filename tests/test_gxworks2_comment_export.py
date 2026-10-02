@@ -128,3 +128,41 @@ def test_explicit_empty_comment_is_not_replaced_by_a_label(tmp_path, explicit):
     _, comments = _export(source, tmp_path)
     assert comments == []
     assert source == before
+
+
+def test_export_compacts_requirement_prose_and_enforces_16_character_comments(tmp_path):
+    from plc.comments import GXWORKS2_DEVICE_COMMENT_MAX_CHARS
+
+    source = _ladder()
+    source["device_comments"] = {
+        "M2": "“不良品输出保持状态，使用普通自保持逻辑保持，不采用 SET/RST 锁存”",
+    }
+    source["rungs"][0]["branches"][0]["outputs"][0]["label"] = (
+        "另一个很长的输出行为要求不应作为软元件注释保存"
+    )
+
+    _, comments = _export(source, tmp_path)
+
+    assert comments[0] == ["M2", "不良品输出保持状态"]
+    assert all(
+        len(comment) <= GXWORKS2_DEVICE_COMMENT_MAX_CHARS
+        for _device, comment in comments
+    )
+
+
+def test_comment_csv_validator_rejects_over_16_character_native_comment(tmp_path):
+    from gxworks2.csv_manager import CSVManager
+
+    path = tmp_path / "COMMENT.csv"
+    with path.open("w", encoding="utf-16", newline="") as stream:
+        csv.writer(
+            stream, delimiter="\t", quoting=csv.QUOTE_ALL, lineterminator="\r\n"
+        ).writerows([
+            ["COMMENT - 副本"],
+            ["软元件名", "注释"],
+            ["M0", "12345678901234567"],
+        ])
+
+    result = CSVManager().validate_comments(path)
+    assert not result.valid
+    assert any("超过16字符" in item for item in result.errors)

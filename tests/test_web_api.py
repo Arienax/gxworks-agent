@@ -593,3 +593,139 @@ def test_cancel_approved_job_waiting_for_engineering_lock_never_calls_executor(t
         assert client.get("/api/jobs/" + job).json()["status"] == "cancelled"
         assert executor_calls == []
         assert client.get("/api/proposals/" + proposal).json()["status"] == "pending"
+
+
+
+def test_web_generation_developer_header_is_explicit_job_input(tmp_path):
+    workspace, state = tmp_path / "workspace", tmp_path / "state"
+    service = WorkbenchService(
+        workspace, state, model_factory=lambda: pytest.fail("Header routing must not initialize a model")
+    )
+    captured = []
+    timestamp = "2026-09-29T00:00:00+00:00"
+
+    def capture(command):
+        captured.append(command)
+        return {
+            "id": f"captured-{len(captured)}",
+            "kind": command["kind"],
+            "status": "queued",
+            "last_sequence": 0,
+            "project_id": command.get("project_id"),
+            "version_id": command.get("version_id"),
+            "created_at": timestamp,
+        }
+
+    with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
+        headers = _login(client)
+        service.submit = capture
+        command = {
+            "kind": "generation",
+            "project_id": "developer-setting-test",
+            "version_id": None,
+            "text": "Generate",
+            "response_language": "zh-CN",
+        }
+        for index, (wire, expected) in enumerate((("0", False), ("1", True)), start=1):
+            response = client.post(
+                "/api/jobs",
+                json={**command, "request_id": f"developer-{index}"},
+                headers={
+                    **headers,
+                    "X-GX-Construction-Examples": wire,
+                    "X-GX-Fresh-Confirmed-Generation": wire,
+                },
+            )
+            assert response.status_code == 202, response.text
+            assert captured[-1]["construction_examples"] is expected
+            assert captured[-1]["fresh_confirmed_generation"] is expected
+
+        invalid = client.post(
+            "/api/jobs",
+            json={**command, "request_id": "developer-invalid"},
+            headers={**headers, "X-GX-Fresh-Confirmed-Generation": "maybe"},
+        )
+        assert invalid.status_code == 400
+        assert len(captured) == 2
+
+
+
+def test_fresh_confirmed_ab_rerun_ignores_existing_version_and_reenters_compact_agent(tmp_path, monkeypatch):
+    from application import generation_agent as agent_b
+
+    workspace, state = tmp_path / "workspace", tmp_path / "state"
+    provider = _Provider()
+    service = WorkbenchService(
+        workspace, state, model_factory=lambda: (provider, offline_runtime_profile())
+    )
+    monkeypatch.setattr(agent_b, "_build_knowledge_context", lambda *a, **k: "")
+    spec = {
+        "summary": "X0 controls Y0",
+        "io_table": [
+            {"address": "X0", "kind": "X", "label": "Input"},
+            {"address": "Y0", "kind": "Y", "label": "Output"},
+        ],
+        "parameters": [],
+        "selected_approach": {
+            "approach_id": "direct",
+            "name": "direct",
+            "generation_contract": {
+                "required_structures": ["direct_logic"],
+                "forbidden_structures": [],
+                "required_opcodes": ["OUT"],
+                "forbidden_opcodes": [],
+                "required_devices": ["X0", "Y0"],
+                "forbidden_devices": [],
+            },
+        },
+    }
+
+    with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
+        headers = _login(client)
+        project = client.post(
+            "/api/projects", json={"name": "A/B rerun", "plc_model": "FX3U"}, headers=headers
+        ).json()["id"]
+        service.store.set_confirmed_spec(project, spec)
+
+        first = client.post("/api/jobs", headers={
+            **headers,
+            "X-GX-Construction-Examples": "0",
+            "X-GX-Fresh-Confirmed-Generation": "1",
+        }, json={
+            "kind": "generation", "project_id": project, "request_id": "ab-off",
+            "text": "Generate", "response_language": "zh-CN",
+        })
+        _, first_output = _complete(client, service, first)
+        assert first_output["generation"]["first_pass_pipeline"]["mode"] == "confirmed_spec"
+        assert first_output["generation"]["generation_handoff"]["construction_examples"]["enabled"] is False
+        assert client.get(f"/api/projects/{project}").json()["version_count"] == 1
+
+        second = client.post("/api/jobs", headers={
+            **headers,
+            "X-GX-Construction-Examples": "1",
+            "X-GX-Fresh-Confirmed-Generation": "1",
+        }, json={
+            "kind": "generation", "project_id": project, "request_id": "ab-on",
+            "text": "Generate", "response_language": "zh-CN",
+        })
+        _, second_output = _complete(client, service, second)
+
+        assert second_output["generation"]["first_pass_pipeline"]["mode"] == "confirmed_spec"
+        handoff = second_output["generation"]["generation_handoff"]
+        # The header enables routing, not unconditional example injection.
+        # direct_logic has no high-confidence archetype in the current corpus,
+        # so a fresh rerun is valid with zero routed examples.
+        assert handoff["construction_examples"]["requested"] is True
+        assert handoff["construction_examples"]["enabled"] is False
+        assert handoff["construction_examples"]["reason"] == "no_primary_match"
+        assert handoff["construction_examples"]["route"]["selected_ids"] == []
+        assert handoff["confirmed_spec_sha256"] == first_output["generation"]["generation_handoff"]["confirmed_spec_sha256"]
+        assert client.get(f"/api/projects/{project}").json()["version_count"] == 2
+
+    assert len(provider.requests) == 2
+    assert [request.response_contract.name for request in provider.requests] == ["compact_ladder", "compact_ladder"]
+    off_prompt = provider.requests[0].messages[0].content
+    on_prompt = provider.requests[1].messages[0].content
+    assert "# Routed construction examples" not in off_prompt
+    assert "# Routed construction examples" not in on_prompt
+    assert off_prompt == on_prompt

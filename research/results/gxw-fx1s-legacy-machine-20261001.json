@@ -1,0 +1,65 @@
+{
+  "converter": "15.31",
+  "cpu": 518,
+  "emission_mode": 5,
+  "scope": "Separate legacy emitter and independent machine decoder; no GX Works3 format transfer",
+  "evidence_level": "verified native byte/count/representation observations and two specific native source-patch save/reopen controls",
+  "handling": "decoded lexical/machine projections with original tokens preserved; explicit source gaps and native refusals",
+  "cold_replay": {
+    "emission_source_predictions": 3439,
+    "pre_emission_refusals": 1445,
+    "native_emission_exact": 1994,
+    "raw_width_rewrites_exact": 1972,
+    "emission_source_gaps": 359,
+    "decoder_groups": 1691,
+    "decoder_complete_groups": 1681,
+    "native_decoder_records_exact": 1742,
+    "native_reverse_refusals": 40,
+    "decoder_source_gaps": 10,
+    "canonical_reemission_groups": 1651,
+    "canonical_reemission_source_gaps": 2,
+    "canonical_machine_roundtrip_exact": 1637,
+    "canonical_native_machine_changes": 12,
+    "canonical_native_reemission_refusals": 2
+  },
+  "original_records": 240,
+  "original_pcode_machine_pcode_byte_exact": 240,
+  "original_public_reemission_exact": 240,
+  "synthetic_native_reverse_refusals": 40,
+  "canonical_native_machine_changes": 12,
+  "canonical_native_reemission_refusals": 2,
+  "lexical_alias_groups": 150,
+  "retained_initial_emission_prediction_differences": 52,
+  "retained_initial_decoder_prediction_differences": 155,
+  "project_patches": {
+    "projects": 2,
+    "source_contact_change": "M11 to M12",
+    "bytes_changed_per_input": 1,
+    "untouched_inner_streams_per_input": 46,
+    "untouched_outer_streams_per_input": 11,
+    "compiled_pcode_exact": 2,
+    "saved_source_body_exact": 2,
+    "reopened": 2,
+    "full_program_check_accepted": 0,
+    "full_check_diagnostics_unchanged_from_original": 2,
+    "full_check_diagnostic": "Repeated coil reports retained in both original and modified copies",
+    "scope": "Specific original source proposals and native COM compile/save/reopen; original project bytes and full reports are local-only. No PLC execution or whole-family production-safe assertion."
+  },
+  "public_archive": {
+    "entries": 54,
+    "bytes": 520778,
+    "entry_bytes_exact": true
+  },
+  "local_archive": {
+    "entries": 401,
+    "bytes": 6070936,
+    "entry_bytes_exact": true
+  },
+  "limitations": [
+    "No controller execution, device range or whole-family writer validation",
+    "Ten synthetic machine fragments remain explicitly truncated for the independent source decoder",
+    "Two original projects retain identical repeated-coil full-check diagnostics before and after mutation; save/reopen measured separately",
+    "Canonical machine/PCode conversion is not a lossless substitute for original raw tokens"
+  ],
+  "original_distribution": "Original third-party projects, raw bodies and native project work remain in the local-only archive"
+}

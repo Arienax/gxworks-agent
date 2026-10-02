@@ -1088,6 +1088,46 @@ def token_case(prefix):
     return base64.b64decode(next(c for c in CORPUS if c["source"].startswith(prefix))["program_base64"])
 
 
+NATIVE_OPAQUE_TOKEN_TRAILER = bytes.fromhex("00000000000000002ce03301a6add460c4e0330100000000")
+
+
+@pytest.mark.parametrize("trailer_bytes", [20, 24])
+def test_native_nonzero_token_trailer_is_preserved_without_entering_the_body(trailer_bytes):
+    # Both extents retained these nonzero bytes through a fresh FX3U compile,
+    # full ProgramCheck, save and reopen. The trailer's meaning is unknown.
+    control = frame_token_pou(token_case("02_"))
+    trailer = NATIVE_OPAQUE_TOKEN_TRAILER[:trailer_bytes]
+    raw = control.raw[:control.body_end] + trailer
+    framed = frame_token_pou(raw)
+    assert framed.body == control.body and framed.tokens == control.tokens
+    assert framed.reconstruct() == raw
+    listing = decode_token_listing(raw, profile="fx3u")
+    assert not listing.gaps and listing.reconstruct() == raw
+    for profile in (None, "fx3u", "fx") if trailer_bytes == 24 else (None, "fx3u"):
+        image = inspect_program(raw, token_profile=profile)
+        assert image.reconstruct() == raw
+        assert image.regions[-1].offset == control.body_end
+        assert image.regions[-1].raw == trailer
+        assert image.regions[-1].handling == "opaque-preserved"
+    if trailer_bytes == 24:
+        assert parse_token_pou(raw).body == control.body
+    else:
+        with pytest.raises(GXWFormatError):
+            parse_token_pou(raw)
+
+
+@pytest.mark.parametrize("trailer_bytes", [19, 21, 23, 25])
+def test_token_source_rejects_unobserved_trailer_extents(trailer_bytes):
+    control = frame_token_pou(token_case("02_"))
+    raw = control.raw[:control.body_end] + bytes(trailer_bytes)
+    for parser in (parse_token_pou, frame_token_pou):
+        with pytest.raises(GXWFormatError):
+            parser(raw)
+    image = inspect_program(raw)
+    assert image.layout == "unsupported"
+    assert image.reconstruct() == raw and len(image.regions) == 1
+
+
 @pytest.mark.parametrize("profile", ["fx3u", "fx1s"])
 @pytest.mark.parametrize("trailer_bytes,prefix_word", [(20, 0), (20, 1), (24, 0), (24, 1)])
 def test_cpu_bound_fx_source_frames_keep_every_byte_and_unknown_record(profile, trailer_bytes, prefix_word):
@@ -1222,7 +1262,7 @@ def test_native_q_and_legacy_sources_are_framed_without_fx_semantic_promotion(ca
     assert report["framing_cross_check"] == "agrees"
 
 
-@pytest.mark.parametrize("offset,value", [(54, 0), (55, 0), (63, 2), (64, 1), (67, 0), (79, 0), (-1, 1)])
+@pytest.mark.parametrize("offset,value", [(54, 0), (55, 0), (63, 2), (64, 1), (67, 0), (79, 0)])
 def test_framing_only_source_rejects_broken_envelopes_and_boundaries(offset, value):
     raw = bytearray(base64.b64decode(SIMPLE_SOURCES[1]["program_base64"]))
     raw[offset] = value
@@ -1262,7 +1302,7 @@ def test_unknown_token_is_not_dropped_or_promoted_to_instruction():
     assert p.reconstruct() == raw
 
 
-@pytest.mark.parametrize("offset,value", [(79, 0), (81, 4), (55, 0), (-1, 1)])
+@pytest.mark.parametrize("offset,value", [(79, 0), (81, 4), (55, 0)])
 def test_broken_framing_becomes_whole_opaque_stream_never_resynchronizes(offset, value):
     raw = bytearray(token_case("02_"))
     raw[offset] = value
@@ -1361,7 +1401,7 @@ def test_corpus_library_source_selection_uses_metadata_and_keeps_companions_opaq
         (s.layer,s.name):s.raw for s in inspect_project(changed).streams if s.layer=="nested"}
 
 
-def token_container_fixture():
+def token_container_fixture(trailer=None):
     """Synthetic container wrapper around the native MOV K10 D1 token POU."""
     source = native_source()
     outer = CompoundFile(source)
@@ -1370,14 +1410,18 @@ def token_container_fixture():
     nested = outer.read_stream("_hdb")
     before = CompoundFile(nested).read_stream(stream)
     after = token_case("10_")
+    if trailer is not None:
+        assert len(trailer) == 24
+        after = after[:-24] + trailer
     history = synchronize_history(outer.read_stream("history.xml"), {logical: (stream, before, after)})[0]
     source = replace_stream_within_allocation(source, "_hdb", replace_stream_within_allocation(nested, stream, after, allow_shrink=True))
     return replace_stream_within_allocation(source, "history.xml", history)
 
 
 @pytest.mark.parametrize("value,resize", [(11, False), (256, True), (-1, True)])
-def test_constant_patch_preserves_every_other_token_and_stream(value, resize):
-    source = token_container_fixture()
+@pytest.mark.parametrize("trailer", [bytes(24), NATIVE_OPAQUE_TOKEN_TRAILER], ids=["zero", "native-nonzero"])
+def test_constant_patch_preserves_every_other_token_and_stream(value, resize, trailer):
+    source = token_container_fixture(trailer)
     logical, stream, original = pou(source)
     before = parse_token_pou(original)
     token = next(t for t in before.tokens if t.annotation().get("constant_type") == "K")
@@ -1385,6 +1429,7 @@ def test_constant_patch_preserves_every_other_token_and_stream(value, resize):
         token_offset=token.offset, old_value=10, new_value=value, allow_resize=resize)
     _, _, updated = pou(result.data)
     after = parse_token_pou(updated)
+    assert updated[after.body_end:] == original[before.body_end:] == trailer
     index = before.tokens.index(token)
     assert after.tokens[index].annotation()["numeric_value"] == value
     assert [t.raw for i, t in enumerate(before.tokens) if i != index] == [t.raw for i, t in enumerate(after.tokens) if i != index]
@@ -1466,8 +1511,14 @@ def test_unsupported_known_class_record_is_opaque_but_does_not_hide_neighbor():
     assert len(image.projection.unknown_records) == 1
     assert any(n.offset == node.offset for n in image.projection.nodes)
     assert image.reconstruct() == mutant
-    with pytest.raises(GXWFormatError):
-        serialize_structured_pou(image.projection)  # strict production writer unchanged
+    # The writer preserves safely framed unsupported layouts as opaque bytes;
+    # round-trip support does not promote them to strict semantic support.
+    serialized = serialize_structured_pou(image.projection)
+    assert serialized == bytes(mutant)
+    with pytest.raises(GXWFormatError, match="port size"):
+        parse_structured_pou(serialized)
+    reparsed = inspect_program(serialized).projection
+    assert reparsed.unknown_records[0].raw == image.projection.unknown_records[0].raw
     outer = CompoundFile(source)
     inner = replace_stream_within_allocation(outer.read_stream("_hdb"), name, bytes(mutant))
     source = replace_stream_within_allocation(source, "_hdb", inner)
@@ -1475,6 +1526,30 @@ def test_unsupported_known_class_record_is_opaque_but_does_not_hide_neighbor():
         logical_name=logical, node_offset=node.offset, old_symbol=node.symbol, new_symbol="X2")
     patched = inspect_program(pou(result.data)[2]).projection
     assert patched.unknown_records[0].raw == image.projection.unknown_records[0].raw
+    assert next(n for n in patched.nodes if n.offset == node.offset).symbol == "X2"
+
+
+@pytest.mark.parametrize("damage", ["length", "class", "truncated"])
+def test_structured_writer_rejects_invalid_opaque_record_framing(damage):
+    from dataclasses import replace
+
+    _, _, raw = pou(native_source())
+    program = parse_structured_pou(raw)
+    unsupported = next(n for n in program.nodes if n.kind_code == 7)
+    mutant = bytearray(raw)
+    struct.pack_into("<I", mutant, unsupported.offset + unsupported.record_length - 32, 20)
+    projection = inspect_program(bytes(mutant)).projection
+    opaque, = projection.unknown_records
+    damaged_raw = bytearray(opaque.raw)
+    if damage == "length":
+        struct.pack_into("<I", damaged_raw, 0, opaque.record_length + 4)
+    elif damage == "class":
+        struct.pack_into("<I", damaged_raw, 4, opaque.record_class + 1)
+    else:
+        del damaged_raw[-1:]
+    damaged = replace(projection, unknown_records=(replace(opaque, raw=bytes(damaged_raw)),))
+    with pytest.raises(GXWFormatError, match="opaque record framing"):
+        serialize_structured_pou(damaged)
 
 
 @pytest.mark.parametrize("override", [{"expected_sha256": "bad"}, {"new_symbol": "X100"}, {"node_offset": 0}, {"new_symbol": "X\0"}])

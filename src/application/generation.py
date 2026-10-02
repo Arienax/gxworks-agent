@@ -53,12 +53,18 @@ class GenerationRequest:
     image_attachments: object = None
     model_name: Optional[str] = None
     response_language: Optional[str] = None
+    construction_examples: Optional[bool] = None
+    fresh_confirmed_generation: bool = False
 
     def __post_init__(self):
         object.__setattr__(self, "effort", None)
         for item in fields(self):
             object.__setattr__(self, item.name, copy.deepcopy(getattr(self, item.name)))
         object.__setattr__(self, "response_language", self.response_language or get_language())
+        if self.construction_examples is not None and not isinstance(self.construction_examples, bool):
+            raise TypeError("construction_examples must be bool or None")
+        if not isinstance(self.fresh_confirmed_generation, bool):
+            raise TypeError("fresh_confirmed_generation must be bool")
 
 
 @dataclass(frozen=True)
@@ -364,6 +370,7 @@ class GenerationWorkflow:
                         on_stage=lambda stage, message: self._emit(
                             "progress", {"stage": stage, "message": message}
                         ),
+                        construction_examples=self.construction_examples,
                     )
                     direct_candidate = result.get("ladder")
                     if not isinstance(direct_candidate, dict):

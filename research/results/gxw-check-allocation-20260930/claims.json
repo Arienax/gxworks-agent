@@ -1,0 +1,19 @@
+{
+  "fresh_check": {
+    "cases": 9,
+    "phases": 14,
+    "fresh_phases": 13,
+    "fresh_accepted_phases": 10,
+    "fresh_rejected_phases": 3,
+    "legacy_false_acceptance": 1,
+    "positive_reopen_pairs": 5
+  },
+  "source_allocation": {
+    "native_runs": 10,
+    "source_model_matches": 12,
+    "matched_projects": 7,
+    "native_overlap_rejections": 3
+  },
+  "additional_pool_cases": 9,
+  "saved_byte_pairs": 41
+}

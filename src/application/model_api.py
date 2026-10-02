@@ -322,7 +322,10 @@ def _request_analysis_response(messages, *, on_format_repair=None, **kwargs):
                 "analysis protocol above. Correct JSON syntax and missing protocol "
                 "keys only; preserve the requirement, devices, alternatives and "
                 "questions. Every approach must include implementation_semantics "
-                "as an array; an empty array is valid. Do not invent confirmed "
+                "as an array; an empty array is valid. Keep execution_intent_claims "
+                "and explicit_constraint_claims as grounded frames with exact user "
+                "evidence; never emit final execution_semantics or explicit_user_constraints. "
+                "Do not invent confirmed "
                 "answers or generate PLC code. No markdown or explanations."
             )
         else:
@@ -340,9 +343,12 @@ def _request_analysis_response(messages, *, on_format_repair=None, **kwargs):
                     "when no architecture structure needs to be fixed. Each semantic "
                     "may only describe kind=structure with status required, forbidden "
                     "or any_of and Core structure vocabulary. Do not emit "
-                    "generation_contract, explicit_user_constraints, "
-                    "implementation_preferences, opcode, operands, device or "
-                    "instruction_instance fields. Preserve the user's requirement, "
+                    "generation_contract, explicit_user_constraints or "
+                    "implementation_preferences inside approaches. Low-level opcode, "
+                    "device and exact-instance fields belong only inside grounded "
+                    "explicit_constraint_claims; never place them in implementation_semantics. "
+                    "Do not emit execution_semantics; use grounded execution_intent_claims. "
+                    "Preserve the user's requirement, "
                     "alternatives and unanswered questions. Do not generate PLC code."
                 )
             else:
@@ -439,7 +445,7 @@ def analyze_requirement(
         print(f"阶段1 分析完成: {result.get('summary', '')[:80]}...")
         return result
 
-    except ModelProviderError:
+    except (ModelProviderError, AnalysisProtocolError):
         raise
     except Exception as e:
         print(f"阶段1 分析失败: {e}")
@@ -514,7 +520,7 @@ def analyze_requirement_streaming(
         print(f"阶段1 分析完成: {result.get('summary', '')[:80]}...")
         return result
 
-    except ModelProviderError:
+    except (ModelProviderError, AnalysisProtocolError):
         raise
     except Exception as e:
         print(f"阶段1 流式分析失败: {e}")

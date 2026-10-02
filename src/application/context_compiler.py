@@ -91,8 +91,11 @@ def model_budget(profile):
         rag_evidence = 0
     else:
         budget_state = "available"
-        retrieval = min(24000, max(6000, usable // 8))
-        rag_evidence = min(32000, max(4000, usable // 8))
+        retrieval = min(24000, usable, max(2000, usable // 8))
+        # Evidence scales with the actual model window. Keep it bounded to a
+        # fraction of usable input so confirmed facts/current program still have
+        # room, but do not collapse 1M-class models behind a 32K ceiling.
+        rag_evidence = min(131072, usable, max(4000, usable // 8))
     return {
         "context_window": window,
         "budget_confidence": "known" if window else "unknown",

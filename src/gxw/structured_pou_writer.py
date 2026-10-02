@@ -140,7 +140,8 @@ def _validate_source_header(program: StructuredProgram) -> None:
     if len(raw) < STRUCTURED_RECORDS_OFFSET:
         raise GXWFormatError("StructuredProgram raw source is shorter than its header")
 
-    parse_structured_pou(raw, logical_name=program.logical_name, source_path=program.source_path)
+    parse_structured_pou(raw, logical_name=program.logical_name, source_path=program.source_path,
+                         preserve_unsupported_records=True)
 
     # This relation is strongly repeated across the controlled Structured
     # Ladder/FBD corpus. The writer intentionally fails closed rather than
@@ -209,7 +210,8 @@ def serialize_structured_pou(
     struct.pack_into("<I", header, BLOCK_COUNT_OFFSET, len(containers))
     result = bytes(header) + body
     if verify:
-        reparsed = parse_structured_pou(result, logical_name=program.logical_name, source_path=program.source_path)
+        reparsed = parse_structured_pou(result, logical_name=program.logical_name, source_path=program.source_path,
+                                        preserve_unsupported_records=True)
         if reparsed.record_count != total_records or len(reparsed.blocks) != len(containers):
             raise GXWFormatError("serialized Program.pou failed block/record-count verification")
 

@@ -1,0 +1,612 @@
+{
+  "created_utc": "2026-09-30T14:09:24.949704+00:00",
+  "base_commit": "1b04dc145ecdf773001b3d2e6a932527c8df64ba",
+  "scope": "One real FX3G UtilsV5/AlarmManger/TimeControl/Modbus project lineage; native compiler 15.50, offline copied projects only.",
+  "counts": {
+    "native-check-and-reopen-accepted": 27,
+    "native-main-or-frontend-refusal": 10,
+    "native_observations": 37,
+    "prospective_full_byte_matches": 17,
+    "prospective_full_byte_failures": 4
+  },
+  "observations": [
+    {
+      "group": "fx3g-st-library-call-abi-disc-20260930",
+      "case": "Repeat",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 367,
+      "original_prospective_equal": null,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": null,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-st-library-call-abi-disc-20260930\\Repeat"
+    },
+    {
+      "group": "fx3g-st-library-call-abi-disc-20260930",
+      "case": "Two-definitions",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 427,
+      "original_prospective_equal": null,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": null,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-st-library-call-abi-disc-20260930\\Two-definitions"
+    },
+    {
+      "group": "fx3g-st-library-call-abi-disc-20260930",
+      "case": "Nested-argument",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 358,
+      "original_prospective_equal": null,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": null,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-st-library-call-abi-disc-20260930\\Nested-argument"
+    },
+    {
+      "group": "fx3g-st-library-call-abi-disc-20260930",
+      "case": "Boolean-pair",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 381,
+      "original_prospective_equal": null,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": null,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-st-library-call-abi-disc-20260930\\Boolean-pair"
+    },
+    {
+      "group": "fx3g-user-functions-forward-v2-20260930",
+      "case": "Reverse-roots",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 428,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-user-functions-forward-v2-20260930\\Reverse-roots"
+    },
+    {
+      "group": "fx3g-user-functions-forward-v2-20260930",
+      "case": "Nested-and-repeat",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 423,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-user-functions-forward-v2-20260930\\Nested-and-repeat"
+    },
+    {
+      "group": "fx3g-user-functions-forward-v2-20260930",
+      "case": "Shared-return-and",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 378,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-user-functions-forward-v2-20260930\\Shared-return-and"
+    },
+    {
+      "group": "fx3g-user-functions-forward-v2-20260930",
+      "case": "Mixed-return-or",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 456,
+      "original_prospective_equal": false,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-user-functions-forward-v2-20260930\\Mixed-return-or"
+    },
+    {
+      "group": "fx3g-user-functions-boolean-forward-20260930",
+      "case": "Mixed-and",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 439,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-user-functions-boolean-forward-20260930\\Mixed-and"
+    },
+    {
+      "group": "fx3g-user-functions-boolean-forward-20260930",
+      "case": "Repeated-or-4",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 221,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-user-functions-boolean-forward-20260930\\Repeated-or-4"
+    },
+    {
+      "group": "fx3g-user-functions-boolean-forward-20260930",
+      "case": "Repeated-or-3",
+      "status": "native-main-or-frontend-refusal",
+      "generated_bytes": null,
+      "original_prospective_equal": null,
+      "original_source_model_refusal": "temporary capacity exhausted: M",
+      "diagnostics": [
+        {
+          "code": "0x50f1217",
+          "arguments": [
+            "M"
+          ]
+        },
+        {
+          "code": "0x50010000",
+          "arguments": []
+        }
+      ],
+      "independent_address_projection_match": null,
+      "reopen_identical": null,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-user-functions-boolean-forward-20260930\\Repeated-or-3"
+    },
+    {
+      "group": "fx3g-user-functions-declaration-order-20260930",
+      "case": "Reordered-rows",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 305,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-user-functions-declaration-order-20260930\\Reordered-rows"
+    },
+    {
+      "group": "fx3g-structure-globals-forward-20260930",
+      "case": "Member-endpoints",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 462,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-structure-globals-forward-20260930\\Member-endpoints"
+    },
+    {
+      "group": "fx3g-structure-globals-forward-20260930",
+      "case": "Reordered-members",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 462,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-structure-globals-forward-20260930\\Reordered-members"
+    },
+    {
+      "group": "fx3g-structure-globals-forward-20260930",
+      "case": "Members-nested-or",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 512,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-structure-globals-forward-20260930\\Members-nested-or"
+    },
+    {
+      "group": "fx3g-structure-bounds-forward-20260930",
+      "case": "Negative-origin",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 163,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-structure-bounds-forward-20260930\\Negative-origin"
+    },
+    {
+      "group": "fx3g-structure-bounds-forward-20260930",
+      "case": "Rank-two",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 462,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-structure-bounds-forward-20260930\\Rank-two"
+    },
+    {
+      "group": "fx3g-structure-instances-forward-20260930",
+      "case": "Second-event",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 179,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-structure-instances-forward-20260930\\Second-event"
+    },
+    {
+      "group": "fx3g-structure-instances-forward-20260930",
+      "case": "Second-event-id-zero",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 179,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-structure-instances-forward-20260930\\Second-event-id-zero"
+    },
+    {
+      "group": "fx3g-structure-instances-forward-20260930",
+      "case": "Second-alarm",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 339,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-structure-instances-forward-20260930\\Second-alarm"
+    },
+    {
+      "group": "fx3g-global-documents-forward-20260930",
+      "case": "Library-and-project",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 371,
+      "original_prospective_equal": false,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-global-documents-forward-20260930\\Library-and-project"
+    },
+    {
+      "group": "fx3g-global-documents-forward-20260930",
+      "case": "Mixed-banks-and-low-id",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 339,
+      "original_prospective_equal": false,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-global-documents-forward-20260930\\Mixed-banks-and-low-id"
+    },
+    {
+      "group": "fx3g-global-mixed-order-forward-20260930",
+      "case": "Scalar-before-and-after",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 495,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-global-mixed-order-forward-20260930\\Scalar-before-and-after"
+    },
+    {
+      "group": "fx3g-global-mixed-order-forward-20260930",
+      "case": "Library-structure-first",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 339,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-global-mixed-order-forward-20260930\\Library-structure-first"
+    },
+    {
+      "group": "fx3g-structure-member-arrays-discovery-20260930",
+      "case": "Word-member-array",
+      "status": "native-main-or-frontend-refusal",
+      "generated_bytes": null,
+      "original_prospective_equal": null,
+      "original_source_model_refusal": "nested/nonprimitive structure member outside profile",
+      "diagnostics": [
+        {
+          "code": "0x500c9004",
+          "arguments": [
+            ""
+          ]
+        },
+        {
+          "code": "0x500c9004",
+          "arguments": [
+            ""
+          ]
+        },
+        {
+          "code": "0x50010000",
+          "arguments": []
+        }
+      ],
+      "independent_address_projection_match": null,
+      "reopen_identical": null,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-structure-member-arrays-discovery-20260930\\Word-member-array"
+    },
+    {
+      "group": "fx3g-structure-member-arrays-discovery-20260930",
+      "case": "Bit-member-array",
+      "status": "native-main-or-frontend-refusal",
+      "generated_bytes": null,
+      "original_prospective_equal": null,
+      "original_source_model_refusal": "nested/nonprimitive structure member outside profile",
+      "diagnostics": [
+        {
+          "code": "0x500c9004",
+          "arguments": [
+            ""
+          ]
+        },
+        {
+          "code": "0x50010000",
+          "arguments": []
+        }
+      ],
+      "independent_address_projection_match": null,
+      "reopen_identical": null,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-structure-member-arrays-discovery-20260930\\Bit-member-array"
+    },
+    {
+      "group": "fx3g-structure-member-array-declaration-20260930",
+      "case": "Declared-unused-word",
+      "status": "native-main-or-frontend-refusal",
+      "generated_bytes": null,
+      "original_prospective_equal": null,
+      "original_source_model_refusal": "nested/nonprimitive structure member outside profile",
+      "diagnostics": [
+        {
+          "code": "0x500c9004",
+          "arguments": [
+            ""
+          ]
+        },
+        {
+          "code": "0x50010000",
+          "arguments": []
+        }
+      ],
+      "independent_address_projection_match": null,
+      "reopen_identical": null,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-structure-member-array-declaration-20260930\\Declared-unused-word"
+    },
+    {
+      "group": "fx3g-structure-member-array-declaration-20260930",
+      "case": "Other-members-word",
+      "status": "native-main-or-frontend-refusal",
+      "generated_bytes": null,
+      "original_prospective_equal": null,
+      "original_source_model_refusal": "nested/nonprimitive structure member outside profile",
+      "diagnostics": [
+        {
+          "code": "0x500c9004",
+          "arguments": [
+            ""
+          ]
+        },
+        {
+          "code": "0x500c9004",
+          "arguments": [
+            ""
+          ]
+        },
+        {
+          "code": "0x50010000",
+          "arguments": []
+        }
+      ],
+      "independent_address_projection_match": null,
+      "reopen_identical": null,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-structure-member-array-declaration-20260930\\Other-members-word"
+    },
+    {
+      "group": "fx3g-structure-member-array-declaration-20260930",
+      "case": "Other-members-bit",
+      "status": "native-main-or-frontend-refusal",
+      "generated_bytes": null,
+      "original_prospective_equal": null,
+      "original_source_model_refusal": "nested/nonprimitive structure member outside profile",
+      "diagnostics": [
+        {
+          "code": "0x500c9004",
+          "arguments": [
+            ""
+          ]
+        },
+        {
+          "code": "0x500c9004",
+          "arguments": [
+            ""
+          ]
+        },
+        {
+          "code": "0x50010000",
+          "arguments": []
+        }
+      ],
+      "independent_address_projection_match": null,
+      "reopen_identical": null,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-structure-member-array-declaration-20260930\\Other-members-bit"
+    },
+    {
+      "group": "fx3g-structure-member-array-default-controls-20260930",
+      "case": "Word-zero-empty",
+      "status": "native-main-or-frontend-refusal",
+      "generated_bytes": null,
+      "original_prospective_equal": null,
+      "original_source_model_refusal": "nested/nonprimitive structure member outside profile",
+      "diagnostics": [
+        {
+          "code": "0x500c9004",
+          "arguments": [
+            ""
+          ]
+        },
+        {
+          "code": "0x50010000",
+          "arguments": []
+        }
+      ],
+      "independent_address_projection_match": null,
+      "reopen_identical": null,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-structure-member-array-default-controls-20260930\\Word-zero-empty"
+    },
+    {
+      "group": "fx3g-structure-member-array-default-controls-20260930",
+      "case": "Bit-zero-empty",
+      "status": "native-main-or-frontend-refusal",
+      "generated_bytes": null,
+      "original_prospective_equal": null,
+      "original_source_model_refusal": "nested/nonprimitive structure member outside profile",
+      "diagnostics": [
+        {
+          "code": "0x500c9004",
+          "arguments": [
+            ""
+          ]
+        },
+        {
+          "code": "0x50010000",
+          "arguments": []
+        }
+      ],
+      "independent_address_projection_match": null,
+      "reopen_identical": null,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-structure-member-array-default-controls-20260930\\Bit-zero-empty"
+    },
+    {
+      "group": "fx3g-structure-member-array-pointer-controls-20260930",
+      "case": "Word-member-array",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 493,
+      "original_prospective_equal": null,
+      "original_source_model_refusal": "nested/nonprimitive structure member outside profile",
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-structure-member-array-pointer-controls-20260930\\Word-member-array"
+    },
+    {
+      "group": "fx3g-structure-member-array-pointer-controls-20260930",
+      "case": "Bit-member-array",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 179,
+      "original_prospective_equal": null,
+      "original_source_model_refusal": "nested/nonprimitive structure member outside profile",
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-structure-member-array-pointer-controls-20260930\\Bit-member-array"
+    },
+    {
+      "group": "fx3g-structure-member-array-pointer-controls-20260930",
+      "case": "Declared-unused-word",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 130,
+      "original_prospective_equal": null,
+      "original_source_model_refusal": "nested/nonprimitive structure member outside profile",
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-structure-member-array-pointer-controls-20260930\\Declared-unused-word"
+    },
+    {
+      "group": "fx3g-structure-member-array-pointer-controls-20260930",
+      "case": "Flat-function-P2100",
+      "status": "native-main-or-frontend-refusal",
+      "generated_bytes": null,
+      "original_prospective_equal": false,
+      "original_source_model_refusal": null,
+      "diagnostics": [
+        {
+          "code": "0x500c9004",
+          "arguments": [
+            ""
+          ]
+        },
+        {
+          "code": "0x50010000",
+          "arguments": []
+        }
+      ],
+      "independent_address_projection_match": null,
+      "reopen_identical": null,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-structure-member-array-pointer-controls-20260930\\Flat-function-P2100"
+    },
+    {
+      "group": "fx3g-function-pointer-boundary-20260930",
+      "case": "P2047",
+      "status": "native-check-and-reopen-accepted",
+      "generated_bytes": 130,
+      "original_prospective_equal": true,
+      "original_source_model_refusal": null,
+      "diagnostics": [],
+      "independent_address_projection_match": true,
+      "reopen_identical": true,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-function-pointer-boundary-20260930\\P2047"
+    },
+    {
+      "group": "fx3g-function-pointer-boundary-20260930",
+      "case": "P2048",
+      "status": "native-main-or-frontend-refusal",
+      "generated_bytes": null,
+      "original_prospective_equal": null,
+      "original_source_model_refusal": "pool addresses outside measured function token profile",
+      "diagnostics": [
+        {
+          "code": "0x500c9004",
+          "arguments": [
+            ""
+          ]
+        },
+        {
+          "code": "0x50010000",
+          "arguments": []
+        }
+      ],
+      "independent_address_projection_match": null,
+      "reopen_identical": null,
+      "evidence_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\fx3g-function-pointer-boundary-20260930\\P2048"
+    }
+  ],
+  "findings": [
+    "Outlined functions share one frame/routine per definition. Inputs precede implicit return and locals; declaration record IDs determine each class order.",
+    "Nested argument calls register before their enclosing calls. Outlined routine discovery uses first-registration queue order; repeated calls reuse a frame.",
+    "Measured two-call AND captures the left result. OR captures both results and combines right capture then left; three-bit/four-bit capacity controls keep refusals separate.",
+    "Source-only global layout splits structures into word/bit blocks, preserves element strides, supports static literal negative origins, rank two and separate same-type instances.",
+    "Globals allocate in source library catalog order followed by project global rows, with record IDs inside each document. Primitive and structure rows can interleave. Earlier type-stage hypotheses failed and remain preserved.",
+    "Native type POU names are not unique across structure instances; array descriptors resolve targets by table offsets. Forty independent cache member-address projections agree with the source model.",
+    "Adjacent outlined CALL controls accept P2047 and refuse P2048; flat P2100 refuses independently of member arrays. This does not define general branch-label ranges.",
+    "WORD/BOOL member arrays and their literal references pass native check/reopen at P1800 after only the project P range changes. Current source model still refuses array members, so these are discovery evidence, not complete source predictions."
+  ],
+  "structure_layout_observations": 12,
+  "structure_layout_prospective_matches": 10,
+  "independent_cache_member_references": 40,
+  "preserved_limitations": [
+    "Current source model covers bounded primitive functions and flat primitive structure members; no general user-function compiler or product integration.",
+    "No nested structures, member arrays in the source model, dynamic member indices or explicit member address layout.",
+    "Multiple global documents are bounded to one storage document per library and one project global document; arbitrary library catalog reorder remains unverified.",
+    "No PLC/device/simulator execution or runtime-semantics certification.",
+    "Original OR mismatch renderer failed after native acceptance; its process return dictionary was lost. Recovery and original failed bytes stay preserved.",
+    "One preparation attempt used a source patcher outside its .prj scope. Seven array controls used invalid P2100; original diagnostics and separate correcting controls remain intact.",
+    "Local archive contains third-party engineering source; redistribution rights are not established. Existing event fingerprint metadata is preserved without recomputation."
+  ],
+  "archives": {
+    "public": "research\\evidence\\gxw-fx-function-layout-20260930.zip",
+    "local": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\gxw-fx-function-layout-local-20260930.zip"
+  }
+}

@@ -156,7 +156,7 @@ def test_pulse_capture_does_not_invent_risk_without_width_or_for_output_width():
     )
     no_width = build_plc_ir(
         ladder_data,
-        semantic_requirements=infer_semantic_requirements("每次按下 X0 一次计数"),
+        semantic_requirements=infer_semantic_requirements("X0 上升沿计数"),
     )
     output_width = build_plc_ir(
         ladder_data,

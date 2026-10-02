@@ -8,7 +8,7 @@ import zipfile
 
 import pytest
 
-from gxw.compiler_debug import parse_compiler_debug
+from gxw.compiler_debug import compiler_st_source_points, parse_compiler_debug
 from gxw.compiler_storage import parse_compiler_index, parse_compiler_link_map
 from gxw.compiler_tables import parse_compiler_tables
 from gxw.container import CompoundFile
@@ -26,6 +26,26 @@ CALLSITE_INPUT_CASES = json.loads(
 GRAPH_INTERFACE_CASES = json.loads(
     (ROOT / "tests/fixtures/gxw_callable_ports.json").read_text(encoding="utf-8")
 )["interfaces"]
+ARRAY_REFERENCE_CASES = json.loads(
+    (ROOT / "tests/fixtures/gxw_array_references_native.json").read_text(encoding="utf-8")
+)["cases"]
+
+
+def _native_reference_graph(case):
+    """Restore the fixture's sparse graph, retaining native record identities."""
+    from gxw.compiler_tables import CompilerTable, CompilerTableRecord, CompilerTables
+    tables = []
+    for row in case["tables"]:
+        records = tuple(CompilerTableRecord(r["absolute_offset"], r["table_offset"],
+                        base64.b64decode(r["raw_base64"])) for r in row["records"])
+        # This buffer supplies the original table extent for range checks.
+        # Unselected regions are omitted; it is not a reconstructed CGTable.
+        raw = bytearray(struct.pack("<I", row["payload_size"]) + bytes(row["payload_size"]))
+        for record in records:
+            start = 4 + record.table_offset
+            raw[start:start + len(record.raw)] = record.raw
+        tables.append(CompilerTable(row["index"], row["absolute_offset"], bytes(raw), records))
+    return CompilerTables(b"", tuple(tables))
 
 
 @pytest.mark.parametrize("case", GRAPH_INTERFACE_CASES, ids=lambda row: row["case"] + "/" + row["symbol"])
@@ -282,6 +302,75 @@ def test_compiler_debug_keeps_offset_tables_unlinked_elements_and_unknown_tail()
             parse_compiler_debug(raw[:parsed.tail_offset - 1])
 
 
+def _native_st_debug():
+    fixture = json.loads((ROOT / "tests/fixtures/gxw_st_source_points_native.json").read_text(encoding="utf-8"))
+    raw = base64.b64decode(fixture["debug_base64"])
+    return fixture, raw, parse_compiler_debug(raw)
+
+
+def test_st_source_points_match_native_reads_prefix_counts_and_saved_contexts():
+    fixture, raw, debug = _native_st_debug()
+    points = compiler_st_source_points(debug)
+    assert len(points) == 45
+    actual = [dict(element_index=debug.elements.index(p.element), row_index=p.row_index,
+                   source_line=p.source_line, compiled_step_start=p.compiled_step_start,
+                   context_names=[name.decode("ascii") for name in p.context_names],
+                   resource=p.element.resource_bytes.decode("ascii")) for p in points]
+    assert actual == fixture["expected"]
+    assert debug.reconstruct() == raw
+    assert all(p.row == p.table.rows[p.row_index] for p in points)
+
+
+def test_st_same_type_instances_and_overlapping_caller_points_remain_separate():
+    _, _, debug = _native_st_debug()
+    points = compiler_st_source_points(debug)
+    first = [p for p in points if p.context_names[4] == b"Keypad_1"]
+    second = [p for p in points if p.context_names[4] == b"Keypad_2"]
+    assert len(first) == len(second) == 18
+    assert {p.definition_name_bytes for p in first + second} == {b"Keypad"}
+    assert [p.source_line for p in first] == [p.source_line for p in second]
+    assert first[0].compiled_step_start == 31
+    assert second[0].compiled_step_start == 116
+    # Caller points include an expansion while its own points remain distinct.
+    caller = next(p for p in points if not p.context_names[4] and p.source_line == 8)
+    assert caller.compiled_step_start == first[0].compiled_step_start
+    # A stored endpoint reaches the next expansion; it is not statement ownership.
+    assert first[-1].source_line == 31
+    assert first[-1].compiled_step_end == second[0].compiled_step_start
+
+
+@pytest.mark.parametrize("change", ["table-language", "negative-line", "negative-step", "reversed-steps", "network-row", "row-kind"])
+def test_unsupported_st_coordinate_views_preserve_the_debug_bytes(change):
+    _, raw, debug = _native_st_debug()
+    damaged = bytearray(raw)
+    table = debug.offset_tables[0]
+    row_offset = table.offset + 8
+    if change == "table-language":
+        offset, value = table.offset, 1
+    else:
+        field, value = {"negative-line": (0, -2), "negative-step": (1, -1),
+                        "reversed-steps": (2, -1), "network-row": (3, 1),
+                        "row-kind": (4, 14)}[change]
+        offset = row_offset + field * 4
+    struct.pack_into("<i", damaged, offset, value)
+    reparsed = parse_compiler_debug(bytes(damaged))
+    assert reparsed.reconstruct() == bytes(damaged)
+    with pytest.raises(GXWFormatError):
+        compiler_st_source_points(reparsed)
+    assert reparsed.reconstruct() == bytes(damaged)
+
+
+def test_st_coordinates_keep_uninterpreted_row_fields():
+    _, raw, debug = _native_st_debug()
+    changed = bytearray(raw)
+    struct.pack_into("<i", changed, debug.offset_tables[0].offset + 8 + 20, 12345)
+    reparsed = parse_compiler_debug(bytes(changed))
+    point = compiler_st_source_points(reparsed)[0]
+    assert point.row[5] == 12345
+    assert point.source_line == point.compiled_step_start == 0
+    assert reparsed.reconstruct() == bytes(changed)
+
+
 def test_compiler_component_fields_match_native_reads_and_global_indirection(monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT / "research"))
     compare = importlib.import_module("native_gxw_compiler").compare_component_reads
@@ -384,6 +473,130 @@ def test_compiler_assignment_native_text_does_not_turn_zero_into_x0():
     assert parse_compiler_assignment(unknown).status == "opaque"
     with pytest.raises(GXWFormatError):
         parse_compiler_assignment(bytes(25))
+
+
+def test_inline_assignments_match_native_operands_without_inventing_allocations():
+    from gxw.compiler_assignment import parse_compiler_assignment
+    fixture = json.loads((ROOT / "tests/fixtures/gxw_inline_assignments_native.json").read_text(encoding="utf-8"))
+    original_constants = original_devices = 0
+    for row in fixture["cases"]:
+        raw = base64.b64decode(row["input_base64"])
+        actual = parse_compiler_assignment(raw)
+        assert actual.raw == raw
+        native_operand = base64.b64decode(row["operand_base64"]).decode("ascii")
+        native_address = base64.b64decode(row["output_base64"]).decode("ascii")
+        after = base64.b64decode(row["after_base64"])
+        # Native uppercases its private copy; parsing preserves original bytes.
+        assert after[:21] == raw[:21] and after[22:] == raw[22:]
+        assert chr(after[21]) == chr(raw[21]).upper()
+        if actual.status == "opaque":
+            assert row["origin"] == "prospective-number-controls"
+            assert actual.operand is None and actual.iec_address is None
+            continue
+        assert actual.status == "decoded" and actual.operand == native_operand
+        assert actual.iec_address == (native_address or None)
+        assert actual.reserved_count is None
+        if actual.constant_value is not None:
+            assert actual.role == "constant"
+            assert actual.device_family is None and actual.number is None
+            assert actual.fx_operand is None and not native_address
+            original_constants += row["origin"] == "original-stored-cache"
+        else:
+            assert actual.role == "device_reference"
+            if actual.device_family == "W":
+                assert actual.fx_operand is None
+                assert actual.operand == f"W{actual.number:X}"
+            else:
+                assert actual.fx_operand == native_operand
+            original_devices += row["origin"] == "original-stored-cache"
+    assert (original_constants, original_devices) == (34, 31)
+
+
+@pytest.mark.parametrize("offset", [1, 8, 13, 20, 22, 25])
+def test_inline_assignment_unknown_modifiers_stay_opaque(offset):
+    from gxw.compiler_assignment import parse_compiler_assignment
+    raw = bytearray.fromhex("070000000000000000f91c000000000000000000004d00000000")
+    raw[offset] = 1
+    actual = parse_compiler_assignment(raw)
+    assert actual.raw == raw and actual.status == "opaque"
+    assert actual.operand is None and actual.iec_address is None
+    assert actual.constant_value is None
+
+
+@pytest.mark.parametrize("case", ARRAY_REFERENCE_CASES, ids=lambda row: row["case"])
+def test_array_member_addresses_match_saved_native_compiler_references(case):
+    from gxw.compiler_symbols import compiler_array_reference
+    tables = _native_reference_graph(case)
+    before = tuple(record.raw for table in tables.tables for record in table.records)
+    for row in case["references"]:
+        actual = compiler_array_reference(tables, row["component_offset"], tuple(row["indices"]),
+            member_offset=row["member_offset"], member_indices=tuple(row["member_indices"]))
+        assert actual.operand == row["expected_operand"]
+        assert actual.iec_address == row["expected_iec_address"]
+        assert actual.type_pou_offset == row["expected_type_pou_offset"]
+        assert actual.primitive_type == row["expected_primitive_type"]
+        assert actual.primitive_width == row["expected_primitive_width"]
+        assert actual.family_stride == row["expected_family_stride"]
+        assert actual.base_assignment.raw == (actual.member or actual.component).user_info
+        assert actual.descriptor.record.raw == tables.tables[13].record_at(actual.descriptor.record.table_offset).raw
+    assert before == tuple(record.raw for table in tables.tables for record in table.records)
+
+
+@pytest.mark.parametrize("invalid", ["below-lower", "above-upper", "wrong-rank", "non-integer", "scalar-member-index"])
+def test_array_member_reference_rejects_invalid_coordinates_without_rewriting_cache(invalid):
+    from gxw.compiler_symbols import compiler_array_reference
+    case = next(c for c in ARRAY_REFERENCE_CASES if c["case"].endswith("/Member-endpoints"))
+    tables = _native_reference_graph(case)
+    row = case["references"][0]
+    descriptor = tables.array_at(tables.component_array_offset(tables.component_at(row["component_offset"])))
+    indices = tuple(row["indices"])
+    member_indices = ()
+    if invalid == "below-lower":
+        indices = (descriptor.dimensions[0].lower - 1,)
+    elif invalid == "above-upper":
+        indices = (descriptor.dimensions[0].upper + 1,)
+    elif invalid == "wrong-rank":
+        indices += (0,)
+    elif invalid == "non-integer":
+        indices = (True,)
+    else:
+        member_indices = (0,)
+    before = tuple(record.raw for table in tables.tables for record in table.records)
+    with pytest.raises(GXWFormatError):
+        compiler_array_reference(tables, row["component_offset"], indices,
+                                 member_offset=row["member_offset"], member_indices=member_indices)
+    assert before == tuple(record.raw for table in tables.tables for record in table.records)
+
+
+def test_array_member_reference_preserves_same_named_type_instance_identity():
+    from gxw.compiler_symbols import compiler_array_reference
+    case = next(c for c in ARRAY_REFERENCE_CASES if c["case"].endswith("/Second-alarm"))
+    tables = _native_reference_graph(case)
+    first, second = case["references"][:2]
+    assert first["expected_type_pou_offset"] != second["expected_type_pou_offset"]
+    assert tables.pou_at(first["expected_type_pou_offset"]).name_bytes == tables.pou_at(second["expected_type_pou_offset"]).name_bytes
+    with pytest.raises(GXWFormatError, match="does not belong"):
+        compiler_array_reference(tables, first["component_offset"], tuple(first["indices"]),
+                                 member_offset=second["member_offset"])
+
+
+@pytest.mark.parametrize("parameter", [14, 32768])
+def test_string_array_reference_refuses_inconsistent_or_unmeasured_extent(parameter):
+    from gxw.compiler_symbols import compiler_array_reference
+    case = next(c for c in ARRAY_REFERENCE_CASES if c["case"].endswith("/outer12-inner5-conditional"))
+    case = json.loads(json.dumps(case))
+    row = next(r for r in case["references"] if r["text"] == "probeArray[0]")
+    tables = _native_reference_graph(case)
+    offset = tables.component_array_offset(tables.component_at(row["component_offset"]))
+    descriptor = next(r for r in case["tables"][13]["records"] if r["table_offset"] == offset)
+    raw = bytearray(base64.b64decode(descriptor["raw_base64"]))
+    struct.pack_into("<I", raw, 8, parameter)
+    descriptor["raw_base64"] = base64.b64encode(raw).decode()
+    tables = _native_reference_graph(case)
+    before = tuple(record.raw for table in tables.tables for record in table.records)
+    with pytest.raises(GXWFormatError):
+        compiler_array_reference(tables, row["component_offset"], tuple(row["indices"]))
+    assert before == tuple(record.raw for table in tables.tables for record in table.records)
 
 
 def test_compiler_address_and_array_values_match_native_objects(monkeypatch):

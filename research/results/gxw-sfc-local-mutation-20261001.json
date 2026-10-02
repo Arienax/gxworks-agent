@@ -1,0 +1,122 @@
+{
+  "schema": 1,
+  "date": "2026-10-01",
+  "status": "native-validated/offline-project-scope",
+  "versions": {
+    "converter": "1.635.0.1",
+    "compiler_adapter": "1.635.0.1",
+    "cpu": 520,
+    "plc": "FX3U/FX3UC"
+  },
+  "counts": {
+    "source_bound_native_bodies": 28,
+    "raw_inline_bindings_exact": 448,
+    "native_body_lexical_gap_cases": 1,
+    "native_full_check_accepted": 8,
+    "failed_conversion_export_and_check_blocked": 2,
+    "empty_task_cache_controls_exact": 2
+  },
+  "accepted_local_candidates": [
+    {
+      "experiment": "fx-sfc-accepted-local-patch-20261001-v1",
+      "case": "known-token-patch",
+      "prospective_prediction": true,
+      "expected_pcode_bytes": 575,
+      "full_check_accepted_before_and_after_native_save": true,
+      "unknown_registered_child_preserved": false,
+      "mutation": "three one-byte Y operands",
+      "graph_cache_and_unrelated_stream_payloads_preserved": true
+    },
+    {
+      "experiment": "fx-sfc-accepted-local-patch-20261001-v1",
+      "case": "registered-opaque-secondary",
+      "prospective_prediction": true,
+      "expected_pcode_bytes": 568,
+      "full_check_accepted_before_and_after_native_save": true,
+      "unknown_registered_child_preserved": true,
+      "mutation": "three one-byte Y operands and one same-width SET-to-RST opcode",
+      "graph_cache_and_unrelated_stream_payloads_preserved": true
+    },
+    {
+      "experiment": "fx-sfc-child-resize-20261001-v1",
+      "case": "known-token-patch",
+      "prospective_prediction": true,
+      "expected_pcode_bytes": 582,
+      "full_check_accepted_before_and_after_native_save": true,
+      "unknown_registered_child_preserved": false,
+      "mutation": "child body growth by 7 bytes, two nested size words and source history size",
+      "graph_cache_and_unrelated_stream_payloads_preserved": true
+    },
+    {
+      "experiment": "fx-sfc-child-resize-20261001-v1",
+      "case": "registered-opaque-secondary",
+      "prospective_prediction": true,
+      "expected_pcode_bytes": 582,
+      "full_check_accepted_before_and_after_native_save": true,
+      "unknown_registered_child_preserved": true,
+      "mutation": "child body growth by 7 bytes, two nested size words and source history size",
+      "graph_cache_and_unrelated_stream_payloads_preserved": true
+    }
+  ],
+  "registration_selection": {
+    "first_stored_entry": "native validated",
+    "concatenation": "rejected",
+    "numeric_sort": "rejected",
+    "measured_registration_counts": [
+      1,
+      2,
+      3
+    ],
+    "measured_numeric_values": [
+      0,
+      1,
+      3,
+      7
+    ],
+    "numeric_field_meaning": "uninterpreted"
+  },
+  "stale_output_controls": {
+    "source_load_failure": "kind 1/code 0x20; native error was cleared; helper blocks export and ProgramCheck",
+    "empty_task": "source load returns success, but assembly/publication do not run and cached PCode is returned",
+    "admission": "Progress 100 and S_OK alone are insufficient; native PCode must be bound to the selected raw source"
+  },
+  "retained_failure_experiments": [
+    "fx-sfc-multireg-20261001-v1",
+    "fx-sfc-multireg-20261001-v2",
+    "fx-sfc-registration-read-20261001-v1",
+    "fx-sfc-registration-read-20261001-v2",
+    "fx-sfc-assembly-entry-20261001-v1"
+  ],
+  "archive_scope": {
+    "public": "Readers, native ABI tools and cold validator; no third-party project or raw source witnesses",
+    "local": "Complete original-derived proposals, native project work, traces, failures and 28 raw source/native witnesses"
+  },
+  "local_archive": {
+    "path": "research/experiments/sfc-graph-20260926/public-corpus-discovery/gxw-sfc-local-mutation-20261001-local.zip",
+    "entries": 4166,
+    "bytes": 35428669,
+    "entry_bytes_exact": true
+  },
+  "limitations": [
+    "One independently sourced converted simple FX3U SFC project and its controlled derivatives",
+    "Unknown secondary child is retained and excluded from the measured selected body; its opcode meaning is not decoded",
+    "Native project check acceptance does not establish PLC execution behavior or original program intent",
+    "Original repeated-coil rejection remains recorded; accepted copies intentionally change output addresses",
+    "Graph layout/cache, registration numeric semantics and other PLC families are not established by these edits"
+  ],
+  "verification": "Direct archive byte equality, source/native byte ownership and retained prospective predictions; no new hashes",
+  "public_archive": {
+    "path": "research/evidence/gxw-sfc-local-mutation-20261001.zip",
+    "entries": 41,
+    "bytes": 175812,
+    "entry_bytes_exact": true
+  },
+  "cold_replay_counts": {
+    "source_bound_native_bodies": 28,
+    "raw_inline_bindings_exact": 448,
+    "native_body_lexical_gap_cases": 1,
+    "native_full_check_accepted": 8,
+    "failed_conversion_export_and_check_blocked": 2,
+    "empty_task_cache_controls_exact": 2
+  }
+}

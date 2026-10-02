@@ -1,0 +1,831 @@
+{
+  "scope": "Q03UDV direct-source research profile; two project shapes. No PLC/simulator execution.",
+  "findings": [
+    "Global explicit ranges that intersect automatic D allocation limits are rejected with 0x500f1028, including a DINT starting one word below the lower bound.",
+    "Local direct-program device/IEC fields are discarded by the native frontend in the INT and independent BOOL controls; whole generated PCode remains unchanged.",
+    "The source-only direct model now checks the whole explicit global span and retains ignored local fields as provenance while allocating locals normally."
+  ],
+  "cases": [
+    {
+      "case": "explicit-pool-overlap-20260930/baseline",
+      "input_sha256": "48d87554b5434da8be57b78ab3977789b6aa814ea94fd7e6645566ccd979e4a3",
+      "generated": [
+        {
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "index": 0,
+          "channels": [
+            {
+              "size": 1717,
+              "sha256": "c658e59d12f469f53579c4845cb63a260fc14517125b3dd4bb27ff4641b3661d"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        },
+        {
+          "name": "\ud14c\uc2a4\ud2b8",
+          "index": 1,
+          "channels": [
+            {
+              "size": 490,
+              "sha256": "1911ef06e9e87fe8762811bbce4f669027b5e56d95814c3869363f98c9a84e67"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        }
+      ],
+      "check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 2,
+        "rejected": true
+      },
+      "export_sha256": null,
+      "diagnostics": [
+        {
+          "phase": "ProgramCheckProgress",
+          "kind": 2,
+          "code": 84710144,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": 198,
+          "network": -1,
+          "left": -1,
+          "top": 198,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y21"
+          ]
+        },
+        {
+          "phase": "ProgramCheckProgress",
+          "kind": 2,
+          "code": 84710144,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": 206,
+          "network": -1,
+          "left": -1,
+          "top": 206,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y21"
+          ]
+        }
+      ],
+      "model_after": {
+        "case": "explicit-pool-overlap-20260930/baseline",
+        "status": "predicted",
+        "resources": [
+          {
+            "index": 0,
+            "equal": true
+          },
+          {
+            "index": 1,
+            "equal": true
+          }
+        ],
+        "ignored": [
+          [],
+          []
+        ]
+      },
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\explicit-pool-overlap-20260930\\baseline\\native-1",
+      "evidence": {
+        "input.gxw": "48d87554b5434da8be57b78ab3977789b6aa814ea94fd7e6645566ccd979e4a3",
+        "frontend-snapshot.json": "5c226122568e2fdb9fbb46b24323852b533ee7153d906c6f9bb85d7617ee05c4",
+        "native-events.jsonl": "774b07b1d894aa9c05387e1133f731d23306fd50957802be4ac2e3bd734be9ef",
+        "events.jsonl": "ddcbf3454f68ddf938200ba750ba57a2f5a6225d376caa50a23238031dda4a57",
+        "resource-correspondence.json": "fff94f91d4ca4a8fc7828bdc0c29f53e6ac3e916b748190090121ca9d250b18a"
+      }
+    },
+    {
+      "case": "explicit-pool-overlap-20260930/global-one",
+      "input_sha256": "f751814f0cebcc61d19cc2ea594f92df67c3fcf9a58aeb83373d823094211f81",
+      "generated": [],
+      "check": null,
+      "export_sha256": null,
+      "diagnostics": [
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1343164456,
+          "name": "Global1",
+          "instance": "Global1",
+          "step": -1,
+          "network": -1,
+          "left": 4,
+          "top": 26,
+          "right": -1,
+          "bottom": -1,
+          "arguments": []
+        }
+      ],
+      "model_after": {
+        "case": "explicit-pool-overlap-20260930/global-one",
+        "status": "unsupported",
+        "reason": "explicit address overlaps system pool"
+      },
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\explicit-pool-overlap-20260930\\global-one\\native-1",
+      "evidence": {
+        "input.gxw": "f751814f0cebcc61d19cc2ea594f92df67c3fcf9a58aeb83373d823094211f81",
+        "frontend-snapshot.json": "7992ff61c36de2400d10a168b88bd320dc061f7e2f63c6f6213ee755c29fad8f",
+        "native-events.jsonl": "49ed68283471088ec6fa919ca561f08bf4bc0933be9acd7645b73270b5d56da6",
+        "events.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "resource-correspondence.json": "0017610c09139297e03b80a9a2e02e863b47f90520d71f89735aa2dd70b2b8f8"
+      }
+    },
+    {
+      "case": "explicit-pool-overlap-20260930/global-two",
+      "input_sha256": "2d4c7d6fb6dec617d2ee967d616350d91a92f97a000b842c6cb258fede6006d7",
+      "generated": [],
+      "check": null,
+      "export_sha256": null,
+      "diagnostics": [
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1343164456,
+          "name": "Global1",
+          "instance": "Global1",
+          "step": -1,
+          "network": -1,
+          "left": 4,
+          "top": 26,
+          "right": -1,
+          "bottom": -1,
+          "arguments": []
+        }
+      ],
+      "model_after": {
+        "case": "explicit-pool-overlap-20260930/global-two",
+        "status": "unsupported",
+        "reason": "explicit address overlaps system pool"
+      },
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\explicit-pool-overlap-20260930\\global-two\\native-1",
+      "evidence": {
+        "input.gxw": "2d4c7d6fb6dec617d2ee967d616350d91a92f97a000b842c6cb258fede6006d7",
+        "frontend-snapshot.json": "ea4412d9ebfc590df90987199f2ab3492b5a4fb8540beda14fc7c0023bbc5375",
+        "native-events.jsonl": "7a36a466373dc9b40c750cd1b8296438815e50558847bd3f7b02fca5e5762b9e",
+        "events.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "resource-correspondence.json": "ecf71cb9f4cd5c2affb78cf37f4d831ce5e25542d66d01f8bb3709e871eb8bef"
+      }
+    },
+    {
+      "case": "explicit-pool-overlap-20260930/local-explicit-after-auto",
+      "input_sha256": "0f9dfd015e2dc07043b98cdd1ac6b56b091aad3352ae932e27f651af3bf19f72",
+      "generated": [
+        {
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "index": 0,
+          "channels": [
+            {
+              "size": 1717,
+              "sha256": "c658e59d12f469f53579c4845cb63a260fc14517125b3dd4bb27ff4641b3661d"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        },
+        {
+          "name": "\ud14c\uc2a4\ud2b8",
+          "index": 1,
+          "channels": [
+            {
+              "size": 490,
+              "sha256": "1911ef06e9e87fe8762811bbce4f669027b5e56d95814c3869363f98c9a84e67"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        }
+      ],
+      "check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 2,
+        "rejected": true
+      },
+      "export_sha256": null,
+      "diagnostics": [
+        {
+          "phase": "ProgramCheckProgress",
+          "kind": 2,
+          "code": 84710144,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": 198,
+          "network": -1,
+          "left": -1,
+          "top": 198,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y21"
+          ]
+        },
+        {
+          "phase": "ProgramCheckProgress",
+          "kind": 2,
+          "code": 84710144,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": 206,
+          "network": -1,
+          "left": -1,
+          "top": 206,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y21"
+          ]
+        }
+      ],
+      "model_after": {
+        "case": "explicit-pool-overlap-20260930/local-explicit-after-auto",
+        "status": "predicted",
+        "resources": [
+          {
+            "index": 0,
+            "equal": true
+          },
+          {
+            "index": 1,
+            "equal": true
+          }
+        ],
+        "ignored": [
+          [
+            {
+              "owner": "\ub2e8\uc18d\uc5f0\uc18d",
+              "name": "EMSTP",
+              "device": "D13311",
+              "iec_address": "%MW0.13311",
+              "handling": "source-fields-discarded-by-native-frontend"
+            }
+          ],
+          [
+            {
+              "owner": "\ub2e8\uc18d\uc5f0\uc18d",
+              "name": "EMSTP",
+              "device": "D13311",
+              "iec_address": "%MW0.13311",
+              "handling": "source-fields-discarded-by-native-frontend"
+            }
+          ]
+        ]
+      },
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\explicit-pool-overlap-20260930\\local-explicit-after-auto\\native-1",
+      "evidence": {
+        "input.gxw": "0f9dfd015e2dc07043b98cdd1ac6b56b091aad3352ae932e27f651af3bf19f72",
+        "frontend-snapshot.json": "5c226122568e2fdb9fbb46b24323852b533ee7153d906c6f9bb85d7617ee05c4",
+        "native-events.jsonl": "0b1c54bb45ba0721dfaaf97e0ae27a3b5a7a1105d62be8c924d290fca7f2b240",
+        "events.jsonl": "e043bf393b2fa129c173e0dd4b7331b4f9107dfa8e3298f1c88d31268896051c",
+        "resource-correspondence.json": "d0813d7a572eab34a7aab84697a4ccc7abbfa506f26f63cdd0d232c49027e416"
+      },
+      "frontend_declarations_equal_to_baseline": true,
+      "pcode_equal_to_baseline": true
+    },
+    {
+      "case": "explicit-pool-overlap-20260930-controls/global-outside",
+      "input_sha256": "5e58b651f73c49c042a4053e93212120896374a3f94bf9a4f3f9b3b9767984fd",
+      "generated": [
+        {
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "index": 0,
+          "channels": [
+            {
+              "size": 1717,
+              "sha256": "c658e59d12f469f53579c4845cb63a260fc14517125b3dd4bb27ff4641b3661d"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        },
+        {
+          "name": "\ud14c\uc2a4\ud2b8",
+          "index": 1,
+          "channels": [
+            {
+              "size": 490,
+              "sha256": "1911ef06e9e87fe8762811bbce4f669027b5e56d95814c3869363f98c9a84e67"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        }
+      ],
+      "check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 2,
+        "rejected": true
+      },
+      "export_sha256": null,
+      "diagnostics": [
+        {
+          "phase": "ProgramCheckProgress",
+          "kind": 2,
+          "code": 84710144,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": 198,
+          "network": -1,
+          "left": -1,
+          "top": 198,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y21"
+          ]
+        },
+        {
+          "phase": "ProgramCheckProgress",
+          "kind": 2,
+          "code": 84710144,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": 206,
+          "network": -1,
+          "left": -1,
+          "top": 206,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y21"
+          ]
+        }
+      ],
+      "model_after": {
+        "case": "explicit-pool-overlap-20260930-controls/global-outside",
+        "status": "predicted",
+        "resources": [
+          {
+            "index": 0,
+            "equal": true
+          },
+          {
+            "index": 1,
+            "equal": true
+          }
+        ],
+        "ignored": [
+          [],
+          []
+        ]
+      },
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\explicit-pool-overlap-20260930-controls\\global-outside\\native-1",
+      "evidence": {
+        "input.gxw": "5e58b651f73c49c042a4053e93212120896374a3f94bf9a4f3f9b3b9767984fd",
+        "frontend-snapshot.json": "7f7613d04fb19045ccaf5bf45804475a496ba37763b29effb9a450c781ed816e",
+        "native-events.jsonl": "8a3b3478f775750a6c3687668c9c2fd694bebb52fb332d48a11c2693b2517f2a",
+        "events.jsonl": "6d5b5bda0c45d23c1527fb17579aaef14f60372827760953081efb54b383d7b8",
+        "resource-correspondence.json": "c43464952e2bb64734a9deb99e3e99a661c8d28edfa55b652669345aba6ea578"
+      }
+    },
+    {
+      "case": "explicit-pool-overlap-20260930-controls/global-dint-outside",
+      "input_sha256": "42f1b4626b04859243707609d50668752c368774101c1e1541df2d9870c28133",
+      "generated": [
+        {
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "index": 0,
+          "channels": [
+            {
+              "size": 1717,
+              "sha256": "c658e59d12f469f53579c4845cb63a260fc14517125b3dd4bb27ff4641b3661d"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        },
+        {
+          "name": "\ud14c\uc2a4\ud2b8",
+          "index": 1,
+          "channels": [
+            {
+              "size": 490,
+              "sha256": "1911ef06e9e87fe8762811bbce4f669027b5e56d95814c3869363f98c9a84e67"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        }
+      ],
+      "check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 2,
+        "rejected": true
+      },
+      "export_sha256": null,
+      "diagnostics": [
+        {
+          "phase": "ProgramCheckProgress",
+          "kind": 2,
+          "code": 84710144,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": 198,
+          "network": -1,
+          "left": -1,
+          "top": 198,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y21"
+          ]
+        },
+        {
+          "phase": "ProgramCheckProgress",
+          "kind": 2,
+          "code": 84710144,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": 206,
+          "network": -1,
+          "left": -1,
+          "top": 206,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y21"
+          ]
+        }
+      ],
+      "model_after": {
+        "case": "explicit-pool-overlap-20260930-controls/global-dint-outside",
+        "status": "predicted",
+        "resources": [
+          {
+            "index": 0,
+            "equal": true
+          },
+          {
+            "index": 1,
+            "equal": true
+          }
+        ],
+        "ignored": [
+          [],
+          []
+        ]
+      },
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\explicit-pool-overlap-20260930-controls\\global-dint-outside\\native-1",
+      "evidence": {
+        "input.gxw": "42f1b4626b04859243707609d50668752c368774101c1e1541df2d9870c28133",
+        "frontend-snapshot.json": "894099ed4639637fc58724b823d31bc8aabfe71334c6f655316f2e1ec3ccc4c4",
+        "native-events.jsonl": "518d3866df3455aa866dbe035e866d46ebe92ba9588510497262c2c503cb3101",
+        "events.jsonl": "56be8b6155a772084e54de6627b14b741d6b9382ca3b6872291a321455dc51b4",
+        "resource-correspondence.json": "79540dd69ff953b89a806be3b90082986ea1fbfc8401d9faeb987200dc1ab9b0"
+      }
+    },
+    {
+      "case": "explicit-pool-overlap-20260930-controls/global-dint-crosses-lower",
+      "input_sha256": "db0e9ed13d5346c4ea13563d0f850a3fb20d4be2e2a627a97840efe34c635529",
+      "generated": [],
+      "check": null,
+      "export_sha256": null,
+      "diagnostics": [
+        {
+          "phase": "Progress",
+          "kind": 2,
+          "code": 1343164456,
+          "name": "Global1",
+          "instance": "Global1",
+          "step": -1,
+          "network": -1,
+          "left": 4,
+          "top": 26,
+          "right": -1,
+          "bottom": -1,
+          "arguments": []
+        }
+      ],
+      "model_after": {
+        "case": "explicit-pool-overlap-20260930-controls/global-dint-crosses-lower",
+        "status": "unsupported",
+        "reason": "explicit address overlaps system pool"
+      },
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\explicit-pool-overlap-20260930-controls\\global-dint-crosses-lower\\native-1",
+      "evidence": {
+        "input.gxw": "db0e9ed13d5346c4ea13563d0f850a3fb20d4be2e2a627a97840efe34c635529",
+        "frontend-snapshot.json": "f41e49b3707cbfed8a01afaa4c9adf5c06d586de19e442153f5daa23c706ce11",
+        "native-events.jsonl": "50c0c7d637f6302f1ec16bc09ef7f85c53895fa4005e1e24d2d62be138b8c92e",
+        "events.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "resource-correspondence.json": "2030336487b32f86ae1cc6be8f67ce6d9180c10dcbac9d93cf067e77ec7f3f1f"
+      }
+    },
+    {
+      "case": "explicit-pool-overlap-20260930-controls/local-explicit-outside",
+      "input_sha256": "a83f64f32d25ff1930fd780ac5bccf14d3c3a66dbed3063ae47bbdc96a2a030a",
+      "generated": [
+        {
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "index": 0,
+          "channels": [
+            {
+              "size": 1717,
+              "sha256": "c658e59d12f469f53579c4845cb63a260fc14517125b3dd4bb27ff4641b3661d"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        },
+        {
+          "name": "\ud14c\uc2a4\ud2b8",
+          "index": 1,
+          "channels": [
+            {
+              "size": 490,
+              "sha256": "1911ef06e9e87fe8762811bbce4f669027b5e56d95814c3869363f98c9a84e67"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        }
+      ],
+      "check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 2,
+        "rejected": true
+      },
+      "export_sha256": null,
+      "diagnostics": [
+        {
+          "phase": "ProgramCheckProgress",
+          "kind": 2,
+          "code": 84710144,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": 198,
+          "network": -1,
+          "left": -1,
+          "top": 198,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y21"
+          ]
+        },
+        {
+          "phase": "ProgramCheckProgress",
+          "kind": 2,
+          "code": 84710144,
+          "name": "\ub2e8\uc18d\uc5f0\uc18d",
+          "instance": "\ub2e8\uc18d\uc5f0\uc18d",
+          "step": 206,
+          "network": -1,
+          "left": -1,
+          "top": 206,
+          "right": -1,
+          "bottom": -1,
+          "arguments": [
+            "Y21"
+          ]
+        }
+      ],
+      "model_after": {
+        "case": "explicit-pool-overlap-20260930-controls/local-explicit-outside",
+        "status": "predicted",
+        "resources": [
+          {
+            "index": 0,
+            "equal": true
+          },
+          {
+            "index": 1,
+            "equal": true
+          }
+        ],
+        "ignored": [
+          [
+            {
+              "owner": "\ub2e8\uc18d\uc5f0\uc18d",
+              "name": "EMSTP",
+              "device": "D100",
+              "iec_address": "%MW0.100",
+              "handling": "source-fields-discarded-by-native-frontend"
+            }
+          ],
+          [
+            {
+              "owner": "\ub2e8\uc18d\uc5f0\uc18d",
+              "name": "EMSTP",
+              "device": "D100",
+              "iec_address": "%MW0.100",
+              "handling": "source-fields-discarded-by-native-frontend"
+            }
+          ]
+        ]
+      },
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\explicit-pool-overlap-20260930-controls\\local-explicit-outside\\native-1",
+      "evidence": {
+        "input.gxw": "a83f64f32d25ff1930fd780ac5bccf14d3c3a66dbed3063ae47bbdc96a2a030a",
+        "frontend-snapshot.json": "5c226122568e2fdb9fbb46b24323852b533ee7153d906c6f9bb85d7617ee05c4",
+        "native-events.jsonl": "0311317a8454099041ab0d8d3d62d03e1e8f346f931115832d63a940063cd06b",
+        "events.jsonl": "e0537b1fd40bf5c11e5d343bbb90ed49f0907052dce6b05d5cc33d47ac4ed86b",
+        "resource-correspondence.json": "e1ddfd9d24201bcd6e6a693a9942d06d16e871e191201266362681d689913b12"
+      },
+      "frontend_declarations_equal_to_baseline": true,
+      "pcode_equal_to_baseline": true
+    },
+    {
+      "case": "local-address-holdout-20260930/baseline",
+      "input_sha256": "9d839e70527515182dfd9a9c63abac7245c700a92942e7f44b94925f862de4f1",
+      "generated": [
+        {
+          "name": "MAIN",
+          "index": 0,
+          "channels": [
+            {
+              "size": 1289,
+              "sha256": "58b41f5edfcc25e0d375c3b5cc7eda7bd96d92be537bc7c2c1b49d4e0baf7ae0"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        }
+      ],
+      "check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "export_sha256": "30903b4fd6f40d46d444b0628da8044cfdf2c751a4a378d8b879856f93aa0497",
+      "diagnostics": [],
+      "model_after": {
+        "case": "local-address-holdout-20260930/baseline",
+        "status": "predicted",
+        "resources": [
+          {
+            "index": 0,
+            "equal": true
+          }
+        ],
+        "ignored": [
+          []
+        ]
+      },
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\local-address-holdout-20260930\\baseline\\native-1",
+      "evidence": {
+        "input.gxw": "9d839e70527515182dfd9a9c63abac7245c700a92942e7f44b94925f862de4f1",
+        "frontend-snapshot.json": "1fee401c284f5c885e2e36d28eb96eba4c9b9ddacadf9d6c3a779ef717a47c71",
+        "native-events.jsonl": "86f27e0c1cd633ae709c633c6c771f0273bde77cf917402da759d48dd6f05745",
+        "events.jsonl": "6993b46ab6b59bcb3a33acb023ff6ff0761970200566416ff65f77f65475943d",
+        "resource-correspondence.json": "d102a519000e8c15634800b3483e0d49c952cda7606f063d2efb9d317bbf4c41"
+      }
+    },
+    {
+      "case": "local-address-holdout-20260930/local-bool-address",
+      "input_sha256": "3136b4f7c919d976e11e5b9a715fb96d5e4f3384534d13f2aece479e4dfc255a",
+      "generated": [
+        {
+          "name": "MAIN",
+          "index": 0,
+          "channels": [
+            {
+              "size": 1289,
+              "sha256": "58b41f5edfcc25e0d375c3b5cc7eda7bd96d92be537bc7c2c1b49d4e0baf7ae0"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "size": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ]
+        }
+      ],
+      "check": {
+        "operation": "ProgramCheckCompleted",
+        "targets": 1,
+        "rejected": false
+      },
+      "export_sha256": "7953f6e383946183b8d54f4a4a8fa60f25aca5a2ba64488bb462b565a6099a0c",
+      "diagnostics": [],
+      "model_after": {
+        "case": "local-address-holdout-20260930/local-bool-address",
+        "status": "predicted",
+        "resources": [
+          {
+            "index": 0,
+            "equal": true
+          }
+        ],
+        "ignored": [
+          [
+            {
+              "owner": "MAIN",
+              "name": "\uc2dc\uc791",
+              "device": "M100",
+              "iec_address": "%MX0.100",
+              "handling": "source-fields-discarded-by-native-frontend"
+            }
+          ]
+        ]
+      },
+      "native_directory": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\local-address-holdout-20260930\\local-bool-address\\native-1",
+      "evidence": {
+        "input.gxw": "3136b4f7c919d976e11e5b9a715fb96d5e4f3384534d13f2aece479e4dfc255a",
+        "frontend-snapshot.json": "1fee401c284f5c885e2e36d28eb96eba4c9b9ddacadf9d6c3a779ef717a47c71",
+        "native-events.jsonl": "d7b36a011aa71f62aa70d9b66158d29671caf61a5765f4e37ca59a1bd4bfa14f",
+        "events.jsonl": "ae7a9eaeb5be16f62f224f0b357684877ae5ad288ab8698405b66ad2785a0815",
+        "resource-correspondence.json": "3e1305e754b3f2412866f0900917c682439e704d9755accd254130913ffb6528"
+      },
+      "frontend_declarations_equal_to_baseline": true,
+      "pcode_equal_to_baseline": true,
+      "saved_local_declaration_raw_preserved": true
+    }
+  ],
+  "corrected_model": {
+    "source_q_direct_declarations.py": {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\source_q_direct_declarations.py",
+      "sha256": "cc9be6f6e9bc6272f5b62532eddf36782cd2878c8bbf14bbb920963c8cb4e578"
+    },
+    "source_q_direct_projection.py": {
+      "path": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\source_q_direct_projection.py",
+      "sha256": "26bd3758b6351253eeaa6dd08612cc60b40eadb6e050ceff85d54c9eee09cbfa"
+    }
+  },
+  "validation": {
+    "native_runs": 10,
+    "source_model_matches": 12,
+    "matched_projects": 7,
+    "native_overlap_rejections": 3
+  },
+  "limitations": [
+    "The first project baseline itself has duplicate Y21 coil errors. Allocation/computation evidence is not full-project acceptance.",
+    "The second project baseline and local BOOL control pass fresh ProgramCheck and export; frontend/PCode equality is independently observed.",
+    "Zero rows from unqualified local GetDeviceAssignment queries are not interpreted as absence of allocation.",
+    "R/ZR pools, retain pools, arbitrary FB local address fields and general temporary lifetimes remain outside this result."
+  ]
+}

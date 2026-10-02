@@ -154,7 +154,7 @@ def test_mixed_writer_and_unprotected_direction_pair_are_reported():
 
 
 def test_edge_first_scan_and_timer_semantics_have_deterministic_findings():
-    edge_requirement = infer_semantic_requirements("每次按下 X0 一次，D0 加一")
+    edge_requirement = infer_semantic_requirements("X0 上升沿，D0 加一")
     edge_program = build_plc_ir(
         ladder(
             rung(

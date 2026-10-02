@@ -19,6 +19,8 @@ from application.compact_protocol import (
     compact_protocol_prompt, compact_capability_prompt,
 )
 
+from application.construction_examples import prepare_construction_examples
+
 from model_runtime.provider import TextDelta
 from application.generation_context import _build_knowledge_context
 from shared.context_audit import audit_section
@@ -47,8 +49,10 @@ _COMPACT_PROTOCOL = """# Agent B compact ladder protocol
 """ + compact_protocol_prompt()
 
 
-def _compact_wire_renderer(plc_model):
+def _compact_wire_renderer(plc_model, *, example_block=None):
     model = str(plc_model or "FX3U").strip().upper() or "FX3U"
+    # Capture once; compiler remeasurement must render the same experiment arm.
+    examples = example_block if example_block is not None else prepare_construction_examples(model)
 
     def render(
         runtime_spec, evidence_text, generation_request, _current_program,
@@ -64,6 +68,7 @@ def _compact_wire_renderer(plc_model):
         )
         system_prompt = (
             _COMPACT_PROTOCOL
+            + examples.text
             + SOURCE_PRECEDENCE
             + f"\n# Selected PLC\n{model}\n"
             + "\n# Confirmed project specification\n"
@@ -208,17 +213,24 @@ def _decode_generated_ladder(value, projected, plc_model):
     raise CompactProtocolError("unknown or ambiguous ladder representation")
 
 
-def _build_agent_b_prompt(projected, plc_model, *, context=None):
+def _build_agent_b_prompt(projected, plc_model, *, context=None, construction_examples=None):
     model = str(plc_model or "FX3U").strip().upper() or "FX3U"
+    renderer = None
+    if context is None or not context.wire_packet:
+        renderer = _compact_wire_renderer(
+            model, example_block=prepare_construction_examples(
+                model, construction_examples, projected
+            ),
+        )
     context = context or build_confirmed_generation_context(
         projected,
         model,
         knowledge_builder=_build_knowledge_context,
-        wire_renderer=_compact_wire_renderer(model),
+        wire_renderer=renderer,
     )
     packet = context.wire_packet
     if not packet:
-        packet = _compact_wire_renderer(model)(
+        packet = renderer(
             context.confirmed_spec,
             context.knowledge_context,
             context.generation_request,
@@ -245,6 +257,7 @@ def generate_confirmed_ladder(
     on_stage=None,
     on_context=None,
     decision_receipt_id=None,
+    construction_examples: bool | None = None,
 ):
     """Generate once after any optional pre-generation context compaction."""
     import application.model_api as api
@@ -254,6 +267,14 @@ def generate_confirmed_ladder(
     if not projected:
         raise ValueError("confirmed generation specification is empty")
 
+    examples = prepare_construction_examples(
+        model, construction_examples, projected
+    )
+    audit_section(
+        "construction_examples", examples.text,
+        status="included" if examples.text else "excluded",
+        reason=examples.reason, source="builtin_plc_ir",
+    )
     base_provider = api.current_provider()
     context = build_confirmed_generation_context(
         projected,
@@ -261,12 +282,21 @@ def generate_confirmed_ladder(
         knowledge_builder=_build_knowledge_context,
         model_profile=getattr(base_provider, "profile", {}),
         decision_receipt_id=decision_receipt_id,
-        wire_renderer=_compact_wire_renderer(model),
+        wire_renderer=_compact_wire_renderer(model, example_block=examples),
     )
+    handoff = context.to_dict()["handoff"]
+    handoff["construction_examples"] = examples.manifest()
     if on_context:
-        on_context(context.to_dict()["handoff"])
+        on_context(copy.deepcopy(handoff))
     system_prompt = _build_agent_b_prompt(projected, model, context=context)
     if on_stage:
+        if examples.requested:
+            on_stage(
+                "construction_examples",
+                "本次生成已加入路由后的构造范例"
+                if examples.text
+                else "构造范例未注入：" + examples.reason,
+            )
         on_stage("confirmed_spec_generation", "正在根据已确认规格生成梯形图")
 
     provider = _FirstJSONObjectProvider(base_provider)
@@ -304,5 +334,5 @@ def generate_confirmed_ladder(
     return {
         "ladder": ladder,
         "model_calls": 1 + compaction_calls,
-        "generation_handoff": context.to_dict()["handoff"],
+        "generation_handoff": handoff,
     }

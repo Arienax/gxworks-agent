@@ -1,0 +1,384 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-01",
+  "evidence_level": "verified within one original FX3G source project and copied controls",
+  "handling": "native-decoded instructions and live source correspondence; project check remains rejected",
+  "environment": {
+    "os": "Windows",
+    "compiler_iec": "15.50",
+    "fx_code_generator": "15.31",
+    "adapter_cpu": 521,
+    "mode": 0,
+    "versions": []
+  },
+  "source": {
+    "repository": "https://github.com/Serhioromano/gxw2-libraries",
+    "independent_original_projects": 1,
+    "original_project": "cross-family-source-holdouts/case-00/input.gxw",
+    "original_bytes": "retained locally"
+  },
+  "original_reading": {
+    "raw_bytes": 49049,
+    "lexical_records": 3724,
+    "native_records": 3724,
+    "native_decode_consumed": 49049,
+    "whole_listing_exact": true,
+    "individual_step_queries": 3724,
+    "individual_step_matches": 3724,
+    "error_prefix_queries": 22,
+    "error_prefix_matches": 22
+  },
+  "source_correspondence": {
+    "compile_snapshots": 69,
+    "normalized_st_sources": 64,
+    "normalized_source_roundtrip_exact": true,
+    "reference_occurrences": 3226,
+    "resolved_references": 3138,
+    "opaque_references": 0,
+    "synthetic_sentinels": 88,
+    "whole_compiler_groups": 64,
+    "all_groups_unique": true,
+    "native_sink_instructions": 3724,
+    "all_instructions_matched": true,
+    "native_operand_matches": 5976,
+    "preceding_source_reads": 876,
+    "finalized_source_points": 876,
+    "native_check_accepted": false,
+    "errors": 22
+  },
+  "independent_source_prefixes": {
+    "finalized_source_points": 876,
+    "distinct_prefix_queries": 798,
+    "exact_prefix_matches": 798,
+    "source_points_verified": 876
+  },
+  "prospective_controls": {
+    "cases": 7,
+    "exact_error_profile_predictions": 2,
+    "counterexamples": 5,
+    "accepted_projects": 0
+  },
+  "conversion_path": [
+    {
+      "case": "original",
+      "summary": {
+        "program_bytes": 49049,
+        "instructions": 3724,
+        "calls": 454,
+        "unique_unordered_anchors": 344,
+        "anchors_nondecreasing": true,
+        "handling_counts": {
+          "resolved-unique-in-ordered-trace": 442,
+          "ambiguous": 12
+        },
+        "resolved_packet_union_bytes": 21031,
+        "instructions_in_resolved_packets": 1538,
+        "resolved_packet_intervals": [
+          [
+            0,
+            1057
+          ],
+          [
+            1096,
+            1138
+          ],
+          [
+            1177,
+            1534
+          ],
+          [
+            1573,
+            1615
+          ],
+          [
+            1654,
+            2011
+          ],
+          [
+            2050,
+            2092
+          ],
+          [
+            2131,
+            2488
+          ],
+          [
+            2527,
+            2569
+          ],
+          [
+            2608,
+            2965
+          ],
+          [
+            3004,
+            3046
+          ],
+          [
+            3085,
+            3642
+          ],
+          [
+            3681,
+            3723
+          ],
+          [
+            3762,
+            21499
+          ]
+        ],
+        "rejected_packets": 6
+      }
+    },
+    {
+      "case": "unused-bool-local",
+      "summary": {
+        "program_bytes": 49049,
+        "instructions": 3724,
+        "calls": 454,
+        "unique_unordered_anchors": 344,
+        "anchors_nondecreasing": true,
+        "handling_counts": {
+          "resolved-unique-in-ordered-trace": 442,
+          "ambiguous": 12
+        },
+        "resolved_packet_union_bytes": 21031,
+        "instructions_in_resolved_packets": 1538,
+        "resolved_packet_intervals": [
+          [
+            0,
+            1057
+          ],
+          [
+            1096,
+            1138
+          ],
+          [
+            1177,
+            1534
+          ],
+          [
+            1573,
+            1615
+          ],
+          [
+            1654,
+            2011
+          ],
+          [
+            2050,
+            2092
+          ],
+          [
+            2131,
+            2488
+          ],
+          [
+            2527,
+            2569
+          ],
+          [
+            2608,
+            2965
+          ],
+          [
+            3004,
+            3046
+          ],
+          [
+            3085,
+            3642
+          ],
+          [
+            3681,
+            3723
+          ],
+          [
+            3762,
+            21499
+          ]
+        ],
+        "rejected_packets": 6
+      }
+    },
+    {
+      "case": "combined",
+      "summary": {
+        "program_bytes": 49742,
+        "instructions": 3773,
+        "calls": 1091,
+        "unique_unordered_anchors": 782,
+        "anchors_nondecreasing": true,
+        "handling_counts": {
+          "resolved-unique-in-ordered-trace": 1060,
+          "ambiguous": 31
+        },
+        "resolved_packet_union_bytes": 48901,
+        "instructions_in_resolved_packets": 3695,
+        "resolved_packet_intervals": [
+          [
+            0,
+            1057
+          ],
+          [
+            1096,
+            1138
+          ],
+          [
+            1177,
+            1534
+          ],
+          [
+            1573,
+            1615
+          ],
+          [
+            1654,
+            2011
+          ],
+          [
+            2050,
+            2092
+          ],
+          [
+            2131,
+            2488
+          ],
+          [
+            2527,
+            2569
+          ],
+          [
+            2608,
+            2965
+          ],
+          [
+            3004,
+            3046
+          ],
+          [
+            3085,
+            3642
+          ],
+          [
+            3681,
+            3723
+          ],
+          [
+            3762,
+            45891
+          ],
+          [
+            45924,
+            46203
+          ],
+          [
+            46236,
+            46559
+          ],
+          [
+            46576,
+            46638
+          ],
+          [
+            46655,
+            46769
+          ],
+          [
+            46786,
+            46848
+          ],
+          [
+            46865,
+            46979
+          ],
+          [
+            46996,
+            47058
+          ],
+          [
+            47075,
+            47137
+          ],
+          [
+            47154,
+            47399
+          ],
+          [
+            47416,
+            47478
+          ],
+          [
+            47495,
+            47609
+          ],
+          [
+            47626,
+            47688
+          ],
+          [
+            47705,
+            47819
+          ],
+          [
+            47836,
+            47898
+          ],
+          [
+            47915,
+            47977
+          ],
+          [
+            47994,
+            48108
+          ],
+          [
+            48125,
+            48187
+          ],
+          [
+            48237,
+            49737
+          ],
+          [
+            49739,
+            49742
+          ]
+        ],
+        "rejected_packets": 8
+      }
+    }
+  ],
+  "independent_refusals": {
+    "requests": 8,
+    "all_return_codes_consumption_heights_offsets_exact": true,
+    "fresh_object_per_request": true
+  },
+  "discoveries": [
+    "All 3724 final records and 5976 native operands agree with the independently decoded full 49049-byte program.",
+    "The compiler links 64 emitted instruction groups in a different order. Event-order record pairing is invalid; every complete group has one disjoint exact final-code occurrence.",
+    "All 64 normalized ST sources reconstruct directly from retained segments. 3138 table references resolve; 88 synthetic source sentinels remain separate.",
+    "All 876 live finalized physical points agree with 798 independently counted final-code prefixes. Twelve points retain three matching incoming references each.",
+    "All 22 initially reported errors join to Modbus demo source or its outlined protocol functions. This does not mean there are no later defects.",
+    "One protocol selection removes the sixteen duplicate-output errors. Tautological branch boundaries around two member assignments remove the two measured structure-copy size errors.",
+    "A simple BOOL comparison capture is a retained counterexample: it exposes other refusals and does not produce an accepted project.",
+    "The original captured ladder-conversion path stops near byte 21499 of 49049. The combined edit reaches the final program bytes and exposes failures in unchanged AlarmManager instruction groups.",
+    "All eight refusals in the combined control reproduce in fresh public converter objects; they are not residual state from a preceding rejected request."
+  ],
+  "limitations": [
+    "A preceding source read is an observed physical point, not exclusive ownership of subsequent instructions.",
+    "No library or root source is merged solely because it has the same definition name; multiple source candidates are retained.",
+    "Formatting of native operands is bounded to this measured FX capture; opaque original fields are retained.",
+    "Instruction emission and exact native decoding do not make a rejected project acceptable.",
+    "Fresh DebugInformation2 is empty after this refusal; stored source ranges are not used as fresh evidence.",
+    "Source correspondence is compiler-version-specific and is not a source-only compilation prediction.",
+    "Normalized reference resolution does not establish complete ST semantics or complete declaration type coverage.",
+    "Ordered packet coverage retains ambiguous positions and does not prove full consumption, acceptance or every ProgramCheck validation path.",
+    "No changed project passed this checkpoint. Save/reopen was not performed after rejection.",
+    "No controller or simulator execution, commit, push, release or public distribution occurred."
+  ],
+  "archives": {
+    "public": "research/evidence/gxw-fx-full-source-correspondence-20261001.zip",
+    "local": "research/experiments/sfc-graph-20260926/public-corpus-discovery/gxw-fx-full-source-correspondence-20261001-local.zip"
+  }
+}

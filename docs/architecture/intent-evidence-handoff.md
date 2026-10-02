@@ -33,17 +33,45 @@ Saved-version delivery uses the version's specification and receipt, not the liv
 Regression coverage belongs to [test_intent_evidence_handoff.py](../../tests/test_intent_evidence_handoff.py) and [test_context_compiler.py](../../tests/test_context_compiler.py). The earlier investigation is preserved in the [process archive](../process/README.md).
 
 
+## Device-comment ownership
+
+GX Works2 device comments are display names, not requirement storage. Core derives
+them from confirmed device-purpose labels, cuts at the first natural clause
+separator, and caps generated/exported comments at 16 characters. Agent B's compact
+wire protocol does not author device comments. Behavioral requirements remain in
+intent/semantic fields instead of being copied into contact/coil annotations.
+
 ## Implementation semantics ownership
+
+Fresh Agent A candidates use `implementation_semantics` for control-structure
+semantics only. Free-form scan/event language is carried separately as
+`execution_intent_claims`: Agent A supplies a non-authoritative trigger frame plus
+exact spans copied from the current user request. Core verifies the evidence and
+device grounding before projecting a claim into `execution_semantics`. Agent A
+never emits the final execution enum directly. Formal notation such as an explicit
+`0 -> 1`, `上升沿`, `首扫` or numeric cycle remains a narrow deterministic fast
+path; summary/description/generation_guide prose is never re-parsed into hard
+execution constraints.
 
 Fresh Agent A candidates use `implementation_semantics` for control-structure
 semantics only. Agent A does not own opcode selection, operand layout, or internal
 M/D/T/C allocation. `plc.specification.approach` normalizes the structure vocabulary.
 
-Caller-fixed low-level choices are extracted independently by
-`plc.specification.explicit_constraints` from the caller's own text and stored as
-`explicit_user_constraints`. That owner covers required/forbidden opcodes and
-devices plus exact opcode+operands instances. Pinned reanalysis merges these persisted
-constraints with the current caller amendment, so Agent A does not have to repeat them.
+Caller-fixed low-level choices use the same claim/grounding boundary as execution
+intent. Agent A emits non-authoritative `explicit_constraint_claims` with
+`operation`, `scope`, a typed PLC target, and exact spans copied from the current
+request. Core validates claim shape, exact evidence membership, opcode/device
+identity and exact instruction form. It does not classify natural-language
+required/forbidden/scoped/clear wording. Only grounded `scope=global` claims
+produce structured operations; `scoped` and `ambiguous` claims remain visible in
+the receipt but never become global hard constraints.
+
+`plc.specification.explicit_constraints` owns only canonical constraint state and
+structured mutation. It persists required/forbidden opcodes and devices plus exact
+opcode+operands instances. Pinned reanalysis starts from persisted constraints for
+the same approach and applies only grounded current-turn operations. A later global
+opcode ban removes any persisted exact instance for that opcode, preventing stale
+self-conflicts.
 
 Core projects `implementation_semantics + explicit_user_constraints` into
 `generation_contract`. Model-authored `generation_contract` is not requested for

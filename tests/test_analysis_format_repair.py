@@ -17,7 +17,7 @@ from application.response_contracts import ANALYSIS_RESPONSE
 BROKEN = '{"summary":"起保停控制","approaches":[],"flowchart_steps":[{"type":"transition":"X0启动"}]}'
 FIXED = '{"summary":"起保停控制","approaches":[],"flowchart_steps":[{"type":"transition","label":"X0启动"}]}'
 LEGACY_PROTOCOL = '{"summary":"起保停控制","approaches":[{"name":"旧协议","generation_contract":{"required_structures":["self_hold"]}}]}'
-CURRENT_EMPTY = '{"summary":"起保停控制","approaches":[{"name":"当前协议","implementation_semantics":[]}]}'
+CURRENT_EMPTY = '{"summary":"起保停控制","approaches":[{"name":"当前协议","implementation_semantics":[]}],"execution_intent_claims":[],"explicit_constraint_claims":[]}'
 MIXED_PROTOCOL = '{"summary":"起保停控制","approaches":[{"name":"新","implementation_semantics":[]},{"name":"旧","generation_contract":{"required_structures":["self_hold"]}}]}'
 LOW_LEVEL_SEMANTIC = '{"summary":"起保停控制","approaches":[{"name":"错误","implementation_semantics":[{"kind":"opcode","status":"required","value":"SFTL"}]}]}'
 
@@ -113,6 +113,58 @@ def test_fresh_agent_a_protocol_violation_uses_one_existing_format_repair(first)
     assert provider.requests[1].messages[-2].content == first
 
 
+def test_execution_claim_metadata_does_not_force_format_repair():
+    content = json.dumps({
+        "summary": "复杂事件",
+        "approaches": [{"name": "当前协议", "implementation_semantics": []}],
+        "explicit_constraint_claims": [{
+            "operation": "require",
+            "scope": "global",
+            "target": {"kind": "opcode", "values": ["MOV"]},
+            "evidence": ["固定使用 MOV。"],
+        }],
+        "execution_intent_claims": [
+            {
+                "trigger": {
+                    "kind": "transition",
+                    "source_devices": ["X2"],
+                    "from": 0,
+                    "to": 1,
+                },
+                "effect": {"kind": "pulse", "devices": ["M1"]},
+                "rearm": True,
+                "evidence": ["X2 每次从 0 变成 1 时，M1 只产生一个扫描周期事件。"],
+            },
+            {
+                "trigger": {"kind": "level", "source_devices": ["X1"]},
+                "effect": {"kind": "reset", "devices": ["M0"]},
+                "rearm": True,
+                "evidence": ["X1 动作时必须立即解除 M0。"],
+            },
+            {
+                "trigger": {
+                    "kind": "transition",
+                    "source_devices": ["M1"],
+                    "from": 0,
+                    "to": 1,
+                },
+                "effect": {"kind": "count", "devices": ["C0"]},
+                "rearm": True,
+                "evidence": ["对 C0 计数一次；"],
+            },
+        ],
+        "missing_info": [],
+        "suggested_io": {},
+        "hardware_config": {},
+        "assumptions": [],
+    }, ensure_ascii=False)
+    provider = Provider(content)
+    with api.provider_scope(provider):
+        result = api._request_analysis_response([UserMessage("复杂事件")])
+    assert result.message.content == content
+    assert len(provider.requests) == 1
+
+
 def test_empty_implementation_semantics_is_valid_current_protocol():
     provider = Provider(CURRENT_EMPTY)
     with api.provider_scope(provider):
@@ -168,5 +220,5 @@ def test_analysis_prompt_contains_valid_json_examples():
     example = example.split("\n# suggested_io", 1)[0]
     assert isinstance(json.loads(example), dict)
     assert set(json.loads(example)) == {
-        "summary", "approaches", "missing_info", "suggested_io", "hardware_config", "assumptions",
+        "summary", "approaches", "execution_intent_claims", "explicit_constraint_claims", "missing_info", "suggested_io", "hardware_config", "assumptions",
     }

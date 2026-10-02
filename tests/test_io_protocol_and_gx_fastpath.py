@@ -275,6 +275,11 @@ def test_device_keyed_suggestions_are_io_not_hardware_metadata(layout):
     ("X003: 检测输入（常闭，按下时 OFF）; Y010: 送料输出（工位2）", {"X3": "检测输入", "Y10": "送料输出（工位2）"}),
     ("X005 is Infeed sensor; Y012 is Reject valve", {"X5": "Infeed sensor", "Y12": "Reject valve"}),
     ("X005为3号泵运行反馈", {"X5": "3号泵运行反馈"}),
+    ("X0 为启动请求，X1 为停止请求。", {"X0": "启动请求", "X1": "停止请求"}),
+    (
+        "M2：不良品输出保持状态，使用普通自保持逻辑保持，不采用 SET/RST 锁存。",
+        {"M2": "不良品输出保持状态"},
+    ),
 ])
 def test_explicit_inline_io_survives_omitted_model_allocation(text, expected):
     from plc.specification.confirmed import build_review_draft

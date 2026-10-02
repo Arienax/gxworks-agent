@@ -57,6 +57,7 @@ import { GenerationResult, useGenerationResult } from "./features/GenerationResu
 import { JobProgress } from "./features/JobProgress";
 import { ApprovalSettingsPanel, approvalLabels } from "./features/ApprovalSettings";
 import type { ApprovalSettings } from "./features/ApprovalSettings";
+import { DeveloperSettingsPanel } from "./features/DeveloperSettings";
 import { ProjectToolbar, artifactLabel } from "./features/ProjectToolbar";
 import { submitGXSend } from "./features/gxSend";
 import type { GXSendSelection } from "./features/gxSend";
@@ -102,7 +103,13 @@ export default function App() {
     [panel, setPanel] = useState("agent"),
     [leftOpen, setLeftOpen] = useState(window.innerWidth > 900);
   const [approvalSettings, setApprovalSettings] = useState<ApprovalSettings | null>(null);
-  const [settingsTab, setSettingsTab] = useState<"general" | "model">("general");
+  const [settingsTab, setSettingsTab] = useState<"general" | "model" | "developer">("general");
+  const [constructionExamples, setConstructionExamples] = useState(
+    () => localStorage.getItem("gx.developer.constructionExamples") === "1",
+  );
+  const [freshConfirmedGeneration, setFreshConfirmedGeneration] = useState(
+    () => localStorage.getItem("gx.developer.freshConfirmedGeneration") === "1",
+  );
   const [settingsError, setSettingsError] = useState("");
   const [settingsRetry, setSettingsRetry] = useState(0);
   const [settings, setSettings] = useState<ModelSettings | null>(null),
@@ -280,6 +287,12 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("gx.theme", theme);
   }, [theme]);
+  useEffect(() => {
+    localStorage.setItem("gx.developer.constructionExamples", constructionExamples ? "1" : "0");
+  }, [constructionExamples]);
+  useEffect(() => {
+    localStorage.setItem("gx.developer.freshConfirmedGeneration", freshConfirmedGeneration ? "1" : "0");
+  }, [freshConfirmedGeneration]);
   useEffect(() => {
     let stopped = false;
     const credential = bootstrapToken;
@@ -667,7 +680,12 @@ export default function App() {
       }} : {}),
       ...extra,
       ...(kind === "analysis" ? { analysis_mode: analysisMode } : {}),
-    });
+    }, kind === "generation" ? {
+      headers: {
+        "X-GX-Construction-Examples": constructionExamples ? "1" : "0",
+        "X-GX-Fresh-Confirmed-Generation": freshConfirmedGeneration ? "1" : "0",
+      },
+    } : {});
     if (activeProjectRef.current !== pid || epoch !== projectEpoch.current)
       return;
     jobsPolling.current?.refresh();
@@ -1949,6 +1967,7 @@ export default function App() {
         <nav className="settings-tabs" aria-label={t("设置分类")}>
           <Button variant={settingsTab === "general" ? "primary" : "ghost"} onClick={() => setSettingsTab("general")}>{t("通用与审批")}</Button>
           <Button variant={settingsTab === "model" ? "primary" : "ghost"} onClick={() => setSettingsTab("model")}>{t("模型")}</Button>
+          <Button variant={settingsTab === "developer" ? "primary" : "ghost"} onClick={() => setSettingsTab("developer")}>{t("开发者")}</Button>
         </nav>
         <RetainedPanel active={settingsTab === "general"}>{() => approvalSettings ? <ApprovalSettingsPanel value={approvalSettings}
           disabled={!!session.read_only} onChange={setApprovalSettings} t={t}/> : <p>{t("正在读取设置")}</p>}</RetainedPanel>
@@ -1963,6 +1982,16 @@ export default function App() {
               onChange={value => { settingsRead.current.cancel(); setSettings(value); }}
             />
           </Suspense>
+        )}</RetainedPanel>
+        <RetainedPanel active={settingsTab === "developer"}>{() => (
+          <DeveloperSettingsPanel
+            constructionExamples={constructionExamples}
+            freshConfirmedGeneration={freshConfirmedGeneration}
+            disabled={!session || !!session.read_only}
+            onConstructionExamplesChange={setConstructionExamples}
+            onFreshConfirmedGenerationChange={setFreshConfirmedGeneration}
+            t={t}
+          />
         )}</RetainedPanel>
       </Modal>
       <Modal

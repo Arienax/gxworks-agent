@@ -33,13 +33,14 @@ export async function api<T>(
   path: string,
   method = "GET",
   body?: unknown,
-  options: { signal?: AbortSignal } = {},
+  options: { signal?: AbortSignal; headers?: Record<string, string> } = {},
 ): Promise<T> {
   const response = await fetch(`/api${path}`, {
     method,
     signal: options.signal,
     credentials: "same-origin",
     headers: {
+      ...options.headers,
       "Content-Type": "application/json",
       ...(method !== "GET" ? { "X-CSRF-Token": csrf } : {}),
     },

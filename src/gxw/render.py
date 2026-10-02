@@ -2,14 +2,14 @@
 from html import escape
 
 from .models import COIL_NODE_KINDS, NodeKind
-from .object_model import _port_names
+from .object_model import _ports
 from .semantic import CoilRole, ContactPolarity, LadderEdge, build_semantic_model
 
 
-def render_structured_svg(program):
+def render_structured_svg(program, *, sources=None):
     if len(program.blocks) > 1:
         import xml.etree.ElementTree as ET
-        views = [ET.fromstring(_render_single(view)) for view in program.block_views()]
+        views = [ET.fromstring(_render_single(view, sources)) for view in program.block_views()]
         dimensions = [list(map(float, view.attrib['viewBox'].split())) for view in views]
         width, height = max(d[2] for d in dimensions), sum(d[3] for d in dimensions)
         parts = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" role="img" aria-label="Structured Ladder FBD blocks">']
@@ -22,10 +22,10 @@ def render_structured_svg(program):
             parts.append(ET.tostring(view, encoding='unicode'))
             y += dim[3]
         return ''.join([*parts, '</svg>'])
-    return _render_single(program)
+    return _render_single(program, sources)
 
 
-def _render_single(program):
+def _render_single(program, sources=None):
     model = build_semantic_model(program)
     ladder = {n.node_offset: n for n in (*model.contacts, *model.coils)}
     unit, margin = 34, 42
@@ -72,13 +72,16 @@ def _render_single(program):
             if n.type_name:
                 parts.append(f'<text class="symbol" x="{x+width/2}" y="{y+unit*.6}" text-anchor="middle">{escape(n.symbol)}</text>')
             parts.append(f'<text x="{x+width/2}" y="{y+unit*1.45}" text-anchor="middle">{escape(n.type_name or n.symbol)}</text>')
-            for name, port in zip(_port_names(n), n.ports):
-                px, py = n.port_point(n.ports.index(port)).x*unit, n.port_point(n.ports.index(port)).y*unit
+            for index, (formal, port) in enumerate(zip(_ports(n, sources), n.ports)):
+                name = formal.get('formal_name', formal['name'])
+                px, py = n.port_point(index).x*unit, n.port_point(index).y*unit
                 left = port.local_x == 0
                 parts.append(f'<text x="{px+(6 if left else -6)}" y="{py-5}" text-anchor="{"start" if left else "end"}">{escape(name)}</text>')
         for i in range(len(n.ports)):
             p = n.port_point(i)
-            parts.append(f'<circle class="port" cx="{p.x*unit}" cy="{p.y*unit}" r="3"/>')
+            negated = bool(n.ports[i].port_kind_code & 8) and n.kind in (
+                NodeKind.FUNCTION, NodeKind.FUNCTION_BLOCK, NodeKind.INPUT, NodeKind.OUTPUT)
+            parts.append(f'<circle class="port" data-negated="{str(negated).lower()}" cx="{p.x*unit}" cy="{p.y*unit}" r="{5 if negated else 3}"/>')
         parts.append('</g>')
     parts.extend(['</g>', '</svg>'])
     return "".join(parts)

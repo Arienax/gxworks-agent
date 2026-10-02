@@ -1,0 +1,9 @@
+ M docs/reports/README.md
+ M research/README.md
+ M research/replay_gxw_workspace.py
+?? docs/reports/gxw/2026-09-30-check-allocation-checkpoint.md
+?? research/freeze_gxw_check_allocation_checkpoint.py
+?? research/probe_gxw_program_check_resources.py
+?? research/results/gxw-check-allocation-20260930/
+?? research/results/program-check-matrix-20260930.json
+?? research/results/source-allocation-boundaries-20260930.json

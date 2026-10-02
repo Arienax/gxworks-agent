@@ -5,6 +5,7 @@ from gxworks2.csv_manager import CSVManager
 from gxworks2.native_export import GXNativeLoweringError, lower_large_parallel_blocks_for_gxworks2
 from plc.ir import ir_to_ladder, is_plc_ir
 from plc.instruction_steps import StepCursor, instruction_step_width
+from plc.comments import short_device_comment
 
 def _step_width_model(payload, override):
     """Keep an explicit CPU through IR-to-ladder projection; default legacy FX."""
@@ -63,7 +64,7 @@ def _write_program_csv(
             identity = match.group(1) + (match.group(2).lstrip("0") or "0")
         if identity not in comment_devices:
             comment_devices.add(identity)
-            device_comments[addr] = comment
+            device_comments[addr] = short_device_comment(str(comment or ""))
 
     # Project declarations are authoritative, including explicit empty values.
     # Work on a separate collection and identify aliases before inferring any
@@ -146,7 +147,7 @@ def _write_program_csv(
         is_contact = inst_up.startswith(("LD", "AN", "OR")) and inst_up not in ["ORB", "ANB"]
         is_sys_block = inst_up in ["MPS", "MRD", "MPP", "ORB", "ANB", "END"]
 
-        valid_note = comment if comment != "null" else ""
+        valid_note = short_device_comment(comment)
         if is_contact or is_sys_block:
             valid_note = ""
 

@@ -1,0 +1,238 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-01",
+  "evidence_level": "verified native function-boundary predicates within recorded scope",
+  "handling": "lossless raw operand framing and decoded temporary type-check descriptors; whole-instruction gaps retained",
+  "environment": {
+    "os": "Windows",
+    "fx_code_generator": "15.31",
+    "adapter_cpu": 521,
+    "cpu_class": 32,
+    "mode": 0,
+    "versions": []
+  },
+  "catalog": {
+    "descriptors": 436,
+    "reachable": 435,
+    "queried_public_edges": 3962,
+    "holes": 3527,
+    "all_static_public_edges_equal": true,
+    "unread_descriptor_fields": "retained as raw uninterpreted bytes"
+  },
+  "static_type_tables": {
+    "map_rows": 530,
+    "distinct_schemas": 213,
+    "roles": 82,
+    "capability_codes": 112
+  },
+  "dynamic_coverage": {
+    "instruction_keys": 404,
+    "catalog_regular_operand_keys": 403,
+    "catalog_regular_operand_keys_reached": 403,
+    "roles_reached": 82,
+    "catalog_operand_slots": 1228,
+    "catalog_operand_slots_reached": 1203,
+    "unvisited_slots": [
+      [
+        83,
+        24,
+        2
+      ],
+      [
+        95,
+        16,
+        2
+      ],
+      [
+        95,
+        17,
+        2
+      ],
+      [
+        95,
+        17,
+        3
+      ],
+      [
+        95,
+        17,
+        4
+      ],
+      [
+        95,
+        18,
+        2
+      ],
+      [
+        95,
+        18,
+        3
+      ],
+      [
+        95,
+        18,
+        4
+      ],
+      [
+        95,
+        19,
+        2
+      ],
+      [
+        95,
+        19,
+        3
+      ],
+      [
+        95,
+        19,
+        4
+      ],
+      [
+        95,
+        20,
+        2
+      ],
+      [
+        95,
+        20,
+        3
+      ],
+      [
+        95,
+        21,
+        2
+      ],
+      [
+        95,
+        21,
+        3
+      ],
+      [
+        95,
+        22,
+        2
+      ],
+      [
+        95,
+        22,
+        3
+      ],
+      [
+        95,
+        23,
+        2
+      ],
+      [
+        95,
+        23,
+        3
+      ],
+      [
+        95,
+        24,
+        2
+      ],
+      [
+        95,
+        24,
+        3
+      ],
+      [
+        95,
+        25,
+        2
+      ],
+      [
+        95,
+        25,
+        3
+      ],
+      [
+        95,
+        26,
+        2
+      ],
+      [
+        95,
+        26,
+        3
+      ]
+    ],
+    "boundary_calls": {
+      "operand-capability": 45664,
+      "operand-rule": 44899,
+      "operand-parse": 23661
+    },
+    "boundary_matches": {
+      "operand-capability": 45663,
+      "operand-rule": 44899,
+      "operand-parse": 23661
+    },
+    "explicit_unsupported": [
+      {
+        "dataset": "fx-operand-modifier-boundaries-20261001-v1",
+        "event": "operand-capability",
+        "request": 40,
+        "reason": "Digit group above the measured lexical range"
+      }
+    ]
+  },
+  "full_project": {
+    "independent_original_projects": 1,
+    "repository": "https://github.com/Serhioromano/gxw2-libraries",
+    "prior_project_evidence": "research/results/gxw-fx-accepted-semantics-20261001.json",
+    "raw_records": 4196,
+    "raw_bytes": 54203,
+    "raw_record_checks_accepted": 4196,
+    "raw_records_byte_exact": 4196,
+    "operands": 6672,
+    "raw_parser_matches": 6672,
+    "capability_matches": 6672,
+    "role_matches": 6672
+  },
+  "synthetic": {
+    "text_requests": 5900,
+    "raw_requests": 5900,
+    "all_public_results_exact_with_and_without_hooks": true,
+    "type_pass_raw_refused": 712,
+    "instruction_phase_refused": 5,
+    "width_rewrite_refused": 707,
+    "word_literal_retries_accepted": 57,
+    "native_word_to_double_word_return": -4,
+    "modifier_requests": 48,
+    "modifier_parser_matches": 67
+  },
+  "discoveries": [
+    "The CPU 521 path uses 530 map entries, 213 schema offsets, 82 role masks and 112 device capability triples.",
+    "All 403 ordinary catalog keys with operands reached the native role routine; 1203 of 1228 ordinary operand positions were observed.",
+    "The native parser initializes eight bytes of a nine-byte slot. The caller high flag byte remains opaque until the capability routine overwrites the flags word.",
+    "Raw Z/V modifier identity and some modifier ordering disappear in the temporary descriptor. The raw tokens must remain in a lossless model.",
+    "A native -4 type status requests word-literal widening; the public text encoder retries these operands as double-word literals.",
+    "Of 712 type-accepted raw controls refused publicly, 707 fail width rewriting and only five fail the instruction check.",
+    "MC N0 M16 and MC N0 Y0 reach the remaining role; MC N0 X0 and MC K0 M16 remain explicit refusals."
+  ],
+  "limitations": [
+    "The predicates are scoped to converter 15.31, adapter CPU 521, class32 and the recorded context. No Q or other FX CPU grammar is transferred.",
+    "All original full-project observations still derive from one source; synthetic cases widen predicate coverage, not original project diversity.",
+    "Role/type acceptance is not a complete instruction, address-range, project, execution or mutation-validity oracle.",
+    "Twenty-five ordinary operand positions remain unvisited; M./U. record shapes are outside this ordinary header model.",
+    "Digit groups above eight stay explicitly unsupported by the model; opaque native bypasses do not establish semantic validity.",
+    "The temporary descriptor is a lossy native checking structure, not a replacement for raw-preserved operands.",
+    "No PLC execution or new whole-program runtime-equivalence claim is made."
+  ],
+  "proof": {
+    "selected_native_witnesses": 858,
+    "frozen_replay": {
+      "matched": {
+        "operand-capability": 58,
+        "operand-rule": 663,
+        "operand-parse": 136,
+        "explicit-unsupported": 1
+      },
+      "reached_roles": 82
+    },
+    "public_archive": "research/evidence/gxw-fx-operand-grammar-20261001.zip",
+    "local_archive": "research/experiments/sfc-graph-20260926/public-corpus-discovery/gxw-fx-operand-grammar-20261001-local.zip"
+  }
+}

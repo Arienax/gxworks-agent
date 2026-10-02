@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .models import CommentCSVValidationResult, CSVValidationResult
+from plc.comments import GXWORKS2_DEVICE_COMMENT_MAX_CHARS
 
 
 GXWORKS2_HEADER = [
@@ -181,6 +182,11 @@ class CSVManager:
             if not comment:
                 warnings.append(f"软元件{device}的注释为空，已忽略")
                 continue
+            if len(comment) > GXWORKS2_DEVICE_COMMENT_MAX_CHARS:
+                errors.append(
+                    f"软元件{device}的注释超过"
+                    f"{GXWORKS2_DEVICE_COMMENT_MAX_CHARS}字符"
+                )
             if device in seen_devices:
                 warnings.append(f"软元件{device}存在重复注释，GX Works2将按文件顺序处理")
             seen_devices.add(device)

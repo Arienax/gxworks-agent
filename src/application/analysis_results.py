@@ -44,6 +44,7 @@ _CURRENT_SEMANTIC_FORBIDDEN_FIELDS = frozenset({
     "device",
     "instruction_instance",
 })
+_CURRENT_ROOT_FORBIDDEN_FIELDS = frozenset({"execution_semantics"})
 
 
 class AnalysisProtocolError(ValueError):
@@ -64,6 +65,22 @@ def current_analysis_protocol_violations(result):
         return ["$.approaches: current protocol requires an array"]
 
     violations = []
+    forbidden_root = sorted(_CURRENT_ROOT_FORBIDDEN_FIELDS.intersection(result))
+    if forbidden_root:
+        violations.append(
+            "$: model must not emit " + ", ".join(forbidden_root)
+            + "; use execution_intent_claims instead"
+        )
+    from plc.execution_intent import execution_intent_claim_violations
+    from plc.specification.explicit_constraint_claims import (
+        explicit_constraint_claim_violations,
+    )
+    violations.extend(
+        execution_intent_claim_violations(result.get("execution_intent_claims"))
+    )
+    violations.extend(
+        explicit_constraint_claim_violations(result.get("explicit_constraint_claims"))
+    )
     for index, approach in enumerate(approaches):
         path = f"$.approaches[{index}]"
         if not isinstance(approach, dict):
@@ -164,25 +181,14 @@ def validate_current_analysis_protocol(result):
 
 
 def _extract_user_declared_io(user_text, plc_model):
-    """Preserve explicit device-purpose declarations, including inline clauses.
+    """Project Core-owned explicit declaration bindings back to suggested_io."""
+    from plc.specification.bindings import extract_declared_bindings
 
-    This bounded grammar is not intent inference: device: purpose, device 为/是
-    purpose, or device is purpose at a statement boundary. It never assigns a
-    purpose from an address number or parses instruction operands/conditions.
-    Electrical qualifiers stay in original intent, separate from the short label.
-    """
     declared = {}
-    for statement in re.split(r"[\n;；。]+", str(user_text or "")):
-        match = _DECLARED_IO_LINE_RE.fullmatch(statement)
-        if match is None:
-            continue
-        address = canonical_device(re.sub(r"\s+", "", match.group(1)).upper())
-        raw_label = match.group(2).strip()
-        # A question or state comparison is not an explicit purpose declaration.
-        if "?" in raw_label or "？" in raw_label or _STATE_NOT_PURPOSE_RE.match(raw_label):
-            continue
-        label = _INPUT_QUALIFIER_RE.split(raw_label, maxsplit=1)[0].strip()
-        if not label:
+    for item in extract_declared_bindings(user_text, plc_model):
+        address = canonical_device(str(item.get("address") or "").strip().upper())
+        label = str(item.get("label") or "").strip()
+        if not address or not label:
             continue
         try:
             parsed = parse_device_address(address, plc_model)
@@ -270,18 +276,18 @@ def _selected_low_level_constraints(selected):
 
 
 def _apply_explicit_user_constraints(result, user_text, plc_model, confirmed_spec=None):
-    """Merge caller-fixed low-level choices independently of Agent-A output."""
-    from plc.specification.explicit_constraints import (
-        extract_explicit_user_constraints,
-        merge_explicit_user_constraints,
-    )
+    """Ground Agent-A user-constraint claims, then apply structured edits."""
+    from plc.specification.explicit_constraint_claims import compile_explicit_constraint_claims
+    from plc.specification.explicit_constraints import apply_explicit_constraint_operations
 
-    update = extract_explicit_user_constraints(user_text, plc_model)
-    previous_selected = (
-        confirmed_spec.get("selected_approach")
-        if isinstance(confirmed_spec, dict)
-        else None
+    receipt = compile_explicit_constraint_claims(
+        result.get("explicit_constraint_claims") or [], user_text, plc_model
     )
+    result["explicit_constraint_receipt"] = {
+        "accepted": copy.deepcopy(receipt.get("accepted") or []),
+        "rejected": copy.deepcopy(receipt.get("rejected") or []),
+    }
+    previous_selected = confirmed_spec.get("selected_approach") if isinstance(confirmed_spec, dict) else None
     previous_id = str((previous_selected or {}).get("approach_id") or "").strip()
     previous_constraints = _selected_low_level_constraints(previous_selected)
 
@@ -290,35 +296,19 @@ def _apply_explicit_user_constraints(result, user_text, plc_model, confirmed_spe
         if not isinstance(raw, dict):
             continue
         approach = dict(raw)
-        same_plan = (
-            previous_id
-            and str(approach.get("approach_id") or "").strip() == previous_id
-        )
+        same_plan = previous_id and str(approach.get("approach_id") or "").strip() == previous_id
         base = previous_constraints if same_plan else {}
-        merged = merge_explicit_user_constraints(
-            base,
-            update["constraints"],
-            clear_fields=update["clear_fields"],
-        )
-
+        merged = apply_explicit_constraint_operations(base, receipt["operations"])
         if "implementation_semantics" in approach:
             approach["explicit_user_constraints"] = merged
             approach = normalize_approach(approach)
         else:
-            # Non-provider compatibility only. Fresh provider responses are
-            # accepted by validate_current_analysis_protocol() before entering
-            # this normalizer; persisted old specs migrate in legacy_migration.
             approach = normalize_approach(approach)
             contract = dict(approach.get("generation_contract") or {})
-            for key in (
-                "required_opcodes", "forbidden_opcodes",
-                "required_devices", "forbidden_devices",
-                "instruction_instances",
-            ):
+            for key in ("required_opcodes", "forbidden_opcodes", "required_devices", "forbidden_devices", "instruction_instances"):
                 contract[key] = copy.deepcopy(merged[key])
             approach["generation_contract"] = contract
         approaches.append(approach)
-
     result["approaches"] = approaches
     return result
 
@@ -344,6 +334,7 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     normalized.pop("engineering_context", None)
     normalized.pop("intent_context", None)
     normalized.pop("decision_receipt", None)
+    normalized.pop("explicit_constraint_receipt", None)
     normalized.pop("declared_io_bindings", None)
     # Legacy UI/classification fields are not part of the current model contract.
     # Do not replay them into later model requests or migrate saved revisions.
@@ -605,22 +596,76 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     normalized["assumptions"] = assumptions
     normalized["format_diagnostics"] = diagnostics
     normalized["plc_model"] = plc_model
-    from plc.semantics import (
-        infer_semantic_requirements,
-        normalize_semantic_requirements,
+    from plc.semantics import normalize_semantic_requirements
+    from plc.execution_intent import (
+        compile_execution_intent_claims,
+        extract_explicit_execution_semantics,
     )
 
-    # Execution semantics are validation constraints, so hidden model output
-    # must not be allowed to invent them.  Only deterministic evidence from the
-    # user's own request is authoritative here.  A previously confirmed value
-    # is preserved later by ``build_review_draft`` when this list is empty.
-    inferred_semantics = infer_semantic_requirements(
+    # Agent A may understand arbitrary wording, but it cannot author the final
+    # validation enum directly.  Core grounds each frame in current-request
+    # evidence and independently retains only formal explicit syntax as a fast
+    # path.  On pinned reanalysis, current claims replace only the source
+    # devices they touch; unrelated confirmed semantics remain stable.
+    normalized.pop("execution_semantics", None)
+    claim_receipt = compile_execution_intent_claims(
+        normalized.get("execution_intent_claims") or [],
         user_text,
-        source="current_request",
+        source="agent_a_claim",
+        confirmed_spec=confirmed_spec,
     )
+    explicit_semantics = normalize_semantic_requirements(
+        extract_explicit_execution_semantics(
+            user_text,
+            source="current_request_explicit",
+        )
+    )
+    # A grounded Agent-A frame owns the evidence spans it interpreted.  The
+    # explicit-syntax fast path only fills uncovered formal notation; it must
+    # not independently reinterpret another device in the same claimed clause.
+    claimed_evidence = {
+        " ".join(str(item or "").split()).casefold()
+        for claim in claim_receipt.get("accepted") or []
+        for item in claim.get("evidence") or []
+        if str(item or "").strip()
+    }
+    if claimed_evidence:
+        explicit_semantics = [
+            item for item in explicit_semantics
+            if not (
+                (evidence := " ".join(
+                    str(item.get("evidence") or "").split()
+                ).casefold())
+                and any(
+                    evidence in claimed or claimed in evidence
+                    for claimed in claimed_evidence
+                )
+            )
+        ]
+    current_semantics = normalize_semantic_requirements(
+        [*claim_receipt["requirements"], *explicit_semantics]
+    )
+    touched_devices = set(claim_receipt.get("touched_devices") or [])
+    touched_devices.update(
+        device
+        for item in explicit_semantics
+        for device in item.get("devices") or []
+    )
+    previous_semantics = normalize_semantic_requirements(
+        (confirmed_spec or {}).get("execution_semantics") or []
+    ) if isinstance(confirmed_spec, dict) else []
+    if touched_devices:
+        previous_semantics = [
+            item for item in previous_semantics
+            if not touched_devices.intersection(item.get("devices") or [])
+        ]
     normalized["execution_semantics"] = normalize_semantic_requirements(
-        inferred_semantics
+        [*previous_semantics, *current_semantics]
     )
+    normalized["execution_intent_receipt"] = {
+        "accepted": copy.deepcopy(claim_receipt.get("accepted") or []),
+        "rejected": copy.deepcopy(claim_receipt.get("rejected") or []),
+    }
     normalized = ensure_hardware_questions(normalized, plc_model, user_text, confirmed_spec)
     normalized = _apply_explicit_user_constraints(
         normalized, user_text, plc_model, confirmed_spec

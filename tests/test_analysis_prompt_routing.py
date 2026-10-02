@@ -225,7 +225,7 @@ def test_core_shape_and_required_parameter_instructions_remain():
     assert "default 不是已确认答案" in ANALYSIS_SYSTEM_PROMPT
     assert "完整操作数" in ANALYSIS_SYSTEM_PROMPT
     assert set(json.loads(example)) == {
-        "summary", "approaches", "missing_info", "suggested_io", "hardware_config", "assumptions",
+        "summary", "approaches", "execution_intent_claims", "explicit_constraint_claims", "missing_info", "suggested_io", "hardware_config", "assumptions",
     }
 
 
@@ -287,6 +287,7 @@ def test_direct_core_does_not_duplicate_unknown_io_or_generic_plc_explanations()
     assert "没有这种差异就用空字符串" in ANALYSIS_SYSTEM_PROMPT
     assert "PLC 常识、常规扫描行为" in ANALYSIS_SYSTEM_PROMPT
     example = ANALYSIS_SYSTEM_PROMPT.split("返回纯JSON（不要```json包裹），格式：\n", 1)[1].split("\n# suggested_io", 1)[0]
+    assert "execution_intent_claims" in json.loads(example)
     assert not {"control_type", "flowchart_steps", "format_diagnostics", "execution_semantics"} & set(json.loads(example))
 
 

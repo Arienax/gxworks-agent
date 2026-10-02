@@ -1,0 +1,118 @@
+{
+  "schema": 1,
+  "date": "2026-10-01",
+  "status": "native-validated/research-prototype",
+  "versions": {
+    "plc": "FX3U/FX3UC",
+    "cpu": 520,
+    "compiler_adapter": "1.635.0.1",
+    "sic_converter": "1.635.0.1"
+  },
+  "counts": {
+    "interface_projects": 29,
+    "source_native_interfaces_exact": 38,
+    "native_accepted_projects": 7,
+    "native_rejected_controls": 4,
+    "saved_node_wire_label_records_exact": 7,
+    "reopened_code_sets_exact": 7,
+    "unchanged_compiled_bodies": 6,
+    "size_only_recoveries": 5,
+    "full_local_inputs_replayed": 40,
+    "unrelated_payload_sets_exact": 5
+  },
+  "public_cold_replay": {
+    "interface_projects": 29,
+    "source_native_interfaces_exact": 38,
+    "native_accepted_projects": 7,
+    "native_rejected_controls": 4,
+    "saved_node_wire_label_records_exact": 7,
+    "reopened_code_sets_exact": 7,
+    "unchanged_compiled_bodies": 6,
+    "size_only_recoveries": 5,
+    "full_local_inputs_replayed": 0,
+    "unrelated_payload_sets_exact": 0
+  },
+  "interface_scope": "Project source .lif declaration prefixes, actual source label bindings and sorted graph ports; no native ANSI declaration input",
+  "native_edits": [
+    {
+      "case": "original",
+      "accepted": true
+    },
+    {
+      "case": "rename-instance",
+      "accepted": true
+    },
+    {
+      "case": "grow-instance",
+      "accepted": true
+    },
+    {
+      "case": "named-port-bend",
+      "accepted": true
+    },
+    {
+      "case": "named-global-terminal",
+      "accepted": true
+    },
+    {
+      "case": "global-instance",
+      "accepted": true
+    },
+    {
+      "case": "inout-output-binding",
+      "accepted": true
+    },
+    {
+      "case": "rename-label-only",
+      "accepted": false
+    },
+    {
+      "case": "rename-graph-only",
+      "accepted": false
+    },
+    {
+      "case": "declaration-type-conflict",
+      "accepted": false
+    },
+    {
+      "case": "local-shadows-global",
+      "accepted": false
+    }
+  ],
+  "findings": [
+    "Callable port binding uses geometric side and ordinate; original serialized port order and fixed row numbers are insufficient.",
+    "IN_OUT has separate input/output endpoints; extensible input multiplicity and compiler EN/ENO come from source declarations.",
+    "FB graph instance name/type must agree with a source declaration. Missing or inconsistent labels yield empty native formal interfaces and compiler rejection.",
+    "A global FB instance and a mapped global BOOL terminal both compile/save/reopen. A local/global duplicate name is rejected in this observed FX3U profile.",
+    "Five growth failures recover when only history iFileSize fields change. All other history fields and stream payloads are identical across each pair.",
+    "Native source conversion receives truncated/zero graph records with stale lengths. Length-only recovery restores the proposed nodes and wire bends."
+  ],
+  "retained_failures": [
+    "Initial source binder omitted function port flags; its 23/38 partial result is retained.",
+    "Initial node type-only prediction ignored missing/mismatched instance declarations; native empty formal interfaces are retained.",
+    "Original and length-only recovered growth proposals retain failed open, malformed graph/declaration observations and diagnostics.",
+    "Local/global duplicate-name rejection and temporary native-directory collisions are retained."
+  ],
+  "limits": [
+    "Native complete-project writeback controls are owned FX3U examples, not Q/L or independent real-world FBD coverage.",
+    "The reader currently handles source .lif definitions. Separate user-library .lnl interfaces remain unsupported.",
+    "Formal binding does not establish execution or IN_OUT copyback effects; unknown flags, types and geometry remain unsupported.",
+    "Six byte-identical complete compiled bodies cover baseline, two instance renames, wire bend, global terminal and global instance. The IN_OUT output control intentionally changes code.",
+    "Public cold replay validates bounded source/native witnesses. Full input projects and all native processes require the paired local archive.",
+    "No product parser/writer or MCP integration is claimed."
+  ],
+  "archives": {
+    "public": {
+      "path": "research\\evidence\\gxw-fbd-source-binding-20261001.zip",
+      "entries": 14,
+      "bytes": 68697,
+      "entry_bytes_exact": true
+    },
+    "local": {
+      "path": "D:\\gxworks-agent\\research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\gxw-fbd-source-binding-20261001-local.zip",
+      "entries": 2465,
+      "bytes": 35854843,
+      "entry_bytes_exact": true
+    }
+  }
+}

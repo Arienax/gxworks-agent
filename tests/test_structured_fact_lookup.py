@@ -81,7 +81,7 @@ def test_exact_instruction_is_resolved_from_structured_table(opcode):
     assert any(str(row.get("instruction_opcode") or "").upper() == opcode for row in rows)
     assert all(row["match_type"] == "structured_direct" for row in rows)
     assert all(row["instruction_step_width"]["known"] is True for row in rows)
-    assert all("STEP_WIDTH:" in row["text"] for row in rows)
+    assert all("STEP_WIDTH:" not in row["text"] for row in rows)
 
 
 def test_every_promoted_fx3u_contract_uses_registry_owner():
@@ -115,7 +115,10 @@ def test_structured_instruction_record_merges_registry_contract(opcode):
     assert rows
     expected = DEFAULT_INSTRUCTION_REGISTRY.describe_contract(opcode, cpu="FX3U")
     assert rows[0]["instruction_contract"] == expected
-    assert "INSTRUCTION_CONTRACT:" in rows[0]["text"]
+    assert "OPERAND_SEMANTICS:" in rows[0]["text"]
+    # Target/runtime lanes are sparse and appear only when they add a decision.
+    assert rows[0]["target_applicability"]["target_model"] == "FX3U"
+    assert "runtime_semantics" in rows[0]
     assert rows[0]["instruction_contract"]["contract_level"] == "signature_verified"
 
 
@@ -128,13 +131,14 @@ def test_structured_contract_prompt_view_is_compact_but_metadata_keeps_sources()
     assert rows
     row = rows[0]
     assert row["instruction_contract"].get("sources")
-    contract_line = next(
+    operand_line = next(
         line for line in row["text"].splitlines()
-        if line.startswith("INSTRUCTION_CONTRACT:")
+        if line.startswith("OPERAND_SEMANTICS:")
     )
-    assert '"verified_fields"' in contract_line
-    assert '"operand_annotations"' in contract_line
-    assert '"sources"' not in contract_line
+    assert '"slots"' in operand_line
+    assert '"role"' in operand_line
+    assert '"sources"' not in operand_line
+    assert "STEP_WIDTH:" not in row["text"]
 
 
 def test_instruction_instance_contract_keeps_exact_operands_and_source():
@@ -149,6 +153,80 @@ def test_instruction_instance_contract_keeps_exact_operands_and_source():
     assert contract["instance_source"] == "generation_contract"
     assert contract["native_operand_order"] == ["S", "D", "N1", "N2"]
     assert {"arity", "operand_order", "form_identity"} <= set(contract["verified_fields"])
+
+
+def test_instruction_lanes_split_common_semantics_target_overlay_and_runtime():
+    from plc.instruction_resolution import resolve_instruction_lanes
+
+    add_fx3 = resolve_instruction_lanes(
+        {"opcode": "ADD", "operands": ["K1", "D1", "D2"]},
+        plc_model="FX3U",
+    )
+    add_fx5 = resolve_instruction_lanes(
+        {"opcode": "ADD", "operands": ["K1", "D1", "D2"]},
+        plc_model="FX5U",
+    )
+
+    assert add_fx3["operand_semantics"]["operands"] == add_fx5["operand_semantics"]["operands"]
+    assert [slot["role"] for slot in add_fx3["operand_slots"]] == ["read", "read", "write"]
+    assert [slot["value"] for slot in add_fx3["operand_slots"]] == ["K1", "D1", "D2"]
+    assert {slot["role_status"] for slot in add_fx3["operand_slots"]} == {"source_verified"}
+    assert {slot["symbol_status"] for slot in add_fx3["operand_slots"]} == {"source_verified"}
+    assert {slot["device_class_status"] for slot in add_fx3["operand_slots"]} == {"unresolved"}
+    assert {slot["role_status"] for slot in add_fx5["operand_slots"]} != {"source_verified"}
+    assert add_fx3["target_applicability"]["target_model"] == "FX3U"
+    assert add_fx5["target_applicability"]["target_model"] == "FX5U"
+    assert add_fx3["runtime_semantics"]["special_devices"] == []
+    assert add_fx5["runtime_semantics"]["special_devices"] == []
+
+    zrn_fx3 = resolve_instruction_lanes({"opcode": "ZRN"}, plc_model="FX3U")
+    zrn_fx5 = resolve_instruction_lanes({"opcode": "ZRN"}, plc_model="FX5U")
+    assert zrn_fx3["target_applicability"]["available"] is True
+    assert zrn_fx3["runtime_semantics"]["completion"]["device"] == "M8029"
+    assert zrn_fx5["target_applicability"]["available"] is False
+    assert zrn_fx5["runtime_semantics"]["special_devices"] == []
+
+
+def test_sparse_lane_view_omits_empty_target_and_runtime_but_keeps_real_runtime_fact():
+    from plc.instruction_resolution import resolve_instruction_lanes
+    from knowledge.structured_facts import _instruction_lane_prompt_lines
+
+    add = _instruction_lane_prompt_lines(
+        resolve_instruction_lanes(
+            {"opcode": "ADD", "operands": ["K1", "D1", "D2"]},
+            plc_model="FX3U",
+        )
+    )
+    assert len(add) == 1
+    assert add[0].startswith("OPERAND_SEMANTICS:")
+
+    zrn = _instruction_lane_prompt_lines(
+        resolve_instruction_lanes({"opcode": "ZRN"}, plc_model="FX3U")
+    )
+    assert any(line.startswith("TARGET_APPLICABILITY:") for line in zrn)
+    assert any(line.startswith("RUNTIME_SEMANTICS:") for line in zrn)
+    assert any("M8029" in line for line in zrn)
+
+
+def test_model_facing_instruction_fact_uses_split_lane_headers():
+    rows = resolve_instruction_records(
+        [{
+            "opcode": "SFTL",
+            "base_opcode": "SFTL",
+            "operands": ["M10", "M100", "K56", "K1"],
+        }],
+        plc_model="FX3U",
+        task_type="generate",
+    )
+    assert rows
+    row = rows[0]
+    assert "OPERAND_SEMANTICS:" in row["text"]
+    assert "INSTRUCTION_CONTRACT:" not in row["text"]
+    assert "STEP_WIDTH:" not in row["text"]
+    assert row["instruction_contract"]
+    assert [slot["value"] for slot in row["operand_slots"]] == [
+        "M10", "M100", "K56", "K1",
+    ]
 
 
 def test_local_instruction_fallback_keeps_contract_and_step_width_provenance_separate(tmp_path, monkeypatch):
@@ -199,7 +277,7 @@ def test_structured_step_width_uses_shared_owner_for_instruction_instance():
         assert fact["steps"] == expected
         assert fact["resolution"] == "instruction_instance"
         assert fact["operands"] == operands
-        assert f"STEP_WIDTH: {expected} program step(s)" in rows[0]["text"]
+        assert "STEP_WIDTH:" not in rows[0]["text"]
         if opcode == "RST":
             assert rows[0]["instruction_lookup_basis"] == "official_section_heading"
             assert rows[0]["manual_number"] == "JY997D16601"
@@ -517,7 +595,8 @@ def test_fact_aware_row_api_keeps_exact_instruction_out_of_broad_retrieval(monke
     assert rows[0]["structured_fact_target"] == "SFTL"
     assert rows[0]["structured_text_compacted"] is True
     assert rows[0]["instruction_contract"]["opcode"] == "SFTL"
-    assert "INSTRUCTION_CONTRACT:" in rows[0]["text"]
+    assert "OPERAND_SEMANTICS:" in rows[0]["text"]
+    assert "STEP_WIDTH:" not in rows[0]["text"]
 
 
 def test_application_runtime_cannot_bypass_fact_aware_retrieval():
@@ -652,7 +731,9 @@ def test_compact_row_view_does_not_mutate_full_manual_backed_record():
     assert compact is not full
     assert compact["instruction_contract"] == full["instruction_contract"]
     assert len(compact["text"]) < len(full["text"])
-    assert "INSTRUCTION_CONTRACT:" in compact["text"]
+    assert "OPERAND_SEMANTICS:" in compact["text"]
+    assert "STEP_WIDTH:" not in compact["text"]
+    assert "INSTRUCTION_CONTRACT:" not in compact["text"]
     assert full["text"].startswith("[STRUCTURED INSTRUCTION RECORD]")
 
 

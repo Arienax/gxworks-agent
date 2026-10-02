@@ -100,7 +100,7 @@ def test_implementation_semantics_are_structure_only_and_core_projects_user_cons
     ]
 
 
-def test_core_extracts_low_level_constraints_without_agent_a_repeating_them():
+def test_grounded_low_level_claims_project_without_prose_reparse():
     raw = {
         "summary": "structured plan",
         "approaches": [{
@@ -111,19 +111,32 @@ def test_core_extracts_low_level_constraints_without_agent_a_repeating_them():
                 {"kind": "structure", "status": "required", "value": "direct_logic"},
                 {"kind": "opcode", "status": "required", "value": "MOV"},
                 {"kind": "device", "status": "required", "value": "D99"},
-                {"kind": "instruction_instance", "status": "required",
-                 "opcode": "MOV", "operands": ["K1", "D99"]},
             ],
         }],
+        "explicit_constraint_claims": [
+            {
+                "operation": "require",
+                "scope": "global",
+                "target": {
+                    "kind": "instruction_instance",
+                    "opcode": "SFTL",
+                    "operands": ["M10", "M100", "K8", "K1"],
+                },
+                "evidence": ["锁定 SFTL M10 M100 K8 K1。"],
+            },
+            {
+                "operation": "require",
+                "scope": "global",
+                "target": {"kind": "device", "values": ["D10"]},
+                "evidence": ["D10 作为状态寄存器。"],
+            },
+        ],
         "missing_info": [], "suggested_io": {}, "hardware_config": {}, "assumptions": [],
     }
     normalized = _normalize_analysis_result(
         raw,
         plc_model="FX3U",
-        user_text=(
-            "明确使用 SFTL M10 M100 K8 K1。"
-            "指定 D10 作为状态寄存器。"
-        ),
+        user_text="锁定 SFTL M10 M100 K8 K1。D10 作为状态寄存器。",
     )
     selected = normalized["approaches"][0]
     assert selected["implementation_semantics"] == [
@@ -137,17 +150,258 @@ def test_core_extracts_low_level_constraints_without_agent_a_repeating_them():
     ]
     assert "MOV" not in contract["required_opcodes"]
     assert "D99" not in contract["required_devices"]
+    assert len(normalized["explicit_constraint_receipt"]["accepted"]) == 2
+    assert normalized["explicit_constraint_receipt"]["rejected"] == []
 
 
-def test_comparison_text_does_not_become_a_fixed_instruction_instance():
-    from plc.specification.explicit_constraints import extract_explicit_user_constraints
-
-    result = extract_explicit_user_constraints(
-        "比较 SFTL M10 M100 K8 K1 和 WSFL 方案，暂未指定具体指令。",
-        "FX3U",
+def test_user_prose_without_constraint_claim_is_never_reparsed_into_hard_constraints():
+    normalized = _normalize_analysis_result(
+        {
+            "summary": "no claims",
+            "approaches": [{
+                "approach_id": "a1",
+                "name": "direct",
+                "implementation_semantics": [],
+            }],
+            "missing_info": [], "suggested_io": {}, "hardware_config": {}, "assumptions": [],
+        },
+        plc_model="FX3U",
+        user_text="必须使用 SFTL M10 M100 K8 K1，并固定 D10。",
     )
-    assert result["constraints"]["instruction_instances"] == []
-    assert result["constraints"]["required_opcodes"] == []
+    contract = normalized["approaches"][0]["generation_contract"]
+    assert contract["required_opcodes"] == []
+    assert contract["required_devices"] == []
+    assert contract["instruction_instances"] == []
+
+
+def test_scoped_low_level_claims_remain_non_global_and_do_not_poison_contract():
+    raw = {
+        "summary": "运行保持与批次控制",
+        "approaches": [{
+            "approach_id": "direct",
+            "name": "直接结构",
+            "generation_guide": "",
+            "implementation_semantics": [
+                {"kind": "structure", "status": "required", "value": "self_hold"},
+                {"kind": "structure", "status": "forbidden", "value": "set_reset_latch"},
+            ],
+        }],
+        "explicit_constraint_claims": [
+            {
+                "operation": "forbid",
+                "scope": "scoped",
+                "target": {"kind": "opcode", "values": ["SET", "RST"]},
+                "evidence": ["不使用 SET/RST 实现 M0 保持。"],
+            },
+            {
+                "operation": "forbid",
+                "scope": "scoped",
+                "target": {"kind": "device", "values": ["Y1"]},
+                "evidence": ["不要为 Y1 另外增加保持状态。"],
+            },
+        ],
+        "missing_info": [], "suggested_io": {}, "hardware_config": {}, "assumptions": [],
+    }
+    normalized = _normalize_analysis_result(
+        raw,
+        plc_model="FX3U",
+        user_text=(
+            "M0 为系统运行保持状态，不使用 SET/RST 实现 M0 保持。"
+            "T0 到时后 Y1=ON；不要为 Y1 另外增加保持状态。"
+        ),
+    )
+    selected = normalized["approaches"][0]
+    explicit = selected["explicit_user_constraints"]
+    assert explicit["forbidden_opcodes"] == []
+    assert explicit["forbidden_devices"] == []
+    contract = selected["generation_contract"]
+    assert contract["required_structures"] == ["self_hold"]
+    assert contract["forbidden_structures"] == ["set_reset_latch"]
+    assert contract["forbidden_opcodes"] == []
+    assert contract["forbidden_devices"] == []
+    assert {
+        item["projection_status"]
+        for item in normalized["explicit_constraint_receipt"]["accepted"]
+    } == {"non_global"}
+
+
+def test_later_global_forbid_removes_persisted_exact_instance_for_same_opcode():
+    previous = {
+        "selected_approach": {
+            "approach_id": "a1",
+            "explicit_user_constraints": {
+                "required_opcodes": ["SFTL"],
+                "instruction_instances": [
+                    {"opcode": "SFTL", "operands": ["M10", "M100", "K8", "K1"]},
+                ],
+            },
+        }
+    }
+    normalized = _normalize_analysis_result(
+        {
+            "summary": "ban old instruction",
+            "approaches": [{
+                "approach_id": "a1",
+                "name": "same plan",
+                "implementation_semantics": [],
+            }],
+            "explicit_constraint_claims": [{
+                "operation": "forbid",
+                "scope": "global",
+                "target": {"kind": "opcode", "values": ["SFTL"]},
+                "evidence": ["后续禁止使用 SFTL。"],
+            }],
+            "missing_info": [], "suggested_io": {}, "hardware_config": {}, "assumptions": [],
+        },
+        plc_model="FX3U",
+        user_text="后续禁止使用 SFTL。",
+        confirmed_spec=previous,
+    )
+    explicit = normalized["approaches"][0]["explicit_user_constraints"]
+    assert explicit["required_opcodes"] == []
+    assert explicit["forbidden_opcodes"] == ["SFTL"]
+    assert explicit["instruction_instances"] == []
+
+
+def test_analysis_execution_claim_compiles_one_grounded_event_without_duplicate_level():
+    text = (
+        "X2 一到料就让 M1 打一拍。"
+        "物料没离开 X2 之前不能再打一拍 M1。"
+    )
+    normalized = _normalize_analysis_result(
+        {
+            "summary": "物料检测",
+            "approaches": [{
+                "approach_id": "direct",
+                "name": "直接逻辑",
+                "implementation_semantics": [
+                    {"kind": "structure", "status": "required", "value": "edge_trigger"},
+                ],
+            }],
+            "execution_intent_claims": [{
+                "trigger": {
+                    "kind": "transition",
+                    "source_devices": ["X2"],
+                    "from": "0",
+                    "to": "1",
+                },
+                "effect": {"kind": "one_shot", "devices": ["M1"]},
+                "rearm": "required",
+                "evidence": [
+                    "X2 一到料就让 M1 打一拍",
+                    "物料没离开 X2 之前不能再打一拍 M1",
+                ],
+            }],
+            "missing_info": [],
+            "suggested_io": {},
+            "hardware_config": {},
+            "assumptions": [],
+        },
+        plc_model="FX3U",
+        user_text=text,
+    )
+
+    assert normalized["execution_semantics"] == [{
+        "semantic": "RISING_EDGE",
+        "devices": ["X2"],
+        "evidence": "X2 一到料就让 M1 打一拍 | 物料没离开 X2 之前不能再打一拍 M1",
+        "source": "agent_a_claim",
+        "strict": True,
+        "effect_devices": ["M1"],
+        "effect_kind": "one_shot",
+        "rearm": "required",
+        "intent_id": normalized["execution_intent_receipt"]["accepted"][0]["claim_id"],
+    }]
+
+
+def test_pinned_execution_claim_replaces_only_touched_device_semantics():
+    previous = {
+        "io_table": [
+            {"address": "X2", "label": "物料检测"},
+            {"address": "Y0", "label": "输送输出"},
+            {"address": "X7", "label": "离开检测"},
+        ],
+        "execution_semantics": [
+            {"semantic": "RISING_EDGE", "devices": ["X2"], "evidence": "old X2"},
+            {"semantic": "FALLING_EDGE", "devices": ["X7"], "evidence": "keep X7"},
+        ],
+    }
+    # Deliberately omit X2/Y0 spellings: Agent A may understand arbitrary
+    # wording, while Core grounds those devices through unique confirmed labels.
+    text = "物料检测现在只看高电平，输送输出在它为高时保持。"
+    raw = {
+        "summary": "修改物料检测",
+        "approaches": [],
+        "execution_intent_claims": [{
+            "trigger": {"kind": "level", "source_devices": ["X2"], "value": "1"},
+            "effect": {"kind": "while_true", "devices": ["Y0"]},
+            "rearm": "not_required",
+            "evidence": [text],
+        }],
+        "missing_info": [], "suggested_io": {}, "hardware_config": {}, "assumptions": [],
+    }
+    normalized = _normalize_analysis_result(raw, "FX3U", text, previous)
+    assert {
+        (item["semantic"], tuple(item["devices"]))
+        for item in normalized["execution_semantics"]
+    } == {
+        ("LEVEL", ("X2",)),
+        ("FALLING_EDGE", ("X7",)),
+    }
+    assert not any(
+        item["semantic"] == "LEVEL" and item["devices"] == ["Y0"]
+        for item in normalized["execution_semantics"]
+    )
+
+
+
+def test_analysis_does_not_turn_derived_events_or_timer_done_into_strict_edges():
+    text = (
+        "X2 一到料就产生 M1。"
+        "M1 是当前扫描事件并用于计算。"
+        "T0 到时后 Y1=ON。"
+        "T1 到时后 M2 自动解除。"
+    )
+    raw = {
+        "summary": "事件与定时完成",
+        "approaches": [],
+        "execution_intent_claims": [
+            {
+                "trigger": {"kind": "transition", "source_devices": ["X2"], "from": 0, "to": 1},
+                "effect": {"kind": "pulse", "devices": ["M1"]},
+                "evidence": ["X2 一到料就产生 M1。"],
+            },
+            {
+                "trigger": {"kind": "transition", "source_devices": ["M1"], "from": 0, "to": 1},
+                "effect": {"kind": "compute", "devices": []},
+                "evidence": ["M1 是当前扫描事件并用于计算。"],
+            },
+            {
+                "trigger": {"kind": "transition", "source_devices": ["T0"], "from": 0, "to": 1},
+                "effect": {"kind": "level", "devices": ["Y1"]},
+                "evidence": ["T0 到时后 Y1=ON。"],
+            },
+            {
+                "trigger": {"kind": "transition", "source_devices": ["T1"], "from": 0, "to": 1},
+                "effect": {"kind": "clear", "devices": ["M2"]},
+                "evidence": ["T1 到时后 M2 自动解除。"],
+            },
+        ],
+        "missing_info": [], "suggested_io": {}, "hardware_config": {}, "assumptions": [],
+    }
+    normalized = _normalize_analysis_result(raw, "FX3U", text)
+
+    pairs = {
+        (item["semantic"], tuple(item["devices"]), item["strict"])
+        for item in normalized["execution_semantics"]
+    }
+    assert ("RISING_EDGE", ("X2",), True) in pairs
+    assert ("LEVEL", ("T0",), False) in pairs
+    assert ("LEVEL", ("T1",), False) in pairs
+    assert not any(
+        item["strict"] and item["devices"] in (["M1"], ["T0"], ["T1"])
+        for item in normalized["execution_semantics"]
+    )
 
 
 def test_agent_b_frames_first_json_but_consumes_trailing_usage():
@@ -170,6 +424,73 @@ def test_agent_b_prompt_makes_input_or_and_single_json_rules_explicit():
     assert "输入条件的 OR" in _GENERATION_REQUEST
     assert "不得把 (A OR B) -> 同一输出 拆成多个 output branch/多个 branches" in _GENERATION_REQUEST
     assert "不得在同一次 completion 中自检后再重写或追加第二份完整 JSON" in _GENERATION_REQUEST
+
+
+def test_construction_router_is_conservative_without_composite_motif():
+    from application.construction_examples import prepare_construction_examples
+
+    simple = {
+        "selected_approach": {
+            "generation_contract": {"required_structures": ["self_hold"]}
+        },
+        "execution_semantics": [],
+    }
+    routed = prepare_construction_examples("FX3U", True, simple)
+    assert routed.example_ids == ("reset_dominant_hold",)
+    assert routed.route["reason"] == "matched_primary_need"
+
+    edge = {
+        "selected_approach": {
+            "generation_contract": {"required_structures": ["edge_trigger"]}
+        },
+        "execution_semantics": [
+            {"semantic": "RISING_EDGE", "devices": ["X2"]}
+        ],
+    }
+    edge_routed = prepare_construction_examples("FX3U", True, edge)
+    assert edge_routed.example_ids == ("edge_and_level",)
+
+    mixed = {
+        "selected_approach": {
+            "generation_contract": {
+                "required_structures": ["self_hold", "edge_trigger"]
+            }
+        },
+        "execution_semantics": [
+            {"semantic": "RISING_EDGE", "devices": ["X2"]}
+        ],
+    }
+    withheld = prepare_construction_examples("FX3U", True, mixed)
+    assert withheld.example_ids == ()
+    assert withheld.text == ""
+    assert withheld.route["reason"] == "multiple_primary_needs_without_composite_motif"
+
+
+def test_confirmed_comments_are_short_server_owned_device_names():
+    from application.compact_protocol import _confirmed_comments
+    from plc.comments import GXWORKS2_DEVICE_COMMENT_MAX_CHARS
+
+    comments = _confirmed_comments({
+        "io_table": [
+            {
+                "address": "M2",
+                "label": "“不良品输出保持状态，使用普通自保持逻辑保持，不采用 SET/RST 锁存”",
+            },
+            {
+                "address": "X0",
+                "label": "启动请求",
+            },
+        ]
+    })
+
+    assert comments == {
+        "M2": "不良品输出保持状态",
+        "X0": "启动请求",
+    }
+    assert all(
+        len(value) <= GXWORKS2_DEVICE_COMMENT_MAX_CHARS
+        for value in comments.values()
+    )
 
 
 def test_compact_agent_b_expands_or_compare_timer_and_app_instruction():
@@ -316,8 +637,15 @@ def test_agent_b_receives_structured_approach_contract_but_not_agent_a_prose():
 
 
 def test_agent_a_low_level_opcode_survives_only_when_user_explicitly_names_it():
+    analysis = _bad_analysis()
+    analysis["explicit_constraint_claims"] = [{
+        "operation": "require",
+        "scope": "global",
+        "target": {"kind": "opcode", "values": ["DMOV"]},
+        "evidence": ["明确要求使用 DMOV"],
+    }]
     normalized = _normalize_analysis_result(
-        _bad_analysis(),
+        analysis,
         plc_model="FX3U",
         user_text="明确要求使用 DMOV；不要把其他模型建议指令当成硬要求。",
     )
@@ -390,8 +718,19 @@ def test_exact_instruction_instance_survives_agent_a_confirmation_to_agent_b():
     from plc.specification.provenance import confirm_context
 
     instance = {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
+    analysis = _structure_only_analysis()
+    analysis["explicit_constraint_claims"] = [{
+        "operation": "require",
+        "scope": "global",
+        "target": {
+            "kind": "instruction_instance",
+            "opcode": "SFTL",
+            "operands": ["M10", "M100", "K128", "K1"],
+        },
+        "evidence": ["明确使用 SFTL M10 M100 K128 K1 实现移位。"],
+    }]
     normalized = _normalize_analysis_result(
-        _structure_only_analysis(),
+        analysis,
         plc_model="FX3U",
         user_text="明确使用 SFTL M10 M100 K128 K1 实现移位。",
     )
@@ -425,8 +764,19 @@ def test_pinned_reanalysis_preserves_instances_until_explicitly_cleared():
     from plc.specification.provenance import confirm_context
 
     instance = {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
+    first_analysis = _structure_only_analysis()
+    first_analysis["explicit_constraint_claims"] = [{
+        "operation": "require",
+        "scope": "global",
+        "target": {
+            "kind": "instruction_instance",
+            "opcode": "SFTL",
+            "operands": ["M10", "M100", "K128", "K1"],
+        },
+        "evidence": ["明确使用 SFTL M10 M100 K128 K1。"],
+    }]
     first = _normalize_analysis_result(
-        _structure_only_analysis(),
+        first_analysis,
         plc_model="FX3U",
         user_text="明确使用 SFTL M10 M100 K128 K1。",
     )
@@ -440,6 +790,12 @@ def test_pinned_reanalysis_preserves_instances_until_explicitly_cleared():
     assert draft["selected_approach"]["generation_contract"]["instruction_instances"] == [instance]
 
     cleared = _structure_only_analysis()
+    cleared["explicit_constraint_claims"] = [{
+        "operation": "clear",
+        "scope": "global",
+        "target": {"kind": "category", "value": "instruction_instances"},
+        "evidence": ["清除原固定指令实例"],
+    }]
     normalized_clear = _normalize_analysis_result(
         cleared, plc_model="FX3U", user_text="清除原固定指令实例，重新开放具体调用。", confirmed_spec=previous,
     )

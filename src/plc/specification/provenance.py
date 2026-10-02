@@ -263,7 +263,7 @@ def mark_request_absorbed(spec, request_id, field_paths, *, superseded_by=None):
 
 
 SOURCE_PRECEDENCE = """# Engineering source boundaries
-已确认的结构化字段（I/O、参数、用户备注、implementation_semantics、explicit_user_constraints 及其 Core 投影 generation_contract）是当前决定；explicit_user_constraints 来自 Core 对用户原文的确定性抽取，其中 instruction_instances 保存完整 opcode+operands，不得退化成仅 opcode。原始请求按时间顺序保留，后续明确修订优先，已确认字段覆盖旧地址/旧参数。
+已确认的结构化字段（I/O、参数、用户备注、implementation_semantics、explicit_user_constraints 及其 Core 投影 generation_contract）是当前决定；explicit_user_constraints 来自 Agent A 非权威 explicit_constraint_claims 经 Core 的 exact evidence、PLC lexical identity 与 global scope 校验，Core 不从自然语言关键词重建约束；instruction_instances 保存完整 opcode+operands，不得退化成仅 opcode。原始请求按时间顺序保留，后续明确修订优先，已确认字段覆盖旧地址/旧参数。
 intent_context.requests 是用户原话，不是模型概述；selected_approach 的名称、说明、generation_guide 是被选中的模型实现方案，必须保留其工程含义，不得因 required_opcodes 为空而忽略方案。
 implementation_preferences 保留模型提出的实现选项（enforce=false），不是用户原话，也不是额外的必用/禁用条件。
 generation_contract.unverified_constraints 保留未机检的方案语义；仍需结合原始要求实现，不代表验证通过，也不转成新的必用/禁用条件。

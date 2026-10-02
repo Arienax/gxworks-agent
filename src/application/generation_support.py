@@ -46,13 +46,13 @@ _KNOWLEDGE_GENERIC_VALUES = {
 }
 
 
-_KNOWLEDGE_TASK_SETTINGS = {
-    "analysis": (4, 7000),
-    "debug": (5, 7600),
-    "edit": (5, 7000),
-    "generate": (5, 7000),
-    "program_review": (5, 7600),
-    "review": (5, 7600),
+_KNOWLEDGE_TASK_TOP_K = {
+    "analysis": 4,
+    "debug": 5,
+    "edit": 5,
+    "generate": 5,
+    "program_review": 5,
+    "review": 5,
 }
 
 

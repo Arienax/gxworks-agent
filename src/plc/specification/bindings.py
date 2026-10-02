@@ -10,6 +10,7 @@ import copy
 import hashlib
 import re
 from plc.device_identity import canonical_device, canonical_io_rows
+from plc.comments import device_purpose_label
 
 _DEVICE = re.compile(r"(?<![A-Za-z0-9_])(?:SM|SD|[XYMTCSDVZ])\d+(?![A-Za-z0-9_])", re.I)
 _ALIASES = {"start_input": ("start", "X"), "stop_input": ("stop", "X"),
@@ -35,6 +36,33 @@ _INPUT_QUALIFIER_RE = re.compile(
     r"[,，(（]\s*(?:按下|未按下|松开|释放|动作|未动作|常开|常闭|常開|常閉|normally\b|active\b)",
     re.IGNORECASE,
 )
+_DECLARATION_SEPARATOR_RE = re.compile(
+    r"[,，、](?=\s*(?:SM|SD|[XYMTCSDVZ])\s*\d+\s*(?:[：:]|为|是|is\b))",
+    re.IGNORECASE,
+)
+_STATE_NOT_PURPOSE_RE = re.compile(
+    r"^(?:(?:ON|OFF|TRUE|FALSE)(?=$|[^A-Za-z0-9_])|"
+    r"[+-]?\d+(?:[.,]\d+)?(?=$|[\s~～<>=+\-]|时|時))",
+    re.IGNORECASE,
+)
+
+
+def _declared_io_segments(user_text):
+    """Split only when every comma-separated part is itself a declaration."""
+    for statement in re.split(r"[\n;；。]+", str(user_text or "")):
+        statement = statement.strip()
+        if not statement:
+            continue
+        parts = [part.strip() for part in _DECLARATION_SEPARATOR_RE.split(statement)]
+        if (
+            len(parts) > 1
+            and all(part and _DECLARED_IO_LINE_RE.fullmatch(part) for part in parts)
+        ):
+            yield from parts
+        else:
+            yield statement
+
+
 
 
 def _is_io_attribute_answer(value):
@@ -108,7 +136,7 @@ def extract_declared_bindings(user_text, plc_model=None):
     model = str(plc_model or "").strip().upper()
     result = []
     seen = set()
-    for statement in re.split(r"[\n;；。]+", str(user_text or "")):
+    for statement in _declared_io_segments(user_text):
         match = _DECLARED_IO_LINE_RE.fullmatch(statement)
         if match is None:
             continue
@@ -121,7 +149,12 @@ def extract_declared_bindings(user_text, plc_model=None):
         if model == "FX3U" and kind in {"X", "Y"} and any(char not in "01234567" for char in digits):
             continue
         raw_value = match.group(2).strip()
-        label = _INPUT_QUALIFIER_RE.split(raw_value, maxsplit=1)[0].strip() or raw_value
+        if "?" in raw_value or "？" in raw_value or _STATE_NOT_PURPOSE_RE.match(raw_value):
+            continue
+        purpose = _INPUT_QUALIFIER_RE.split(raw_value, maxsplit=1)[0].strip()
+        label = device_purpose_label(purpose or raw_value)
+        if not label:
+            continue
         role = canonical_signal_role(label)
         identity = f"declared.{role or kind.casefold()}.{address}"
         if identity in seen:
