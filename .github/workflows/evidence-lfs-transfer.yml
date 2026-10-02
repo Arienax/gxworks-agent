@@ -1,0 +1,76 @@
+name: One-time evidence LFS transfer
+
+on:
+  push:
+    branches: [maintenance/evidence-lfs-transfer-20261003]
+    paths: [.github/workflows/evidence-lfs-transfer.yml]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: evidence-lfs-transfer-20261003
+  cancel-in-progress: false
+
+jobs:
+  transfer:
+    if: github.repository == 'Arienax/gxworks-agent'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 1
+          lfs: false
+          persist-credentials: true
+      - name: Upload archives and verify download before advancing the branch
+        shell: bash
+        env:
+          GIT_LFS_SKIP_SMUDGE: '1'
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git lfs install --local
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          import tempfile
+
+          def git(*args):
+              return subprocess.check_output(['git', *args])
+
+          names = [os.fsdecode(p) for p in git('ls-files', '-z', '--', 'research/evidence').split(b'\0') if p]
+          names = [p for p in names if p.endswith('.zip')]
+          if not names:
+              raise SystemExit('No tracked evidence ZIPs found; nothing was changed.')
+          sizes = {p: Path(p).stat().st_size for p in names}
+          git('lfs', 'track', 'research/evidence/**/*.zip')
+          git('add', '--', '.gitattributes')
+          git('add', '--renormalize', '--', *names)
+          oids = []
+          for name in names:
+              pointer = git('show', ':' + name)
+              match = re.fullmatch(rb'version https://git-lfs.github.com/spec/v1\noid sha256:([0-9a-f]{64})\nsize ([0-9]+)\n', pointer)
+              if match is None or int(match[2]) != sizes[name]:
+                  raise SystemExit(f'Archive did not become a valid, same-size LFS pointer: {name}')
+              oids.append(match[1].decode('ascii'))
+          # Upload only these archives, not unrelated knowledge LFS objects.
+          git('lfs', 'push', '--object-id', 'origin', *sorted(set(oids)))
+          git('commit', '-m', 'chore(research): move frozen evidence ZIPs to Git LFS without rewriting history')
+          # A separate empty object cache proves this is a remote download,
+          # not a successful lookup of objects just created locally.
+          with tempfile.TemporaryDirectory(prefix='evidence-lfs-download-') as storage:
+              git('-c', 'lfs.storage=' + storage, 'lfs', 'fetch', '--include=research/evidence/**/*.zip', '--exclude=', 'origin', 'HEAD')
+          result = {'archives': len(names), 'archive_bytes': sum(sizes.values()), 'largest_archive': max(sizes, key=sizes.get), 'largest_archive_bytes': max(sizes.values()), 'remote_download_verified': True, 'head': git('rev-parse', 'HEAD').decode().strip()}
+          print(json.dumps(result, indent=2))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as report:
+              report.write('## Evidence LFS transfer\n\n```json\n' + json.dumps(result, indent=2) + '\n```\n\nNo main-branch history was rewritten. Existing historical ZIP blobs remain reachable.\n')
+          PY
+          # Normal fast-forward only. A concurrent branch update stops the push.
+          git push origin HEAD:refs/heads/maintenance/evidence-lfs-transfer-20261003
