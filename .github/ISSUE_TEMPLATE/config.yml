@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 使用文档 / Documentation
+    url: https://github.com/Arienax/gxworks-agent/blob/main/docs/README.md
+    about: 安装、模型设置、Web/MCP、诊断与原生操作指南。
+  - name: 安全问题 / Security reporting
+    url: https://github.com/Arienax/gxworks-agent/blob/main/SECURITY.md
+    about: 先阅读私下报告流程；不要在公开 Issue 中披露漏洞详情。
+  - name: 无障碍说明 / Accessibility
+    url: https://github.com/Arienax/gxworks-agent/blob/main/ACCESSIBILITY.md
+    about: 查看范围、限制和报告方法；无需提供医疗或身份信息。

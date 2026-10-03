@@ -1,0 +1,33 @@
+name: 功能建议 / Feature request
+description: 提出使用目标、当前限制和可验证的改进建议。
+title: "[Feature] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        中文或英文均可。请优先描述需要解决的问题，不必预先设计整套实现。
+        Requests are not commitments of support. Do not share credentials or customer projects.
+  - type: textarea
+    id: problem
+    attributes:
+      label: 使用目标与当前障碍 / Problem and goal
+      description: 想完成什么？现有流程在哪里受限？已有 Issue 可直接补充证据。
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: 期望结果 / Desired outcome
+      description: 给出可观察的完成条件，最好使用最小示例，而不是只描述按钮或技术选型。
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 相关范围 / Relevant scope
+      description: 可选。具体 PLC Series/Type、GX Works2 版本、程序语言、Web/MCP 入口，以及必须保留的行为。
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 现有替代方法与资料 / Alternatives and references
+      description: 可选。说明目前如何处理；引用有权公开的资料，不上传厂商软件、完整手册或客户工程。

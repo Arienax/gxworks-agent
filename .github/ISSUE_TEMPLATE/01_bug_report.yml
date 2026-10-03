@@ -1,0 +1,73 @@
+name: 缺陷报告 / Bug report
+description: 报告使用、生成、界面、MCP 或无障碍问题。
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        中文或英文均可。只填写与问题相关的信息；未知内容请写“未知”。
+        漏洞、凭据泄露或未授权操作请先阅读 [安全政策](https://github.com/Arienax/gxworks-agent/blob/main/SECURITY.md)，不要在这里公开详情。
+        Do not include API keys, login links, customer projects or unsanitized diagnostics.
+  - type: dropdown
+    id: area
+    attributes:
+      label: 问题范围 / Area
+      options:
+        - 安装或启动 / Setup
+        - 需求分析或规格确认 / Analysis
+        - 生成或修改程序 / Generation
+        - 知识检索 / RAG
+        - Web 界面或图形预览 / Web UI
+        - 原生工程读写或 GX Works2 / Native integration
+        - MCP
+        - 仿真 / Simulation
+        - 无障碍 / Accessibility
+        - 文档或其他 / Other
+  - type: input
+    id: version
+    attributes:
+      label: 项目版本 / Project version
+      description: 填 commit、包版本或来源；不知道时写“未知”。 / Commit, package version or unknown.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: 期望与实际行为 / Expected and actual behavior
+      description: 描述具体差异、错误信息和影响；截图请配文字说明。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 最小复现 / Minimal reproduction
+      description: 提供可公开的最小需求和操作步骤。不能稳定复现时说明频率，不要为复现操作生产设备。
+      placeholder: |
+        1. 使用的入口和初始状态：
+        2. 输入或操作：
+        3. 观察到的结果：
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 相关环境 / Relevant environment
+      description: 只填相关项；不要求所有问题都安装 GX Works2 或配置模型。
+      placeholder: |
+        操作系统、浏览器或 MCP 客户端及版本：
+        源码运行或发布包；Python/Node.js 版本（相关时）：
+        PLC Series/Type、GX Works2 版本、Ladder/ST/FBD/SFC（相关时）：
+        模型服务与模型 ID、Direct/Design、相关参数（相关时，不含凭据或私有 URL）：
+        无障碍问题的缩放比例、键盘或辅助技术版本（可选，不含医疗信息）：
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 脱敏证据 / Sanitized evidence
+      description: 可选。提供任务 ID、错误片段、最小 IR 或带文字说明的截图；不要求完整 ZIP 或客户工程。
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 公开前检查 / Before publishing
+      options:
+        - label: 我已检查内容，不包含有效凭据、登录链接、未授权客户/第三方材料或无关个人信息。 / I reviewed this report for sensitive or unauthorized material.
+          required: true
