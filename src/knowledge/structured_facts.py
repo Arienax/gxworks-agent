@@ -115,7 +115,7 @@ def _chunk_results(chunk_ids, *, plc_model, task_type, fact_kind, fact_target, a
         result = core._chunk_result(row, meta, path, plc_model, task_type)
         if result is None:
             continue
-        original_text = str(result.get("text") or "")
+        original_text = str(core._row_value(row, core._TEXT_COLUMNS, result.get("text") or ""))
         if augment_instruction:
             result = core._augment_structured_instruction(connection, schema, result)
             if result is None or result.get("manual_type") not in _OFFICIAL_INSTRUCTION_TYPES:
@@ -202,6 +202,11 @@ def _instruction_lane_prompt_lines(lanes):
             and not (key == "data_type" and item[key] == "any")
         }
         if slot:
+            if item.get("usage_conflicts"):
+                slot["usage_conflicts"] = [{
+                    "facet": conflict["facet"], "status": "unresolved",
+                    "reason": conflict["reason"], "candidate_count": len(conflict["candidates"]),
+                } for conflict in item["usage_conflicts"]]
             if slot.get("usage_facts"):
                 for fact in slot["usage_facts"]:
                     if fact.get("sources"):
@@ -219,6 +224,8 @@ def _instruction_lane_prompt_lines(lanes):
                             ref = {"source": source_indexes[marker]}
                             if source.get("row_span"):
                                 ref["row_span"] = copy.deepcopy(source["row_span"])
+                            if source.get("value_spans"):
+                                ref["value_spans"] = copy.deepcopy(source["value_spans"])
                             refs.append(ref)
                         fact["source_refs"] = refs
             compact_slots.append(slot)
@@ -529,6 +536,45 @@ def _instruction_section_records(opcode, *, plc_model, task_type):
     return records
 
 
+def _instruction_contract_source_records(target, *, plc_model, task_type):
+    """Follow exact definition pages already owned by the selected Core form.
+
+    Shared D/P definitions can be absent from instructions.opcode_norm. Their
+    independently verified order already cites a manual/revision/page; reading
+    that page adds candidate prose without certifying its operand purposes.
+    """
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+    core, _path, connection, schema, _meta = _runtime()
+    form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(target.get("opcode"), cpu=plc_model)
+    chunks = schema.get("chunks") if schema is not None else None
+    if (form is None or form.spec.contract_coverage().get("operand_order") != "source_verified"
+            or not connection or not chunks
+            or not {"id", "manual_id", "revision", "pdf_page", "pdf_page_end"}.issubset(chunks["columns"])):
+        return []
+    records, seen = [], set()
+    for source in form.spec.contract_sources:
+        if not source.get("manual_id") or not source.get("revision") or not source.get("pdf_page"):
+            continue
+        ids = connection.execute(
+            f"SELECT id FROM {core._quote_identifier(chunks['name'])} "
+            "WHERE manual_id=? AND revision=? AND pdf_page<=? AND pdf_page_end>=? ORDER BY id",
+            (source["manual_id"], source["revision"], source["pdf_page"], source["pdf_page"]),
+        ).fetchall()
+        for record in _chunk_results(
+            [row["id"] for row in ids], plc_model=plc_model, task_type=task_type,
+            fact_kind="instruction", fact_target=target["opcode"], augment_instruction=True,
+        ):
+            if record["id"] in seen or (source.get("manual") and record.get("manual_number") != source["manual"]):
+                continue
+            seen.add(record["id"])
+            record["instruction_lookup_basis"] = "verified_contract_source_page"
+            record["instruction_contract_source"] = copy.deepcopy(dict(source))
+            record["manual_instruction_opcode"] = record.get("instruction_opcode")
+            record["instruction_opcode"] = target["opcode"]
+            records.append(record)
+    return records
+
+
 def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generate"):
     """Resolve canonical/variant opcodes directly through ``instructions``.
 
@@ -571,25 +617,41 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
                 ),
                 tuple(value.casefold() for value in names),
             ).fetchall()
+        source_records = _instruction_contract_source_records(
+            step_target, plc_model=plc_model, task_type=task_type,
+        )
+        source_by_id = {record["id"]: record for record in source_records}
+        source_scopes = {(record["manual_id"], record["revision"]) for record in source_records}
+        if table_available and source_by_id:
+            placeholders = ",".join("?" for _ in source_by_id)
+            rows.extend(connection.execute(
+                f"SELECT * FROM {core._quote_identifier(table['name'])} WHERE chunk_id IN ({placeholders})",
+                tuple(source_by_id),
+            ).fetchall())
+        inputs, input_seen = [], set()
+        for row in rows:
+            chunk_id = str(row["chunk_id"])
+            if chunk_id in input_seen:
+                continue
+            input_seen.add(chunk_id)
+            chunk = ([source_by_id[chunk_id]] if chunk_id in source_by_id else _chunk_results(
+                [row["chunk_id"]], plc_model=plc_model, task_type=task_type,
+                fact_kind="instruction", fact_target=opcode or base, augment_instruction=True,
+            ))
+            if chunk and ((chunk[0].get("manual_id"), chunk[0].get("revision")) not in source_scopes
+                          or chunk_id in source_by_id):
+                inputs.append((row, chunk[0]))
+        inputs.extend(({}, record) for record in source_records if record["id"] not in input_seen)
         # Prefer the exact selected form and the most complete structured record.
         # Manual priority only resolves otherwise-equivalent official sources;
         # there is no query-dependent score or opcode-specific boost here.
         candidates = []
-        for row in rows:
-            row_opcode = str(row["opcode"] if "opcode" in row.keys() else row["opcode_norm"]).upper()
-            exact = 1 if row_opcode == opcode else 0
-            chunk = _chunk_results(
-                [row["chunk_id"]],
-                plc_model=plc_model,
-                task_type=task_type,
-                fact_kind="instruction",
-                fact_target=opcode or base,
-                augment_instruction=True,
-            )
-            if not chunk:
-                continue
+        for row, chunk in inputs:
+            row_opcode = str(row["opcode"] if "opcode" in row.keys() else
+                             row["opcode_norm"] if "opcode_norm" in row.keys() else "").upper()
+            exact = 2 if chunk.get("instruction_contract_source") else 1 if row_opcode == opcode else 0
             candidate = _attach_instruction_step_width(
-                chunk[0], step_target, plc_model=plc_model,
+                chunk, step_target, plc_model=plc_model,
             )
             candidate = _attach_instruction_contract(
                 candidate, step_target, plc_model=plc_model,
@@ -614,7 +676,7 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
                 (
                     0 if not authority or candidate.get("manual_id") == authority["manual_id"] else 1,
                     -exact,
-                    -_instruction_completeness(row),
+                    -_instruction_completeness(row) if row else 0,
                     -int(candidate.get("manual_priority") or 0),
                     int(candidate.get("pdf_page") or 0),
                     str(candidate.get("id") or ""),

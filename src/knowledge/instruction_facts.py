@@ -27,7 +27,7 @@ _FACT_TERMS = {
     "limits": re.compile(r"range|limit|restrict|overflow|overlap|outside|exceed|maximum|minimum|caution|supported|≤|≥|范围|边界|限制|溢出|重叠|最大|最小", re.I),
 }
 _OFFICIAL = frozenset({"programming", "positioning", "structured_instruction", "structured_function"})
-_VERSION = "instruction-facts-v4-operand-evidence"
+_VERSION = "instruction-facts-v5-candidate-arbitration"
 
 _OPERAND_SLOT_FACETS = (
     ("operand_roles", "role_status", "operand_role_status"),
@@ -83,9 +83,11 @@ def _operand_gap_details(record):
                 for key in ("symbol", "name"):
                     if raw_slot.get(key):
                         gap[key] = str(raw_slot[key])
+                if any(item.get("facet") == facet for item in raw_slot.get("usage_conflicts") or ()):
+                    gap["reason"] = "candidate_conflict"
                 gaps.append(gap)
             for facet in sorted({
-                item.get("facet") for item in raw_slot.get("usage_facts") or ()
+                item.get("facet") for item in [*raw_slot.get("usage_facts", []), *raw_slot.get("usage_conflicts", [])]
                 if isinstance(item, Mapping) and item.get("facet")
                 and item.get("facet") != "purpose"
             }):
@@ -196,6 +198,7 @@ def _model_structured_prefix(text):
         line
         for line in prefix.splitlines()
         if line.strip()
+        and not (raw.startswith("[STRUCTURED INSTRUCTION RECORD]") and line.startswith("OPERANDS:"))
         and not line.startswith((
             "STEP_WIDTH:",
             "STEP_WIDTH_SOURCE:",
@@ -342,6 +345,7 @@ def _related_units(seed, plc_model, task_type):
                 continue
             if str(value.get("revision") or "") != str(seed.get("revision") or ""):
                 continue
+            value["manual_text"] = str(core._row_value(row, core._TEXT_COLUMNS, value["text"]))
             results.append(value)
         return results
     except (OSError, sqlite3.Error, TypeError, ValueError, KeyError, IndexError):
@@ -576,13 +580,17 @@ def _operand_evidence_bindings(result, start, end, gaps, expected_order):
     offset_delta, offset_basis = 0, "resolved_record.text"
     if isinstance(original, str):
         original_body = original.partition("\n\n")[2] if original.startswith("[STRUCTURED") else original
-        if original_body and text.endswith(original_body):
-            offset_delta = len(original) - len(text)
+        body = original_body.strip()
+        rendered = text.rstrip()
+        if body and rendered.endswith(body):
+            body_start = len(original) - len(original_body) + len(original_body) - len(original_body.lstrip())
+            offset_delta = body_start - (len(rendered) - len(body))
             offset_basis = "chunks.text"
     raw = text[start:end]
     lines = raw.splitlines(keepends=True)
     description_column, columns, cursor = None, {}, start
     rows = []
+    pending = []
     hints = {}
     data_type = re.compile(
         r"(?:Bit|Bool(?:ean)?|Word|Dword|Real|Float|String|ANY\d+|"
@@ -596,8 +604,36 @@ def _operand_evidence_bindings(result, start, end, gaps, expected_order):
         description = " ".join(str(item.get("description") or "").split())
         if symbol in expected and description:
             hints.setdefault(description, []).append(symbol)
+
+    def cell_parts(line, offset):
+        result, relative = [], 0
+        for raw_cell in line.rstrip("\r\n").split("|"):
+            cell = raw_cell.strip()
+            left = offset + relative + len(raw_cell) - len(raw_cell.lstrip())
+            result.append((cell, left, left + len(cell)))
+            relative += len(raw_cell) + 1
+        return result
+
+    def native_symbol(cell):
+        # Font placeholders decorate the symbol, not its identity. Other
+        # content in the same cell still makes that association ambiguous.
+        cell = re.sub(r"\[GLYPH-[0-9A-F]+\]", "", cell, flags=re.I)
+        return re.sub(r"\s+", "", cell).upper()
+
+    def description_fragment(cell):
+        if not cell or cell == "<blank>" or data_type.fullmatch(cell):
+            return False
+        if re.match(r"^(?:\*\d+[.:]|\[GLYPH-[0-9A-F]+\]\d+:)", cell, re.I):
+            return False  # notes stay in the source unit, outside row purpose
+        tokens = re.findall(r"[A-Za-z]+", cell)
+        return (bool(re.search(r"[\u3400-\u9fff]", cell))
+                or any(len(token) >= 4 for token in tokens)
+                or len(tokens) == 1 and len(tokens[0]) >= 3
+                or cell.startswith(("(", "[")) and bool(re.search(r"\d", cell)))
+
     for line in lines:
-        cells = [cell.strip() for cell in line.strip().split("|")]
+        parts = cell_parts(line, cursor)
+        cells = [part[0] for part in parts]
         if description_column is None:
             for index, cell in enumerate(cells):
                 if re.fullmatch(r"Description|含义|说明", cell, re.I):
@@ -616,40 +652,67 @@ def _operand_evidence_bindings(result, start, end, gaps, expected_order):
                             columns[facet] = index
             cursor += len(line)
             continue
-        if len(cells) <= description_column or "|" not in line:
-            cursor += len(line)
-            continue
-        description = cells[description_column]
-        if (
-            not description or description == "<blank>" or data_type.fullmatch(description)
-            or re.sub(r"\s+", "", description).upper() in expected
-        ):
-            cursor += len(line)
-            continue
-        symbols = [re.sub(r"\s+", "", cell).upper() for cell in cells[:description_column]]
+        description = cells[description_column] if description_column < len(cells) else ""
+        symbols = [native_symbol(cell) for cell in cells[:description_column]] if "|" in line else []
         symbols = [symbol for symbol in symbols if symbol in expected]
         hinted = hints.get(" ".join(description.split()), [])
         # An indexed description may recover a dropped symbol only if the
         # source description and its indexed association are both unambiguous.
-        if not symbols and len(hinted) == 1:
+        if (not symbols and len(hinted) == 1
+                and all(cell in {"", "<blank>"} for cell in cells[:description_column])):
             symbols = hinted
-        if len(symbols) != 1 or (hinted and set(hinted) != set(symbols)):
+        if len(symbols) > 1:
+            pending = []
             cursor += len(line)
             continue
-        values = {"purpose": description}
-        values.update({
+        if not symbols:
+            # Flattened PDF rows place their description before the symbol,
+            # with continuations after it. Bind only through that explicit
+            # symbol anchor; sidebar fragments and data types are excluded.
+            fragment = parts[0]
+            closing_range = bool(
+                rows and rows[-1]["parts"] and re.fullmatch(r"[\d\s,.:;+-]+[)\]]", fragment[0])
+                and any("[" in part[0] or "(" in part[0] for part in rows[-1]["parts"])
+            )
+            if description_fragment(fragment[0]) or closing_range:
+                if (rows and rows[-1]["wrapped"] and rows[-1]["parts"]
+                        and (closing_range or fragment[0].startswith(("(", "[")) or fragment[0][0].islower())):
+                    rows[-1]["parts"].append(fragment)
+                    rows[-1]["end"] = cursor + len(line.rstrip("\r\n"))
+                elif rows and fragment[0].startswith(("(", "[")):
+                    pass  # inline-row notes remain context, never a prefix of the next row
+                else:
+                    pending.append(fragment)
+            cursor += len(line)
+            continue
+        valid_description = (description_fragment(description)
+                             and native_symbol(description) not in expected)
+        wrapped = not valid_description or bool(pending and description.startswith(("(", "[", "-")))
+        fragments = list(pending) if wrapped else []
+        if valid_description:
+            fragments.append(parts[description_column])
+        pending = []
+        values = {
             facet: cells[index] for facet, index in columns.items()
             if index < len(cells) and cells[index] not in {"", "<blank>"}
-        })
+        }
+        if wrapped and data_type.fullmatch(description):
+            values["operand_types"] = description
         if "operand_types" in values and not data_type.fullmatch(values["operand_types"]):
             del values["operand_types"]
-        rows.append((symbols[0], cursor, cursor + len(line.rstrip("\r\n")), values))
+        rows.append({"symbol": symbols[0], "start": min([cursor, *(part[1] for part in fragments)]),
+                     "end": cursor + len(line.rstrip("\r\n")), "parts": fragments,
+                     "wrapped": wrapped, "values": values})
         cursor += len(line)
-    symbol_counts = {symbol: sum(row[0] == symbol for row in rows) for symbol in expected}
+    symbol_counts = {symbol: sum(row["symbol"] == symbol for row in rows) for symbol in expected}
     bindings = []
-    for symbol, row_start, row_end, values in rows:
+    for row in rows:
+        symbol, row_start, row_end = row["symbol"], row["start"], row["end"]
         if symbol_counts[symbol] != 1:
             continue
+        values = dict(row["values"])
+        if row["parts"]:
+            values["purpose"] = " ".join(part[0] for part in row["parts"])
         position = expected.index(symbol) + 1
         for gap in gaps or ():
             facet = gap.get("facet")
@@ -669,6 +732,9 @@ def _operand_evidence_bindings(result, start, end, gaps, expected_order):
             page_markers = list(re.finditer(r"(?m)^\[(?:PAGE\s+(\d+)|TABLE\s+page=(\d+))\b", text[:row_start]))
             if page_markers:
                 evidence["pdf_page"] = int(next(group for group in page_markers[-1].groups() if group))
+            if facet == "purpose" and (row["wrapped"] or len(row["parts"]) > 1):
+                evidence["value_spans"] = [{"start": left + offset_delta, "end": right + offset_delta}
+                                           for _, left, right in row["parts"]]
             binding = {
                 "position": position, "symbol": symbol, "facet": facet,
                 "value": values[facet], "status": "candidate_evidence", "source": evidence,
@@ -682,10 +748,10 @@ def _operand_evidence_bindings(result, start, end, gaps, expected_order):
     return bindings
 
 
-def _render_units(result, selected, *, bindings=(), structured_owner=None):
+def _render_units(result, selected, *, bindings=(), conflicts=(), structured_owner=None):
     """Preserve source offsets and provenance while grouping selected units.
 
-    Structured contract/step-width facts are supplemental to the original
+    Structured instruction facts are supplemental to the original
     manual evidence. They are not candidates for prose/table selection, but
     once a manual block is selected the structured prefix is delivered with it.
     """
@@ -695,14 +761,16 @@ def _render_units(result, selected, *, bindings=(), structured_owner=None):
 
     structured_prefix = _model_structured_prefix(text)
     value = copy.deepcopy(result)
-    if bindings:
+    if bindings or conflicts:
         from knowledge.structured_facts import _instruction_lane_prompt_lines
         from plc.instruction_semantics import attach_operand_usage
         owner = structured_owner or result
         lanes = {key: copy.deepcopy(owner.get(key) or {}) for key in (
             "operand_semantics", "target_applicability", "runtime_semantics",
         )}
-        lanes["operand_slots"] = attach_operand_usage(owner.get("operand_slots") or [], bindings)
+        lanes["operand_slots"] = attach_operand_usage(
+            owner.get("operand_slots") or [], bindings, conflicts=conflicts,
+        )
         value.update(lanes)
         rendered_lanes = "\n".join(_instruction_lane_prompt_lines(lanes))
         if structured_prefix:
@@ -727,6 +795,7 @@ def _render_units(result, selected, *, bindings=(), structured_owner=None):
         text=metadata + source_text,
     )
     value["operand_evidence_bindings"] = copy.deepcopy(list(bindings))
+    value["operand_candidate_conflicts"] = copy.deepcopy(list(conflicts))
     value["content_sha256"] = _sha(value["text"])
     return value
 
@@ -886,6 +955,32 @@ def _pack_target(
                     if not cats:
                         continue
                 candidates.append((source_index, (start, end, cats), priority, bindings))
+
+    # Inspect all source candidates before budget selection. A later unit can
+    # contradict an earlier one even if its other positions add new coverage.
+    from plc.instruction_semantics import arbitrate_operand_usage
+    grouped = {}
+    for _, _, _, bindings in candidates:
+        for binding in bindings:
+            fact = binding.get("fact") or {
+                "facet": binding["facet"], "value": binding["value"],
+                "status": binding["status"], "sources": [binding["source"]],
+            }
+            grouped.setdefault((binding["position"], binding["facet"]), []).append(fact)
+    conflicts = []
+    for (position, facet), facts in sorted(grouped.items()):
+        _, rejected = arbitrate_operand_usage(facts)
+        conflicts.extend({**conflict, "position": position} for conflict in rejected)
+    blocked = {(item["position"], item["facet"]) for item in conflicts}
+    # Source units are atomic. Keeping their contradictory prose would still
+    # deliver two meanings even if one structured binding were removed.
+    quarantined = [(index, unit) for index, unit, _, bindings in candidates if any(
+        (binding["position"], binding["facet"]) in blocked for binding in bindings
+    )]
+    candidates = [item for item in candidates if not any(
+        item[0] == index and left < item[1][1] and item[1][0] < right
+        for index, (left, right, _) in quarantined
+    )]
     selected, selected_bindings, rendered, covered, bound = {}, {}, {}, set(), set()
     while candidates:
         candidates.sort(key=lambda item: (-item[2], -len({
@@ -909,7 +1004,7 @@ def _pack_target(
         trial_bindings = [*selected_bindings.get(source_index, []), *bindings]
         trial = _render_units(
             sources[source_index], trial_units, bindings=trial_bindings,
-            structured_owner=structured_owner,
+            conflicts=conflicts, structured_owner=structured_owner,
         )
         block_cost = lambda value: len(core._format_result_block(value)) + 40
         cost = sum(block_cost(value) for index, value in rendered.items() if index != source_index) + block_cost(trial)
@@ -921,8 +1016,8 @@ def _pack_target(
         bound.update(binding_dimensions)
     if not rendered:
         prefix = _model_structured_prefix(sources[0].get("text"))
-        if prefix:
-            trial = _render_units(sources[0], [])
+        if prefix or conflicts:
+            trial = _render_units(sources[0], [], conflicts=conflicts, structured_owner=structured_owner)
             if len(core._format_result_block(trial)) + 40 <= allowance:
                 rendered[0] = trial
     return [rendered[index] for index in sorted(rendered)]
@@ -984,7 +1079,7 @@ def retrieve_instruction_facts(
                 if not marker or marker in seen:
                     continue
                 opcode = str(result.get("instruction_opcode") or "").upper()
-                if opcode and opcode not in {target["opcode"], target["base_opcode"]}:
+                if opcode and opcode not in {target["opcode"], target["base_opcode"], seed.get("manual_instruction_opcode")}:
                     continue
                 seen.add(marker)
                 sources.append(result)
@@ -1089,6 +1184,7 @@ def retrieve_instruction_facts(
                 "operand_semantics", "target_applicability", "runtime_semantics",
                 "operand_slots", "operand_gap_details",
                 "operand_evidence_bindings",
+                "operand_candidate_conflicts",
                 "instruction_step_width", "instruction_instance",
             )
             if key in item

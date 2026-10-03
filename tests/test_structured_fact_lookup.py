@@ -85,6 +85,30 @@ def test_exact_instruction_is_resolved_from_structured_table(opcode):
     assert all("STEP_WIDTH:" not in row["text"] for row in rows)
 
 
+@pytest.mark.parametrize("opcode,manual_opcode,page", [
+    ("ADD", "ADD", 273), ("DFLT", "FLT", 338), ("DPLSY", "PLSY", 377),
+])
+def test_verified_form_source_pages_own_lookup_even_without_an_exact_indexed_form(opcode, manual_opcode, page):
+    _bundled_index()
+    rows = resolve_instruction_records([{"opcode": opcode}], plc_model="FX3U", task_type="generate")
+    assert rows
+    primary = rows[0]
+    assert primary["instruction_lookup_basis"] == "verified_contract_source_page"
+    assert primary["instruction_opcode"] == opcode
+    assert primary["manual_instruction_opcode"] == manual_opcode
+    assert primary["instruction_contract_source"]["pdf_page"] == page
+    assert primary["manual_id"] == "fx3_programming_r"
+    assert primary["revision"] == "R"
+    assert primary["instruction_contract"]["opcode"] == opcode
+    assert all(slot["symbol_status"] == "source_verified" for slot in primary["operand_slots"])
+
+
+def test_source_page_lookup_does_not_borrow_fx3u_verification_for_other_cpus():
+    from knowledge.structured_facts import _instruction_contract_source_records
+    _bundled_index()
+    assert _instruction_contract_source_records({"opcode": "DFLT"}, plc_model="FX5U", task_type="generate") == []
+
+
 def test_every_promoted_fx3u_contract_uses_registry_owner():
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, generation_app_instr_mnemonics
 

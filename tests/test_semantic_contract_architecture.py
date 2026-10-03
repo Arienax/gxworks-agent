@@ -241,6 +241,66 @@ def test_operand_usage_verification_is_independent_for_every_facet_and_slot():
     assert changed[1]["usage_facts"][1]["status"] == "declared_unverified"
     assert slots[0]["purpose_status"] == "unresolved"
 
+
+@pytest.mark.parametrize("conflicting", [False, True])
+def test_candidate_arbitration_preserves_slot_facets_under_every_delivery_order(conflicting):
+    from itertools import permutations
+    from plc.instruction_semantics import attach_operand_usage
+    first, second = "Source region", "Destination region" if conflicting else "Source  region"
+    bindings = [{"position": position, "fact": {
+        "facet": facet, "value": value, "status": "candidate_evidence", "sources": [{"id": identity}],
+    }} for position, facet, value, identity in (
+        (1, "purpose", first, "source-a"), (1, "purpose", second, "source-b"),
+        (1, "unit", "bit", "unit-row"), (2, "purpose", "Result region", "result-row"),
+    )]
+    slots = [{"position": 1, "symbol": "S", "value": "M0", "usage_facts": []},
+             {"position": 2, "symbol": "D", "value": "M100", "usage_facts": []}]
+    expected = attach_operand_usage(slots, bindings)
+    for sequence in permutations(bindings):
+        assert attach_operand_usage(slots, sequence) == expected
+        incremental = slots
+        for binding in sequence:
+            incremental = attach_operand_usage(incremental, [binding])
+        assert incremental == expected
+        assert attach_operand_usage(expected, sequence) == expected
+    assert [(item["symbol"], item["value"]) for item in expected] == [("S", "M0"), ("D", "M100")]
+    assert expected[1]["purpose_status"] == "candidate_evidence"
+    assert next(fact for fact in expected[0]["usage_facts"] if fact["facet"] == "unit")["value"] == "bit"
+    purposes = [fact for fact in expected[0]["usage_facts"] if fact["facet"] == "purpose"]
+    if conflicting:
+        assert purposes == []
+        assert expected[0]["purpose_status"] == "unresolved"
+        assert {fact["value"] for fact in expected[0]["usage_conflicts"][0]["candidates"]} == {first, second}
+    else:
+        assert len(purposes) == 1
+        assert {row["id"] for row in purposes[0]["sources"]} == {"source-a", "source-b"}
+    assert all(item["usage_facts"] == [] for item in slots)
+
+
+@pytest.mark.parametrize("owner_status", ["source_verified", "declared_unverified"])
+def test_candidate_arbitration_obeys_existing_verification_without_promoting(owner_status):
+    from plc.instruction_semantics import attach_operand_usage
+    slots = [{"position": 1, "usage_facts": [{
+        "facet": "purpose", "value": "Owner purpose", "status": owner_status, "sources": [{"id": "owner"}],
+    }]}]
+    result = attach_operand_usage(slots, [{"position": 1, "fact": {
+        "facet": "purpose", "value": "Candidate purpose", "status": "candidate_evidence", "sources": [{"id": "candidate"}],
+    }}])[0]
+    assert result["purpose_status"] == ("source_verified" if owner_status == "source_verified" else "candidate_evidence")
+    assert [fact["value"] for fact in result["usage_facts"]] == [
+        "Owner purpose" if owner_status == "source_verified" else "Candidate purpose",
+    ]
+
+
+def test_candidate_arbitration_does_not_discard_conditions_or_assume_their_equivalence():
+    from plc.instruction_semantics import arbitrate_operand_usage
+    candidates = [{"facet": "purpose", "value": "Result region", "status": "candidate_evidence",
+                   "conditions": {"execution_form": form}, "sources": [{"id": form}]}
+                  for form in ("pulse", "continuous")]
+    resolved, conflicts = arbitrate_operand_usage(candidates)
+    assert resolved == []
+    assert {fact["conditions"]["execution_form"] for fact in conflicts[0]["candidates"]} == {"pulse", "continuous"}
+
 def test_sftl_overlap_and_zrn_numeric_boundary_are_registry_driven_hard_rules():
     with pytest.raises(PLCJsonValidationError, match="K6710"):
         validate_ladder_candidate_structure(

@@ -10,6 +10,12 @@ When the same opcode exists in multiple official manuals, [knowledge.source_auth
 
 The [scoped retrieval facade](runtime-ownership.md#retrieval) applies task and source lanes before candidate limits. CPU applicability remains owned by the index and instruction catalog.
 
+For a form whose native order is already verified, direct lookup also follows
+its existing Core contract sources by manual identity, revision and definition
+page. This recovers shared D/P definitions absent from `instructions.opcode_norm`
+and keeps overview examples from displacing the cited definition. It does not
+verify a purpose merely because the definition's signature is verified.
+
 ## Operand usage evidence
 
 [_operand_gap_details](../../src/knowledge/instruction_facts.py) requires purpose
@@ -30,8 +36,26 @@ Each `operand_evidence_bindings` entry identifies position, facet, candidate
 value and source. Row/context spans use the original `chunks.text` when it is
 available; otherwise `offset_basis` explicitly names `resolved_record.text`.
 Manual identity, revision, PDF page and selected CPU/form remain attached.
+Flattened multiline descriptions bind through an explicit native symbol;
+`value_spans` identifies each original fragment used to reconstruct their value.
+Font placeholders are removed only from symbol identity. Indexed descriptions
+may recover a missing symbol but cannot override a symbol present in the source.
 Runtime binding supplies candidate evidence, not semantic certification. The
 role/type promotion audit and its existing acceptance criteria remain separate.
+
+[arbitrate_operand_usage](../../src/plc/instruction_semantics.py) owns candidate
+resolution for each slot/facet. Verified owners take precedence. Equivalent
+candidates merge their sources; different values or condition scopes leave the
+facet unresolved. Whitespace is normalized, without assuming equivalent units
+or rewriting conditions. An explicit candidate supersedes an unverified
+declaration without becoming source-verified.
+
+Packing checks all candidates before source ordering or budget selection.
+Conflicting source units and overlapping renditions are quarantined together.
+`operand_candidate_conflicts` retains the competing values and sources in the
+diagnostic receipt. Agent B receives only the unresolved facet, reason and
+candidate count; cached index `OPERANDS` summaries cannot reintroduce a discarded
+meaning through the structured prefix. Unrelated slots/facets remain independent.
 
 ## Packing and receipts
 
@@ -54,3 +78,11 @@ Whole-block removal during final compilation changes delivered candidates to
 Required compact fields are rendered from [application.compact_protocol](../../src/application/compact_protocol.py). Local aliases preserve the same representation; polarity and scan behavior are engineering semantics, not syntax cleanup.
 
 [test_instruction_fact_context.py](../../tests/test_instruction_fact_context.py) covers source integrity, all row permutations of a small frozen binding table and final-budget reconciliation. [test_generation_agent_boundary.py](../../tests/test_generation_agent_boundary.py) captures the actual offline Agent B request after context compilation and checks bound purposes, source references and execution form with changed addresses/values. These checks establish delivery, not model reasoning or PLC behavior. [test_agent_b_measurement.py](../../tests/test_agent_b_measurement.py) covers the paired experiment runner. The runner's usage and comparison groups are documented in [Agent B measurements](../guides/agent-b-measurement.md).
+
+`python tools/audit_operand_semantics.py --purpose-coverage --report <path>`
+replays all forms in the existing FX3U signature ledger through the shared
+knowledge context. It records every position's purpose status and failure bucket
+separately from role/type promotions, without a provider call or index mutation.
+The [2026-10-03 coverage report](../reports/2026-10-03-fx3u-operand-purpose.md)
+records its denominator, parser baseline, remaining failures and verification
+limits. Final context compilation retains its separate budget reconciliation.

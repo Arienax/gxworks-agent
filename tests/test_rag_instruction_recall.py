@@ -131,9 +131,12 @@ def test_section_fallback_keeps_manual_bytes_and_instance_step_facts():
 
     full = resolve_instruction_records([{"opcode": "RST", "operands": ["D10"]}])[0]
     assert full["instruction_lookup_basis"] == "official_section_heading"
-    assert "STEP_WIDTH: 3 program step(s)" in full["text"]
+    assert full["instruction_step_width"]["steps"] == 3
+    assert not any(marker in full["text"] for marker in (
+        "STEP_WIDTH:", "STEP_WIDTH_SOURCE:", "STEP_WIDTH_REASON:",
+    ))
     public = compact_structured_fact_record(full)
-    assert public["instruction_step_width"]["steps"] == 3
+    assert public["instruction_step_width"] == full["instruction_step_width"]
     assert public["instruction_contract"]["opcode"] == "RST"
     with sqlite3.connect(resource_path("knowledge/fx3u_knowledge.sqlite").resolve().as_uri()+"?mode=ro", uri=True) as db:
         assert public["text"] == db.execute("SELECT text FROM chunks WHERE id=?", (full["original_id"],)).fetchone()[0]

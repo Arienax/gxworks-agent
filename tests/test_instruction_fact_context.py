@@ -540,6 +540,121 @@ def test_operand_usage_evidence_covers_only_its_slot_and_surviving_block(monkeyp
     assert {item["status"] for item in wrong["requirements"] if "facet" in item} == {"unresolved"}
 
 
+@pytest.mark.parametrize("allowance", [2500, 12000])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_candidate_conflicts_are_quarantined_before_source_order_or_budget_can_choose(allowance, reverse):
+    sources = [
+        _usage_source([("S", "First conflicting purpose", "Bit"), _USAGE_ROWS[1]], identity="first"),
+        _usage_source([("S", "Second conflicting purpose", "Bit"), _USAGE_ROWS[2]], identity="second"),
+        _usage_source([_USAGE_ROWS[3]], identity="unrelated"),
+    ]
+    if reverse:
+        sources.reverse()
+    owner = _usage_source()
+    packed = _pack_target(
+        sources, allowance, operand_gap_details=_operand_gap_details(owner),
+        verified_operand_order=["S", "D", "N1", "N2"], structured_owner=owner,
+    )
+    assert packed
+    assert all("First conflicting purpose" not in row["text"] and "Second conflicting purpose" not in row["text"] for row in packed)
+    assert {binding["position"] for row in packed for binding in row["operand_evidence_bindings"]} <= {4}
+    conflict = packed[0]["operand_candidate_conflicts"][0]
+    assert (conflict["position"], conflict["facet"], conflict["status"]) == (1, "purpose", "unresolved")
+    assert {fact["value"] for fact in conflict["candidates"]} == {"First conflicting purpose", "Second conflicting purpose"}
+    assert {fact["sources"][0]["id"] for fact in conflict["candidates"]} == {"first", "second"}
+    assert packed[0]["operand_slots"][0]["purpose_status"] == "unresolved"
+    assert '"usage_conflicts"' in packed[0]["text"]
+    if allowance == 12000:
+        assert {binding["position"] for row in packed for binding in row["operand_evidence_bindings"]} == {4}
+
+
+@pytest.mark.parametrize("glyph", ["", " [GLYPH-F0A0]"])
+def test_wrapped_operand_rows_keep_individual_value_spans_and_do_not_move_inline_notes(glyph):
+    original = _usage_source()
+    original["text"] = (
+        "[TABLE page=12]\nOperand Type | Description | Data Type\n"
+        f"New data source\nS{glyph} | Bit\n"
+        "Head of affected data\nD | Bit\n(Two devices are occupied.)\n"
+        "N1 | Affected length in bits | 16-bit binary\n(only bit data)\n"
+        "Number of bits moved per operation [setting range: 1 to\nN2 | 16-bit binary\n16]\n"
+        "\n*1. Applies only while enabled.\n"
+    )
+    packed = _pack_target(
+        [original], 12000, operand_gap_details=_operand_gap_details(original),
+        verified_operand_order=["S", "D", "N1", "N2"], structured_owner=original,
+    )
+    purposes = {binding["position"]: binding for binding in packed[0]["operand_evidence_bindings"]
+                if binding["facet"] == "purpose"}
+    assert {position: binding["value"] for position, binding in purposes.items()} == {
+        1: "New data source", 2: "Head of affected data (Two devices are occupied.)",
+        3: "Affected length in bits", 4: "Number of bits moved per operation [setting range: 1 to 16]",
+    }
+    for position in (1, 2, 4):
+        binding = purposes[position]
+        spans = binding["source"]["value_spans"]
+        assert " ".join(original["text"][span["start"]:span["end"]] for span in spans) == binding["value"]
+    assert '"value_spans"' in packed[0]["text"]
+    assert "*1. Applies only while enabled." in packed[0]["text"]
+    assert {slot["purpose_status"] for slot in packed[0]["operand_slots"]} == {"candidate_evidence"}
+
+
+def test_explicit_native_symbols_override_stale_or_shared_index_descriptions():
+    original = _usage_source([("S", "Shared operand purpose", "Bit"), ("D", "Shared operand purpose", "Bit")])
+    original["manual_operand_rows"] = [
+        {"position": "S", "description": "Shared operand purpose"},
+        {"position": "D", "description": "Shared operand purpose"},
+    ]
+    packed = _pack_target(
+        [original], 12000, operand_gap_details=_operand_gap_details(original),
+        verified_operand_order=["S", "D", "N1", "N2"], structured_owner=original,
+    )
+    assert {binding["position"] for binding in packed[0]["operand_evidence_bindings"]} == {1, 2}
+
+
+def test_packed_manual_prefix_does_not_reintroduce_unarbitrated_index_operand_summaries():
+    original = _usage_source([_USAGE_ROWS[0]])
+    original["text"] = "[STRUCTURED INSTRUCTION RECORD]\nOPERANDS: S: stale purpose\n\n" + original["text"]
+    packed = _pack_target(
+        [original], 12000, operand_gap_details=_operand_gap_details(original),
+        verified_operand_order=["S", "D", "N1", "N2"], structured_owner=original,
+    )
+    assert "stale purpose" not in packed[0]["text"]
+    assert "New data source" in packed[0]["text"]
+
+
+def test_manual_row_spans_include_original_whitespace_outside_the_runtime_wrapper():
+    original = _usage_source([_USAGE_ROWS[0]])
+    original["manual_text"] = "\n  " + original["text"] + "  \n"
+    packed = _pack_target(
+        [original], 12000, operand_gap_details=_operand_gap_details(original),
+        verified_operand_order=["S", "D", "N1", "N2"], structured_owner=original,
+    )
+    evidence = packed[0]["operand_evidence_bindings"][0]["source"]
+    assert evidence["offset_basis"] == "chunks.text"
+    span = evidence["row_span"]
+    assert original["manual_text"][span["start"]:span["end"]] == " | ".join(_USAGE_ROWS[0])
+
+
+def test_purpose_coverage_audit_counts_independent_positions_and_retains_conflicts(monkeypatch):
+    from tools import audit_operand_semantics as audit
+    signatures, forms = audit._signature_map()
+    selected = {opcode: forms[opcode] for opcode in ("ADD", "DFLT", "SFTL", "CML")}
+    monkeypatch.setattr(audit, "_signature_map", lambda: (signatures, selected))
+    database_stat = core._index_path().stat()
+    report = audit.audit_operand_purpose_coverage()
+    assert report["forms"] == 4
+    assert report["operand_positions"] == 11
+    assert report["purpose_status_counts"] == {"candidate_evidence": 9, "unresolved": 2}
+    assert report["forms_with_complete_purpose_evidence"] == 3
+    assert report["database_mutated"] is report["promotion_performed"] is False
+    assert (core._index_path().stat().st_size, core._index_path().stat().st_mtime_ns) == (
+        database_stat.st_size, database_stat.st_mtime_ns,
+    )
+    unresolved = next(row for row in report["rows"] if row["opcode"] == "CML")["operands"]
+    assert {row["status"] for row in unresolved} == {"unresolved"}
+    assert sum(report["failure_buckets"].values()) == 2
+
+
 def test_final_context_receipt_distinguishes_bound_omitted_and_unknown_usage(monkeypatch):
     import knowledge.instruction_facts as facts
     import knowledge.structured_facts as structured

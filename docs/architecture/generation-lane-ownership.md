@@ -59,10 +59,16 @@ three explicit lanes:
 `OPERAND_SEMANTICS` includes bound values, slot statuses, `purpose_status` and
 usage facts. The compact renderer shares source identities in its `sources`
 array; each fact's `source_refs[].source` is a zero-based index into that array,
-with a row span when available. Full per-fact provenance stays in the lane
+with row and reconstructed-value spans when available. Full per-fact provenance stays in the lane
 metadata. [attach_operand_usage](../../src/plc/instruction_semantics.py) adds
 manual candidates to their own positions without promoting them or changing
 the native order.
+
+Candidate resolution belongs to the same Core owner, grouped by position and
+facet. Equivalent candidates merge sources; conflicting values/conditions leave
+that facet unresolved. Diagnostic metadata keeps the alternatives, while the
+prompt carries `usage_conflicts` with reason/count only. Manual source units are
+quarantined before budget packing so source order cannot select a meaning.
 
 `TARGET_APPLICABILITY` delivers `execution_form` and its independent status when
 known. Continuous/pulse form, complete execution conditions and runtime

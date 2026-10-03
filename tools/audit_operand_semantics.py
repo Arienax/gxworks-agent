@@ -16,6 +16,8 @@ from collections import Counter
 import hashlib
 import json
 from pathlib import Path
+import platform
+import re
 import sqlite3
 import sys
 
@@ -325,6 +327,127 @@ def _json_text(payload):
     return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
 
 
+def audit_operand_purpose_coverage(*, char_budget=24000, top_k=8):
+    """Audit frozen FX3U positions through the existing runtime retrieval owner.
+
+    Candidate delivery and semantic verification are counted separately. The
+    audit does not promote, change the SQLite index or call a provider/native PLC.
+    """
+    from knowledge import core
+    from knowledge.evidence import KnowledgeQuery
+    from knowledge.instruction_facts import (
+        _operand_evidence_bindings, _operand_gap_details, _operand_table_units, _related_units,
+    )
+    from knowledge.retriever import build_knowledge_context
+    from knowledge.structured_facts import resolve_instruction_records
+    from plc.instruction_resolution import resolve_instruction_lanes
+
+    if core._index_identity(core._index_path())[0] == "missing":
+        raise ValueError("Purpose coverage requires the bundled runtime knowledge index")
+    signatures, forms = _signature_map()
+    rows, counts, buckets, samples = [], Counter(), Counter(), {}
+    complete_forms, verified_forms, off_definition = 0, 0, 0
+    for opcode, signature in sorted(forms.items()):
+        slots = resolve_instruction_lanes(opcode, plc_model="FX3U")["operand_slots"]
+        order = list(signature["native_order"])
+        if [slot.get("symbol") for slot in slots] != order:
+            raise ValueError(f"{opcode}: runtime slots differ from the frozen native order")
+        context = build_knowledge_context(
+            KnowledgeQuery(opcode, precompiled=True, metadata={"instruction_fact_mode": "targeted"}),
+            plc_model="FX3U", task_type="generate", char_budget=char_budget, top_k=top_k,
+        )
+        receipt = context.manifest["instruction_facts"]
+        records = [row for row in receipt["records"] if row.get("fact_target") == opcode]
+        requirements = {row["position"]: row for row in receipt["operand_facts"]
+                        if row["opcode"] == opcode and row["facet"] == "purpose"}
+        target = next(row for row in receipt["targets"] if row["opcode"] == opcode)
+        seeds = resolve_instruction_records([target], plc_model="FX3U", task_type="generate")
+        sources, seen = [], set()
+        if seeds:
+            primary = (seeds[0].get("manual_id"), seeds[0].get("revision"))
+            for seed in seeds:
+                for source in (seed, *_related_units(seed, "FX3U", "generate")):
+                    if source["id"] in seen or (source.get("manual_id"), source.get("revision")) != primary:
+                        continue
+                    seen.add(source["id"])
+                    sources.append(source)
+        gaps = _operand_gap_details(seeds[0]) if seeds else []
+        tables = [(source, start, end) for source in sources
+                  for start, end in _operand_table_units(source["text"])]
+        potential = [binding for source, start, end in tables
+                     for binding in _operand_evidence_bindings(source, start, end, gaps, order)]
+        form_rows = []
+        for slot in slots:
+            position = slot["position"]
+            delivered = [binding for record in records if record.get("included")
+                         for binding in record.get("operand_evidence_bindings") or ()
+                         if binding["position"] == position and binding["facet"] == "purpose"]
+            conflicts = [item for record in records for item in record.get("operand_candidate_conflicts") or ()
+                         if item["position"] == position and item["facet"] == "purpose"]
+            status = ("source_verified" if slot.get("purpose_status") == "source_verified"
+                      else requirements.get(position, {}).get("status", "unresolved"))
+            item = {"position": position, "symbol": slot["symbol"], "status": status}
+            if delivered:
+                # Literal forms share the ledger's native definition page.
+                matches = [binding["source"].get("pdf_page") == signature["native_page"]
+                           and binding["source"].get("manual_id") == NATIVE for binding in delivered]
+                item["native_definition_match"] = any(matches)
+                off_definition += not any(matches)
+                item["candidates"] = [{"value": binding["value"], "source": binding["source"]}
+                                      for binding in delivered]
+            if status in {"unresolved", "budget_omitted"}:
+                symbol = slot["symbol"]
+                if status == "budget_omitted":
+                    bucket = "budget_omitted"
+                elif conflicts:
+                    bucket = "candidate_conflict"
+                elif any(binding["position"] == position and binding["facet"] == "purpose" for binding in potential):
+                    bucket = "candidate_unit_quarantined_or_not_selected"
+                elif not sources:
+                    bucket = "definition_not_resolved"
+                elif not tables:
+                    bucket = "operand_table_not_recovered"
+                elif not any(re.search(r"(?<![A-Z0-9])" + re.escape(symbol) + r"(?![A-Z0-9])",
+                                       source["text"][start:end], re.I) for source, start, end in tables):
+                    bucket = "operand_symbol_not_recovered"
+                else:
+                    bucket = "operand_row_not_bound"
+                item["failure_bucket"] = bucket
+                buckets[bucket] += 1
+                if len(samples.setdefault(bucket, [])) < 4:
+                    sample = {"opcode": opcode, "position": position, "symbol": symbol,
+                              "native_page": signature["native_page"]}
+                    if conflicts:
+                        sample["conflict"] = conflicts[0]
+                    sample["source_tables"] = [{"id": source["id"], "manual_id": source.get("manual_id"),
+                                                "text": source["text"][start:end][:2200]}
+                                               for source, start, end in tables[:3]]
+                    samples[bucket].append(sample)
+            counts[status] += 1
+            form_rows.append(item)
+        complete_forms += all(item["status"] in {"source_verified", "candidate_evidence"} for item in form_rows)
+        verified_forms += all(item["status"] == "source_verified" for item in form_rows)
+        rows.append({"opcode": opcode, "native_page": signature["native_page"], "operands": form_rows})
+    return {
+        "schema_version": 1, "scope": "frozen_fx3u_signature_forms", "cpu": "FX3U",
+        "signature_ledger": (SIGNATURE_LEDGER.relative_to(ROOT).as_posix()
+                             if SIGNATURE_LEDGER.is_relative_to(ROOT) else SIGNATURE_LEDGER.as_posix()),
+        "manual_sources": signatures["sources"], "evidence_database": "resources/knowledge/fx3u_knowledge.sqlite",
+        "database_mutated": False, "promotion_performed": False,
+        "measurement_stage": "shared_knowledge_context_receipt", "char_budget": char_budget, "top_k": top_k,
+        "environment": {"python": platform.python_version(), "platform": platform.system()},
+        "forms": len(rows), "operand_positions": sum(counts.values()),
+        "purpose_status_counts": dict(sorted(counts.items())),
+        "forms_with_complete_purpose_evidence": complete_forms,
+        "forms_with_all_purposes_verified": verified_forms,
+        "candidate_positions_without_native_definition_match": off_definition,
+        "failure_buckets": dict(sorted(buckets.items(), key=lambda item: (-item[1], item[0]))),
+        "failure_samples": samples, "rows": rows,
+        "limits": ["candidate delivery is not purpose verification", "no model call, native compile or PLC execution",
+                   "context compiler may subsequently omit evidence according to its separate budget"],
+    }
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--database", type=Path, default=DB)
@@ -334,6 +457,7 @@ def main(argv=None):
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--promote", action="store_true")
     mode.add_argument("--check", action="store_true")
+    mode.add_argument("--purpose-coverage", action="store_true")
     args = parser.parse_args(argv)
 
     for target in (args.output, args.summary, args.report):
@@ -343,6 +467,18 @@ def main(argv=None):
             target.exists() and args.database.exists() and target.samefile(args.database)
         ):
             parser.error("Audit output must not overwrite the source database")
+
+    if args.purpose_coverage:
+        from knowledge import core
+        if core._index_path() is None or args.database.resolve() != core._index_path().resolve():
+            parser.error("Purpose coverage uses the shared runtime index; --database must match that index")
+        report = audit_operand_purpose_coverage()
+        if args.report is not None:
+            args.report.parent.mkdir(parents=True, exist_ok=True)
+            args.report.write_text(_json_text(report), encoding="utf-8")
+        print(json.dumps({key: value for key, value in report.items() if key not in {"rows", "failure_samples"}},
+                         ensure_ascii=False, sort_keys=True))
+        return 0
 
     ledger, report = build(args.database)
     summary = _summary(report)

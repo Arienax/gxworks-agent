@@ -143,6 +143,41 @@ def test_operand_usage_and_execution_form_reach_actual_agent_b_messages(tmp_path
     assert "STEP_WIDTH:" not in sent
 
 
+def test_conflicting_usage_candidates_reach_agent_b_only_as_an_unresolved_facet(tmp_path, monkeypatch):
+    import knowledge.structured_facts as structured
+    from tests.test_instruction_fact_context import _usage_source
+
+    sources = [_usage_source([("S", value, "Bit")], identity=identity)
+               for identity, value in (("a", "First conflicting purpose"), ("b", "Second conflicting purpose"))]
+    monkeypatch.setattr(structured, "resolve_instruction_records", lambda *a, **k: copy.deepcopy(sources))
+
+    class UsageProvider(OneShotProvider):
+        def stream(self, request):
+            self.requests.append(request)
+            yield TextDelta(json.dumps({"r": [{"b": [{"i": ["NO X0"], "o": ["SFTL M0 M100 K16 K2"]}]}]}))
+
+    provider = UsageProvider()
+    specification = _spec()
+    contract = specification["selected_approach"]["generation_contract"]
+    contract["required_opcodes"] = ["SFTL"]
+    contract["instruction_instances"] = [{"opcode": "SFTL", "operands": ["M0", "M100", "K16", "K2"]}]
+    metadata = GenerationWorkflow(
+        GenerationRequest(user_input="Generate", confirmed_context=specification, plc_model="FX3U", model_name=provider.profile["model"]),
+        tmp_path, dependencies=GenerationDependencies(provider=provider),
+    ).run()
+    assert len(provider.requests) == 1
+    sent = "\n".join(str(getattr(message, "content", "")) for message in provider.requests[0].messages)
+    assert "First conflicting purpose" not in sent
+    assert "Second conflicting purpose" not in sent
+    views = [json.loads(line.split(": ", 1)[1]) for line in sent.splitlines() if line.startswith("OPERAND_SEMANTICS:")]
+    source = next(view["slots"][0] for view in views if view["opcode"] == "SFTL")
+    assert source["purpose_status"] == "unresolved"
+    assert source["usage_conflicts"][0]["facet"] == "purpose"
+    assert source["usage_conflicts"][0]["candidate_count"] == 2
+    receipt = metadata["generation_handoff"]["instruction_facts"]
+    assert next(row for row in receipt["operand_facts"] if row["opcode"] == "SFTL" and row["position"] == 1 and row["facet"] == "purpose")["status"] == "unresolved"
+
+
 @pytest.mark.parametrize(("required_opcode", "expected_status"), [
     ("OUT", "verified"), ("MOV", "violated"),
 ])
