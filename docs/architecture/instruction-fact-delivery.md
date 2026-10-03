@@ -38,6 +38,13 @@ available; otherwise `offset_basis` explicitly names `resolved_record.text`.
 Manual identity, revision, PDF page and selected CPU/form remain attached.
 Flattened multiline descriptions bind through an explicit native symbol;
 `value_spans` identifies each original fragment used to reconstruct their value.
+Fragments join with a space by default. A span's optional `join_before: ""`
+records a source-supported adjacent-cell word join. The binder requires another
+operand-table rendition in the same source record, manual revision and PDF page
+to contain the exact complete description on the same explicit native-symbol
+row. Both split fragments retain their original offsets; different negation,
+units, values, pages or symbols cannot supply that witness. This reconstruction
+does not relax candidate arbitration or certify the purpose.
 Font placeholders are removed only from symbol identity. Indexed descriptions
 may recover a missing symbol but cannot override a symbol present in the source.
 Runtime binding supplies candidate evidence, not semantic certification. The

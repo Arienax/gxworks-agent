@@ -631,6 +631,34 @@ def _operand_evidence_bindings(result, start, end, gaps, expected_order):
                 or len(tokens) == 1 and len(tokens[0]) >= 3
                 or cell.startswith(("(", "[")) and bool(re.search(r"\d", cell)))
 
+    def source_page(offset):
+        markers = list(re.finditer(r"(?m)^\[(?:PAGE\s+(\d+)|TABLE\s+page=(\d+))\b", text[:offset]))
+        return int(next(group for group in markers[-1].groups() if group)) if markers else result.get("pdf_page")
+
+    def supports_split_cell(symbol, description, offset):
+        # Reconstruct only if another representation of this source page has
+        # the exact complete value on the same explicit native-symbol row. No
+        # spelling similarity, preferred length or cross-manual inference.
+        if not result.get("manual_id") or not result.get("revision") or not source_page(offset):
+            return False
+        for left, right in _operand_table_units(text):
+            if left == start and right == end or source_page(left) != source_page(offset):
+                continue
+            column = None
+            for other in text[left:right].splitlines():
+                other_cells = [cell.strip() for cell in other.split("|")]
+                if column is None:
+                    column = next((index for index, cell in enumerate(other_cells)
+                                   if re.fullmatch(r"Description|含义|说明", cell, re.I)), None)
+                    continue
+                if len(other_cells) <= column:
+                    continue
+                anchors = [native_symbol(cell) for cell in other_cells[:column]
+                           if native_symbol(cell) in expected]
+                if anchors == [symbol] and " ".join(other_cells[column].split()) == " ".join(description.split()):
+                    return True
+        return False
+
     for line in lines:
         parts = cell_parts(line, cursor)
         cells = [part[0] for part in parts]
@@ -689,7 +717,14 @@ def _operand_evidence_bindings(result, start, end, gaps, expected_order):
                              and native_symbol(description) not in expected)
         wrapped = not valid_description or bool(pending and description.startswith(("(", "[", "-")))
         fragments = list(pending) if wrapped else []
+        join_at = set()
         if valid_description:
+            prefix = parts[description_column-1] if description_column else None
+            if (not wrapped and prefix and re.fullmatch(r"[A-Za-z]", prefix[0])
+                    and description and description[0].islower()
+                    and supports_split_cell(symbols[0], prefix[0]+description, cursor)):
+                fragments.append(prefix)
+                join_at.add(len(fragments))
             fragments.append(parts[description_column])
         pending = []
         values = {
@@ -702,7 +737,7 @@ def _operand_evidence_bindings(result, start, end, gaps, expected_order):
             del values["operand_types"]
         rows.append({"symbol": symbols[0], "start": min([cursor, *(part[1] for part in fragments)]),
                      "end": cursor + len(line.rstrip("\r\n")), "parts": fragments,
-                     "wrapped": wrapped, "values": values})
+                     "wrapped": wrapped, "join_at": join_at, "values": values})
         cursor += len(line)
     symbol_counts = {symbol: sum(row["symbol"] == symbol for row in rows) for symbol in expected}
     bindings = []
@@ -712,7 +747,8 @@ def _operand_evidence_bindings(result, start, end, gaps, expected_order):
             continue
         values = dict(row["values"])
         if row["parts"]:
-            values["purpose"] = " ".join(part[0] for part in row["parts"])
+            values["purpose"] = "".join(("" if index == 0 or index in row["join_at"] else " ") + part[0]
+                                        for index, part in enumerate(row["parts"]))
         position = expected.index(symbol) + 1
         for gap in gaps or ():
             facet = gap.get("facet")
@@ -733,8 +769,9 @@ def _operand_evidence_bindings(result, start, end, gaps, expected_order):
             if page_markers:
                 evidence["pdf_page"] = int(next(group for group in page_markers[-1].groups() if group))
             if facet == "purpose" and (row["wrapped"] or len(row["parts"]) > 1):
-                evidence["value_spans"] = [{"start": left + offset_delta, "end": right + offset_delta}
-                                           for _, left, right in row["parts"]]
+                evidence["value_spans"] = [{"start": left + offset_delta, "end": right + offset_delta,
+                                           **({"join_before": ""} if index in row["join_at"] else {})}
+                                          for index, (_, left, right) in enumerate(row["parts"])]
             binding = {
                 "position": position, "symbol": symbol, "facet": facet,
                 "value": values[facet], "status": "candidate_evidence", "source": evidence,

@@ -75,6 +75,24 @@ def test_corrupt_cache_and_expired_samples_are_ignored(tmp_path):
     assert store.decorate(c)==c
 
 
+@pytest.mark.parametrize('operation', ['decorate', 'capabilities', 'record', 'clear'])
+def test_corrupt_cache_connection_is_closed_before_return(tmp_path, operation):
+    contract=CapabilityContract.from_dict(scoped_provider().profile['capabilityContract'])
+    store=ObservationStore(tmp_path/'corrupt.sqlite')
+    store.path.write_text('corrupt database')
+    if operation=='decorate':
+        assert store.decorate(contract)==contract
+    elif operation=='capabilities':
+        assert store.capabilities(contract.scope)==[]
+    elif operation=='record':
+        store.record(contract.scope,'temperature','accepted',.73,context='a'*64)
+    else:
+        store.clear(contract.scope)
+    # Windows refuses this while a SQLite handle remains open. No GC/retry.
+    store.path.unlink()
+    assert not store.path.exists()
+
+
 def test_cache_bound_and_clear_do_not_mutate_profile(tmp_path,monkeypatch):
     import model_runtime.observations as model_observations
     monkeypatch.setattr(model_observations,'MAX_ROWS',8)

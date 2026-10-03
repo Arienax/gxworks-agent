@@ -10,7 +10,10 @@ from model_profile_fixtures import offline_runtime_profile
 from application.compact_protocol import canonical_compact_example, compact_response_schema, compact_protocol_prompt
 from application.generation_agent import _FirstJSONObjectProvider
 from model_runtime.provider import ModelRequest, OpenAICompatibleProvider, ReasoningDelta, TextDelta, Usage, UserMessage, _usage_event
-from scripts.benchmark_agent_b import ObservedProvider, main, run_case, schedule, summarize
+from scripts.benchmark_agent_b import (
+    ObservedProvider, evaluate_synthetic_case, load_cases, main, manual_text_context,
+    preflight_pairs, run_case, schedule, summarize, without_candidate_usage,
+)
 
 
 @pytest.mark.parametrize("details", ["completion_tokens_details", "output_tokens_details"])
@@ -36,6 +39,108 @@ def test_missing_reasoning_meter_is_unknown_not_zero():
     assert usage.reasoning_tokens is None
     assert "reasoning_tokens" not in usage.raw_usage
     assert _usage_event({"input_tokens": 10, "output_tokens": 20, "output_tokens_details": {"reasoning_tokens": 0}}).reasoning_tokens == 0
+
+
+def _purpose_cases():
+    from pathlib import Path
+    return load_cases(Path(__file__).resolve().parents[1] / "benchmarks/agent_b_operand_purpose_cases.jsonl")
+
+
+def test_usage_ablation_preserves_native_slots_verified_owner_and_manual_bytes():
+    from knowledge.evidence import KnowledgeContext
+    view = {"opcode": "WSFL", "slots": [
+        {"position": 1, "symbol": "S", "symbol_status": "source_verified", "value": "D40",
+         "purpose_status": "source_verified", "usage_facts": [
+             {"facet": "purpose", "value": "original verified purpose", "status": "source_verified", "sources": [{"id": "verified"}]}]},
+        {"position": 3, "symbol": "N1", "symbol_status": "source_verified", "purpose_status": "candidate_evidence",
+         "usage_facts": [{"facet": "purpose", "value": "new candidate purpose", "status": "candidate_evidence", "source_refs": [{"source": 0}]}]},
+    ]}
+    original = 'MODEL: FX3U\nOPERAND_SEMANTICS: ' + json.dumps(view) + '\nOriginal manual: do not invert; 17 words, 3 moves.\nS | D | N1 | N2\n'
+    context = KnowledgeContext(original, {"records": []})
+    stripped = manual_text_context(context)
+    value = json.loads(stripped.splitlines()[1].split(': ', 1)[1])
+    assert value["slots"][0]["usage_facts"][0]["value"] == "original verified purpose"
+    assert value["slots"][1] == {"position": 3, "symbol": "N1", "symbol_status": "source_verified", "purpose_status": "unresolved"}
+    assert stripped.splitlines()[0:1] + stripped.splitlines()[2:] == original.splitlines()[0:1] + original.splitlines()[2:]
+    assert without_candidate_usage(stripped) == stripped
+    assert context == original
+
+
+@pytest.mark.parametrize("case_id", ["wsfl-a", "wsfl-b", "ivck-a", "tcmp-b", "hold-control"])
+def test_paired_preflight_compares_real_final_requests_and_does_not_use_transport(case_id):
+    from knowledge import core
+    if core._index_identity(core._index_path())[0] == "missing":
+        pytest.skip("Bundled index is not installed")
+    provider = OpenAICompatibleProvider(offline_runtime_profile(), "fixture-key", client=object())
+    case = next(case for case in _purpose_cases() if case["case_id"] == case_id)
+    original = copy.deepcopy(case)
+    result = preflight_pairs([case], provider=provider, evidence_cache={})
+    assert result["passed"] and result["network_calls"] == 0 and case == original
+    pair = result["pairs"][0]
+    raw, bound = [record["actual_requests"][0] for record in pair["records"]]
+    assert {k:v for k,v in raw.items() if k != 'messages'} == {k:v for k,v in bound.items() if k != 'messages'}
+    for a,b in zip(raw['messages'],bound['messages']):
+        assert a['role'] == b['role']
+        # Independent check: all other lines, including complete manual bodies,
+        # confirmed specification, CPU facts and examples, match byte for byte.
+        assert [line for line in a['content'].splitlines() if not line.startswith('OPERAND_SEMANTICS: ')] == [
+            line for line in b['content'].splitlines() if not line.startswith('OPERAND_SEMANTICS: ')]
+    if case_id != 'hold-control':
+        assert pair['candidate_counts']['manual_text'] == 0 < pair['candidate_counts']['usage_bound']
+        supplied = json.dumps(raw['messages'],ensure_ascii=False)
+        assert ' '.join([case['evaluation']['opcode'],*case['evaluation']['operands']]) not in supplied
+    else:
+        assert raw == bound and pair['candidate_counts'] == {'manual_text':0,'usage_bound':0}
+
+
+@pytest.mark.parametrize("case", _purpose_cases()[:-1], ids=lambda case:case['case_id'])
+def test_independent_mapping_answers_reject_swapped_values(case):
+    from application.compact_protocol import expand_compact_ladder
+    expected = case['evaluation']
+    def ladder(operands):
+        return expand_compact_ladder({'r':[{'b':[{'i':['NO X0'],'o':[' '.join([expected['opcode'],*operands])]}]}]})
+    assert evaluate_synthetic_case(case,{'ladder':ladder(expected['operands'])})['status'] == 'verified'
+    swapped = list(expected['operands'])
+    swapped[0],swapped[-1] = swapped[-1],swapped[0]
+    assert evaluate_synthetic_case(case,{'ladder':ladder(swapped)})['status'] == 'failed'
+
+
+def test_mapping_fixture_refuses_prepopulated_operands(tmp_path):
+    case = _purpose_cases()[0]
+    case['confirmed_spec']['selected_approach']['instruction_instances'] = [{'opcode':'SFTL','operands':case['evaluation']['operands']}]
+    path = tmp_path/'cases.jsonl'
+    path.write_text(json.dumps(case),encoding='utf-8')
+    with pytest.raises(ValueError,match='must not prefill'):
+        load_cases(path)
+
+
+def test_first_candidate_does_not_count_a_later_duplicate_as_a_repair(monkeypatch):
+    from knowledge.evidence import KnowledgeContext
+    import application.generation_agent as agent
+    monkeypatch.setattr(agent,'_build_knowledge_context',lambda *a,**k:KnowledgeContext(''))
+    case = next(case for case in _purpose_cases() if case['case_id']=='wsfl-a')
+    class Provider:
+        profile = offline_runtime_profile()
+        def stream(self,request):
+            yield TextDelta('{"r":[{"b":[{"i":["P X0"],"o":["WSFL D40 D300 K3 K17"]}]}]}')
+            yield TextDelta('{"r":[{"b":[{"i":["P X0"],"o":["WSFL D40 D300 K17 K3"]}]}]}')
+            yield Usage(10,20,30,None)
+    record = run_case(case,'usage_bound',provider=Provider())
+    assert record['model_calls'] == 1 and record['first_candidate']['retries'] == 0
+    assert record['first_candidate']['semantic']['status'] == 'failed'
+    assert not record['first_candidate']['usable']
+    assert 'K17 K3' in record['attempts'][0]['raw_content']
+
+
+def test_required_endpoint_rejects_wrong_saved_profile_before_transport(tmp_path,monkeypatch):
+    import model_runtime.provider as providers
+    provider = SimpleNamespace(profile={'baseUrl':'https://other.invalid/v1'})
+    monkeypatch.setattr(providers,'get_active_provider',lambda:provider)
+    path = tmp_path/'cases.jsonl'
+    path.write_text(json.dumps({'case_id':'control','confirmed_spec':{'summary':'hold'}}),encoding='utf-8')
+    with pytest.raises(SystemExit):
+        main([str(path),'--live','--require-endpoint','https://api-inference.modelscope.cn/v1','--output',str(tmp_path/'result.jsonl')])
+    assert not (tmp_path/'result.jsonl').exists()
 
 
 def test_json_framing_does_not_drop_reasoning_or_usage_and_observation_sees_duplicates():

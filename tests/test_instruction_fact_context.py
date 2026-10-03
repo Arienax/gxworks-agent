@@ -635,24 +635,57 @@ def test_manual_row_spans_include_original_whitespace_outside_the_runtime_wrappe
     assert original["manual_text"][span["start"]:span["end"]] == " | ".join(_USAGE_ROWS[0])
 
 
+@pytest.mark.parametrize('other_symbol,other_value,other_page,reconstructed', [
+    ('D','Word device number storing inverted data',256,True),
+    ('D','Word device number not storing inverted data',256,False),
+    ('D','Word device number storing inverted data',257,False),
+    ('S','Word device number storing inverted data',256,False),
+    ('D','Word device number storing inverted data in 2 ms',256,False),
+])
+def test_split_cell_reconstruction_needs_exact_same_page_native_row(other_symbol,other_value,other_page,reconstructed):
+    from knowledge.instruction_facts import _operand_evidence_bindings, _operand_table_units
+    raw = (f'[PAGE {other_page} LAYOUT]\nOperand Type | Description | Data Type\n'
+           f'{other_symbol} | {other_value} | 16-bit binary\n'
+           '[TABLE page=256 index=2 bbox=[89.61,257.71,547.08,301.21]]\n'
+           'Operand Type | <blank> | <blank> | Description | Data Type\n'
+           '<blank> | D | W | ord device number storing inverted data | <blank>\n')
+    original = source(opcode='CML',text=raw)
+    original.update(pdf_page=256,manual_text=raw)
+    left,right = list(_operand_table_units(raw))[-1]
+    bindings = _operand_evidence_bindings(original,left,right,[{'position':2,'facet':'purpose'}],['S','D'])
+    assert len(bindings)==1
+    binding = bindings[0]
+    assert binding['value']==('Word device number storing inverted data' if reconstructed else 'ord device number storing inverted data')
+    if reconstructed:
+        spans=binding['source']['value_spans']
+        assert [raw[span['start']:span['end']] for span in spans]==['W','ord device number storing inverted data']
+        assert spans[1]['join_before']==''
+        rebuilt=''.join(('' if index==0 else span.get('join_before',' '))+raw[span['start']:span['end']]
+                        for index,span in enumerate(spans))
+        assert rebuilt==binding['value']
+
+
 def test_purpose_coverage_audit_counts_independent_positions_and_retains_conflicts(monkeypatch):
     from tools import audit_operand_semantics as audit
     signatures, forms = audit._signature_map()
-    selected = {opcode: forms[opcode] for opcode in ("ADD", "DFLT", "SFTL", "CML")}
+    selected = {opcode: forms[opcode] for opcode in ("ADD", "DFLT", "SFTL", "CML", "MTR")}
     monkeypatch.setattr(audit, "_signature_map", lambda: (signatures, selected))
     database_stat = core._index_path().stat()
     report = audit.audit_operand_purpose_coverage()
-    assert report["forms"] == 4
-    assert report["operand_positions"] == 11
-    assert report["purpose_status_counts"] == {"candidate_evidence": 9, "unresolved": 2}
-    assert report["forms_with_complete_purpose_evidence"] == 3
+    assert report["forms"] == 5
+    assert report["operand_positions"] == 15
+    assert report["purpose_status_counts"] == {"candidate_evidence": 11, "unresolved": 4}
+    assert report["forms_with_complete_purpose_evidence"] == 4
     assert report["database_mutated"] is report["promotion_performed"] is False
     assert (core._index_path().stat().st_size, core._index_path().stat().st_mtime_ns) == (
         database_stat.st_size, database_stat.st_mtime_ns,
     )
-    unresolved = next(row for row in report["rows"] if row["opcode"] == "CML")["operands"]
+    unresolved = next(row for row in report["rows"] if row["opcode"] == "MTR")["operands"]
     assert {row["status"] for row in unresolved} == {"unresolved"}
-    assert sum(report["failure_buckets"].values()) == 2
+    assert sum(report["failure_buckets"].values()) == 4
+    cml = next(row for row in report['rows'] if row['opcode']=='CML')['operands']
+    assert {row['status'] for row in cml}=={'candidate_evidence'}
+    assert {candidate['value'] for candidate in cml[1]['candidates']}=={'Word device number storing inverted data'}
 
 
 def test_final_context_receipt_distinguishes_bound_omitted_and_unknown_usage(monkeypatch):

@@ -9,6 +9,7 @@ import json
 import re
 import sqlite3
 import time
+from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
 from model_runtime.contract import CapabilityContract, scoped_contract
@@ -44,7 +45,7 @@ class ObservationStore:
             identifier(target)
             payload = json.dumps(value, allow_nan=False)
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            with sqlite3.connect(self.path, timeout=.1) as db:
+            with closing(sqlite3.connect(self.path, timeout=.1)) as db, db:
                 db.execute('CREATE TABLE IF NOT EXISTS observations (scope TEXT, target TEXT, outcome TEXT, value TEXT, context TEXT, source TEXT, code TEXT, at REAL, PRIMARY KEY(scope,target,outcome,value,context,source))')
                 now = time.time()
                 db.execute('INSERT OR REPLACE INTO observations VALUES (?,?,?,?,?,?,?,?)',
@@ -60,7 +61,7 @@ class ObservationStore:
             return contract
         try:
             # A read never creates a database or migrates a user's profile.
-            with sqlite3.connect(self.path.as_uri()+'?mode=ro', uri=True, timeout=.1) as db:
+            with closing(sqlite3.connect(self.path.as_uri()+'?mode=ro', uri=True, timeout=.1)) as db, db:
                 rows = db.execute('SELECT target,outcome,value,context,source,code,at FROM observations WHERE scope=? AND at>? ORDER BY at DESC LIMIT 128',
                     (digest(contract.scope), time.time()-MAX_AGE)).fetchall()
         except (OSError, sqlite3.Error, ValueError):
@@ -90,7 +91,7 @@ class ObservationStore:
         if not self.path.is_file():
             return []
         try:
-            with sqlite3.connect(self.path.as_uri()+'?mode=ro', uri=True, timeout=.1) as db:
+            with closing(sqlite3.connect(self.path.as_uri()+'?mode=ro', uri=True, timeout=.1)) as db, db:
                 return [{'target':t, 'value':json.loads(v), 'context':c, 'at':at} for t,v,c,at in db.execute(
                     "SELECT target,value,context,at FROM observations WHERE scope=? AND outcome='observed' AND at>? ORDER BY at DESC LIMIT 16",
                     (digest(scope),time.time()-MAX_AGE))]
@@ -100,7 +101,7 @@ class ObservationStore:
     def clear(self, scope):
         if self.path.is_file():
             try:
-                with sqlite3.connect(self.path, timeout=.1) as db:
+                with closing(sqlite3.connect(self.path, timeout=.1)) as db, db:
                     db.execute('DELETE FROM observations WHERE scope=?', (digest(scope),))
             except (OSError, sqlite3.Error, ValueError):
                 return
