@@ -46,6 +46,20 @@ def _purpose_cases():
     return load_cases(Path(__file__).resolve().parents[1] / "benchmarks/agent_b_operand_purpose_cases.jsonl")
 
 
+def _challenge_cases():
+    from pathlib import Path
+    return load_cases(Path(__file__).resolve().parents[1] / "benchmarks/agent_b_operand_purpose_challenge_cases.jsonl")
+
+
+def _mapping_ladder(case, operands=None):
+    from application.compact_protocol import expand_compact_ladder
+    expected = case['evaluation']
+    gate = expected.get('gate', {'op':'LD','args':['X0']})
+    contact = {'LD':'NO','LDI':'NC','LDP':'P','LDF':'F'}[gate['op']]
+    instruction = ' '.join([expected['opcode'],*(operands or expected['operands'])])
+    return expand_compact_ladder({'r':[{'b':[{'i':[contact+' '+gate['args'][0]],'o':[instruction]}]}]})
+
+
 def test_usage_ablation_preserves_native_slots_verified_owner_and_manual_bytes():
     from knowledge.evidence import KnowledgeContext
     view = {"opcode": "WSFL", "slots": [
@@ -93,16 +107,126 @@ def test_paired_preflight_compares_real_final_requests_and_does_not_use_transpor
         assert raw == bound and pair['candidate_counts'] == {'manual_text':0,'usage_bound':0}
 
 
-@pytest.mark.parametrize("case", _purpose_cases()[:-1], ids=lambda case:case['case_id'])
+@pytest.mark.parametrize("case", _challenge_cases()[:-1], ids=lambda case:case['case_id'])
+def test_challenge_preflight_compares_final_requests_without_prefilled_parameters(case):
+    provider = OpenAICompatibleProvider(offline_runtime_profile(), 'fixture-key', client=object())
+    result = preflight_pairs([case], provider=provider, evidence_cache={})
+    assert result['passed'] and result['network_calls'] == 0
+    for record in result['pairs'][0]['records']:
+        supplied = json.dumps(record['actual_requests'][0]['messages'],ensure_ascii=False)
+        assert ' '.join([case['evaluation']['opcode'],*case['evaluation']['operands']]) not in supplied
+
+
+@pytest.mark.parametrize("case", _purpose_cases()[:-1]+_challenge_cases()[:-1], ids=lambda case:case['case_id'])
 def test_independent_mapping_answers_reject_swapped_values(case):
-    from application.compact_protocol import expand_compact_ladder
     expected = case['evaluation']
-    def ladder(operands):
-        return expand_compact_ladder({'r':[{'b':[{'i':['NO X0'],'o':[' '.join([expected['opcode'],*operands])]}]}]})
-    assert evaluate_synthetic_case(case,{'ladder':ladder(expected['operands'])})['status'] == 'verified'
+    assert evaluate_synthetic_case(case,{'ladder':_mapping_ladder(case)})['status'] == 'verified'
     swapped = list(expected['operands'])
     swapped[0],swapped[-1] = swapped[-1],swapped[0]
-    assert evaluate_synthetic_case(case,{'ladder':ladder(swapped)})['status'] == 'failed'
+    assert evaluate_synthetic_case(case,{'ladder':_mapping_ladder(case,swapped)})['status'] == 'failed'
+
+
+@pytest.mark.parametrize('location', ['same_branch','parallel_branch','later_rung'])
+@pytest.mark.parametrize('copies', [1,3])
+def test_mapping_evaluator_counts_equal_call_occurrences(location,copies):
+    case = next(row for row in _purpose_cases() if row['case_id']=='wsfl-a')
+    ladder = _mapping_ladder(case)
+    rung = ladder['rungs'][0]
+    branch = rung['branches'][0]
+    for _ in range(copies):
+        if location=='same_branch':
+            branch['outputs'].append(copy.deepcopy(branch['outputs'][0]))
+        elif location=='parallel_branch':
+            rung['branches'].append(copy.deepcopy(branch))
+        else:
+            ladder['rungs'].append(copy.deepcopy(rung))
+    result = evaluate_synthetic_case(case,{'ladder':ladder})
+    assert result['status']=='failed' and result['call_count']==copies+1
+    assert result['checks']['operand_mapping'] is True
+    assert result['checks']['exactly_one_designated_call'] is False
+    assert len(result['actual'])==copies+1
+
+
+def test_mapping_evaluator_rejects_missing_designated_call():
+    case = next(row for row in _purpose_cases() if row['case_id']=='cmp-b')
+    ladder = _mapping_ladder(case)
+    ladder['rungs'][0]['branches'][0]['outputs'].clear()
+    result = evaluate_synthetic_case(case,{'ladder':ladder})
+    assert result['status']=='failed' and result['call_count']==result['output_count']==0
+    assert result['checks']['exactly_one_designated_call'] is False
+
+
+@pytest.mark.parametrize('extra', [
+    {'type':'COIL','address':'M480'},
+    {'type':'COIL','address':'Y2'},
+    {'type':'APP_INSTR','opcode':'MOV','operands':['K0','D610']},
+    {'type':'APP_INSTR','opcode':'MOV','operands':['K0','D999']},
+    {'type':'APP_INSTR','opcode':'RST','operands':['M480']},
+    {'type':'APP_INSTR','opcode':'SET','operands':['Y2']},
+    {'type':'TIMER','address':'T0','value':'K10'},
+    {'type':'COUNTER','address':'C0','value':'K10'},
+])
+@pytest.mark.parametrize('before', [False,True])
+def test_mapping_evaluator_rejects_any_additional_output_even_in_the_result_region(extra,before):
+    case = next(row for row in _purpose_cases() if row['case_id']=='cmp-b')
+    ladder = _mapping_ladder(case)
+    outputs = ladder['rungs'][0]['branches'][0]['outputs']
+    outputs.insert(0 if before else 1,extra)
+    result = evaluate_synthetic_case(case,{'ladder':ladder})
+    assert result['status']=='failed' and result['output_count']==2
+    assert result['checks']['operand_mapping'] is result['checks']['exactly_one_designated_call'] is True
+    assert result['checks']['no_additional_outputs'] is False
+
+
+@pytest.mark.parametrize('wrong', ['address','polarity','ungated','duplicate_contact'])
+def test_mapping_evaluator_uses_independent_gate_expectation(wrong):
+    case = next(row for row in _challenge_cases() if row['case_id']=='cmp-low-limit-off')
+    ladder = _mapping_ladder(case)
+    inputs = ladder['rungs'][0]['branches'][0]['inputs']
+    if wrong=='address': inputs[0]['address']='X4'
+    elif wrong=='polarity': inputs[0]['type']='NO'
+    elif wrong=='ungated': inputs.clear()
+    else: inputs.append(copy.deepcopy(inputs[0]))
+    result = evaluate_synthetic_case(case,{'ladder':ladder})
+    assert result['status']=='failed'
+    assert result['checks']['operand_mapping'] is True
+    assert result['checks']['specified_direct_gate'] is False
+
+
+@pytest.mark.parametrize('case_id,position,literal,correct', [
+    ('cmp-negative-reference',0,'HFFDB',True),
+    ('cmp-negative-reference',0,'h0ffdb',True),
+    ('cmp-negative-reference',0,'K65500',False),
+    ('cmp-negative-reference',0,'K65499',False),
+    ('cmp-negative-measurement',1,'HFFAC',True),
+    ('cmp-low-limit-off',0,'HC003',True),
+    ('cmp-hex-upper-limit',1,'K32545',True),
+    ('deco-32-flags',2,'H5',True),
+    ('deco-32-flags',2,'K32',False),
+])
+def test_mapping_evaluator_uses_only_reviewed_constant_aliases(case_id,position,literal,correct):
+    case = next(row for row in _challenge_cases() if row['case_id']==case_id)
+    operands = list(case['evaluation']['operands'])
+    operands[position]=literal
+    result = evaluate_synthetic_case(case,{'ladder':_mapping_ladder(case,operands)})
+    assert (result['status']=='verified') is correct
+
+
+@pytest.mark.parametrize('outputs', [[],['CMP K215 D610 M480','COIL M480'],['CMP K215 D610 M480','CMP K215 D610 M480']])
+def test_first_candidate_applies_single_call_and_side_effect_checks(monkeypatch,outputs):
+    from knowledge.evidence import KnowledgeContext
+    import application.generation_agent as agent
+    monkeypatch.setattr(agent,'_build_knowledge_context',lambda *a,**k:KnowledgeContext(''))
+    case = next(row for row in _purpose_cases() if row['case_id']=='cmp-b')
+    class Provider:
+        profile = offline_runtime_profile()
+        def stream(self,request):
+            yield TextDelta(json.dumps({'r':[{'b':[{'i':['NO X4'],'o':outputs}]}]}))
+    record = run_case(case,'usage_bound',provider=Provider())
+    # An empty output can be rejected by the existing decoder before an
+    # independent semantic evaluation; it still cannot become a usable pass.
+    assert record['first_candidate']['semantic']['status']!='verified'
+    assert not record['first_candidate']['usable']
 
 
 def test_mapping_fixture_refuses_prepopulated_operands(tmp_path):

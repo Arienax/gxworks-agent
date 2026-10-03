@@ -327,7 +327,8 @@ def evaluate_synthetic_case(case, result):
     operand mapping coverage, not native communication or PLC execution proof.
     """
     from plc.device_identity import canonical_operand
-    from plc.specification.semantic_validation import _ladder_instruction_instances, validate_confirmed_semantics
+    from plc.ir import lower_rung_instructions
+    from plc.specification.semantic_validation import validate_confirmed_semantics
     expected = case.get("evaluation") or {}
     if expected.get("kind") == "control":
         receipt = validate_confirmed_semantics(result["ladder"], case["confirmed_spec"], case.get("plc_model", "FX3U"))
@@ -335,19 +336,42 @@ def evaluate_synthetic_case(case, result):
                 "scope": "core_control_structure_and_binding_predicates", "receipt": receipt}
     if expected.get("kind") != "operand_mapping":
         return {"status": "not_covered", "reason": "no_independent_operand_expectation"}
+    # Explicit aliases belong to the independently reviewed case. In particular,
+    # a signed CMP constant may have a documented 16-bit hexadecimal spelling;
+    # do not apply a guessed width or wrap unrelated length/channel operands.
+    aliases = {alias.upper(): original.upper()
+               for original, values in expected.get("constant_aliases", {}).items() for alias in values}
     def identity(value):
         value = str(value).strip().upper()
+        if re.fullmatch(r"H[0-9A-F]+", value):
+            value = "H" + format(int(value[1:], 16), "X")
+        value = aliases.get(value, value)
         if re.fullmatch(r"K[+-]?\d+", value):
             return ("integer", int(value[1:]))
         if re.fullmatch(r"H[0-9A-F]+", value):
             return ("integer", int(value[1:], 16))
         return ("device", canonical_operand(value))
     wanted = tuple(map(identity, expected["operands"]))
-    actual = sorted(operands for opcode, operands in _ladder_instruction_instances(result["ladder"])
-                    if opcode == expected["opcode"])
-    correct = bool(actual) and all(tuple(map(identity, operands)) == wanted for operands in actual)
-    return {"status": "verified" if correct else "failed", "scope": "specified_operand_positions_units_and_regions",
-            "expected": expected["operands"], "actual": [list(operands) for operands in actual],
+    outputs = [output for rung in result["ladder"].get("rungs", [])
+               for branch in rung.get("branches", []) for output in branch.get("outputs", [])]
+    calls = [output for output in outputs if output.get("type") == "APP_INSTR"
+             and str(output.get("opcode", "")).strip().upper() == expected["opcode"]]
+    # Preserve occurrences: the Core instance-presence helper is a set, which
+    # cannot distinguish one shift/reset/communication call from two equal ones.
+    actual = [output.get("operands", []) for output in calls]
+    checks = {"exactly_one_designated_call": len(calls) == 1,
+              "operand_mapping": bool(actual) and all(tuple(map(identity, operands)) == wanted for operands in actual),
+              "no_additional_outputs": len(outputs) == len(calls)}
+    gate = expected.get("gate")
+    if gate is not None:
+        gates = [instruction for rung in result["ladder"].get("rungs", [])
+                 for instruction in lower_rung_instructions(rung) if ".outputs[" not in instruction.get("path", "")]
+        checks["specified_direct_gate"] = (len(gates) == 1 and gates[0]["op"] == gate["op"]
+            and tuple(map(identity, gates[0]["args"])) == tuple(map(identity, gate["args"])))
+    return {"status": "verified" if all(checks.values()) else "failed",
+            "scope": "operand_mapping_single_call_and_no_extra_operations",
+            "checks": checks, "call_count": len(calls), "output_count": len(outputs),
+            "expected": expected["operands"], "actual": actual,
             "native_execution": "not_measured"}
 
 

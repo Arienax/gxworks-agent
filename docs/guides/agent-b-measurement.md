@@ -4,6 +4,8 @@
 
 使用 [benchmark_agent_b.py](../../scripts/benchmark_agent_b.py) 的 `load_cases` 读取 JSONL。每行具有唯一的 `case_id` 和 `confirmed_spec` 对象；可选字段及实验分组由该脚本的 `main`、`ARMS`、`run_case` 定义。[agent_b_smoke_cases.jsonl](../../benchmarks/agent_b_smoke_cases.jsonl)是边界测试样本。[agent_b_operand_purpose_cases.jsonl](../../benchmarks/agent_b_operand_purpose_cases.jsonl)包含 SFTL、WSFL、BMOV、CMP、IVCK、TCMP 各两个参数变体，以及起保停对照。
 
+[定向挑战案例](../../benchmarks/agent_b_operand_purpose_challenge_cases.jsonl)包含六个 CMP 方向/符号/数值变体，DECO、ENCO、ZRST 各两个参数变体，以及相同起保停对照。它提高参数映射难度，沿用原来的重复次数；编码位宽与区域点数、包含首尾的复位范围分别取独立预期。
+
 用途案例只在确认规格中给需求、地址和参数含义，由模型自行映射操作数。独立预期放在顶层 `evaluation`，不交给模型；`load_cases` 拒绝在这类规格中预填 `instruction_instances` 或 `operands` 列表。合成预期依据手册定义单独抄录，改变地址、长度、移动量、通道、时间值；不使用当前解析器生成答案。
 
 固定确认规格、模型配置、服务端点及评估器。原生或行为预期由对应工程证据提供；`oracle_evidence` 使用人工审核的资料，必须显式标记 `oracle_reviewed`。调优值在[模型配置](model-settings.md)中设置，已废弃的 `--effort` 参数不改变请求。案例不指定 `construction_examples` 时沿用当前范例设置。
@@ -44,7 +46,11 @@ $resultPath = Join-Path $env:LOCALAPPDATA 'GXWorksAgent/measurements/agent-b-pur
 python scripts/benchmark_agent_b.py benchmarks/agent_b_operand_purpose_cases.jsonl --live --arms manual_text,usage_bound --repeat 2 --seed 20261003 --require-endpoint https://api-inference.modelscope.cn/v1 --output $resultPath
 ```
 
-内置 `evaluate_synthetic_case` 用独立固定预期比较指定指令的每个操作数，包括常量、地址、长度/移动量、单位和连续区首地址；十进制与等值十六进制常量可等价。起保停复用 Core 控制结构和绑定谓词检查。其他领域评价通过 `--evaluator module:function` 接入已有评估器，不在 runner 复制 PLC 规则。
+内置 `evaluate_synthetic_case` 用独立固定预期比较指定指令的每个操作数，包括常量、地址、长度/移动量、单位和连续区首地址。它保留调用出现次数，要求指定指令恰好一处，且没有其他输出操作；同样的调用出现在同分支、其他分支或其他梯级也不能被去重为一次。额外的 COIL、MOV、SET/RST、定时器、计数器，无论写入结果区还是其他区域，都使封闭的单指令案例失败。此处“无额外副作用”限定为没有额外生成操作，不宣称指定指令本身没有已记录的区域写入或通信效果。
+
+十进制与等值十六进制正常量可等价。负数的 16-bit CMP 十六进制写法在 `evaluation.constant_aliases` 中独立列出；不为其他常量猜测位宽、截断或循环折返。新案例的 `evaluation.gate` 给出独立原生条件指令及地址，例如 `{"op":"LDI","args":["X5"]}`；通过既有 Core 降低逻辑检查单个直接触点的地址和极性，缺失、重复或不同条件均不通过。这些评估字段不交给模型。
+
+`checks`、`call_count`、`output_count` 区分参数映射、唯一调用、额外输出和门控失败。起保停复用 Core 控制结构和绑定谓词检查。其他领域评价通过 `--evaluator module:function` 接入已有评估器，不在 runner 复制 PLC 规则。
 
 每次结果及时写入 JSONL；保留失败、重试、超时、缺失 usage 及全部分组结果。记录脚本版本、案例身份、模型/端点、实际请求参数、环境和执行日期。完成后产生 `.summary.json`；仓库报告只保留可公开的合成案例与汇总结果。
 
