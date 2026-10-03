@@ -2,3 +2,6 @@ resources/knowledge/*.sqlite filter=lfs diff=lfs merge=lfs -text
 resources/knowledge/*.npz filter=lfs diff=lfs merge=lfs -text
 # Historical failure-corpus attestations hash these exact repository bytes.
 research/results/gxworks_validation.json text eol=lf
+research/evidence/**/*.zip filter=lfs diff=lfs merge=lfs -text
+# Keep readable summaries in research/results; bulk raw output is opt-in.
+research/results/raw/** filter=lfs diff=lfs merge=lfs -text

@@ -98,7 +98,7 @@ Owns confirmed-spec to Agent B generation, selected-approach contracts, candidat
 | `tests/test_generation_delivery.py` | generation preview/artifact delivery, including deterministic repair re-entry |
 | `tests/test_generation_fast_path.py` | focused coverage for generation fast path |
 | `tests/test_generation_path_parity.py` | generation behavior parity across API/worker/MCP entry paths |
-| `tests/test_generation_rejected_json_repair.py` | focused coverage for generation rejected json repair |
+| `tests/test_generation_rejected_json_repair.py` | focused coverage for rejected generation json repair |
 | `tests/test_generation_repair_assembly.py` | focused coverage for generation repair assembly |
 | `tests/test_generation_repair_workflow.py` | focused coverage for generation repair workflow |
 | `tests/test_generation_scope_audit.py` | focused coverage for generation scope audit |
@@ -276,6 +276,7 @@ Owns source/import ownership, architecture constraints, issue-to-test linkage, W
 | `tests/test_architecture_boundaries.py` | focused coverage for architecture boundaries |
 | `tests/test_architecture_boundary_cleanup.py` | retired runtime control surfaces stay retired: no context-policy import, no workflow reasoning-effort defaults, no dedicated self-hold checker module |
 | `tests/test_issue_test_links.py` | focused coverage for issue test links |
+| `tests/test_repository_storage.py` | Git-object size/LFS pointer policy and intermediate-commit coverage in isolated repositories; standard-library-only Linux/Windows storage checks |
 | `tests/test_source_layout.py` | source/import ownership plus completeness of this test-boundary registry |
 | `tests/test_windows_credentials.py` | focused coverage for windows credentials |
 

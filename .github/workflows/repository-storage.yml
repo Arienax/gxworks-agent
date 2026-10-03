@@ -1,0 +1,50 @@
+name: Repository Storage Policy
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-storage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  storage:
+    name: Git object size and evidence LFS policy (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    env:
+      GIT_LFS_SKIP_SMUDGE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: false
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Test the storage checker without LFS or network
+        run: python -m unittest discover -s tests -p test_repository_storage.py -v
+      - name: Check all introduced Git objects, not just the final diff
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
+            python scripts/check_repository_storage.py --all --head "$HEAD_SHA"
+          else
+            python scripts/check_repository_storage.py --base "$BASE_SHA" --head "$HEAD_SHA"
+          fi
