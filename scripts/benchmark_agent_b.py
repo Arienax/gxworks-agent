@@ -27,6 +27,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 ARMS = ("manual_text", "usage_bound", "oracle", "legacy_retrieval", "automatic")
 PAIRED_ARMS = ("manual_text", "usage_bound")
+FACTORIAL_ARMS = ("manual_text_no_relations", "usage_bound_no_relations", *PAIRED_ARMS)
+ARMS = (*ARMS, *FACTORIAL_ARMS[:2])
+RELATION_DIMENSIONS = ("operation.result_mapping", "execution.disabled_retention")
 
 
 def _without_candidate_slots(slots):
@@ -109,6 +112,70 @@ def _wire_without_usage(params):
     return value
 
 
+def without_relation_evidence(text):
+    """Experiment-only removal of the entire atomic manual relation group."""
+    return re.sub(r'(?ms)(?:\n\n)?^\[RELATION EVIDENCE \{[^\n]+\}\]\n.*?^\[/RELATION EVIDENCE\]', '', str(text))
+
+
+def without_relation_context(context):
+    from knowledge.evidence import KnowledgeContext, context_manifest, text_sha256
+    from knowledge.fact_coverage import included_evidence_ids, reconcile_fact_coverage
+    text = without_relation_evidence(context)
+    manifest = context_manifest(context)
+    blocks = {json.loads(m[1])["id"]: m[2] for m in re.finditer(
+        r"(?ms)^\[KNOWLEDGE (\{[^\n]+\})\]\n(.*?)\n\[/KNOWLEDGE\]", text)}
+    def visit(value):
+        if isinstance(value, list):
+            for item in value: visit(item)
+        elif isinstance(value, dict):
+            if "relation_evidence_groups" in value: value["relation_evidence_groups"] = []
+            if "fact_group_members" in value:
+                value["fact_group_members"] = {d:m for d,m in value["fact_group_members"].items() if d not in RELATION_DIMENSIONS}
+            for key in ("dimensions", "fact_dimensions"):
+                if key in value: value[key] = [d for d in value[key] if d not in RELATION_DIMENSIONS]
+            if value.get("dimension", value.get("question")) in RELATION_DIMENSIONS:
+                value.update(candidate_source_ids=[], source_ids=[], status="unresolved")
+            if value.get("id") in blocks and "content_sha256" in value:
+                value["content_sha256"] = text_sha256(blocks[value["id"]])
+            for item in list(value.values()): visit(item)
+    visit(manifest)
+    if "fact_coverage" in manifest:
+        manifest["fact_coverage"] = reconcile_fact_coverage(
+            manifest["fact_coverage"], included_evidence_ids(text, manifest["fact_coverage"].get("records", [])))
+    manifest.update(context_sha256=text_sha256(text), benchmark_relation_ablation=True)
+    return KnowledgeContext(text, manifest)
+
+
+def _wire_without_factors(params):
+    value = _wire_without_usage(params)
+    for message in value.get("messages", []):
+        if isinstance(message.get("content"), str): message["content"] = without_relation_evidence(message["content"])
+    return value
+
+
+def preflight_factorial(cases, *, provider, model=None, evidence_cache=None):
+    blocks = []
+    for case in cases:
+        records = [run_case(case, arm, provider=PreviewProvider(provider), model=model,
+                            evidence_cache=evidence_cache) for arm in FACTORIAL_ARMS]
+        if any(len(row["actual_requests"]) != 1 for row in records):
+            raise ValueError(f"{case['case_id']}: factorial preflight requires one final request")
+        requests = [row["actual_requests"][0] for row in records]
+        normalized = [_wire_without_factors(r) for r in requests]
+        if any(r != normalized[0] for r in normalized):
+            raise ValueError(f"{case['case_id']}: content outside the two factors differs")
+        counts = [_candidate_count(r) for r in requests]
+        relation_counts = [sum(str(m.get('content','')).count('[RELATION EVIDENCE ') for m in r['messages']) for r in requests]
+        if counts != [0,3,0,3] or relation_counts != [0,0,1,1]:
+            raise ValueError(f"{case['case_id']}: invalid factor delivery {counts} / {relation_counts}")
+        examples = [row['handoff']['construction_examples'] for row in records]
+        if any(e != examples[0] for e in examples): raise ValueError('Construction examples differ')
+        blocks.append({"case_id":case['case_id'], "other_request_content_identical":True,
+                       "candidate_counts":dict(zip(FACTORIAL_ARMS,counts)),
+                       "relation_counts":dict(zip(FACTORIAL_ARMS,relation_counts)), "records":records})
+    return {"network_calls":0, "passed":True, "factorial_blocks":blocks}
+
+
 def _candidate_count(params):
     count = 0
     for message in params.get("messages", []):
@@ -182,11 +249,20 @@ def load_cases(path):
     return cases
 
 
-def schedule(cases, arms, repeats, seed):
+def schedule(cases, arms, repeats, seed, *, blocked=False):
     if repeats < 1 or not arms or any(arm not in ARMS for arm in arms):
         raise ValueError("Invalid repeat count or experiment arm")
-    tasks = [(case, arm, repeat) for repeat in range(repeats) for case in cases for arm in dict.fromkeys(arms)]
-    random.Random(seed).shuffle(tasks)
+    rng = random.Random(seed)
+    if blocked:
+        blocks = [(case, repeat) for repeat in range(repeats) for case in cases]
+        rng.shuffle(blocks)
+        tasks = []
+        for case,repeat in blocks:
+            order = list(dict.fromkeys(arms)); rng.shuffle(order)
+            tasks.extend((case,arm,repeat) for arm in order)
+    else:
+        tasks = [(case, arm, repeat) for repeat in range(repeats) for case in cases for arm in dict.fromkeys(arms)]
+        rng.shuffle(tasks)
     return tasks
 
 
@@ -278,8 +354,10 @@ def run_case(case, arm, *, provider, model=None, effort=None, evaluator=None, ev
                 context = original_builder(query, **kwargs)
                 if evidence_cache is not None:
                     evidence_cache[key] = context
-            if arm == "manual_text":
+            if arm in {"manual_text", "manual_text_no_relations"}:
                 context = manual_text_context(context)
+            if arm in FACTORIAL_ARMS[:2]:
+                context = without_relation_context(context)
         record["evidence"].append({"query": str(query), "text": str(context),
                                    "manifest": context_manifest(context),
                                    "elapsed_ms": (time.perf_counter()-started)*1000})
@@ -368,11 +446,66 @@ def evaluate_synthetic_case(case, result):
                  for instruction in lower_rung_instructions(rung) if ".outputs[" not in instruction.get("path", "")]
         checks["specified_direct_gate"] = (len(gates) == 1 and gates[0]["op"] == gate["op"]
             and tuple(map(identity, gates[0]["args"])) == tuple(map(identity, gate["args"])))
+    behavior = None
+    if expected.get("cmp_behavior"):
+        behavior = evaluate_cmp_behavior(expected["cmp_behavior"], result["ladder"])
+        checks["cmp_behavior"] = behavior["status"] == "verified"
     return {"status": "verified" if all(checks.values()) else "failed",
             "scope": "operand_mapping_single_call_and_no_extra_operations",
             "checks": checks, "call_count": len(calls), "output_count": len(outputs),
             "expected": expected["operands"], "actual": actual,
-            "native_execution": "not_measured"}
+            "native_execution": "not_measured",
+            **({"cmp_behavior": behavior} if behavior is not None else {})}
+
+
+def cmp_reference_state(left, right, previous, enabled):
+    """Benchmark-only signed-16 CMP reference, independent of retrieval data."""
+    if not (-32768 <= left <= 32767 and -32768 <= right <= 32767):
+        raise ValueError("Reference inputs must be signed 16-bit words")
+    if not enabled: return tuple(previous)
+    return (left > right, left == right, left < right)
+
+
+def evaluate_cmp_behavior(expected, ladder):
+    """Compare a closed single-CMP program against frozen task truth traces.
+
+    The trace oracle is authored separately from the source extractor; this
+    evaluator never imports or reads relationship evidence or usage facts.
+    Only M-result cells, direct LD/LDI gates and word/K/H inputs are in scope.
+    """
+    from plc.ir import lower_rung_instructions
+    if not expected.get('scenarios') or len(expected.get('result_devices',[]))!=3:
+        return {'status':'failed','reason':'no_independent_truth_traces','traces':[]}
+    instructions = [i for rung in ladder.get('rungs',[]) for i in lower_rung_instructions(rung)]
+    calls = [i for i in instructions if i['op']=='CMP']
+    gates = [i for i in instructions if '.outputs[' not in i.get('path','')]
+    if len(calls)!=1 or len(gates)!=1 or gates[0]['op'] not in {'LD','LDI'}:
+        return {'status':'failed','reason':'outside_single_cmp_reference_scope','traces':[]}
+    args = calls[0]['args']; traces=[]
+    def word(operand, memory):
+        token=str(operand).upper()
+        if token.startswith('K'): return int(token[1:])
+        if token.startswith('H'):
+            value=int(token[1:],16)
+            if not 0<=value<=65535: raise ValueError('Outside 16-bit constant')
+            return value-65536 if value>=32768 else value
+        return int(memory[token])
+    try:
+        if len(args)!=3 or not re.fullmatch(r'M\d+',args[2]): raise ValueError('Unsupported result address')
+        written=[f'M{int(args[2][1:])+offset}' for offset in range(3)]
+        for row in expected['scenarios']:
+            memory={**row['inputs'],**dict(zip(expected['result_devices'],row['before']))}
+            active=bool(memory[gates[0]['args'][0]])
+            if gates[0]['op']=='LDI': active=not active
+            if active:
+                values=cmp_reference_state(word(args[0],memory),word(args[1],memory),(False,False,False),True)
+                memory.update(zip(written,values))
+            actual=[bool(memory[d]) for d in expected['result_devices']]
+            traces.append({'id':row['id'],'actual':actual,'expected':row['expected'],'passed':actual==row['expected']})
+    except (KeyError,ValueError,IndexError):
+        return {'status':'failed','reason':'unsupported_or_missing_reference_input','traces':traces}
+    return {'status':'verified' if all(t['passed'] for t in traces) else 'failed','traces':traces,
+            'scope':'benchmark_signed16_cmp_and_disabled_retention','native_execution':'not_measured'}
 
 
 def assess_first_candidate(case, record, *, evaluator=None):
@@ -456,7 +589,23 @@ def summarize(records):
             matched.append({"case_id": case_id, "repeat": repeat,
                 "usable": {arm: pair[arm].get("first_candidate", {}).get("usable", False) for arm in PAIRED_ARMS},
                 "bound_minus_manual_ms": bound["end_to_end_ms"]-raw["end_to_end_ms"]})
-    return {"groups": result, "performance_acceptance": "not_established",
+    factorial = []
+    factor_blocks = {}
+    for row in records:
+        if row['arm'] in FACTORIAL_ARMS: factor_blocks.setdefault((row['case_id'],row.get('repeat',0)),{})[row['arm']]=row
+    for (case_id,repeat), block in sorted(factor_blocks.items()):
+        if set(block) != set(FACTORIAL_ARMS): continue
+        for name, baseline, treatment in (
+            ('relations_without_usage',FACTORIAL_ARMS[0],FACTORIAL_ARMS[2]),
+            ('relations_with_usage',FACTORIAL_ARMS[1],FACTORIAL_ARMS[3]),
+            ('usage_without_relations',FACTORIAL_ARMS[0],FACTORIAL_ARMS[1]),
+            ('usage_with_relations',FACTORIAL_ARMS[2],FACTORIAL_ARMS[3]),
+        ):
+            factorial.append({'case_id':case_id,'repeat':repeat,'contrast':name,
+                              'baseline_usable':block[baseline]['first_candidate']['usable'],
+                              'treatment_usable':block[treatment]['first_candidate']['usable'],
+                              'treatment_minus_baseline_ms':block[treatment]['end_to_end_ms']-block[baseline]['end_to_end_ms']})
+    return {"groups": result, "performance_acceptance": "not_established", "factorial_contrasts":factorial,
             "paired_results": matched,
             "note": "Inspect matched case/repeat pairs, actual settings and behavioral coverage before drawing conclusions."}
 
@@ -476,10 +625,17 @@ def main(argv=None):
     mode.add_argument("--preflight", action="store_true", help="Compile final requests with the saved profile; no transport")
     parser.add_argument("--profile-id", help="Select an existing saved profile without changing the active profile")
     parser.add_argument("--require-endpoint", help="Abort before any transport if the saved endpoint differs")
+    parser.add_argument("--cmp-relations", action="store_true", help="Six existing CMP cases, four factors, randomized adjacent blocks")
     args = parser.parse_args(argv)
     try:
         cases = load_cases(args.cases)
-        tasks = schedule(cases, args.arms.split(","), args.repeat, args.seed)
+        if args.cmp_relations:
+            cases = [c for c in cases if c.get('evaluation',{}).get('opcode')=='CMP']
+            if not cases: raise ValueError('CMP factorial requires operand-mapping CMP cases')
+            if any(c.get('plc_model','FX3U')!='FX3U' or not c['evaluation'].get('cmp_behavior') for c in cases):
+                raise ValueError('CMP factorial requires FX3U cases with independent behavior truth traces')
+            args.arms=','.join(FACTORIAL_ARMS)
+        tasks = schedule(cases, args.arms.split(","), args.repeat, args.seed, blocked=args.cmp_relations)
         if "oracle" in args.arms.split(",") and any(not c.get("oracle_reviewed") or not c.get("oracle_evidence") for c in cases):
             raise ValueError("Supply reviewed oracle_evidence for every oracle case")
     except (ValueError, OSError) as error:
@@ -524,7 +680,8 @@ def main(argv=None):
     import os
     evidence_cache = {}
     if args.preflight or set(PAIRED_ARMS).issubset(args.arms.split(",")):
-        preflight = preflight_pairs(cases, provider=provider, model=args.model, evidence_cache=evidence_cache)
+        preview = preflight_factorial if args.cmp_relations else preflight_pairs
+        preflight = preview(cases, provider=provider, model=args.model, evidence_cache=evidence_cache)
         preflight.update(identity)
         path = args.output if args.preflight else args.output.with_suffix(".preflight.json")
         descriptor = os.open(path, os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o600)

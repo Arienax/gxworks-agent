@@ -74,6 +74,8 @@ def _record_descriptor(record, included):
         "content_sha256": str(record.get("content_sha256") or text_sha256(record.get("text", ""))),
         "included": str(record["id"]) in included,
     }
+    if isinstance(record.get("fact_group_members"), Mapping):
+        descriptor["fact_group_members"] = copy.deepcopy(record["fact_group_members"])
     instance = record.get("instruction_instance")
     if isinstance(instance, Mapping):
         opcode, operands = _instruction_identity(instance)
@@ -90,7 +92,11 @@ def _requirement_matches_record(requirement, record):
     required_instance = requirement.get("instruction_instance")
     if isinstance(required_instance, Mapping) and record.get("instruction_instance") != required_instance:
         return False
-    return requirement.get("dimension") in record.get("dimensions", ())
+    dimension = requirement.get("dimension")
+    if dimension not in record.get("dimensions", ()):
+        return False
+    members = requirement.get("members") or ()
+    return not members or set(members) <= set(record.get("fact_group_members", {}).get(dimension, ()))
 
 
 def _recompute(report, included_ids):
@@ -176,7 +182,8 @@ def instruction_report_view(report, included_ids):
     coverage = build_fact_coverage(
         {"instructions": result.get("targets") or (), "devices": [], "errors": []},
         records, included_ids, instruction_questions=result.get("questions") or {},
-        extra_requirements=result.get("operand_requirements") or (),
+        extra_requirements=[*(result.get("operand_requirements") or ()),
+                            *(result.get("relation_requirements") or ())],
     )
     included_by_id = {row["id"]: row["included"] for row in coverage["records"]}
     for record in result.get("records", []):

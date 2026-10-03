@@ -52,6 +52,31 @@ python scripts/benchmark_agent_b.py benchmarks/agent_b_operand_purpose_cases.jso
 
 `checks`、`call_count`、`output_count` 区分参数映射、唯一调用、额外输出和门控失败。起保停复用 Core 控制结构和绑定谓词检查。其他领域评价通过 `--evaluator module:function` 接入已有评估器，不在 runner 复制 PLC 规则。
 
+## CMP 关系二因素对照
+
+`--cmp-relations` 只选输入文件中现有的 CMP 案例，使用四组：
+
+| 组 | 实验标识 | 候选逐槽位用途 | 完整关系组 |
+| --- | --- | --- | --- |
+| A | `manual_text_no_relations` | 移除 | 移除 |
+| B | `usage_bound_no_relations` | 保留 | 移除 |
+| C | `manual_text` | 移除 | 保留 |
+| D | `usage_bound` | 保留 | 保留 |
+
+关系消融移除整个原子手册证据组，保留共同正文、规格、型号事实、顺序及范例。它同时更新块回执和对应必要关系维度，不把未交付关系记为已送达。这里的“原文”仍指当前已清理的共同手册正文，不代表未经打包的完整原页。产品默认交付完整关系；消融只在 benchmark 中存在。
+
+`preflight_factorial` 离线编译四份最终请求，检查去除两个因素后内容完全相同、用途数量为 `0/3/0/3`、关系组数量为 `0/0/1/1`。组块以 `(case_id, repeat)` 为单位随机排列，同一块四组相邻执行，组内也随机排列。新跑 A/B 基线，避免跨测量时段比较旧基线与新处理组。
+
+```powershell
+$env:PYTHONUTF8 = '1'
+$resultPath = Join-Path $env:LOCALAPPDATA 'GXWorksAgent/measurements/agent-b-cmp-relations-new/live.jsonl'
+python scripts/benchmark_agent_b.py benchmarks/agent_b_operand_purpose_challenge_cases.jsonl --cmp-relations --live --repeat 2 --seed 20261003 --require-endpoint https://api-inference.modelscope.cn/v1 --output $resultPath
+```
+
+六个 CMP 案例的独立 `evaluation.cmp_behavior` 真值表包含小于、等于、大于三种启用输入，以及八种已有结果状态的禁用保持检查。`evaluate_cmp_behavior` 只解释封闭任务里的单个 16-bit CMP、LD/LDI 使能和 M 结果区；`cmp_reference_state` 不读取生产关系组或用途数据，不证明原生接受或 PLC 扫描。程序仍先满足唯一调用、无额外输出、参数位置与门控判据，首次候选不被后续修复替换。
+
+`factorial_contrasts` 分别记录 C−A、D−B 的关系增量和 B−A、D−C 的用途绑定增量，保留通过方向与配对耗时。文字等价和需求方向变化的离线测试验证独立真值表组织，不能冒充真实模型的语言不变性测试。模型、推理参数和构造范例保持预设值，不加入专用 CMP 生成提示。
+
 每次结果及时写入 JSONL；保留失败、重试、超时、缺失 usage 及全部分组结果。记录脚本版本、案例身份、模型/端点、实际请求参数、环境和执行日期。完成后产生 `.summary.json`；仓库报告只保留可公开的合成案例与汇总结果。
 
 ## 结果解释

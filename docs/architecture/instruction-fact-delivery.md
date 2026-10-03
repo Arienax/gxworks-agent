@@ -68,6 +68,24 @@ meaning through the structured prefix. Unrelated slots/facets remain independent
 
 Evidence is packed as complete source units within the available allowance. Tables and source identities remain intact; duplicate diagram/layout renditions do not replace missing prose. Records retain manual identity, revision, offsets and content hashes where available.
 
+For FX3U `CMP`, `_cmp_relation_groups` separately projects the explicit cells of
+the same page's 16-bit result diagram. The complete group contains output labels
+`D`, `D+1`, `D+2`, their comparisons, command-input context, algebraic-comparison
+note and disabled-retention clause. `D` denotes the result-head operand. Each
+member keeps original `value_spans`; the group keeps manual/revision/page and
+`source_spans`, naming `chunks.text` or `resolved_record.text` as its offset basis.
+Unlabelled glyph sequences, incomplete groups, negation, unsupported operators
+and cross-page fragments cannot fill missing associations. Conflicting complete
+renditions leave a gap; equivalent groups need only one delivery.
+
+`relation_evidence_groups` is source evidence, not a new instruction-operation
+schema or a purpose string. A group is serialized as one `[RELATION EVIDENCE]`
+block inside its existing knowledge block, or omitted whole when it cannot fit.
+Recovered result relations can survive even when the mixed layout's call syntax
+conflicts with verified order. The existing order filter and zero-priority layout
+fallback remain in force for unrecovered diagram text. Delivery and source
+verification are separate; groups remain `candidate_evidence`.
+
 [knowledge.fact_coverage](../../src/knowledge/fact_coverage.py) is the canonical delivery-accounting layer for exact instruction, device and error facts. It projects targets into dimension-addressed requirements, records candidate source IDs, and reconciles them again after final prompt compilation using complete block identities and hashes. `candidate_evidence`, `budget_omitted` and `unresolved` retain different meanings.
 
 [delivered_fact_report](../../src/knowledge/instruction_facts.py) remains a compatibility view for existing instruction diagnostics, but its status calculation delegates to the generic coverage owner. A recorded keyword category is a packing hint; a fact is only marked as delivered when its block survives compilation. Missing facts remain visible without creating an instruction prohibition or inventing an I/O. Context compilation is owned by [application.context_compiler](../../src/application/context_compiler.py).
@@ -79,6 +97,15 @@ contains both coarse questions and these slot/facet requirements. A table is
 delivered once while its explicit bindings can answer several requirements.
 Whole-block removal during final compilation changes delivered candidates to
 `budget_omitted`; a delivered table never supplies evidence to an unbound slot.
+
+The instruction adapter adds `operation.result_mapping` and
+`execution.disabled_retention` requirements for FX3U CMP. These dimensions are
+supplied only by a complete recovered group containing all three output members;
+an `operation` keyword hit cannot satisfy them. `relation_evidence` records source
+hints, complete candidate groups, conflicts and packing status before generic
+coverage tracks the packed block and reconciles it after final compilation.
+Source hints do not establish completeness, and any gap remains diagnostic rather
+than prohibiting generation or starting an unlimited retrieval loop.
 
 ## Representation and measurement
 

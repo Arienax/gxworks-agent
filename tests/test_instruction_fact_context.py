@@ -27,6 +27,115 @@ def source(identity="one", opcode="MOV", text="Source operand and destination wo
             "chunk_type": "instruction", "instruction_opcode": opcode, "page": 1, "text": text}
 
 
+def _cmp_relation_source(identity='cmp-group', operators=('>','=','<')):
+    # Synthetic layout: the call syntax is deliberately wrong, while explicit
+    # first-column output labels and relation cells are complete and separate.
+    rows = ['[PAGE 12 PROSE]','Operation compares words and writes the comparison result.','',
+            '[PAGE 12 LAYOUT]','FNC 10','CMP S1 [GLYPH-F0A0] D [GLYPH-F0A0] S2 [GLYPH-F0A0]',
+            '1. 16-bit operation (CMP and CMPP)','• Comparison is executed algebraically.',
+            'Command | Command','input | input']
+    for name,operator in zip(['D','D+1','D+2'],operators):
+        rows.extend([name+' [GLYPH-F0A0] | Turns ON in the case of',f'" [ S1 [GLYPH-F0A0] {operator} S2 [GLYPH-F0A0] ] ". | waveform'])
+    rows.extend(['Even if the command input turns OFF and CMP instruction is not executed, D , D +1 and D +2 latch',
+                 'the status just before the command input turns OFF from ON.'])
+    value=source(identity,'CMP','\n'.join(rows))
+    value.update(manual_text=value['text'],pdf_page=12,plc_model='FX3U',
+                 target_applicability={'native_operand_order':['S1','S2','D'],'operand_order_status':'source_verified'})
+    return value
+
+
+@pytest.mark.parametrize('operators', list(permutations(['>','=','<'])))
+def test_complete_relation_group_preserves_explicit_cells_without_conflicting_syntax(operators):
+    original=_cmp_relation_source(operators=operators)
+    packed=_pack_target([original],12000,verified_operand_order=['S1','S2','D'],verified_opcodes=['CMP'])
+    assert len(packed)==1 and 'CMP S1 [GLYPH-F0A0] D' not in packed[0]['text']
+    group=packed[0]['relation_evidence_groups'][0]
+    assert group['status']=='candidate_evidence'
+    assert [(m['output'],m['comparison']) for m in group['members']]==list(zip(['D','D+1','D+2'],['S1 '+x+' S2' for x in operators]))
+    assert group['source']['pdf_page']==12 and group['source']['offset_basis']=='chunks.text'
+    for member in group['members']:
+        label,comparison=[original['manual_text'][s['start']:s['end']] for s in member['value_spans']]
+        assert member['output'] in label and member['comparison'].split()[1] in comparison
+    assert 'turns OFF from ON.' in group['text']
+    assert packed[0]['text'].count('[RELATION EVIDENCE ')==1
+
+
+@pytest.mark.parametrize('mutation', ['missing_output','unlabelled','cross_page','negated','different_operator','missing_hold','missing_condition','duplicate_mapping','negated_on'])
+def test_relation_group_requires_complete_unambiguous_same_page_evidence(mutation):
+    original=_cmp_relation_source()
+    text=original['text']
+    if mutation=='missing_output':text=text.replace('D+2 [GLYPH-F0A0] |','Unlabelled |')
+    elif mutation=='unlabelled':text=text.replace('D [GLYPH-F0A0] |','Unlabelled |')
+    elif mutation=='cross_page':text=text.replace('D+1 [GLYPH-F0A0] |','[PAGE 13 LAYOUT]\nD+1 [GLYPH-F0A0] |')
+    elif mutation=='negated':text=text.replace('" [ S1 [GLYPH-F0A0] >','not " [ S1 [GLYPH-F0A0] >')
+    elif mutation=='different_operator':text=text.replace(' > S2',' >= S2')
+    elif mutation=='missing_hold':text=text.replace('and D +2 latch','and D +2 clear')
+    elif mutation=='missing_condition':text=text.replace('Command | Command','Missing | Missing')
+    elif mutation=='negated_on':text=text.replace('Turns ON in the case of','Never Turns ON in the case of',1)
+    else:text=text.replace('D+1 [GLYPH-F0A0] |','D [GLYPH-F0A0] |')
+    original.update(text=text,manual_text=text)
+    packed=_pack_target([original],12000,verified_operand_order=['S1','S2','D'])
+    assert not any(row.get('relation_evidence_groups') for row in packed)
+
+
+def test_relation_group_is_atomic_under_budget_and_conflicting_renditions():
+    original=_cmp_relation_source();diagnostics={}
+    packed=_pack_target([original],500,verified_operand_order=['S1','S2','D'],relation_diagnostics=diagnostics)
+    assert diagnostics['packing_status']=='budget_omitted'
+    assert not any(row.get('relation_evidence_groups') for row in packed)
+    conflicting=_cmp_relation_source('other',('<','=','>'))
+    diagnostics={}
+    packed=_pack_target([original,conflicting],12000,verified_operand_order=['S1','S2','D'],relation_diagnostics=diagnostics)
+    assert diagnostics['packing_status']=='candidate_conflict'
+    assert not any(row.get('relation_evidence_groups') for row in packed)
+
+
+def test_actual_cmp_relation_delivery_has_exact_requirements_and_original_witnesses():
+    from knowledge.fact_coverage import reconcile_fact_coverage
+    context=build_knowledge_context(KnowledgeQuery('CMP',precompiled=True),plc_model='FX3U',task_type='generate',char_budget=24000,top_k=8)
+    coverage=context.manifest['fact_coverage']
+    relations={r['dimension']:r for r in coverage['requirements'] if '.' in r['dimension']}
+    assert set(relations)=={'operation.result_mapping','execution.disabled_retention'}
+    assert all(r['status']=='candidate_evidence' and r['members']==['D','D+1','D+2'] for r in relations.values())
+    group=next(g for r in context.manifest['instruction_facts']['records'] for g in r.get('relation_evidence_groups',[]))
+    with sqlite3.connect(core._index_path().resolve().as_uri()+'?mode=ro',uri=True) as db:
+        raw=db.execute('SELECT text FROM chunks WHERE id=?',(group['source']['id'],)).fetchone()[0]
+    for span in group['source']['value_spans']:
+        assert 0<=span['start']<span['end']<=len(raw)
+        assert raw[span['start']:span['end']].strip()
+    omitted=reconcile_fact_coverage(coverage,[])
+    assert all(r['status']=='budget_omitted' for r in omitted['requirements'] if '.' in r['dimension'])
+    assert 'D: Turns ON in the case of [S1 > S2].' in context
+
+
+def test_operation_keyword_hit_does_not_supply_a_complete_result_relation(monkeypatch):
+    import knowledge.instruction_facts as facts
+    monkeypatch.setattr(facts,'_related_units',lambda *a:[])
+    row=source('keyword','CMP','[PAGE 12 PROSE]\nOperation writes a comparison result; output turns ON or OFF.')
+    packed,report=retrieve_instruction_facts('',targets=[{'opcode':'CMP','base_opcode':'CMP'}],plc_model='FX3U',task_type='generate',char_budget=12000,resolver=lambda *a,**k:[row])
+    receipt=delivered_fact_report(report,[r['id'] for r in packed])
+    assert next(f for f in receipt['facts'] if f['question']=='operation')['status']=='candidate_evidence'
+    assert {f['status'] for f in receipt['facts'] if '.' in f['question']}=={'unresolved'}
+
+
+def test_cmp_relation_scope_uses_structured_owner_and_does_not_extend_to_other_cpus():
+    original=_cmp_relation_source();original.pop('plc_model')
+    for model,expected in [('FX3U',True),('FX3G',False),('Q03UDV',False)]:
+        packed=_pack_target([original],12000,verified_operand_order=['S1','S2','D'],
+                            structured_owner={'target_applicability':{'target_model':model}})
+        assert any(row.get('relation_evidence_groups') for row in packed) is expected
+
+
+def test_generic_group_coverage_requires_every_explicit_member():
+    from knowledge.fact_coverage import build_coverage
+    requirement={'kind':'custom','target':'sample','dimension':'result.mapping','members':['left','right']}
+    record={'id':'group','fact_kind':'custom','fact_target':'sample','fact_dimensions':['result.mapping']}
+    for members,status in [([], 'unresolved'),(['left'],'unresolved'),(['left','right'],'candidate_evidence')]:
+        record['fact_group_members']={'result.mapping':members}
+        report=build_coverage([requirement],[record],['group'])
+        assert report['requirements'][0]['status']==status
+
+
 @pytest.mark.parametrize("opcode", ["SFTL", "WSFL", "MOV", "BMOV", "CMP", "DRVI", "$MOV"])
 def test_targets_follow_catalogue_not_a_shift_recipe(opcode):
     spec = {"selected_approach": {"generation_contract": {"required_opcodes": [opcode]}}}

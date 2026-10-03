@@ -27,7 +27,8 @@ _FACT_TERMS = {
     "limits": re.compile(r"range|limit|restrict|overflow|overlap|outside|exceed|maximum|minimum|caution|supported|≤|≥|范围|边界|限制|溢出|重叠|最大|最小", re.I),
 }
 _OFFICIAL = frozenset({"programming", "positioning", "structured_instruction", "structured_function"})
-_VERSION = "instruction-facts-v5-candidate-arbitration"
+_VERSION = "instruction-facts-v6-relation-evidence"
+_CMP_RELATION_DIMENSIONS = ("operation.result_mapping", "execution.disabled_retention")
 
 _OPERAND_SLOT_FACETS = (
     ("operand_roles", "role_status", "operand_role_status"),
@@ -570,11 +571,8 @@ def _operand_table_units(text):
                 yield left, right
 
 
-def _operand_evidence_bindings(result, start, end, gaps, expected_order):
-    """Bind explicit rows by unique native symbol, never their physical order."""
-    expected = [re.sub(r"\s+", "", str(item)).upper() for item in expected_order or ()]
-    if not expected or len(set(expected)) != len(expected):
-        return []
+def _source_offset_basis(result):
+    """Translate resolved text offsets back to the original chunk when possible."""
     text = str(result.get("text") or "")
     original = result.get("manual_text")
     offset_delta, offset_basis = 0, "resolved_record.text"
@@ -586,6 +584,122 @@ def _operand_evidence_bindings(result, start, end, gaps, expected_order):
             body_start = len(original) - len(original_body) + len(original_body) - len(original_body.lstrip())
             offset_delta = body_start - (len(rendered) - len(body))
             offset_basis = "chunks.text"
+    return offset_delta, offset_basis
+
+
+def _cmp_relation_groups(result, expected_order, *, target_model=None):
+    """Recover an atomic 16-bit result diagram from explicit layout cells.
+
+    This is source text projection, not a verified operation definition. A
+    complete group needs labelled outputs, one explicit comparison per output,
+    command-input context and the same page's disabled-retention sentence.
+    Unlabelled/reordered prose glyphs cannot supply missing associations.
+    """
+    model = target_model or result.get("plc_model") or (result.get("target_applicability") or {}).get("target_model")
+    if (model != "FX3U" or str(result.get("instruction_opcode") or "").upper() != "CMP"
+            or list(expected_order or ()) != ["S1", "S2", "D"]):
+        return []
+    text = str(result.get("text") or "")
+    delta, basis = _source_offset_basis(result)
+    groups = []
+    glyphs = re.compile(r"\[GLYPH-[0-9A-F]+\]", re.I)
+    clean = lambda value: re.sub(r"\s+", " ", glyphs.sub("", value)).strip()
+    label = re.compile(r"D(?:\s*\+\s*([12]))?$")
+    comparison = re.compile(r'^"?\s*\[\s*S1\s*([><=])\s*S2\s*\]\s*"?\.?$')
+    for left, right in _units(text):
+        raw = text[left:right]
+        page = re.match(r"\[PAGE (\d+) LAYOUT\]", raw)
+        if not page:
+            continue
+        # First-column projection keeps label/relation association. Other
+        # columns contain the waveform and running page headers, not this row.
+        lines, cursor = [], left
+        for line in raw.splitlines(keepends=True):
+            cell = line.split("|", 1)[0].rstrip()
+            lines.append((clean(cell), cursor, cursor + len(cell), line))
+            cursor += len(line)
+        headings = [i for i, row in enumerate(lines) if row[0] == "1. 16-bit operation (CMP and CMPP)"]
+        if len(headings) != 1:
+            continue
+        begin = headings[0]
+        body = lines[begin:]
+        command = [row for row in body if row[0] in {"Command", "input"}]
+        algebraic = [row for row in body if row[0].startswith("• Comparison is executed algebraically.")]
+        hold = [i for i, row in enumerate(body) if row[0] == (
+            "Even if the command input turns OFF and CMP instruction is not executed, D , D +1 and D +2 latch")]
+        if {row[0] for row in command} != {"Command", "input"} or len(algebraic) != 1 or len(hold) != 1:
+            continue
+        h = hold[0]
+        if h + 1 >= len(body):
+            continue
+        # A separate sidebar cell may intervene; do not infer a missing clause.
+        tails = [row for row in body[h+1:h+4] if row[0] == "the status just before the command input turns OFF from ON."]
+        if len(tails) != 1:
+            continue
+        found = {}
+        invalid = False
+        for i, row in enumerate(body[:h]):
+            match = label.fullmatch(row[0])
+            if not match:
+                continue
+            following = []
+            for item in body[i+1:h]:
+                if label.fullmatch(item[0]):
+                    break
+                if comparison.fullmatch(item[0]):
+                    following.append(item)
+            if not following:
+                continue  # waveform labels alone carry no relation
+            output = "D" + ("+" + match[1] if match[1] else "")
+            if output in found or len(following) != 1:
+                invalid = True
+                break
+            found[output] = (comparison.fullmatch(following[0][0])[1], row, following[0])
+        if invalid or set(found) != {"D", "D+1", "D+2"} or {v[0] for v in found.values()} != {">", "=", "<"}:
+            continue
+        first = found["D"][1][1]
+        last = found["D+2"][2][2]
+        on_cells = []
+        for row in body:
+            cursor = row[1]
+            for cell in row[3].rstrip('\r\n').split('|')[:2]:
+                if clean(cell) == "Turns ON in the case of" and first <= cursor < last:
+                    on_cells.append((clean(cell), cursor, cursor+len(cell), row[3]))
+                cursor += len(cell)+1
+        if len(on_cells) != 3:
+            continue
+        witness_rows = [body[0], algebraic[0], *command, *on_cells, body[h], tails[0]]
+        members = []
+        for output in ("D", "D+1", "D+2"):
+            operator, output_row, relation_row = found[output]
+            witness_rows.extend([output_row, relation_row])
+            members.append({"output": output, "comparison": f"S1 {operator} S2",
+                            "value_spans": [{"start": r[1]+delta, "end": r[2]+delta} for r in (output_row, relation_row)]})
+        source = {key: copy.deepcopy(result[key]) for key in (
+            "id", "manual_id", "manual_number", "revision", "source", "section", "plc_model",
+        ) if key in result}
+        source.update(pdf_page=int(page[1]), target_model=model, offset_basis=basis,
+                      source_spans=[{"start": left+delta, "end": right+delta}],
+                      value_spans=[{"start": r[1]+delta, "end": r[2]+delta} for r in witness_rows])
+        prose = "\n".join([
+            body[0][0], algebraic[0][0],
+            "Command input controls CMP execution. When the instruction executes:",
+            *[f"{m['output']}: Turns ON in the case of [{m['comparison']}]." for m in members],
+            body[h][0] + " " + tails[0][0],
+        ])
+        groups.append({"id": f"{result['id']}:cmp16:{page[1]}", "status": "candidate_evidence",
+                       "representation": "layout_cell_projection", "dimensions": list(_CMP_RELATION_DIMENSIONS),
+                       "members": members, "source": source, "text": prose})
+    return groups
+
+
+def _operand_evidence_bindings(result, start, end, gaps, expected_order):
+    """Bind explicit rows by unique native symbol, never their physical order."""
+    expected = [re.sub(r"\s+", "", str(item)).upper() for item in expected_order or ()]
+    if not expected or len(set(expected)) != len(expected):
+        return []
+    text = str(result.get("text") or "")
+    offset_delta, offset_basis = _source_offset_basis(result)
     raw = text[start:end]
     lines = raw.splitlines(keepends=True)
     description_column, columns, cursor = None, {}, start
@@ -785,7 +899,7 @@ def _operand_evidence_bindings(result, start, end, gaps, expected_order):
     return bindings
 
 
-def _render_units(result, selected, *, bindings=(), conflicts=(), structured_owner=None):
+def _render_units(result, selected, *, bindings=(), conflicts=(), structured_owner=None, relation_groups=()):
     """Preserve source offsets and provenance while grouping selected units.
 
     Structured instruction facts are supplemental to the original
@@ -795,6 +909,10 @@ def _render_units(result, selected, *, bindings=(), conflicts=(), structured_own
     text = str(result.get("text") or "")
     selected = sorted(selected, key=lambda unit: unit[0])
     source_text = "\n\n".join(text[start:end].rstrip() for start, end, _ in selected)
+    for group in relation_groups:
+        marker = {key: group[key] for key in ("id", "status", "representation")}
+        source_text += ("\n\n" if source_text else "") + (
+            "[RELATION EVIDENCE " + json.dumps(marker, sort_keys=True) + "]\n" + group["text"] + "\n[/RELATION EVIDENCE]")
 
     structured_prefix = _model_structured_prefix(text)
     value = copy.deepcopy(result)
@@ -833,6 +951,9 @@ def _render_units(result, selected, *, bindings=(), conflicts=(), structured_own
     )
     value["operand_evidence_bindings"] = copy.deepcopy(list(bindings))
     value["operand_candidate_conflicts"] = copy.deepcopy(list(conflicts))
+    value["relation_evidence_groups"] = copy.deepcopy(list(relation_groups))
+    value["fact_group_members"] = {dimension: [m["output"] for m in group["members"]]
+                                   for group in relation_groups for dimension in group["dimensions"]}
     value["content_sha256"] = _sha(value["text"])
     return value
 
@@ -895,7 +1016,7 @@ def _completion_sources(seed, plc_model, task_type):
 def _pack_target(
     results, allowance, *, needed_categories=None,
     verified_operand_order=None, verified_opcodes=(),
-    operand_gap_details=(), structured_owner=None,
+    operand_gap_details=(), structured_owner=None, relation_diagnostics=None,
 ):
     """Pack definition, tables and cautions together before any top-k truncation.
 
@@ -918,6 +1039,27 @@ def _pack_target(
     document_key = lambda value: (value.get("manual_id") or value.get("source") or value.get("id"), value.get("revision"))
     primary = document_key(results[0])
     sources = [r for r in results if document_key(r) == primary]
+    owner_model = ((structured_owner or {}).get("target_applicability") or {}).get("target_model")
+    relation_candidates = [(index, group) for index, result in enumerate(sources)
+                           for group in _cmp_relation_groups(result, verified_operand_order, target_model=owner_model)]
+    # Equivalent same-manual renditions may corroborate a group. Different
+    # complete mappings remain a gap; representation priority cannot arbitrate.
+    meanings = {tuple((m["output"], m["comparison"]) for m in group["members"])
+                for _, group in relation_candidates}
+    if relation_diagnostics is not None:
+        normalized_sources = [(r, re.sub(r"\[GLYPH-[0-9A-F]+\]", "", str(r.get("text") or ""))) for r in sources]
+        relation_diagnostics.update(
+            source_ids=[str(r["id"]) for r in sources],
+            source_hints=[{"id": str(r["id"]),
+                           "comparisons": sorted(set(re.findall(r"S1\s*([><=])\s*S2", raw))),
+                           "disabled_retention": bool(re.search(r"command input turns OFF.*?latch", raw, re.S))}
+                          for r,raw in normalized_sources],
+            candidate_groups=[{k: copy.deepcopy(v) for k,v in group.items() if k != "text"}
+                              for _, group in relation_candidates],
+            conflicting_groups=len(meanings) > 1, packed_group_ids=[],
+        )
+    if len(meanings) > 1:
+        relation_candidates = []
     candidates = []
     for source_index, result in enumerate(sources):
         text = str(result.get("text") or "")
@@ -1057,6 +1199,29 @@ def _pack_target(
             trial = _render_units(sources[0], [], conflicts=conflicts, structured_owner=structured_owner)
             if len(core._format_result_block(trial)) + 40 <= allowance:
                 rendered[0] = trial
+    # A recovered relation group is a distinct atomic source projection. It
+    # is neither a syntax-layout fallback nor evidence for an operand purpose.
+    # Never deliver a partial result mapping or an isolated retention clause.
+    for source_index, group in relation_candidates:
+        trial = _render_units(
+            sources[source_index], selected.get(source_index, []),
+            bindings=selected_bindings.get(source_index, []), conflicts=conflicts,
+            structured_owner=structured_owner, relation_groups=[group],
+        )
+        cost = sum(len(core._format_result_block(value)) + 40 for index,value in rendered.items()
+                   if index != source_index) + len(core._format_result_block(trial)) + 40
+        if cost > allowance:
+            continue
+        rendered[source_index] = trial
+        if relation_diagnostics is not None:
+            relation_diagnostics["packed_group_ids"].append(group["id"])
+        break  # one equivalent group suffices; preserve its precise source
+    if relation_diagnostics is not None:
+        relation_diagnostics["packing_status"] = (
+            "candidate_conflict" if len(meanings) > 1 else
+            "packed" if relation_diagnostics["packed_group_ids"] else
+            "budget_omitted" if relation_candidates else "no_complete_group"
+        )
     return [rendered[index] for index in sorted(rendered)]
 
 
@@ -1086,6 +1251,7 @@ def retrieve_instruction_facts(
         "records": [],
         "facts": [],
         "operand_requirements": [],
+        "relation_requirements": [], "relation_evidence": [],
         "verification": "not_performed",
         "retrieval_mode": "structured_direct",
     }
@@ -1122,6 +1288,13 @@ def retrieve_instruction_facts(
                 sources.append(result)
 
         structured_owner = seeds[0] if seeds else {}
+        relation_diagnostics = {"target": target["opcode"]}
+        if plc_model == "FX3U" and target["opcode"] == "CMP":
+            report["relation_requirements"].extend(
+                {"kind": "instruction", "target": "CMP", "dimension": dimension,
+                 "members": ["D", "D+1", "D+2"], "verification": "not_performed"}
+                for dimension in _CMP_RELATION_DIMENSIONS
+            )
         operand_gap_details = _operand_gap_details(structured_owner)
         manual_gaps = _manual_fact_gaps(structured_owner)
         report["lookups"][-1]["manual_gaps"] = sorted(manual_gaps)
@@ -1185,7 +1358,10 @@ def retrieve_instruction_facts(
             ),
             operand_gap_details=operand_gap_details,
             structured_owner=structured_owner,
+            relation_diagnostics=relation_diagnostics,
         )
+        if plc_model == "FX3U" and target["opcode"] == "CMP":
+            report["relation_evidence"].append(relation_diagnostics)
         pool = primary_pool[:1] + companion_pool + primary_pool[1:]
         for value in pool:
             value["fact_kind"] = "instruction"
@@ -1197,6 +1373,8 @@ def retrieve_instruction_facts(
                     _operand_dimension(binding["position"], binding["facet"])
                     for binding in value.get("operand_evidence_bindings") or ()
                 }
+                | {dimension for group in value.get("relation_evidence_groups") or ()
+                   for dimension in group["dimensions"]}
             )
             if "operands" in target:
                 value["instruction_instance"] = {
@@ -1223,6 +1401,8 @@ def retrieve_instruction_facts(
                 "operand_evidence_bindings",
                 "operand_candidate_conflicts",
                 "instruction_step_width", "instruction_instance",
+                "relation_evidence_groups",
+                "fact_group_members",
             )
             if key in item
         }

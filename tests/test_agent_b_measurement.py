@@ -60,6 +60,83 @@ def _mapping_ladder(case, operands=None):
     return expand_compact_ladder({'r':[{'b':[{'i':[contact+' '+gate['args'][0]],'o':[instruction]}]}]})
 
 
+def test_cmp_four_factor_preflight_uses_identical_specs_and_distinct_delivery():
+    from scripts.benchmark_agent_b import FACTORIAL_ARMS,preflight_factorial
+    provider=OpenAICompatibleProvider(offline_runtime_profile(),'fixture-key',client=object())
+    cases=[c for c in _challenge_cases() if c['evaluation'].get('opcode')=='CMP']
+    result=preflight_factorial(cases,provider=provider,evidence_cache={})
+    assert result['passed'] and result['network_calls']==0
+    for block in result['factorial_blocks']:
+        assert list(block['candidate_counts'].values())==[0,3,0,3]
+        assert list(block['relation_counts'].values())==[0,0,1,1]
+        case=next(c for c in cases if c['case_id']==block['case_id'])
+        for row in block['records']:
+            message=json.dumps(row['actual_requests'][0]['messages'],ensure_ascii=False)
+            assert ' '.join(['CMP',*case['evaluation']['operands']]) not in message
+            delivered={r['dimension']:r['status'] for r in row['handoff']['fact_coverage']['requirements'] if '.' in r['dimension']}
+            assert set(delivered.values())==({'unresolved'} if row['arm'] in FACTORIAL_ARMS[:2] else {'candidate_evidence'})
+
+
+def test_factorial_schedule_keeps_four_arms_adjacent_and_randomizes_blocks():
+    from scripts.benchmark_agent_b import FACTORIAL_ARMS
+    cases=[{'case_id':str(i)} for i in range(6)]
+    tasks=schedule(cases,FACTORIAL_ARMS,2,20261003,blocked=True)
+    assert len(tasks)==48 and tasks==schedule(cases,FACTORIAL_ARMS,2,20261003,blocked=True)
+    for start in range(0,len(tasks),4):
+        block=tasks[start:start+4]
+        assert len({(c['case_id'],r) for c,a,r in block})==1
+        assert {a for c,a,r in block}==set(FACTORIAL_ARMS)
+    assert len({tuple(a for c,a,r in tasks[start:start+4]) for start in range(0,len(tasks),4)})>1
+
+
+@pytest.mark.parametrize('left,right',[(a,b) for a in [-32768,-1,0,1,32767] for b in [-32768,-1,0,1,32767]])
+def test_cmp_reference_retention_one_hot_and_swap_properties(left,right):
+    from itertools import product
+    from scripts.benchmark_agent_b import cmp_reference_state
+    for previous in product([False,True],repeat=3):
+        assert cmp_reference_state(left,right,previous,False)==previous
+        active=cmp_reference_state(left,right,previous,True)
+        assert sum(active)==1
+        assert cmp_reference_state(right,left,previous,True)==active[::-1]
+        if left==right:assert active==(False,True,False)
+
+
+@pytest.mark.parametrize('case',[c for c in _challenge_cases() if c['evaluation'].get('opcode')=='CMP'],ids=lambda c:c['case_id'])
+def test_cmp_truth_traces_reject_direction_swap_and_preserve_disabled_states(case):
+    from scripts.benchmark_agent_b import evaluate_cmp_behavior
+    expectation=case['evaluation']['cmp_behavior']
+    report=evaluate_cmp_behavior(expectation,_mapping_ladder(case))
+    assert report['status']=='verified' and len(report['traces'])==11
+    swapped=list(case['evaluation']['operands']);swapped[0],swapped[1]=swapped[1],swapped[0]
+    bad=evaluate_cmp_behavior(expectation,_mapping_ladder(case,swapped))
+    assert bad['status']=='failed'
+    assert sum(not t['passed'] for t in bad['traces'])==2
+    assert all(t['passed'] for t in bad['traces'] if t['id'].startswith('disabled-'))
+
+
+def test_cmp_task_paraphrase_and_direction_change_have_independent_expectations():
+    from scripts.benchmark_agent_b import evaluate_cmp_behavior
+    case=copy.deepcopy(next(c for c in _challenge_cases() if c['case_id']=='cmp-negative-reference'))
+    ladder=_mapping_ladder(case)
+    # Two equivalent task descriptions share the independently frozen truth
+    # table. This checks the oracle organization, not live language invariance.
+    for summary in ['实测值低于阈值时首位为ON','阈值高于实测值时首位为ON']:
+        case['confirmed_spec']['summary']=summary
+        assert evaluate_cmp_behavior(case['evaluation']['cmp_behavior'],ladder)['status']=='verified'
+    opposite=copy.deepcopy(case['evaluation']['cmp_behavior'])
+    for trace in opposite['scenarios']:
+        if trace['id'].startswith('enabled-'):trace['expected']=trace['expected'][::-1]
+    assert evaluate_cmp_behavior(opposite,ladder)['status']=='failed'
+    operands=[case['evaluation']['operands'][1],case['evaluation']['operands'][0],case['evaluation']['operands'][2]]
+    assert evaluate_cmp_behavior(opposite,_mapping_ladder(case,operands))['status']=='verified'
+
+
+def test_cmp_behavior_cannot_pass_without_independent_truth_traces():
+    from scripts.benchmark_agent_b import evaluate_cmp_behavior
+    case=next(c for c in _challenge_cases() if c['case_id']=='cmp-negative-reference')
+    assert evaluate_cmp_behavior({'result_devices':['M610','M611','M612'],'scenarios':[]},_mapping_ladder(case))['status']=='failed'
+
+
 def test_usage_ablation_preserves_native_slots_verified_owner_and_manual_bytes():
     from knowledge.evidence import KnowledgeContext
     view = {"opcode": "WSFL", "slots": [
