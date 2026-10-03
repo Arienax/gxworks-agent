@@ -14,7 +14,10 @@ motif receive no example rather than several weak analogies.
 ## 2. Common instruction operand semantics
 
 `plc.instruction_semantics` owns the vendor-level meaning of operand positions:
-position, semantic name, read/write role and data type. For example, ADD keeps
+position, semantic name, read/write role, data type and independently sourced
+`OperandSpec.usage_facts`. Each [OperandUsageFact](../../src/plc/instructions.py)
+carries a `facet` (`purpose`, `unit`, `encoding`, `range` or `condition`), its
+value, verification status, sources and any conditions. For example, ADD keeps
 three positions with read/read/write roles independent of the selected CPU.
 
 A catalogue entry that is already CPU-scoped is marked `catalog_scoped`; this
@@ -32,6 +35,11 @@ The materialized `operand_slots` zip common position meanings, target-native
 symbols when known, and exact confirmed operands. This removes a repeated
 position-mapping task from Agent B.
 
+The target overlay projects existing numeric boundaries, disjoint bit ranges and
+pulse-output ownership into usage facts at their existing operand indexes. Their
+status and source remain scoped to that target and dimension. A verified range
+length dependency does not certify the complete purpose of its count operand.
+
 ## 4. Device/runtime semantics
 
 `plc.runtime_semantics` owns instruction completion devices and pulse/hardware
@@ -47,6 +55,18 @@ three explicit lanes:
 - `OPERAND_SEMANTICS`
 - `TARGET_APPLICABILITY`
 - `RUNTIME_SEMANTICS`
+
+`OPERAND_SEMANTICS` includes bound values, slot statuses, `purpose_status` and
+usage facts. The compact renderer shares source identities in its `sources`
+array; each fact's `source_refs[].source` is a zero-based index into that array,
+with a row span when available. Full per-fact provenance stays in the lane
+metadata. [attach_operand_usage](../../src/plc/instruction_semantics.py) adds
+manual candidates to their own positions without promoting them or changing
+the native order.
+
+`TARGET_APPLICABILITY` delivers `execution_form` and its independent status when
+known. Continuous/pulse form, complete execution conditions and runtime
+completion ownership remain separate facts.
 
 Construction examples are injected independently by the application router.
 
@@ -103,3 +123,8 @@ the common instruction catalogue. Common semantic names remain single-source;
 the overlay records which dimensions have been verified for FX3U. Future Q/L or
 other family evidence can add their own scoped corroboration without duplicating
 the instruction definition.
+
+Runtime usage evidence is a separate delivery step. It may bind an original
+description row by a unique, already verified native symbol even when the
+description table's physical row order differs. These descriptions retain
+`candidate_evidence` status; they do not extend the role/type promotion ledger.

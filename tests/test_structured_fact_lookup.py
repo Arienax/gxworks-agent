@@ -1,6 +1,7 @@
 """Architecture tests for exact PLC facts outside the broad RAG scorer."""
 import ast
 import inspect
+import json
 import sqlite3
 
 import pytest
@@ -137,7 +138,9 @@ def test_structured_contract_prompt_view_is_compact_but_metadata_keeps_sources()
     )
     assert '"slots"' in operand_line
     assert '"role"' in operand_line
-    assert '"sources"' not in operand_line
+    usage = json.loads(operand_line.split(": ", 1)[1])
+    assert usage["sources"]  # usage-specific references are shared, not a mixed contract blob
+    assert all(fact.get("source_refs") for slot in usage["slots"] for fact in slot.get("usage_facts", []))
     assert "STEP_WIDTH:" not in row["text"]
 
 
@@ -199,6 +202,10 @@ def test_sparse_lane_view_omits_empty_target_and_runtime_but_keeps_real_runtime_
     )
     assert len(add) == 1
     assert add[0].startswith("OPERAND_SEMANTICS:")
+    pulse = _instruction_lane_prompt_lines(resolve_instruction_lanes("DADDP", plc_model="FX3U"))
+    target = json.loads(next(line for line in pulse if line.startswith("TARGET_APPLICABILITY:")).split(": ", 1)[1])
+    assert target["execution_form"] == "pulse"
+    assert target["execution_form_status"] == "source_verified"
 
     zrn = _instruction_lane_prompt_lines(
         resolve_instruction_lanes({"opcode": "ZRN"}, plc_model="FX3U")

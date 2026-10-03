@@ -6,6 +6,7 @@ Actual-index sentinels check source selection, not generated-program correctness
 import copy
 import json
 import sqlite3
+from itertools import permutations
 
 import pytest
 
@@ -220,13 +221,11 @@ def test_operand_gap_tracking_is_slot_and_facet_granular():
         ],
         "target_applicability": {"boundary_status": "source_verified"},
     }
-    assert _operand_gap_details(record) == [{
-        "position": 2,
-        "facet": "device_classes",
-        "status": "unresolved",
-        "symbol": "D",
-        "name": "destination",
-    }]
+    assert _operand_gap_details(record) == [
+        {"position": 1, "facet": "purpose", "status": "unresolved", "symbol": "S1", "name": "source"},
+        {"position": 2, "facet": "device_classes", "status": "unresolved", "symbol": "D", "name": "destination"},
+        {"position": 2, "facet": "purpose", "status": "unresolved", "symbol": "D", "name": "destination"},
+    ]
     assert _manual_fact_gaps(record) == frozenset({
         "operands", "operation", "execution",
     })
@@ -442,7 +441,7 @@ def test_verified_role_type_order_do_not_close_unverified_device_class_gap():
     assert "operands" not in lookup["structured_dimensions"]
     gaps = lookup["operand_gap_details"]
     assert gaps
-    assert {row["facet"] for row in gaps} == {"device_classes"}
+    assert {row["facet"] for row in gaps} == {"device_classes", "purpose"}
     assert {row["position"] for row in gaps} == {1, 2, 3}
 
     included = [row for row in report["records"] if row.get("included")]
@@ -451,6 +450,209 @@ def test_verified_role_type_order_do_not_close_unverified_device_class_gap():
         "operands" in (row.get("candidate_fact_categories") or ())
         for row in included
     )
+
+
+_USAGE_ROWS = (
+    ("S", "New data source", "Bit"),
+    ("D", "Head of affected data", "Bit"),
+    ("N1", "Affected length in bits", "16-bit binary"),
+    ("N2", "Number of bits moved per operation*1", "16-bit binary"),
+)
+
+
+def _usage_source(rows=_USAGE_ROWS, *, identity="usage", suffix=""):
+    """Synthetic table; the frozen symbol-to-description pairs are the oracle."""
+    from plc.instruction_semantics import bind_operand_slots
+    result = source(identity, opcode="SFTL", text=(
+        "[TABLE page=12]\nOperand Type | Description | Data Type\n"
+        + "\n".join(" | ".join(row) for row in rows)
+        + "\n\n*1. Applies only while enabled.\n" + suffix
+    ))
+    result["operand_semantics"] = {
+        "opcode": "SFTL", "operand_role_status": "source_verified", "operand_type_status": "source_verified",
+        "operands": [{"name": symbol, "role": "read", "data_type": data_type} for symbol, _, data_type in _USAGE_ROWS],
+    }
+    result["target_applicability"] = {
+        "opcode": "SFTL", "target_model": "FX3U", "native_operand_order": ["S", "D", "N1", "N2"],
+        "operand_order_status": "source_verified", "device_class_status": "source_verified",
+    }
+    result["operand_slots"] = bind_operand_slots(
+        result["operand_semantics"], result["target_applicability"], ["M0", "M100", "K16", "K2"],
+    )
+    return result
+
+
+@pytest.mark.parametrize("rows", list(permutations(_USAGE_ROWS)))
+def test_operand_usage_binding_is_invariant_under_all_table_row_permutations(rows):
+    original = _usage_source(rows)
+    before = copy.deepcopy(original)
+    gaps = _operand_gap_details(original)
+    packed = _pack_target(
+        [original], 12000, needed_categories={"operands"}, operand_gap_details=gaps,
+        verified_operand_order=["S", "D", "N1", "N2"], structured_owner=original,
+    )
+    assert len(packed) == 1
+    row = packed[0]
+    slots = row["operand_slots"]
+    assert [slot["symbol"] for slot in slots] == ["S", "D", "N1", "N2"]
+    assert [slot["value"] for slot in slots] == ["M0", "M100", "K16", "K2"]
+    assert [slot["usage_facts"][0]["value"] for slot in slots] == [item[1] for item in _USAGE_ROWS]
+    assert {slot["purpose_status"] for slot in slots} == {"candidate_evidence"}
+    for binding in row["operand_evidence_bindings"]:
+        span = binding["source"]["row_span"]
+        assert original["text"][span["start"]:span["end"]] == " | ".join(_USAGE_ROWS[binding["position"] - 1])
+        assert binding["source"]["pdf_page"] == 12
+        assert binding["source"]["target_model"] == "FX3U"
+    assert original["text"].rstrip() in row["text"]
+    assert "*1. Applies only while enabled." in row["text"]
+    assert len(_operand_gap_details(row)) == 4  # candidate delivery never certifies usage
+    assert original == before
+
+
+def test_operand_usage_evidence_covers_only_its_slot_and_surviving_block(monkeypatch):
+    import knowledge.instruction_facts as facts
+    from knowledge.fact_coverage import build_fact_coverage, reconcile_fact_coverage
+    monkeypatch.setattr(facts, "_related_units", lambda *a: [])
+    monkeypatch.setattr(facts, "_completion_sources", lambda *a: [])
+    original = _usage_source((_USAGE_ROWS[1],))
+    target = {"opcode": "SFTL", "base_opcode": "SFTL", "operands": ["M0", "M100", "K16", "K2"]}
+    blocks, report = retrieve_instruction_facts(
+        "", targets=[target], plc_model="FX3U", task_type="generate", char_budget=12000,
+        resolver=lambda *a, **k: [original],
+    )
+    included = delivered_fact_report(report, [blocks[0]["id"]])
+    assert [(item["position"], item["status"]) for item in included["operand_facts"]] == [
+        (1, "unresolved"), (2, "candidate_evidence"), (3, "unresolved"), (4, "unresolved"),
+    ]
+    generic = build_fact_coverage(
+        {"instructions": [target]}, blocks, [blocks[0]["id"]],
+        instruction_questions=report["questions"], extra_requirements=report["operand_requirements"],
+    )
+    omitted = reconcile_fact_coverage(generic, [])
+    assert next(item for item in omitted["requirements"] if item["dimension"] == "operand:2:purpose")["status"] == "budget_omitted"
+    assert next(item for item in omitted["requirements"] if item["dimension"] == "operand:1:purpose")["status"] == "unresolved"
+    other_instance = copy.deepcopy(blocks)
+    other_instance[0]["instruction_instance"]["operands"][2] = "K8"
+    wrong = build_fact_coverage(
+        {"instructions": [target]}, other_instance, [blocks[0]["id"]],
+        extra_requirements=report["operand_requirements"],
+    )
+    assert {item["status"] for item in wrong["requirements"] if "facet" in item} == {"unresolved"}
+
+
+def test_final_context_receipt_distinguishes_bound_omitted_and_unknown_usage(monkeypatch):
+    import knowledge.instruction_facts as facts
+    import knowledge.structured_facts as structured
+    from application.confirmed_generation_context import build_confirmed_generation_context
+    monkeypatch.setattr(facts, "_related_units", lambda *a: [])
+    monkeypatch.setattr(facts, "_completion_sources", lambda *a: [])
+    sources = [_usage_source((_USAGE_ROWS[0],), identity="first"), _usage_source((_USAGE_ROWS[1],), identity="second")]
+    monkeypatch.setattr(structured, "resolve_instruction_records", lambda *a, **k: copy.deepcopy(sources))
+    spec = {"summary": "Synthetic binding delivery", "selected_approach": {"generation_contract": {
+        "required_opcodes": ["SFTL"], "instruction_instances": [{"opcode": "SFTL", "operands": ["M0", "M100", "K16", "K2"]}],
+    }}}
+    context = build_confirmed_generation_context(
+        spec, "FX3U", knowledge_builder=lambda query, **k: build_knowledge_context(query, char_budget=24000, top_k=1),
+        wire_renderer=lambda _spec, evidence, request, _program, _checkpoint, _history: {
+            "messages": [{"role": "system", "content": evidence}, {"role": "user", "content": request}],
+        },
+    )
+    assert [(item["position"], item["status"]) for item in context.handoff["instruction_facts"]["operand_facts"] if item["opcode"] == "SFTL"] == [
+        (1, "candidate_evidence"), (2, "budget_omitted"), (3, "unresolved"), (4, "unresolved"),
+    ]
+    assert "New data source" in context.wire_packet["messages"][0]["content"]
+    assert "Head of affected data" not in context.wire_packet["messages"][0]["content"]
+    generic = context.handoff["fact_coverage"]["requirements"]
+    assert {item["dimension"]: item["status"] for item in generic if "facet" in item and item["target"] == "SFTL"} == {
+        "operand:1:purpose": "candidate_evidence", "operand:2:purpose": "budget_omitted",
+        "operand:3:purpose": "unresolved", "operand:4:purpose": "unresolved",
+    }
+
+
+@pytest.mark.parametrize("damage", ["duplicate_row", "merged_symbols", "unverified_order", "duplicate_native_symbol", "type_as_description"])
+def test_ambiguous_or_missing_operand_usage_is_not_bound(damage):
+    row = _USAGE_ROWS[0]
+    rows = [row]
+    if damage == "duplicate_row":
+        rows.append(("S", "Another meaning", "Bit"))
+    elif damage == "merged_symbols":
+        rows = [("S | D", row[1], row[2])]
+    elif damage == "type_as_description":
+        rows = [("S", "16-bit binary", "-F")]
+    original = _usage_source(rows)
+    order = ["S", "D", "N1", "N2"]
+    if damage == "unverified_order":
+        order = None
+        original["target_applicability"]["operand_order_status"] = "declared_unverified"
+    elif damage == "duplicate_native_symbol":
+        order = ["S", "S", "N1", "N2"]
+    packed = _pack_target(
+        [original], 12000, operand_gap_details=_operand_gap_details(original),
+        verified_operand_order=order, structured_owner=original,
+    )
+    assert not any(item.get("operand_evidence_bindings") for item in packed)
+    assert all(slot["purpose_status"] == "unresolved" for item in packed for slot in item["operand_slots"])
+
+
+@pytest.mark.parametrize("hints,expected", [
+    ([{"position": "D", "description": "Head of affected data"}], [2]),
+    ([{"position": "D", "description": "Different description"}], []),
+    ([{"position": "D", "description": "Head of affected data"}, {"position": "S", "description": "Head of affected data"}], []),
+])
+def test_missing_table_symbol_uses_only_unambiguous_source_backed_description(hints, expected):
+    original = _usage_source([("<blank>", "Head of affected data", "Bit")])
+    original["manual_operand_rows"] = hints
+    packed = _pack_target(
+        [original], 12000, operand_gap_details=_operand_gap_details(original),
+        verified_operand_order=["S", "D", "N1", "N2"], structured_owner=original,
+    )
+    assert [binding["position"] for item in packed for binding in item["operand_evidence_bindings"]] == expected
+
+
+def test_operand_table_can_be_recovered_without_delivering_conflicting_layout():
+    original = _usage_source()
+    table = original["text"].split("\n", 1)[1]
+    original["text"] = (
+        "[PAGE 12 LAYOUT]\nFNC 35\nSFTL n1 n2D [GLYPH-F0A0]S [GLYPH-F0A0]\n"
+        + table + "\n3. Applicable devices\nUnrelated device table"
+    )
+    packed = _pack_target(
+        [original], 12000, operand_gap_details=_operand_gap_details(original),
+        verified_operand_order=["S", "D", "N1", "N2"], verified_opcodes=["SFTL"], structured_owner=original,
+    )
+    assert [binding["position"] for item in packed for binding in item["operand_evidence_bindings"]] == [1, 2, 3, 4]
+    assert "SFTL n1 n2D" not in packed[0]["text"]
+    assert "*1. Applies only while enabled." in packed[0]["text"]
+    assert "Unrelated device table" not in packed[0]["text"]
+
+
+@pytest.mark.parametrize("opcode,position,snippet", [
+    ("SFTL", 3, "Bit length of the shift data"),
+    ("SFTL", 4, "Number of bits to be shifted leftward"),
+    ("WSFL", 3, "Word data length of the shift data"),
+    ("WSFL", 4, "Number of words to be shifted leftward"),
+    ("BMOV", 3, "Number of transferred points"),
+    ("CMP", 3, "Head bit device number to which comparison result is output"),
+])
+def test_bundled_operand_usage_returns_to_original_manual_rows(opcode, position, snippet):
+    if core._index_identity(core._index_path())[0] == "missing":
+        pytest.skip("Bundled index is not installed")
+    context = build_knowledge_context(KnowledgeQuery(opcode, precompiled=True), char_budget=24000, top_k=8)
+    report = context.manifest["instruction_facts"]
+    bindings = [b for r in report["records"] if r.get("included") for b in r.get("operand_evidence_bindings", [])]
+    binding = next(b for b in bindings if b["position"] == position and b["facet"] == "purpose")
+    assert snippet in binding["value"]
+    evidence = binding["source"]
+    assert evidence["manual_id"] == "fx3_programming_r"
+    assert evidence["revision"] == "R"
+    assert evidence["offset_basis"] == "chunks.text"
+    with sqlite3.connect(core._index_path().resolve().as_uri() + "?mode=ro", uri=True) as connection:
+        original = connection.execute("SELECT text FROM chunks WHERE id=?", (evidence["id"],)).fetchone()[0]
+    span = evidence["row_span"]
+    assert binding["value"] in original[span["start"]:span["end"]]
+    assert binding["status"] == "candidate_evidence"
+    requirement = next(r for r in context.manifest["fact_coverage"]["requirements"] if r["dimension"] == f"operand:{position}:purpose")
+    assert requirement["status"] == "candidate_evidence"
 
 
 def test_generation_packer_delivers_structured_contract_with_manual_evidence():

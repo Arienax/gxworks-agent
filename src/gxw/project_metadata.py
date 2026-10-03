@@ -174,8 +174,14 @@ def md5_base64(raw: bytes) -> str:
     return base64.b64encode(hashlib.md5(raw).digest()).decode("ascii")
 
 
-def synchronize_history(raw: bytes, replacements: dict) -> tuple[bytes, list, list]:
-    """replacements: logical name -> (stream ID, old payload, new payload)."""
+def synchronize_history(raw: bytes, replacements: dict, *, current_mapping: dict | None = None) -> tuple[bytes, list, list]:
+    """replacements: logical name -> (stream ID, old payload, new payload).
+
+    Native POU renaming can retain a previous Program history name across saves
+    and payload changes. Resolve that alias only through the current directory's unique
+    stream ID, retaining the historical name bytes. A name belonging to another
+    current object remains a conflicting identity.
+    """
     rows, encoding = current_rows(raw, "DSHISTORY", "D_History")
     edits, changes, preserved = [], [], []
     for logical, (stream, old, new) in replacements.items():
@@ -187,8 +193,17 @@ def synchronize_history(raw: bytes, replacements: dict) -> tuple[bytes, list, li
         if len(matches) != 1:
             raise GXWFormatError(f"expected one current history row for {logical}; found {len(matches)}")
         fields = matches[0]
-        if "szProjectdataName" not in fields or fields["szProjectdataName"].text.strip() != logical:
-            raise GXWFormatError(f"history name/ID mismatch for {logical}")
+        history_name = fields["szProjectdataName"].text.strip() if "szProjectdataName" in fields else None
+        if history_name != logical:
+            source_alias = (current_mapping is not None and current_mapping.get(logical) == stream
+                            and list(current_mapping.values()).count(stream) == 1
+                            and history_name and history_name not in current_mapping
+                            and logical.endswith(".Program.pou") and history_name.endswith(".Program.pou"))
+            if not source_alias:
+                raise GXWFormatError(f"history name/ID mismatch for {logical}")
+            preserved.append({"object": logical, "stream": stream, "field": "szProjectdataName",
+                              "status": "native-source-name-alias", "value": history_name,
+                              "reason": "current directory uniquely binds the renamed Program stream; history name preserved"})
         if "iFileSize" not in fields or not fields["iFileSize"].text.strip().isdigit():
             raise GXWFormatError(f"missing/invalid history iFileSize for {logical}")
         updates = {"iFileSize": str(len(new))}

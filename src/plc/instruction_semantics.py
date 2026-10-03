@@ -6,6 +6,7 @@ resources and construction examples.
 """
 from __future__ import annotations
 
+import copy
 from collections.abc import Mapping, Sequence
 
 
@@ -53,6 +54,7 @@ def resolve_common_operand_semantics(target):
                 "name": operand.name,
                 "role": operand.role.value,
                 "data_type": operand.data_type,
+                "usage_facts": [fact.as_mapping() for fact in operand.usage_facts],
             }
             for index, operand in enumerate(spec.operands, start=1)
         ],
@@ -99,6 +101,7 @@ def bind_operand_slots(operand_semantics, target_applicability, operands=None):
     device_class_status = str(
         applicability.get("device_class_status") or "unresolved"
     )
+    target_usage = applicability.get("operand_usage_facts") or []
 
     count = max(len(definitions), len(symbols), len(values))
     slots = []
@@ -117,6 +120,14 @@ def bind_operand_slots(operand_semantics, target_applicability, operands=None):
                 device_class_status if has_definition else "unresolved"
             ),
         }
+        usage = list(definition.get("usage_facts") or ())
+        usage.extend(
+            item["fact"] for item in target_usage
+            if isinstance(item, Mapping) and item.get("position") == position
+            and isinstance(item.get("fact"), Mapping)
+        )
+        slot["usage_facts"] = copy.deepcopy(usage)
+        slot["purpose_status"] = operand_usage_status(usage, "purpose")
         if position in constraints:
             slot["device_prefixes"] = constraints[position]
         if offset < len(symbols):
@@ -130,4 +141,36 @@ def bind_operand_slots(operand_semantics, target_applicability, operands=None):
     return slots
 
 
-__all__ = ["bind_operand_slots", "resolve_common_operand_semantics"]
+def operand_usage_status(facts, facet):
+    """No instruction-wide verification can certify an operand usage fact."""
+    matching = [item for item in facts if isinstance(item, Mapping) and item.get("facet") == facet]
+    if not matching:
+        return "unresolved"
+    statuses = {str(item.get("status") or "declared_unverified") for item in matching}
+    if statuses == {"source_verified"} and all(item.get("sources") for item in matching):
+        return "source_verified"
+    if "declared_unverified" in statuses:
+        return "declared_unverified"
+    return "candidate_evidence"
+
+
+def attach_operand_usage(slots, bindings):
+    """Attach evidence to its position without promoting it or changing order."""
+    result = copy.deepcopy(slots)
+    for slot in result:
+        usage = slot.setdefault("usage_facts", [])
+        for binding in bindings:
+            if binding.get("position") != slot.get("position"):
+                continue
+            fact = binding.get("fact")
+            if not isinstance(fact, Mapping):
+                continue
+            if operand_usage_status(usage, fact.get("facet")) == "source_verified":
+                continue
+            if fact not in usage:
+                usage.append(copy.deepcopy(fact))
+        slot["purpose_status"] = operand_usage_status(usage, "purpose")
+    return result
+
+
+__all__ = ["attach_operand_usage", "bind_operand_slots", "operand_usage_status", "resolve_common_operand_semantics"]

@@ -428,7 +428,8 @@ def _replace_token_program(source: bytes, logical_name: str, raw: bytes, new: by
     nested = validate_cfb_streams(outer["_hdb"])
     if nested[stream] != raw:
         raise GXWFormatError("token program source changed")
-    history, metadata, preserved = synchronize_history(outer["history.xml"], {logical_name: (stream, raw, new)})
+    history, metadata, preserved = synchronize_history(outer["history.xml"], {logical_name: (stream, raw, new)},
+                                                       current_mapping=mapping)
     hdb, inner_mode = replace_project_stream(outer["_hdb"], stream, new)
     result, outer_mode = replace_project_stream(source, "_hdb", hdb)
     result, history_mode = replace_project_stream(result, "history.xml", history)
@@ -459,7 +460,7 @@ def _patch_program_range_equal_size(source: bytes, logical_name: str, start: int
         raise GXWFormatError("program patch range is not source-bound/equal-size")
     new = raw[:start] + new_text + raw[start + len(old_text):]
     history, metadata, preserved = synchronize_history(outer_payloads["history.xml"],
-                                                       {logical_name: (stream, raw, new)})
+                                                       {logical_name: (stream, raw, new)}, current_mapping=mapping)
     if len(history) != len(outer_payloads["history.xml"]):
         raise GXWFormatError("metadata resize is outside the bounded patch contract")
     hdb_new = replace_stream_within_allocation(hdb, stream, new)

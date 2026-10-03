@@ -193,10 +193,53 @@ def test_instruction_capability_contract_owns_sftl_zrn_and_completion_rules():
     assert zrn.numeric_operand_boundaries[0].operand_index == 1
     assert zrn.numeric_operand_boundaries[0].minimum == 10
     assert zrn.numeric_operand_boundaries[0].maximum == 32767
-
     assert plsr is not None and plsr.completion is not None
     assert plsr.completion.device == "M8029"
 
+
+def test_target_usage_reuses_existing_rules_without_cross_certifying_purpose_or_cpu():
+    from plc.instruction_resolution import resolve_instruction_lanes
+    sftl = resolve_instruction_lanes("SFTL", plc_model="FX3U")
+    source, destination, length, count = sftl["operand_slots"]
+    source_range = next(fact for fact in source["usage_facts"] if fact["facet"] == "range")
+    assert source_range["value"] == {
+        "length_position": 4, "unit": "bit", "disjoint_with_position": 2,
+        "same_device_prefix_only": True, "error_code": "K6710",
+    }
+    assert next(fact for fact in destination["usage_facts"] if fact["facet"] == "range")["value"]["length_position"] == 3
+    assert length["purpose_status"] == count["purpose_status"] == "unresolved"
+    assert source_range["status"] == "source_verified"
+    assert source_range["sources"][0]["target_model"] == "FX3U"
+    assert not any(slot["usage_facts"] for slot in resolve_instruction_lanes("SFTL", plc_model="FX5U")["operand_slots"])
+    zrn = resolve_instruction_lanes("ZRN", plc_model="FX3U")["operand_slots"][1]
+    facts = {fact["facet"]: fact for fact in zrn["usage_facts"]}
+    assert facts["purpose"]["value"] == "creep speed"
+    assert facts["unit"]["value"] == "Hz"
+    assert facts["range"]["value"] == {"minimum": 10, "maximum": 32767, "absolute": True}
+    assert all(fact["status"] == "source_verified" and fact["sources"] for fact in facts.values())
+
+
+def test_operand_usage_verification_is_independent_for_every_facet_and_slot():
+    from plc.instruction_semantics import attach_operand_usage, bind_operand_slots
+    semantics = {"operand_role_status": "source_verified", "operands": [
+        {"name": "first", "role": "read"}, {"name": "second", "role": "write"},
+    ]}
+    applicability = {
+        "native_operand_order": ["S", "D"], "operand_order_status": "source_verified",
+        "operand_usage_facts": [{"position": 2, "fact": {
+            "facet": "purpose", "value": "Result region", "status": "source_verified", "sources": [{"id": "purpose-row"}],
+        }}, {"position": 2, "fact": {
+            "facet": "unit", "value": "word", "status": "declared_unverified",
+        }}],
+    }
+    slots = bind_operand_slots(semantics, applicability, ["D0", "D10"])
+    assert [slot["purpose_status"] for slot in slots] == ["unresolved", "source_verified"]
+    changed = attach_operand_usage(slots, [{"position": 1, "fact": {
+        "facet": "purpose", "value": "Input region", "status": "candidate_evidence", "sources": [{"id": "input-row"}],
+    }}])
+    assert [slot["purpose_status"] for slot in changed] == ["candidate_evidence", "source_verified"]
+    assert changed[1]["usage_facts"][1]["status"] == "declared_unverified"
+    assert slots[0]["purpose_status"] == "unresolved"
 
 def test_sftl_overlap_and_zrn_numeric_boundary_are_registry_driven_hard_rules():
     with pytest.raises(PLCJsonValidationError, match="K6710"):

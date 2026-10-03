@@ -147,6 +147,51 @@ def test_history_invalid_mapping_fails_closed(damage):
         synchronize_history(raw, {"p.Program.pou": ("83", b"old", b"new")})
 
 
+@pytest.mark.parametrize("encoding", ["utf-8", "utf-16le", "utf-16be"])
+def test_edit_native_renamed_program_preserves_history_alias_and_other_streams(encoding):
+    # Native SetObjectName + SaveProject changes the live POU name while its
+    # Program history can retain the previous name after editing and reopening.
+    _, original = project_fixture()
+    logical = "计时模块_延迟控制.Program.pou"
+    model = replace(original, logical_name=logical)
+    mapping = (f'<DSPROJECTDATA><D_Projectdata><iID>83</iID><szName>{logical}</szName>'
+               '<bScrapFlag>false</bScrapFlag></D_Projectdata></DSPROJECTDATA>').encode()
+    history = history_xml("1.Program.pou", "83", model.raw).decode().encode(encoding)
+    if encoding == "utf-16le":
+        history = b"\xff\xfe" + history
+    elif encoding == "utf-16be":
+        history = b"\xfe\xff" + history
+    nested = cfb_fixture({"83": model.raw, "opaque": b"KEEP THIS UNKNOWN PAYLOAD"})
+    source = cfb_fixture({"_hdb": nested, "projectdatalist.xml": mapping, "history.xml": history})
+    assert build_gxw_project(source, model).data == source
+    edited = replace_node_symbol(model, "X1", "X123")
+    result = build_gxw_project(source, edited)
+    outer = validate_cfb_streams(result.data)
+    body = serialize_structured_pou(edited)
+    assert validate_cfb_streams(outer["_hdb"]) == {"83": body, "opaque": b"KEEP THIS UNKNOWN PAYLOAD"}
+    assert outer["projectdatalist.xml"] == mapping
+    expected_history = history.replace(f" {len(model.raw)} ".encode(encoding), f" {len(body)} ".encode(encoding))
+    expected_history = expected_history.replace(md5_base64(model.raw).encode(encoding), md5_base64(body).encode(encoding))
+    assert outer["history.xml"] == expected_history
+    assert result.report["preserved_metadata"][0]["value"] == "1.Program.pou"
+    reread = parse_structured_pou(body, logical_name=logical)
+    assert [n.symbol for n in reread.nodes] == ["X123", "Y1"]
+    assert build_gxw_project(result.data, replace_node_symbol(reread, "X123", "X2")).data != result.data
+
+
+@pytest.mark.parametrize("mapping,history_name", [
+    (None, "old.Program.pou"),
+    ({"new.Program.pou": "84"}, "old.Program.pou"),
+    ({"new.Program.pou": "83", "other.Program.pou": "83"}, "old.Program.pou"),
+    ({"new.Program.pou": "83", "old.Program.pou": "84"}, "old.Program.pou"),
+    ({"new.Program.pou": "83"}, "old.Labels.lh"),
+])
+def test_history_alias_requires_unique_current_directory_identity(mapping, history_name):
+    raw = history_xml(history_name, "83", b"old")
+    with pytest.raises(GXWFormatError, match="history name/ID mismatch"):
+        synchronize_history(raw, {"new.Program.pou": ("83", b"old", b"new")}, current_mapping=mapping)
+
+
 def test_project_noop_is_byte_identical():
     raw, model = project_fixture()
     result = build_gxw_project(raw, model)

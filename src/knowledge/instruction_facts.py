@@ -27,13 +27,14 @@ _FACT_TERMS = {
     "limits": re.compile(r"range|limit|restrict|overflow|overlap|outside|exceed|maximum|minimum|caution|supported|≤|≥|范围|边界|限制|溢出|重叠|最大|最小", re.I),
 }
 _OFFICIAL = frozenset({"programming", "positioning", "structured_instruction", "structured_function"})
-_VERSION = "instruction-facts-v3-gap-directed"
+_VERSION = "instruction-facts-v4-operand-evidence"
 
 _OPERAND_SLOT_FACETS = (
     ("operand_roles", "role_status", "operand_role_status"),
     ("operand_types", "data_type_status", "operand_type_status"),
     ("operand_order", "symbol_status", "operand_order_status"),
     ("device_classes", "device_class_status", "device_class_status"),
+    ("purpose", "purpose_status", "operand_purpose_status"),
 )
 
 
@@ -56,6 +57,7 @@ def _operand_gap_details(record):
     fallback for records produced before slot status was materialized.
     """
     record = record if isinstance(record, Mapping) else {}
+    from plc.instruction_semantics import bind_operand_slots, operand_usage_status
     operand = record.get("operand_semantics") or {}
     target = record.get("target_applicability") or {}
     slots = record.get("operand_slots")
@@ -67,7 +69,10 @@ def _operand_gap_details(record):
                 continue
             position = raw_slot.get("position")
             for facet, slot_key, _aggregate_key in _OPERAND_SLOT_FACETS:
-                status = str(raw_slot.get(slot_key) or "unresolved")
+                status = (
+                    operand_usage_status(raw_slot.get("usage_facts") or (), "purpose")
+                    if facet == "purpose" else str(raw_slot.get(slot_key) or "unresolved")
+                )
                 if status == "source_verified":
                     continue
                 gap = {
@@ -79,6 +84,17 @@ def _operand_gap_details(record):
                     if raw_slot.get(key):
                         gap[key] = str(raw_slot[key])
                 gaps.append(gap)
+            for facet in sorted({
+                item.get("facet") for item in raw_slot.get("usage_facts") or ()
+                if isinstance(item, Mapping) and item.get("facet")
+                and item.get("facet") != "purpose"
+            }):
+                status = operand_usage_status(raw_slot.get("usage_facts") or (), facet)
+                if status != "source_verified":
+                    gaps.append({
+                        "position": position, "facet": facet, "status": status,
+                        **{key: str(raw_slot[key]) for key in ("symbol", "name") if raw_slot.get(key)},
+                    })
         return gaps
 
     if (
@@ -87,6 +103,10 @@ def _operand_gap_details(record):
         and target.get("operand_order_status") == "source_verified"
     ):
         return []
+
+    compatibility_slots = bind_operand_slots(operand, target)
+    if compatibility_slots:
+        return _operand_gap_details({**record, "operand_slots": compatibility_slots})
 
     definitions = list(operand.get("operands") or ())
     symbols = list(target.get("native_operand_order") or ())
@@ -102,6 +122,8 @@ def _operand_gap_details(record):
         ),
         "operand_order": str(target.get("operand_order_status") or "unresolved"),
         "device_classes": str(target.get("device_class_status") or "unresolved"),
+        # A signature/role promotion carries no operand-purpose evidence.
+        "purpose": "unresolved",
     }
 
     gaps = []
@@ -512,7 +534,155 @@ def _embedded_instruction_layout_offset(raw):
     return None
 
 
-def _render_units(result, selected):
+def _operand_dimension(position, facet):
+    return f"operand:{position if position is not None else 'unknown'}:{facet}"
+
+
+def _operand_table_units(text):
+    """Recover complete operand tables, including ones flattened into LAYOUT.
+
+    A layout suffix can contain conflicting visual syntax. Only its explicit
+    operand-description table and following notes are used as a source unit.
+    """
+    header = re.compile(
+        r"(?im)^[^\n]*(?:Operand|Variable|操作数)[^\n]*\|[^\n]*(?:Description|含义|说明)[^\n]*$"
+    )
+    for start, end in _units(text):
+        raw = text[start:end]
+        for match in header.finditer(raw):
+            left = start + match.start()
+            if raw.startswith("[TABLE"):
+                yield start, end
+                break
+            # Keep footnotes with the table, stop before a new numbered section
+            # or a different table header. Never infer a neighboring page.
+            tail = text[left:]
+            boundary = re.search(
+                r"(?im)^(?:\d+\.\s+|(?:Bit Devices|Word Devices)\s*\||\[PAGE|\[TABLE)",
+                tail,
+            )
+            right = left + boundary.start() if boundary else len(text)
+            if right > left:
+                yield left, right
+
+
+def _operand_evidence_bindings(result, start, end, gaps, expected_order):
+    """Bind explicit rows by unique native symbol, never their physical order."""
+    expected = [re.sub(r"\s+", "", str(item)).upper() for item in expected_order or ()]
+    if not expected or len(set(expected)) != len(expected):
+        return []
+    text = str(result.get("text") or "")
+    original = result.get("manual_text")
+    offset_delta, offset_basis = 0, "resolved_record.text"
+    if isinstance(original, str):
+        original_body = original.partition("\n\n")[2] if original.startswith("[STRUCTURED") else original
+        if original_body and text.endswith(original_body):
+            offset_delta = len(original) - len(text)
+            offset_basis = "chunks.text"
+    raw = text[start:end]
+    lines = raw.splitlines(keepends=True)
+    description_column, columns, cursor = None, {}, start
+    rows = []
+    hints = {}
+    data_type = re.compile(
+        r"(?:Bit|Bool(?:ean)?|Word|Dword|Real|Float|String|ANY\d+|"
+        r"(?:16|32|64)(?:-\s*or\s*(?:32|64))?-bit(?:\s+(?:binary|integer|floating point))?)",
+        re.I,
+    )
+    for item in result.get("manual_operand_rows") or ():
+        if not isinstance(item, Mapping):
+            continue
+        symbol = re.sub(r"\s+", "", str(item.get("position") or "")).upper()
+        description = " ".join(str(item.get("description") or "").split())
+        if symbol in expected and description:
+            hints.setdefault(description, []).append(symbol)
+    for line in lines:
+        cells = [cell.strip() for cell in line.strip().split("|")]
+        if description_column is None:
+            for index, cell in enumerate(cells):
+                if re.fullmatch(r"Description|含义|说明", cell, re.I):
+                    description_column = index
+            if description_column is not None:
+                for index, cell in enumerate(cells):
+                    for facet, pattern in (
+                        ("operand_types", r"Data\s*Type|数据类型"),
+                        ("operand_roles", r"Role|读写角色"),
+                        ("unit", r"Unit|单位"),
+                        ("encoding", r"Encoding|编码"),
+                        ("range", r"Range|范围"),
+                        ("condition", r"Condition|条件"),
+                    ):
+                        if re.fullmatch(pattern, cell, re.I):
+                            columns[facet] = index
+            cursor += len(line)
+            continue
+        if len(cells) <= description_column or "|" not in line:
+            cursor += len(line)
+            continue
+        description = cells[description_column]
+        if (
+            not description or description == "<blank>" or data_type.fullmatch(description)
+            or re.sub(r"\s+", "", description).upper() in expected
+        ):
+            cursor += len(line)
+            continue
+        symbols = [re.sub(r"\s+", "", cell).upper() for cell in cells[:description_column]]
+        symbols = [symbol for symbol in symbols if symbol in expected]
+        hinted = hints.get(" ".join(description.split()), [])
+        # An indexed description may recover a dropped symbol only if the
+        # source description and its indexed association are both unambiguous.
+        if not symbols and len(hinted) == 1:
+            symbols = hinted
+        if len(symbols) != 1 or (hinted and set(hinted) != set(symbols)):
+            cursor += len(line)
+            continue
+        values = {"purpose": description}
+        values.update({
+            facet: cells[index] for facet, index in columns.items()
+            if index < len(cells) and cells[index] not in {"", "<blank>"}
+        })
+        if "operand_types" in values and not data_type.fullmatch(values["operand_types"]):
+            del values["operand_types"]
+        rows.append((symbols[0], cursor, cursor + len(line.rstrip("\r\n")), values))
+        cursor += len(line)
+    symbol_counts = {symbol: sum(row[0] == symbol for row in rows) for symbol in expected}
+    bindings = []
+    for symbol, row_start, row_end, values in rows:
+        if symbol_counts[symbol] != 1:
+            continue
+        position = expected.index(symbol) + 1
+        for gap in gaps or ():
+            facet = gap.get("facet")
+            if gap.get("position") != position or facet not in values:
+                continue
+            evidence = {
+                "id": str(result.get("original_id") or result.get("id") or ""),
+                "manual_id": result.get("manual_id"),
+                "manual": result.get("manual_number"),
+                "revision": result.get("revision"),
+                "page": result.get("page"),
+                "section": result.get("section"),
+                "row_span": {"start": row_start + offset_delta, "end": row_end + offset_delta},
+                "context_span": {"start": start + offset_delta, "end": end + offset_delta},
+                "offset_basis": offset_basis,
+            }
+            page_markers = list(re.finditer(r"(?m)^\[(?:PAGE\s+(\d+)|TABLE\s+page=(\d+))\b", text[:row_start]))
+            if page_markers:
+                evidence["pdf_page"] = int(next(group for group in page_markers[-1].groups() if group))
+            binding = {
+                "position": position, "symbol": symbol, "facet": facet,
+                "value": values[facet], "status": "candidate_evidence", "source": evidence,
+            }
+            if facet not in {"operand_types", "operand_roles"}:
+                from plc.instructions import OperandUsageFact
+                binding["fact"] = OperandUsageFact(
+                    facet, values[facet], "candidate_evidence", (evidence,),
+                ).as_mapping()
+            bindings.append(binding)
+    return bindings
+
+
+def _render_units(result, selected, *, bindings=(), structured_owner=None):
     """Preserve source offsets and provenance while grouping selected units.
 
     Structured contract/step-width facts are supplemental to the original
@@ -524,13 +694,31 @@ def _render_units(result, selected):
     source_text = "\n\n".join(text[start:end].rstrip() for start, end, _ in selected)
 
     structured_prefix = _model_structured_prefix(text)
+    value = copy.deepcopy(result)
+    if bindings:
+        from knowledge.structured_facts import _instruction_lane_prompt_lines
+        from plc.instruction_semantics import attach_operand_usage
+        owner = structured_owner or result
+        lanes = {key: copy.deepcopy(owner.get(key) or {}) for key in (
+            "operand_semantics", "target_applicability", "runtime_semantics",
+        )}
+        lanes["operand_slots"] = attach_operand_usage(owner.get("operand_slots") or [], bindings)
+        value.update(lanes)
+        rendered_lanes = "\n".join(_instruction_lane_prompt_lines(lanes))
+        if structured_prefix:
+            structured_prefix = "\n".join(
+                line for line in structured_prefix.splitlines()
+                if not line.startswith(("OPERAND_SEMANTICS:", "TARGET_APPLICABILITY:", "RUNTIME_SEMANTICS:"))
+            )
+            structured_prefix += "\n" + rendered_lanes
+        else:
+            structured_prefix = "[STRUCTURED INSTRUCTION RECORD]\n" + rendered_lanes
     if structured_prefix:
         source_text = structured_prefix + ("\n\n" + source_text if source_text else "")
 
     metadata = ("Manual: " + str(result.get("manual_number") or result.get("manual_id") or result.get("source") or "")
                 + "; revision: " + str(result.get("revision") or "unspecified")
                 + "; section: " + str(result.get("section") or "") + "\n")
-    value = copy.deepcopy(result)
     value.update(
         id=str(result["id"]) + "#facts-" + _sha(source_text)[:12],
         original_id=str(result["id"]), source_text_sha256=_sha(text),
@@ -538,6 +726,7 @@ def _render_units(result, selected):
         candidate_fact_categories=sorted({cat for _, _, cats in selected for cat in cats}),
         text=metadata + source_text,
     )
+    value["operand_evidence_bindings"] = copy.deepcopy(list(bindings))
     value["content_sha256"] = _sha(value["text"])
     return value
 
@@ -600,6 +789,7 @@ def _completion_sources(seed, plc_model, task_type):
 def _pack_target(
     results, allowance, *, needed_categories=None,
     verified_operand_order=None, verified_opcodes=(),
+    operand_gap_details=(), structured_owner=None,
 ):
     """Pack definition, tables and cautions together before any top-k truncation.
 
@@ -626,9 +816,12 @@ def _pack_target(
     for source_index, result in enumerate(sources):
         text = str(result.get("text") or "")
         page_markers = list(re.finditer(r"(?m)^\[PAGE[^\n]*", text))
-        for unit_start, unit_end in _units(text):
+        table_units = set(_operand_table_units(text)) if operand_gap_details else set()
+        unit_ranges = sorted(set(_units(text)) | table_units)
+        for unit_start, unit_end in unit_ranges:
             unit_raw = text[unit_start:unit_end]
-            embedded_cut = _embedded_instruction_layout_offset(unit_raw)
+            operand_table = (unit_start, unit_end) in table_units
+            embedded_cut = None if operand_table else _embedded_instruction_layout_offset(unit_raw)
             pieces = (
                 [
                     (unit_start, unit_start + embedded_cut, False),
@@ -659,7 +852,7 @@ def _pack_target(
                     continue
                 markers = [match for match in page_markers if match.start() <= start]
                 mode = markers[-1].group() if markers else ""
-                table = raw.startswith("[TABLE")
+                table = operand_table or raw.startswith("[TABLE")
                 if embedded_layout or (
                     not table and ("LAYOUT" in mode or "LADDER/DIAGRAM" in mode)
                 ):
@@ -675,28 +868,57 @@ def _pack_target(
                 if focus and not result.get("instruction_opcode"):
                     priority += 5  # The referenced flag definition precedes opcode examples.
                 cats = [key for key, pattern in _FACT_TERMS.items() if pattern.search(raw)]
+                bindings = _operand_evidence_bindings(
+                    result, start, end, operand_gap_details, verified_operand_order,
+                ) if operand_table else []
+                owner_target = (structured_owner or result).get("target_applicability") or {}
+                for binding in bindings:
+                    binding["source"].update(
+                        target_model=owner_target.get("target_model") or result.get("plc_model"),
+                        opcode=owner_target.get("opcode") or result.get("instruction_opcode"),
+                    )
+                    if binding.get("fact"):
+                        binding["fact"]["sources"] = [copy.deepcopy(binding["source"])]
+                if bindings and "operands" not in cats:
+                    cats.append("operands")
                 if needed is not None:
                     cats = [key for key in cats if key in needed]
                     if not cats:
                         continue
-                candidates.append((source_index, (start, end, cats), priority))
-    selected, rendered, covered = {}, {}, set()
+                candidates.append((source_index, (start, end, cats), priority, bindings))
+    selected, selected_bindings, rendered, covered, bound = {}, {}, {}, set(), set()
     while candidates:
-        candidates.sort(key=lambda item: (-item[2], -len(set(item[1][2])-covered),
+        candidates.sort(key=lambda item: (-item[2], -len({
+            _operand_dimension(binding["position"], binding["facet"])
+            for binding in item[3]
+        } - bound), -len(set(item[1][2])-covered),
                                           item[0], item[1][0]))
-        source_index, unit, priority = candidates.pop(0)
+        source_index, unit, priority, bindings = candidates.pop(0)
         # Do not refill with duplicate page-layout renditions after the factual
         # source representations have been considered.
         if priority == 0 and rendered:
             continue
+        binding_dimensions = {
+            _operand_dimension(binding["position"], binding["facet"]) for binding in bindings
+        }
+        if bindings and binding_dimensions <= bound and set(unit[2]) <= covered:
+            continue
+        if any(left < unit[1] and unit[0] < right for left, right, _ in selected.get(source_index, [])):
+            continue
         trial_units = [*selected.get(source_index, []), unit]
-        trial = _render_units(sources[source_index], trial_units)
+        trial_bindings = [*selected_bindings.get(source_index, []), *bindings]
+        trial = _render_units(
+            sources[source_index], trial_units, bindings=trial_bindings,
+            structured_owner=structured_owner,
+        )
         block_cost = lambda value: len(core._format_result_block(value)) + 40
         cost = sum(block_cost(value) for index, value in rendered.items() if index != source_index) + block_cost(trial)
         if cost > allowance:
             continue
         selected[source_index], rendered[source_index] = trial_units, trial
+        selected_bindings[source_index] = trial_bindings
         covered.update(unit[2])
+        bound.update(binding_dimensions)
     if not rendered:
         prefix = _model_structured_prefix(sources[0].get("text"))
         if prefix:
@@ -731,6 +953,7 @@ def retrieve_instruction_facts(
         "lookups": [],
         "records": [],
         "facts": [],
+        "operand_requirements": [],
         "verification": "not_performed",
         "retrieval_mode": "structured_direct",
     }
@@ -776,6 +999,17 @@ def retrieve_instruction_facts(
         report["lookups"][-1]["structured_dimensions"] = sorted(
             _structured_fact_dimensions(structured_owner)
         )
+        for gap in operand_gap_details:
+            requirement = {
+                "kind": "instruction", "target": target["opcode"],
+                "dimension": _operand_dimension(gap["position"], gap["facet"]),
+                "position": gap["position"], "facet": gap["facet"],
+            }
+            if "operands" in target:
+                requirement["instruction_instance"] = {
+                    "opcode": target["opcode"], "operands": list(target["operands"]),
+                }
+            report["operand_requirements"].append(requirement)
 
         companions = (
             _completion_sources(seeds[0], plc_model, task_type)
@@ -817,6 +1051,8 @@ def retrieve_instruction_facts(
                 target.get("opcode"),
                 target.get("base_opcode"),
             ),
+            operand_gap_details=operand_gap_details,
+            structured_owner=structured_owner,
         )
         pool = primary_pool[:1] + companion_pool + primary_pool[1:]
         for value in pool:
@@ -825,7 +1061,15 @@ def retrieve_instruction_facts(
             value["fact_dimensions"] = sorted(
                 set(value.get("candidate_fact_categories") or ())
                 | set(_structured_fact_dimensions(value))
+                | {
+                    _operand_dimension(binding["position"], binding["facet"])
+                    for binding in value.get("operand_evidence_bindings") or ()
+                }
             )
+            if "operands" in target:
+                value["instruction_instance"] = {
+                    "opcode": target["opcode"], "operands": list(target["operands"]),
+                }
             value["manual_fact_gaps"] = sorted(manual_gaps)
             value["operand_gap_details"] = copy.deepcopy(operand_gap_details)
         groups.append(pool)
@@ -844,6 +1088,7 @@ def retrieve_instruction_facts(
                 "fact_target", "fact_dimensions", "instruction_contract",
                 "operand_semantics", "target_applicability", "runtime_semantics",
                 "operand_slots", "operand_gap_details",
+                "operand_evidence_bindings",
                 "instruction_step_width", "instruction_instance",
             )
             if key in item

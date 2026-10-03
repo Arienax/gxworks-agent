@@ -183,7 +183,7 @@ def build_gxw_project(baseline: bytes, programs: StructuredProgram | Mapping[str
                         "offset_space": "logical declaration stream bytes",
                         "binary_changes": binary_diff(original, new),
                         "records_before": _declaration_manifest(parsed), "records_after": _declaration_manifest(rebuilt)})
-    history, metadata, preserved = synchronize_history(outer_payloads["history.xml"], replacements)
+    history, metadata, preserved = synchronize_history(outer_payloads["history.xml"], replacements, current_mapping=mapping)
     allocations = []
     for logical, (stream, old, new) in replacements.items():
         if old == new:
@@ -206,7 +206,7 @@ def build_gxw_project(baseline: bytes, programs: StructuredProgram | Mapping[str
         raise GXWFormatError("outer stream preservation/replacement check failed")
     # Verify the metadata updater is stable against the newly serialized source.
     current = {name: (stream, new, new) for name, (stream, old, new) in replacements.items()}
-    if synchronize_history(history, current)[0] != history:
+    if synchronize_history(history, current, current_mapping=mapping)[0] != history:
         raise GXWFormatError("post-write history consistency failed")
     return ProjectWriteResult(result, {
         "schema_version": 1, "baseline_sha256": sha256(baseline), "output_sha256": sha256(result),

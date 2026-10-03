@@ -115,11 +115,14 @@ def _chunk_results(chunk_ids, *, plc_model, task_type, fact_kind, fact_target, a
         result = core._chunk_result(row, meta, path, plc_model, task_type)
         if result is None:
             continue
+        original_text = str(result.get("text") or "")
         if augment_instruction:
             result = core._augment_structured_instruction(connection, schema, result)
             if result is None or result.get("manual_type") not in _OFFICIAL_INSTRUCTION_TYPES:
                 continue
         value = dict(result)
+        if augment_instruction:
+            value["manual_text"] = original_text
         value["structured_fact_kind"] = fact_kind
         value["structured_fact_target"] = fact_target
         value["fact_kind"] = fact_kind
@@ -183,17 +186,41 @@ def _instruction_lane_prompt_lines(lanes):
     slots = lanes.get("operand_slots") or []
 
     compact_slots = []
+    usage_sources, source_indexes = [], {}
     for item in slots:
         if not isinstance(item, Mapping):
             continue
         slot = {
             key: copy.deepcopy(item[key])
-            for key in ("position", "symbol", "name", "role", "data_type", "value")
+            for key in (
+                "position", "symbol", "name", "role", "data_type", "value",
+                "role_status", "data_type_status", "symbol_status", "device_class_status",
+                "purpose_status", "usage_facts",
+            )
             if key in item
             and item[key] not in (None, "", [], {})
             and not (key == "data_type" and item[key] == "any")
         }
         if slot:
+            if slot.get("usage_facts"):
+                for fact in slot["usage_facts"]:
+                    if fact.get("sources"):
+                        refs = []
+                        for source in fact.pop("sources"):
+                            source_view = {key: copy.deepcopy(source[key]) for key in (
+                                "id", "manual_id", "manual", "revision", "pdf_page", "reference",
+                                "context_span", "target_model", "opcode",
+                                "offset_basis", "path",
+                            ) if source.get(key) not in (None, "", [], {})}
+                            marker = json.dumps(source_view, sort_keys=True, ensure_ascii=False)
+                            if marker not in source_indexes:
+                                source_indexes[marker] = len(usage_sources)
+                                usage_sources.append(source_view)
+                            ref = {"source": source_indexes[marker]}
+                            if source.get("row_span"):
+                                ref["row_span"] = copy.deepcopy(source["row_span"])
+                            refs.append(ref)
+                        fact["source_refs"] = refs
             compact_slots.append(slot)
 
     lines = []
@@ -201,7 +228,8 @@ def _instruction_lane_prompt_lines(lanes):
         lines.append(
             "OPERAND_SEMANTICS: "
             + json.dumps(
-                {"opcode": common.get("opcode"), "slots": compact_slots},
+                {"opcode": common.get("opcode"), "slots": compact_slots,
+                 **({"sources": usage_sources} if usage_sources else {})},
                 ensure_ascii=False,
                 separators=(",", ":"),
                 sort_keys=True,
@@ -228,6 +256,11 @@ def _instruction_lane_prompt_lines(lanes):
         ):
             if target.get(key):
                 target_view[key] = copy.deepcopy(target[key])
+        if target.get("execution_form"):
+            target_view["execution_form"] = target["execution_form"]
+            target_view["execution_form_status"] = target.get("execution_form_status", "unresolved")
+        if target.get("numeric_operand_boundaries") or target.get("disjoint_bit_ranges"):
+            target_view["boundary_status"] = target.get("boundary_status", "unresolved")
     if target_view:
         lines.append(
             "TARGET_APPLICABILITY: "
@@ -561,6 +594,15 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
             candidate = _attach_instruction_contract(
                 candidate, step_target, plc_model=plc_model,
             )
+            if "operands_json" in row.keys():
+                try:
+                    operand_rows = json.loads(row["operands_json"] or "[]")
+                except (TypeError, ValueError):
+                    operand_rows = []
+                if isinstance(operand_rows, list):
+                    # Hints only: binding still requires the description in an
+                    # original source row and never uses physical row order.
+                    candidate["manual_operand_rows"] = operand_rows
             if authority:
                 candidate["instruction_source_authority"] = copy.deepcopy(authority)
                 candidate["instruction_source_authority_status"] = (

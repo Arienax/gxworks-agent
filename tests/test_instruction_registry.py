@@ -208,3 +208,40 @@ def test_invalid_repeated_modifier_is_still_rejected():
     ladder = _ladder_with_app_instruction("DDADDP", ["D0", "K1", "D10"])
     with pytest.raises(PLCJsonValidationError, match="unsupported APP_INSTR opcode"):
         validate_ladder_full(ladder, plc_model="FX3U")
+
+
+def test_operand_usage_facts_keep_independent_status_conditions_and_sources():
+    from plc.instructions import OperandSpec
+    payload = {
+        "name": "length", "role": "read",
+        "usage_facts": [
+            {"facet": "purpose", "value": "Affected data length"},
+            {"facet": "unit", "value": "word", "status": "source_verified", "sources": [{"manual_id": "fixture", "revision": "1"}]},
+            {"facet": "range", "value": {"minimum": 1, "maximum": 16}, "status": "candidate_evidence",
+             "sources": [{"id": "row-3"}], "conditions": ["16-bit form only"]},
+        ],
+    }
+    spec = OperandSpec.from_mapping(payload, 3)
+    facts = [fact.as_mapping() for fact in spec.usage_facts]
+    assert [item["status"] for item in facts] == ["declared_unverified", "source_verified", "candidate_evidence"]
+    assert facts[2]["conditions"] == ["16-bit form only"]
+    payload["usage_facts"][2]["value"]["maximum"] = 512
+    facts[1]["sources"][0]["revision"] = "changed"
+    assert spec.usage_facts[2].as_mapping()["value"]["maximum"] == 16
+    assert spec.usage_facts[1].as_mapping()["sources"][0]["revision"] == "1"
+    assert OperandSpec.from_mapping({"name": "legacy"}, 1).usage_facts == ()
+
+
+@pytest.mark.parametrize("fact", [
+    {"facet": "purpose", "value": "Length", "status": "source_verified"},
+    {"facet": "purpose", "value": "Length", "status": "candidate_evidence"},
+    {"facet": "purpose", "value": " ", "sources": [{"id": "row"}]},
+    {"facet": "unknown", "value": "Length"},
+    {"facet": "purpose", "value": "Length", "status": "complete"},
+    {"facet": "purpose", "value": "Length", "sources": [{"unrelated": "metadata"}]},
+    {"facet": "purpose", "value": "Length", "conditions": "when enabled"},
+])
+def test_operand_usage_cannot_claim_evidence_without_its_own_source(fact):
+    from plc.instructions import OperandSpec
+    with pytest.raises(ValueError):
+        OperandSpec.from_mapping({"name": "length", "usage_facts": [fact]}, 1)

@@ -148,10 +148,12 @@ def build_coverage(requirements, records, included_ids=()):
     }, included)
 
 
-def build_fact_coverage(targets, records, included_ids=(), *, instruction_questions=None):
+def build_fact_coverage(
+    targets, records, included_ids=(), *, instruction_questions=None, extra_requirements=(),
+):
     """Adapt structured PLC targets into the domain-agnostic coverage core."""
     return build_coverage(
-        fact_requirements(targets, instruction_questions=instruction_questions),
+        [*fact_requirements(targets, instruction_questions=instruction_questions), *extra_requirements],
         records,
         included_ids,
     )
@@ -169,11 +171,12 @@ def instruction_report_view(report, included_ids):
     for row in result.get("records", []):
         value = copy.deepcopy(row)
         value["fact_kind"] = "instruction"
-        value["fact_dimensions"] = list(value.get("candidate_fact_categories") or ())
+        value["fact_dimensions"] = list(value.get("fact_dimensions") or value.get("candidate_fact_categories") or ())
         records.append(value)
     coverage = build_fact_coverage(
         {"instructions": result.get("targets") or (), "devices": [], "errors": []},
         records, included_ids, instruction_questions=result.get("questions") or {},
+        extra_requirements=result.get("operand_requirements") or (),
     )
     included_by_id = {row["id"]: row["included"] for row in coverage["records"]}
     for record in result.get("records", []):
@@ -183,7 +186,14 @@ def instruction_report_view(report, included_ids):
     result["facts"] = [
         {"opcode": requirement["target"], "question": requirement["dimension"],
          "source_ids": list(requirement["source_ids"]), "status": requirement["status"]}
-        for requirement in coverage["requirements"]
+        for requirement in coverage["requirements"] if "facet" not in requirement
+    ]
+    result["operand_facts"] = [
+        {"opcode": requirement["target"], "position": requirement["position"],
+         "facet": requirement["facet"], "source_ids": list(requirement["source_ids"]),
+         "status": requirement["status"],
+         **({"instruction_instance": requirement["instruction_instance"]} if "instruction_instance" in requirement else {})}
+        for requirement in coverage["requirements"] if "facet" in requirement
     ]
     return result
 

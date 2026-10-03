@@ -503,6 +503,7 @@ def build_knowledge_context(
         direct_results,
         included_fact_ids,
         instruction_questions=instruction_questions,
+        extra_requirements=(fact_report.get("operand_requirements") or ()) if isinstance(fact_report, dict) else (),
     )
     if fact_report is not None:
         manifest["instruction_facts"] = delivered_fact_report(

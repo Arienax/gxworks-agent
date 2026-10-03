@@ -100,6 +100,49 @@ def test_confirmed_generation_uses_one_isolated_agent_call(tmp_path):
     assert metadata["validation"]["status"] == "candidate_ready"
 
 
+@pytest.mark.parametrize("operands", [["D0", "D100", "K56", "K1"], ["D20", "D200", "K16", "K2"]])
+def test_operand_usage_and_execution_form_reach_actual_agent_b_messages(tmp_path, operands):
+    from knowledge import core
+    if core._index_identity(core._index_path())[0] == "missing":
+        pytest.skip("Bundled index is not installed")
+
+    class UsageProvider(OneShotProvider):
+        def stream(self, request):
+            self.requests.append(request)
+            yield TextDelta(json.dumps({"r": [{"b": [{"i": ["NO X0"], "o": ["WSFL " + " ".join(operands)]}]}]}))
+
+    provider = UsageProvider()
+    specification = _spec()
+    contract = specification["selected_approach"]["generation_contract"]
+    contract["required_opcodes"] = ["WSFL"]
+    contract["instruction_instances"] = [{"opcode": "WSFL", "operands": operands}]
+    GenerationWorkflow(
+        GenerationRequest(user_input="Generate", confirmed_context=specification, plc_model="FX3U", model_name=provider.profile["model"]),
+        tmp_path, dependencies=GenerationDependencies(provider=provider),
+    ).run()
+    assert len(provider.requests) == 1
+    sent = "\n".join(str(getattr(message, "content", "")) for message in provider.requests[0].messages)
+    operand_lines = [line for line in sent.splitlines() if line.startswith("OPERAND_SEMANTICS:")]
+    views = [json.loads(line.split(": ", 1)[1]) for line in operand_lines]
+    delivered = next(view for view in views if view["opcode"] == "WSFL" and any(slot.get("usage_facts") for slot in view["slots"]))
+    assert [slot["symbol"] for slot in delivered["slots"]] == ["S", "D", "N1", "N2"]
+    assert [slot["value"] for slot in delivered["slots"]] == operands
+    length, count = delivered["slots"][2:]
+    assert "Word data length of the shift data" in length["usage_facts"][0]["value"]
+    assert "Number of words to be shifted leftward" in count["usage_facts"][0]["value"]
+    for slot in (length, count):
+        assert slot["purpose_status"] == "candidate_evidence"
+        ref = slot["usage_facts"][0]["source_refs"][0]
+        source = delivered["sources"][ref["source"]]
+        assert source["manual_id"] == "fx3_programming_r"
+        assert source["revision"] == "R"
+        assert ref["row_span"]
+        assert slot["symbol_status"] == "source_verified"
+    assert '"execution_form":"continuous"' in sent
+    assert '"execution_form_status":"source_verified"' in sent
+    assert "STEP_WIDTH:" not in sent
+
+
 @pytest.mark.parametrize(("required_opcode", "expected_status"), [
     ("OUT", "verified"), ("MOV", "violated"),
 ])

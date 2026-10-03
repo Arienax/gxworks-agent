@@ -10,6 +10,29 @@ When the same opcode exists in multiple official manuals, [knowledge.source_auth
 
 The [scoped retrieval facade](runtime-ownership.md#retrieval) applies task and source lanes before candidate limits. CPU applicability remains owned by the index and instruction catalog.
 
+## Operand usage evidence
+
+[_operand_gap_details](../../src/knowledge/instruction_facts.py) requires purpose
+evidence independently of role, type, symbol/order and device-class evidence.
+Other declared usage facets retain their own gaps until source-verified. An
+instruction-wide signature or role promotion cannot certify an operand purpose.
+
+[_pack_target](../../src/knowledge/instruction_facts.py) receives these slot/facet
+gaps. Operand tables bind by unique symbols in the verified native order,
+preserving the original table header, rows and following notes. Tables flattened
+into layout text can be recovered without delivering neighboring conflicting
+diagram syntax. Missing symbols may use `operands_json` description associations
+only when a unique matching description occurs in the original table. Repeated
+symbols, merged/ambiguous rows and description cells containing only data types
+leave the affected purpose unresolved.
+
+Each `operand_evidence_bindings` entry identifies position, facet, candidate
+value and source. Row/context spans use the original `chunks.text` when it is
+available; otherwise `offset_basis` explicitly names `resolved_record.text`.
+Manual identity, revision, PDF page and selected CPU/form remain attached.
+Runtime binding supplies candidate evidence, not semantic certification. The
+role/type promotion audit and its existing acceptance criteria remain separate.
+
 ## Packing and receipts
 
 Evidence is packed as complete source units within the available allowance. Tables and source identities remain intact; duplicate diagram/layout renditions do not replace missing prose. Records retain manual identity, revision, offsets and content hashes where available.
@@ -18,8 +41,16 @@ Evidence is packed as complete source units within the available allowance. Tabl
 
 [delivered_fact_report](../../src/knowledge/instruction_facts.py) remains a compatibility view for existing instruction diagnostics, but its status calculation delegates to the generic coverage owner. A recorded keyword category is a packing hint; a fact is only marked as delivered when its block survives compilation. Missing facts remain visible without creating an instruction prohibition or inventing an I/O. Context compilation is owned by [application.context_compiler](../../src/application/context_compiler.py).
 
+Slot requirements use dimensions such as `operand:3:purpose` through the same
+coverage owner, including exact instruction-instance matching. The compatibility
+receipt exposes them in `operand_facts`; canonical `fact_coverage.requirements`
+contains both coarse questions and these slot/facet requirements. A table is
+delivered once while its explicit bindings can answer several requirements.
+Whole-block removal during final compilation changes delivered candidates to
+`budget_omitted`; a delivered table never supplies evidence to an unbound slot.
+
 ## Representation and measurement
 
 Required compact fields are rendered from [application.compact_protocol](../../src/application/compact_protocol.py). Local aliases preserve the same representation; polarity and scan behavior are engineering semantics, not syntax cleanup.
 
-[test_instruction_fact_context.py](../../tests/test_instruction_fact_context.py) covers source integrity and final-budget reconciliation. [test_agent_b_measurement.py](../../tests/test_agent_b_measurement.py) covers the paired experiment runner. The runner's usage and comparison groups are documented in [Agent B measurements](../guides/agent-b-measurement.md).
+[test_instruction_fact_context.py](../../tests/test_instruction_fact_context.py) covers source integrity, all row permutations of a small frozen binding table and final-budget reconciliation. [test_generation_agent_boundary.py](../../tests/test_generation_agent_boundary.py) captures the actual offline Agent B request after context compilation and checks bound purposes, source references and execution form with changed addresses/values. These checks establish delivery, not model reasoning or PLC behavior. [test_agent_b_measurement.py](../../tests/test_agent_b_measurement.py) covers the paired experiment runner. The runner's usage and comparison groups are documented in [Agent B measurements](../guides/agent-b-measurement.md).

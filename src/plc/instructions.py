@@ -14,6 +14,7 @@ conservatively: no write targets or other semantics are guessed.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
@@ -49,12 +50,59 @@ class SemanticKind(str, Enum):
 
 
 @dataclass(frozen=True)
+class OperandUsageFact:
+    """One independently sourced facet of an operand's meaning."""
+
+    facet: str
+    value: Any
+    status: str = "declared_unverified"
+    sources: Tuple[Mapping[str, Any], ...] = ()
+    conditions: Tuple[str, ...] = ()
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, Any]) -> "OperandUsageFact":
+        facet = str(payload.get("facet") or "").strip()
+        if facet not in {"purpose", "unit", "encoding", "range", "condition"}:
+            raise ValueError("Invalid operand usage facet")
+        value = payload.get("value")
+        if not isinstance(value, (str, Mapping)) or not value or isinstance(value, str) and not value.strip():
+            raise ValueError("Operand usage value is required")
+        status = str(payload.get("status") or "declared_unverified")
+        if status not in {"declared_unverified", "candidate_evidence", "source_verified"}:
+            raise ValueError("Invalid operand usage status")
+        sources = payload.get("sources") or []
+        if not isinstance(sources, (list, tuple)) or any(
+            not isinstance(item, Mapping) or not any(item.get(key) for key in (
+                "id", "manual_id", "reference", "path",
+            )) for item in sources
+        ):
+            raise ValueError("Invalid operand usage sources")
+        if status != "declared_unverified" and not sources:
+            raise ValueError("Sourced operand usage requires its own evidence")
+        conditions = payload.get("conditions") or []
+        if not isinstance(conditions, (list, tuple)) or any(
+            not isinstance(item, str) or not item.strip() for item in conditions
+        ):
+            raise ValueError("Invalid operand usage conditions")
+        return cls(facet, copy.deepcopy(value), status, tuple(copy.deepcopy(dict(item)) for item in sources), tuple(conditions))
+
+    def as_mapping(self) -> Dict[str, Any]:
+        result = {"facet": self.facet, "value": copy.deepcopy(self.value), "status": self.status}
+        if self.sources:
+            result["sources"] = [copy.deepcopy(dict(item)) for item in self.sources]
+        if self.conditions:
+            result["conditions"] = list(self.conditions)
+        return result
+
+
+@dataclass(frozen=True)
 class OperandSpec:
     name: str
     role: OperandRole = OperandRole.READ
     data_type: str = "any"
     device_prefixes: Tuple[str, ...] = ()
     optional: bool = True
+    usage_facts: Tuple[OperandUsageFact, ...] = ()
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, Any], index: int) -> "OperandSpec":
@@ -68,12 +116,16 @@ class OperandSpec:
             for item in (payload.get("device_prefixes") or [])
             if str(item).strip()
         )
+        usage = payload.get("usage_facts") or []
+        if not isinstance(usage, list) or any(not isinstance(item, Mapping) for item in usage):
+            raise ValueError("Operand usage facts must be an array of objects")
         return cls(
             name=str(payload.get("name") or f"operand_{index}").strip(),
             role=role,
             data_type=str(payload.get("data_type") or "any").strip().lower(),
             device_prefixes=prefixes,
             optional=bool(payload.get("optional", True)),
+            usage_facts=tuple(OperandUsageFact.from_mapping(item) for item in usage),
         )
 
 
@@ -798,7 +850,7 @@ class InstructionRegistry:
                     replacements[cpu] = replacement_opcode
                 merged_sources = [
                     *current.contract_sources,
-                    *(dict(source) for source in sources),
+                    *({**dict(source), "verified_fields": list(verified)} for source in sources),
                 ]
                 deduped_sources = []
                 seen_sources = set()
@@ -878,7 +930,9 @@ class InstructionRegistry:
                 "verified_fields": list(spec.verified_fields),
                 "unverified_fields": [key for key, value in coverage.items() if value != "source_verified"],
                 "operand_annotations": [{"name": o.name, "role": o.role.value,
-                    "data_type": o.data_type, "device_prefixes": list(o.device_prefixes)} for o in spec.operands],
+                    "data_type": o.data_type, "device_prefixes": list(o.device_prefixes),
+                    **({"usage_facts": [fact.as_mapping() for fact in o.usage_facts]} if o.usage_facts else {})}
+                    for o in spec.operands],
                 "sources": [{k: v for k, v in source.items() if k not in {"proof_sha256", "source_sha256"}} for source in spec.contract_sources]}
 
     def is_known(self, mnemonic: Any, *, vendor: str = "mitsubishi") -> bool:

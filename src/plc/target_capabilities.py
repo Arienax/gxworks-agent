@@ -8,6 +8,61 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 
+def _operand_usage_facts(spec, coverage, *, model, opcode):
+    """Project existing target rules, keeping their own evidence and indexes."""
+    from plc.instructions import OperandUsageFact
+
+    facts = []
+
+    def add(index, facet, value, dimension):
+        sources = tuple(
+            {**source, "target_model": model, "opcode": opcode} for source in spec.contract_sources
+            if dimension in (source.get("verified_fields") or ())
+        )
+        status = coverage.get(dimension, "unresolved")
+        if status != "source_verified" or not sources:
+            status = "declared_unverified"
+        fact = OperandUsageFact(facet, value, status, sources)
+        facts.append({"position": index + 1, "fact": fact.as_mapping()})
+
+    boundary_dimension = "numeric_and_memory_boundaries"
+    for item in spec.numeric_operand_boundaries:
+        if item.label and item.label != "operand":
+            add(item.operand_index, "purpose", item.label, boundary_dimension)
+        if item.unit:
+            add(item.operand_index, "unit", item.unit, boundary_dimension)
+        add(item.operand_index, "range", {
+            "minimum": item.minimum, "maximum": item.maximum, "absolute": item.absolute,
+        }, boundary_dimension)
+    for item in spec.disjoint_bit_ranges:
+        for index, length, other in (
+            (item.source_operand_index, item.source_length_operand_index, item.destination_operand_index),
+            (item.destination_operand_index, item.destination_length_operand_index, item.source_operand_index),
+        ):
+            add(index, "range", {
+                "length_position": length + 1, "unit": "bit",
+                "disjoint_with_position": other + 1,
+                "same_device_prefix_only": item.same_device_prefix_only,
+                "error_code": item.error_code,
+            }, boundary_dimension)
+        for index, base in (
+            (item.destination_length_operand_index, item.destination_operand_index),
+            (item.source_length_operand_index, item.source_operand_index),
+        ):
+            # Knowing a range's length dependency does not prove the complete
+            # instruction-specific purpose of that length/count operand.
+            add(index, "range", {"length_of_position": base + 1, "unit": "bit"}, boundary_dimension)
+            add(index, "unit", "bit", boundary_dimension)
+    if spec.pulse_output:
+        pulse = spec.pulse_output
+        for index in pulse.frequency_operand_indexes:
+            add(index, "purpose", "Pulse-output frequency", "hardware_applicability")
+        add(pulse.pulse_output_operand_index, "purpose", "Pulse output device", "hardware_applicability")
+        if pulse.direction_output_operand_index is not None:
+            add(pulse.direction_output_operand_index, "purpose", "Direction output device", "hardware_applicability")
+    return facts
+
+
 def _opcode(target):
     if isinstance(target, Mapping):
         return str(target.get("opcode") or target.get("base_opcode") or "").strip().upper()
@@ -66,6 +121,8 @@ def resolve_target_applicability(target, plc_model):
         "operand_constraints": constraints,
         "device_class_status": coverage.get("device_classes", "unresolved"),
         "execution_form": spec.execution_form,
+        "execution_form_status": coverage.get("execution_form", "unresolved"),
+        "operand_usage_facts": _operand_usage_facts(spec, coverage, model=model, opcode=form.opcode),
         "instruction_width": spec.instruction_width,
         "numeric_operand_boundaries": [
             {
