@@ -44,6 +44,10 @@ The [documentation index](docs/README.md) separates usage guides, implementation
 - [Knowledge resources](resources/knowledge/README.md) and [GXW research evidence](research/README.md)
 - [Verification reports](docs/reports/README.md)
 
+## Community
+
+Chinese and English reports and contributions are welcome. Start with the [contributing guide](CONTRIBUTING.md) and [issue forms](https://github.com/Arienax/gxworks-agent/issues/new/choose). Please follow the [code of conduct](CODE_OF_CONDUCT.md), report vulnerabilities through the [security policy](SECURITY.md), and see the [accessibility statement](ACCESSIBILITY.md) for scope and reporting guidance. Review and sanitize diagnostics before sharing them publicly.
+
 ## Before operating machinery
 
 Review generated logic against the selected CPU, wiring, motion limits and machine operating modes. Compile and check it in the intended GX Works2 environment before commissioning. Emergency stops, guarding and other safety functions require the machine's independent safety system; generated application logic and software tests do not replace it.

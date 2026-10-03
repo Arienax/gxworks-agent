@@ -44,6 +44,10 @@ git lfs pull
 - [知识库](resources/knowledge/README.md)与 [GXW 研究证据](research/README.md)
 - [验证报告](docs/reports/README.md)
 
+## 参与与反馈
+
+欢迎中文或英文反馈。提交问题和改进前请阅读[贡献指南](CONTRIBUTING.md)，使用 [Issue 表单](https://github.com/Arienax/gxworks-agent/issues/new/choose)，并遵守[行为准则](CODE_OF_CONDUCT.md)。漏洞按[安全政策](SECURITY.md)私下报告；无障碍范围与反馈方式见[无障碍说明](ACCESSIBILITY.md)。公开诊断记录前请先检查并脱敏。
+
 ## 设备投运前
 
 按所选 CPU、实际接线、运动边界和运行模式审查生成逻辑，在目标 GX Works2 环境编译、检查后再调试设备。急停、防护等安全功能应由设备的独立安全系统承担，生成的应用逻辑和软件测试不能替代这些功能。

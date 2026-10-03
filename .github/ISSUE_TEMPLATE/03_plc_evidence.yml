@@ -1,0 +1,63 @@
+name: PLC 事实或原生格式 / PLC evidence
+description: 报告指令、操作数、特殊软元件、型号适用性或原生工程证据问题。
+title: "[PLC] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        用于具体 PLC 规则或 GXW 原生工程问题；普通界面故障可使用缺陷表单。
+        表单中的型号/语言不代表已经支持。区分资料规则、推断、打开、编译、仿真和设备观察。
+        Record existing evidence only; do not run tests on production machinery to complete this form.
+        涉及越权或危险操作的漏洞请使用 [私下报告流程](https://github.com/Arienax/gxworks-agent/blob/main/SECURITY.md)。
+  - type: textarea
+    id: target
+    attributes:
+      label: 具体目标与版本 / Exact target and versions
+      description: 未知项写“未知”；保留 GX Works2 菜单中的实际合并选项，不只写 Q/FX 等系列名。
+      placeholder: |
+        项目 commit 或包版本：
+        Series / Type：
+        GX Works2 版本：
+        工程类型与语言（Ladder/ST/FBD/SFC，或与语言无关）：
+    validations:
+      required: true
+  - type: textarea
+    id: discrepancy
+    attributes:
+      label: 规则或行为差异 / Discrepancy
+      description: 写出具体指令及操作数、特殊软元件或工程对象；说明期望、实际结果及判断依据。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 最小样例或已有观察 / Minimal example or observations
+      description: 使用可公开的最小源码、IR、操作序列或脱敏记录。不能共享样例时说明限制，不要求上传原工程。
+    validations:
+      required: true
+  - type: dropdown
+    id: evidence_level
+    attributes:
+      label: 已有证据层次 / Existing evidence
+      multiple: true
+      options:
+        - 官方资料规则 / Documented rule
+        - 静态推断，尚未原生验证 / Static inference
+        - 本项目解析或回读 / Parser or round-trip
+        - GX Works2 原生打开 / Native open
+        - GX Works2 原生编译 / Native compile
+        - 仿真观察 / Simulation
+        - 已有设备观察 / Existing hardware observation
+        - 未验证或不确定 / Unverified
+  - type: textarea
+    id: source
+    attributes:
+      label: 来源及尚未验证的范围 / Sources and limits
+      description: 可选。手册名称/编号/修订/页码、可公开链接、工程来源和未测条件。不要附厂商 DLL、完整手册或客户数据。
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 公开前检查 / Before publishing
+      options:
+        - label: 我有权公开所附材料，已移除凭据、客户数据和无关个人信息。 / I may publish the attached material and have removed sensitive data.
+          required: true
