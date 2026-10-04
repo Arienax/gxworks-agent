@@ -149,11 +149,11 @@ def test_object_model_cannot_silently_remove_unknown_block_contents():
 
 
 def test_project_writer_preserves_native_multi_block_noop_and_unrelated_payloads():
-    import zipfile
+    from tests.local_evidence import open_evidence_archive, require_evidence_path
     from src.gxw.object_model import read_project, export_object_model, generate_object_project
     from src.gxw.experiment import compare_projects
     archive = Path(__file__).parents[1] / 'research/evidence/gxw-block-boundary-20260913.zip'
-    with zipfile.ZipFile(archive) as z:
+    with open_evidence_archive(archive) as z:
         baseline = z.read('samples/C.gxw')
     p, declarations, _ = read_project(baseline)
     model = export_object_model(p, declarations)
@@ -207,14 +207,14 @@ def test_preview_places_local_canvases_in_separate_viewports():
 
 @pytest.mark.parametrize('manifest_name', ['evidence-manifest.json', 'generation-evidence-manifest.json'])
 def test_archived_native_evidence_hashes_are_complete(manifest_name):
-    import zipfile
+    from tests.local_evidence import open_evidence_archive, require_evidence_path
     root = Path(__file__).parents[1]
     manifest = json.loads((root / 'research/results/block-boundary-20260913' / manifest_name).read_text(encoding='utf-8'))
     assert '\\' not in manifest['archive']
     assert ':' not in manifest['archive'].split('/', 1)[0]
     archive = root / manifest['archive']
-    assert hashlib.sha256(archive.read_bytes()).hexdigest() == manifest['archive_sha256']
-    with zipfile.ZipFile(archive) as z:
+    assert hashlib.sha256(require_evidence_path(archive).read_bytes()).hexdigest() == manifest['archive_sha256']
+    with open_evidence_archive(archive) as z:
         assert set(z.namelist()) == {f['member'] for f in manifest['files']}
         for entry in manifest['files']:
             data = z.read(entry['member'])
@@ -223,13 +223,13 @@ def test_archived_native_evidence_hashes_are_complete(manifest_name):
 
 
 def test_current_generator_reproduces_natively_validated_relay_bytes():
-    import zipfile
+    from tests.local_evidence import open_evidence_archive, require_evidence_path
     from src.gxw.object_model import generate_object_project, read_project
     from src.gxw.ladder_lowering import ladder_to_object_model
     from src.gxw.experiment import compare_programs
     root = Path(__file__).parents[1]
     model = json.loads((root / 'research/models/relay-parallel.json').read_text())
-    with zipfile.ZipFile(root / 'research/evidence/gxw-block-generation-20260913.zip') as z:
+    with open_evidence_archive(root / 'research/evidence/gxw-block-generation-20260913.zip') as z:
         generated, native = z.read('samples/R.gxw'), z.read('samples/R_compile.gxw')
     assert generate_object_project(ladder_to_object_model(model)).data == generated
     p, _, _ = read_project(generated)
@@ -240,10 +240,10 @@ def test_current_generator_reproduces_natively_validated_relay_bytes():
 
 
 def test_single_stream_mutation_is_reproducible_from_frozen_native_controls():
-    import zipfile
+    from tests.local_evidence import open_evidence_archive, require_evidence_path
     sys.path.insert(0, str(Path(__file__).parents[1] / 'research'))
     from mutate_block_boundary import transplant
-    with zipfile.ZipFile(Path(__file__).parents[1] / 'research/evidence/gxw-block-boundary-20260913.zip') as z:
+    with open_evidence_archive(Path(__file__).parents[1] / 'research/evidence/gxw-block-boundary-20260913.zip') as z:
         result, report = transplant(z.read('samples/B.gxw'), z.read('samples/C.gxw'))
         assert result == z.read('samples/M1.gxw')
     assert list(report['logical_stream_changes']) == ['1.Program.pou']

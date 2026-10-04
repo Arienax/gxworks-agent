@@ -4,6 +4,7 @@ import os
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from scripts import check_repository_storage as storage
 
@@ -41,13 +42,13 @@ class RepositoryStorageTests(unittest.TestCase):
 
     def test_small_raw_zip_rejected_in_index(self):
         self.add("research/evidence/tiny.zip", b"PK\x03\x04small")
-        self.assertIn("Git LFS pointer", storage.check(self.repo, staged=True)[0])
+        self.assertIn("local only", storage.check(self.repo, staged=True)[0])
 
-    def test_valid_pointer_and_nested_archive(self):
+    def test_lfs_pointer_and_nested_archive_are_also_rejected(self):
         self.add("research/evidence/nested/data.zip", POINTER)
-        self.assertEqual(storage.check(self.repo, staged=True), [])
+        self.assertTrue(storage.check(self.repo, staged=True))
         self.commit()
-        self.assertEqual(storage.check(self.repo, base=self.base), [])
+        self.assertTrue(storage.check(self.repo, base=self.base))
 
     def test_small_witnesses_and_summary_stay_plain_git(self):
         for path in ("research/evidence/witness.gxw", "research/evidence/screen.png", "research/results/summary.json"):
@@ -55,11 +56,11 @@ class RepositoryStorageTests(unittest.TestCase):
         self.commit()
         self.assertEqual(storage.check(self.repo, base=self.base), [])
 
-    def test_raw_json_requires_lfs(self):
+    def test_raw_json_is_local_only_in_both_git_representations(self):
         self.add("research/results/raw/trace.json", b"{}")
         self.assertTrue(storage.check(self.repo, staged=True))
         self.add("research/results/raw/trace.json", POINTER)
-        self.assertEqual(storage.check(self.repo, staged=True), [])
+        self.assertTrue(storage.check(self.repo, staged=True))
 
     def test_malformed_pointer_rejected(self):
         self.add("research/evidence/invalid.zip", POINTER.replace(b"a" * 64, b"bad"))
@@ -91,17 +92,17 @@ class RepositoryStorageTests(unittest.TestCase):
         self.commit()
         self.assertEqual(storage.check(self.repo, base=base, max_bytes=64), [])
 
-    def test_legacy_archive_must_be_migrated_at_current_head(self):
+    def test_legacy_archive_must_be_removed_at_current_head(self):
         self.add("research/evidence/legacy.zip", b"PKsmall")
         self.commit()
         base = self.git("rev-parse", "HEAD").decode().strip()
         self.assertTrue(storage.check(self.repo, base=base))
-        self.add("research/evidence/legacy.zip", POINTER)
+        self.git("rm", "research/evidence/legacy.zip")
         self.commit()
         self.assertEqual(storage.check(self.repo, base=base), [])
 
     def test_worktree_smudge_does_not_change_committed_object_check(self):
-        path = "research/evidence/payload.zip"
+        path = "resources/knowledge/database.sqlite"
         self.add(path, POINTER)
         self.commit()
         (self.repo / path).write_bytes(b"the real downloaded archive")
@@ -136,14 +137,105 @@ class RepositoryStorageTests(unittest.TestCase):
     def test_case_insensitive_archive_suffixes(self):
         for extension in ("ZIP", "7z", "tar.gz", "zst"):
             with self.subTest(extension=extension):
-                self.assertTrue(storage.requires_lfs("research/evidence/data." + extension))
+                self.assertTrue(storage.is_local_only_evidence("research/evidence/data." + extension))
 
-    def test_git_attributes_include_root_and_nested_zips_not_witnesses(self):
-        self.add(".gitattributes", b"research/evidence/**/*.zip filter=lfs diff=lfs merge=lfs -text\nresearch/results/raw/** filter=lfs diff=lfs merge=lfs -text\n")
-        for path, expected in (("research/evidence/top.zip", "lfs"), ("research/evidence/deep/a.zip", "lfs"), ("research/evidence/witness.gxw", "unspecified"), ("research/results/summary.json", "unspecified"), ("research/results/raw/trace.json", "lfs")):
+    def test_git_attributes_disable_evidence_lfs_and_preserve_knowledge(self):
+        policy = Path(__file__).resolve().parents[1]
+        self.add(".gitattributes", (policy / ".gitattributes").read_bytes())
+        for path, expected in (("research/evidence/top.zip", "unset"), ("research/evidence/deep/a.zip", "unset"), ("research/evidence/witness.gxw", "unset"), ("research/results/summary.json", "unspecified"), ("research/results/raw/trace.json", "unset"), ("resources/knowledge/database.sqlite", "lfs")):
             with self.subTest(path=path):
                 result = self.git("check-attr", "filter", "--", path).decode()
                 self.assertTrue(result.rstrip().endswith(": " + expected))
+
+    def test_ignored_archives_stay_local_but_force_add_is_rejected(self):
+        policy = Path(__file__).resolve().parents[1]
+        self.add(".gitignore", (policy / ".gitignore").read_bytes())
+        for path in ("research/evidence/a.zip", "research/evidence/nested/a.ZIP",
+                     "research/evidence/a.tar.gz", "research/evidence/a.7z",
+                     "research/evidence/a.rar", "research/results/raw/data.json"):
+            with self.subTest(path=path):
+                target = self.repo / path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(b"local evidence")
+                self.assertTrue(self.git("check-ignore", "--", path))
+                self.git("add", "--force", "--", path)
+        self.assertEqual(len(storage.check(self.repo, staged=True)), 6)
+
+    def test_unchanged_archive_in_index_cannot_be_hidden_by_other_staged_files(self):
+        self.add("research/evidence/legacy.zip", POINTER)
+        self.commit()
+        self.add("README.md", b"small")
+        self.assertTrue(storage.check(self.repo, staged=True))
+        self.git("rm", "--cached", "research/evidence/legacy.zip")
+        self.assertEqual(storage.check(self.repo, staged=True), [])
+        self.assertTrue((self.repo / "research/evidence/legacy.zip").exists())
+
+    def test_reused_pointer_added_then_deleted_is_rejected(self):
+        self.add("resources/knowledge/database.sqlite", POINTER)
+        self.commit()
+        base = self.git("rev-parse", "HEAD").decode().strip()
+        self.add("research/evidence/reused.zip", POINTER)
+        self.commit()
+        self.git("rm", "research/evidence/reused.zip")
+        self.commit()
+        self.assertTrue(storage.check(self.repo, base=base))
+
+    def test_push_checks_all_refs_and_intermediate_commits(self):
+        self.add("README.md", b"clean")
+        self.commit()
+        clean = self.git("rev-parse", "HEAD").decode().strip()
+        self.add("research/evidence/forbidden.zip", POINTER)
+        self.commit()
+        self.git("rm", "research/evidence/forbidden.zip")
+        self.commit()
+        bad = self.git("rev-parse", "HEAD").decode().strip()
+        data = (f"refs/heads/clean {clean} refs/heads/clean {self.base}\n"
+                f"refs/heads/bad {bad} refs/heads/bad {self.base}\n").encode()
+        issues = storage.check_push(self.repo, "origin", data)
+        self.assertTrue(issues)
+        self.assertTrue(all("refs/heads/bad" in issue for issue in issues))
+
+    def test_new_ref_excludes_published_history_but_checks_its_current_tree(self):
+        self.add("research/evidence/published.zip", POINTER)
+        self.commit()
+        published = self.git("rev-parse", "HEAD").decode().strip()
+        self.git("update-ref", "refs/remotes/origin/main", published)
+        zeros = "0" * 40
+        data = f"refs/heads/topic {published} refs/heads/topic {zeros}\n".encode()
+        self.assertTrue(storage.check_push(self.repo, "origin", data))
+        self.git("rm", "research/evidence/published.zip")
+        self.commit()
+        cleaned = self.git("rev-parse", "HEAD").decode().strip()
+        data = f"refs/heads/topic {cleaned} refs/heads/topic {zeros}\n".encode()
+        self.assertEqual(storage.check_push(self.repo, "origin", data), [])
+
+    def test_new_ref_without_cached_remote_does_not_hide_deleted_evidence(self):
+        self.add("research/evidence/transient.zip", POINTER)
+        self.commit()
+        self.git("rm", "research/evidence/transient.zip")
+        self.commit()
+        head = self.git("rev-parse", "HEAD").decode().strip()
+        data = f"refs/heads/topic {head} refs/heads/topic {'0' * 40}\n".encode()
+        self.assertTrue(storage.check_push(self.repo, "origin", data))
+
+    def test_ref_deletion_is_permitted(self):
+        data = f"(delete) {'0' * 40} refs/heads/old {self.base}\n".encode()
+        self.assertEqual(storage.check_push(self.repo, "origin", data), [])
+
+    def test_policy_rejection_happens_before_lfs_upload(self):
+        with patch.object(storage, "check_push", return_value=["local only"]), \
+             patch.object(storage.subprocess, "run") as upload:
+            self.assertEqual(storage.pre_push(self.repo, "origin", "unused", b"refs\n"), 1)
+            upload.assert_not_called()
+
+    def test_success_preserves_lfs_input_and_failure_status(self):
+        data = f"refs/heads/main {self.base} refs/heads/main {self.base}\n".encode()
+        with patch.object(storage, "check_push", return_value=[]), \
+             patch.object(storage.subprocess, "run") as upload:
+            upload.return_value.returncode = 17
+            self.assertEqual(storage.pre_push(self.repo, "origin", "url", data), 17)
+            upload.assert_called_once_with(["git", "lfs", "pre-push", "origin", "url"],
+                                          cwd=self.repo, input=data, check=False)
 
 
 if __name__ == "__main__":

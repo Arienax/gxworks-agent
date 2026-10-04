@@ -25,7 +25,7 @@ GX Works2 逆向常态化使用 `ghidra-cli` 和 `property-based-testing`，按�
 
 过程保留可重现的最小源码和原始实验记录；形成大模块成果后再集中固定证据、补必要回归并接入 Web/MCP，不因每个小发现新增报告或扩展应用能力，不新增哈希验证。
 
-证据存储与提交遵循[研究证据存储](docs/guides/evidence-storage.md)：摘要、freeze 脚本和必要的小型 witness 留在普通 Git，归档及大型原始输出使用 LFS。新提交暂存后运行 `python scripts/check_repository_storage.py --staged`，不跳过 LFS 上传。一个研究模块按 `research finding → Core semantic change → integration` 组织可独立验证的提交，各层带对应测试和文档；不在普通维护中追溯拆改已发布历史，也不把三层重新 squash 成同一个大提交。
+证据存储与提交遵循[研究证据存储](docs/guides/evidence-storage.md)：摘要、freeze 脚本和必要的小型 witness 留在普通 Git；证据归档及大型原始输出仅保存在本地，禁止加入普通 Git 或 Git LFS，也不得作为 Actions artifact 或 release asset 上传。新工作区启用 `git config --local core.hooksPath .githooks`，新提交暂存后运行 `python scripts/check_repository_storage.py --staged`；提交和推送钩子在 LFS 上传前拒绝证据包，保留知识库的正常 LFS 上传。一个研究模块按 `research finding → Core semantic change → integration` 组织可独立验证的提交，各层带对应测试和文档；不在普通维护中追溯拆改已发布历史，也不把三层重新 squash 成同一个大提交。
 
 ## 文档
 

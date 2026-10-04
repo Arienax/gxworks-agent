@@ -3,7 +3,7 @@ import hashlib
 import json
 from pathlib import Path
 import runpy
-import zipfile
+from tests.local_evidence import open_evidence_archive
 
 import pytest
 
@@ -17,10 +17,25 @@ MANIFEST = json.loads((ROOT / "research/results/generation-evidence-manifest.jso
 
 
 def evidence(name):
-    with zipfile.ZipFile(ROOT / MANIFEST["archive"]) as archive:
+    with open_evidence_archive(ROOT / MANIFEST["archive"]) as archive:
         raw = archive.read(name)
     assert hashlib.sha256(raw).hexdigest() == MANIFEST["files"][name]["sha256"]
     return raw
+
+
+def test_missing_local_archive_is_explicitly_unverified():
+    with pytest.raises(pytest.skip.Exception, match="Local research evidence required"):
+        open_evidence_archive(ROOT / "research/evidence/missing-local-evidence.zip")
+
+
+def test_missing_other_files_and_corrupt_archives_still_fail(tmp_path):
+    import zipfile
+    with pytest.raises(FileNotFoundError):
+        open_evidence_archive(tmp_path / "missing.zip")
+    broken = tmp_path / "broken.zip"
+    broken.write_bytes(b"invalid archive")
+    with pytest.raises(zipfile.BadZipFile):
+        open_evidence_archive(broken)
 
 
 @pytest.mark.parametrize("name,report", [
@@ -89,7 +104,7 @@ def test_source_bound_application_candidates_keep_graph_and_labels_after_native_
     import base64
     from gxw.declarations import parse_declarations
     from gxw.structured_pou import parse_structured_pou
-    with zipfile.ZipFile(ROOT/'research/evidence/gxw-fbd-application-v2-20261002.zip') as archive:
+    with open_evidence_archive(ROOT/'research/evidence/gxw-fbd-application-v2-20261002.zip') as archive:
         cases = json.loads(archive.read('application-source-witnesses.json'))
     native_count = 0
     for case in cases:

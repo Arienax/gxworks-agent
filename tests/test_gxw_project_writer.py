@@ -3,7 +3,7 @@ from dataclasses import replace
 import json
 from pathlib import Path
 import struct
-import zipfile
+from tests.local_evidence import open_evidence_archive
 
 import pytest
 
@@ -83,7 +83,7 @@ def project_fixture():
 @pytest.mark.parametrize("change", [{}, {"initial_value": "124"}, {"comment": "Q" * 3000}])
 def test_native_partial_nested_container_declaration_edits_preserve_other_payloads(change):
     archive = Path(__file__).resolve().parents[1] / "research/evidence/gxw-partial-sector-20260927.zip"
-    with zipfile.ZipFile(archive) as z:
+    with open_evidence_archive(archive) as z:
         source = z.read("native/native-saved.gxw")
     outer = validate_cfb_streams(source)
     nested = validate_cfb_streams(outer["_hdb"])

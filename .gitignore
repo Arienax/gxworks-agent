@@ -86,6 +86,21 @@ dist-web/
 # Editable GXW experiment copies; immutable evidence is archived separately.
 /research/experiments/
 
+# Evidence packages and bulk raw results stay local; summaries and small witnesses remain in Git.
+/research/evidence/**/*.[zZ][iI][pP]
+/research/evidence/**/*.[7][zZ]
+/research/evidence/**/*.[rR][aA][rR]
+/research/evidence/**/*.[tT][aA][rR]
+/research/evidence/**/*.[gG][zZ]
+/research/evidence/**/*.[bB][zZ][2]
+/research/evidence/**/*.[xX][zZ]
+/research/evidence/**/*.[zZ][sS][tT]
+/research/evidence/**/*.[tT][gG][zZ]
+/research/evidence/**/*.[tT][bB][zZ]
+/research/evidence/**/*.[tT][bB][zZ][2]
+/research/evidence/**/*.[tT][xX][zZ]
+/research/results/raw/
+
 # Model capability observations are local runtime data, not source files.
 model-observations.sqlite
 model-observations.sqlite-journal

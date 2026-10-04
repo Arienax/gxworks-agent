@@ -1,7 +1,7 @@
 import io
 from pathlib import Path
 import struct
-import zipfile
+from tests.local_evidence import open_evidence_archive
 
 import pytest
 
@@ -27,7 +27,7 @@ def verify_external(raw, expected):
 
 def partial_native_container():
     archive = Path(__file__).resolve().parents[1] / "research/evidence/gxw-partial-sector-20260927.zip"
-    with zipfile.ZipFile(archive) as z:
+    with open_evidence_archive(archive) as z:
         outer = CompoundFile(z.read("native/native-saved.gxw"))
     name = logical_mapping(outer.read_stream("projectdatalist.xml"))["CGTable.dat"]
     return outer.read_stream("_hdb"), name

@@ -4,7 +4,7 @@ from dataclasses import replace
 import json
 from pathlib import Path
 import xml.etree.ElementTree as ET
-import zipfile
+from tests.local_evidence import open_evidence_archive
 
 import pytest
 
@@ -21,7 +21,7 @@ def source_binding_witness(index=0):
     from src.gxw.callable_sources import ProjectCallableSources
     from src.gxw.declarations import parse_declarations
     from src.gxw.structured_pou import parse_structured_pou
-    with zipfile.ZipFile(Path(__file__).parents[1] / 'research/evidence/gxw-fbd-source-binding-20261001.zip') as archive:
+    with open_evidence_archive(Path(__file__).parents[1] / 'research/evidence/gxw-fbd-source-binding-20261001.zip') as archive:
         case = json.loads(archive.read('witnesses.json'))['interfaces'][index]
     declarations = {name: parse_declarations(base64.b64decode(value), logical_name=name)
                     for name, value in case['declarations'].items()}
