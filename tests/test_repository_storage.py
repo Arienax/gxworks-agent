@@ -43,16 +43,21 @@ class RepositoryStorageTests(unittest.TestCase):
 
     def test_small_raw_zip_rejected_in_index(self):
         self.add("research/evidence/tiny.zip", b"PK\x03\x04small")
-        self.assertIn("local only", storage.check(self.repo, staged=True)[0])
+        self.add("docs/reports/evidence/tiny.zip", b"PK\x03\x04small")
+        issues = storage.check(self.repo, staged=True)
+        self.assertEqual(len(issues), 2)
+        self.assertTrue(all("local only" in issue for issue in issues))
 
     def test_lfs_pointer_and_nested_archive_are_also_rejected(self):
         self.add("research/evidence/nested/data.zip", POINTER)
-        self.assertTrue(storage.check(self.repo, staged=True))
+        self.add("docs/reports/evidence/nested/data.zip", POINTER)
+        self.assertEqual(len(storage.check(self.repo, staged=True)), 2)
         self.commit()
-        self.assertTrue(storage.check(self.repo, base=self.base))
+        self.assertEqual(len(storage.check(self.repo, base=self.base)), 2)
 
     def test_small_witnesses_and_summary_stay_plain_git(self):
-        for path in ("research/evidence/witness.gxw", "research/evidence/screen.png", "research/results/summary.json"):
+        for path in ("research/evidence/witness.gxw", "research/evidence/screen.png",
+                     "docs/reports/evidence/summary.json", "research/results/summary.json"):
             self.add(path, b"small witness")
         self.commit()
         self.assertEqual(storage.check(self.repo, base=self.base), [])
@@ -143,7 +148,7 @@ class RepositoryStorageTests(unittest.TestCase):
     def test_git_attributes_disable_evidence_lfs_and_preserve_knowledge(self):
         policy = Path(__file__).resolve().parents[1]
         self.add(".gitattributes", (policy / ".gitattributes").read_bytes())
-        for path, expected in (("research/evidence/top.zip", "unset"), ("research/evidence/deep/a.zip", "unset"), ("research/evidence/witness.gxw", "unset"), ("research/results/summary.json", "unspecified"), ("research/results/raw/trace.json", "unset"), ("resources/knowledge/database.sqlite", "lfs")):
+        for path, expected in (("research/evidence/top.zip", "unset"), ("research/evidence/deep/a.zip", "unset"), ("docs/reports/evidence/top.zip", "unset"), ("research/evidence/witness.gxw", "unset"), ("research/results/summary.json", "unspecified"), ("research/results/raw/trace.json", "unset"), ("resources/knowledge/database.sqlite", "lfs")):
             with self.subTest(path=path):
                 result = self.git("check-attr", "filter", "--", path).decode()
                 self.assertTrue(result.rstrip().endswith(": " + expected))
@@ -153,14 +158,15 @@ class RepositoryStorageTests(unittest.TestCase):
         self.add(".gitignore", (policy / ".gitignore").read_bytes())
         for path in ("research/evidence/a.zip", "research/evidence/nested/a.ZIP",
                      "research/evidence/a.tar.gz", "research/evidence/a.7z",
-                     "research/evidence/a.rar", "research/results/raw/data.json"):
+                     "research/evidence/a.rar", "docs/reports/evidence/nested/a.ZIP",
+                     "research/results/raw/data.json"):
             with self.subTest(path=path):
                 target = self.repo / path
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(b"local evidence")
                 self.assertTrue(self.git("check-ignore", "--", path))
                 self.git("add", "--force", "--", path)
-        self.assertEqual(len(storage.check(self.repo, staged=True)), 6)
+        self.assertEqual(len(storage.check(self.repo, staged=True)), 7)
 
     def test_unchanged_archive_in_index_cannot_be_hidden_by_other_staged_files(self):
         self.add("research/evidence/legacy.zip", POINTER)
@@ -255,6 +261,7 @@ class DocumentationEvidenceStorageTests(unittest.TestCase):
 
     def test_missing_and_present_local_evidence_are_excluded_from_releases(self):
         paths = ("research/evidence/nested/a.ZIP", "research/evidence/a.tar.gz",
+                 "docs/reports/evidence/validation.zip",
                  "research/results/raw/trace.json", "research/results/raw")
         for present in (False, True):
             with self.subTest(present=present):

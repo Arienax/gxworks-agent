@@ -5,4 +5,5 @@ resources/knowledge/*.npz filter=lfs diff=lfs merge=lfs -text
 research/results/gxworks_validation.json text eol=lf
 # Evidence packages and bulk raw results are local only, including with global LFS rules.
 research/evidence/** -filter !diff !merge
+docs/reports/evidence/** -filter !diff !merge
 research/results/raw/** -filter !diff !merge

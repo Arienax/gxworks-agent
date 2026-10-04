@@ -99,6 +99,18 @@ dist-web/
 /research/evidence/**/*.[tT][bB][zZ]
 /research/evidence/**/*.[tT][bB][zZ][2]
 /research/evidence/**/*.[tT][xX][zZ]
+/docs/reports/evidence/**/*.[zZ][iI][pP]
+/docs/reports/evidence/**/*.[7][zZ]
+/docs/reports/evidence/**/*.[rR][aA][rR]
+/docs/reports/evidence/**/*.[tT][aA][rR]
+/docs/reports/evidence/**/*.[gG][zZ]
+/docs/reports/evidence/**/*.[bB][zZ][2]
+/docs/reports/evidence/**/*.[xX][zZ]
+/docs/reports/evidence/**/*.[zZ][sS][tT]
+/docs/reports/evidence/**/*.[tT][gG][zZ]
+/docs/reports/evidence/**/*.[tT][bB][zZ]
+/docs/reports/evidence/**/*.[tT][bB][zZ][2]
+/docs/reports/evidence/**/*.[tT][xX][zZ]
 /research/results/raw/
 
 # Model capability observations are local runtime data, not source files.

@@ -33,7 +33,7 @@ def commit_id(repo: Path, ref: str) -> str:
 def is_local_only_evidence(path: str) -> bool:
     path = path.casefold()
     return path.startswith("research/results/raw/") or (
-        path.startswith("research/evidence/")
+        path.startswith(("research/evidence/", "docs/reports/evidence/"))
         and path.lower().endswith(ARCHIVE_SUFFIXES)
     )
 
