@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   storage:
-    name: Git object size and local evidence policy (${{ matrix.os }})
+    name: Git object size and evidence LFS policy (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:

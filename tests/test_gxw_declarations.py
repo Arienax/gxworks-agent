@@ -3,7 +3,7 @@ from dataclasses import replace
 import json
 from pathlib import Path
 import struct
-from tests.local_evidence import open_evidence_archive
+import zipfile
 
 import pytest
 
@@ -27,7 +27,7 @@ def document(case="dtypes", logical="1.Labels.lh"):
 
 
 def baseline(case):
-    with open_evidence_archive(ROOT / "research/evidence/gxw-20260910.zip") as archive:
+    with zipfile.ZipFile(ROOT / "research/evidence/gxw-20260910.zip") as archive:
         return archive.read(case + ".gxw")
 
 

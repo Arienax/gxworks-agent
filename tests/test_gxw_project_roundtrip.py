@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import runpy
 import struct
-from tests.local_evidence import open_evidence_archive
+import zipfile
 
 import pytest
 
@@ -100,7 +100,7 @@ def test_reproduction_controls_match_recorded_project_bytes(mode, source, target
     from gxw.project_writer import build_gxw_project
     from gxw.structured_pou import parse_structured_pou as parse_for_cli
 
-    with open_evidence_archive(root / "research/evidence/gxw-20260910.zip") as archive:
+    with zipfile.ZipFile(root / "research/evidence/gxw-20260910.zip") as archive:
         baseline = archive.read(source + ".gxw")
         expected = archive.read(target + ".gxw")
     assert hashlib.sha256(baseline).hexdigest() == FIXTURE[source]["gxw_sha256"]

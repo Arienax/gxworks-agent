@@ -58,7 +58,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-          lfs: true
+          lfs: false
       - name: Detect pull-request generation scope
         id: scope
         shell: bash
@@ -82,6 +82,8 @@ jobs:
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
+      - uses: ./.github/actions/checkout-lfs
+        if: steps.scope.outputs.run == 'true'
       - uses: actions/setup-python@v5
         if: steps.scope.outputs.run == 'true'
         with:

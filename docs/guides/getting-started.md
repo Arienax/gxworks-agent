@@ -10,7 +10,6 @@
 git clone https://github.com/Arienax/gxworks-agent.git
 cd gxworks-agent
 git lfs install --local
-git config --local core.hooksPath .githooks
 git lfs pull
 .\build-web.bat --no-pause
 .\start-web.cmd

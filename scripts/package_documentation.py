@@ -1,9 +1,8 @@
 """Stage public documentation and inert source references for a release directory.
 
 This module copies documentation only. It does not build, start or configure the
-application. Local evidence packages and raw results are excluded. Distributed
-witness and license bytes are retained; source excerpts are copied as .txt so
-they cannot become importable application modules.
+application. Original evidence and license bytes are retained; source excerpts
+are copied as .txt so they cannot become importable application modules.
 """
 from __future__ import annotations
 
@@ -14,11 +13,6 @@ import os
 from pathlib import Path
 import re
 from urllib.parse import unquote, urlsplit
-
-if __package__:
-    from .check_repository_storage import is_local_only_evidence
-else:
-    from check_repository_storage import is_local_only_evidence
 
 LINK = re.compile(r"(?<!!)\[([^\]\n]*)\]\(([^\s)]+)\)")
 PUBLIC_READMES = (
@@ -45,11 +39,9 @@ def stage_documentation(root: Path, destination: Path) -> dict:
         resolved = path.resolve()
         if not resolved.is_relative_to(root):
             raise ValueError(f"Documentation link leaves the source tree: {path}")
+        if not resolved.exists():
+            raise FileNotFoundError(f"Documentation source is missing: {path}")
         return resolved
-
-    def local_evidence(source: Path) -> bool:
-        rel = source.relative_to(root).as_posix()
-        return rel.casefold() == "research/results/raw" or is_local_only_evidence(rel)
 
     def record(source: Path, out: Path, data: bytes, kind: str) -> None:
         target = destination / out
@@ -70,8 +62,7 @@ def stage_documentation(root: Path, destination: Path) -> dict:
             out = Path("docs/source") / rel / "index.md"
             listing = "# Source directory\n\n`" + rel.as_posix() + "`\n\n"
             listing += "\n".join("- `" + p.name + ("/" if p.is_dir() else "") + "`"
-                                 for p in sorted(source.iterdir())
-                                 if not p.name.startswith(".") and not local_evidence(p)) + "\n"
+                                 for p in sorted(source.iterdir()) if not p.name.startswith(".")) + "\n"
             record(source, out, listing.encode("utf-8"), "directory-index")
         else:
             if source.suffix.lower() in {".ttf", ".otf", ".woff", ".woff2"}:
@@ -97,10 +88,6 @@ def stage_documentation(root: Path, destination: Path) -> dict:
             if parsed.scheme or parsed.netloc or not parsed.path:
                 return match.group(0)
             linked = source_path(source.parent / unquote(parsed.path))
-            if local_evidence(linked):
-                return label + " (local evidence: `" + linked.relative_to(root).as_posix() + "`)"
-            if not linked.exists():
-                raise FileNotFoundError(f"Documentation source is missing: {linked}")
             target = reference(linked)
             relative = Path(os.path.relpath(target, out.parent)).as_posix()
             if parsed.fragment:

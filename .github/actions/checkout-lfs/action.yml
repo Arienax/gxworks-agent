@@ -1,0 +1,50 @@
+name: Cached Git LFS checkout
+description: Restore shared LFS objects before downloading and checking out missing objects.
+
+inputs:
+  token:
+    description: Repository token used only while fetching missing LFS objects.
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Identify the current LFS object set
+      id: objects
+      shell: bash
+      run: |
+        set -euo pipefail
+        git lfs install --local
+        fingerprint="$(git lfs ls-files --long | awk '{print $1}' | LC_ALL=C sort -u | sha256sum | awk '{print $1}')"
+        echo "key=lfs-v1-${fingerprint}" >> "$GITHUB_OUTPUT"
+
+    - name: Restore LFS objects
+      id: cache
+      uses: actions/cache/restore@v4
+      with:
+        path: .git/lfs/objects
+        key: ${{ steps.objects.outputs.key }}
+        restore-keys: lfs-v1-
+        enableCrossOsArchive: true
+
+    - name: Fetch missing LFS objects and populate files
+      shell: bash
+      env:
+        LFS_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+        authorization="$(printf 'x-access-token:%s' "$LFS_TOKEN" | base64 | tr -d '\r\n')"
+        echo "::add-mask::$authorization"
+        GIT_CONFIG_COUNT=1 \
+          GIT_CONFIG_KEY_0="http.${GITHUB_SERVER_URL}/.extraheader" \
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $authorization" \
+          git lfs fetch origin HEAD
+        git lfs checkout
+
+    - name: Save LFS objects before running validation
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: .git/lfs/objects
+        key: ${{ steps.objects.outputs.key }}
+        enableCrossOsArchive: true

@@ -17,6 +17,7 @@ on:
       - 'requirements.txt'
       - 'requirements/**'
       - '.github/workflows/**'
+      - '.github/actions/**'
   push:
     branches: [main]
   release:
@@ -31,8 +32,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lfs-cache:
+    name: Prepare shared LFS cache
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          lfs: false
+      - uses: ./.github/actions/checkout-lfs
+
   regression:
     name: Full headless suite and MCP smoke
+    needs: lfs-cache
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -40,7 +53,8 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-          lfs: true
+          lfs: false
+      - uses: ./.github/actions/checkout-lfs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -125,6 +139,7 @@ jobs:
 
   web:
     name: Web contract, browser tests and build
+    needs: lfs-cache
     if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-validation')
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -132,7 +147,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          lfs: true
+          lfs: false
+      - uses: ./.github/actions/checkout-lfs
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -168,6 +184,7 @@ jobs:
 
   web-package:
     name: Windows Web and MCP package smoke
+    needs: lfs-cache
     if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-validation')
     runs-on: windows-latest
     timeout-minutes: 25
@@ -175,7 +192,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          lfs: true
+          lfs: false
+      - uses: ./.github/actions/checkout-lfs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -214,6 +232,7 @@ jobs:
 
   context-replay:
     name: Typed context and offline promptfoo replay
+    needs: lfs-cache
     if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-validation')
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -225,7 +244,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          lfs: true
+          lfs: false
+      - uses: ./.github/actions/checkout-lfs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'

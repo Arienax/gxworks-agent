@@ -1,2 +1,0 @@
-#!/bin/sh
-exec python scripts/check_repository_storage.py --pre-push "$@"

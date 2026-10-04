@@ -3,7 +3,7 @@ import importlib
 import json
 from pathlib import Path
 import struct
-from tests.local_evidence import open_evidence_archive, require_evidence_path
+import zipfile
 
 import pytest
 
@@ -19,8 +19,8 @@ def test_call_tree_primitive_reads_and_whole_native_component_replays(monkeypatc
     monkeypatch.syspath_prepend(str(ROOT / "research"))
     oracle = importlib.import_module("native_gxw_archive")
     manifest = json.loads((ROOT / "research/results/token-20260919/calltree-manifest.json").read_text())
-    assert sha256(require_evidence_path(ARCHIVE).read_bytes()) == manifest["archive_sha256"]
-    with open_evidence_archive(ARCHIVE) as z:
+    assert sha256(ARCHIVE.read_bytes()) == manifest["archive_sha256"]
+    with zipfile.ZipFile(ARCHIVE) as z:
         for member, expected in manifest["files"].items():
             assert sha256(z.read(member)) == expected["sha256"]
         cases = json.loads(z.read("calltree-scan/manifest.json"))
@@ -49,7 +49,7 @@ def test_call_tree_primitive_reads_and_whole_native_component_replays(monkeypatc
 
 def test_call_tree_keeps_disagreeing_forward_and_reverse_names():
     digest = "4069c7b618031a81e7a8155b835c2268da66af330c86e9362b6dab1ca787dd98"
-    with open_evidence_archive(ARCHIVE) as z:
+    with zipfile.ZipFile(ARCHIVE) as z:
         raw = z.read(f"calltree-scan/{digest}.bin")
         saved = z.read(f"native-calltree-replay-corpus/{digest}/native-save.dat")
     for value in (raw, saved):
@@ -66,7 +66,7 @@ def test_call_tree_keeps_disagreeing_forward_and_reverse_names():
 def test_call_tree_native_save_is_not_an_opaque_preserving_writer(monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT / "research"))
     compare = importlib.import_module("native_gxw_archive").compare_call_tree_replay
-    with open_evidence_archive(ARCHIVE) as z:
+    with zipfile.ZipFile(ARCHIVE) as z:
         raw = z.read("native-calltree-opaque-control/input.bin")
         saved = z.read("native-calltree-opaque-control/native-save.dat")
     tree = parse_compiler_call_tree(raw)
@@ -85,7 +85,7 @@ def test_call_tree_native_save_is_not_an_opaque_preserving_writer(monkeypatch):
 def test_archive_length_encodings_match_native_and_remain_lossless(monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT / "research"))
     plan = importlib.import_module("native_gxw_archive").call_tree_plan
-    with open_evidence_archive(ARCHIVE) as z:
+    with zipfile.ZipFile(ARCHIVE) as z:
         raw = z.read("native-archive-string-controls/input.bin")
         observations = [json.loads(s) for s in z.read("native-archive-string-controls/native-reads.jsonl").splitlines()]
     tree = parse_compiler_call_tree(raw)

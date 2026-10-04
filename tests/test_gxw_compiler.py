@@ -4,7 +4,7 @@ import importlib
 import json
 from pathlib import Path
 import struct
-from tests.local_evidence import open_evidence_archive
+import zipfile
 
 import pytest
 
@@ -130,7 +130,7 @@ def test_callsite_input_unknown_shapes_remain_opaque(change, monkeypatch):
 
 
 def test_native_link_empty_name_placeholder_is_preserved():
-    with open_evidence_archive(REPLAY_ARCHIVE) as archive:
+    with zipfile.ZipFile(REPLAY_ARCHIVE) as archive:
         raw = archive.read("two-programs-1/1-2-chained/MAIN.map")
     mapping = parse_compiler_link_map(raw)
     assert mapping.reconstruct() == raw
@@ -150,7 +150,7 @@ def test_native_link_empty_name_placeholder_is_preserved():
 
 def test_native_source_prediction_matches_real_gxw_patch_compile():
     from gxw.lossless import patch_structured_symbol_equal_size, sha256
-    with open_evidence_archive(REPLAY_ARCHIVE) as archive:
+    with zipfile.ZipFile(REPLAY_ARCHIVE) as archive:
         prefix = "gui-mutated-compiler-project/"
         before = archive.read(prefix + "baseline-before-patch.gxw")
         expected = archive.read(prefix + "patched-before-native.gxw")
@@ -194,7 +194,7 @@ def test_compiler_fragments_need_no_end_but_complete_programs_still_do():
 def test_compiler_link_membership_keeps_renamed_unlinked_aliases(monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT / "research"))
     inspect = importlib.import_module("inspect_gxw_compiler").inspect_storage
-    with open_evidence_archive(ARCHIVE) as z:
+    with zipfile.ZipFile(ARCHIVE) as z:
         scan = json.loads(z.read("artifact-scan/compiler-storage.json"))
         native = json.loads(z.read("public-scan/compiler-storage.json"))["fragments"]
         checked = 0
@@ -230,7 +230,7 @@ def test_compiler_link_membership_keeps_renamed_unlinked_aliases(monkeypatch):
 def test_compiler_tables_match_native_names_offsets_instances_and_replay(monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT / "research"))
     compare = importlib.import_module("native_gxw_compiler").compare_table_dump
-    with open_evidence_archive(ARCHIVE) as z:
+    with zipfile.ZipFile(ARCHIVE) as z:
         observations = json.loads(z.read("native-table-corpus/report.json"))
         components = instances = 0
         for case in observations:
@@ -255,7 +255,7 @@ def test_compiler_tables_match_native_names_offsets_instances_and_replay(monkeyp
 
 
 def test_compiler_table_unknown_records_survive_and_bad_references_fail():
-    with open_evidence_archive(ARCHIVE) as z:
+    with zipfile.ZipFile(ARCHIVE) as z:
         raw = z.read("CGTable.dat")
     assert raw[:4] == b"\0" * 4
     opaque = struct.pack("<II", 7, 3) + b"xyz" + raw[4:]
@@ -278,7 +278,7 @@ def test_compiler_table_unknown_records_survive_and_bad_references_fail():
 
 
 def test_compiler_debug_keeps_offset_tables_unlinked_elements_and_unknown_tail():
-    with open_evidence_archive(ARCHIVE) as z:
+    with zipfile.ZipFile(ARCHIVE) as z:
         artifacts = json.loads(z.read("artifact-scan/compiler-storage.json"))["compiler_artifacts"]
         cases = [base64.b64decode(a["raw_base64"]) for a in artifacts.values() if a["kind"] == "DebugInformation2.dat"]
         assert len(cases) == 15
@@ -374,7 +374,7 @@ def test_st_coordinates_keep_uninterpreted_row_fields():
 def test_compiler_component_fields_match_native_reads_and_global_indirection(monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT / "research"))
     compare = importlib.import_module("native_gxw_compiler").compare_component_reads
-    with open_evidence_archive(COMPONENT_ARCHIVE) as z:
+    with zipfile.ZipFile(COMPONENT_ARCHIVE) as z:
         count = 0
         for i in range(12):
             prefix = f"native-component-corpus/{i}/"
@@ -452,7 +452,7 @@ def test_global_fb_reference_corruption_remains_visible(reference, error):
 
 def test_compiler_assignment_native_text_does_not_turn_zero_into_x0():
     from gxw.compiler_assignment import parse_compiler_assignment
-    with open_evidence_archive(SYMBOL_ARCHIVE) as z:
+    with zipfile.ZipFile(SYMBOL_ARCHIVE) as z:
         rows = [json.loads(s) for s in z.read("native-assignment-corpus/outputs.jsonl").splitlines()]
     decoded = unassigned = 0
     for row in rows:
@@ -603,7 +603,7 @@ def test_compiler_address_and_array_values_match_native_objects(monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT / "research"))
     oracle = importlib.import_module("native_gxw_compiler")
     addresses = arrays = references = 0
-    with open_evidence_archive(SYMBOL_ARCHIVE) as z:
+    with zipfile.ZipFile(SYMBOL_ARCHIVE) as z:
         for i in range(12):
             prefix = f"native-array-corpus/{i}/"
             raw = z.read(prefix + "CGTable.dat")
@@ -637,7 +637,7 @@ def test_compiler_address_and_array_values_match_native_objects(monkeypatch):
 def test_compiler_array_native_acceptance_preserves_inconsistent_counts(monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT / "research"))
     compare = importlib.import_module("native_gxw_compiler").compare_array_reads
-    with open_evidence_archive(SYMBOL_ARCHIVE) as z:
+    with zipfile.ZipFile(SYMBOL_ARCHIVE) as z:
         prefix = "native-array-controls/"
         raw = z.read(prefix + "CGTable.dat")
         rows = [json.loads(s) for s in z.read(prefix + "native-arrays.jsonl").splitlines()]
@@ -671,7 +671,7 @@ def test_compiler_array_native_acceptance_preserves_inconsistent_counts(monkeypa
 def test_compiler_symbol_paths_and_timer_aliases_survive_instruction_links():
     from gxw.compiler_symbols import compiler_symbols, compiler_symbol_paths, compiler_operand_occurrences
     from gxw.token_listing import decode_token_program
-    with open_evidence_archive(SYMBOL_ARCHIVE) as z:
+    with zipfile.ZipFile(SYMBOL_ARCHIVE) as z:
         scan = json.loads(z.read("symbol-array-scan/compiler-storage.json"))
     match = next(x for x in scan["symbol_cross_references"] if x["storage_sha256"] ==
                  "73912bb8b92bf6fea01c3ee00d3cde8bac7d436a06384a91cd66d5951b45ce81")
@@ -715,7 +715,7 @@ def test_source_declarations_expose_cached_fb_type_until_native_recompile():
 
     # Existing native GUI compile evidence: TOF source declaration with the
     # old TON compiler cache; successful native compile produces a TOF cache.
-    with open_evidence_archive(ROOT / "research/evidence/gxw-20260910.zip") as z:
+    with zipfile.ZipFile(ROOT / "research/evidence/gxw-20260910.zip") as z:
         before, after = z.read("t2.gxw"), z.read("t2c.gxw")
     assert sha256(before) == "ff7ed97c1275913beca2764e0429d33cb25013283bf34cd81da34ce9b9cd8e24"
     assert sha256(after) == "2b3c0b6bb2565be28aa2cf1826ff251dc1ed0105d227dc84a5606952b106afc9"
@@ -738,7 +738,7 @@ def test_source_added_declarations_bind_only_after_archived_native_compile():
     from gxw.compiler_symbols import compiler_declaration_bindings
     from gxw.declarations import parse_declarations
     from gxw.lossless import inspect_project
-    with open_evidence_archive(ROOT / "research/evidence/gxw-generation-20260910.zip") as z:
+    with zipfile.ZipFile(ROOT / "research/evidence/gxw-generation-20260910.zip") as z:
         cases = [z.read(name) for name in ("auto_decl.gxw", "auto_decl_compile.gxw")]
     states = []
     for raw in cases:
@@ -761,7 +761,7 @@ def test_source_added_declarations_bind_only_after_archived_native_compile():
 def test_current_code_checks_preserve_stale_reads_incomplete_diagnostics_and_empty_tasks(monkeypatch, name):
     monkeypatch.syspath_prepend(str(ROOT/'research'))
     from program_check_evidence import analyze_check
-    with open_evidence_archive(ROOT/'research/evidence/gxw-fbd-application-v2-20261002.zip') as archive:
+    with zipfile.ZipFile(ROOT/'research/evidence/gxw-fbd-application-v2-20261002.zip') as archive:
         case = next(row for row in json.loads(archive.read('check-witnesses.json')) if row['case']==name)
     generated = {tuple(row['id']): tuple(base64.b64decode(b) for b in row['channels_base64'])
                  for row in case['generated']}
@@ -1269,14 +1269,11 @@ def test_native_source_chain_status_is_independent_of_required_order_and_unrelat
 
 
 def diagnostic_source_witnesses():
-    with open_evidence_archive(ROOT/'research/evidence/gxw-native-diagnostic-sources-20261002.zip') as archive:
+    with zipfile.ZipFile(ROOT/'research/evidence/gxw-native-diagnostic-sources-20261002.zip') as archive:
         return json.loads(archive.read('cpu-source-witnesses.json'))
 
 
-@pytest.mark.parametrize('case',
-    diagnostic_source_witnesses() if (ROOT / 'research/evidence/gxw-native-diagnostic-sources-20261002.zip').exists()
-    else [pytest.param(None, marks=pytest.mark.skip(reason='Local research evidence required: gxw-native-diagnostic-sources-20261002.zip'))],
-    ids=lambda case: case['cpu'] if case is not None else 'missing-local-evidence')
+@pytest.mark.parametrize('case', diagnostic_source_witnesses(), ids=lambda case: case['cpu'])
 def test_native_fb_diagnostics_correlate_only_unique_current_instance_ranges(monkeypatch, case):
     monkeypatch.syspath_prepend(str(ROOT/'research'))
     from program_check_evidence import correlate_st_diagnostic
@@ -1338,7 +1335,7 @@ def test_diagnostic_source_mapping_keeps_missing_and_ambiguous_evidence_unresolv
 
 
 def test_native_debug_range_rejection_keeps_original_error_and_does_not_replace_public_check():
-    with open_evidence_archive(ROOT/'research/evidence/gxw-native-diagnostic-sources-20261002.zip') as archive:
+    with zipfile.ZipFile(ROOT/'research/evidence/gxw-native-diagnostic-sources-20261002.zip') as archive:
         cases = json.loads(archive.read('native-debug-boundary.json'))
     assert len(cases) == 3
     for case in cases:

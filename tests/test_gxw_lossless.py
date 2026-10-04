@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import runpy
 import struct
-from tests.local_evidence import open_evidence_archive, require_evidence_path
+import zipfile
 
 import pytest
 
@@ -211,7 +211,7 @@ def test_sfc_source_unknown_graph_and_malformed_children_remain_raw(change):
 
 def test_q_real_source_corpus_matches_independent_native_text_and_preserves_every_byte():
     oracle = runpy.run_path(str(ROOT / "research/native_gxw_tokens.py"))["native_il_projection"]
-    with open_evidence_archive(Q_EVIDENCE) as archive:
+    with zipfile.ZipFile(Q_EVIDENCE) as archive:
         manifest = json.loads(archive.read("manifest.json"))
         for member in manifest["files"]:
             assert sha256(archive.read(member["path"])) == member["sha256"]
@@ -261,7 +261,7 @@ def reverse_q_boundaries(raw, source):
 ])
 def test_q_lexical_controls_replay_native_successes_and_version_dependent_failures(control, accepted, rejected):
     oracle = runpy.run_path(str(ROOT / "research/native_gxw_tokens.py"))["native_il_projection"]
-    with open_evidence_archive(Q_EVIDENCE) as archive:
+    with zipfile.ZipFile(Q_EVIDENCE) as archive:
         prefix = "controls/" + control + "/native-decode/"
         requests = json.loads(archive.read(prefix + "requests.json"))["requests"]
         answers = [json.loads(s) for s in archive.read(prefix + "native-stdout.jsonl").splitlines()]
@@ -338,7 +338,7 @@ def test_q_profile_is_explicit_and_text_never_uses_the_host_codepage():
 ])
 def test_q02_cpu_rules_and_float_display_match_independent_native_controls(control, profile, accepted, rejected):
     oracle = runpy.run_path(str(ROOT / "research/native_gxw_tokens.py"))["native_il_projection"]
-    with open_evidence_archive(Q02_EVIDENCE) as archive:
+    with zipfile.ZipFile(Q02_EVIDENCE) as archive:
         manifest = json.loads(archive.read("manifest.json"))
         prefix = "controls/" + control + "/"
         for member in manifest["files"]:
@@ -364,7 +364,7 @@ def test_q02_cpu_rules_and_float_display_match_independent_native_controls(contr
 
 def test_q02_descriptor_catalog_matches_native_queries_and_never_uses_q03_holes():
     catalog = json.loads((ROOT / "src/gxw/templates/q02-token-grammar.json").read_text(encoding="utf-8"))
-    with open_evidence_archive(Q02_EVIDENCE) as archive:
+    with zipfile.ZipFile(Q02_EVIDENCE) as archive:
         rows = [json.loads(line) for line in archive.read("descriptors/34/native-stdout.jsonl").splitlines()]
     assert len(rows) == 31110
     assert catalog["headers"] == {f"{r['family']:02x}:{r['variant']:02x}": [r["name"], bytes.fromhex(r["descriptor_hex"])[4]]
@@ -393,7 +393,7 @@ def test_q_float_native_display_does_not_replace_raw_value_or_negative_zero():
 
 @pytest.mark.parametrize("change", ["length", "terminator", "utf16", "prefix", "truncated"])
 def test_project_text_context_rejects_broken_metadata_without_guessing_a_cpu(change):
-    with open_evidence_archive(Q_EVIDENCE) as archive:
+    with zipfile.ZipFile(Q_EVIDENCE) as archive:
         case = json.loads(archive.read("manifest.json"))["programs"][0]
         raw = bytearray(archive.read(case["native_prefix"].removesuffix("/native") + "/metadata.prj"))
     context = read_project_text_context(raw)
@@ -455,7 +455,7 @@ def test_compile_option_gaps_are_explicit_instead_of_guessing_source_binding(dam
 def test_project_context_keeps_unknown_codepages_and_cpus_explicit():
     from types import SimpleNamespace
 
-    with open_evidence_archive(Q_EVIDENCE) as archive:
+    with zipfile.ZipFile(Q_EVIDENCE) as archive:
         case = json.loads(archive.read("manifest.json"))["programs"][0]
         raw = bytearray(archive.read(case["native_prefix"].removesuffix("/native") + "/metadata.prj"))
     offset = read_project_text_context(raw)["codepage_offset"]
@@ -473,7 +473,7 @@ def test_project_context_keeps_unknown_codepages_and_cpus_explicit():
 
 
 def test_q_project_scan_and_cli_select_the_source_cpu_and_encoding(tmp_path):
-    with open_evidence_archive(ROOT / "research/evidence/gxw-callsite-inputs-20260927.zip") as archive:
+    with zipfile.ZipFile(ROOT / "research/evidence/gxw-callsite-inputs-20260927.zip") as archive:
         source = archive.read("research/experiments/sfc-graph-20260926/public-corpus-discovery/samples/scpi-SCPI_FB.gxw")
     report = HARNESS["analyze"](source)
     assert report["token_context"]["token_profile"] == "q03udv"
@@ -494,7 +494,7 @@ def test_q_project_scan_and_cli_select_the_source_cpu_and_encoding(tmp_path):
 
 @pytest.mark.parametrize("tail_bytes", [0, 110, 111, 112, 511, 512])
 def test_native_nested_container_requires_payload_but_not_unused_sector_tail(tail_bytes):
-    with open_evidence_archive(ROOT / "research/evidence/gxw-partial-sector-20260927.zip") as archive:
+    with zipfile.ZipFile(ROOT / "research/evidence/gxw-partial-sector-20260927.zip") as archive:
         source = archive.read("native/native-saved.gxw")
         expected = archive.read("native/compiler_DZComp/CGTable.dat")
         manifest = json.loads(archive.read("manifest.json"))
@@ -524,7 +524,7 @@ def token_envelope(body):
 
 
 def splice_fixture(key):
-    with open_evidence_archive(ROOT / "research/evidence/gxw-record-splice-20260920.zip") as z:
+    with zipfile.ZipFile(ROOT / "research/evidence/gxw-record-splice-20260920.zip") as z:
         folder = "native" if key == "c" else "u-native"
         report = json.loads(z.read(f"splice/{folder}/patch.json"))
         edits = tuple(TokenRecordSplice(e["old_offset"], bytes.fromhex(e["old_raw_hex"]),
@@ -621,7 +621,7 @@ def test_explicit_opaque_deletion_cannot_rebind_a_neighboring_instruction():
 
 def test_native_string_headers_decode_by_identity_without_new_exact_observations():
     from gxw.token_pou import _NATIVE_ENCODINGS
-    with open_evidence_archive(ROOT / "research/evidence/gxw-record-splice-20260920.zip") as z:
+    with zipfile.ZipFile(ROOT / "research/evidence/gxw-record-splice-20260920.zip") as z:
         cases = json.loads(z.read("header-grammar/strings/probes.json"))["cases"]
     novel = set()
     for case in cases:
@@ -634,7 +634,7 @@ def test_native_string_headers_decode_by_identity_without_new_exact_observations
 
 
 def test_timer_counter_header_shapes_keep_distinct_native_operand_bindings():
-    with open_evidence_archive(ROOT / "research/evidence/gxw-step-width-20260920.zip") as z:
+    with zipfile.ZipFile(ROOT / "research/evidence/gxw-step-width-20260920.zip") as z:
         cases = json.loads(z.read("timer-controls/probes.json"))["cases"]
         saved = z.read("g.gxw")
         native_csv = z.read("g-reopened.csv")
@@ -655,7 +655,7 @@ def test_timer_counter_header_shapes_keep_distinct_native_operand_bindings():
 
 def test_native_width_rejections_remain_distinct_from_editor_check_acceptance():
     manifest = json.loads((ROOT / "research/results/token-20260919/step-width-manifest.json").read_text("utf-8"))
-    with open_evidence_archive(ROOT / manifest["archive"]) as z:
+    with zipfile.ZipFile(ROOT / manifest["archive"]) as z:
         checks = json.loads(z.read("corpus-checks.json"))
         controls = json.loads(z.read("width-control-checks.json"))
         saved = z.read("b.gxw")
@@ -671,7 +671,7 @@ def test_native_width_rejections_remain_distinct_from_editor_check_acceptance():
 
 
 def test_public_machinecode_export_proof_is_independent_of_stored_step_widths():
-    with open_evidence_archive(ROOT / "research/evidence/gxw-machinecode-20260920.zip") as z:
+    with zipfile.ZipFile(ROOT / "research/evidence/gxw-machinecode-20260920.zip") as z:
         requests = json.loads(z.read("native-project-controls/requests.json"))["requests"]
         results = [json.loads(line) for line in z.read("native-project-controls/native-stdout.jsonl").splitlines()]
         mutants = json.loads(z.read("width-checks.json"))
@@ -710,7 +710,7 @@ def recorded_roundtrip_oracle(monkeypatch, archive, prefix, mutate=None):
 
 
 def test_machine_roundtrip_replays_exact_normalized_text_loss_and_rejection(monkeypatch, tmp_path):
-    with open_evidence_archive(ROOT / "research/evidence/gxw-machine-roundtrip-20260920.zip") as z:
+    with zipfile.ZipFile(ROOT / "research/evidence/gxw-machine-roundtrip-20260920.zip") as z:
         module = recorded_roundtrip_oracle(monkeypatch, z, "controls")
         cases = json.loads(z.read("controls/cases.json"))
         observed = module.roundtrip_bodies(cases, tmp_path / "controls")
@@ -749,7 +749,7 @@ def test_new_encoding_guard_rejects_native_error_truncation_and_machine_change(m
             changed = bytearray(base64.b64decode(rows[0]["output_base64"]))
             changed[-1] ^= 1
             rows[0]["output_base64"] = base64.b64encode(changed).decode()
-    with open_evidence_archive(ROOT / "research/evidence/gxw-machine-roundtrip-20260920.zip") as z:
+    with zipfile.ZipFile(ROOT / "research/evidence/gxw-machine-roundtrip-20260920.zip") as z:
         module = recorded_roundtrip_oracle(monkeypatch, z, prefix, mutate)
         body = base64.b64decode(json.loads(z.read(f"{prefix}/cases.json"))[0]["body_base64"])
         with pytest.raises(ValueError, match="native machinecode roundtrip rejected"):
@@ -761,7 +761,7 @@ def test_new_encoding_guard_rejects_native_error_truncation_and_machine_change(m
 @pytest.mark.parametrize("operation", ["generate", "patch"])
 def test_new_instruction_workflows_reject_missing_timer_preset_before_composition(monkeypatch, tmp_path, operation):
     import importlib
-    with open_evidence_archive(ROOT / "research/evidence/gxw-machine-roundtrip-20260920.zip") as z:
+    with zipfile.ZipFile(ROOT / "research/evidence/gxw-machine-roundtrip-20260920.zip") as z:
         prefix = operation + "-incomplete"
         recorded_roundtrip_oracle(monkeypatch, z, prefix + "/machinecode-roundtrip")
         name = "generate_native_token_project" if operation == "generate" else "patch_native_token_instructions"
@@ -777,7 +777,7 @@ def test_new_instruction_workflows_reject_missing_timer_preset_before_compositio
         monkeypatch.setattr(module, "_replace_token_program" if operation == "generate" else "patch_token_instructions", should_not_compose)
         with pytest.raises(ValueError, match="native machinecode roundtrip rejected"):
             if operation == "generate":
-                with open_evidence_archive(ROOT / "research/evidence/gxw-step-width-20260920.zip") as seeds:
+                with zipfile.ZipFile(ROOT / "research/evidence/gxw-step-width-20260920.zip") as seeds:
                     seed = seeds.read("empty.gxw")
                 module.generate(seed, sha256(seed), "LD M8000\nOUT T10Z0\nEND", tmp_path / "generate")
             else:
@@ -794,7 +794,7 @@ def test_family_recognition_does_not_guess_unknown_flags_or_zero_width(header):
 
 
 def instruction_patch_fixture(key="a"):
-    with open_evidence_archive(ROOT / "research/evidence/gxw-instruction-patch-20260920.zip") as z:
+    with zipfile.ZipFile(ROOT / "research/evidence/gxw-instruction-patch-20260920.zip") as z:
         source = z.read(key + "/base.gxw")
         report = json.loads(z.read(key + "/patch.json"))
         edits = tuple(TokenInstructionPatch(e["old_offset"], bytes.fromhex(e["old_raw_hex"]),
@@ -979,7 +979,7 @@ def test_control_flow_generation_has_native_csv_label_steps_without_losing_label
     align = runpy.run_path(str(ROOT / "research/align_gxw_tokens.py"))
     oracle = runpy.run_path(str(ROOT / "research/native_gxw_tokens.py"))
     manifest = json.loads((ROOT / "research/results/token-20260919/control-flow-manifest.json").read_text(encoding="utf-8"))
-    with open_evidence_archive(ROOT / manifest["archive"]) as z:
+    with zipfile.ZipFile(ROOT / manifest["archive"]) as z:
         empty, generated, saved = [z.read("samples/" + n) for n in ("empty.gxw", "generated.gxw", "native-saved.gxw")]
         native_csv, controls = z.read("native/reopened.csv"), json.loads(z.read("controls/probe.json"))
     def program(blob):
@@ -1005,7 +1005,7 @@ def test_control_flow_generation_has_native_csv_label_steps_without_losing_label
 
 
 def test_actual_native_patch_retains_old_compiled_code_until_native_conversion():
-    with open_evidence_archive(ROOT / "research/evidence/gxw-lossless-20260919.zip") as z:
+    with zipfile.ZipFile(ROOT / "research/evidence/gxw-lossless-20260919.zip") as z:
         images = [z.read("samples/" + name) for name in ("p.gxw", "p_compile.gxw")]
     readings = []
     for source in images:
@@ -1044,8 +1044,8 @@ def test_native_token_generation_archive_reproduces_cross_allocation_source_byte
     from gxw.lossless import _replace_token_program
     manifest = json.loads((ROOT / "research/results/token-20260919" / manifest_name).read_text(encoding="utf-8"))
     archive = ROOT / manifest["archive"]
-    assert sha256(require_evidence_path(archive).read_bytes()) == manifest["archive_sha256"]
-    with open_evidence_archive(archive) as z:
+    assert sha256(archive.read_bytes()) == manifest["archive_sha256"]
+    with zipfile.ZipFile(archive) as z:
         for name, expected in manifest["files"].items():
             assert sha256(z.read(name)) == expected["sha256"]
         baseline, generated, saved = [z.read("samples/" + name) for name in ("empty.gxw", "generated.gxw", "native-saved.gxw")]
@@ -1355,7 +1355,7 @@ def test_broken_framing_becomes_whole_opaque_stream_never_resynchronizes(offset,
 
 
 def native_source():
-    with open_evidence_archive(ROOT / "research/evidence/gxw-abi-checkpoint-20260919.zip") as z:
+    with zipfile.ZipFile(ROOT / "research/evidence/gxw-abi-checkpoint-20260919.zip") as z:
         return z.read("frozen/set_spaced_compile.gxw")
 
 
@@ -1656,19 +1656,8 @@ def test_writer_rejection_does_not_change_parser_verdict(monkeypatch):
 
 
 def test_all_evidence_manifests_include_nested_archives_and_external_screenshots():
-    for path in (ROOT / "research/results").rglob("*manifest.json"):
-        manifest = json.loads(path.read_text(encoding="utf-8"))
-        archive = manifest.get("archive")
-        if archive and "files" in manifest:
-            name = archive["path"] if isinstance(archive, dict) else archive
-            require_evidence_path(ROOT / name)
-            require_evidence_path(path.parent / name)
     audit = runpy.run_path(str(ROOT / "research/audit_gxw_knowledge.py"))
-    try:
-        reports = audit["verify_evidence_manifests"]()
-    except FileNotFoundError as error:
-        require_evidence_path(error.filename)
-        raise
+    reports = audit["verify_evidence_manifests"]()
     assert len(reports) >= 6
     assert sum(r["verified_members"] for r in reports) >= 95
     assert sum(r["verified_external_screenshots"] for r in reports) == 17
@@ -1686,9 +1675,6 @@ def test_failure_corpus_attestations_are_repo_relative_and_hash_bound():
 
 
 def test_recorded_native_failures_are_kept_even_when_parsing_succeeds():
-    manifest = json.loads((ROOT / "research/corpus/failures.json").read_text(encoding="utf-8"))
-    for case in manifest["cases"]:
-        require_evidence_path(ROOT / case["source"]["path"])
     report = HARNESS["scan"]([ROOT / "research/corpus/failures.json"])
     failures = [f for f in report["failure_index"] if f["stage"] == "compile"]
     assert len(failures) == 3
@@ -1700,8 +1686,8 @@ def test_recorded_native_failures_are_kept_even_when_parsing_succeeds():
 def test_native_patch_attestation_and_archive_bind_exact_reproducible_bytes():
     manifest = json.loads((ROOT / "research/results/lossless-20260919/native-manifest.json").read_text(encoding="utf-8"))
     archive = ROOT / manifest["archive"]
-    assert sha256(require_evidence_path(archive).read_bytes()) == manifest["archive_sha256"]
-    with open_evidence_archive(archive) as z:
+    assert sha256(archive.read_bytes()) == manifest["archive_sha256"]
+    with zipfile.ZipFile(archive) as z:
         for member, expected in manifest["files"].items():
             assert sha256(z.read(member)) == expected["sha256"]
         before, patched, compiled = [z.read("samples/" + name) for name in ("base.gxw", "p.gxw", "p_compile.gxw")]

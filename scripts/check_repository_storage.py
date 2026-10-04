@@ -2,21 +2,24 @@
 
 Only newly introduced blobs are size-limited in a commit range. Every commit
 is examined so an add-then-delete does not hide a large historical object.
-Evidence archives and bulk raw results are local only, even as LFS pointers.
-The pre-push mode checks every outgoing ref before invoking the LFS uploader.
-Checks do not rewrite, stage, or delete anything.
+Evidence archives at the final revision must also be LFS pointers. This tool
+does not check remote LFS availability or rewrite, stage, or delete anything.
 """
 from __future__ import annotations
 
 import argparse
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 
 MAX_BLOB_BYTES = 5 * 1024 * 1024
-ARCHIVE_SUFFIXES = (".zip", ".7z", ".rar", ".tar", ".gz", ".bz2", ".xz", ".zst",
-                    ".tgz", ".tbz", ".tbz2", ".txz")
+ARCHIVE_SUFFIXES = (".zip", ".7z", ".tar", ".gz", ".bz2", ".xz", ".zst")
+LFS_POINTER = re.compile(
+    rb"version https://git-lfs.github.com/spec/v1\n"
+    rb"oid sha256:[0-9a-f]{64}\nsize [0-9]+\n"
+)
 
 
 def git(repo: Path, *args: str, data: bytes | None = None) -> bytes:
@@ -30,10 +33,9 @@ def commit_id(repo: Path, ref: str) -> str:
     return git(repo, "rev-parse", "--verify", "--end-of-options", ref + "^{commit}").decode().strip()
 
 
-def is_local_only_evidence(path: str) -> bool:
-    path = path.casefold()
+def requires_lfs(path: str) -> bool:
     return path.startswith("research/results/raw/") or (
-        path.startswith(("research/evidence/", "docs/reports/evidence/"))
+        path.startswith("research/evidence/")
         and path.lower().endswith(ARCHIVE_SUFFIXES)
     )
 
@@ -54,20 +56,6 @@ def diff_entries(raw: bytes) -> set[tuple[str, str]]:
     return entries
 
 
-def index_entries(repo: Path) -> set[tuple[str, str]]:
-    entries = set()
-    for item in git(repo, "ls-files", "--stage", "-z").split(b"\0"):
-        if not item:
-            continue
-        metadata, name = item.split(b"\t", 1)
-        mode, oid, stage = metadata.split()
-        if stage != b"0":
-            raise ValueError("Resolve index conflicts before checking repository storage")
-        if mode != b"160000":
-            entries.add((oid.decode("ascii"), os.fsdecode(name)))
-    return entries
-
-
 def tree_entries(repo: Path, head: str, *paths: str) -> set[tuple[str, str]]:
     raw = git(repo, "ls-tree", "-r", "-z", "--full-tree", head, "--", *paths)
     entries = set()
@@ -81,7 +69,7 @@ def tree_entries(repo: Path, head: str, *paths: str) -> set[tuple[str, str]]:
 
 
 def check(
-    repo: Path, *, base: str | tuple[str, ...] | None = None, head: str = "HEAD",
+    repo: Path, *, base: str | None = None, head: str = "HEAD",
     staged: bool = False, all_files: bool = False,
     max_bytes: int = MAX_BLOB_BYTES,
 ) -> list[str]:
@@ -94,33 +82,30 @@ def check(
             repo, "diff", "--cached", "--raw", "-z", "--no-abbrev",
             "--no-renames", "--diff-filter=AMT",
         ))
-        entries.update((oid, path) for oid, path in index_entries(repo)
-                       if is_local_only_evidence(path))
     else:
         head = commit_id(repo, head)
         if all_files:
             entries = tree_entries(repo, head)
         else:
-            bases = (base,) if isinstance(base, str) else (base or ())
-            excluded = ["^" + commit_id(repo, ref) for ref in bases]
+            base = commit_id(repo, base or "HEAD")
             introduced = set(git(
-                repo, "rev-list", "--objects", "--no-object-names", head, *excluded,
+                repo, "rev-list", "--objects", "--no-object-names", head, "^" + base,
             ).decode().splitlines())
             entries = set()
-            for commit in git(repo, "rev-list", head, *excluded).decode().splitlines():
+            for commit in git(repo, "rev-list", head, "^" + base).decode().splitlines():
                 entries.update(
                     (oid, path) for oid, path in diff_entries(git(
                         repo, "diff-tree", "--root", "-r", "-m", "--no-commit-id",
                         "--raw", "-z", "--no-abbrev", "--no-renames",
                         "--diff-filter=AMT", commit,
-                    )) if oid in introduced or is_local_only_evidence(path)
+                    )) if oid in introduced
                 )
-            # Already published history is excluded; the outgoing tree must
-            # still remove every archive, including unchanged LFS pointers.
+            # Legacy ordinary blobs may remain in history, but not as the
+            # current representation of frozen archives after migration.
             entries.update(
                 (oid, path) for oid, path in tree_entries(
-                    repo, head,
-                ) if is_local_only_evidence(path)
+                    repo, head, "research/evidence", "research/results/raw",
+                ) if requires_lfs(path)
             )
     if not entries:
         return []
@@ -134,49 +119,17 @@ def check(
             raise ValueError(f"Expected a Git blob, got {kind}: {oid}")
         sizes[oid] = int(size)
     issues = []
+    pointer_cache = {}
     for oid, path in sorted(entries, key=lambda item: (item[1], item[0])):
         size = sizes[oid]
-        if is_local_only_evidence(path):
-            issues.append(f"{path!r}: evidence packages/raw results are local only; ordinary Git and Git LFS uploads are prohibited.")
+        if requires_lfs(path):
+            if oid not in pointer_cache:
+                pointer_cache[oid] = size <= 1024 and LFS_POINTER.fullmatch(git(repo, "cat-file", "blob", oid)) is not None
+            if not pointer_cache[oid]:
+                issues.append(f"{path!r}: frozen archive/raw result must be a Git LFS pointer (Git blob: {size} bytes).")
         elif size > max_bytes:
-            issues.append(f"{path!r}: ordinary Git blob is {size} bytes; limit is {max_bytes}. Keep a summary/small witness and keep research bulk data local.")
+            issues.append(f"{path!r}: ordinary Git blob is {size} bytes; limit is {max_bytes}. Keep a summary/small witness and move bulk data to LFS or release storage.")
     return issues
-
-
-def check_push(repo: Path, remote: str, data: bytes) -> list[str]:
-    issues = []
-    for line in data.decode("utf-8").splitlines():
-        local_ref, local_sha, remote_ref, remote_sha = line.split()
-        if not local_sha.strip("0"):  # Deleting a ref does not upload objects.
-            continue
-        if remote_sha.strip("0"):
-            base: str | tuple[str, ...] = remote_sha
-        else:
-            # New refs can share already published history. Exclude the
-            # cached remote refs, but examine every newly introduced commit.
-            base = tuple(git(repo, "for-each-ref", "--format=%(objectname)",
-                             "refs/remotes/" + remote + "/").decode().splitlines())
-        issues.extend(f"{local_ref} -> {remote_ref}: {issue}"
-                      for issue in check(repo, base=base, head=local_sha))
-    return issues
-
-
-def report_issues(issues: list[str]) -> None:
-    print("Repository storage policy failed:", file=sys.stderr)
-    for issue in issues:
-        print("  " + issue, file=sys.stderr)
-    print("See docs/guides/evidence-storage.md. Nothing was uploaded or changed.", file=sys.stderr)
-
-
-def pre_push(repo: Path, remote: str, url: str, data: bytes) -> int:
-    issues = check_push(repo, remote, data)
-    if issues:
-        report_issues(issues)
-        return 1
-    # Preserve LFS uploads for the knowledge database. LFS must receive the
-    # original ref input, and must never run until ALL refs pass the policy.
-    return subprocess.run(["git", "lfs", "pre-push", remote, url],
-                          cwd=repo, input=data, check=False).returncode
 
 
 def main() -> int:
@@ -185,19 +138,19 @@ def main() -> int:
     mode.add_argument("--base", help="Exclude objects already reachable from this commit")
     mode.add_argument("--staged", action="store_true", help="Check index additions/modifications")
     mode.add_argument("--all", dest="all_files", action="store_true", help="Check all files at --head")
-    mode.add_argument("--pre-push", nargs=2, metavar=("REMOTE", "URL"), help="Check outgoing refs before LFS upload")
     parser.add_argument("--head", default="HEAD")
     args = parser.parse_args()
     try:
         root = Path(os.fsdecode(git(Path.cwd(), "rev-parse", "--show-toplevel")).strip())
-        if args.pre_push:
-            return pre_push(root, *args.pre_push, sys.stdin.buffer.read())
         issues = check(root, base=args.base, head=args.head, staged=args.staged, all_files=args.all_files)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f"Storage check could not complete: {error}", file=sys.stderr)
         return 2
     if issues:
-        report_issues(issues)
+        print("Repository storage policy failed:", file=sys.stderr)
+        for issue in issues:
+            print("  " + issue, file=sys.stderr)
+        print("See docs/guides/evidence-storage.md. Nothing was changed.", file=sys.stderr)
         return 1
     print("Repository storage policy passed (Git objects only; remote LFS upload is separate).")
     return 0

@@ -2,65 +2,70 @@
 
 ## 存储边界
 
-普通 Git 保存可审查的机器可读摘要、freeze/replay 脚本、必要的小型 witness、截图、研究结论及其环境和失败边界。现有 `research/results/*.json` 不因行数多就整体迁走或压成一行；先判断它是摘要、消费接口还是可重建的原始输出，保留已有消费者和引用。
+普通 Git 保存可审查的机器可读摘要、freeze/replay 脚本、必要的小型 witness、研究结论及其环境和失败边界。现有 `research/results/*.json` 不因行数多就整体迁走或压成一行；先判断它是摘要、消费接口还是可重建的原始输出，保留已有消费者和引用。
 
-证据归档和大型原始输出仅保存在本地。`research/evidence/` 和 `docs/reports/evidence/` 下的 ZIP、7z、rar、tar、gz、bz2、xz、zst、tgz、tbz、tbz2、txz，以及 `research/results/raw/` 下的所有文件，不进入普通 Git 或 Git LFS，也不作为 Actions artifact 或 release asset 上传。`.gitignore` 忽略这些产物，`.gitattributes` 禁用这些目录的 LFS filter；摘要和必要的小型未压缩 witness 继续纳入 Git。文档打包时把这些产物的链接呈现为本地证据路径，即使本机文件存在也不复制到发布目录；源报告保持原样。
+`research/evidence/**/*.zip` 保存为 Git LFS 对象，路径与归档内容不变。小型未压缩 witness、截图和源码仍可留在普通 Git。新增的大型原始 JSON/日志可放在 `research/results/raw/`，该目录由 LFS 跟踪；摘要留在原来的 results 目录，并记录原始数据路径、生成命令、具体 CPU、GX 版本、来源和未通过项。freeze 脚本继续生成真实归档，由 Git LFS clean filter 负责暂存指针，不让生成器自己伪造 pointer。
 
-freeze 脚本继续生成真实归档供本地复现。摘要记录本地归档路径、生成命令、具体 CPU、GX 版本、来源和未通过项；该路径不代表 GitHub 上存在可下载的包。保留原始证据和冻结快照的内容，不增加新的哈希验证体系。
+其他压缩格式必须显式增加对应的 LFS 跟踪规则。不要用全仓库 `*.json` 或整个 `research/**` 的 LFS 规则，把可读摘要、脚本和回归 witness 一起隐藏。历史冻结摘要不在本次存储迁移中修改，也不增加新的哈希验证体系。
 
 ## 获取与提交
 
-知识库仍使用 Git LFS。新工作区安装 LFS 后启用仓库钩子：
+仓库已有 LFS 知识库，沿用同一 Git LFS 安装：
 
 ```powershell
 git lfs install --local
-git config --local core.hooksPath .githooks
 git lfs pull
 ```
 
-仓库钩子保留知识库所需的 LFS checkout/commit/merge 行为；pre-push 先检查所有待推送 ref，再把原始 ref 输入交给 Git LFS。不要用 `git lfs install --force` 覆盖这些钩子。
-
-冻结证据后，只暂存摘要、脚本及必要的小型 witness：
+仅需要证据归档时可选择性下载：
 
 ```powershell
-git add -- research/results/<summary>.json research/<freeze-script>.py
+git lfs pull --include="research/evidence/**/*.zip" --exclude=""
+```
+
+冻结证据后，先把摘要和相应归档暂存，再检查 Git 索引：
+
+```powershell
+git add -- research/results/<summary>.json research/evidence/<package>.zip
 python scripts/check_repository_storage.py --staged
 git diff --cached --stat
 git lfs status
 ```
 
-以上占位符是待替换的文件名。证据包保持在本地，不使用 `git add -f`、`git lfs push --all` 或 `git lfs push --object-id` 上传证据，不跳过提交或推送钩子。正常知识库 LFS 上传失败必须先处理，不能提交只有指针但没有对象的运行时资源。
+以上 `<summary>`、`<package>` 是待替换的文件名。完成相应 commit 后正常 `git push`；不要跳过 LFS pre-push hook，也不要设置 `lfs.allowincompletepush`。LFS 上传失败必须先处理，不能提交只有指针但没有对象的交付。新加入跟踪规则的已有文件须 `git add --renormalize -- <明确文件路径>`，只执行 `git lfs track` 不会自动转换已提交内容。
 
-从旧工作区更新时，可用 `git rm --cached -- <明确归档路径>` 取消跟踪并保留本地文件。新克隆没有这些证据包；需要本地归档回放时，从自己的本地备份恢复到原路径。使用 [tests/local_evidence.py](../../tests/local_evidence.py) 的回归测试会明确跳过缺少本地归档的案例，已有包损坏、缺少成员或断言不通过仍是失败。跳过的案例属于未验证，不能报告为原生回归通过。
+使用 LFS 的 CI 先通过 `actions/checkout` 的 `lfs: false` 获取指针，再调用 [缓存 checkout action](../../.github/actions/checkout-lfs/action.yml)。缓存键来自当前版本的 LFS 对象 ID；Linux 和 Windows 共用 `.git/lfs/objects` 缓存，对象变化时恢复已有缓存并仅下载缺失对象。下载后立即保存缓存，后续测试失败也不会使已下载对象丢失。主验证流程先准备共享缓存，再启动各验证任务，避免首次执行时各任务同时重复下载。
+
+只有专门读取 Git 对象的 storage check 不下载 LFS；它检验指针格式和对象大小，不证明远端对象可用。缓存首次创建或被淘汰后仍需下载，已有下载流量不会因缓存或删除文件而退回。不要把 GitHub Download ZIP 当作一定包含 LFS 原始数据的交付方式，复现实验优先使用 clone + LFS pull。
 
 ## 防止再次膨胀
 
-[check_repository_storage.py](../../scripts/check_repository_storage.py) 默认对新增普通 Git blob 设置 **5 MiB** 上限；这是仓库贡献阈值，不是 GitHub 文件限制。未修改的旧大文件不会使每个 PR 都失败。证据归档和 `results/raw/` 无论多小、无论是原始文件还是 LFS pointer 都被拒绝。
+[check_repository_storage.py](../../scripts/check_repository_storage.py) 默认对新增普通 Git blob 设置 **5 MiB** 上限；这是仓库贡献阈值，不是 GitHub 文件限制。未修改的旧大文件不会使每个 PR 都失败。证据目录的 ZIP/7z/tar/gz/bz2/xz/zst 和 `results/raw/` 文件必须使用 LFS。
 
-pre-commit 检查暂存修改及索引中仍被跟踪的证据包。pre-push 检查每个待推送 ref 的当前树和新增历史，在任何 LFS 上传前拒绝违规内容；新分支排除本地缓存的远端 refs，缺少远端缓存时检查全部历史。已有远端提交不在本次普通推送检查中重写；远端提交尚未获取时检查报错，应先 fetch。
+[Repository Storage Policy](../../.github/workflows/repository-storage.yml) 检查 PR/push 范围内所有新增对象及中间提交，不能用“先加大包、下一提交删除”绕过检查；并核对目标版本中证据归档的表示。读取的是 Git blob，不是已经 smudge 成真实归档的工作区文件。检查没有应用运行时副作用，不改模型、Core、Application、MCP 或 Web。
 
-[Repository Storage Policy](../../.github/workflows/repository-storage.yml) 在 PR/push 中复查所有新增对象及中间提交，不能用“先加包、下一提交删除”绕过检查。它读取 Git blob，不依赖下载 LFS。CI 是推送后的检查；克隆时应启用本地钩子，才能在上传前拦截。
+本地检查整个分支：
 
 ```powershell
 python scripts/check_repository_storage.py --base origin/main --head HEAD
 ```
 
-Git 钩子不是 GitHub 服务端的 LFS 权限控制，手工调用上传接口或绕过钩子仍可能写入存储。CI 本身也不等于分支保护规则；仓库管理员可将该 check 设为合并必需项。
+CI 检查本身不等于分支保护规则；仓库管理员可将该 check 设为合并必需项。本次修改不更改仓库保护设置。
 
 ## 迁移范围与历史
 
-2026-10-03 曾将 `6ab646e` 工作树中的 **57 个 ZIP，共 123,248,061 字节**迁移到 LFS；最大的 `gxw-current-source-check-20261002.zip` 为 35,893,073 字节。当时上传后使用空 LFS 缓存从远端重新下载成功，记录见 [Actions run 37053321042](https://github.com/Arienax/gxworks-agent/actions/runs/37053321042)。这是历史实测记录，不再是当前上传策略。
+本次将 `6ab646e` 工作树中的 **57 个 ZIP，共 123,248,061 字节**迁移到 LFS；其中最大的 `gxw-current-source-check-20261002.zip` 为 35,893,073 字节。传输使用一次性隔离分支，上传后使用空 LFS 缓存从远端重新下载成功；记录见 [Actions run 37053321042](https://github.com/Arienax/gxworks-agent/actions/runs/37053321042)。一次性写权限 workflow 不进入正式修复分支。
 
-当前清理从 `main` 的最新树取消上述证据归档的跟踪，并将后续证据归档改为本地保存。本地原始包保留。已有历史中的 ZIP blob、LFS pointer 和其他旧分支不因这次删除自动消失；本次不强推或重写已发布历史。
+这是不改历史的迁移：普通 Git 在新版本中只保存指针，后续归档版本进入 LFS；**已有历史里的 ZIP blob 仍然存在**。普通删除、`git gc` 或合并这个修复不会让所有历史 clone 自动缩小，完整 clone 仍会获取可达的旧归档；LFS 下载还会使用独立的存储和流量配额。需要轻量新工作区时可使用浅克隆与按需 LFS 下载，但它不适合完整 bisect。
 
-根据 [GitHub 的 LFS 删除说明](https://docs.github.com/en/repositories/working-with-files/managing-large-files/removing-files-from-git-large-file-storage)，删除文件或重写 Git 历史后，远端 LFS 对象仍计入存储配额。需要 GitHub Support 协助清除指定对象，或另行授权删除并重建仓库。删除整个仓库会丢失关联的 issues、stars、forks，不能作为仅删除证据包的默认步骤。普通 `git gc` 或本地 `git lfs prune` 不会释放远端配额。
+真正清理历史需另行安排：先离线备份 refs/仓库，确认相关分支、tag、PR、其他 clone 与 LFS 对象可用性，再做定向历史迁移，核对 commit 映射并协调强推。不要直接在日常工作目录运行 `git lfs migrate import --everything` 或 `git push --force --mirror`。本次不重写 `main`，不拆改已发布的 `6ab646e`。
 
 ## 提交层次
 
 一个研究模块形成可验证成果后，按依赖顺序组织提交：
 
-1. **research finding**：最小可复现源码、冻结脚本、摘要、失败边界和必要的小型 witness；证据归档留在本地。
+1. **research finding**：最小可复现源码、冻结脚本、摘要、失败边界和 LFS evidence；不混入产品行为变化。
 2. **Core semantic change**：Python Core 的格式/语义/编辑不变量及对应 Core 回归，引用前一层证据。
 3. **integration**：Application、MCP、Web 接入与对应契约/端到端测试、用户文档。
 
-每层尽量独立构建和验证；涉及同一文件的不同职责时按 hunk 暂存，不为了形式制造不能运行的中间状态。合并时保留有意义的提交边界。已发布的混合提交不在普通维护 PR 中追溯拆分。
+每层尽量独立构建和验证；涉及同一文件的不同职责时按 hunk 暂存，而不是单靠目录分组。不要为了形式制造明知不能运行的中间状态。合并时保留有意义的提交边界；把三层 squash 回一个大提交会再次失去 bisect 粒度。已发布的混合提交不在普通维护 PR 中追溯拆分。
