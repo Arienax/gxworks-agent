@@ -1,3 +1,5 @@
+import pytest
+
 from inspection.engine import run_local_inspection
 from inspection.models import merge_inspection_reports, normalize_finding
 from plc.review import review_ladder
@@ -64,6 +66,31 @@ def test_coil_mixed_with_set_reset_remains_an_ownership_warning():
         and item.severity == "warning"
         for item in findings
     )
+
+
+@pytest.mark.parametrize("model,first_scan,reset", [
+    ("FX3U", "M8002", "RST"), ("FX3U", "M8002", "ZRST"), ("FX5U", "SM402", "RST")])
+def test_first_scan_reset_does_not_return_as_a_legacy_ownership_warning(model, first_scan, reset):
+    args = ["Y0"] if reset == "RST" else ["Y0", "Y1"]
+    data = ladder(rung(1, inputs=[{"type": "NO", "address": first_scan}], outputs=[instruction(reset, args)]),
+                  rung(2, inputs=[{"type": "NO", "address": "X0"}], outputs=[{"type": "COIL", "address": "Y0"}]))
+    assert not any(item.address == "Y0" and "ownership" in item.category for item in review_ladder(data, plc_model=model))
+    assert not any("Y0" in item["addresses"] and "ownership" in item["category"]
+                   for item in run_local_inspection(data, plc_model=model)["findings"])
+
+
+def test_range_reset_covers_interior_held_bits_in_both_reviewers():
+    data = ladder(rung(1, inputs=[{"type": "NO", "address": "X0"}], outputs=[instruction("SET", ["M11"])]),
+                  rung(2, inputs=[{"type": "NO", "address": "X1"}], outputs=[instruction("ZRST", ["M10", "M19"])]))
+    assert not any(item.address == "M11" and "ownership" in item.category for item in review_ladder(data))
+    assert not any("M11" in item["addresses"] and item["code"] in {"MULTIPLE_WRITER", "LATCH_WITHOUT_RESET"}
+                   for item in run_local_inspection(data)["findings"])
+
+
+def test_range_reset_does_not_require_set_owners_for_spare_bits():
+    data = ladder(rung(1, inputs=[{"type": "NO", "address": "M8002"}],
+                       outputs=[instruction("ZRST", ["M100", "M199"])]))
+    assert not any(item.category == "set_reset_ownership" for item in review_ladder(data))
 
 
 def test_external_or_hmi_owned_one_sided_latch_is_not_reported():
@@ -227,6 +254,21 @@ def test_ai_high_or_error_severity_cannot_become_a_hard_error():
     assert error["severity"] == "warning"
 
 
+def test_strategy_mismatch_keeps_hard_error_and_independent_logic_review():
+    from plc.validation import ApproachContractValidationError, validate_ladder_full
+    data = ladder(rung(1, outputs=[instruction("SET", ["M10"])]))
+    confirmed = {"selected_approach": {"name": "CMP strategy", "generation_contract": {
+        "required_opcodes": ["CMP"]}}}
+    with pytest.raises(ApproachContractValidationError):
+        validate_ladder_full(data, confirmed_spec=confirmed)
+    report = run_local_inspection(data, confirmed_spec=confirmed, base_version_id="v4")
+    assert report["base_version_id"] == "v4"
+    assert any(item["category"] == "hard_validation" and item["severity"] == "error"
+               for item in report["findings"])
+    assert any(item["code"] == "LATCH_WITHOUT_RESET" and "M10" in item["addresses"]
+               for item in report["findings"])
+
+
 def test_ai_finding_without_valid_location_is_only_low_confidence_info():
     base = ladder(rung(1))
 
@@ -322,3 +364,85 @@ def test_ai_reusing_local_finding_id_merges_instead_of_duplicating():
     merged = merge_inspection_reports(local, ai)
 
     assert len(merged["findings"]) == 1
+
+
+@pytest.mark.parametrize("shape,expected", [("direct_edge", False), ("source_pulse", False),
+                                            ("gated_pulse", True), ("level", True)])
+def test_local_review_keeps_confirmed_source_edge_requirements(shape, expected):
+    if shape == "source_pulse":
+        data = ladder(rung(1, inputs=[{"type": "NO", "address": "X5"}],
+                           outputs=[{"type": "PLS", "address": "M115"}]))
+    elif shape == "gated_pulse":
+        data = ladder(rung(1, inputs=[{"type": "NO", "address": "M103"}, {"type": "NO", "address": "X5"}],
+                           outputs=[{"type": "PLS", "address": "M115"}]))
+    else:
+        data = ladder(rung(1, inputs=[{"type": "P" if shape == "direct_edge" else "NO", "address": "X5"}],
+                           outputs=[instruction("INC", ["D0"])]))
+    spec = {"plc_model": "FX3U", "execution_semantics": [
+        {"semantic": "RISING_EDGE", "devices": ["X5"], "strict": True, "source": "user_review"}]}
+    report = run_local_inspection(data, confirmed_spec=spec)
+    findings = [f for f in report["findings"] if f["code"] == "EDGE_MISUSE"]
+    assert bool(findings) is expected
+    if expected:
+        assert findings[0]["addresses"] == ["X5"]
+        assert findings[0]["severity"] == "error"
+        assert findings[0]["fixable"] is False
+    without_contract = run_local_inspection(data, confirmed_spec={"user_notes": "X5必须上升沿"})
+    assert not any(f["code"] == "EDGE_MISUSE" for f in without_contract["findings"])
+
+
+def test_identical_missing_edge_proof_is_shown_once_without_dropping_requirements():
+    from inspection.engine import _static_findings
+    data = ladder(rung(1, inputs=[{"type": "NO", "address": "X5"}],
+                       outputs=[instruction("INC", ["D0"])]))
+    spec = {"execution_semantics": [
+        {"semantic": "RISING_EDGE", "devices": ["X5"], "strict": True},
+        {"semantic": "RISING_EDGE", "devices": ["X5"], "strict": True, "pulse_width_ms": 50.0}]}
+    program, findings = _static_findings(data, spec, "FX3U")
+    assert len(program["timing"]["coverage"]) == 2
+    assert len([f for f in findings if f["code"] == "EDGE_MISUSE"]) == 1
+
+
+@pytest.mark.parametrize("difference,expected_count", [
+    ("explanation", 1), ("other_code", 2), ("other_rung", 2),
+    ("missing_address", 2), ("missing_path", 2), ("path_prefix", 2),
+    ("ambiguous_proofs", 3),
+])
+def test_ai_explanation_merges_only_a_unique_complete_local_proof(difference, expected_count):
+    local_finding = {
+        "finding_id": "local_guard", "source": "local", "severity": "warning",
+        "category": "repeated_guard_invalidated", "code": "REPEATED_GUARD_INVALIDATED",
+        "message": "前一分支复位 M10，后一分支再次判断 M10。",
+        "rung_ids": [1], "addresses": ["M10"],
+        "json_paths": ["$.rungs[0].branches[0].outputs[0]", "$.rungs[0].branches[1].inputs"],
+        "evidence": ["guard=M10; write=M10=0"],
+    }
+    ai_finding = {
+        "source": "ai", "severity": "warning", "category": "repeated_guard_invalidated",
+        "message": "第二个复位动作会被前一分支阻断。", "rung_ids": [1], "addresses": ["M10", "M11"],
+        "json_paths": ["$.rungs[0].branches[0].outputs[0]", "$.rungs[0].branches[1].inputs[0]",
+                       "$.rungs[0].branches[1].outputs[0]"], "evidence": ["M11 的复位不能执行。"],
+    }
+    local_findings = [local_finding]
+    if difference == "other_code":
+        ai_finding["code"] = "OTHER_PROOF"
+    elif difference == "other_rung":
+        ai_finding["rung_ids"] = [2]
+    elif difference == "missing_address":
+        ai_finding["addresses"] = ["M11"]
+    elif difference == "missing_path":
+        ai_finding["json_paths"] = ai_finding["json_paths"][1:]
+    elif difference == "path_prefix":
+        ai_finding["json_paths"][0] = "$.rungs[0].branches[0].outputs[01]"
+    elif difference == "ambiguous_proofs":
+        local_findings.append({**local_finding, "finding_id": "other_guard", "addresses": ["M11"]})
+    merged = merge_inspection_reports(
+        {"findings": local_findings}, {"status": "complete", "findings": [ai_finding]})
+    assert len(merged["findings"]) == expected_count
+    if expected_count == 1:
+        finding = merged["findings"][0]
+        assert finding["finding_id"] == "local_guard"
+        assert finding["code"] == "REPEATED_GUARD_INVALIDATED"
+        assert finding["addresses"] == ["M10", "M11"]
+        assert finding["evidence"] == ["guard=M10; write=M10=0", "M11 的复位不能执行。"]
+        assert finding["fixable"] is False

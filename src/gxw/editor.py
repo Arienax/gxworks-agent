@@ -167,10 +167,14 @@ def edit_draft(value, command=None, *, templates=None, context=None):
                 old_symbol = node['symbol']
                 if node['template'].startswith('function_block:') and old_symbol != new:
                     local = model['program'].removesuffix('.Program.pou') + '.Labels.lh'
-                    hits = [(table, row['name']) for table in model.get('labels', {})
-                            if table == local or table.endswith('.gh')
-                            for row in declaration_rows(model, table)
-                            if row['name'].casefold() == old_symbol.casefold()]
+                    if context:
+                        binding = context.draft_sources(model.get('declaration_edits')).label(old_symbol)
+                        hits = [(binding[0], binding[1].name)] if binding else []
+                    else:
+                        hits = [(table, row['name']) for table in model.get('labels', {})
+                                if table == local or table.endswith('.gh')
+                                for row in declaration_rows(model, table)
+                                if row['name'].casefold() == old_symbol.casefold()]
                     if len(hits) > 1:
                         raise GXWFormatError('ambiguous FB instance declaration')
                     if hits:
@@ -253,7 +257,11 @@ def edit_draft(value, command=None, *, templates=None, context=None):
                     # The graph and its source declaration are one edit. Direct
                     # terminals and instance/member references keep their binding.
                     current_local = model['program'].removesuffix('.Program.pou') + '.Labels.lh'
-                    for node in model['nodes'] if table == current_local or table.endswith('.gh') else ():
+                    visible = table == current_local or table.endswith('.gh')
+                    if visible and previous_sources:
+                        binding = previous_sources.label(name)
+                        visible = binding is not None and binding[0] == table
+                    for node in model['nodes'] if visible else ():
                         if node['template'].startswith('function:'):
                             continue
                         if node['symbol'].casefold() == name.casefold():
@@ -266,6 +274,8 @@ def edit_draft(value, command=None, *, templates=None, context=None):
                     if item is None:
                         item = {"name": name}
                         upserts.append(item)
+                    if field == 'data_type' and source and source['kind'] == 'function_block' and 'kind' not in item:
+                        item['kind'] = 'function_block'
                     item[field] = new
     elif action != "inspect":
         raise GXWFormatError("unsupported FBD editor command")

@@ -84,6 +84,13 @@ def normalize_compact(value):
         elif isinstance(item, list):
             stack.extend((child, depth + 1) for child in item)
     result, changes = copy.deepcopy(value), []
+    # A transport format annotation carries no ladder semantics. Remove only
+    # this exact, observed spelling; conflicting/unknown fields still fail.
+    if (isinstance(result, dict) and set(result) == {'r', 'type'}
+            and result['type'] == 'json_object' and isinstance(result['r'], list)):
+        result.pop('type')
+        changes.append({'rule': 'transport_format_annotation', 'path': 'content',
+                        'removed_field': 'type', 'value': 'json_object'})
     # One observed field alias, never unwrap arbitrary objects or choose between
     # competing representations. Full schema/PLC checks still run afterwards.
     if isinstance(result, dict) and set(result) == {"root"} and isinstance(result["root"], list):
@@ -111,6 +118,21 @@ def normalize_compact(value):
                     changes.append({"rule": "single_series_input_wrapper",
                                     "path": f"content.r.{index}.b.{branch_index}.i",
                                     "from_type": "wrapped_array", "to_type": "array"})
+            # A sole output branch evaluates the complete condition before its
+            # outputs. Relocate this observed representation without repeating
+            # a common guard across multiple branches or admitting a new PLC
+            # container. Unknown keys/shapes still meet the ordinary schema.
+            shared = row.get("s")
+            if (len(row["b"]) == 1 and isinstance(row["b"][0], dict)
+                    and isinstance(row["b"][0].get("i", []), list)
+                    and isinstance(shared, list)
+                    and any(isinstance(item, dict) and set(item) == {"or"} for item in shared)
+                    and all(isinstance(item, str) or isinstance(item, dict) and set(item) == {"or"}
+                            for item in shared)):
+                row["b"][0]["i"] = shared + row["b"][0].get("i", [])
+                row["s"] = []
+                changes.append({"rule": "single_branch_shared_parallel", "path": f"content.r.{index}",
+                                "from_field": "s", "to_field": "b.0.i"})
     return result, changes
 
 

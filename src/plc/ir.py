@@ -308,7 +308,42 @@ def _walk_input_elements(elements: Sequence[Mapping[str, Any]]) -> Iterable[Mapp
             yield element
 
 
-def _instruction_access(opcode: Any, operands: Sequence[Any]) -> Tuple[Set[str], Set[str]]:
+def _zero_reset_range(operands: Sequence[Any], plc_model: str) -> Optional[Set[str]]:
+    """Resolve a bounded, explicit ZRST range without guessing dynamic writes.
+
+    FX3 programming manual, FNC 40, pp. 316-319: both endpoints belong to the
+    same device family, and every intervening device is reset. A descending
+    range resets only its first device. Counter widths must not be mixed.
+    Address validity and X/Y numbering remain owned by the CPU validator.
+    """
+    from plc.validation import SUPPORTED_PLC_MODELS, parse_device_address
+
+    model = str(plc_model or "FX3U").strip().upper()
+    spec = DEFAULT_INSTRUCTION_REGISTRY.resolve("ZRST")
+    if (model not in SUPPORTED_PLC_MODELS or len(operands) != 2
+            or spec is None or not spec.supports_cpu(model)):
+        return None
+    first = parse_device_address(str(operands[0]).strip(), model)
+    last = parse_device_address(str(operands[1]).strip(), model)
+    if first is None or last is None or first[0] != last[0]:
+        return None
+    prefix, start = first
+    end = last[1]
+    if prefix not in {"Y", "M", "S", "T", "C", "D"}:
+        return None
+    if model == "FX3U" and prefix == "C" and (start < 200) != (end < 200):
+        return None
+    radix = "o" if model == "FX3U" and prefix == "Y" else "d"
+    addresses = {prefix + format(index, radix) for index in range(start, max(start, end) + 1)}
+    # An interior hole in a CPU namespace cannot prove full initialization.
+    if any(parse_device_address(address, model) is None for address in addresses):
+        return None
+    return addresses
+
+
+def _instruction_access(
+    opcode: Any, operands: Sequence[Any], *, plc_model: str = "FX3U"
+) -> Tuple[Set[str], Set[str]]:
     """Return conservative access semantics using the shared instruction registry.
 
     A catalogue miss is intentionally not treated as a parse failure.  Unknown
@@ -320,6 +355,10 @@ def _instruction_access(opcode: Any, operands: Sequence[Any]) -> Tuple[Set[str],
     op = str(opcode or "").strip().upper()
     reads: Set[str] = set()
     writes: Set[str] = set()
+    if op == "ZRST":
+        reset_range = _zero_reset_range(operands or [], plc_model)
+        if reset_range is not None:
+            return reads, reset_range
     spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(op)
     write_indexes = set(spec.write_indexes if spec is not None else ())
     read_write_indexes = set(spec.read_write_indexes if spec is not None else ())
@@ -353,7 +392,7 @@ def _instruction_access(opcode: Any, operands: Sequence[Any]) -> Tuple[Set[str],
 
 
 def analyze_instruction_access(
-    opcode: Any, operands: Sequence[Any]
+    opcode: Any, operands: Sequence[Any], *, plc_model: str = "FX3U"
 ) -> Tuple[List[str], List[str]]:
     """Return deterministic device reads/writes for one lowered instruction."""
 
@@ -377,14 +416,16 @@ def analyze_instruction_access(
             if address:
                 writes.add(address)
     elif op not in {"ANB", "ORB", "MPS", "MRD", "MPP", "INV", "NOP"}:
-        reads, writes = _instruction_access(op, args)
+        reads, writes = _instruction_access(op, args, plc_model=plc_model)
     return (
         sorted(reads, key=_device_sort_key),
         sorted(writes, key=_device_sort_key),
     )
 
 
-def analyze_rung_access(rung: Mapping[str, Any]) -> Tuple[List[str], List[str]]:
+def analyze_rung_access(
+    rung: Mapping[str, Any], *, plc_model: str = "FX3U"
+) -> Tuple[List[str], List[str]]:
     reads: Set[str] = set()
     writes: Set[str] = set()
     condition_elements: List[Mapping[str, Any]] = []
@@ -409,14 +450,14 @@ def analyze_rung_access(rung: Mapping[str, Any]) -> Tuple[List[str], List[str]]:
                     reads.update(_device_tokens(output.get("value", "")))
             elif output_type == "APP_INSTR":
                 local_reads, local_writes = _instruction_access(
-                    output.get("opcode"), output.get("operands", []) or []
+                    output.get("opcode"), output.get("operands", []) or [], plc_model=plc_model
                 )
                 reads.update(local_reads)
                 writes.update(local_writes)
             elif output_type == "BLOCK_OUTPUT":
                 parts = str(output.get("expression", "") or "").strip().split()
                 if parts:
-                    local_reads, local_writes = _instruction_access(parts[0], parts[1:])
+                    local_reads, local_writes = _instruction_access(parts[0], parts[1:], plc_model=plc_model)
                     reads.update(local_reads)
                     writes.update(local_writes)
     return (
@@ -509,7 +550,7 @@ def build_plc_ir(
         if network_id in seen_networks:
             raise PLCIRValidationError(f"duplicate network id {network_id}")
         seen_networks.add(network_id)
-        reads, writes = analyze_rung_access(rung)
+        reads, writes = analyze_rung_access(rung, plc_model=plc_model)
         networks.append(
             {
                 "id": network_id,
@@ -703,7 +744,7 @@ def validate_plc_ir(
         expected_instructions = lower_rung_instructions(rung)
         if network.get("instructions") != expected_instructions:
             raise PLCIRValidationError(f"network {network_id} instructions are stale")
-        expected_reads, expected_writes = analyze_rung_access(rung)
+        expected_reads, expected_writes = analyze_rung_access(rung, plc_model=str(plc["cpu"]))
         if network.get("reads") != expected_reads:
             raise PLCIRValidationError(f"network {network_id} reads are stale")
         if network.get("writes") != expected_writes:

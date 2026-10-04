@@ -112,6 +112,28 @@ def test_program_review_has_fixed_route_and_version_bound_audit():
     assert result["audit"]["authority"]["may_run_simulator"] is False
     assert len(result["reports"]) == 2
     assert calls[1][1]["upstream"]["role"] == REVIEWER
+    assert calls[1][1]["upstream"]["findings"][0]["finding_id"] == result["reports"][0]["findings"][0]["finding_id"]
+    assert calls[1][1]["upstream"]["findings_truncated"] is False
+
+
+def test_timing_review_can_enrich_prior_finding_without_duplicating_it():
+    from inspection.models import merge_inspection_reports
+    program = _program()
+    def runner(role, payload):
+        result = _specialist_output(payload, title=role)
+        if role == TIMING_PLANNER:
+            result["findings"][0]["finding_id"] = payload["upstream"]["findings"][0]["finding_id"]
+            result["findings"][0]["message"] = "补充同一扫描的具体条件。"
+        return result
+    local = _local_report(program)
+    result = DeterministicMultiAgentSupervisor(runner).review_program(program,
+        project_id="p1", version_id="v0004", request={}, local_report=local)
+    merged = local
+    for report in result["reports"]:
+        merged = merge_inspection_reports(merged, report)
+    advice = [item for item in merged["findings"] if item["source"] == "ai"]
+    assert len(advice) == 1
+    assert "补充同一扫描" in advice[0]["message"]
 
 
 def test_program_review_rejects_cross_version_specialist_output():
@@ -173,6 +195,29 @@ def test_review_context_is_read_only_bounded_and_has_no_operational_authority():
         "may_run_simulator": False,
         "deterministic_validator_is_authoritative": True,
     }
+
+
+def test_review_context_preserves_parallel_shared_guards_and_recovers_confirmed_levels():
+    ladder = _ladder()
+    rung = ladder["rungs"][0]
+    rung["shared_inputs"] = [_contact("NC", "X1")]
+    rung["branches"][0]["inputs"] = [{"type": "parallel_block", "branches": [
+        [_contact("NC", "X0")], [_contact("NO", "Y0")]]}]
+    spec = {"io_table": [{"kind": "X", "address": "X0", "label": "启动"},
+                         {"kind": "X", "address": "X1", "label": "停止"}],
+            "intent_context": {"requests": [{"text":
+                "X0：启动按钮，未按下为1，按下为0；X1：停止按钮，未按下为0，按下为1。"}]}}
+    before = copy.deepcopy(spec)
+    program = build_plc_ir(ladder, plc_model="FX3U")
+    context = build_review_context(program, project_id="p", version_id="v", request={},
+                                   local_report={}, confirmed_spec=spec)
+    assert context["networks"][0]["ladder"] == rung
+    levels = {row["address"]: row for row in context["input_conditions"]["level_predicates"]}
+    assert levels["X0"]["active_when"] == "NC X0"
+    assert levels["X1"]["run_permit_when"] == "NC X1"
+    assert spec == before
+    context["networks"][0]["ladder"]["shared_inputs"].clear()
+    assert program["networks"][0]["ladder"]["shared_inputs"] == [_contact("NC", "X1")]
 
 
 def test_debug_route_normalizes_diagnosis_before_patch_and_uses_plan_builder():
@@ -342,6 +387,37 @@ def test_review_specialists_receive_p8_knowledge_context(monkeypatch):
     assert captured["knowledge_kwargs"]["plc_model"] == "FX3U"
     assert captured["knowledge_kwargs"]["task_type"] == "program_review"
     assert "# Retrieved FX3U evidence" in captured["prompt"]
+    assert captured["call_kwargs"]["prefer_stream"] is True
+    assert captured["call_kwargs"]["request_timeout"] is None
+
+
+@pytest.mark.parametrize("streaming_supported", [True, False])
+@pytest.mark.parametrize("request_timeout", [None, 37])
+def test_review_transport_uses_model_streaming_capability_without_changing_tuning(monkeypatch, streaming_supported, request_timeout):
+    from types import SimpleNamespace
+    import application.model_api as api
+    from model_runtime.runtime_profile import materialize_runtime_profile
+    from model_profile_fixtures import offline_runtime_profile
+    import model_runtime.runtime_profile as profiles
+    profile = offline_runtime_profile()
+    provider = SimpleNamespace(profile=profile, api_key="fixture-key")
+    runtime = materialize_runtime_profile(profile, api_key="fixture-key")
+    descriptor = SimpleNamespace(status="supported" if streaming_supported else "unsupported")
+    monkeypatch.setattr(profiles, "materialize_runtime_profile", lambda *a, **k: SimpleNamespace(
+        contract=SimpleNamespace(capabilities={**runtime.contract.capabilities, "streaming": descriptor})))
+    monkeypatch.setattr(api, "current_provider", lambda: provider)
+    monkeypatch.setattr(api, "load_full_config", lambda: {})
+    calls = []
+    def request(*args, **kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(message=SimpleNamespace(content='{"findings":[]}'))
+    monkeypatch.setattr(api, "_request_model", request)
+    assert api._call_debug_evidence_json("Review program", {}, model_name="offline", prefer_stream=True,
+                                         request_timeout=request_timeout) == {"findings": []}
+    assert len(calls) == 1 and calls[0]["stream"] is streaming_supported
+    assert calls[0]["request_timeout"] == request_timeout and calls[0]["max_retries"] == 0
+    assert calls[0]["effort"] is None and "options" not in calls[0]
+    assert profile == offline_runtime_profile()
 
 
 def test_p9_exports_only_routes_with_real_supervisor_entrypoints():

@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from plc.device_identity import canonical_device
 
 
-def generation_input_conditions(bindings):
+def generation_input_conditions(bindings, *, plc_model="FX3U"):
     """Return settled input predicates plus unresolved identities, without edits.
 
     Only explicitly typed input bindings participate. In particular a word
@@ -41,8 +41,9 @@ def generation_input_conditions(bindings):
         valid_level = type(level) is int and level in (0, 1)
         valid_address = (isinstance(address, str) and address.startswith(kind)
                          and address[len(kind):].isdigit())
-        if kind == "X" and valid_address:
-            valid_address = all(c in "01234567" for c in address[1:])
+        if valid_address:
+            from plc.validation import parse_device_address
+            valid_address = parse_device_address(address, plc_model) is not None
         if not valid_address or not valid_level or (
             inactive is not None and (type(inactive) is not int or inactive != 1 - level)
         ):
@@ -51,7 +52,11 @@ def generation_input_conditions(bindings):
         active = ("NO " if level else "NC ") + address
         inactive_test = ("NC " if level else "NO ") + address
         result = {"binding_id": identity, "address": address,
+                  "active_level": level, "inactive_level": 1 - level,
                   "active_when": active, "inactive_when": inactive_test}
+        label = row.get("label", row.get("name"))
+        if isinstance(label, str) and label.strip():
+            result["label"] = label.strip()
         if role:
             result["role"] = role
         if role == "stop":

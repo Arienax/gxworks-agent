@@ -50,6 +50,8 @@ class InspectionWorkflow(Workflow):
     @staticmethod
     def _mark_ai(report, status, error=""):
         report = copy.deepcopy(report)
+        if status == "complete" and report.get("status") not in {"complete", "local_only"}:
+            status = "partial"
         if status == "complete":
             report["status"] = "complete"
         elif status == "skipped_no_key":
@@ -59,6 +61,9 @@ class InspectionWorkflow(Workflow):
         report["ai_status"] = status
         report["ai_error"] = str(error or "")
         report["depth"] = "deep"
+        execution = report.setdefault("execution", {})
+        execution["status"] = report["status"]
+        execution["ai"] = {"status": status, "error": report["ai_error"]}
         if error:
             report["summary"] = (
                 str(report.get("summary", "")).rstrip("。")
@@ -85,9 +90,12 @@ class InspectionWorkflow(Workflow):
                 depth="deep" if self.deep else "basic",
             )
             self._emit("local", local_report)
-            if not self.deep:
+            if not self.deep or local_report["status"] == "unsupported":
+                local_report["execution"]["ai"]["status"] = "not_requested"
                 return local_report
 
+            merged = local_report
+            ai_reports = []
             try:
                 if self.provider is None and not self._api_key_available():
                     partial = self._mark_ai(
@@ -119,6 +127,11 @@ class InspectionWorkflow(Workflow):
                         raise_errors=True,
                     )
 
+                def accept_report(ai_report):
+                    nonlocal merged
+                    merged = merge_inspection_reports(merged, ai_report)
+                    ai_reports.append(ai_report)
+
                 result = DeterministicMultiAgentSupervisor(
                     run_specialist
                 ).review_program(
@@ -128,15 +141,14 @@ class InspectionWorkflow(Workflow):
                     request=self.request,
                     local_report=local_report,
                     confirmed_spec=self.confirmed_spec,
+                    on_report=accept_report,
                 )
-                merged = local_report
-                for ai_report in result["reports"]:
-                    merged = merge_inspection_reports(merged, ai_report)
                 merged["multi_agent"] = result["audit"]
-                merged = self._mark_ai(merged, "complete")
+                ai_status = "complete" if all(report["status"] == "complete" for report in ai_reports) else "partial"
+                merged = self._mark_ai(merged, ai_status)
                 return merged
             except Exception as error:
-                partial = self._mark_ai(local_report, "failed", str(error))
+                partial = self._mark_ai(merged, "failed", str(error))
                 return partial
         except Exception as error:
             raise WorkflowError(str(error))

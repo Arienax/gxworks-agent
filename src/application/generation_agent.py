@@ -20,6 +20,7 @@ from application.compact_protocol import (
 )
 
 from application.construction_examples import prepare_construction_examples
+from plc.instruction_binding import operation_intent_prompt, materialize_operation_references
 
 from model_runtime.provider import TextDelta
 from application.generation_context import _build_knowledge_context
@@ -64,22 +65,28 @@ def _compact_wire_renderer(plc_model, *, example_block=None):
         from plc.specification.provenance import SOURCE_PRECEDENCE
 
         confirmed = json.dumps(
-            runtime_spec, ensure_ascii=False, separators=(",", ":")
+            runtime_spec, ensure_ascii=False, separators=(",", ":"), sort_keys=True
         )
+        # Prefix caches reuse tokens before the first differing token. Keep
+        # shared policy and unchanged technical evidence before project values;
+        # two specs with the same evidence then share that whole prefix. This
+        # changes only rendering order, not authority, selection or budgeting.
         system_prompt = (
             _COMPACT_PROTOCOL
-            + examples.text
             + SOURCE_PRECEDENCE
             + f"\n# Selected PLC\n{model}\n"
+            + compact_capability_prompt(model, runtime_spec)
+            + str(evidence_text or "")
+            + examples.text
             + "\n# Confirmed project specification\n"
             + confirmed
-            + compact_capability_prompt(model, runtime_spec)
+            + operation_intent_prompt(runtime_spec, target_model=model)
             + render_context_checkpoint(context_checkpoint)
-            + str(evidence_text or "")
             + generation_execution_prompt(
                 runtime_spec,
                 evidence_text=evidence_text,
                 task_type="generate",
+                plc_model=model,
             )
         )
         return {
@@ -324,7 +331,16 @@ def generate_confirmed_ladder(
                          canonical_sha256=hashlib.sha256(json.dumps(compact, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest())
         if on_stage:
             on_stage("compact_normalized", "已在本地兼容确定性的表示差异；正在展开梯形图，未增加模型请求")
+    compact, binding_receipt = materialize_operation_references(compact, projected, target_model=model)
+    if binding_receipt["receipts"]:
+        diagnostics.emit("operation_binding", stage="Core_operation_binding", receipt=binding_receipt)
+        if on_stage:
+            on_stage("operation_binding", "已按确认效果绑定指令参数")
     ladder, representation = _decode_generated_ladder(compact, projected, model)
+    from plc.specification.semantic_validation import bind_confirmed_predicates
+    ladder, predicate_binding = bind_confirmed_predicates(ladder, projected, plc_model=model)
+    if predicate_binding['changes'] or predicate_binding['diagnostics']:
+        diagnostics.emit('confirmed_predicate_binding', stage=predicate_binding['stage'], receipt=predicate_binding)
     diagnostics.emit("generation_representation", stage="compact_protocol", representation=representation)
     compaction = (
         context.handoff.get("budget_report", {}).get("context_compaction", {})
@@ -335,4 +351,6 @@ def generate_confirmed_ladder(
         "ladder": ladder,
         "model_calls": 1 + compaction_calls,
         "generation_handoff": handoff,
+        "operation_binding": binding_receipt,
+        "confirmed_predicate_binding": predicate_binding,
     }

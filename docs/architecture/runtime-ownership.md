@@ -8,6 +8,18 @@ The saved model profile owns tuning. Project/workflow `effort` is a retired comp
 
 User-facing configuration and storage instructions are in [model settings](../guides/model-settings.md). Capability schema ownership is in [capability contracts](../integrations/capability-contract-v3.md).
 
+Program-review specialists prefer streaming when the saved runtime capability permits it.
+Review, debug and test-suite calls have no application-imposed 120-second deadline.
+They use the provider transport default unless the caller supplies a deadline, with
+zero automatic retries. Streaming supports long reasoning responses; model tuning
+still comes from the saved profile, and declared non-streaming providers remain supported.
+
+Inspection preserves accepted, version-bound advice if a later review stage fails.
+Flat and nested execution fields describe the same terminal state; incomplete advice
+remains partial. Strategy-contract errors remain errors while valid ladder logic
+continues through independent local checks. Timing review receives a bounded list
+of prior finding identities so it can enrich an existing issue without duplicating it.
+
 ## Retrieval
 
 Application, agent runtime and integrations enter through [knowledge.retriever](../../src/knowledge/retriever.py). Task/source routing in [knowledge.scope](../../src/knowledge/scope.py) runs before backend candidate limits. Caller source lanes can narrow the task policy. Legacy public `knowledge.core` names forward to the same facade.

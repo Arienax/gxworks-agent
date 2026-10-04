@@ -29,7 +29,7 @@ _IO_ATTRIBUTE_RE = re.compile(
 
 _DECLARED_IO_LINE_RE = re.compile(
     r"^\s*(?:[-*•]\s*|\d+[.)、]\s*)?((?:SM|SD|[XYMTCSDVZ])\s*\d+)"
-    r"\s*(?:[：:]|为|是|is\s+)\s*(.+?)\s*$",
+    r"\s*(?P<delimiter>[：:=]|为|是|is\s+)\s*(?P<purpose>.+?)\s*$",
     re.IGNORECASE,
 )
 _INPUT_QUALIFIER_RE = re.compile(
@@ -37,7 +37,7 @@ _INPUT_QUALIFIER_RE = re.compile(
     re.IGNORECASE,
 )
 _DECLARATION_SEPARATOR_RE = re.compile(
-    r"[,，、](?=\s*(?:SM|SD|[XYMTCSDVZ])\s*\d+\s*(?:[：:]|为|是|is\b))",
+    r"[,，、](?=\s*(?:SM|SD|[XYMTCSDVZ])\s*\d+(?![A-Za-z0-9_]))",
     re.IGNORECASE,
 )
 _STATE_NOT_PURPOSE_RE = re.compile(
@@ -45,22 +45,83 @@ _STATE_NOT_PURPOSE_RE = re.compile(
     r"[+-]?\d+(?:[.,]\d+)?(?=$|[\s~～<>=+\-]|时|時))",
     re.IGNORECASE,
 )
+_DECLARATION_HEADING_RE = re.compile(r"^\s*(?:确认(?:如下现场规格|现场规格|如下)?|现场确认|I/O\s*约定)\s*[：:]\s*", re.I)
+_NAMED_INPUT_LEVEL_RE = re.compile(
+    r"^\s*(X\s*\d+)\s*([^,，、;；：:=?？]{1,32}?)\s*=\s*([01])\s*$", re.I
+)
+_LEVEL_PURPOSE_RE = re.compile(r"^([01])\s*(?:为|表示)?\s*([^\d\s,，、;；~～<>=+\-].*)$")
+_GROUPED_INPUT_LEVEL_RE = re.compile(
+    r"^\s*(?P<addresses>X\s*\d+(?:\s*[/／]\s*X\s*\d+)+)\s*=\s*"
+    r"(?P<level>[01])\s*分别\s*(?P<purpose>.+?)\s*$", re.I,
+)
+_ADJACENT_INPUT_DECLARATION_RE = re.compile(
+    r"(?<![A-Za-z0-9_/／])(?=X\s*\d+\s*(?:[：:=]|为|是|is\b))", re.I,
+)
+
+
+def _declared_io_value(statement):
+    match = _DECLARED_IO_LINE_RE.fullmatch(statement)
+    if match is not None:
+        address, raw_value = match.group(1), match.group("purpose").strip()
+        # Equals may bind a bit level to a named purpose. This never interprets
+        # register-value classifications or a bare input condition as wiring.
+        if match.group("delimiter") == "=" and re.match(r"(?:SM|[XYMS])", address, re.I):
+            level_purpose = _LEVEL_PURPOSE_RE.fullmatch(raw_value)
+            if level_purpose is not None:
+                purpose = level_purpose.group(2)
+                if re.match(r"时|時|且|则|則|and\b|or\b", purpose, re.I) or _DEVICE.search(purpose):
+                    return None
+                return address, purpose, int(level_purpose.group(1))
+        if match.group("delimiter") == "=" and re.match(r"[+-]?\d", raw_value):
+            return None
+        return address, raw_value, None
+    match = _NAMED_INPUT_LEVEL_RE.fullmatch(statement)
+    if match is not None:
+        purpose = re.sub(r"(?:按下|动作|激活)\s*$", "", match.group(2)).strip()
+        if purpose and not _DEVICE.search(purpose) and not re.search(r"时|则|如果|上升沿|下降沿", purpose):
+            return match.group(1), purpose, int(match.group(3))
+    return None
 
 
 def _declared_io_segments(user_text):
-    """Split only when every comma-separated part is itself a declaration."""
+    """Split declared rows, without treating a bare device list as declarations."""
     for statement in re.split(r"[\n;；。]+", str(user_text or "")):
-        statement = statement.strip()
+        statement = _DECLARATION_HEADING_RE.sub("", statement.strip())
         if not statement:
             continue
         parts = [part.strip() for part in _DECLARATION_SEPARATOR_RE.split(statement)]
         if (
             len(parts) > 1
-            and all(part and _DECLARED_IO_LINE_RE.fullmatch(part) for part in parts)
+            and (_declared_io_value(parts[0]) is not None
+                 or _GROUPED_INPUT_LEVEL_RE.fullmatch(parts[0]) is not None)
         ):
-            yield from parts
+            segments = parts
         else:
-            yield statement
+            segments = [statement]
+        adjacent = []
+        for segment in segments:
+            # Split only within an established declaration row. An output
+            # assignment is never used as a boundary: that would turn
+            # "X0=1启动Y0=1" (control logic) into two wiring declarations.
+            boundaries = [match.start() for match in _ADJACENT_INPUT_DECLARATION_RE.finditer(segment)
+                          if match.start() and not segment[:match.start()].rstrip().endswith(("/", "／"))]
+            limits = [0, *boundaries, len(segment)]
+            separated = [segment[start:end].strip(" \t\r\n,，、")
+                         for start, end in zip(limits, limits[1:])]
+            if boundaries and _declared_io_value(separated[0]) is not None:
+                adjacent.extend(separated)
+            else:
+                adjacent.append(segment)
+        for segment in adjacent:
+            group = _GROUPED_INPUT_LEVEL_RE.fullmatch(segment)
+            if group is None:
+                yield segment
+                continue
+            # "分别" explicitly associates the same level with each named
+            # input. Retain the shared purpose instead of guessing a missing
+            # prefix in labels such as "手动点动A/B".
+            for address in re.findall(r"X\s*\d+", group["addresses"], re.I):
+                yield f'{address}={group["level"]}{group["purpose"]}'
 
 
 
@@ -135,12 +196,13 @@ def extract_declared_bindings(user_text, plc_model=None):
     """
     model = str(plc_model or "").strip().upper()
     result = []
-    seen = set()
+    seen = {}
     for statement in _declared_io_segments(user_text):
-        match = _DECLARED_IO_LINE_RE.fullmatch(statement)
-        if match is None:
+        declared = _declared_io_value(statement)
+        if declared is None:
             continue
-        address = canonical_device(re.sub(r"\s+", "", match.group(1)).upper())
+        address_text, raw_value, level = declared
+        address = canonical_device(re.sub(r"\s+", "", address_text).upper())
         kind_match = re.match(r"[A-Z]+", address)
         if kind_match is None:
             continue
@@ -148,7 +210,6 @@ def extract_declared_bindings(user_text, plc_model=None):
         digits = address[len(kind):]
         if model == "FX3U" and kind in {"X", "Y"} and any(char not in "01234567" for char in digits):
             continue
-        raw_value = match.group(2).strip()
         if "?" in raw_value or "？" in raw_value or _STATE_NOT_PURPOSE_RE.match(raw_value):
             continue
         purpose = _INPUT_QUALIFIER_RE.split(raw_value, maxsplit=1)[0].strip()
@@ -157,9 +218,6 @@ def extract_declared_bindings(user_text, plc_model=None):
             continue
         role = canonical_signal_role(label)
         identity = f"declared.{role or kind.casefold()}.{address}"
-        if identity in seen:
-            continue
-        seen.add(identity)
         item = {
             "binding_id": identity,
             "kind": kind,
@@ -172,6 +230,20 @@ def extract_declared_bindings(user_text, plc_model=None):
             item["role"] = role
         if kind == "X":
             item.update(confirmed_input_levels(raw_value))
+            if level is not None:
+                item.update(active_level=level, inactive_level=1 - level)
+        prior = seen.get(identity)
+        if prior is not None:
+            if "active_level" in prior and "active_level" in item:
+                if prior["active_level"] != item["active_level"]:
+                    # Conflicting declarations in one request do not establish
+                    # a polarity. A later request is handled as a revision by
+                    # the confirmation adapter, rather than by list order here.
+                    prior.update(active_level=None, inactive_level=None)
+            elif prior["label"] == item["label"] and "active_level" in item:
+                prior.update(active_level=item["active_level"], inactive_level=item["inactive_level"])
+            continue
+        seen[identity] = item
         result.append(item)
     return result
 
@@ -215,6 +287,56 @@ def merge_declared_bindings(rows, existing=(), declared=()):
             continue
         result[str(item["binding_id"])] = item
     return [result[key] for key in sorted(result)]
+
+
+def recover_declared_bindings(spec, rows, bindings=()):
+    """Recover missing legacy identities without replaying edits from prose.
+
+    Current bindings own their addresses, including deliberately unknown levels.
+    Requests can supply a missing binding only for one still-present I/O row.
+    Once recovered, its row identity preserves later moves and deletions through
+    bind_answers. This adapter does not allocate I/O or replace current facts.
+    """
+    from plc.generation_contract import intent_context
+
+    rows, bindings = copy.deepcopy(rows), copy.deepcopy(list(bindings or ()))
+    occupied = {canonical_device(item.get("address")) for item in bindings
+                if isinstance(item, dict)}
+    declarations = {}
+    model = str(spec.get("plc_model") or "FX3U").strip().upper()
+    for request in intent_context(spec).get("requests", []):
+        if not isinstance(request, dict):
+            continue
+        for item in extract_declared_bindings(request.get("text", ""), model):
+            # A later explicit declaration is a user revision. Existing
+            # structured bindings still take precedence over every request.
+            declarations[item["address"]] = item
+    identities = {item.get("binding_id") for item in bindings if isinstance(item, dict)}
+    for address, source in declarations.items():
+        if address in occupied:
+            continue
+        matches = [row for row in rows if isinstance(row, dict)
+                   and canonical_device(row.get("address")) == address]
+        if len(matches) != 1:
+            continue
+        row = matches[0]
+        identity = row.get("binding_id") or source["binding_id"]
+        if identity in identities:
+            continue
+        item = copy.deepcopy(source)
+        item["binding_id"] = identity
+        item["row_binding_id"] = identity
+        row["binding_id"] = identity
+        # The editable row owns its displayed purpose. Recovery must not undo
+        # a label edit, including an intentionally empty label.
+        if isinstance(row.get("label"), str):
+            item["label"] = row["label"].strip()
+        elif "label" in row:
+            item.pop("label", None)
+        bindings.append(item)
+        identities.add(identity)
+        occupied.add(address)
+    return rows, sorted(bindings, key=lambda item: str(item.get("binding_id") or ""))
 
 
 def binding_hint(parameter):
@@ -711,6 +833,7 @@ def generation_io_snapshot(spec, *, protected_ids=()):
         result["io_table"], parameters if isinstance(parameters, list) else [],
         bindings if isinstance(bindings, list) else [], protected_ids=protected_ids,
     )
+    rows, bindings = recover_declared_bindings(result, rows, bindings)
     result["io_table"] = rows
     if isinstance(parameters, list):
         result["parameters"] = remaining

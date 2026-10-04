@@ -17,7 +17,7 @@ from plc.specification.confirmed import build_review_draft, canonicalize_confirm
 from plc.specification.legacy_migration import migrate_legacy_approach
 from plc.specification.provenance import confirm_context, fingerprint, retrieval_projection, seal_confirmation
 
-CASES = json.loads((Path(__file__).parent / "fixtures/call_chain/intent_cases.json").read_text())["cases"]
+CASES = json.loads((Path(__file__).parent / "fixtures/call_chain/intent_cases.json").read_text(encoding="utf-8"))["cases"]
 
 
 def _evidence(stage="generate", marker="manual-source"):
@@ -620,7 +620,7 @@ def test_storage_read_is_pure_and_writer_migration_is_atomic_idempotent(tmp_path
     assert receipt["migration"]["confirmed_spec_sha256"] == fingerprint(loaded["confirmed_spec"])
     assert loaded["confirmed_spec"]["intent_context"]["requests"] == original["confirmed_spec"]["engineering_context"]["requests"]
     assert store.migrate_confirmed_specs() == {"migrated": [pid], "failed": []}
-    persisted = json.loads(project_path.read_text())
+    persisted = json.loads(project_path.read_text(encoding="utf-8"))
     assert persisted["updated_at"] == original["updated_at"]
     assert persisted["versions"] == original["versions"]
     assert persisted["confirmed_spec"] == loaded["confirmed_spec"]

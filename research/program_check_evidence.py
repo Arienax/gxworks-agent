@@ -9,75 +9,54 @@ import argparse
 import json
 from pathlib import Path
 
+from gxw.native_diagnostics import (analyze_native_check as analyze_check, bind_native_check_input, bind_native_source_chain, bind_native_source_snapshot,
+                                    project_native_source_identity,
+                                    project_native_source_diagnostic as _project_source_diagnostic)
+
 
 def _id(value):
     return tuple(value) if isinstance(value, list) and len(value) == 12 else None
 
 
-def project_native_source_diagnostic(query, diagnostic, *, project_id, native_version):
-    """Join an original resource diagnostic to a native project-local source.
+def has_current_native_check_code(evidence):
+    """Accept owned task bytes without hiding conflicting observed reads."""
+    traced = evidence.get('checker_resources', {})
+    owned = evidence.get('owned_check_inputs', {}).get('correspondence', 'not_observed')
+    if owned == 'not_observed':
+        return traced.get('correspondence') == 'current'
+    return (owned == 'current' and not traced.get('observation_errors')
+            and traced.get('correspondence') in ('current', 'not_observed')
+            and evidence.get('raw_backend_check', {}).get('completed') is True)
 
-    The 1.635.0.1 workspace lookup returns the Program body (type 32), whose
-    parent is the named POU (type 26). Its language belongs to the POU. Require
-    the independent parent, name, type and language reads; a stored success
-    flag alone is insufficient. This does not repair the public adapter or
-    establish that the checker read current code.
+
+def project_native_source_diagnostic(query, diagnostic, *, project_id, native_version, references=None):
+    """Join an original resource diagnostic to a verified project-local source.
+
+    Source identity, current checker reads and graph positions are separate
+    facts. Optional instance references require complete original ranges.
     """
-    unresolved = {'status': 'unresolved', 'public_check_promoted': False}
-
-    def native_id(value):
-        result = _id(value)
-        return result if result is not None and any(result) and all(
-            type(word) is int and 0 <= word <= 0xffffffff for word in result) else None
-
-    def accepted(value):
-        return isinstance(value, dict) and value.get('hresult') == 0 and value.get('code') == 0
-
-    def text(value):
-        return value.get('text') if isinstance(value, dict) else None
-
-    project = native_id(project_id)
-    if native_version != '1.635.0.1' or project is None:
-        return {**unresolved, 'reason': 'unobserved native version or missing project identity'}
-    if (diagnostic.get('kind') not in (2, 3) or type(diagnostic.get('code')) is not int
-            or not accepted(query) or text(diagnostic.get('library')) != ''
-            or text(diagnostic.get('name')) != query.get('resource')
-            or type(diagnostic.get('step')) is not int or diagnostic['step'] < 0
-            or diagnostic['step'] != query.get('code_step')):
-        return {**unresolved, 'reason': 'original diagnostic and native resource query do not match'}
-    location, source = query.get('location') or {}, query.get('source_object') or {}
-    pou, kind = location.get('pou'), location.get('program_kind')
-    if (location.get('library') != '' or not isinstance(pou, str) or not pou
-            or kind not in (1, 193, 208) or source.get('status') != 'verified-source-object'
-            or native_id(source.get('parent')) != project
-            or source.get('lookup_type') != 32 or source.get('name') != pou):
-        return {**unresolved, 'reason': 'no verified project-local source identity'}
-    lookup, owner_lookup = source.get('lookup') or {}, source.get('owner_lookup') or {}
-    body, owner = source.get('body') or {}, source.get('owner') or {}
-    parent, language = source.get('body_parent') or {}, source.get('language') or {}
-    body_id, owner_id = native_id(lookup.get('id')), native_id(owner_lookup.get('id'))
-    if (not accepted(lookup) or not accepted(owner_lookup) or owner_lookup.get('lookup_type') != 26
-            or body_id is None or owner_id is None or body_id == owner_id
-            or native_id(body.get('id')) != body_id or native_id(owner.get('id')) != owner_id
-            or not accepted(parent) or native_id(parent.get('id')) != owner_id):
-        return {**unresolved, 'reason': 'source body and POU parent identities disagree'}
-    if (not accepted(body.get('read_type')) or body['read_type'].get('data_type') != 32
-            or not accepted(body.get('read_name')) or not body['read_name'].get('name')
-            or not accepted(owner.get('read_type')) or owner['read_type'].get('data_type') != 26
-            or not accepted(owner.get('read_name')) or owner['read_name'].get('name') != pou
-            or not accepted(language) or native_id(language.get('object_id')) != owner_id
-            or language.get('value') != kind or language.get('expected') != kind):
-        return {**unresolved, 'reason': 'native source type, name or POU language does not match'}
-    return {'status': 'source-resolved', 'public_check_promoted': False,
-            'original_diagnostic': diagnostic,
-            'resource': query['resource'], 'diagnostic_step': query['code_step'],
-            'source': {'project_id': list(project), 'pou': pou,
-                       'body_id': list(body_id), 'pou_id': list(owner_id), 'program_kind': kind},
-            'native_position': {key: location.get(key) for key in
-                                ('network', 'start_step', 'step_count', 'element_id',
-                                 'action_transition_present')},
-            'node_port_resolution': 'not-established',
-            'provenance': 'original native location and workspace identity calls'}
+    result = _project_source_diagnostic(query, diagnostic, project_id=project_id, native_version=native_version)
+    if result['status'] != 'source-resolved':
+        return result
+    location = query['location']
+    pou, kind = location['pou'], location['program_kind']
+    if references is not None and kind in (193, 208):
+        scoped = [row for row in references if row.get('program_kind') == kind
+                  and row.get('source') == pou and row.get('library') == ''
+                  and row.get('resource') == query['resource'] and row.get('task') and row.get('instance')
+                  and (row.get('top') == location.get('start_step') and row.get('attribute') == 2
+                       if kind == 193 else row.get('network') == location.get('network'))]
+        adapted = {**query, 'query': {'resource': query['resource'], 'start_step': query['code_step']}}
+        binding = _native_instance_interval(adapted, scoped, query.get('instance_ranges'))
+        interval = binding.pop('interval')
+        if interval is None:
+            result['instance_projection'] = {'status': 'unresolved', **binding}
+        else:
+            reference = interval['native_range_evidence']['original_reference']
+            result['instance_projection'] = {'status': 'instance-resolved',
+                'instance': reference['instance'], 'task': reference['task'],
+                'compiled_interval': interval, 'node_port_resolution': 'not-established'}
+    return result
 
 
 def compare_public_source_diagnostic(public, query, diagnostic, *, project_id, native_version):
@@ -161,8 +140,70 @@ def _debug_st_interval(query, debug, references, encoding):
     return candidates[0] if len(candidates) == 1 else None
 
 
+def _native_instance_interval(query, references, evidence):
+    """Require complete original GetPCodeRange responses for native instances.
+
+    The observed 1.635.0.1 ordinary interface accepts a full instance path
+    without a task prefix.
+    ST uses the observed single-line query. FBD retains every source position
+    field returned by GetPOULocation, including its -1 span; it is not a bbox.
+    An accepted call can still return a null-resource/-1 sentinel. Inactive
+    declarations and cached variable references are not executable intervals.
+    """
+    native, location = query['query'], query['location']
+    missing = {'interval': None}
+    kind = location.get('program_kind')
+    if kind not in (193, 208):
+        return {**missing, 'reason': 'source language outside observed native instance queries'}
+    if (not isinstance(evidence, dict) or evidence.get('status') != 'completed'
+            or evidence.get('resource') != native.get('resource')
+            or evidence.get('diagnostic_step') != native.get('start_step')):
+        return {**missing, 'reason': 'native instance range queries incomplete or mismatched'}
+    candidates = evidence.get('candidates')
+    if not isinstance(candidates, list):
+        return {**missing, 'reason': 'native instance range responses unavailable'}
+    expected = {(row['task'], row['instance']) for row in references}
+    seen, matches = set(), []
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            return {**missing, 'reason': 'malformed native instance range response'}
+        row, source = candidate.get('original_reference'), candidate.get('query') or {}
+        if not isinstance(row, dict) or row not in references:
+            return {**missing, 'reason': 'native interval reference differs from current source references'}
+        identity = (row['task'], row['instance'])
+        if identity in seen:
+            return {**missing, 'reason': 'duplicate native instance range response'}
+        seen.add(identity)
+        expected_source = {'library': '', 'pou': row['instance'], 'program_kind': kind,
+            'network': location.get('network'), 'start_step': location.get('start_step'),
+            'step_count': 1 if kind == 193 else location.get('step_count'), 'element_id': location.get('element_id')}
+        if (source != expected_source
+                or any(type(source.get(key)) is not int for key in
+                       ('program_kind','network','start_step','step_count','element_id'))
+                or any(type(candidate.get(key)) is not int or candidate[key] != 0 for key in ('hresult','code'))):
+            return {**missing, 'reason': 'original native source range query failed or differs'}
+        value = candidate.get('range')
+        if (isinstance(value, dict) and value.get('resource') is None
+                and all(value.get(key) == -1 for key in ('start_step', 'step_count', 'timestamp'))):
+            continue
+        if (not isinstance(value, dict) or value.get('resource') != native.get('resource')
+                or any(type(value.get(key)) is not int for key in ('start_step','step_count','timestamp'))
+                or value['start_step'] < 0 or value['step_count'] <= 0 or value['timestamp'] < 0):
+            return {**missing, 'reason': 'native source interval is absent or belongs to another resource'}
+        if value['start_step'] <= native['start_step'] < value['start_step'] + value['step_count']:
+            matches.append(dict(name=row['task']+'.'+row['instance'], step_start=value['start_step'],
+                step_count=value['step_count'], token_offset=None, token_length=None,
+                native_range_evidence=candidate))
+    if seen != expected or not expected:
+        return {**missing, 'reason': 'native instance range selection is incomplete'}
+    if len(matches) != 1:
+        return {**missing, 'reason': 'native instance source interval missing or ambiguous',
+                'range_candidates': len(matches)}
+    return {'interval': matches[0]}
+
+
 def correlate_st_diagnostic(query, link_rows, references, source_texts, caller_nodes, *, debug=None,
-                            debug_encoding=None, caller_pou=None):
+                            debug_encoding=None, caller_pou=None, native_ranges=None):
     """Correlate a controlled native ST line with one compiled FB instance.
 
     This is saved evidence processing, not a replacement public check. Exact
@@ -170,6 +211,8 @@ def correlate_st_diagnostic(query, link_rows, references, source_texts, caller_n
     explicit native FB call references through ST callers to a current FBD
     node; do not infer parents by splitting instance names. Optional same-
     compile debug data can resolve an inlined FB without a link-map row.
+    When original instance range responses are supplied, require their complete
+    agreement and do not replace a failed or conflicting API result with caches.
     """
     location = query.get('location') or {}
     unresolved = {'status': 'unresolved', 'public_check_promoted': False}
@@ -190,9 +233,16 @@ def correlate_st_diagnostic(query, link_rows, references, source_texts, caller_n
     ranges = [row for row in link_rows if type(step) is int and row['step_count'] > 0
               and row['step_start'] <= step < row['step_start'] + row['step_count']]
     interval = ranges[0] if len(ranges) == 1 else None
+    if native_ranges is not None:
+        if type(step) is not int or step < 0:
+            return {**unresolved, 'reason': 'original diagnostic code step is unavailable'}
+        resolved = _native_instance_interval(query, line_references, native_ranges)
+        if resolved['interval'] is None:
+            return {**unresolved, **{key:value for key,value in resolved.items() if key != 'interval'}}
+        interval = resolved['interval']
     matches = [row for row in line_references if interval is not None
                and row['task'] + '.' + row['instance'] == interval['name']]
-    if type(step) is int and len(matches) != 1:
+    if native_ranges is None and type(step) is int and len(matches) != 1:
         recovered = _debug_st_interval(query, debug, line_references, debug_encoding)
         if recovered is not None:
             interval = recovered
@@ -264,11 +314,13 @@ def correlate_st_diagnostic(query, link_rows, references, source_texts, caller_n
         result['limits'][0] = 'controlled ST-to-FBD call chain, not an expression span'
     if 'debug_evidence' in interval:
         result['debug_evidence'] = interval['debug_evidence']
+    if 'native_range_evidence' in interval:
+        result['native_range_evidence'] = interval['native_range_evidence']
     return result
 
 
 def correlate_fbd_bool_output(query, diagnostic, records, references, model, *, selected_pou, connectivity=None):
-    """Correlate an observed FX3U direct FB BOOL-port LD/OUT diagnostic.
+    """Correlate observed FX3U/FX3UC and Q03UDV scalar FB output diagnostics.
 
     records must already agree with native lexical reads and native prefix
     GetStepSize. The caller binds all inputs to one current owned compilation.
@@ -283,9 +335,9 @@ def correlate_fbd_bool_output(query, diagnostic, records, references, model, *, 
         return canonical_record({'kind':'instruction','op':'LD','args':[value]})['args'][0]
     location = query.get('location') or {}
     resource, step = query.get('resource'), query.get('code_step')
-    if (model.get('schema_version') != 2 or model.get('cpu') != 'FX3U/FX3UC'
+    if (model.get('schema_version') != 2 or model.get('cpu') not in ('FX3U/FX3UC','Q03UDV')
             or model.get('unknown_record_count') != 0):
-        return reject('outside observed FX3U source/graph scope')
+        return reject('outside observed FX3U/FX3UC or Q03UDV source/graph scope')
     if (query.get('hresult') != 0 or query.get('code') != 0
             or location.get('program_kind') != 208 or location.get('library') != ''
             or not selected_pou or location.get('pou') != selected_pou):
@@ -301,16 +353,45 @@ def correlate_fbd_bool_output(query, diagnostic, records, references, model, *, 
     output = at[0]
     if not arguments[0].get('text') or device(output['args'][0]) != device(arguments[0]['text']):
         return reject('native diagnostic operand differs from OUT')
+    def output_chain(write):
+        # Q03UDV's controlled one-driver/two-terminal case emits LD/OUT/OUT.
+        # Follow only contiguous ordinary OUT records; every other opcode,
+        # lexical gap or duplicate record leaves the producer unresolved.
+        chain,seen = [write],set()
+        for _ in range(64):
+            current=chain[-1]
+            if (any(type(current.get(key)) is not int for key in
+                    ('record_index','native_step','source_offset','source_end'))
+                    or current['record_index'] in seen or current['record_index']<0
+                    or sum(type(r.get('record_index')) is int and r['record_index']==current['record_index']
+                           for r in records)!=1
+                    or not 0<=current['source_offset']<current['source_end']):
+                return None
+            seen.add(current['record_index'])
+            previous=[r for r in records if type(r.get('record_index')) is int
+                and r['record_index']==current['record_index']-1]
+            if len(previous)!=1:
+                return None
+            prior=previous[0]
+            if (len(prior.get('args',[]))!=1
+                    or any(type(prior.get(key)) is not int for key in ('native_step','source_offset','source_end'))
+                    or prior['source_end']!=current['source_offset']
+                    or not 0<=prior['source_offset']<prior['source_end']
+                    or not 0<=prior['native_step']<current['native_step']):
+                return None
+            if prior.get('op')=='LD':
+                return [prior,*reversed(chain)]
+            if prior.get('op')!='OUT':
+                return None
+            chain.append(prior)
+        return None
     def direct_read(write):
-        previous = [r for r in records if r.get('record_index') == write['record_index'] - 1]
-        if (len(previous) != 1 or previous[0].get('op') != 'LD' or len(previous[0].get('args', [])) != 1
-                or previous[0].get('source_end') != write.get('source_offset')
-                or previous[0].get('source_end') is None):
-            return None
-        return previous[0]
-    read = direct_read(output)
-    if read is None:
-        return reject('not an adjacent native LD/OUT pair')
+        chain=output_chain(write)
+        return chain[0] if chain is not None else None
+    chain=output_chain(output)
+    if chain is None:
+        return reject('not a contiguous native LD/OUT output chain')
+    read=chain[0]
     scoped = [r for r in references if r.get('resource') == resource and r.get('source') == selected_pou
         and r.get('program_kind') == 208 and r.get('library') == ''
         and r.get('network') == location.get('network')]
@@ -341,6 +422,15 @@ def correlate_fbd_bool_output(query, diagnostic, records, references, model, *, 
     if len(calls) != 1:
         return reject('current native FB instance is missing or ambiguous')
     point = [source['x']+port['x'],source['y']+port['y']]
+    def scalar_terminal(row):
+        # Original direct-device references have no declaration type. The
+        # independently observed scalar local/global BOOL references do.
+        # Other declaration roles, arrays and conflicting types stay unresolved.
+        return (type(row.get('array_data_type')) is int and row['array_data_type']==0
+            and ((type(row.get('class_code')) is int and row['class_code']==0
+                  and type(row.get('data_type')) is int and row['data_type']==0)
+                or (type(row.get('class_code')) is int and row['class_code'] in (1,8)
+                    and type(row.get('data_type')) is int and row['data_type']==1)))
     def connection(node, endpoint):
         target_point = [node['x']+endpoint['x'],node['y']+endpoint['y']]
         if connectivity is None:
@@ -375,7 +465,7 @@ def correlate_fbd_bool_output(query, diagnostic, records, references, model, *, 
                 return None
             # Direct device terminals report data_type=0; use their original
             # native LD/OUT operands rather than inventing a BOOL type field.
-            writes = [r for r in scoped if r.get('attribute') == 2 and r.get('address')
+            writes = [r for r in scoped if r.get('attribute') == 2 and r.get('address') and scalar_terminal(r)
                 and r.get('name') == terminal['symbol'] and bbox(r) == node_bbox(terminal)
                 and r.get('task') == producer.get('task') and r.get('instance') == producer.get('instance')]
             if len(writes) != 1:
@@ -395,7 +485,7 @@ def correlate_fbd_bool_output(query, diagnostic, records, references, model, *, 
                 'wire_scope':'all conductors in the current Core net, not a unique path'}
     destinations = []
     for reference in scoped:
-        if (reference.get('attribute') != 2 or not reference.get('address')
+        if (reference.get('attribute') != 2 or not reference.get('address') or not scalar_terminal(reference)
                 or device(reference['address']) != device(output['args'][0])
                 or reference.get('task') != producer.get('task')
                 or reference.get('instance') != producer.get('instance')):
@@ -417,9 +507,11 @@ def correlate_fbd_bool_output(query, diagnostic, records, references, model, *, 
                 'port_name':port['name'],'side':'out','point':point},
             output_status='ambiguous' if destinations else 'missing',
             output_candidates=sorted({node['id'] for node,_,_ in destinations}))
+        if len(chain)>2:
+            result['native_output_chain']=chain
         return result
     destination, reference, link = destinations[0]
-    return {'status':'uniquely_correlated','public_check_promoted':False,
+    result = {'status':'uniquely_correlated','public_check_promoted':False,
         'original_kind':diagnostic['kind'],'original_code':diagnostic['code'],
         'resource':resource,'source_pou':selected_pou,'diagnostic_step':step,
         'native_pair':{'read':read,'write':output},'native_member':producer,
@@ -428,138 +520,11 @@ def correlate_fbd_bool_output(query, diagnostic, records, references, model, *, 
         'output':{'object_id':destination['id'],'source_offset':destination['source_offset'],
             'symbol':destination['symbol'],'bbox':node_bbox(destination),'native_reference':reference},
         'connection':link,
-        'limits':['adjacent native LD/OUT and direct scalar FB BOOL/output connection only',
+        'limits':['contiguous native LD/OUT chain and direct scalar FB BOOL/output connection only',
             'current native facts and source context required; no execution claim']}
-
-
-def analyze_check(events, observations, generated, *, selection=None, reopened=None, source_audits=None):
-    """generated maps native resource IDs to three exact GetPCode buffers."""
-    trace = [row.get('payload', row) for row in observations if row.get('type') != 'error']
-    observation_errors = [row for row in observations if row.get('type') == 'error']
-    observation_errors += [row for row in trace if row.get('event') == 'observation-error']
-    planned, collection = [], None
-    collecting = False
-    for row in events:
-        if row.get('operation') == 'Workspace.GetProgramCheckCollection':
-            collecting = True
-        elif collecting and row.get('operation') == 'InventoryCount':
-            collection = _id(row.get('id'))
-        elif collecting and row.get('operation') == 'NativeObject' and _id(row.get('parent')) == collection:
-            planned.append(_id(row['id']))
-        elif row.get('operation') == 'ProgramCheckTarget':
-            collecting = False
-    started = [_id(row['id']) for row in events if row.get('operation') == 'ProgramCheckTarget']
-    planned = list(dict.fromkeys(planned or started))
-    reads, queries = [], []
-    for row in trace:
-        if row.get('event') != 'workspace-pcode-read' or row.get('phase') != 'check':
-            continue
-        buffers = row.get('buffers', [])
-        query = (row.get('hresult') == row.get('code') == 0 and row.get('requested_sizes') == [0, 0, 0]
-                 and any(b.get('size') and b.get('raw_hex') is None for b in buffers))
-        if query:
-            queries.append(row['serial'])
-            continue
-        actual = []
-        for buffer in buffers:
-            raw = buffer.get('raw_hex')
-            # A successful zero-length channel has no bytes even with NULL.
-            if raw is None and buffer.get('size') == 0 and row.get('hresult') == row.get('code') == 0:
-                raw = ''
-            actual.append(bytes.fromhex(raw) if raw is not None else None)
-        expected = generated.get(_id(row.get('target')))
-        if (row.get('hresult') != 0 or row.get('code') != 0 or len(actual) != 3 or any(b is None for b in actual)
-                or any(len(data) != buffer.get('size') for data, buffer in zip(actual, buffers) if data is not None)):
-            status = 'unreadable'
-        elif expected is None:
-            status = 'unbound_resource'
-        else:
-            status = 'current' if tuple(actual) == tuple(expected) else 'stale'
-        reads.append({'serial': row['serial'], 'check_target': row.get('check_target'),
-                      'resource': row.get('target'), 'channel_sizes': [b.get('size') for b in buffers], 'status': status})
-    completed_backend = list(dict.fromkeys(_id(row.get('target')) for row in trace
-        if row.get('event') == 'backend-check-progress' and row.get('percent') == 100
-        and row.get('hresult') == row.get('code') == 0))
-    public_completion = [row for row in events if row.get('operation') == 'ProgramCheckCompleted']
-    drained_completion = [row for row in events if row.get('operation') == 'ProgramCheckPollingFinished']
-    target, drained_targets = None, []
-    for row in events:
-        if row.get('operation') == 'ProgramCheckReportContext':
-            target = _id(row.get('target'))
-        elif row.get('operation') == 'ProgramCheckTargetOutcome' and 'public_check' in row:
-            drained_targets.append((target, row['public_check']))
-    projection_failures = [row for row in trace if row.get('event') == 'diagnostic-projection-failure']
-    failed_public_poll = any(row.get('operation') in ('ProgramCheckProgress.GetProgress', 'ProgramCheckOriginalProgress')
-        and (row.get('hresult', 0) < 0 or row.get('code', 0) != 0) for row in events)
-    public_diagnostics = [report for row in events if (row.get('operation', '').startswith('ProgramCheckProgress')
-        or row.get('operation') == 'ProgramCheckOriginalReports')
-        for report in row.get('reports', []) if report.get('kind') in (2, 3)]
-    backend_diagnostics = [report for row in trace if row.get('event') == 'backend-check-progress'
-        for report in row.get('reports', []) if report.get('kind') in (2, 3)]
-    legacy_completed = bool(public_completion) and public_completion[-1].get('targets') == len(planned)
-    drained_completed = (bool(drained_completion) and drained_completion[-1].get('targets') == len(planned)
-        and len(drained_targets) == len(planned) and {t for t, _ in drained_targets} == set(planned)
-        and all(status in ('completed-accepted', 'completed-rejected') for _, status in drained_targets))
-    whole_completed = (bool(planned) and set(started) == set(planned)
-        and (legacy_completed or drained_completed) and not projection_failures and not failed_public_poll)
-    public_status = ('rejected' if (public_completion and public_completion[-1].get('rejected'))
-                     or any(status == 'completed-rejected' for _, status in drained_targets)
-                     or any(d['kind'] == 2 for d in public_diagnostics)
-                     else 'passed') if whole_completed else 'incomplete'
-    source_binding = ('conflicted' if source_audits and any(a['status'] == 'source-conflict' for a in source_audits)
-        else 'consistent' if source_audits and len(source_audits) == len(public_diagnostics)
-            and all(a['status'] == 'source-consistent' for a in source_audits)
-        else 'partial_or_unresolved' if source_audits else 'not_observed')
-    requested = any(row.get('operation') == 'Workspace.GetProgramCheckCollection' for row in events) or bool(started)
-    if not requested:
-        public_status = 'not_requested'
-    if not reads:
-        correspondence = 'not_observed'
-    elif observation_errors or any(row['status'] not in ('current', 'stale') for row in reads):
-        correspondence = 'not_established'
-    elif any(row['status'] == 'stale' for row in reads):
-        correspondence = 'stale'
-    elif not planned or any(not any(_id(row['check_target']) == target for row in reads) for target in planned):
-        correspondence = 'partial_targets'
-    else:
-        correspondence = 'current'
-    compile_completed = any(row.get('operation') == 'Progress' and row.get('percent') == 100 for row in events)
-    compile_diagnostics = [report for row in events if row.get('operation') == 'Progress'
-        for report in row.get('reports', []) if report.get('kind') in (2, 3)]
-    compile_failures = [row for row in events if row.get('operation') in ('Compiler.Build', 'Progress.GetProgress')
-        and (row.get('hresult', 0) < 0 or row.get('code', 0) != 0)]
-    compile_started = any(row.get('operation') == 'Compiler.Build'
-        and row.get('hresult') == row.get('code') == 0 for row in events)
-    compile_acceptance = ('rejected' if compile_failures or any(row['kind'] == 2 for row in compile_diagnostics)
-        else 'accepted' if compile_started and compile_completed else 'not_established')
-    selected = selection or {'status': 'not_observed'}
-    selection_current = (selected.get('status') == 'verified' and selected.get('source_bytes_current') is True
-        and selected.get('configuration_bytes_current') is True and bool(selected.get('selected_sources'))
-        and not selected.get('empty_task'))
-    current_source_check = ('established' if selection_current and compile_acceptance == 'accepted'
-        and correspondence == 'current' and whole_completed else 'not_established')
-    return {
-        'selection': selected,
-        'compilation': {'completed': compile_completed, 'acceptance': compile_acceptance,
-            'diagnostics': compile_diagnostics, 'failures': compile_failures,
-            'returned_resources': sum(row.get('operation') == 'Resource' for row in events), 'bound_resources': len(generated)},
-        'publication': {'completed': any(row.get('operation') == 'Workspace.UpdatePCodeBeforeProgramCheck'
-            and row.get('hresult') == row.get('code') == 0 for row in events)},
-        'checker_resources': {'correspondence': correspondence, 'reads': reads, 'size_queries': queries,
-                              'observation_errors': observation_errors},
-        'targets': {'planned': [list(t) for t in planned], 'started': [list(t) for t in started],
-                    'backend_completed': [list(t) for t in completed_backend]},
-        'public_check': {'status': public_status, 'completed': whole_completed},
-        'diagnostic_projection': {'status': 'failed' if projection_failures or failed_public_poll else
-            'completed' if whole_completed else 'not_completed', 'failures': projection_failures,
-            'source_body_binding': source_binding, 'source_audits': source_audits or [],
-            'public_diagnostics': public_diagnostics, 'backend_diagnostics': backend_diagnostics,
-            'empty_public_list_means_no_errors': whole_completed and not public_diagnostics and not backend_diagnostics},
-        'save': {'completed': any(row.get('operation') == 'SaveProject' and row.get('hresult') == row.get('code') == 0
-            for row in events), 'exported': any(row.get('operation') == 'NativeExport' for row in events)},
-        'reopen': reopened or {'status': 'not_observed'},
-        'current_source_check': current_source_check,
-    }
+    if len(chain)>2:
+        result['native_output_chain']=chain
+    return result
 
 
 def analyze_directory(directory):
@@ -571,6 +536,22 @@ def analyze_directory(directory):
     resources = {row['name']: tuple((directory/f"pcode-{row['index']}-{i}.bin").read_bytes() for i in range(3))
                  for row in events if row.get('operation') == 'Resource'}
     generated = {identity: resources[name] for identity, name in names.items() if name in resources}
+    published = {}
+    owned_snapshots = {}
+    for row in events:
+        if row.get('operation') == 'OwnedCheckInput':
+            for item in row.get('rows', []):
+                path = directory / item['file']
+                if path.resolve().is_relative_to(directory.resolve()) and path.is_file():
+                    owned_snapshots[item['file']] = path.read_bytes()
+        if row.get('operation') != 'PublishedResourceCodeCorrespondence':
+            continue
+        channels = row.get('channels', [])
+        if len(channels) != 3 or [channel.get('channel') for channel in channels] != [0, 1, 2]:
+            continue
+        paths = [directory/channel['published_snapshot'] for channel in channels]
+        if all(path.resolve().is_relative_to(directory.resolve()) and path.is_file() for path in paths):
+            published[_id(row.get('target'))] = tuple(path.read_bytes() for path in paths)
     source_audits = []
     audit_path = directory/'public-source-diagnostic-audit.json'
     if audit_path.exists():
@@ -588,7 +569,8 @@ def analyze_directory(directory):
                 name={'text': bytes.fromhex(raw['name_hex']).decode('cp936')})
             source_audits.append(compare_public_source_diagnostic(public, row['source_query'], original,
                 project_id=projects[0] if len(projects) == 1 else None, native_version=version))
-    return analyze_check(events, observations, generated, source_audits=source_audits)
+    return analyze_check(events, observations, generated, source_audits=source_audits,
+                         published=published, owned_snapshots=owned_snapshots)
 
 
 if __name__ == '__main__':

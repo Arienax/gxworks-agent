@@ -10,7 +10,7 @@ from inspection.models import (
     normalize_inspection_report,
     normalize_plc_model,
 )
-from plc.validation import PLCJsonValidationError, validate_ladder_full
+from plc.validation import ApproachContractValidationError, PLCJsonValidationError, validate_ladder_full
 from plc.review import findings_to_dicts, review_ladder
 
 
@@ -69,13 +69,17 @@ def _hard_validation_finding(error, ladder):
         "source": "local",
         "severity": "error",
         "category": "hard_validation",
-        "title": "梯形图硬校验失败",
+        "title": "所选方案约束未满足" if isinstance(error, ApproachContractValidationError) else "梯形图硬校验失败",
         "message": message,
         "evidence": [str(error)],
         "rung_ids": rung_ids,
         "json_paths": [path],
         "addresses": addresses,
-        "suggestion": "先修正结构、地址或指令兼容错误，再进行版本修复。",
+        "suggestion": (
+            "核对已确认方案与当前实现；有效梯形图的独立逻辑检查仍可继续。"
+            if isinstance(error, ApproachContractValidationError)
+            else "先修正结构、地址或指令兼容错误，再进行版本修复。"
+        ),
         "fixable": False,
         "confidence": "high",
     }
@@ -174,17 +178,24 @@ def _static_findings(ladder, confirmed_spec, plc_model):
     """Return P4/P5 findings, suppressing equivalent legacy report rows."""
 
     from plc.ir import build_plc_ir
+    from plc.semantics import semantic_requirements_from_spec
 
     program = build_plc_ir(
         ladder,
         plc_model=plc_model,
         confirmed_spec=confirmed_spec,
+        semantic_requirements=semantic_requirements_from_spec(confirmed_spec),
     )
-    return program, [
-        dict(item, source="local")
-        for item in (program.get("analysis") or {}).get("findings", [])
-        if isinstance(item, Mapping)
-    ]
+    findings = []
+    for item in (program.get("analysis") or {}).get("findings", []):
+        if isinstance(item, Mapping):
+            finding = dict(item, source="local")
+            # Distinct semantic requirements can expose the identical missing
+            # implementation. Keep all requirements in IR, but show that exact
+            # proof once. Different evidence, units or locations remain separate.
+            if finding not in findings:
+                findings.append(finding)
+    return program, findings
 
 
 def _finding_signature(finding):
@@ -246,13 +257,16 @@ def run_local_inspection(
             plc_model=model,
             confirmed_spec=confirmed_spec,
         )
+    except ApproachContractValidationError as error:
+        # The full validator checks the strategy contract after structural and
+        # instruction checks. Keep this error while inspecting valid logic.
+        findings.append(_hard_validation_finding(error, ladder))
     except (PLCJsonValidationError, TypeError, ValueError) as error:
         hard_validation_passed = False
         findings.append(_hard_validation_finding(error, ladder))
 
-    # Advisory rules assume a structurally valid ladder.  Continuing after a
-    # hard failure turns one root problem into many secondary warnings and can
-    # make a generated program look far worse than the evidence supports.
+    # Structural/instruction failures would produce secondary warnings; a
+    # strategy mismatch leaves valid logic available for independent checks.
     if hard_validation_passed:
         legacy_findings = findings_to_dicts(
             review_ladder(

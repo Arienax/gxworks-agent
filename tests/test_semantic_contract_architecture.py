@@ -44,6 +44,45 @@ def _ladder(opcode, operands, *, inputs=None):
     }
 
 
+@pytest.mark.parametrize("opcode,operands,used,unused", [
+    ("MUL", ["D410", "K5", "D430"], ["D430", "D431"], "D432"),
+    ("DMUL", ["D410", "K5", "D430"], ["D430", "D431", "D432", "D433"], "D434"),
+    ("DDIV", ["D430", "K2", "D432"], ["D432", "D433", "D434", "D435"], "D436"),
+    ("BMOV", ["D500", "D520", "K10"], ["D520", "D529"], "D530"),
+])
+def test_device_obligations_include_definition_result_regions(opcode, operands, used, unused):
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+
+    ladder = _ladder(opcode, operands)
+    before = copy.deepcopy(ladder)
+    spec = {"plc_model": "FX3U", "selected_approach": {
+        "implementation_semantics": [],
+        "explicit_user_constraints": {"required_devices": used},
+    }}
+    assert validate_confirmed_semantics(ladder, spec)["status"] == "verified"
+    assert validate_ladder_full(ladder, "FX3U", confirmed_spec=spec) == ladder
+    spec["selected_approach"]["explicit_user_constraints"]["forbidden_devices"] = [used[-1]]
+    result = validate_confirmed_semantics(ladder, spec)
+    assert any(row["expected"] == used[-1] for row in result["violations"])
+    spec["selected_approach"]["explicit_user_constraints"] = {"required_devices": [unused]}
+    assert validate_confirmed_semantics(ladder, spec)["status"] == "violated"
+    assert ladder == before
+
+
+@pytest.mark.parametrize("opcode,operands", [
+    ("BMOV", ["D500", "D520", "D100"]),
+    ("VENDOR_UNKNOWN", ["D500", "D520"]),
+])
+def test_device_obligations_do_not_guess_dynamic_or_unknown_result_regions(opcode, operands):
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+
+    spec = {"plc_model": "FX3U", "selected_approach": {
+        "implementation_semantics": [],
+        "explicit_user_constraints": {"required_devices": ["D521"]},
+    }}
+    assert validate_confirmed_semantics(_ladder(opcode, operands), spec)["status"] == "violated"
+
+
 @pytest.mark.parametrize(
     "structure",
     ["hardware_counter", "self_hold", "register_state_machine"],
@@ -207,7 +246,7 @@ def test_target_usage_reuses_existing_rules_without_cross_certifying_purpose_or_
         "same_device_prefix_only": True, "error_code": "K6710",
     }
     assert next(fact for fact in destination["usage_facts"] if fact["facet"] == "range")["value"]["length_position"] == 3
-    assert length["purpose_status"] == count["purpose_status"] == "unresolved"
+    assert length["purpose_status"] == count["purpose_status"] == "candidate_evidence"
     assert source_range["status"] == "source_verified"
     assert source_range["sources"][0]["target_model"] == "FX3U"
     assert not any(slot["usage_facts"] for slot in resolve_instruction_lanes("SFTL", plc_model="FX5U")["operand_slots"])
@@ -380,3 +419,25 @@ def test_fresh_explicit_constraints_use_grounded_claims_not_keyword_parser():
     assert "evidence_not_in_current_request" in compiler_source
     assert "target_not_grounded_in_evidence" in compiler_source
     assert 'scope == "global"' in compiler_source
+
+
+@pytest.mark.parametrize('mutation', [None, 'untyped', 'self_confirmed_root'])
+def test_operation_effect_candidates_use_the_analysis_protocol_boundary(mutation):
+    import copy
+    import json
+    from pathlib import Path
+    from application.analysis_results import current_analysis_protocol_violations
+    from plc.instruction_binding import normalize_operation_intents
+    case = json.loads((Path(__file__).resolve().parents[1] /
+        'benchmarks/agent_b_instruction_effect_cases.jsonl').read_text(encoding='utf-8').splitlines()[0])
+    claim = copy.deepcopy(case['confirmed_spec']['operation_intents'][0])
+    payload = {'approaches': [], 'operation_intent_claims': [claim]}
+    if mutation == 'untyped':
+        claim['enable']['type'] = 'bool'
+    elif mutation == 'self_confirmed_root':
+        payload['operation_intents'] = [claim]
+    violations = current_analysis_protocol_violations(payload)
+    assert bool(violations) == (mutation is not None)
+    if mutation is None:
+        row = normalize_operation_intents(payload['operation_intent_claims'], candidate=True)[0]
+        assert row['status'] == 'candidate' and row['provenance']['source'] == 'model_candidate'

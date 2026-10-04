@@ -81,6 +81,15 @@ def current_analysis_protocol_violations(result):
     violations.extend(
         explicit_constraint_claim_violations(result.get("explicit_constraint_claims"))
     )
+    if 'operation_intents' in result:
+        violations.append('$.operation_intents: model must use operation_intent_claims; confirmation belongs to the user')
+    if 'operation_intent_claims' in result:
+        from plc.instruction_binding import normalize_operation_intents
+        from plc.instruction_definition import DefinitionError
+        try:
+            normalize_operation_intents(result['operation_intent_claims'], candidate=True)
+        except DefinitionError as error:
+            violations.append('$.operation_intent_claims: ' + str(error))
     for index, approach in enumerate(approaches):
         path = f"$.approaches[{index}]"
         if not isinstance(approach, dict):
@@ -675,6 +684,11 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     normalized.update(analysis_context(
         public_generation_value(user_text), normalized.get("approaches", []), confirmed_spec,
     ))
+    if normalized.get("operation_intent_claims"):
+        from plc.instruction_binding import normalize_operation_intents
+        normalized["operation_intents"] = normalize_operation_intents(
+            normalized["operation_intent_claims"], candidate=True, evidence_text=user_text,
+        )
     return normalized
 
 

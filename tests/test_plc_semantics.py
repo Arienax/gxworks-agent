@@ -12,6 +12,76 @@ from plc.semantics import (
 )
 
 
+@pytest.mark.parametrize('bits', [8, 16, 32, 64])
+@pytest.mark.parametrize('signed', [False, True])
+def test_instruction_expression_finite_word_roundtrip_and_bit_invariants(bits, signed):
+    from plc.instruction_definition import Expression, ValueType, evaluate_expression
+    kind = {'kind': 'int', 'bits': bits, 'signed': signed}
+    value_type = ValueType.from_mapping(kind)
+    minimum, maximum = value_type.bounds
+    edges = {minimum, maximum, 0, 1, maximum // 2}
+    if signed:
+        edges.add(-1)
+    parameter = {'op': 'parameter', 'name': 'input', 'type': kind}
+    invert = {'op': 'bit_not', 'type': kind, 'overflow': 'wrap', 'args': [parameter]}
+    double_invert = {'op': 'bit_not', 'type': kind, 'overflow': 'wrap', 'args': [invert]}
+    for value in sorted(edges):
+        assert value_type.decode_bits(value & ((1 << bits) - 1)) == value
+        assert evaluate_expression(double_invert, {'input': value}) == value
+        expr = Expression.from_mapping(double_invert)
+        assert Expression.from_mapping(expr.as_mapping()) == expr
+
+
+@pytest.mark.parametrize('bits', [8, 16, 32])
+def test_instruction_expression_signed_comparison_and_overflow_are_separate(bits):
+    from plc.instruction_definition import DefinitionError, UnknownInstructionSemantics, evaluate_expression
+    kind = {'kind': 'int', 'bits': bits, 'signed': True}
+    boolean = {'kind': 'bool'}
+    left = {'op': 'parameter', 'name': 'left', 'type': kind}
+    right = {'op': 'parameter', 'name': 'right', 'type': kind}
+    maximum = (1 << (bits - 1)) - 1
+    compare = {'op': 'lt', 'type': boolean, 'args': [left, right]}
+    assert evaluate_expression(compare, {'left': (1 << bits) - 1, 'right': 0}) is True
+    total = {'op': 'add', 'type': kind, 'args': [left, right]}
+    with pytest.raises(UnknownInstructionSemantics):
+        evaluate_expression(total, {'left': maximum, 'right': 1})
+    with pytest.raises(DefinitionError):
+        evaluate_expression({**total, 'overflow': 'reject'}, {'left': maximum, 'right': 1})
+    assert evaluate_expression({**total, 'overflow': 'wrap'}, {'left': maximum, 'right': 1}) == -(1 << (bits - 1))
+
+
+def test_instruction_expression_canonical_symmetry_does_not_change_direction_or_type():
+    from plc.instruction_definition import canonical_expression
+    kind = {'kind': 'int', 'bits': 16, 'signed': True}
+    a = {'op': 'device', 'name': 'D1450', 'type': kind}
+    b = {'op': 'constant', 'value': -37, 'type': kind}
+    expr = lambda op, left, right: {'op': op, 'type': {'kind': 'bool'}, 'args': [left, right]}
+    assert canonical_expression(expr('lt', a, b)) == canonical_expression(expr('gt', b, a))
+    assert canonical_expression(expr('lt', a, b)) != canonical_expression(expr('gt', a, b))
+    assert canonical_expression(expr('eq', a, b)) == canonical_expression(expr('eq', b, a))
+
+
+@pytest.mark.parametrize('bits', [8, 16, 32])
+def test_widening_product_preserves_full_signed_result_and_rejects_narrowing(bits):
+    from itertools import product
+    from plc.instruction_definition import Expression, DefinitionError, evaluate_expression
+    source = {'kind': 'int', 'bits': bits, 'signed': True}
+    result = {**source, 'bits': bits * 2}
+    raw = {'op': 'mul', 'type': result, 'args': [
+        {'op': 'parameter', 'type': source, 'name': name} for name in ('left', 'right')]}
+    expression = Expression.from_mapping(raw)
+    values = range(-128, 128) if bits == 8 else [
+        -(1 << (bits - 1)), -(1 << (bits - 1)) + 1, -73, -1, 0, 1, 97, (1 << (bits - 1)) - 1]
+    for left, right in product(values, repeat=2):
+        assert evaluate_expression(expression, {'left': left, 'right': right}) == left * right
+    assert Expression.from_mapping(expression.as_mapping()) == expression
+    if bits > 8:
+        with pytest.raises(DefinitionError, match='narrow'):
+            Expression.from_mapping({**raw, 'type': {**source, 'bits': bits // 2}})
+    with pytest.raises(DefinitionError, match='reinterpret'):
+        Expression.from_mapping({**raw, 'type': {**result, 'signed': False}})
+
+
 def _input(kind, address, label=""):
     return {"type": kind, "address": address, "label": label}
 
@@ -416,6 +486,38 @@ def test_first_scan_requirement_rejects_m8000_continuous_initialization_semantic
     assert strict_semantic_gaps(program)[0]["semantic"] == "FIRST_SCAN"
 
 
+@pytest.mark.parametrize("opcode,contact_kind,expected", [
+    ("PLS", "NO", "RISING_EDGE"), ("PLF", "NO", "FALLING_EDGE"),
+    ("PLS", "NC", "FALLING_EDGE"), ("PLF", "NC", "RISING_EDGE"),
+])
+def test_single_contact_pulse_output_proves_source_edge_without_changing_network_enable(opcode, contact_kind, expected):
+    output = {"type": opcode, "address": "M10"}
+    data = _ladder(_rung(1, inputs=[_input(contact_kind, "X2")], outputs=[output]))
+    requirements = [{"semantic": expected, "devices": ["X2"], "strict": True}]
+    program = build_plc_ir(data, semantic_requirements=requirements)
+    assert program["networks"][0]["execution"]["semantics"] == ["LEVEL"]
+    assert program["timing"]["coverage"][0]["status"] == "satisfied"
+    assert strict_semantic_gaps(program) == []
+    opposite = "FALLING_EDGE" if expected == "RISING_EDGE" else "RISING_EDGE"
+    wrong = build_plc_ir(data, semantic_requirements=[{"semantic": opposite, "devices": ["X2"], "strict": True}])
+    assert wrong["timing"]["coverage"][0]["status"] == "unresolved"
+    assert validate_plc_ir(program) is program
+
+
+@pytest.mark.parametrize("extra_condition", ["series", "parallel", "other_device"])
+def test_pulse_output_does_not_certify_an_unproven_source_edge(extra_condition):
+    inputs = [_input("NO", "X2")]
+    if extra_condition == "series":
+        inputs.append(_input("NO", "X3"))
+    elif extra_condition == "parallel":
+        inputs = [{"type": "parallel_block", "branches": [inputs, [_input("NO", "X3")]]}]
+    else:
+        inputs = [_input("NO", "X3")]
+    data = _ladder(_rung(1, inputs=inputs, outputs=[{"type": "PLS", "address": "M10"}]))
+    program = build_plc_ir(data, semantic_requirements=[{"semantic": "RISING_EDGE", "devices": ["X2"], "strict": True}])
+    assert program["timing"]["coverage"][0]["status"] == "unresolved"
+
+
 def test_state_machine_is_structured_with_separate_transition_and_output_regions():
     ladder = _ladder(
         _rung(
@@ -575,3 +677,412 @@ def test_saved_sfc_cli_is_read_only(tmp_path, capsys):
     assert main([str(source)]) == 0
     assert "Y0" in capsys.readouterr().out
     assert source.read_bytes() == before and list(tmp_path.iterdir()) == [source]
+
+
+def _effect_cases():
+    import json
+    from pathlib import Path
+    return [json.loads(row) for row in (Path(__file__).resolve().parents[1] /
+            'benchmarks/agent_b_instruction_effect_cases.jsonl').read_text(encoding='utf-8').splitlines()]
+
+
+@pytest.mark.parametrize('case', _effect_cases(), ids=lambda c: c['case_id'])
+def test_every_reviewed_form_binds_independent_fixed_native_answer(case):
+    from plc.instruction_binding import bind_operation_intent, materialize_operation_references, check_operation_intents
+    from application.compact_protocol import expand_compact_ladder
+    from copy import deepcopy
+    spec = case['confirmed_spec']
+    before = deepcopy(spec)
+    receipt = bind_operation_intent(spec['operation_intents'][0], target_model=case['plc_model'], confirmed_spec=spec)
+    assert receipt['status'] == 'bound', receipt
+    assert receipt['opcode'] == case['evaluation']['opcode']
+    assert receipt['operands'] == case['evaluation']['operands']
+    assert receipt['source_verification'] == 'source_checked' and receipt['hardware_effect'] == 'not_tested'
+    gate = case['evaluation']['gate']
+    contact = ('NC ' if gate['op'] == 'LDI' else 'NO ') + gate['args'][0]
+    compact = {'r': [{'b': [{'i': [contact], 'o': ['OP operation']}]}]}
+    native, diagnostic = materialize_operation_references(compact, spec, target_model=case['plc_model'])
+    assert native['r'][0]['b'][0]['o'] == [' '.join([receipt['opcode'], *case['evaluation']['operands']])]
+    assert diagnostic['stage'] == 'Core_operation_binding' and diagnostic['model_calls'] == 0
+    assert compact['r'][0]['b'][0]['o'] == ['OP operation'] and spec == before
+    rows, violations = check_operation_intents(expand_compact_ladder(native), spec, target_model=case['plc_model'])
+    assert not violations and rows[0]['status'] == 'verified'
+    # A displaced destination remains a real contradiction, including P forms.
+    wrong = deepcopy(native)
+    wrong['r'][0]['b'][0]['o'] = [native['r'][0]['b'][0]['o'][0] + ' K1']
+    _, violations = check_operation_intents(expand_compact_ladder(wrong), spec, target_model=case['plc_model'])
+    assert violations
+
+
+def test_effect_matching_protects_user_confirmation_and_native_constraints():
+    from copy import deepcopy
+    from plc.instruction_binding import normalize_operation_intents, confirm_operation_intents, bind_operation_intent
+    from plc.instruction_definition import DefinitionError
+    intent = deepcopy(_effect_cases()[0]['confirmed_spec']['operation_intents'][0])
+    candidate = normalize_operation_intents([intent], candidate=True, evidence_text='unrelated text')[0]
+    assert candidate['status'] == 'candidate' and candidate['provenance']['source'] == 'model_candidate'
+    assert candidate['provenance']['grounding_status'] == 'unresolved'
+    assert bind_operation_intent(candidate, target_model='FX3U')['reason'] == 'intent_not_user_confirmed'
+    confirmed = confirm_operation_intents([candidate], ['operation'])[0]
+    assert bind_operation_intent(confirmed, target_model='FX3U')['operands'] == ['K-37', 'D1450', 'M610']
+    assert bind_operation_intent(confirmed, target_model='FX5U')['status'] == 'unresolved'
+    spoofed = {**candidate, 'status': 'confirmed'}
+    with pytest.raises(DefinitionError, match='cannot confirm itself'):
+        normalize_operation_intents([spoofed])
+    spec = {'selected_approach': {'explicit_user_constraints': {'instruction_instances': [
+        {'opcode': 'CMP', 'operands': ['D1450', 'K-37', 'M610']}]}}}
+    assert bind_operation_intent(confirmed, target_model='FX3U', confirmed_spec=spec)['status'] == 'unresolved'
+    bm = next(c for c in _effect_cases() if c['evaluation']['opcode'] == 'BMOV')['confirmed_spec']['operation_intents'][0]
+    assert bind_operation_intent({**bm, 'execution': {'trigger': 'level'}}, target_model='FX3U')['status'] == 'unresolved'
+
+
+@pytest.mark.parametrize('extra', ['CMP K-37 D1450 M620', 'MOV K0 M611', 'RST M612', 'COIL M611', 'PLS M612'])
+def test_native_effect_check_detects_extra_calls_and_neighbor_clobber(extra):
+    from application.compact_protocol import expand_compact_ladder
+    from plc.instruction_binding import check_operation_intents
+    case = _effect_cases()[0]
+    ladder = expand_compact_ladder({'r': [{'b': [{'i': ['NO X0'], 'o': ['CMP K-37 D1450 M610', extra]}]}]})
+    rows, violations = check_operation_intents(ladder, case['confirmed_spec'], target_model='FX3U')
+    assert violations and rows[0]['status'] == 'violated'
+
+
+def test_uninterpreted_enable_predicate_does_not_pass_as_a_plain_contact():
+    from application.compact_protocol import expand_compact_ladder
+    from plc.instruction_binding import check_operation_intents
+    case = _effect_cases()[0]
+    ladder = expand_compact_ladder({'r': [{'b': [{'i': ['NO X0', '> D1 K0'], 'o': ['CMP K-37 D1450 M610']}]}]})
+    rows, violations = check_operation_intents(ladder, case['confirmed_spec'], target_model='FX3U')
+    assert not violations and rows[0]['status'] == 'unresolved'
+
+
+@pytest.mark.parametrize('opcode,contact,inverted,status', [
+    ('CMP', 'NO', False, 'verified'), ('CMP', 'P', False, 'violated'),
+    ('CMPP', 'NO', False, 'verified'), ('CMPP', 'P', False, 'verified'),
+    ('CMPP', 'F', False, 'violated'), ('CMPP', 'F', True, 'verified'),
+    ('CMPP', 'P', True, 'violated'), ('CMPP', 'NC', True, 'verified'),
+])
+def test_instruction_trigger_gate_proof_covers_level_hold_and_both_edge_directions(opcode, contact, inverted, status):
+    from application.compact_protocol import expand_compact_ladder
+    from plc.instruction_binding import check_operation_intents
+    from copy import deepcopy
+    case = deepcopy(next(case for case in _effect_cases() if case['evaluation']['opcode'] == opcode))
+    if inverted:
+        intent = case['confirmed_spec']['operation_intents'][0]
+        intent['enable'] = {'op': 'not', 'type': {'kind': 'bool'}, 'args': [intent['enable']]}
+    ladder = expand_compact_ladder({'r': [{'b': [{'i': [contact + ' X0'], 'o': [' '.join([
+        opcode, *case['evaluation']['operands']])]}]}]})
+    rows, violations = check_operation_intents(ladder, case['confirmed_spec'], target_model='FX3U')
+    assert rows[0]['status'] == status
+    assert bool(violations) == (status == 'violated')
+
+
+@pytest.mark.parametrize('neighbor,status', [('D1711', 'violated'), ('D1712', 'violated'),
+                                           ('D1713', 'violated'), ('D1714', 'verified')])
+def test_double_multiplication_protects_all_four_result_words(neighbor, status):
+    from application.compact_protocol import expand_compact_ladder
+    from plc.instruction_binding import check_operation_intents
+    case = next(case for case in _effect_cases() if case['evaluation']['opcode'] == 'DMUL')
+    ladder = expand_compact_ladder({'r': [{'b': [{'i': ['NO X0'], 'o': [
+        ' '.join(['DMUL', *case['evaluation']['operands']]), 'MOV K0 ' + neighbor]}]}]})
+    rows, _ = check_operation_intents(ladder, case['confirmed_spec'], target_model='FX3U')
+    assert rows[0]['status'] == status
+
+
+@pytest.mark.parametrize('second,bound', [('D1411', False), ('D1412', True), ('D1410', False)])
+def test_double_exchange_does_not_verify_overlapping_word_pairs(second, bound):
+    from copy import deepcopy
+    from plc.instruction_binding import bind_operation_intent
+    from plc.instruction_effects import execute_behavior
+    from plc.instruction_definition import UnknownInstructionSemantics
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY as registry
+    intent = deepcopy(next(c for c in _effect_cases() if c['evaluation']['opcode'] == 'DXCH')[
+        'confirmed_spec']['operation_intents'][0])
+    intent['effects'][0]['value']['name'] = second
+    intent['effects'][1]['target']['device'] = second
+    receipt = bind_operation_intent(intent, target_model='FX3U')
+    assert (receipt['status'] == 'bound') == bound
+    behavior = next(g.value for g in registry.resolve('DXCH', cpu='FX3U').definition_facts
+                    if g.dimension == 'effects.expression_write')
+    if not bound:
+        with pytest.raises(UnknownInstructionSemantics, match='Overlapping'):
+            execute_behavior(behavior, {'D1': 'D1410', 'D2': second},
+                             memory={'D1410': 5, second: 7}, state={'M8160': False})
+
+
+@pytest.mark.parametrize('opcode,invalid', [('DIV', 'zero'), ('DDIV', 'zero'),
+                                         ('DIV', 'overflow'), ('DDIV', 'overflow')])
+def test_source_checked_known_division_precondition_is_a_violation(opcode, invalid):
+    from copy import deepcopy
+    from plc.instruction_binding import bind_operation_intent, check_operation_intents
+    case = deepcopy(next(c for c in _effect_cases() if c['evaluation']['opcode'] == opcode))
+    intent = case['confirmed_spec']['operation_intents'][0]
+    for effect in intent['effects']:
+        expression = effect['value']
+        if invalid == 'zero':
+            expression['args'][1]['value'] = 0
+        else:
+            expression['args'][0] = {'op': 'constant', 'type': expression['type'],
+                                     'value': -(1 << (expression['type']['bits'] - 1))}
+            expression['args'][1]['value'] = -1
+    receipt = bind_operation_intent(intent, target_model='FX3U')
+    assert receipt['reason'] == 'known_parameter_constraint_violation'
+    rows, violations = check_operation_intents({'rungs': []}, case['confirmed_spec'], target_model='FX3U')
+    assert rows[0]['status'] == 'violated' and violations == rows
+
+
+@pytest.mark.parametrize('operation,known,expected', [('and', False, False), ('and', True, None),
+                                                    ('or', False, None), ('or', True, True)])
+@pytest.mark.parametrize('reverse', [False, True])
+def test_partial_boolean_conditions_only_resolve_a_decisive_known_value(operation, known, expected, reverse):
+    from plc.instruction_definition import evaluate_expression, UnknownInstructionSemantics
+    boolean = {'kind': 'bool'}
+    arguments = [{'op': 'parameter', 'name': 'runtime', 'type': boolean},
+                 {'op': 'constant', 'value': known, 'type': boolean}]
+    expression = {'op': operation, 'type': boolean, 'args': arguments[::-1] if reverse else arguments}
+    if expected is None:
+        with pytest.raises(UnknownInstructionSemantics):
+            evaluate_expression(expression, {})
+    else:
+        assert evaluate_expression(expression, {}) is expected
+
+
+@pytest.mark.parametrize('opcode,initial,final', [('INC', 32767, -32768), ('INCP', 32767, -32768),
+                                               ('DINC', 2147483647, -2147483648),
+                                               ('DINCP', 2147483647, -2147483648)])
+def test_reviewed_increment_reference_runs_a_state_sequence_with_retention(opcode, initial, final):
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY as registry
+    from plc.instruction_effects import execute_behavior
+    group = next(group for group in registry.resolve(opcode, cpu='FX3U').definition_facts
+                 if group.dimension == 'effects.expression_write')
+    pulse = opcode.endswith('P')
+    value, previous = initial, False
+    outputs = []
+    for enabled in [False, True, True, False, True]:
+        result = execute_behavior(group.value, {'D': 'D1710'}, memory={'D1710': value},
+                                  enabled=enabled, previous_enabled=previous,
+                                  trigger='rising' if pulse else 'level', disabled='retain')
+        value = result['writes'].get(('D1710', 0), value)
+        outputs.append(value)
+        previous = enabled
+    assert outputs == ([initial, final, final, final, final + 1] if pulse else
+                       [initial, final, final + 1, final + 1, final + 2])
+
+
+@pytest.mark.parametrize('extra,status', [
+    ('BMOV D20 D99 K2', 'violated'), ('DMOV D20 D99', 'violated'),
+    ('BMOV D20 D200 D30', 'unresolved'), ('BMOV D20 D200 K2', 'verified'),
+])
+def test_extra_instruction_checks_full_word_region_and_unknown_extent(extra, status):
+    from application.compact_protocol import expand_compact_ladder
+    from plc.instruction_binding import check_operation_intents
+    case = next(c for c in _effect_cases() if c['evaluation']['opcode'] == 'MOV')
+    ladder = expand_compact_ladder({'r': [{'b': [{'i': ['NO X0'], 'o': ['MOV D20 D100', extra]}]}]})
+    rows, violations = check_operation_intents(ladder, case['confirmed_spec'], target_model='FX3U')
+    assert rows[0]['status'] == status
+    assert bool(violations) == (status == 'violated')
+
+
+@pytest.mark.parametrize('gate,status', [('NC M8024', 'verified'), ('NO M8024', 'violated'),
+                                       ('NC M10', 'violated')])
+def test_enable_equivalence_uses_only_confirmed_bit_preconditions(gate, status):
+    from application.compact_protocol import expand_compact_ladder
+    from plc.instruction_binding import check_operation_intents
+    case = next(c for c in _effect_cases() if c['evaluation']['opcode'] == 'BMOV')
+    ladder = expand_compact_ladder({'r': [{'b': [{'i': ['NO X0', gate], 'o': ['BMOV D20 D300 K7']}]}]})
+    rows, violations = check_operation_intents(ladder, case['confirmed_spec'], target_model='FX3U')
+    assert rows[0]['status'] == status and rows[0]['confirmed_preconditions'] == {'M8024': False}
+    assert bool(violations) == (status == 'violated')
+
+
+def test_binding_preserves_aliases_and_rejects_out_of_scope_memory():
+    from copy import deepcopy
+    from plc.instruction_binding import bind_operation_intent
+    intent = deepcopy(_effect_cases()[0]['confirmed_spec']['operation_intents'][0])
+    intent['effects'][0]['target']['device'] = 'm0610'
+    intent['effects'][0]['value']['args'][0]['name'] = 'd01450'
+    assert bind_operation_intent(intent, target_model='FX3U')['operands'] == ['K-37', 'D1450', 'M610']
+    mov = deepcopy(next(c for c in _effect_cases() if c['evaluation']['opcode'] == 'DMOV')['confirmed_spec']['operation_intents'][0])
+    for destination in ['M100', 'D7999', 'D999999']:
+        mov['effects'][0]['target']['device'] = destination
+        assert bind_operation_intent(mov, target_model='FX3U')['status'] == 'unresolved'
+
+
+def test_native_compatibility_accepts_equivalent_whole_effects_without_swapping_comparison_results():
+    from copy import deepcopy
+    from application.compact_protocol import expand_compact_ladder
+    from plc.instruction_binding import check_operation_intents, bind_operation_intent
+    add = next(c for c in _effect_cases() if c['evaluation']['opcode'] == 'ADD')
+    ladder = expand_compact_ladder({'r': [{'b': [{'i': ['NO X0'], 'o': ['ADD K3 D14 D100']}]}]})
+    rows, violations = check_operation_intents(ladder, add['confirmed_spec'], target_model='FX3U')
+    assert rows[0]['status'] == 'verified' and not violations
+    cmp = deepcopy(_effect_cases()[0]['confirmed_spec']['operation_intents'][0])
+    cmp['effects'][0]['target']['offset'] = 1
+    cmp['effects'][0]['value']['op'] = 'eq'
+    assert bind_operation_intent(cmp, target_model='FX3U')['reason'] == 'ambiguous_binding'
+
+
+@pytest.mark.parametrize('opcode,positions', [('CMP', (0, 1)), ('DCMP', (0, 1)),
+    ('SUB', (0, 1)), ('WSFL', (2, 3)), ('TCMP', (0, 2)), ('IVCK', (0, 3))])
+@pytest.mark.parametrize('representation', ['compact', 'compact_alias', 'ladder_v1'])
+def test_native_read_parameter_rebinding_corrects_confirmed_mapping_without_a_model_call(opcode, positions, representation):
+    from copy import deepcopy
+    from application.compact_protocol import expand_compact_ladder
+    from application.generation_agent import _decode_generated_ladder
+    from plc.instruction_binding import materialize_operation_references, check_operation_intents
+    case = next(c for c in _effect_cases() if c['evaluation']['opcode'] == opcode)
+    expected = case['evaluation']['operands']
+    wrong = list(expected)
+    a, b = positions
+    wrong[a], wrong[b] = wrong[b], wrong[a]
+    compact = {'r': [{'b': [{'i': ['NO X0'], 'o': [' '.join([opcode, *wrong])]}]}]}
+    if representation == 'compact_alias':
+        compact = {'rungs': [{'branches': [{'inputs': ['NO X0'], 'outputs': compact['r'][0]['b'][0]['o']}]}]}
+    elif representation == 'ladder_v1':
+        compact = expand_compact_ladder(compact)
+    before = deepcopy(compact)
+    native, receipt = materialize_operation_references(compact, case['confirmed_spec'], target_model='FX3U')
+    assert compact == before and receipt['model_calls'] == 0
+    assert len(receipt['receipts']) == 1
+    change = receipt['receipts'][0]
+    assert change['binding_mode'] == 'native_read_parameter_rebinding'
+    assert change['input_call'] == {'opcode': opcode, 'operands': wrong}
+    assert change['output_call'] == {'opcode': opcode, 'operands': expected}
+    ladder, _ = _decode_generated_ladder(native, case['confirmed_spec'], 'FX3U')
+    rows, violations = check_operation_intents(ladder, case['confirmed_spec'], target_model='FX3U')
+    assert not violations and rows[0]['status'] == 'verified'
+    assert ladder['rungs'][0]['branches'][0]['inputs'] == expand_compact_ladder(
+        {'r': [{'b': [{'i': ['NO X0'], 'o': ['COIL Y0']}]}]})['rungs'][0]['branches'][0]['inputs']
+
+
+@pytest.mark.parametrize('constraint', ['locked_wrong_call', 'candidate_intent', 'wrong_cpu',
+    'duplicate_call', 'additional_operation_reference', 'changed_target', 'changed_constant', 'unknown_intent'])
+def test_native_rebinding_never_overrides_confirmation_or_invents_a_different_call(constraint):
+    from copy import deepcopy
+    from plc.instruction_binding import materialize_operation_references
+    spec = deepcopy(_effect_cases()[0]['confirmed_spec'])
+    outputs = ['CMP D1450 K-37 M610']
+    cpu = 'FX3U'
+    if constraint == 'locked_wrong_call':
+        spec['selected_approach']['explicit_user_constraints']['instruction_instances'] = [
+            {'opcode': 'CMP', 'operands': ['D1450', 'K-37', 'M610']}]
+    elif constraint == 'candidate_intent':
+        spec['operation_intents'][0]['status'] = 'candidate'
+        spec['operation_intents'][0]['provenance']['source'] = 'model_candidate'
+    elif constraint == 'wrong_cpu':
+        cpu = 'FX5U'
+    elif constraint == 'duplicate_call':
+        outputs *= 2
+    elif constraint == 'additional_operation_reference':
+        outputs.append('OP operation')
+    elif constraint == 'changed_target':
+        outputs[0] = 'CMP D1450 K-37 M620'
+    elif constraint == 'changed_constant':
+        outputs[0] = 'CMP D1450 K-38 M610'
+    elif constraint == 'unknown_intent':
+        spec.pop('operation_intents')
+    compact = {'r': [{'b': [{'i': ['NC X1'], 'o': outputs}]}]}
+    before = deepcopy(compact)
+    native, diagnostic = materialize_operation_references(compact, spec, target_model=cpu)
+    assert compact == before and native['r'][0]['b'][0]['o'][0] == outputs[0]
+    assert all(r['binding_mode'] != 'native_read_parameter_rebinding' for r in diagnostic['receipts'])
+
+
+@pytest.mark.parametrize('call,expected,status', [
+    ('CMP HFFDB D1450 M610', 'CMP HFFDB D1450 M610', 'verified'),
+    ('CMP D1450 HFFDB M610', 'CMP K-37 D1450 M610', 'verified'),
+    ('CMP K65499 D1450 M610', 'CMP K65499 D1450 M610', 'violated'),
+    ('CMP H1FFDB D1450 M610', 'CMP H1FFDB D1450 M610', 'violated'),
+])
+def test_native_constant_equivalence_uses_explicit_finite_width(call, expected, status):
+    from plc.instruction_binding import materialize_operation_references, check_operation_intents
+    from application.compact_protocol import expand_compact_ladder
+    case = _effect_cases()[0]
+    native, _ = materialize_operation_references({'r': [{'b': [{'i': ['NO X0'], 'o': [call]}]}]},
+        case['confirmed_spec'], target_model='FX3U')
+    assert native['r'][0]['b'][0]['o'] == [expected]
+    rows, violations = check_operation_intents(expand_compact_ladder(native), case['confirmed_spec'], target_model='FX3U')
+    assert rows[0]['status'] == status and bool(violations) == (status == 'violated')
+
+
+def test_native_rebinding_and_conformance_require_source_checked_effect_dependencies():
+    from dataclasses import replace
+    from types import SimpleNamespace
+    from application.compact_protocol import expand_compact_ladder
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+    from plc.instruction_binding import materialize_operation_references, check_operation_intents
+    from plc.instruction_definition import UnknownInstructionSemantics
+    case = _effect_cases()[0]
+    form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form('CMP', cpu='FX3U')
+    candidate = replace(form, spec=replace(form.spec, definition_facts=tuple(
+        replace(g, status='candidate_evidence') for g in form.spec.definition_facts)))
+    registry = SimpleNamespace(resolve_form=lambda *a, **k: candidate)
+    compact = {'r': [{'b': [{'i': ['NO X0'], 'o': ['CMP D1450 K-37 M610']}]}]}
+    native, receipt = materialize_operation_references(compact, case['confirmed_spec'], target_model='FX3U', registry=registry)
+    assert native == compact and not receipt['receipts']
+    rows, violations = check_operation_intents(expand_compact_ladder(native), case['confirmed_spec'], target_model='FX3U', registry=registry)
+    assert not violations and rows[0]['status'] == 'unresolved'
+    with pytest.raises(UnknownInstructionSemantics, match='not_source_checked'):
+        materialize_operation_references({'r': [{'b': [{'i': ['NO X0'], 'o': ['OP operation']}]}]},
+            case['confirmed_spec'], target_model='FX3U', registry=registry)
+
+
+@pytest.mark.parametrize('mode', ['snapshot', 'forward', 'backward'])
+@pytest.mark.parametrize('count', range(1, 7))
+def test_range_reference_handles_physical_overlap_and_keeps_inputs_immutable(mode, count):
+    from copy import deepcopy
+    from plc.instruction_effects import execute_behavior
+    behavior = {'behavior': 'range_copy', 'source': 'S', 'destination': 'D',
+                'element_type': {'kind': 'int', 'bits': 16, 'signed': False},
+                'count': {'op': 'parameter', 'name': 'N', 'type': {'kind': 'int', 'bits': 16, 'signed': False}},
+                'read_mode': mode, 'max_count': 16}
+    memory = {'D' + str(10 + i): 101 + i for i in range(count + 1)}
+    before = deepcopy(memory)
+    actual = execute_behavior(behavior, {'S': 'D10', 'D': 'D11', 'N': count}, memory=memory)
+    expected = [101] * count if mode == 'forward' else [101 + i for i in range(count)]
+    assert [actual['writes'][('D11', i)] for i in range(count)] == expected
+    assert memory == before
+
+
+@pytest.mark.parametrize('direction', ['left', 'right'])
+@pytest.mark.parametrize('count', range(1, 6))
+def test_shift_reference_matches_independent_sequence_transform(direction, count):
+    from plc.instruction_effects import execute_behavior
+    from plc.instruction_definition import DefinitionError
+    uint = {'kind': 'int', 'bits': 16, 'signed': False}
+    behavior = {'behavior': 'range_shift', 'region': 'D', 'source': 'S', 'count': {'op': 'parameter', 'name': 'N', 'type': uint},
+                'shift': {'op': 'parameter', 'name': 'Q', 'type': uint}, 'element_type': uint,
+                'direction': direction, 'fill': 'source', 'source_must_differ': True}
+    old = list(range(30, 30 + count))
+    for shift in range(1, count + 1):
+        fill = list(range(90, 90 + shift))
+        memory = {**{'D' + str(10 + i): x for i, x in enumerate(old)},
+                  **{'D' + str(100 + i): x for i, x in enumerate(fill)}}
+        actual = execute_behavior(behavior, {'D': 'D10', 'S': 'D100', 'N': count, 'Q': shift}, memory=memory)
+        expected = fill + old[:count - shift] if direction == 'left' else old[shift:] + fill
+        assert [actual['writes'][('D10', i)] for i in range(count)] == expected
+        with pytest.raises(DefinitionError, match='overlaps'):
+            execute_behavior(behavior, {'D': 'D10', 'S': 'D10', 'N': count, 'Q': shift}, memory=memory)
+
+
+def test_state_update_trigger_sequences_layout_and_external_contract_remain_distinct():
+    from plc.instruction_effects import execute_behavior
+    uint = {'kind': 'int', 'bits': 16, 'signed': False}
+    update = {'behavior': 'state_update', 'outputs': [{'target': {'parameter': 'D', 'kind': 'state'},
+        'expression': {'op': 'add', 'type': uint, 'args': [{'op': 'state', 'name': 'counter', 'type': uint},
+                                                        {'op': 'constant', 'value': 1, 'type': uint}]}}]}
+    levels = [False, True, True, False, True]
+    for trigger, expected in [('level', 3), ('rising', 2), ('falling', 1)]:
+        state, previous = {'counter': 0}, False
+        for level in levels:
+            result = execute_behavior(update, {'D': 'counter'}, state=state, enabled=level,
+                                      previous_enabled=previous, trigger=trigger, disabled='no_action')
+            state['counter'] = result['state_writes'].get(('counter', 0), state['counter'])
+            previous = level
+        assert state['counter'] == expected
+    layout = execute_behavior({'behavior': 'parameter_layout', 'fields': [
+        {'offset': 0, 'access': 'read_write', 'type': uint, 'bits': [0, 3, 15]}]}, {})
+    assert layout['layout'][0]['bits'] == [0, 3, 15] and not layout['writes']
+    external = execute_behavior({'behavior': 'external_action', 'resource_parameter': 'channel',
+                                 'protocol': {'complete': 'M8029'}}, {'channel': 2})
+    assert external['external_contract']['resource'] == 2 and external['hardware_effect'] == 'not_tested'
+    assert external['writes'] == {}

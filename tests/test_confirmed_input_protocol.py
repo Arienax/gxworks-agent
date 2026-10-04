@@ -6,6 +6,7 @@ import copy
 import json
 
 import pytest
+from hypothesis import given, settings, strategies as st
 
 from application.compact_protocol import CompactProtocolError, expand_compact_ladder, normalize_compact
 from application.confirmed_generation_context import build_confirmed_generation_context, project_confirmed_specification
@@ -54,6 +55,76 @@ def compact(start=1, stop=0, wrapped=False, wrong=False):
         stop_contact = "NC" if stop_contact == "NO" else "NO"
     inputs = [{"or": [[f"{'NO' if start else 'NC'} X0"], ["NO Y0"]]}, f"{stop_contact} X1"]
     return {"r": [{"h": None, "s": [], "b": [{"i": [inputs] if wrapped else inputs, "o": ["COIL Y0"]}]}]}
+
+
+@pytest.mark.parametrize('start,stop', [(0, 0), (0, 1), (1, 0), (1, 1)])
+def test_Core_predicate_binding_corrects_confirmed_levels_without_changing_topology(start, stop):
+    from plc.specification.semantic_validation import bind_confirmed_predicates, validate_confirmed_semantics
+    spec = {'io_bindings': [
+        {'role': 'start', 'kind': 'X', 'address': 'X0', 'active_level': start, 'inactive_level': 1 - start},
+        {'role': 'stop', 'kind': 'X', 'address': 'X1', 'active_level': stop, 'inactive_level': 1 - stop},
+        {'role': 'output', 'kind': 'Y', 'address': 'Y0'}],
+        'selected_approach': {'implementation_semantics': [
+            {'kind': 'structure', 'status': 'required', 'value': 'self_hold'}]}}
+    source = expand_compact_ladder(compact(start, stop, wrong=True))
+    before = copy.deepcopy(source)
+    assert validate_confirmed_semantics(source, spec)['status'] == 'violated'
+    result, receipt = bind_confirmed_predicates(source, spec)
+    assert result == expand_compact_ladder(compact(start, stop))
+    assert source == before
+    assert receipt['stage'] == 'Core_confirmed_predicate_binding' and receipt['model_calls'] == 0
+    assert len(receipt['changes']) == 1
+    assert validate_confirmed_semantics(result, spec)['status'] == 'verified'
+    assert bind_confirmed_predicates(result, spec)[1]['changes'] == []
+
+
+@pytest.mark.parametrize('damage', ['unknown_levels', 'other_output', 'wrong_address', 'no_confirmed_structure'])
+def test_Core_predicate_binding_keeps_unsettled_or_nonisolated_logic(damage):
+    from plc.specification.semantic_validation import bind_confirmed_predicates
+    spec = {'io_bindings': [
+        {'role': 'start', 'kind': 'X', 'address': 'X0', 'active_level': 1, 'inactive_level': 0},
+        {'role': 'stop', 'kind': 'X', 'address': 'X1', 'active_level': 0, 'inactive_level': 1},
+        {'role': 'output', 'kind': 'Y', 'address': 'Y0'}],
+        'selected_approach': {'implementation_semantics': [
+            {'kind': 'structure', 'status': 'required', 'value': 'self_hold'}]}}
+    raw = compact(wrong=True)
+    if damage == 'unknown_levels':
+        spec['io_bindings'][1].pop('active_level')
+        spec['io_bindings'][1].pop('inactive_level')
+    elif damage == 'other_output':
+        raw['r'][0]['b'][0]['o'].append('COIL Y1')
+    elif damage == 'wrong_address':
+        raw['r'][0]['b'][0]['i'][1] = 'NC X2'
+    else:
+        spec['selected_approach'] = {}
+    source = expand_compact_ladder(raw)
+    result, receipt = bind_confirmed_predicates(source, spec)
+    assert result == source and receipt['changes'] == []
+
+
+@pytest.mark.parametrize('placement', ['header', 'shared', 'branch'])
+def test_confirmed_device_and_structure_checks_include_every_condition_position(placement):
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+    from plc.specification.approach import inspect_ladder_features
+    spec = {'io_bindings': [
+        {'role': 'start', 'kind': 'X', 'address': 'X0', 'active_level': 1, 'inactive_level': 0},
+        {'role': 'stop', 'kind': 'X', 'address': 'X1', 'active_level': 0, 'inactive_level': 1},
+        {'role': 'output', 'kind': 'Y', 'address': 'Y0'}],
+        'selected_approach': {'implementation_semantics': [
+            {'kind': 'structure', 'status': 'required', 'value': 'self_hold'}],
+            'explicit_user_constraints': {'required_devices': ['X0', 'X1', 'Y0']}}}
+    ladder = expand_compact_ladder(compact())
+    rung = ladder['rungs'][0]
+    contact = rung['branches'][0]['inputs'].pop()
+    assert contact == {'type': 'NO', 'address': 'X1'}
+    if placement == 'header':
+        rung['header_element'] = contact
+    elif placement == 'shared':
+        rung['shared_inputs'] = [contact]
+    else:
+        rung['branches'][0]['inputs'].append(contact)
+    assert inspect_ladder_features(ladder)['devices'] == ['X0', 'X1', 'Y0']
+    assert validate_confirmed_semantics(ladder, spec)['status'] == 'verified'
 
 
 @pytest.mark.parametrize(("mnemonic", "expected"), [
@@ -240,6 +311,93 @@ def test_resolved_self_hold_does_not_query_unrelated_manuals(monkeypatch):
 def test_specific_fact_targets_are_kept(text):
     from knowledge.analysis_router import has_generation_fact_target
     assert has_generation_fact_target(text)
+
+
+@pytest.mark.parametrize("task_type,user_delta,expected", [
+    ("generate", "查 TCMP", []),
+    ("edit", "改用 OR X0", ["OR"]),
+])
+def test_generation_protocol_text_does_not_create_instruction_lookup_needs(task_type, user_delta, expected):
+    queries = []
+
+    def capture(query, **kwargs):
+        queries.append(query)
+        return ""
+
+    build_confirmed_generation_context(old_confirmed_spec(), "FX3U", task_type=task_type,
+                                       user_requirement=user_delta, knowledge_builder=capture)
+    assert len(queries) == 1
+    assert [row["opcode"] for row in queries[0].metadata["structured_fact_targets"]["instructions"]] == expected
+
+
+def test_equals_and_named_input_declarations_reach_the_spec_editor_with_levels():
+    from application.model_api import _normalize_analysis_result
+    from plc.specification.confirmed import build_review_draft
+
+    text = "确认如下现场规格：X0=1为安全许可正常，X1启动按下=1，X2停止按下=1，D200=单瓶目标，Y0=输送电机。"
+    raw = {"summary": "已声明现场I/O", "missing_info": [], "suggested_io": {"M": {"M1": "模型自分配"}},
+           "approaches": [{"name": "直控", "implementation_semantics": []}]}
+    draft = build_review_draft(_normalize_analysis_result(raw, "FX3U", text))
+    assert {row["address"]: row["label"] for row in draft["io_table"]} == {
+        "X0": "安全许可正常", "X1": "启动", "X2": "停止", "D200": "单瓶目标", "Y0": "输送电机"}
+    inputs = {row["address"]: row for row in draft["io_bindings"] if row["kind"] == "X"}
+    assert all(row["active_level"] == 1 and row["inactive_level"] == 0 for row in inputs.values())
+    assert inputs["X1"]["role"] == "start" and inputs["X2"]["role"] == "stop"
+
+
+@pytest.mark.parametrize("text", [
+    "X0=1时启动Y0", "X0=1启动Y0", "X0=1且X1=0时运行", "X0=ON", "X0启动Y0=1",
+    "X0启动时=1", "X0=1", "D0=0表示无料", "D0=1~3蓝色", "X0、X1为两个输入",
+    "X0=1启动Y0=1", "X0=1时X1=0", "X0/X1=1分别启动Y0/Y1", "X0/X1=1时启动",
+])
+def test_new_declaration_syntax_does_not_promote_states_or_logic_to_wiring(text):
+    from plc.specification.bindings import extract_declared_bindings
+    assert extract_declared_bindings(text, "FX3U") == []
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("X7=1泵A过载，X10=1泵B过载，X11/X12=1分别手动点动A/B",
+     {"X7": 1, "X10": 1, "X11": 1, "X12": 1}),
+    ("X0／X1=0分别限位A/B，X2：复位按钮，按下为ON", {"X0": 0, "X1": 0, "X2": 1}),
+    ("X5=1废品/0合格X6为编码器每节距脉冲", {"X5": 1, "X6": None}),
+    ("X5=1废品/0合格，X6编码器每节距脉冲，所有脉冲至少50ms", {"X5": 1}),
+    ("X0=1安全许可正常，X1启动按下=1，X2停止按下=1，X3复位按下=1，X4入口有件=1，"
+     "X5=1废品/0合格X6为编码器每节距脉冲", {"X0": 1, "X1": 1, "X2": 1, "X3": 1, "X4": 1, "X5": 1, "X6": None}),
+    ("X0=1安全许可正常，X3停止按钮按下=1，X4复位按钮按下=1，X5=1低液位，"
+     "X11 / X12=1分别手动点动A/B", {"X0": 1, "X3": 1, "X4": 1, "X5": 1, "X11": 1, "X12": 1}),
+])
+def test_grouped_and_adjacent_input_declarations_keep_explicit_levels(text, expected):
+    from plc.specification.bindings import extract_declared_bindings
+    result = extract_declared_bindings(text, "FX3U")
+    assert {row["address"]: row.get("active_level") for row in result} == expected
+
+
+@settings(max_examples=100, deadline=None)
+@given(addresses=st.lists(st.integers(min_value=1, max_value=63), min_size=2, max_size=5, unique=True),
+       level=st.integers(min_value=0, max_value=1),
+       slash=st.sampled_from(("/", " / ", "／", " ／ ")),
+       comma=st.sampled_from((",", "，", "、")))
+def test_grouped_input_level_roundtrip_with_spaces_aliases_and_separators(addresses, level, slash, comma):
+    from plc.specification.bindings import extract_declared_bindings
+    text = ("X0=1安全许可正常" + comma + slash.join(f"X{index:03o}" for index in addresses)
+            + f" = {level}分别手动点动A/B" + comma + "X177编码器脉冲")
+    result = extract_declared_bindings(text, "FX3U")
+    expected = {"X0": 1, **{f"X{index:o}": level for index in addresses}}
+    assert {row["address"]: row.get("active_level") for row in result} == expected
+
+
+@settings(max_examples=100, deadline=None)
+@given(index=st.integers(min_value=0, max_value=63), first_level=st.integers(min_value=0, max_value=1))
+def test_conflicting_user_declarations_cannot_materialize_a_settled_level(index, first_level):
+    from plc.specification.conditions import generation_input_conditions
+    address = f"X{index:o}"
+    spec = {"plc_model": "FX3U", "io_table": [{"kind": "X", "address": address, "label": "sensor"}],
+        "intent_context": {"requests": [{"text":
+            f"{address}={first_level}sensor\n{address}={1-first_level}sensor"}]}}
+    projected = project_confirmed_specification(spec)
+    assert projected["io_bindings"][0]["active_level"] is None
+    assert generation_input_conditions(projected["io_bindings"]) == {
+        "level_predicates": [], "unresolved_input_bindings": [f"declared.x.{address}"]}
 
 
 def test_edit_request_contributes_new_fact_target():
@@ -466,6 +624,36 @@ def test_execution_conflicting_levels_or_malformed_input_are_not_guessed():
     assert result["unresolved_input_bindings"] == ["conflict", "bad-address"]
 
 
+@pytest.mark.parametrize("model,address,valid", [
+    ("FX3U", "X7", True), ("FX3U", "X8", False), ("FX3U", "X10", True),
+    ("FX5U", "X8", True), ("FX5U", "X18", True), ("FX5U", "X1778", False),
+])
+def test_input_predicates_use_the_selected_cpu_address_policy(model, address, valid):
+    from plc.specification.conditions import generation_input_conditions
+    binding = {"binding_id": "stop", "kind": "X", "address": address, "role": "stop", "active_level": 0}
+    facts = generation_input_conditions([binding], plc_model=model)
+    assert bool(facts["level_predicates"]) is valid
+    if valid:
+        assert facts["level_predicates"][0]["active_when"] == "NC " + address
+        assert facts["level_predicates"][0]["run_permit_when"] == "NO " + address
+    else:
+        assert facts["unresolved_input_bindings"] == ["stop"]
+
+
+def test_fx5u_compact_and_full_final_requests_keep_decimal_input_predicates():
+    from application.generation_agent import _build_agent_b_prompt
+    from application.generation_context import build_generation_instructions
+    spec = {"plc_model": "FX5U", "io_table": [{"kind": "X", "address": "X18", "label": "停止"}],
+            "io_bindings": [{"binding_id": "stop", "kind": "X", "address": "X18", "role": "stop", "active_level": 0}]}
+    context = build_confirmed_generation_context(spec, "FX5U", knowledge_builder=lambda *a, **k: "")
+    compact = _build_agent_b_prompt(context.confirmed_spec, "FX5U", context=context)
+    full = build_generation_instructions("generate", plc_model="FX5U", confirmed_context=spec,
+        knowledge_builder=lambda *a, **k: "", profile_builder=lambda *a, **k: "",
+        prompt_builder=lambda *a, **k: "existing full protocol")
+    assert '"active_when":"NC X18"' in compact and '"run_permit_when":"NO X18"' in compact
+    assert '"active_when":"NC X18"' in full and '"run_permit_when":"NO X18"' in full
+
+
 def test_execution_predicates_recompute_after_confirmed_io_edits_and_deletion():
     from plc.specification.confirmed import canonicalize_confirmed_spec
     from plc.specification.conditions import generation_input_conditions
@@ -484,7 +672,8 @@ def test_execution_predicates_recompute_after_confirmed_io_edits_and_deletion():
 
 
 def test_execution_compact_and_full_share_one_execution_contract_and_keep_evidence(monkeypatch):
-    from application.confirmed_generation_context import GENERATION_EXECUTION_POLICY, generation_execution_prompt
+    from application.confirmed_generation_context import (
+        GENERATION_EXECUTION_POLICY, GENERATION_EXECUTION_POLICY_VERSION, generation_execution_prompt)
     from application.generation_agent import _build_agent_b_prompt
     from application.generation_context import build_generation_instructions
     spec = old_confirmed_spec()
@@ -505,9 +694,12 @@ def test_execution_compact_and_full_share_one_execution_contract_and_keep_eviden
         prompt_builder=lambda *a, **k: "existing full protocol")
     assert len(calls) == 2  # one retrieval per adapter, no extra planning/model pass
     assert full.endswith(expected) and full.count(GENERATION_EXECUTION_POLICY) == 1
+    assert 'NO 在位=1时导通，NC 在位=0时导通' in prompt
+    assert 'NO 在位=1时导通，NC 在位=0时导通' in full
+    assert '现场接线不直接决定程序触点' in full
     assert evidence in full and spec == original
     assert '"run_permit_when":"NO X1"' in full
-    assert context.handoff["generation_execution_policy"] == "settled-facts-v1"
+    assert context.handoff["generation_execution_policy"] == GENERATION_EXECUTION_POLICY_VERSION
 
 
 @pytest.mark.parametrize("task", ["format_repair", "contract_repair", "analysis", "program_review"])
@@ -525,11 +717,11 @@ def test_execution_policy_keeps_user_amendments_and_does_not_claim_evidence_cove
     prompt = generation_execution_prompt(spec, task_type="edit")
     facts = json.loads(prompt.rsplit("\n", 1)[1])
     assert facts["basis"] == "edit_baseline" and facts["retrieved_text_present"] is False
-    assert "本轮明确修改优先" in prompt and "参数/绑定优先" in prompt
+    assert "本轮修改优先" in prompt and "绑定、参数" in prompt
     assert spec == before  # no unreliable prose reconciliation, no lost intent
     provided = generation_execution_prompt(spec, evidence_text="one incomplete fact")
     assert json.loads(provided.rsplit("\n", 1)[1])["retrieved_text_present"] is True
-    assert "不代表覆盖全部事实" in provided
+    assert "检索文本不代表完整覆盖" in provided
     assert all(term not in GENERATION_EXECUTION_POLICY for term in ("WSFL", "SFTL", "M8012", "T0"))
 
 
@@ -551,3 +743,115 @@ def test_execution_current_snapshot_is_not_cached_or_written_back():
     assert "run_permit_when" not in rows[0] and rows[0]["address"] == "X005"
     rows.clear()
     assert generation_input_conditions(rows)["level_predicates"] == []
+
+
+@pytest.mark.parametrize("context_key", ["intent_context", "engineering_context"])
+def test_legacy_declarations_deliver_named_bit_values_to_both_generation_adapters(context_key):
+    from application.confirmed_generation_context import generation_execution_prompt
+    from application.generation_agent import _build_agent_b_prompt
+    from application.generation_context import build_generation_instructions
+    from plc.specification.confirmed import canonicalize_confirmed_spec
+
+    spec = {"plc_model": "FX3U", "io_table": [
+        {"address": "X0", "kind": "X", "label": "安全许可正常"},
+        {"address": "X1", "kind": "X", "label": "停止按钮"},
+        {"address": "Y0", "kind": "Y", "label": "泵"}], "parameters": [],
+        context_key: {"requests": [{"id": "operator", "source": "user_request",
+            "text": "X0=1安全许可正常\nX1：停止按钮，按下为OFF\nY0：泵"}]}}
+    original = copy.deepcopy(spec)
+    context = build_confirmed_generation_context(spec, "FX3U", knowledge_builder=lambda *a, **k: "")
+    expected = generation_execution_prompt(context.confirmed_spec)
+    facts = json.loads(expected.rsplit("\n", 1)[1])
+    by_address = {row["address"]: row for row in facts["level_predicates"]}
+    assert by_address["X0"]["label"] == "安全许可正常"
+    assert by_address["X0"]["active_level"] == 1 and by_address["X0"]["active_when"] == "NO X0"
+    assert by_address["X1"] == {
+        "binding_id": "declared.stop.X1", "address": "X1", "label": "停止按钮", "role": "stop",
+        "active_level": 0, "inactive_level": 1, "active_when": "NC X1", "inactive_when": "NO X1",
+        "run_permit_when": "NO X1"}
+    compact_prompt = _build_agent_b_prompt(context.confirmed_spec, "FX3U", context=context)
+    full_prompt = build_generation_instructions("generate", plc_model="FX3U", confirmed_context=spec,
+        knowledge_builder=lambda *a, **k: "", profile_builder=lambda *a, **k: "",
+        prompt_builder=lambda *a, **k: "full protocol")
+    assert compact_prompt.endswith(expected) and full_prompt.endswith(expected)
+    assert spec == original
+    assert project_confirmed_specification(context.confirmed_spec) == context.confirmed_spec
+    canonical = project_confirmed_specification(canonicalize_confirmed_spec(spec))
+    assert canonical["io_bindings"] == context.confirmed_spec["io_bindings"]
+
+
+@pytest.mark.parametrize("current_level", [0, 1, None])
+def test_historical_declaration_cannot_override_current_level_or_label(current_level):
+    from plc.specification.confirmed import canonicalize_confirmed_spec
+    from plc.specification.conditions import generation_input_conditions
+
+    spec = {"plc_model": "FX3U", "io_table": [{"kind": "X", "address": "X1",
+            "binding_id": "operator.stop", "label": "改名后的停机输入"}],
+        "io_bindings": [{"kind": "X", "address": "X1", "binding_id": "operator.stop",
+            "row_binding_id": "operator.stop", "role": "stop", "label": "旧标签",
+            "active_level": current_level}], "parameters": [],
+        "intent_context": {"requests": [{"text": "X1：停止按钮，按下为OFF"}]}}
+    original = copy.deepcopy(spec)
+    for projected in (project_confirmed_specification(spec),
+                      project_confirmed_specification(canonicalize_confirmed_spec(spec))):
+        assert len(projected["io_bindings"]) == 1
+        assert projected["io_bindings"][0]["active_level"] == current_level
+        assert projected["io_bindings"][0]["label"] == "改名后的停机输入"
+        facts = generation_input_conditions(projected["io_bindings"])
+        if current_level is None:
+            assert facts == {"level_predicates": [], "unresolved_input_bindings": ["operator.stop"]}
+        else:
+            assert facts["level_predicates"][0]["active_level"] == current_level
+    assert spec == original
+
+
+def test_removed_or_explicitly_cleared_intent_does_not_recover_legacy_inputs():
+    spec = {"plc_model": "FX3U", "io_table": [{"kind": "Y", "address": "Y0", "label": "泵"}],
+        "intent_context": {}, "engineering_context": {"requests": [{"text": "X1：停止按钮，按下为OFF\nY0：泵"}]}}
+    projected = project_confirmed_specification(spec)
+    assert not projected.get("io_bindings")
+    spec.pop("intent_context")
+    projected = project_confirmed_specification(spec)
+    assert [row["address"] for row in projected["io_bindings"]] == ["Y0"]
+    assert [row["address"] for row in projected["io_table"]] == ["Y0"]
+
+
+@settings(max_examples=150, deadline=None)
+@given(
+    signals=st.lists(st.tuples(st.integers(min_value=0, max_value=63), st.integers(min_value=0, max_value=1)),
+                     min_size=1, max_size=8, unique_by=lambda item: item[0]),
+    mutation=st.sampled_from(("move", "delete", "polarity")),
+)
+def test_recovered_signal_facts_follow_owned_row_edits_not_historical_text(signals, mutation):
+    from plc.specification.bindings import generation_io_snapshot
+    from plc.specification.conditions import generation_input_conditions
+
+    # The independently supplied declarations are the oracle. The generator
+    # does not create the expected signal levels or later operator edits.
+    expected = {f"X{index:o}": level for index, level in signals}
+    spec = {"plc_model": "FX3U", "io_table": [{"kind": "X", "address": f"X{index:03o}",
+                "label": f"sensor_{index}"} for index, _ in signals],
+        "intent_context": {"requests": [{"text": "\n".join(
+            f"X{index:o}={level}sensor_{index}" for index, level in signals)}]}}
+    original = copy.deepcopy(spec)
+    saved = generation_io_snapshot(spec)
+    old_address = f"X{signals[0][0]:o}"
+    row = next(row for row in saved["io_table"] if row["address"] == old_address)
+    binding = next(item for item in saved["io_bindings"] if item["address"] == old_address)
+    if mutation == "move":
+        new_address = f"X{max(index for index, _ in signals) + 1:o}"
+        row["address"] = new_address
+        expected[new_address] = expected.pop(old_address)
+    elif mutation == "delete":
+        saved["io_table"].remove(row)
+        expected.pop(old_address)
+    else:
+        expected[old_address] = 1 - expected[old_address]
+        binding.update(active_level=expected[old_address], inactive_level=1 - expected[old_address])
+    projected = project_confirmed_specification(saved)
+    facts = generation_input_conditions(projected["io_bindings"])
+    assert {item["address"]: item["active_level"] for item in facts["level_predicates"]} == expected
+    assert {row["address"] for row in projected["io_table"]} == set(expected)
+    assert facts["unresolved_input_bindings"] == []
+    assert project_confirmed_specification(projected) == projected
+    assert spec == original

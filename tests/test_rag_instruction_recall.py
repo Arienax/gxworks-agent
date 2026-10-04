@@ -130,7 +130,7 @@ def test_section_fallback_keeps_manual_bytes_and_instance_step_facts():
     from knowledge.structured_facts import resolve_instruction_records, compact_structured_fact_record
 
     full = resolve_instruction_records([{"opcode": "RST", "operands": ["D10"]}])[0]
-    assert full["instruction_lookup_basis"] == "official_section_heading"
+    assert full["instruction_lookup_basis"] == "compiled_definition_section"
     assert full["instruction_step_width"]["steps"] == 3
     assert not any(marker in full["text"] for marker in (
         "STEP_WIDTH:", "STEP_WIDTH_SOURCE:", "STEP_WIDTH_REASON:",

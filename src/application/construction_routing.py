@@ -60,6 +60,8 @@ def route_construction_examples(profile, candidates, *, max_examples=2):
     rows = [dict(item) for item in candidates if isinstance(item, Mapping)]
     scored = []
     for row in rows:
+        required = {str(item).strip().casefold()
+                    for item in row.get("requires_structures") or []}
         structures = {
             str(item).strip().casefold()
             for item in row.get("primary_structures") or []
@@ -78,20 +80,34 @@ def route_construction_examples(profile, candidates, *, max_examples=2):
         hit_structures = structures & set(profile.structures)
         hit_semantics = semantics & set(profile.execution_semantics)
         hit_motifs = motifs & set(profile.motifs)
-        score = 5 * len(hit_motifs) + 3 * len(hit_structures) + 2 * len(hit_semantics)
+        missing = required - set(profile.structures)
+        score = 0 if missing else 5 * len(hit_motifs) + 3 * len(hit_structures) + 2 * len(hit_semantics)
         scored.append({
             "id": str(row.get("id") or ""),
             "score": score,
             "hit_structures": sorted(hit_structures),
             "hit_execution_semantics": sorted(hit_semantics),
             "hit_motifs": sorted(hit_motifs),
+            "missing_required_structures": sorted(missing),
         })
 
     eligible = [row for row in scored if row["score"] > 0 and row["id"]]
+    # A confirmed state-machine plan is the process skeleton. A small edge or
+    # counter example cannot outrank it merely by matching more minor signals.
+    process_structures = set(profile.structures) & {"bit_state_machine", "register_state_machine"}
+    if process_structures:
+        eligible = [row for row in eligible if process_structures.intersection(row["hit_structures"])]
     # Multiple signals may all describe one archetype (for example
     # edge_trigger + RISING_EDGE -> edge_and_level). With no grounded composite
     # motif, withhold examples only when different archetypes compete.
-    if not profile.motifs and len(eligible) > 1:
+    # One example can already implement the combined needs: the counter-reset
+    # example includes both an edge and a hardware counter. Do not mistake its
+    # simpler edge-only subset for an independent competing archetype.
+    need_keys = ("hit_structures", "hit_execution_semantics", "hit_motifs")
+    union = {key: set().union(*(set(row[key]) for row in eligible)) for key in need_keys}
+    complete = [row for row in eligible
+                if all(set(row[key]) == union[key] for key in need_keys)]
+    if not profile.motifs and len(eligible) > 1 and not complete:
         return {
             "selected_ids": [],
             "reason": "multiple_primary_needs_without_composite_motif",
@@ -99,11 +115,14 @@ def route_construction_examples(profile, candidates, *, max_examples=2):
             "candidates": scored,
         }
 
+    if not profile.motifs and complete:
+        eligible = complete[:]
     eligible.sort(key=lambda row: (-row["score"], row["id"]))
     selected = [row["id"] for row in eligible[:max(0, int(max_examples))]]
     return {
         "selected_ids": selected,
         "reason": "matched_primary_need" if selected else "no_primary_match",
+        "primary_process_structures": sorted(process_structures),
         "profile": profile.manifest(),
         "candidates": scored,
     }

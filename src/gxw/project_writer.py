@@ -13,9 +13,9 @@ import tempfile
 from typing import Mapping
 
 from .container_writer import replace_project_stream, validate_cfb_streams
-from .declarations import DeclarationDocument, edit_declarations, parse_declarations, serialize_declarations
+from .declarations import DeclarationDocument, edit_declarations, parse_declarations, serialize_declarations, resolve_label
 from .models import GXWFormatError, StructuredProgram
-from .project_metadata import logical_mapping, synchronize_history
+from .project_metadata import logical_mapping, synchronize_history, read_project_compile_options
 from .structured_pou import parse_structured_pou
 from .structured_pou_writer import serialize_structured_pou
 
@@ -73,6 +73,25 @@ class ProjectWriteResult:
     report: dict
 
 
+@dataclass(frozen=True)
+class PreparedProjectWrite:
+    """Validated, source-bound edits shared by container and native saves."""
+
+    baseline: bytes
+    programs: dict[str, StructuredProgram]
+    declarations: dict[str, DeclarationDocument]
+    outer: dict[str, bytes]
+    nested: dict[str, bytes]
+    mapping: dict[str, str]
+    replacements: dict[str, tuple[str, bytes, bytes]]
+    objects: list[dict]
+
+    @property
+    def requires_native_save(self):
+        return bool(self.outer.get('Project.gd2')) and any(
+            old != new for _, old, new in self.replacements.values())
+
+
 def _declaration_manifest(document):
     return [{"offset": r.offset, "length": len(r.raw), "sha256": sha256(r.raw),
              "kind": "declaration", "symbol": r.name, "type_name": r.data_type,
@@ -90,6 +109,13 @@ def _bind_function_blocks(programs, declarations, mapping, payloads):
         if logical.endswith((".Labels.lh", ".gh")) and logical not in documents:
             documents[logical] = parse_declarations(payloads[mapping[logical]], logical_name=logical)
     changed = dict(declarations)
+    project_metadata = [payloads[mapping[name]] for name in mapping if name.endswith('.prj') and mapping[name] in payloads]
+    hiding = None
+    if len(project_metadata) == 1:
+        try:
+            hiding = read_project_compile_options(project_metadata[0])['global_variable_hiding']
+        except GXWFormatError:
+            pass  # Preserve unsupported metadata; ambiguous names cannot bind.
     for logical, program in programs.items():
         local_name = logical.removesuffix(".Program.pou") + ".Labels.lh"
         instances = {}
@@ -103,16 +129,11 @@ def _bind_function_blocks(programs, declarations, mapping, payloads):
         for key, node in instances.items():
             if local_name not in documents:
                 raise GXWFormatError(f"missing local declaration table: {local_name}")
-            local = documents[local_name]
-            hits = [(local_name, r) for r in local.rows if r.name.casefold() == key]
-            hits += [(name, row) for name, doc in documents.items() if doc.scope == "global"
-                     for row in doc.rows if row.name.casefold() == key]
-            if len(hits) > 1:
-                raise GXWFormatError(f"ambiguous FB declaration: {node.symbol}")
-            target = hits[0][0] if hits else local_name
-            if hits and hits[0][1].type_code != 15:
+            binding = resolve_label(documents, logical, node.symbol, global_variable_hiding=hiding)
+            target = binding[0] if binding else local_name
+            if binding and binding[1].type_code not in (0, 15):
                 raise GXWFormatError(f"FB instance conflicts with a variable: {node.symbol}")
-            if hits and hits[0][1].type_reference == node.type_name and hits[0][1].data_type == node.type_name:
+            if binding and binding[1].data_type == node.type_name:
                 continue
             doc = edit_declarations(documents[target], upserts=[{
                 "name": node.symbol, "data_type": node.type_name, "kind": "function_block"}])
@@ -120,10 +141,10 @@ def _bind_function_blocks(programs, declarations, mapping, payloads):
     return changed
 
 
-def build_gxw_project(baseline: bytes, programs: StructuredProgram | Mapping[str, StructuredProgram] | None = None,
-                      *, declarations: Mapping[str, DeclarationDocument] | None = None,
-                      sync_fb_declarations: bool = False) -> ProjectWriteResult:
-    """Build and verify both CFB layers before exposing output bytes.
+def prepare_project_write(baseline: bytes, programs: StructuredProgram | Mapping[str, StructuredProgram] | None = None,
+                          *, declarations: Mapping[str, DeclarationDocument] | None = None,
+                          sync_fb_declarations: bool = False) -> PreparedProjectWrite:
+    """Validate edits without choosing how the native container will be saved.
 
     A source-bound model prevents edits based on a different/stale project being
     applied silently. Multiple POU replacements form a single in-memory write.
@@ -183,6 +204,20 @@ def build_gxw_project(baseline: bytes, programs: StructuredProgram | Mapping[str
                         "offset_space": "logical declaration stream bytes",
                         "binary_changes": binary_diff(original, new),
                         "records_before": _declaration_manifest(parsed), "records_after": _declaration_manifest(rebuilt)})
+    return PreparedProjectWrite(bytes(baseline), programs, declarations, outer_payloads,
+                                nested_payloads, mapping, replacements, objects)
+
+
+def write_prepared_project(prepared: PreparedProjectWrite) -> ProjectWriteResult:
+    """Write the generic container only when its save envelope permits it."""
+    baseline, outer_payloads, nested_payloads = prepared.baseline, prepared.outer, prepared.nested
+    mapping, replacements, objects = prepared.mapping, prepared.replacements, prepared.objects
+    hdb = outer_payloads['_hdb']
+    if prepared.requires_native_save:
+        # The observed native envelope has save metadata outside the nested
+        # CFB sectors. The generic allocator cannot preserve/update that state.
+        # Return no invalid file; the original workspace must save source edits.
+        raise GXWFormatError('this project requires a native workspace save for changed sources or declarations')
     history, metadata, preserved = synchronize_history(outer_payloads["history.xml"], replacements, current_mapping=mapping)
     allocations = []
     for logical, (stream, old, new) in replacements.items():
@@ -217,6 +252,13 @@ def build_gxw_project(baseline: bytes, programs: StructuredProgram | Mapping[str
         "limitations": ["Template-backed supported StructuredProgram layouts only",
                         "Compiler state preserved; GX Works2 compilation is a separate required gate",
                         "Declaration edits use existing local/global tables; adding new POUs or table streams is unsupported"]})
+
+
+def build_gxw_project(baseline: bytes, programs: StructuredProgram | Mapping[str, StructuredProgram] | None = None,
+                      *, declarations: Mapping[str, DeclarationDocument] | None = None,
+                      sync_fb_declarations: bool = False) -> ProjectWriteResult:
+    return write_prepared_project(prepare_project_write(
+        baseline, programs, declarations=declarations, sync_fb_declarations=sync_fb_declarations))
 
 
 def write_new_file(path: Path, data: bytes) -> None:

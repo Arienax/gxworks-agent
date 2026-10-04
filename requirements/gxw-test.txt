@@ -1,2 +1,4 @@
 # Optional independent MS-CFB reader used by GXW allocator regression tests.
 olefile==0.47
+# Generated source/edit invariants against independent native interface witnesses.
+hypothesis==6.168.3

@@ -41,6 +41,181 @@ def test_missing_reasoning_meter_is_unknown_not_zero():
     assert _usage_event({"input_tokens": 10, "output_tokens": 20, "output_tokens_details": {"reasoning_tokens": 0}}).reasoning_tokens == 0
 
 
+def test_user_journey_dry_run_requires_no_provider_or_private_outputs(tmp_path, monkeypatch, capsys):
+    from scripts.benchmark_user_path import main as journey_main
+    import model_runtime.provider as providers
+    monkeypatch.setattr(providers, "get_active_provider", lambda *args: pytest.fail("dry run loaded credentials"))
+    assert journey_main(["--phase", "analysis", "--profile-id", "fixture", "--output", str(tmp_path / "private")]) == 0
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["network_calls"] == 0 and len(plan["cases"]) == 4
+    assert not (tmp_path / "private").exists()
+
+
+def test_user_journey_raw_directory_excludes_repository():
+    from scripts.benchmark_user_path import ROOT, private_directory
+    with pytest.raises(ValueError, match="outside the repository"):
+        private_directory(ROOT / "benchmarks" / "raw")
+
+
+@pytest.mark.parametrize("change", ["evidence", "specification", "temperature"])
+def test_user_journey_preflight_rejects_non_example_changes(change, monkeypatch):
+    from scripts import benchmark_user_path as journey
+    request = {"messages": [{"role": "system", "content": "same evidence and specification"}], "temperature": 0.1}
+    def run(case, *args, **kwargs):
+        actual = copy.deepcopy(request)
+        if case["construction_examples"]:
+            if change == "temperature":
+                actual["temperature"] = 0.2
+            else:
+                actual["messages"][0]["content"] += " changed " + change
+        return {"actual_requests": [actual], "handoff": {"construction_examples": {"enabled": case["construction_examples"]}}}
+    monkeypatch.setattr(journey, "run_case", run)
+    with pytest.raises(ValueError, match="Non-example request content differs"):
+        journey.preflight({"case_id": "fixture"}, {"summary": "same"}, SimpleNamespace(profile={"model": "offline"}, api_key="offline-key"))
+
+
+def test_user_journey_only_removes_the_delimited_example_block():
+    from scripts.benchmark_user_path import request_without_examples
+    request = {"messages": [{"role": "system", "content": "facts\n# Routed construction examples (routed_construction/2)\nexample\n# End routed construction examples\nspec"}], "temperature": 0.1}
+    stripped = request_without_examples(request)
+    assert stripped == {"messages": [{"role": "system", "content": "factsspec"}], "temperature": 0.1}
+    assert "example" in request["messages"][0]["content"]
+
+
+def test_user_journey_no_rag_is_opt_in_and_keeps_the_two_existing_arms(tmp_path, capsys):
+    from scripts.benchmark_user_path import generation_arms, main as journey_main
+    assert generation_arms() == [("examples_off", False), ("examples_on", True)]
+    assert generation_arms(True) == [*generation_arms(), ("no_rag", False)]
+    assert journey_main(["--phase", "generation", "--profile-id", "fixture", "--include-no-rag",
+                         "--output", str(tmp_path / "private"), "--repeats", "1"]) == 0
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["generation_arms"] == ["examples_off", "examples_on", "no_rag"]
+    assert plan["network_calls"] == 0
+
+
+@pytest.mark.parametrize("leak", ["# Retrieved PLC evidence", "[KNOWLEDGE {}]", "[INSTRUCTION FACTS CMP]",
+                                 "OPERAND_SEMANTICS:", "# Routed construction examples",
+                                 "# Confirmed operation effects", "# Compacted historical context",
+                                 '"retrieved_text_present":true'])
+def test_user_journey_no_rag_checks_final_request_not_only_empty_retrieval(leak):
+    from scripts.benchmark_user_path import assert_no_rag_request
+    contexts = [{"text": "", "manifest": {"records": [], "retrieval_enabled": False}}]
+    with pytest.raises(ValueError):
+        assert_no_rag_request({"messages": [{"content": "unchanged specification\n" + leak}]}, contexts)
+
+
+def test_user_journey_rag_comparison_preserves_everything_except_observed_evidence():
+    from scripts.benchmark_user_path import request_without_rag
+    evidence = "\n# Retrieved PLC evidence\nmanual source bytes\n"
+    suffix = '# Settled input predicates (not a new requirement)\n{"retrieved_text_present":true,"active":"X0=1"}\n\n# Provider JSON protocol\nunchanged schema'
+    actual = {"model": "same", "temperature": 0.2, "messages": [
+        {"role": "system", "content": "protocol" + evidence + "confirmed specification\n" + suffix},
+        {"role": "user", "content": "fixed request"}]}
+    expected = copy.deepcopy(actual)
+    expected["messages"][0]["content"] = "protocolconfirmed specification\n" + suffix.replace(":true", ":false")
+    assert request_without_rag(actual, evidence) == expected
+    assert evidence in actual["messages"][0]["content"]
+    with pytest.raises(ValueError, match="once"):
+        request_without_rag(actual, "unobserved evidence")
+
+
+def test_no_rag_actual_generation_skips_retriever_and_sqlite_planner_and_forces_examples_off(monkeypatch):
+    from scripts.benchmark_agent_b import PreviewProvider
+    from scripts.benchmark_user_path import assert_no_rag_request
+    from application import generation_agent
+    from knowledge import structured_facts
+    provider = OpenAICompatibleProvider(offline_runtime_profile(), "fixture-key", client=object())
+    case = next(case for case in _purpose_cases() if case["case_id"] == "wsfl-a")
+    before = copy.deepcopy(case)
+    original_planner = structured_facts.structured_fact_targets
+    monkeypatch.setattr(generation_agent, "_build_knowledge_context",
+                        lambda *a, **k: pytest.fail("No-RAG called the retriever"))
+    monkeypatch.setattr(structured_facts, "_declared_instruction_alias_targets",
+                        lambda *a, **k: pytest.fail("No-RAG queried SQLite aliases"))
+    record = run_case({**case, "construction_examples": True}, "no_rag", provider=PreviewProvider(provider))
+    assert len(record["actual_requests"]) == 1
+    assert_no_rag_request(record["actual_requests"][0], record["evidence"])
+    assert record["handoff"]["generation_evidence"]["records"] == []
+    assert not record["handoff"]["construction_examples"]["enabled"]
+    assert structured_facts.structured_fact_targets is original_planner
+    assert case == before
+
+
+def test_no_rag_workbench_journey_restores_retrieval_for_the_next_arm(tmp_path, monkeypatch):
+    from scripts.benchmark_agent_b import PreviewProvider
+    from scripts.benchmark_user_path import Journey
+    from application import model_api
+    from knowledge.evidence import KnowledgeContext
+    calls = []
+    def build(query, **kwargs):
+        calls.append(str(query))
+        return KnowledgeContext("", {"records": []})
+    monkeypatch.setattr(model_api, "_build_knowledge_context", build)
+    profile = {**offline_runtime_profile(), "id": "offline_profile"}
+    provider = OpenAICompatibleProvider(profile, "fixture-key", client=object())
+    case = next(case for case in _purpose_cases() if case["case_id"] == "hold-control")
+    with Journey(tmp_path / "private", PreviewProvider(provider)) as journey:
+        project = journey.service.create_project(name="isolated", plc_model="FX3U", target_mode="ladder")
+        assert journey.service.set_spec(project["id"], case["confirmed_spec"], None)["valid"]
+        command = {"kind": "generation", "project_id": project["id"], "text": "Generate confirmed spec",
+                   "fresh_confirmed_generation": True, "construction_examples": True}
+        baseline = journey.job(command, case_id=case["case_id"], arm="no_rag", repeat=0)
+        assert calls == [] and len(baseline["actual_requests"]) == 1
+        assert baseline["retrieval"][0]["manifest"]["retrieval_enabled"] is False
+        journey.job({**command, "construction_examples": False}, case_id=case["case_id"], arm="examples_off", repeat=0)
+        assert len(calls) == 1
+
+
+@pytest.mark.parametrize('model,address', [('FX3U', 'X0'), ('FX5U', 'X18')])
+@pytest.mark.parametrize('typed_level', [False, True])
+def test_user_journey_preflight_reports_levels_delivered_instead_of_guessing_from_labels(typed_level, model, address, monkeypatch):
+    from scripts import benchmark_user_path as journey
+    spec = {'plc_model': model, 'io_table': [
+        {'kind': 'X', 'address': address, 'label': '安全许可正常=1'},
+        {'kind': 'Y', 'address': 'Y0', 'label': '输出'}]}
+    if typed_level:
+        spec['io_bindings'] = [{'binding_id': 'permit', 'kind': 'X', 'address': address,
+                                'active_level': 1, 'inactive_level': 0}]
+    before = copy.deepcopy(spec)
+    provider = SimpleNamespace(profile={'model': 'offline'}, api_key='offline-key')
+    monkeypatch.setattr(journey, 'run_case', lambda *args, **kwargs: {
+        'actual_requests': [{'model': 'offline', 'messages': []}], 'handoff': {}})
+    result = journey.preflight({'case_id': 'fixture'}, spec, provider)
+    assert result['input_level_delivery'] == {
+        'physical_input_count': 1, 'settled_predicate_count': int(typed_level),
+        'missing_level_addresses': [] if typed_level else [address], 'unresolved_binding_ids': []}
+    assert result['network_calls'] == 0 and spec == before
+
+
+@pytest.mark.parametrize('raw,expected', [
+    ({'prompt_cache_hit_tokens': 8, 'prompt_cache_miss_tokens': 2}, (8, 2)),
+    ({'prompt_tokens_details': {'cached_tokens': 0}}, (0, None)),
+    ({'input_tokens_details': {'cached_tokens': 6}}, (6, None)),
+    ({'prompt_cache_hit_tokens': 8, 'prompt_tokens_details': {'cached_tokens': 2}}, (8, None)),
+    ({}, None), ({'prompt_cache_hit_tokens': True}, None),
+    ({'prompt_cache_hit_tokens': 11}, None), ({'prompt_cache_hit_tokens': -1}, None),
+    ({'prompt_cache_hit_tokens': 8, 'prompt_cache_miss_tokens': 3}, None),
+])
+def test_prompt_cache_meter_preserves_reported_values_and_missingness(raw, expected):
+    from scripts.benchmark_agent_b import prompt_cache_meter
+    measured = prompt_cache_meter({'input_tokens': 10, 'raw_usage': raw})
+    assert measured is None if expected is None else (
+        measured['hit_tokens'], measured['miss_tokens']) == expected
+
+
+def test_prompt_cache_summary_weights_reported_tokens_and_excludes_unknown_calls():
+    rows = [{'arm': 'automatic', 'end_to_end_ms': 1, 'generation_status': 'completed',
+             'behavior': {}, 'attempts': [{'usage': usage}]} for usage in [
+        {'input_tokens': 100, 'raw_usage': {'prompt_cache_hit_tokens': 100, 'prompt_cache_miss_tokens': 0}},
+        {'input_tokens': 900, 'raw_usage': {'prompt_cache_hit_tokens': 720}},
+        {'input_tokens': 8000, 'raw_usage': {}},
+    ]]
+    measured = summarize(rows)['groups']['automatic']['prompt_cache']
+    assert measured == {'known_calls': 2, 'unreported_or_invalid_calls': 1,
+        'hit_tokens': 820, 'reported_miss_tokens': None, 'measured_input_tokens': 1000,
+        'input_token_hit_rate': 0.82}
+
+
 def _purpose_cases():
     from pathlib import Path
     return load_cases(Path(__file__).resolve().parents[1] / "benchmarks/agent_b_operand_purpose_cases.jsonl")
@@ -68,12 +243,14 @@ def test_cmp_four_factor_preflight_uses_identical_specs_and_distinct_delivery():
     assert result['passed'] and result['network_calls']==0
     for block in result['factorial_blocks']:
         assert list(block['candidate_counts'].values())==[0,3,0,3]
-        assert list(block['relation_counts'].values())==[0,0,1,1]
+        counts = list(block['relation_counts'].values())
+        assert counts[:2] == [0,0] and counts[2] == counts[3] and counts[2] > 0
         case=next(c for c in cases if c['case_id']==block['case_id'])
         for row in block['records']:
             message=json.dumps(row['actual_requests'][0]['messages'],ensure_ascii=False)
             assert ' '.join(['CMP',*case['evaluation']['operands']]) not in message
-            delivered={r['dimension']:r['status'] for r in row['handoff']['fact_coverage']['requirements'] if '.' in r['dimension']}
+            delivered={r['dimension']:r['status'] for r in row['handoff']['fact_coverage']['requirements'] if r['dimension'] in
+                       {'operation.result_mapping', 'execution.disabled_retention'}}
             assert set(delivered.values())==({'unresolved'} if row['arm'] in FACTORIAL_ARMS[:2] else {'candidate_evidence'})
 
 
@@ -174,8 +351,15 @@ def test_paired_preflight_compares_real_final_requests_and_does_not_use_transpor
         assert a['role'] == b['role']
         # Independent check: all other lines, including complete manual bodies,
         # confirmed specification, CPU facts and examples, match byte for byte.
-        assert [line for line in a['content'].splitlines() if not line.startswith('OPERAND_SEMANTICS: ')] == [
-            line for line in b['content'].splitlines() if not line.startswith('OPERAND_SEMANTICS: ')]
+        def independent_content(text):
+            import re
+            def remove(match):
+                groups = json.loads(match[1])['groups']
+                remaining = [g for g in groups if not (g['status'] == 'candidate_evidence' and g['value'].get('facet'))]
+                return json.dumps(remaining, ensure_ascii=False, sort_keys=True) if remaining else ''
+            result = re.sub(r'(?m)^\[INSTRUCTION FACTS [^\n]+\]\n(\{[^\n]+\})\n\[/INSTRUCTION FACTS\]', remove, text)
+            return [line for line in result.splitlines() if line.strip() and not line.startswith('OPERAND_SEMANTICS: ')]
+        assert independent_content(a['content']) == independent_content(b['content'])
     if case_id != 'hold-control':
         assert pair['candidate_counts']['manual_text'] == 0 < pair['candidate_counts']['usage_bound']
         supplied = json.dumps(raw['messages'],ensure_ascii=False)
@@ -268,6 +452,191 @@ def test_mapping_evaluator_uses_independent_gate_expectation(wrong):
     assert result['status']=='failed'
     assert result['checks']['operand_mapping'] is True
     assert result['checks']['specified_direct_gate'] is False
+
+
+@pytest.mark.parametrize('extra,verified', [('NC M8024', True), ('NO M8024', False),
+                                           ('NC M10', False)])
+def test_independent_mapping_gate_honors_only_explicit_case_assumptions(extra, verified):
+    from application.compact_protocol import expand_compact_ladder
+    from pathlib import Path
+    case = next(json.loads(row) for row in (Path(__file__).resolve().parents[1] /
+                'benchmarks/agent_b_instruction_effect_cases.jsonl').read_text(encoding='utf-8').splitlines()
+                if json.loads(row)['case_id'] == 'effect-bmov')
+    ladder = expand_compact_ladder({'r': [{'b': [{'i': ['NO X0', extra], 'o': ['BMOV D20 D300 K7']}]}]})
+    receipt = evaluate_synthetic_case(case, {'ladder': ladder})
+    assert (receipt['status'] == 'verified') is verified
+
+
+def test_binding_summary_preserves_matched_first_failures_and_stage_use():
+    rows = []
+    for repeat, baseline_ok, bound_ok in [(0, False, True), (1, True, False)]:
+        for arm, usable in [('native_parameters', baseline_ok), ('core_binding', bound_ok)]:
+            rows.append({'case_id': 'synthetic', 'repeat': repeat, 'arm': arm,
+                'generation_status': 'completed' if usable else 'failed', 'behavior': {},
+                'attempts': [{'usage': {}}], 'end_to_end_ms': 10 + repeat,
+                'first_candidate': {'usable': usable}, 'operation_binding': {'receipts': [
+                    {'binding_mode': 'operation_reference'}] if usable else []}})
+    receipt = summarize(rows)
+    pairs = receipt['binding_contrasts']
+    assert len(pairs) == 2 and [(p['baseline_usable'], p['treatment_usable']) for p in pairs] == [(False, True), (True, False)]
+    assert [p['binding_reference_used'] for p in pairs] == [True, False]
+    assert receipt['groups']['core_binding']['total_tokens']['median'] is None
+
+
+def test_native_direction_failure_is_rebound_and_original_model_error_stays_measurable(monkeypatch):
+    from knowledge.evidence import KnowledgeContext
+    from pathlib import Path
+    import application.generation_agent as agent
+    monkeypatch.setattr(agent, '_build_knowledge_context', lambda *a, **k: KnowledgeContext(''))
+    case = next(json.loads(row) for row in (Path(__file__).resolve().parents[1] /
+        'benchmarks/agent_b_instruction_effect_cases.jsonl').read_text(encoding='utf-8').splitlines()
+        if json.loads(row)['case_id'] == 'effect-cmp')
+    calls = []
+    class Provider:
+        profile = offline_runtime_profile()
+        def stream(self, request):
+            calls.append(request)
+            yield TextDelta(json.dumps({'r': [{'b': [{'i': ['NO X0'], 'o': ['CMP D1450 K-37 M610']}]}]}))
+    record = run_case(case, 'native_parameters', provider=Provider())
+    first = record['first_candidate']
+    assert len(calls) == record['model_calls'] == 1
+    assert first['usable'] and first['semantic']['status'] == 'verified'
+    assert first['raw_model_candidate']['semantic']['status'] == 'failed'
+    assert first['raw_model_candidate']['contract_status'] == 'violated'
+    receipt = first['Core_binding']['receipts'][0]
+    assert receipt['input_call']['operands'] == ['D1450', 'K-37', 'M610']
+    assert receipt['output_call']['operands'] == ['K-37', 'D1450', 'M610']
+    totals = summarize([record])['groups']['native_parameters']
+    assert totals['first_pass_usable'] == totals['native_parameter_rebindings'] == 1
+    assert totals['raw_model_semantic_correct'] == 0
+    assert totals['raw_model_native_evaluated_runs'] == 1
+
+
+def _effect_challenge_cases():
+    from pathlib import Path
+    return [row for row in map(json.loads, (Path(__file__).resolve().parents[1] /
+        'benchmarks/agent_b_instruction_effect_cases.jsonl').read_text(encoding='utf-8').splitlines())
+        if row['case_id'].startswith('challenge-')]
+
+
+def _reviewed_effect_cases():
+    from pathlib import Path
+    return load_cases(Path(__file__).resolve().parents[1] / 'benchmarks/agent_b_instruction_effect_cases.jsonl')
+
+
+@pytest.mark.parametrize('case', _reviewed_effect_cases(), ids=lambda c: c['case_id'])
+def test_every_reviewed_effect_case_executes_independent_fixed_traces(case):
+    evaluation = case['evaluation']
+    assert evaluation['effect_traces'] and evaluation['reference']['expected_source']
+    result = evaluate_synthetic_case(case, {'ladder': _mapping_ladder(case)})
+    assert result['status'] == 'verified', result
+    if case['confirmed_spec']['operation_intents'][0]['execution']['trigger'] == 'rising':
+        assert any(row['enabled'] and row.get('previous_enabled') is True and not row['executed']
+                   for row in evaluation['effect_traces'])
+
+
+def test_reviewed_effect_coverage_requires_all_forms_and_independent_traces():
+    from scripts.benchmark_agent_b import reviewed_effect_case_coverage
+    cases = _reviewed_effect_cases()
+    coverage = reviewed_effect_case_coverage(cases)
+    assert coverage['required_reviewed_forms'] > 60
+    assert coverage['represented_reviewed_forms'] == coverage['required_reviewed_forms'] and not coverage['missing']
+    missing = reviewed_effect_case_coverage([case for case in cases if case['evaluation']['opcode'] != 'DMULP'])
+    assert missing['missing'] == [{'target_model': 'FX3U', 'opcode': 'DMULP'}]
+    damaged = copy.deepcopy(cases)
+    for case in damaged:
+        if case['evaluation']['opcode'] == 'DMULP':
+            case['evaluation'].pop('effect_traces')
+    assert reviewed_effect_case_coverage(damaged)['missing'] == missing['missing']
+
+
+def test_reference_trace_sequence_preserves_state_and_previous_enable():
+    from scripts.benchmark_agent_b import evaluate_effect_traces
+    traces = [
+        {'id': 'off', 'sequence': 'counter', 'enabled': False, 'executed': False,
+         'memory': {'D1710': 32767}, 'writes': {}, 'memory_after': {'D1710': 32767}},
+        {'id': 'first-edge', 'sequence': 'counter', 'enabled': True, 'executed': True,
+         'writes': {'D1710': -32768}, 'memory_after': {'D1710': -32768}},
+        {'id': 'held', 'sequence': 'counter', 'enabled': True, 'executed': False,
+         'writes': {}, 'memory_after': {'D1710': -32768}},
+        {'id': 'disabled', 'sequence': 'counter', 'enabled': False, 'executed': False,
+         'writes': {}, 'memory_after': {'D1710': -32768}},
+        {'id': 'second-edge', 'sequence': 'counter', 'enabled': True, 'executed': True,
+         'writes': {'D1710': -32767}, 'memory_after': {'D1710': -32767}},
+    ]
+    call = {'opcode': 'INCP', 'operands': ['D1710']}
+    assert evaluate_effect_traces(traces, [call], 'FX3U')['status'] == 'verified'
+    damaged = copy.deepcopy(traces)
+    damaged[2]['memory_after']['D1710'] = -32767
+    assert evaluate_effect_traces(damaged, [call], 'FX3U')['status'] == 'failed'
+
+
+@pytest.mark.parametrize('contacts,valid', [
+    (['NC M8024', 'NC X5'], True), (['NC X5', 'NC M8024'], True),
+    (['NO M8024', 'NC X5'], False), (['NC M8024', 'NO X5'], False),
+    (['NC M99', 'NC X5'], False),
+])
+def test_independent_gate_oracle_accepts_confirmed_true_conditions_in_either_order(contacts, valid):
+    from application.compact_protocol import expand_compact_ladder
+    case = next(c for c in _effect_challenge_cases() if c['case_id'] == 'challenge-bmov-2')
+    evaluation = case['evaluation']
+    ladder = expand_compact_ladder({'r': [{'b': [{'i': contacts,
+        'o': [' '.join([evaluation['opcode'], *evaluation['operands']])]}]}]})
+    receipt = evaluate_synthetic_case(case, {'ladder': ladder})
+    assert (receipt['status'] == 'verified') == valid
+
+
+def test_operation_reference_raw_candidate_requires_Core_instead_of_counting_as_a_native_failure(monkeypatch):
+    from knowledge.evidence import KnowledgeContext
+    import application.generation_agent as agent
+    monkeypatch.setattr(agent, '_build_knowledge_context', lambda *a, **k: KnowledgeContext(''))
+    case = next(c for c in _effect_challenge_cases() if c['case_id'] == 'challenge-cmp-1')
+    class Provider:
+        profile = offline_runtime_profile()
+        def stream(self, request):
+            yield TextDelta(json.dumps({'r': [{'b': [{'i': ['NO X3'], 'o': ['OP operation']}]}]}))
+    record = run_case(case, 'core_binding', provider=Provider())
+    assert record['first_candidate']['usable']
+    assert record['first_candidate']['raw_model_candidate']['status'] == 'operation_reference'
+    totals = summarize([record])['groups']['core_binding']
+    assert totals['raw_model_semantic_correct'] == totals['raw_model_native_evaluated_runs'] == 0
+
+
+@pytest.mark.parametrize('case', _effect_challenge_cases(), ids=lambda case: case['case_id'])
+def test_effect_challenges_execute_independent_fixed_result_traces(case):
+    from application.compact_protocol import expand_compact_ladder
+    expected = case['evaluation']
+    contact = ('NC ' if expected['gate']['op'] == 'LDI' else 'NO ') + expected['gate']['args'][0]
+    ladder = expand_compact_ladder({'r': [{'b': [{'i': [contact],
+        'o': [' '.join([expected['opcode'], *expected['operands']])]}]}]})
+    receipt = evaluate_synthetic_case(case, {'ladder': ladder})
+    assert receipt['status'] == 'verified'
+    assert receipt['effect_traces']['status'] == 'verified'
+    assert receipt['effect_traces']['hardware_effect'] == 'not_tested'
+
+
+def test_independent_result_traces_detect_a_bad_definition_even_when_operand_mapping_matches(monkeypatch):
+    from copy import deepcopy
+    from dataclasses import replace
+    from types import SimpleNamespace
+    import plc.instructions as instructions
+    from application.compact_protocol import expand_compact_ladder
+    case = next(c for c in _effect_challenge_cases() if c['case_id'] == 'challenge-cmp-1')
+    form = instructions.DEFAULT_INSTRUCTION_REGISTRY.resolve_form('CMP', cpu='FX3U')
+    facts = []
+    for g in form.spec.definition_facts:
+        if g.id == 'behavior:effect':
+            bad = deepcopy(g.value)
+            bad['outputs'][0]['expression']['op'] = 'lt'
+            facts.append(replace(g, value=bad))
+        else:
+            facts.append(g)
+    bad_form = replace(form, spec=replace(form.spec, definition_facts=tuple(facts)))
+    monkeypatch.setattr(instructions, 'DEFAULT_INSTRUCTION_REGISTRY', SimpleNamespace(resolve_form=lambda *a, **k: bad_form))
+    ladder = expand_compact_ladder({'r': [{'b': [{'i': ['NO X3'], 'o': ['CMP K-32767 D2815 M1120']}]}]})
+    receipt = evaluate_synthetic_case(case, {'ladder': ladder})
+    assert receipt['checks']['operand_mapping']
+    assert not receipt['checks']['effect_traces'] and receipt['status'] == 'failed'
 
 
 @pytest.mark.parametrize('case_id,position,literal,correct', [

@@ -11,6 +11,9 @@ from __future__ import annotations
 
 from plc.generation_contract import generation_specification
 from plc.specification.parameters import generation_parameter_view
+from plc.specification.bindings import generation_io_snapshot
+from plc.specification.conditions import generation_input_conditions
+from plc.hardware_profiles import QUESTION_IDS
 
 import copy
 from datetime import datetime, timezone
@@ -121,6 +124,10 @@ def _network_context(program: Mapping[str, Any]) -> List[Dict[str, Any]]:
                 "instructions_truncated": len(instructions) > 120,
                 "reads": list(item.get("reads") or [])[:120],
                 "writes": list(item.get("writes") or [])[:120],
+                # The original topology preserves series/parallel conditions,
+                # shared guards and output order. Flattened instructions alone
+                # cannot explain whether a stop masks a simultaneous completion.
+                "ladder": copy.deepcopy(item.get("ladder") or {}),
             }
         )
     return rows
@@ -145,13 +152,18 @@ def build_review_context(
     devices = sorted(str(item) for item in (program.get("devices") or {}))
     local_findings = list(local_report.get("findings") or [])
     static_findings = list(analysis.get("findings") or [])
+    spec = generation_parameter_view(generation_io_snapshot(
+        dict(confirmed_spec), protected_ids=QUESTION_IDS
+    )) if isinstance(confirmed_spec, Mapping) else {}
     context = {
         "schema_version": MULTI_AGENT_SCHEMA_VERSION,
         "binding": binding,
         "plc": copy.deepcopy(program.get("plc") or {}),
         "program_name": str(program.get("program_name") or "MAIN"),
         "request": copy.deepcopy(request),
-        "confirmed_spec": generation_specification(generation_parameter_view(confirmed_spec)) or {},
+        "confirmed_spec": generation_specification(spec) or {},
+        "input_conditions": generation_input_conditions(spec.get("io_bindings"),
+            plc_model=(program.get("plc") or {}).get("cpu") or spec.get("plc_model") or "FX3U"),
         "networks": _network_context(program),
         "network_scope": {
             "total": len(networks),
@@ -381,6 +393,7 @@ class DeterministicMultiAgentSupervisor:
         request: Any,
         local_report: Mapping[str, Any],
         confirmed_spec: Optional[Mapping[str, Any]] = None,
+        on_report: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> Dict[str, Any]:
         """Run Reviewer then Timing Planner and return normalized advice."""
 
@@ -398,13 +411,16 @@ class DeterministicMultiAgentSupervisor:
         stages: List[Dict[str, Any]] = []
         reports: List[Dict[str, Any]] = []
         prior_summary = ""
+        prior_findings = []
+        prior_truncated = False
         for sequence, role in enumerate(_ROUTES["program_review"], start=1):
             role_payload = {
                 "schema_version": MULTI_AGENT_SCHEMA_VERSION,
                 "role": role,
                 "context": context,
                 "upstream": (
-                    {"role": REVIEWER, "summary": prior_summary}
+                    {"role": REVIEWER, "summary": prior_summary,
+                     "findings": prior_findings, "findings_truncated": prior_truncated}
                     if role == TIMING_PLANNER
                     else None
                 ),
@@ -423,7 +439,16 @@ class DeterministicMultiAgentSupervisor:
             stage["normalized_output_sha256"] = _sha(normalized)
             stages.append(stage)
             reports.append(normalized)
+            if on_report is not None:
+                on_report(copy.deepcopy(normalized))
             prior_summary = str(normalized.get("summary") or "")[:1000]
+            prior_findings = [
+                {"finding_id": item["finding_id"], "category": item["category"], "code": item["code"],
+                 "message": item["message"][:800], "rung_ids": item["rung_ids"][:16],
+                 "json_paths": item["json_paths"][:8], "addresses": item["addresses"][:16]}
+                for item in normalized["findings"][:12]
+            ]
+            prior_truncated = len(normalized["findings"]) > 12
 
         run = {
             "schema_version": MULTI_AGENT_SCHEMA_VERSION,

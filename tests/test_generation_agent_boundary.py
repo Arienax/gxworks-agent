@@ -116,39 +116,42 @@ def test_operand_usage_and_execution_form_reach_actual_agent_b_messages(tmp_path
     contract = specification["selected_approach"]["generation_contract"]
     contract["required_opcodes"] = ["WSFL"]
     contract["instruction_instances"] = [{"opcode": "WSFL", "operands": operands}]
-    GenerationWorkflow(
+    metadata = GenerationWorkflow(
         GenerationRequest(user_input="Generate", confirmed_context=specification, plc_model="FX3U", model_name=provider.profile["model"]),
         tmp_path, dependencies=GenerationDependencies(provider=provider),
     ).run()
     assert len(provider.requests) == 1
     sent = "\n".join(str(getattr(message, "content", "")) for message in provider.requests[0].messages)
-    operand_lines = [line for line in sent.splitlines() if line.startswith("OPERAND_SEMANTICS:")]
-    views = [json.loads(line.split(": ", 1)[1]) for line in operand_lines]
-    delivered = next(view for view in views if view["opcode"] == "WSFL" and any(slot.get("usage_facts") for slot in view["slots"]))
-    assert [slot["symbol"] for slot in delivered["slots"]] == ["S", "D", "N1", "N2"]
-    assert [slot["value"] for slot in delivered["slots"]] == operands
-    length, count = delivered["slots"][2:]
+    import re
+    groups = [g for match in re.finditer(r'(?m)^\[INSTRUCTION FACTS [^\n]+\]\n(\{[^\n]+\})', sent)
+              for g in json.loads(match[1])['groups']]
+    assert any(g['value'].get('facet') == 'purpose' for g in groups)
+    delivered = next(row for row in metadata['generation_handoff']['instruction_facts']['records']
+                     if row.get('definition_fact_groups'))
+    assert [slot["symbol"] for slot in delivered["operand_slots"]] == ["S", "D", "N1", "N2"]
+    assert [slot["value"] for slot in delivered["operand_slots"]] == operands
+    length, count = delivered["operand_slots"][2:]
     assert "Word data length of the shift data" in length["usage_facts"][0]["value"]
     assert "Number of words to be shifted leftward" in count["usage_facts"][0]["value"]
     for slot in (length, count):
         assert slot["purpose_status"] == "candidate_evidence"
-        ref = slot["usage_facts"][0]["source_refs"][0]
-        source = delivered["sources"][ref["source"]]
+        source = slot["usage_facts"][0]["sources"][0]
         assert source["manual_id"] == "fx3_programming_r"
         assert source["revision"] == "R"
-        assert ref["row_span"]
+        assert source["row_span"]
         assert slot["symbol_status"] == "source_verified"
-    assert '"execution_form":"continuous"' in sent
-    assert '"execution_form_status":"source_verified"' in sent
+    assert '"form":"continuous"' in sent
+    assert '"trigger":"level"' in sent
     assert "STEP_WIDTH:" not in sent
 
 
 def test_conflicting_usage_candidates_reach_agent_b_only_as_an_unresolved_facet(tmp_path, monkeypatch):
     import knowledge.structured_facts as structured
-    from tests.test_instruction_fact_context import _usage_source
+    from tests.test_instruction_fact_context import _usage_source, _fixture_definition
 
     sources = [_usage_source([("S", value, "Bit")], identity=identity)
                for identity, value in (("a", "First conflicting purpose"), ("b", "Second conflicting purpose"))]
+    sources[0]['instruction_definition'] = _fixture_definition(sources, sources[0], ['S', 'D', 'N1', 'N2'])
     monkeypatch.setattr(structured, "resolve_instruction_records", lambda *a, **k: copy.deepcopy(sources))
 
     class UsageProvider(OneShotProvider):
@@ -169,11 +172,12 @@ def test_conflicting_usage_candidates_reach_agent_b_only_as_an_unresolved_facet(
     sent = "\n".join(str(getattr(message, "content", "")) for message in provider.requests[0].messages)
     assert "First conflicting purpose" not in sent
     assert "Second conflicting purpose" not in sent
-    views = [json.loads(line.split(": ", 1)[1]) for line in sent.splitlines() if line.startswith("OPERAND_SEMANTICS:")]
-    source = next(view["slots"][0] for view in views if view["opcode"] == "SFTL")
+    assert '"usage_conflicts"' in sent
+    source = next(row['operand_slots'][0] for row in metadata['generation_handoff']['instruction_facts']['records']
+                  if row.get('operand_slots'))
     assert source["purpose_status"] == "unresolved"
     assert source["usage_conflicts"][0]["facet"] == "purpose"
-    assert source["usage_conflicts"][0]["candidate_count"] == 2
+    assert len(source["usage_conflicts"][0]["candidates"]) == 2
     receipt = metadata["generation_handoff"]["instruction_facts"]
     assert next(row for row in receipt["operand_facts"] if row["opcode"] == "SFTL" and row["position"] == 1 and row["facet"] == "purpose")["status"] == "unresolved"
 
@@ -437,7 +441,7 @@ def test_other_model_is_not_given_fx3u_examples():
 
 def test_all_examples_are_current_valid_ir_and_round_trip_exactly():
     items = examples.construction_examples_ir()
-    assert len(items) == 6
+    assert len(items) == 8
     assert len({item["id"] for item in items}) == len(items)
     for item in items:
         program = item["program_ir"]
@@ -453,7 +457,22 @@ def test_all_examples_are_current_valid_ir_and_round_trip_exactly():
             for address, label in ladder["device_comments"].items()
         ]}
         assert expand_compact_ladder(compact, projected) == ladder
-        assert not any(address.startswith(("SM", "SD", "M8", "D8")) for address in program["devices"])
+        assert not any(address.startswith(("SM", "SD", "M8", "D8")) and address != "M8002" for address in program["devices"])
+
+
+@pytest.mark.parametrize("structure,expected", [("bit_state_machine", "timed_bit_sequence"),
+                                                ("register_state_machine", "timed_register_sequence")])
+def test_complex_state_plan_selects_its_process_skeleton_before_generic_edges(structure, expected):
+    specification = {"selected_approach": {"generation_contract": {
+        "required_structures": [structure, "edge_trigger", "hardware_counter"]}},
+        "execution_semantics": [{"semantic": value} for value in ("FIRST_SCAN", "RISING_EDGE", "FALLING_EDGE")]}
+    block = examples.prepare_construction_examples("FX3U", True, specification)
+    assert block.example_ids == (expected,)
+    assert block.route["primary_process_structures"] == [structure]
+    assert "counter_reset_priority" not in block.text and "edge_and_level" not in block.text
+    program = next(row["program_ir"] for row in examples.construction_examples_ir() if row["id"] == expected)
+    codes = {f["code"] for f in program["analysis"]["findings"]}
+    assert not codes.intersection({"REPEATED_GUARD_INVALIDATED", "TIMER_OUTPUT_FEEDBACK", "LATCH_WITHOUT_RESET"})
 
 
 def test_ir_exports_and_manifests_cannot_mutate_cached_examples():
@@ -503,10 +522,11 @@ def test_wire_renderer_changes_only_the_example_block_and_freezes_flag(monkeypat
     on_block = examples.prepare_construction_examples("FX3U", True, spec)
     off = _compact_wire_renderer("FX3U", example_block=off_block)
     expected = (_COMPACT_PROTOCOL + SOURCE_PRECEDENCE + "\n# Selected PLC\nFX3U\n"
+                + compact_capability_prompt("FX3U", spec) + evidence
                 + "\n# Confirmed project specification\n"
-                + json.dumps(spec, ensure_ascii=False, separators=(",", ":"))
-                + compact_capability_prompt("FX3U", spec) + render_context_checkpoint("")
-                + evidence + generation_execution_prompt(spec, evidence_text=evidence, task_type="generate"))
+                + json.dumps(spec, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+                + render_context_checkpoint("")
+                + generation_execution_prompt(spec, evidence_text=evidence, task_type="generate"))
     assert off(*args) == {"messages": render_wire_messages(expected, [{"role": "user", "content": request}])}
     on = _compact_wire_renderer("FX3U", example_block=on_block)
     off_packet, on_packet = off(*args), on(*args)
@@ -515,6 +535,25 @@ def test_wire_renderer_changes_only_the_example_block_and_freezes_flag(monkeypat
     assert on_packet["messages"][0]["content"].count(block.text) == 1
     on_packet["messages"][0]["content"] = on_packet["messages"][0]["content"].replace(block.text, "", 1)
     assert on_packet == off_packet
+
+
+def test_actual_wire_reuses_evidence_prefix_across_project_values_and_key_order():
+    from application.generation_agent import _compact_wire_renderer
+    spec = _construction_spec()
+    other = copy.deepcopy(spec)
+    other['summary'] = '另一份已确认规格，地址及参数另行给定'
+    evidence = '\n# Technical evidence\nUNCHANGED_SOURCE_' * 300
+    block = examples.prepare_construction_examples('FX3U', False, spec)
+    render = _compact_wire_renderer('FX3U', example_block=block)
+    first = render(spec, evidence, 'generate', None, '', [])['messages'][0]['content']
+    second = render(other, evidence, 'generate', None, '', [])['messages'][0]['content']
+    prefix = first.split('\n# Confirmed project specification\n', 1)[0]
+    assert second.startswith(prefix)
+    assert evidence in prefix
+    assert first != second and '另一份已确认规格' in second
+    reversed_keys = dict(reversed(list(spec.items())))
+    assert render(reversed_keys, evidence, 'generate', None, '', [])['messages'][0]['content'] == first
+    assert render(spec, '\nCHANGED_SOURCE\n', 'generate', None, '', [])['messages'][0]['content'] != first
 
 
 def test_actual_agent_request_budget_handoff_and_retrieval_are_isolated(monkeypatch):
@@ -588,6 +627,8 @@ def test_generation_workflow_forwards_explicit_construction_example_arm(monkeypa
             "generation_handoff": {
                 "construction_examples": {"enabled": bool(kwargs.get("construction_examples"))}
             },
+            "operation_binding": {"stage": "Core_operation_binding", "model_calls": 0,
+                                  "receipts": [{"binding_mode": "native_read_parameter_rebinding"}]},
         }
 
     monkeypatch.setattr(agent_b, "generate_confirmed_ladder", fake_generate)
@@ -607,6 +648,7 @@ def test_generation_workflow_forwards_explicit_construction_example_arm(monkeypa
 
     assert captured == [enabled]
     assert metadata["generation_handoff"]["construction_examples"]["enabled"] is enabled
+    assert metadata['first_pass_pipeline']['operation_binding']['receipts'][0]['binding_mode'] == 'native_read_parameter_rebinding'
 
 
 @pytest.mark.parametrize("value", ["1", "false", 0, 1, {}, []])

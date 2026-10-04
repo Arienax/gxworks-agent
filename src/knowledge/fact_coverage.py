@@ -54,6 +54,13 @@ def fact_requirements(targets, *, instruction_questions=None):
                 if instance is not None:
                     requirement["instruction_instance"] = {"opcode": target, "operands": list(instance)}
                 requirements.append(requirement)
+    for row in targets.get("process") or ():
+        if isinstance(row, Mapping) and row.get("target"):
+            target = str(row["target"]).upper()
+            dimension = str(row.get("dimension") or _DEFAULT_DIMENSION)
+            requirements.append({"id": f"process:{target}:{dimension}", "kind": "process",
+                                 "target": target, "dimension": dimension,
+                                 "candidate_source_ids": [], "source_ids": [], "status": "unresolved"})
     return requirements
 
 
@@ -183,11 +190,18 @@ def instruction_report_view(report, included_ids):
         {"instructions": result.get("targets") or (), "devices": [], "errors": []},
         records, included_ids, instruction_questions=result.get("questions") or {},
         extra_requirements=[*(result.get("operand_requirements") or ()),
-                            *(result.get("relation_requirements") or ())],
+                            *(result.get("relation_requirements") or ()),
+                            *(result.get("definition_requirements") or ())],
     )
     included_by_id = {row["id"]: row["included"] for row in coverage["records"]}
     for record in result.get("records", []):
         record["included"] = included_by_id.get(record.get("id"), False)
+    for view in result.get('definition_views', []):
+        delivered = {g['id'] for r in result.get('records', []) if r.get('included')
+                     and r.get('fact_target') == view['opcode']
+                     and (r.get('definition_task_view') or {}).get('target_model') == view['target_model']
+                     for g in r.get('definition_fact_groups', [])}
+        view['receipt']['final_delivered_fact_ids'] = sorted(set(view['receipt']['packed_fact_ids']) & delivered)
     result["coverage_version"] = coverage["version"]
     result["verification"] = coverage["verification"]
     result["facts"] = [

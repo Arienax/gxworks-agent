@@ -39,14 +39,15 @@ def test_live_key_stays_in_memory_and_real_provider_functions_are_preserved(tmp_
             model_provider.create_provider(bad, sentinel)
 
 
-def test_live_transport_limits_actual_requests_including_fallbacks():
+@pytest.mark.parametrize("timeout", [None, 37.0])
+def test_live_transport_limits_actual_requests_without_overriding_deadlines(timeout):
     sent = []
     def receive(request):
         sent.append(request)
         return httpx.Response(200, json={"data": []})
     budget = RequestBudget()
     transport = BoundedDeepSeekTransport(budget, transport=httpx.MockTransport(receive))
-    with httpx.Client(transport=transport) as client:
+    with httpx.Client(transport=transport, timeout=timeout) as client:
         for _ in range(12):
             assert client.post(DEEPSEEK_URL + "/chat/completions", json={}).status_code == 200
         with pytest.raises(AcceptanceLimitError):
@@ -54,7 +55,7 @@ def test_live_transport_limits_actual_requests_including_fallbacks():
         with pytest.raises(AcceptanceLimitError):
             client.get("https://example.invalid/models")
     assert len(sent) == 12 and budget.count == 12
-    assert all(value == 120 for request in sent for value in request.extensions["timeout"].values())
+    assert all(value == timeout for request in sent for value in request.extensions["timeout"].values())
 
 
 def test_live_workspace_starts_empty_and_host_devices_are_unavailable(tmp_path):

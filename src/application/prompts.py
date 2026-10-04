@@ -19,11 +19,14 @@ approaches 每项含 approach_id、name、description、pros、cons、generation
 # Execution intent
 execution_intent_claims：trigger{kind,source_devices,from/to|value/period_ms}、evidence[]。kind 仅 level/transition/first_scan/cyclic/interrupt/clear；evidence 逐字来自本轮；不输出 execution_semantics。
 
+# Operation effect candidates
+operation_intent_claims[] 可选，仅记录明确效果，不猜地址、位宽或关系。项含 id、opcode(仅用户指定)、effects:[{target:{device,kind:bit|word|state,offset},value:表达式}]、enable:表达式、execution:{trigger:level|rising|falling}、provenance:{evidence:[本轮逐字原文]}；候选不能自确认。表达式为 {op,type,args}；叶为 {op:device,name,type} 或 {op:constant,value,type}。type 必须为对象 {kind:bool} 或 {kind:int,bits:16|32,signed:true|false}。比较输入同类型、结果 bool；add/sub 同类型；and/or/not 使用 bool。
+
 # Explicit low-level claims
 Agent A 不选择 opcode、完整操作数或内部地址，只报告用户本轮明确写死/撤销的低层条件。explicit_constraint_claims 每项含 operation=require|forbid|clear、scope=global|scoped|ambiguous、target、evidence[]；evidence 逐字来自本轮。target 仅 opcode/device 的 values，instruction_instance 的 opcode+operands，或 clear 的 category(opcodes|devices|instruction_instances|all)。局部用途限制用 scoped，不确定用 ambiguous；只有 global 会被 Core 投影。
 
 # Implementation semantics
-原始用户请求由应用另行保留。implementation_semantics 只允许结构语义：{"kind":"structure","status":"required|forbidden|any_of","value":"..."}；any_of 用 values，结构名只能来自 Core 词表。不要在 approach 中输出低层字段。generation_guide 只写其他结构化字段无法表达的方案级差异；没有这种差异就用空字符串。来源元数据由应用记录。
+原始用户请求由应用另行保留。每个 approach 的 implementation_semantics 必须是 JSON 数组，即使只有一项也不能写成对象；没有明确结构时用 []。字段示例：{"implementation_semantics":[{"kind":"structure","status":"required","value":"self_hold"}]}。数组项只允许结构语义，status 为 required/forbidden/any_of；any_of 用 values，结构名只能来自 Core 词表。不要在 approach 中输出低层字段。generation_guide 只写其他结构化字段无法表达的方案级差异；没有这种差异就用空字符串。来源元数据由应用记录。
 
 # Missing-info minimality
 仅询问当前实现确实缺失且会改变程序的参数，不重复问已给答案。每项含稳定 id、question、required、options；default 不是已确认答案。从属项用 required_when。缺失实际接线、极性、数值等必要输入仍为 required；内部地址分配不设必填。PLC 常识、常规扫描行为不是 assumptions；不得凭空新增硬件、停止或急停输入。
@@ -250,10 +253,18 @@ Return pure JSON only:
 
 Rules:
 - Copy context.binding exactly. Cite only existing rungs, paths and devices.
+- Reuse the local finding_id for the same issue.
 - Deterministic analysis is authoritative; do not turn style preferences into defects.
 - Multiple SET/RST sites are normal unless concrete priority behavior contradicts
   a confirmed requirement. A T/C/D/M value may exist only for HMI/external use.
 - Do not invent safety, reset, completion, motion or communications requirements.
+- Check stated requirements using context.networks[].ladder and input_conditions;
+  cite the violated requirement and exact guard/write, including startup and
+  specified simultaneous-event priorities in scan order.
+- Evaluate later branch guards after earlier writes; distinguish them from
+  a shared enable already evaluated at branch entry.
+- Local checks do not establish process correctness. Missing evidence and
+  uncertain runtime timing belong in online_checks.
 - A selectable fix requires exact version evidence and a precise instruction;
   otherwise keep fixable=false. Never output replacement ladder/IR/CSV.
 """,
@@ -268,8 +279,11 @@ Return the same binding/summary/findings/online_checks JSON shape as Reviewer.
 Rules:
 - Copy context.binding exactly. Use only context.logic, context.timing,
   context.networks, confirmed requirements and deterministic findings.
+- Reuse the local or upstream finding_id for the same issue.
 - Distinguish LEVEL, RISING_EDGE, FALLING_EDGE, FIRST_SCAN, CYCLIC and INTERRUPT.
 - Counter C is normally edge/pulse driven; do not apply timer enable rules to it.
+- Check specified simultaneous-event priorities in ladder order and timer
+  enables/resets across scans before claiming a continuous off interval.
 - Do not invent scan time facts when timing coverage is unavailable. Express
   uncertain runtime behavior as an online_check, not a confirmed code defect.
 - Cite an existing rung/path/device. Never output code, IR, CSV or a patch.

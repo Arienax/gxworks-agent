@@ -14,18 +14,19 @@ import re
 import sqlite3
 from collections.abc import Mapping
 
-_VERSION = "structured-facts-v2-contract-merged"
+_VERSION = "structured-facts-v3-process-needs"
 _OFFICIAL_INSTRUCTION_TYPES = frozenset(
     {"programming", "positioning", "structured_instruction", "structured_function"}
 )
 
 
-def structured_fact_targets(query, confirmed_spec=None):
+def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None):
     """Return exact fact identities without retrieving any manual prose."""
     from knowledge import core
     from knowledge.analysis_router import route_analysis_request
     from knowledge.instruction_facts import instruction_fact_targets
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+    from plc.semantics import generation_process_fact_needs
 
     spec = confirmed_spec if isinstance(confirmed_spec, Mapping) else {}
     # Device/error targets come only from the current retrieval query. The
@@ -58,6 +59,7 @@ def structured_fact_targets(query, confirmed_spec=None):
         "instructions": copy.deepcopy(instructions),
         "devices": list(dict.fromkeys(value.upper() for value in route.devices)),
         "errors": list(dict.fromkeys(core._error_terms(str(query or "")))),
+        "process": generation_process_fact_needs(spec, plc_model=plc_model),
     }
 
 
@@ -311,6 +313,8 @@ def _attach_instruction_contract(record, target, *, plc_model):
 
     body = str(value.get("text") or "")
     details = "\n".join(_instruction_lane_prompt_lines(lanes))
+    if not details:
+        return value
     if body.startswith("[STRUCTURED INSTRUCTION RECORD]"):
         first, separator, rest = body.partition("\n")
         value["text"] = first + "\n" + details + (separator + rest if separator else "")
@@ -608,6 +612,53 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
             instruction_source_authority(opcode, plc_model)
             or instruction_source_authority(base, plc_model)
         )
+        # Prefer the compiled literal chapter over a historical index row whose
+        # first opcode mention can be a reading-guide example. Verify its source
+        # identity against this index before using the reproducible artifact.
+        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+        form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(opcode, cpu=plc_model)
+        materials = list(form.spec.source_materials) if form else []
+        if not materials:
+            entry = DEFAULT_INSTRUCTION_REGISTRY.definition_entry(opcode, cpu=plc_model) or {}
+            materials = entry.get('source_materials', [])
+        compiled = []
+        for material in materials:
+            hits = _chunk_results(material['source_ids'], plc_model=plc_model, task_type=task_type,
+                                  fact_kind='instruction', fact_target=opcode, augment_instruction=True)
+            for hit in hits:
+                if (hit.get('manual_id') != material['manual_id'] or hit.get('revision') != material['revision']
+                        or material['document_id'].split(':', 2)[-1] != str(hit.get('section') or '').split(' > ')[-1]):
+                    continue
+                candidate = _attach_instruction_contract(_attach_instruction_step_width(hit, step_target, plc_model=plc_model),
+                                                         step_target, plc_model=plc_model)
+                candidate['compiled_source_chapter'] = True
+                candidate['instruction_lookup_basis'] = 'compiled_definition_section'
+                candidate['manual_instruction_opcode'] = hit.get('instruction_opcode')
+                candidate['instruction_opcode'] = opcode
+                if form and form.spec.contract_coverage().get('operand_order') == 'source_verified':
+                    source = next((source for source in form.spec.contract_sources
+                                   if source.get('manual_id') == hit.get('manual_id')
+                                   and source.get('revision') == hit.get('revision')
+                                   and source.get('pdf_page') == hit.get('pdf_page')), None)
+                    if source:
+                        candidate['instruction_contract_source'] = copy.deepcopy(dict(source))
+                if authority:
+                    candidate['instruction_source_authority'] = copy.deepcopy(authority)
+                    candidate['instruction_source_authority_status'] = (
+                        'authoritative' if hit.get('manual_id') == authority['manual_id'] else 'non_authoritative')
+                compiled.append((not material.get('primary_semantic_source'), int(hit.get('pdf_page') or 0), candidate))
+        if compiled:
+            if authority:
+                authoritative = [row for row in compiled if row[-1].get('manual_id') == authority['manual_id']]
+                if authoritative:
+                    compiled = authoritative
+            for _, _, candidate in sorted(compiled, key=lambda row: (row[0], row[1])):
+                marker = (candidate['id'], opcode,
+                          tuple(step_target.get('operands') or ()) if isinstance(step_target, Mapping) else ())
+                if marker not in seen:
+                    seen.add(marker)
+                    results.append(candidate)
+            continue
         rows = []
         if table_available:
             placeholders = ",".join("?" for _ in names)
@@ -845,6 +896,82 @@ def resolve_device_records(devices, *, plc_model="FX3U", task_type="analysis", q
     return results
 
 
+def resolve_process_records(needs, *, plc_model="FX3U", task_type="generate"):
+    """Use original official device chapters for explicit process fact needs.
+
+    No occurrence-index fallback: a timer or counter mentioned in an unrelated
+    program is not its operating definition. Preserve original source blocks.
+    """
+    core, _path, connection, schema, _meta = _runtime()
+    if connection is None or schema is None:
+        return []
+    chunks = schema.get("chunks")
+    if not chunks or not {"id", "manual_type", "text"}.issubset(chunks["columns"]):
+        return []
+    results = []
+    for need in needs or ():
+        if not isinstance(need, Mapping):
+            continue
+        target = str(need.get("target") or "").upper()
+        if target == "FIRST_SCAN":
+            candidates = resolve_device_records(need.get("devices"), plc_model=plc_model, task_type=task_type)
+            candidates = [row for row in candidates
+                          if row.get("device_lookup_basis") == "official_definition_heading"][:1]
+        elif target in {"TIMER", "COUNTER"}:
+            if target == "TIMER" and plc_model == "FX3U" and any(
+                re.fullmatch(r"T\d+", str(device)) and 246 <= int(str(device)[1:]) <= 255
+                for device in need.get("devices") or []
+            ):
+                # The selected general-type page does not establish retentive
+                # enable/reset behavior. Leave this family unresolved until its
+                # own complete operation evidence is selected.
+                continue
+            if target == "COUNTER" and (not need.get("devices") or any(
+                not re.fullmatch(r"C\d+", str(device)) or int(str(device)[1:]) > 199
+                for device in need["devices"]
+            )):
+                # This source selector establishes ordinary 16-bit operation;
+                # high-speed/32-bit families need their own operating chapter.
+                continue
+            family = "Timer [T]" if target == "TIMER" else "Counter [C]"
+            candidates = []
+            ordering = ",".join(key for key in ("manual_priority DESC", "pdf_page", "id")
+                                if key.split()[0] in chunks["columns"])
+            rows = connection.execute(
+                f"SELECT * FROM {core._quote_identifier(chunks['name'])} "
+                "WHERE manual_type IN ('programming','structured_device') "
+                f"AND text LIKE ? ORDER BY {ordering}",
+                (f"%{family}%",),
+            )
+            for row in rows:
+                if not core._row_in_scope(row, plc_model, task_type):
+                    continue
+                text = str(row["text"] or "")
+                # The source section must include the actual operation, not just
+                # a cross-reference or a device-number list.
+                if "Functions and operation examples" not in text:
+                    continue
+                if target == "TIMER" and not (core._timer_range_evidence(text, plc_model)
+                                                and "General type" in text and "reset" in text):
+                    continue
+                if target == "COUNTER" and not ("16-bit up counter" in text and "RST" in text):
+                    continue
+                candidates = _chunk_results([row["id"]], plc_model=plc_model, task_type=task_type,
+                                             fact_kind="process", fact_target=target)
+                if candidates:
+                    break
+        else:
+            continue
+        for raw in candidates:
+            record = copy.deepcopy(raw)
+            record.update(fact_kind="process", structured_fact_kind="process", fact_target=target,
+                          structured_fact_target=target, fact_dimensions=[str(need.get("dimension") or "definition")],
+                          process_lookup_basis="official_device_operation", process_fact_need=copy.deepcopy(dict(need)))
+            record.pop("structured_fact_requested_target", None)
+            results.append(record)
+    return results
+
+
 def resolve_error_records(codes, *, plc_model="FX3U", task_type="debug"):
     """Resolve explicit error codes through ``error_records`` only."""
     core, _path, connection, schema, _meta = _runtime()
@@ -899,7 +1026,9 @@ def compact_structured_fact_record(record):
     value = copy.deepcopy(dict(record))
     if value.get("structured_fact_kind") != "instruction":
         return value
-    if value.get("instruction_lookup_basis") == "official_section_heading":
+    if (value.get("instruction_lookup_basis") == "official_section_heading" or
+            value.get('compiled_source_chapter') and
+            not str(value.get('text') or '').startswith('[STRUCTURED INSTRUCTION RECORD]')):
         value["text"] = value.pop("manual_text", value.get("text", ""))
         return value
     text = str(value.get("text") or "")

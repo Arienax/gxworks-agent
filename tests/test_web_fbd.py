@@ -321,3 +321,78 @@ def test_http_and_connected_agent_share_source_catalog_and_candidate_validation(
         assert 'AGENT_STAGE_A' in preview['svg']
         assert candidate['data']['data']['verification']['gx_compile'] == 'not_run'
         assert client.get('/api/projects/' + project['id']).json()['version_count'] == 1
+
+
+def test_native_envelope_preview_and_save_share_source_plan_and_keep_v2(service, monkeypatch):
+    import application.execution as execution
+    native_lock = execution.DesktopResourceLock
+    monkeypatch.setattr(execution, 'DesktopResourceLock', lambda: native_lock(service.state_dir / 'test-native.lock'))
+    from gxw.container_writer import replace_project_stream
+    from gxw.native_write import native_source_plan, verify_native_save
+    from gxworks2.workspace_adapter import NativeWorkspaceSourceSave
+    # Only the application boundary is doubled; this envelope is not native
+    # acceptance evidence. Live native save/cold-compile is a separate check.
+    raw, _ = replace_project_stream(source_binding_baseline(), 'Project.gd2', b'0' * 64)
+    calls = []
+
+    def save(_self, prepared):
+        calls.append(native_source_plan(prepared))
+        assert prepared.baseline == raw
+        hdb = prepared.outer['_hdb']
+        for stream, old, new in prepared.replacements.values():
+            if old != new:
+                hdb, _ = replace_project_stream(hdb, stream, new)
+        saved, _ = replace_project_stream(raw, '_hdb', hdb)
+        return verify_native_save(prepared, saved, {'operation': 'test_double'})
+
+    monkeypatch.setattr(NativeWorkspaceSourceSave, 'save', save)
+    project = service.create_project(name='Native FBD v2', target_mode='fbd')
+    imported = service.fbd.propose({'operation': 'import', 'project_id': project['id'],
+        'request_id': 'native-import', 'data_base64': base64.b64encode(raw).decode()})
+    base = accept(service, imported)
+    original = service.projects.program(project['id'], base)
+    fb = next(n for n in original['nodes'] if n['template'].startswith('function_block:'))
+    draft = service.fbd.editor(project['id'], original,
+        {'action': 'update_node', 'id': fb['id'], 'field': 'symbol', 'value': 'NATIVE_UPDATED'}, base)['model']
+    preview = service.fbd.preview(project['id'], draft, base)
+    saved = service.fbd.propose({'operation': 'edit', 'project_id': project['id'],
+        'version_id': base, 'request_id': 'native-edit', 'model': draft})
+    current = accept(service, saved)
+    assert calls[0] == calls[1]
+    assert service.projects.program(project['id'], current) == preview['model']
+    assert preview['model']['schema_version'] == 2
+    assert preview['gx_compile'] == service.projects.version(project['id'], current)['validation']['gx_compile'] == 'not_run'
+    assert service.projects.artifact(project['id'], base, 'gxw').read_bytes() == raw
+    updated = next(n for n in preview['model']['nodes'] if n['symbol'] == 'NATIVE_UPDATED')
+    assert [p['name'] for p in updated['ports']] == ['SIGNAL', 'in.STATE', 'RESULT', 'out.STATE']
+
+
+def test_native_save_failure_or_busy_resource_leaves_base_version_unchanged(service, monkeypatch):
+    import application.execution as execution
+    from application.execution import DesktopResourceLock
+    monkeypatch.setattr(execution, 'DesktopResourceLock', lambda: DesktopResourceLock(service.state_dir / 'test-native.lock'))
+    from application.fbd import FBDValidationError
+    from gxw.container_writer import replace_project_stream
+    from gxworks2.workspace_adapter import NativeWorkspaceSourceSave, WorkspaceSaveError
+    raw, _ = replace_project_stream(source_binding_baseline(), 'Project.gd2', b'0' * 64)
+    project = service.create_project(name='Native failure', target_mode='fbd')
+    base = accept(service, service.fbd.propose({'operation': 'import', 'project_id': project['id'],
+        'request_id': 'import-native', 'data_base64': base64.b64encode(raw).decode()}))
+    model = service.projects.program(project['id'], base)
+    model['nodes'][0]['symbol'] = 'FAILED_UPDATE'
+    model['declaration_edits'] = {'1.Labels.lh': {'renames': {'TIMER_A': 'FAILED_UPDATE'}}}
+    calls = []
+
+    def save(_self, _prepared):
+        calls.append(True)
+        raise WorkspaceSaveError('native-source-readback-mismatch')
+
+    monkeypatch.setattr(NativeWorkspaceSourceSave, 'save', save)
+    with DesktopResourceLock(service.state_dir / 'test-native.lock'), pytest.raises(ConflictError, match='原生资源'):
+        service.fbd.preview(project['id'], model, base)
+    assert not calls
+    with pytest.raises(FBDValidationError, match='native-source-readback-mismatch'):
+        service.fbd.propose({'operation': 'edit', 'project_id': project['id'], 'version_id': base,
+                            'request_id': 'failed-native-edit', 'model': model})
+    assert len(service.projects.raw_project(project['id'])['versions']) == 1
+    assert service.projects.artifact(project['id'], base, 'gxw').read_bytes() == raw

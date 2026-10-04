@@ -54,12 +54,36 @@ def build(text=SFTL_REQUEST, spec=None, evidence="FACT_EVIDENCE", profile=PROFIL
     return assembled, calls, audits
 
 
+@pytest.mark.parametrize("mode", ["direct", "design"])
+def test_semantic_field_example_uses_the_current_array_protocol(mode):
+    from application.analysis_results import current_analysis_protocol_violations
+    import re
+    assembled, _, _ = build(analysis_mode=mode)
+    example = json.loads(re.search(r'字段示例：(\{"implementation_semantics".*?\})。', assembled.system_prompt).group(1))
+    assert isinstance(example["implementation_semantics"], list)
+    assert current_analysis_protocol_violations({"approaches": [example]}) == []
+
+
 def test_direct_sftl_does_not_explore_despite_missing_stop_parameter():
     result = route(SFTL_REQUEST)
     assert result.mode == "direct"
     assert result.opcodes == ("SFTL", "LDP")
     assert not result.include_design
     assert result.topics == ()
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("D400=hour(0至23)，D401=minute(0至59)", ()),
+    ("时间hour，当前时间由外部设备提供", ()),
+    ("时间hour\nD401\n时间minute\nD402\n时间second", ()),
+    ("hour", ("HOUR",)),
+    ("使用 hour 指令", ("HOUR",)),
+    ("HOUR D0 D10 D20", ("HOUR",)),
+])
+def test_time_field_hour_is_not_an_accumulation_instruction(text, expected):
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+    result = route_analysis_request(text, resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form)
+    assert result.opcodes == expected
 
 
 @pytest.mark.parametrize("text", [
@@ -218,7 +242,8 @@ def test_missing_model_profile_does_not_borrow_fx3u_data():
 
 
 def test_core_shape_and_required_parameter_instructions_remain():
-    assert len(ANALYSIS_SYSTEM_PROMPT) < 2000
+    # Typed effect candidates add a bounded wire contract, not manual facts.
+    assert len(ANALYSIS_SYSTEM_PROMPT) < 2400
     example = ANALYSIS_SYSTEM_PROMPT.split("返回纯JSON（不要```json包裹），格式：\n", 1)[1].split("\n# suggested_io", 1)[0]
     assert isinstance(json.loads(example), dict)
     assert "必要输入仍为 required" in ANALYSIS_SYSTEM_PROMPT

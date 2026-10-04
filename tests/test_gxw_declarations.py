@@ -31,6 +31,36 @@ def baseline(case):
         return archive.read(case + ".gxw")
 
 
+@pytest.mark.parametrize('collision', ['two-locals', 'two-globals', 'unknown-option', 'disabled-option'])
+def test_source_scope_resolution_does_not_hide_duplicates_or_unverified_options(collision):
+    from src.gxw.declarations import resolve_label
+    local = edit_declarations(document('d0'), upserts=[{'name': 'SHARED', 'data_type': 'BOOL'}])
+    global_ = edit_declarations(document('d0', 'Global1.gh'), upserts=[{'name': 'SHARED', 'data_type': 'BOOL'}])
+    docs = {'1.Labels.lh': local, 'Global1.gh': global_}
+    enabled = True
+    if collision == 'two-locals':
+        docs['1.Labels.lh'] = replace(local, rows=local.rows + (replace(local.rows[0], name='shared'),))
+    elif collision == 'two-globals':
+        docs['Global2.gh'] = replace(global_, logical_name='Global2.gh')
+    else:
+        enabled = None if collision == 'unknown-option' else False
+    with pytest.raises(GXWFormatError, match='ambiguous'):
+        resolve_label(docs, '1.Program.pou', 'shared', global_variable_hiding=enabled)
+
+
+def test_scope_resolution_selects_the_program_local_table_and_retains_other_scopes():
+    from src.gxw.declarations import resolve_label
+    local = edit_declarations(document('d0'), upserts=[{'name': 'SHARED', 'data_type': 'BOOL'}])
+    other = replace(local, logical_name='OTHER.Labels.lh')
+    global_ = edit_declarations(document('d0', 'Global1.gh'), upserts=[{'name': 'SHARED', 'data_type': 'INT'}])
+    docs = {'1.Labels.lh': local, 'OTHER.Labels.lh': other, 'Global1.gh': global_}
+    assert resolve_label(docs, '1.Program.pou', 'shared', global_variable_hiding=True) == ('1.Labels.lh', local.rows[0])
+    shared = next(row for row in global_.rows if row.name == 'SHARED')
+    assert resolve_label(docs, 'MISSING.Program.pou', 'shared', global_variable_hiding=True) == ('Global1.gh', shared)
+    assert resolve_label(docs, '1.Program.pou', 'missing', global_variable_hiding=True) is None
+    assert docs['OTHER.Labels.lh'] is other and docs['Global1.gh'] is global_
+
+
 def test_source_library_decoding_is_bounded_and_framing_preserves_every_byte():
     import base64
     from src.gxw.library_sources import decode_library_archive, parse_library_source, parse_library_declarations
@@ -161,7 +191,7 @@ def test_function_header_return_type_and_description_move_the_label_rows():
     assert serialize_declarations(parsed) == raw
 
 
-@pytest.mark.parametrize('kind,status', [(0x1000000,0),(0x1000001,1),(0x1000002,1),(0xabcdef,0x76543210)])
+@pytest.mark.parametrize('kind,status', [(0x1000000,0),(0x1000001,1),(0x1000002,1),(0x1000003,1),(0xabcdef,0x76543210)])
 def test_owner_kind_and_status_remain_lossless_during_row_edits(kind,status):
     from src.gxw.declarations import _string
     base = document('d0')
@@ -172,9 +202,14 @@ def test_owner_kind_and_status_remain_lossless_during_row_edits(kind,status):
     edited = edit_declarations(parsed,upserts=[{'name':'work','data_type':'WORD'}])
     assert edited.header == parsed.header
     assert serialize_declarations(parsed)==raw
-    if kind not in (0x1000001,0x1000002):
+    if kind not in (0x1000002,0x1000003):
         with pytest.raises(GXWFormatError,match='function or function-block'):
             edit_declarations(parsed,upserts=[{'name':'signal','data_type':'BOOL','class_name':'VAR_INPUT'}])
+    else:
+        formals = edit_declarations(parsed,upserts=[{'name':'signal','data_type':'BOOL','class_name':'VAR_INPUT'}])
+        reread = parse_declarations(serialize_declarations(formals),logical_name=parsed.logical_name)
+        assert next(row for row in reread.rows if row.name == 'signal').class_code == 3
+        assert reread.header[:reread.count_offset] == parsed.header[:parsed.count_offset]
 
 
 def test_structure_source_member_boundaries_are_not_ordinary_label_rows():

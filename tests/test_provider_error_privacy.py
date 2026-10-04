@@ -130,6 +130,9 @@ def test_http_jobs_events_outputs_and_saved_reports_never_echo_provider_credenti
             report = client.get(f"/api/projects/{project_id}/reports/{report_id}")
             assert report.status_code == 200
             assert report.json()["ai_status"] == "failed" and report.json()["status"] == "partial"
+            assert report.json()["execution"]["status"] == "partial"
+            assert report.json()["execution"]["ai"]["status"] == "failed"
+            assert report.json()["execution"]["ai"]["error"] == report.json()["ai_error"]
             public_text += report.text
             assert "authentication failed" in report.text if typed else "model service request failed" in report.text
         assert SENTINEL not in public_text + capsys.readouterr().out

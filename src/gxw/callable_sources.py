@@ -10,10 +10,11 @@ from functools import lru_cache
 import re
 
 from .container_writer import validate_cfb_streams
-from .declarations import parse_declarations
+from .declarations import parse_declarations, resolve_label
 from .library_sources import decode_library_archive, parse_library_source, parse_library_declarations
 from .models import GXWFormatError, NodeKind
-from .project_metadata import logical_mapping, read_project_text_context
+from .project_metadata import (current_rows, logical_mapping, read_project_text_context,
+                               read_project_compile_options)
 from .semantic import (FunctionBlockCategory, FunctionBlockPortSpec, FunctionBlockSpec,
                        SemanticPortRole)
 
@@ -138,11 +139,64 @@ def _library_text(value):
     return decode_library_archive(value[20:]).decoded
 
 
+def _user_library_owners(metadata, streams):
+    """Pair native library labels/source by current folder and namespace.
+
+    Folder numbers restart in each library. The declaration metadata row owns
+    the POU name; the source filename and embedded label owner are not keys.
+    Unknown groups remain read issues, without choosing an arbitrary source.
+    """
+    rows, _ = current_rows(metadata, 'DSPROJECTDATA', 'D_Projectdata')
+    groups = defaultdict(list)
+    descriptors = set()
+    for row in rows:
+        fields = {key: value.text.strip() for key, value in row.fields().items()}
+        if fields.get('bScrapFlag', 'false').lower() in ('true', '1'):
+            continue
+        name = fields.get('szName', '')
+        if (fields.get('ucProductType') == '1' and fields.get('ucFolderType') == '80'
+                and fields.get('ucReserve') == '0' and fields.get('ucFileType') == '0' and name.endswith('.lif')):
+            # Native user-library properties are counted UTF-16 metadata,
+            # not the compressed source archives sharing the .lif extension.
+            descriptors.add(name)
+        if fields.get('ucFolderType') != '92':
+            continue
+        namespace = name.rsplit('\\', 1)[-1].rsplit('.', 1)[0] if '\\' in name else None
+        key = tuple(fields.get(field) for field in ('ucProductType', 'uiFolderNo', 'ucReserve')) + (namespace,)
+        groups[key].append(fields)
+    owners, issues = {}, []
+    for key, members in groups.items():
+        labels = [m['szName'] for m in members if m.get('ucFileType') == '1' and m['szName'].endswith('.lnl')]
+        sources = [m['szName'] for m in members if m.get('ucFileType') == '2' and m['szName'].endswith('.lnb')]
+        if (key[0] != '1' or not key[1] or key[2] != '0' or not key[3] or len(members) != 2
+                or len(labels) != 1 or len(sources) != 1
+                or labels[0] not in streams or sources[0] not in streams):
+            issues.append({'code': 'user_library_owner_gap', 'streams': [m.get('szName', '') for m in members],
+                           'message': 'missing or ambiguous native library declaration/source group'})
+            continue
+        stem = labels[0].rsplit('\\', 1)[0]
+        name, separator, _ = stem.rpartition('.')
+        if not separator or not name:
+            issues.append({'code': 'user_library_owner_gap', 'stream': labels[0],
+                           'message': 'native library declaration identity is outside observed names'})
+            continue
+        owners[labels[0]] = {'name': name, 'library': key[3], 'source_program': sources[0]}
+    for name in streams:
+        if name.endswith('.lnl') and name not in owners and not any(
+                name == issue.get('stream') or name in issue.get('streams', []) for issue in issues):
+            issues.append({'code': 'user_library_owner_gap', 'stream': name,
+                           'message': 'native library declaration has no current source group'})
+    return owners, issues, descriptors
+
+
 class ProjectCallableSources:
     """Read-only callable/declaration context for one selected native program."""
 
-    def __init__(self, cpu, program_name, declarations, library_sources):
+    def __init__(self, cpu, program_name, declarations, library_sources, *, global_variable_hiding=False,
+                 user_library_owners=None):
         self.cpu, self.program_name, self.declarations = cpu, program_name, declarations
+        self.user_library_owners = dict(user_library_owners or {})
+        self.global_variable_hiding = global_variable_hiding
         self.library_cpu = LIBRARY_CPU_SECTIONS.get(cpu, cpu)
         self.catalog = defaultdict(list)
         self.issues = []
@@ -157,10 +211,18 @@ class ProjectCallableSources:
 
     def _project_definitions(self, declarations):
         for stream, document in declarations.items():
-            kind = {0x1000001: 'FUNCTION', 0x1000002: 'FUNCTION_BLOCK'}.get(document.owner_pou_type)
-            if kind is None or not stream.endswith('.Labels.lh'):
+            # Native user FUNCTION labels carry 0x1000003. The distinct
+            # 0x1000001 control does not acquire a FUNCTION return interface.
+            kind = {0x1000003: 'FUNCTION', 0x1000002: 'FUNCTION_BLOCK'}.get(document.owner_pou_type)
+            if kind is None:
                 continue
-            owner = stream.removesuffix('.Labels.lh')
+            library_owner = self.user_library_owners.get(stream)
+            if library_owner is not None:
+                owner = library_owner['name']
+            elif stream.endswith('.Labels.lh'):
+                owner = stream.removesuffix('.Labels.lh')
+            else:
+                continue
             if document.scope != 'local' or document.owner_name != owner:
                 self.issues.append({'code': 'project_callable_owner_gap', 'stream': stream,
                                     'message': 'project callable owner and declaration stream differ'})
@@ -168,6 +230,8 @@ class ProjectCallableSources:
             definition = dict(name=owner, kind=kind, source_kind='project_labels',
                               offset=0, return_type_raw=document.owner_return_type,
                               declarations=document)
+            if library_owner is not None:
+                definition.update(library_owner)
             self.catalog[owner.casefold()].append((stream, definition))
 
     @classmethod
@@ -181,15 +245,29 @@ class ProjectCallableSources:
             raise GXWFormatError('one project CPU context is required for source library selection')
         if declarations is None:
             declarations = {name: parse_declarations(value, logical_name=name)
-                            for name, value in streams.items() if name.endswith(('.Labels.lh', '.gh'))}
+                            for name, value in streams.items() if name.endswith(('.Labels.lh', '.gh', '.lnl'))}
+        else:
+            # Supplied draft declarations override the matching current bytes.
+            # Library formals still belong to this project snapshot.
+            declarations = {**{name: parse_declarations(value, logical_name=name)
+                for name, value in streams.items() if name.endswith('.lnl')}, **declarations}
         libraries, issues = {}, []
+        user_library_owners, owner_issues, descriptors = _user_library_owners(outer['projectdatalist.xml'], streams)
+        issues.extend(owner_issues)
         for name, value in streams.items():
-            if name.endswith('.lif'):
+            if name.endswith('.lif') and name not in descriptors:
                 try:
                     libraries[name] = _library_text(value)
                 except ValueError as error:
                     issues.append({'code': 'library_archive_gap', 'stream': name, 'message': str(error)})
-        result = cls(contexts[0]['cpu'], program_name, declarations, libraries)
+        project_name, project_raw = next((name, value) for name, value in streams.items() if name.endswith('.prj'))
+        try:
+            hiding = read_project_compile_options(project_raw)['global_variable_hiding']
+        except GXWFormatError as error:
+            hiding = None
+            issues.append({'code': 'project_compile_option_gap', 'stream': project_name, 'message': str(error)})
+        result = cls(contexts[0]['cpu'], program_name, declarations, libraries, global_variable_hiding=hiding,
+                     user_library_owners=user_library_owners)
         result.issues[:0] = issues
         return result
 
@@ -203,14 +281,17 @@ class ProjectCallableSources:
         return result
 
     def label(self, symbol):
-        local = self.program_name.removesuffix('.Program.pou') + '.Labels.lh'
-        names = [local] if local in self.declarations else []
-        names += [name for name, doc in self.declarations.items() if doc.scope == 'global']
-        matched = [(name, row) for name in names for row in self.declarations[name].rows
-                   if row.name.casefold() == symbol.casefold()]
-        if len(matched) > 1:
-            raise GXWFormatError('ambiguous local/global source declaration name: ' + symbol)
-        return matched[0] if matched else None
+        return resolve_label(self.declarations, self.program_name, symbol,
+                             global_variable_hiding=self.global_variable_hiding)
+
+    def declaration_kind(self, row):
+        if row.type_code == 15:
+            return 'function_block'
+        if row.type_code == 0:
+            matches = self.catalog.get(row.data_type.casefold(), [])
+            if len(matches) == 1 and matches[0][1]['kind'] == 'FUNCTION_BLOCK':
+                return 'function_block'
+        return 'variable'
 
     def definition(self, name, kind):
         matches = self.catalog.get(name.casefold(), [])
@@ -235,15 +316,24 @@ class ProjectCallableSources:
         if bind_instance and node.kind == NodeKind.FUNCTION_BLOCK:
             binding = self.label(node.symbol)
             row = binding[1] if binding else None
-            if not row or row.type_code != 15 or row.type_reference != name or row.data_type != name:
+            # Native type changes retain the prior reference. Newly created
+            # declarations can retain code 0 and an empty reference through
+            # cold compilation. Bind their declared type, retaining both fields.
+            if not row or row.type_code not in (0, 15) or row.data_type != name:
                 raise GXWFormatError('FB instance requires a matching source label type: ' + node.symbol)
         matches = self.catalog.get(name.casefold(), [])
         if not matches and node.kind == NodeKind.FUNCTION:
             base = re.sub(r'-[1-9][0-9]*$', '', name)
             candidates = self.catalog.get(base.casefold(), [])
-            if len(candidates) == 1 and any(row['source_class'] == 'VAR_IN_EXT'
-                    for row in parse_library_declarations(candidates[0][1])['rows']):
-                matches = candidates
+            if len(candidates) == 1:
+                definition = candidates[0][1]
+                if definition.get('source_kind') == 'project_labels':
+                    extensible = any(row.class_code == 12 for row in definition['declarations'].rows)
+                else:
+                    extensible = any(row['source_class'] == 'VAR_IN_EXT'
+                        for row in parse_library_declarations(definition)['rows'])
+                if extensible:
+                    matches = candidates
         if len(matches) != 1:
             raise GXWFormatError('missing or ambiguous CPU-selected source callable: ' + name)
         stream, definition = matches[0]

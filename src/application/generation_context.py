@@ -474,6 +474,7 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
                 runtime_spec,
                 evidence_text=evidence_text,
                 task_type=normalized_task,
+                plc_model=plc_model,
             )
             message_history = (
                 runtime_history
@@ -507,6 +508,7 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
                 confirmed_context,
                 evidence_text=knowledge_ctx,
                 task_type=normalized_task,
+                plc_model=plc_model,
             )
             audit_section(
                 "generation_execution_policy",
@@ -531,6 +533,7 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
             and isinstance(confirmed_context, dict) and confirmed_context):
         execution_prompt = generation_execution_prompt(
             confirmed_context, evidence_text=knowledge_ctx, task_type=normalized_task,
+            plc_model=plc_model,
         )
         system_prompt += execution_prompt
         audit_section("generation_execution_policy", execution_prompt,

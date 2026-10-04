@@ -24,6 +24,29 @@ def _branch(inputs, outputs):
     }
 
 
+def test_range_reset_initializes_interior_state_bits_for_selected_contract():
+    model, first_scan = "FX3U", "M8002"
+    def contact(kind, address):
+        return {"type": kind, "address": address}
+    def app(op, *args):
+        return {"type": "APP_INSTR", "opcode": op, "operands": list(args)}
+    rows = [
+        ([contact("NO", first_scan)], [app("ZRST", "M10", "M19")]),
+        ([contact("P", "X0")], [app("SET", "M11")]),
+        ([contact("NO", "M11"), contact("P", "X1")], [app("RST", "M11"), app("SET", "M12")]),
+        ([contact("NO", "M12"), contact("P", "X2")], [app("RST", "M12")]),
+        ([contact("NO", "M11")], [{"type": "COIL", "address": "Y0"}]),
+    ]
+    data = {"device_comments": {}, "rungs": [
+        {"rung_id": index + 1, "header_element": None, "shared_inputs": [], "branches": [_branch(inputs, outputs)]}
+        for index, (inputs, outputs) in enumerate(rows)]}
+    contract = {"plc_model": model, "selected_approach": {"name": "bit steps", "generation_contract": {
+        "required_structures": ["bit_state_machine", "state_initialization"]}}}
+    assert "state_initialization" in inspect_ladder_features(data, plc_model=model)["structures"]
+    assert validate_ladder_against_selected_approach(data, contract) == []
+    assert validate_ladder_full(data, plc_model=model, confirmed_spec=contract) is data
+
+
 def _register_state_machine():
     return {
         "device_comments": {"D0": "主状态", "Y0": "运行输出"},
@@ -376,6 +399,19 @@ def test_selected_register_state_machine_is_enforced_by_full_validator():
     assert validate_ladder_full(_register_state_machine(), "FX3U", spec)
     with pytest.raises(PLCJsonValidationError, match="不符合用户选择"):
         validate_ladder_full(_direct_logic(), "FX3U", spec)
+
+
+def test_direct_output_blocks_can_coexist_with_a_state_machine():
+    ladder = _register_state_machine()
+    selected = _approach("mixed", "状态转移与并行直控", {
+        "required_structures": ["register_state_machine", "direct_logic"]})
+    assert validate_ladder_against_selected_approach(ladder, {"selected_approach": selected}) == []
+    features = inspect_ladder_features(ladder)
+    direct = [row for row in features["structure_instances"] if row["selector"] == "direct_output"]
+    assert [(row["rung_id"], row["target"]) for row in direct] == [(4, "Y0")]
+    # State writes alone do not establish a combinational output block.
+    ladder["rungs"].pop()
+    assert "direct_logic" not in inspect_ladder_features(ladder)["structures"]
 
 
 def test_out_contract_summary_explains_the_typed_json_representation():

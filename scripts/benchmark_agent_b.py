@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import argparse
 import copy
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 import hashlib
 import importlib
 import json
@@ -25,11 +25,31 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-ARMS = ("manual_text", "usage_bound", "oracle", "legacy_retrieval", "automatic")
+NO_RAG_ARM = "no_rag"
+ARMS = ("manual_text", "usage_bound", "oracle", "legacy_retrieval", "automatic", NO_RAG_ARM)
 PAIRED_ARMS = ("manual_text", "usage_bound")
 FACTORIAL_ARMS = ("manual_text_no_relations", "usage_bound_no_relations", *PAIRED_ARMS)
 ARMS = (*ARMS, *FACTORIAL_ARMS[:2])
+BINDING_ARMS = ('native_parameters', 'core_binding')
+ARMS = (*ARMS, *BINDING_ARMS)
 RELATION_DIMENSIONS = ("operation.result_mapping", "execution.disabled_retention")
+
+
+def no_rag_context():
+    """An explicit experiment receipt; never enter the knowledge builder."""
+    from knowledge.evidence import KnowledgeContext
+    return KnowledgeContext("", {"status": "experiment_disabled", "experiment_arm": NO_RAG_ARM,
+                                 "retrieval_enabled": False, "records": []})
+
+
+@contextmanager
+def no_rag_scope():
+    # Query planning otherwise opens SQLite for alias enrichment. Keep this
+    # ablation in the runner, without adding a production configuration flag.
+    targets = {"version": "experiment_no_rag", "instructions": [], "devices": [],
+               "errors": [], "process": []}
+    with patch("knowledge.structured_facts.structured_fact_targets", return_value=targets):
+        yield
 
 
 def _without_candidate_slots(slots):
@@ -53,7 +73,13 @@ def without_candidate_usage(text):
         value = json.loads(match[1])
         value["slots"] = _without_candidate_slots(value["slots"])
         return "OPERAND_SEMANTICS: " + json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return re.sub(r"(?m)^OPERAND_SEMANTICS: (\{[^\r\n]+\})", replace, str(text))
+    value = re.sub(r"(?m)^OPERAND_SEMANTICS: (\{[^\r\n]+\})", replace, str(text))
+    def compiled(match):
+        payload = json.loads(match[2])
+        payload['groups'] = [g for g in payload['groups'] if not (
+            g.get('status') == 'candidate_evidence' and g.get('value', {}).get('facet'))]
+        return match[1] + '\n' + json.dumps(payload, ensure_ascii=False, separators=(',', ':')) + '\n[/INSTRUCTION FACTS]' if payload['groups'] else ''
+    return re.sub(r'(?m)^(\[INSTRUCTION FACTS [^\n]+\])\n(\{[^\n]+\})\n\[/INSTRUCTION FACTS\]', compiled, value)
 
 
 def manual_text_context(context):
@@ -99,6 +125,7 @@ def manual_text_context(context):
             for item in value.values():
                 receipts(item)
     receipts(manifest)
+    _reconcile_compiled_ablation(manifest, text)
     manifest["context_sha256"] = text_sha256(text)
     manifest["benchmark_ablation"] = "candidate_usage_only"
     return KnowledgeContext(text, manifest)
@@ -112,9 +139,46 @@ def _wire_without_usage(params):
     return value
 
 
+def _reconcile_compiled_ablation(manifest, text):
+    """Reflect actual compiled facts, separately from the unchanged raw units."""
+    from knowledge.evidence import text_sha256
+    blocks = {json.loads(m[1])['id']: m[2] for m in re.finditer(
+        r'(?ms)^\[KNOWLEDGE (\{[^\n]+\})\]\n(.*?)\n\[/KNOWLEDGE\]', text)}
+    available = {}
+    for identity, body in blocks.items():
+        available[identity] = {g['id'] for m in re.finditer(r'(?m)^\[INSTRUCTION FACTS [^\n]+\]\n(\{[^\n]+\})', body)
+                               for g in json.loads(m[1])['groups']}
+    def visit(value):
+        if isinstance(value, list):
+            for item in value:
+                visit(item)
+        elif isinstance(value, dict):
+            identity = value.get('id')
+            if identity in available:
+                for key in ('dimensions', 'fact_dimensions'):
+                    if key in value:
+                        value[key] = [d for d in value[key] if not d.startswith('definition.') or d[11:] in available[identity]]
+                if 'definition_fact_groups' in value:
+                    value['definition_fact_groups'] = [g for g in value['definition_fact_groups'] if g['id'] in available[identity]]
+                if 'content_sha256' in value:
+                    value['content_sha256'] = text_sha256(blocks[identity])
+            if value.get('dimension', '').startswith('definition.') and 'candidate_source_ids' in value:
+                value['candidate_source_ids'] = [i for i in value['candidate_source_ids'] if value['dimension'][11:] in available.get(i, ())]
+            for item in list(value.values()):
+                visit(item)
+    visit(manifest)
+
+
 def without_relation_evidence(text):
     """Experiment-only removal of the entire atomic manual relation group."""
-    return re.sub(r'(?ms)(?:\n\n)?^\[RELATION EVIDENCE \{[^\n]+\}\]\n.*?^\[/RELATION EVIDENCE\]', '', str(text))
+    value = re.sub(r'(?ms)(?:\n\n)?^\[RELATION EVIDENCE \{[^\n]+\}\]\n.*?^\[/RELATION EVIDENCE\]', '', str(text))
+    def compiled(match):
+        groups = json.loads(match[2])['groups']
+        if any(g['value'].get('behavior') == 'conditional_results' or g['dimension'] == 'execution.disabled_retention'
+               or g['value'].get('disabled') == 'retain' for g in groups):
+            return ''
+        return match[0]
+    return re.sub(r'(?m)^(\[INSTRUCTION FACTS [^\n]+\])\n(\{[^\n]+\})\n\[/INSTRUCTION FACTS\]', compiled, value)
 
 
 def without_relation_context(context):
@@ -139,6 +203,7 @@ def without_relation_context(context):
                 value["content_sha256"] = text_sha256(blocks[value["id"]])
             for item in list(value.values()): visit(item)
     visit(manifest)
+    _reconcile_compiled_ablation(manifest, text)
     if "fact_coverage" in manifest:
         manifest["fact_coverage"] = reconcile_fact_coverage(
             manifest["fact_coverage"], included_evidence_ids(text, manifest["fact_coverage"].get("records", [])))
@@ -166,7 +231,8 @@ def preflight_factorial(cases, *, provider, model=None, evidence_cache=None):
             raise ValueError(f"{case['case_id']}: content outside the two factors differs")
         counts = [_candidate_count(r) for r in requests]
         relation_counts = [sum(str(m.get('content','')).count('[RELATION EVIDENCE ') for m in r['messages']) for r in requests]
-        if counts != [0,3,0,3] or relation_counts != [0,0,1,1]:
+        if (counts != [0,3,0,3] or relation_counts[:2] != [0,0]
+                or relation_counts[2] <= 0 or relation_counts[2] != relation_counts[3]):
             raise ValueError(f"{case['case_id']}: invalid factor delivery {counts} / {relation_counts}")
         examples = [row['handoff']['construction_examples'] for row in records]
         if any(e != examples[0] for e in examples): raise ValueError('Construction examples differ')
@@ -179,6 +245,9 @@ def preflight_factorial(cases, *, provider, model=None, evidence_cache=None):
 def _candidate_count(params):
     count = 0
     for message in params.get("messages", []):
+        for match in re.finditer(r'(?m)^\[INSTRUCTION FACTS [^\n]+\]\n(\{[^\n]+\})', str(message.get('content', ''))):
+            count += sum(g.get('status') == 'candidate_evidence' and bool(g.get('value', {}).get('facet'))
+                         for g in json.loads(match[1])['groups'])
         for match in re.finditer(r"(?m)^OPERAND_SEMANTICS: (\{[^\r\n]+\})", str(message.get("content", ""))):
             count += sum(fact.get("status") == "candidate_evidence"
                          for slot in json.loads(match[1])["slots"] for fact in slot.get("usage_facts", []))
@@ -220,9 +289,55 @@ def preflight_pairs(cases, *, provider, model=None, evidence_cache=None):
     return {"network_calls": 0, "passed": True, "pairs": rows}
 
 
+def preflight_binding(cases, *, provider, model=None, evidence_cache=None):
+    pairs = []
+    def common(request):
+        result = copy.deepcopy(request)
+        for message in result['messages']:
+            message['content'] = re.sub(r'\n# Confirmed operation effects\n[^\n]*\n', '', message['content'])
+        return result
+    for case in cases:
+        rows = [run_case(case, arm, provider=PreviewProvider(provider), model=model, evidence_cache=evidence_cache)
+                for arm in BINDING_ARMS]
+        if any(len(r['actual_requests']) != 1 for r in rows):
+            raise ValueError(case['case_id'] + ': binding preflight needs one final request')
+        requests = [r['actual_requests'][0] for r in rows]
+        control = not case['confirmed_spec'].get('operation_intents')
+        if common(requests[0]) != common(requests[1]) or (requests[0] == requests[1]) != control:
+            raise ValueError(case['case_id'] + ': binding contrast is not isolated')
+        pairs.append({'case_id': case['case_id'], 'other_request_content_identical': True,
+                      'control_request_unchanged': control, 'records': rows})
+    return {'network_calls': 0, 'passed': True, 'pairs': pairs}
+
+
 def digest(value):
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True,
                                     separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def reviewed_effect_case_coverage(cases):
+    """Require an independent expectation for every currently reviewed effect form."""
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY as registry
+    from plc.instruction_definition import select_fact_dependencies
+    models = {case.get('plc_model', 'FX3U') for case in cases}
+    required = set()
+    for model in models:
+        for opcode in registry.known_mnemonics():
+            form = registry.resolve_form(opcode, cpu=model)
+            if form is None or not form.spec.supports_cpu(model):
+                continue
+            for group in form.spec.definition_facts:
+                if group.dimension.startswith('effects.') and group.value.get('behavior'):
+                    closure = select_fact_dependencies(form.spec.definition_facts, [group.id], opcode=opcode, model=model)
+                    if closure['source_verification_complete'] and not closure['gaps']:
+                        required.add((model, opcode))
+    represented = {(case.get('plc_model', 'FX3U'), case['evaluation']['opcode']) for case in cases
+                   if case.get('evaluation', {}).get('kind') == 'operand_mapping'
+                   and case['evaluation'].get('reference', {}).get('expected_source')
+                   and case['evaluation'].get('effect_traces')}
+    return {'required_reviewed_forms': len(required), 'represented_reviewed_forms': len(required & represented),
+            'missing': [{'target_model': model, 'opcode': opcode} for model, opcode in sorted(required - represented)],
+            'scope': 'reviewed_effect_subset; unformalized_forms_and_hardware_are_separate_gaps'}
 
 
 def load_cases(path):
@@ -331,7 +446,9 @@ def run_case(case, arm, *, provider, model=None, effort=None, evaluator=None, ev
 
     def builder(query, **kwargs):
         started = time.perf_counter()
-        if arm == "oracle":
+        if arm == NO_RAG_ARM:
+            context = no_rag_context()
+        elif arm == "oracle":
             rows = case.get("oracle_evidence")
             if not case.get("oracle_reviewed") or not isinstance(rows, list) or not rows:
                 raise ValueError("Oracle arm requires operator-reviewed oracle_evidence")
@@ -367,13 +484,21 @@ def run_case(case, arm, *, provider, model=None, effort=None, evaluator=None, ev
     # failure; nothing persists in the user's model profile or application state.
     sink_scope = patch.object(provider, "observation_sink", capture_request) if hasattr(provider, "observation_sink") else nullcontext()
     started = time.perf_counter()
+    original_binding_prompt = agent.operation_intent_prompt
+    binding_prompt_scope = patch.object(agent, 'operation_intent_prompt', lambda *a, **k:
+        ('\n# Confirmed operation effects\n按 operation_intents 中已确认的效果输出原生指令调用，逐项推导操作数；不要输出 OP 引用。\n'
+         if original_binding_prompt(*a, **k) else '')) if arm == 'native_parameters' else nullcontext()
+    retrieval_scope = no_rag_scope() if arm == NO_RAG_ARM else nullcontext()
     try:
-        with sink_scope, patch.object(agent, "_build_knowledge_context", builder), provider_scope(observed, model_name=model):
+        with sink_scope, binding_prompt_scope, retrieval_scope, patch.object(agent, "_build_knowledge_context", builder), provider_scope(observed, model_name=model):
             result = agent.generate_confirmed_ladder(case["confirmed_spec"], case.get("plc_model", "FX3U"),
-                model_name=model, effort=effort, construction_examples=case.get("construction_examples"),
+                model_name=model, effort=effort,
+                construction_examples=False if arm == NO_RAG_ARM else case.get("construction_examples"),
                 on_context=lambda handoff: record.update(handoff=handoff))
         record["generation_status"] = "completed"
         record["ladder"] = result["ladder"]
+        record['operation_binding'] = result.get('operation_binding')
+        record['confirmed_predicate_binding'] = result.get('confirmed_predicate_binding')
         plc_model = case.get("plc_model", "FX3U")
         validate_ladder_candidate_structure(result["ladder"], plc_model=plc_model)
         validate_plc_ir(build_plc_ir(result["ladder"], plc_model=plc_model), validate_ladder=False)
@@ -430,6 +555,7 @@ def evaluate_synthetic_case(case, result):
             return ("integer", int(value[1:], 16))
         return ("device", canonical_operand(value))
     wanted = tuple(map(identity, expected["operands"]))
+    valid = {wanted, *(tuple(map(identity, values)) for values in expected.get('equivalent_operands', []))}
     outputs = [output for rung in result["ladder"].get("rungs", [])
                for branch in rung.get("branches", []) for output in branch.get("outputs", [])]
     calls = [output for output in outputs if output.get("type") == "APP_INSTR"
@@ -438,24 +564,131 @@ def evaluate_synthetic_case(case, result):
     # cannot distinguish one shift/reset/communication call from two equal ones.
     actual = [output.get("operands", []) for output in calls]
     checks = {"exactly_one_designated_call": len(calls) == 1,
-              "operand_mapping": bool(actual) and all(tuple(map(identity, operands)) == wanted for operands in actual),
+              "operand_mapping": bool(actual) and all(tuple(map(identity, operands)) in valid for operands in actual),
               "no_additional_outputs": len(outputs) == len(calls)}
     gate = expected.get("gate")
     if gate is not None:
         gates = [instruction for rung in result["ladder"].get("rungs", [])
                  for instruction in lower_rung_instructions(rung) if ".outputs[" not in instruction.get("path", "")]
-        checks["specified_direct_gate"] = (len(gates) == 1 and gates[0]["op"] == gate["op"]
-            and tuple(map(identity, gates[0]["args"])) == tuple(map(identity, gate["args"])))
+        assumed = expected.get('assumed_bits', {})
+        # Expectations come from the independently reviewed synthetic case,
+        # never from production extraction or a model-generated predicate.
+        redundant = lambda g: (g['op'] in {'AND', 'ANI'} and len(g['args']) == 1
+            and type(assumed.get(canonical_operand(g['args'][0]))) is bool
+            and (g['op'] == 'AND') == assumed[canonical_operand(g['args'][0])])
+        effective_gates = [g for g in gates if not redundant(g)]
+        if gates and gates[0]['op'] in {'LD', 'LDI'} and all(
+                g['op'] in {'AND', 'ANI'} for g in gates[1:]):
+            # A confirmed true contact can precede the variable gate as well
+            # as follow it. This is an independent conjunction oracle, not a
+            # relaxation for arbitrary unknown ladder predicates.
+            def known_true(g):
+                return (len(g['args']) == 1 and type(assumed.get(canonical_operand(g['args'][0]))) is bool
+                        and (g['op'] in {'LD', 'AND'}) == assumed[canonical_operand(g['args'][0])])
+            effective_gates = [dict(g) for g in gates if not known_true(g)]
+            if effective_gates and effective_gates[0]['op'] in {'AND', 'ANI'}:
+                effective_gates[0]['op'] = 'LD' if effective_gates[0]['op'] == 'AND' else 'LDI'
+        allowed_gates = [gate, *expected.get('equivalent_gates', [])]
+        checks["specified_direct_gate"] = (len(effective_gates) == 1 and any(
+            effective_gates[0]["op"] == option["op"] and
+            tuple(map(identity, effective_gates[0]["args"])) == tuple(map(identity, option["args"]))
+            for option in allowed_gates))
     behavior = None
     if expected.get("cmp_behavior"):
         behavior = evaluate_cmp_behavior(expected["cmp_behavior"], result["ladder"])
         checks["cmp_behavior"] = behavior["status"] == "verified"
+    traces = None
+    if expected.get('effect_traces'):
+        traces = evaluate_effect_traces(expected['effect_traces'], calls, case.get('plc_model', 'FX3U'))
+        checks['effect_traces'] = traces['status'] == 'verified'
     return {"status": "verified" if all(checks.values()) else "failed",
             "scope": "operand_mapping_single_call_and_no_extra_operations",
             "checks": checks, "call_count": len(calls), "output_count": len(outputs),
             "expected": expected["operands"], "actual": actual,
             "native_execution": "not_measured",
-            **({"cmp_behavior": behavior} if behavior is not None else {})}
+            **({"cmp_behavior": behavior} if behavior is not None else {}),
+            **({'effect_traces': traces} if traces is not None else {})}
+
+
+def evaluate_effect_traces(expected, calls, model):
+    """Execute the shared reference primitives against independent fixed traces.
+
+    The expected memory and writes are authored in the case, never generated
+    from the production definition. This checks its formalized reference scope,
+    not native execution or physical communication.
+    """
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+    from plc.instruction_effects import execute_behavior
+    from plc.instruction_definition import DefinitionError, select_fact_dependencies
+    from plc.device_identity import canonical_operand, decimal_region_address
+    traces = []
+    if len(calls) != 1:
+        return {'status': 'failed', 'reason': 'single_call_required', 'traces': traces}
+    call = calls[0]
+    form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(call['opcode'], cpu=model)
+    if form is None or len(call['operands']) != len(form.spec.native_operand_order):
+        return {'status': 'failed', 'reason': 'missing_parameter_contract', 'traces': traces}
+    groups = [g for g in form.spec.definition_facts if g.dimension.startswith('effects.')
+              and g.status == 'source_verified' and g.value.get('behavior')]
+    if len(groups) != 1:
+        return {'status': 'failed', 'reason': 'unique_checked_effect_required', 'traces': traces}
+    closure = select_fact_dependencies(form.spec.definition_facts, [groups[0].id], opcode=call['opcode'], model=model)
+    if not closure['source_verification_complete']:
+        return {'status': 'failed', 'reason': 'unchecked_effect_dependencies', 'traces': traces}
+    parameters = {}
+    for name, operand in zip(form.spec.native_operand_order, call['operands']):
+        token = canonical_operand(operand)
+        parameters[name] = int(token[1:], 16 if token.startswith('H') else 10) if re.fullmatch(r'K[+-]?\d+|H[0-9A-F]+', token) else token
+    lifecycle = next((g.value for g in form.spec.definition_facts
+        if g.id in closure['bundles'][0]['fact_ids'] and g.dimension.startswith('execution.')), {})
+    scalar_names = set()
+    def scalar_parameters(value):
+        if isinstance(value, dict):
+            if value.get('op') == 'parameter' and value.get('type', {}).get('kind') in {'int', 'bool'}:
+                scalar_names.add(value['name'])
+            for item in value.values():
+                scalar_parameters(item)
+        elif isinstance(value, list):
+            for item in value:
+                scalar_parameters(item)
+    scalar_parameters(groups[0].value)
+    sequences = {}
+    try:
+        for row in expected:
+            sequence = row.get('sequence')
+            if sequence is not None:
+                if not isinstance(sequence, str) or not sequence:
+                    raise ValueError('Trace sequence needs a nonempty identity')
+                frame = sequences.setdefault(sequence, {'memory': {}, 'previous_enabled': False})
+                memory = frame['memory']
+                memory.update(row.get('memory', {}))
+                previous_enabled = frame['previous_enabled']
+            else:
+                memory = row.get('memory', {})
+                previous_enabled = row.get('previous_enabled', False)
+            values = {name: memory[operand] if name in scalar_names and isinstance(operand, str) else operand
+                      for name, operand in parameters.items()}
+            result = execute_behavior(groups[0].value, values, memory=memory,
+                state=row.get('state', {}), enabled=row['enabled'],
+                previous_enabled=previous_enabled,
+                trigger=lifecycle.get('trigger', 'level'), disabled=lifecycle.get('disabled', 'unknown'))
+            writes = {decimal_region_address(base, offset): value for (base, offset), value in result['writes'].items()}
+            checks = {'writes': writes == row['writes'], 'executed': result['executed'] == row['executed']}
+            if sequence is not None:
+                memory.update(writes)
+                frame['previous_enabled'] = row['enabled']
+            if 'memory_after' in row:
+                final = {**memory, **writes}
+                checks['retained_sequence_memory'] = all(final.get(address) == value
+                    for address, value in row['memory_after'].items())
+            if 'external_resource' in row:
+                checks['external_resource'] = result.get('external_contract', {}).get('resource') == row['external_resource']
+            traces.append({'id': row['id'], 'actual_writes': writes, 'checks': checks, 'passed': all(checks.values())})
+    except (DefinitionError, KeyError, ValueError, TypeError) as error:
+        return {'status': 'failed', 'reason': type(error).__name__, 'traces': traces}
+    return {'status': 'verified' if traces and all(t['passed'] for t in traces) else 'failed',
+            'traces': traces, 'scope': 'source_checked_typed_reference_against_independent_fixed_traces',
+            'native_execution': 'not_measured', 'hardware_effect': 'not_tested'}
 
 
 def cmp_reference_state(left, right, previous, enabled):
@@ -528,7 +761,32 @@ def assess_first_candidate(case, record, *, evaluator=None):
         compact, _ = normalize_compact(agent._json_object(text))
         model = case.get("plc_model", "FX3U")
         spec = project_confirmed_specification(case["confirmed_spec"])
+        # Preserve the model's own semantic outcome separately from the
+        # explicit Core stage. Rebinding must not erase a model direction error.
+        raw_candidate = {'semantic': {'status': 'not_covered'}}
+        outputs = [out for rung in compact.get('r', compact.get('rungs', []))
+                   for branch in rung.get('b', rung.get('branches', []))
+                   for out in branch.get('o', branch.get('outputs', []))]
+        if any(isinstance(out, str) and out.startswith('OP ') for out in outputs):
+            raw_candidate['semantic']['reason'] = 'operation_reference_requires_Core_binding'
+            raw_candidate['status'] = 'operation_reference'
+        else:
+            try:
+                raw_ladder, _ = agent._decode_generated_ladder(compact, spec, model)
+                if case.get('evaluation'):
+                    raw_candidate['semantic'] = evaluate_synthetic_case(case, {'ladder': raw_ladder})
+                raw_candidate['contract_status'] = validate_confirmed_semantics(raw_ladder, spec, model)['status']
+            except Exception as error:
+                raw_candidate['status'] = 'not_native_or_invalid'
+                raw_candidate['error'] = {'type': type(error).__name__, 'code': getattr(error, 'code', None)}
+        outcome['raw_model_candidate'] = raw_candidate
+        compact, binding = agent.materialize_operation_references(compact, spec, target_model=model)
+        outcome['Core_binding'] = binding
+        outcome['raw_model_candidate_retained'] = True
         ladder, _ = agent._decode_generated_ladder(compact, spec, model)
+        from plc.specification.semantic_validation import bind_confirmed_predicates
+        ladder, predicate_binding = bind_confirmed_predicates(ladder, spec)
+        outcome['Core_predicate_binding'] = predicate_binding
         outcome.update(status="decoded", ladder=ladder)
         if evaluator and record["generation_status"] == "completed" and len(generators) == 1:
             outcome["semantic"] = copy.deepcopy(record["behavior"])
@@ -547,6 +805,29 @@ def assess_first_candidate(case, record, *, evaluator=None):
     return outcome
 
 
+def prompt_cache_meter(usage):
+    """Read provider-reported cache tokens; missing/invalid metering stays unknown."""
+    raw = usage.get('raw_usage') or {}
+    if not isinstance(raw, dict):
+        return None
+    hit = raw.get('prompt_cache_hit_tokens')
+    if hit is None:
+        for name in ('prompt_tokens_details', 'input_tokens_details'):
+            details = raw.get(name)
+            if isinstance(details, dict) and details.get('cached_tokens') is not None:
+                hit = details['cached_tokens']
+                break
+    if hit is None:
+        hit = raw.get('cache_read_input_tokens')
+    inputs = usage.get('input_tokens')
+    if type(hit) is not int or hit < 0 or type(inputs) is not int or inputs <= 0 or hit > inputs:
+        return None
+    miss = raw.get('prompt_cache_miss_tokens')
+    if miss is not None and (type(miss) is not int or miss < 0 or hit + miss != inputs):
+        return None
+    return {'hit_tokens': hit, 'miss_tokens': miss, 'input_tokens': inputs}
+
+
 def summarize(records):
     """Describe all runs including failures, never infer a correctness win."""
     groups = {}
@@ -557,9 +838,13 @@ def summarize(records):
     for arm, rows in groups.items():
         durations = sorted(row["end_to_end_ms"] for row in rows)
         reasoning = []
+        cache_calls = []
+        observed_calls = 0
         metering = {name: [] for name in ("input_tokens", "output_tokens", "total_tokens")}
         for row in rows:
             usages = [attempt.get("usage") or {} for attempt in row["attempts"]]
+            observed_calls += len(usages)
+            cache_calls.extend(meter for usage in usages if (meter := prompt_cache_meter(usage)) is not None)
             values = [usage.get("reasoning_tokens") for usage in usages]
             if values and all(type(value) is int for value in values):
                 reasoning.append(sum(values))
@@ -571,11 +856,24 @@ def summarize(records):
                        "behavior_verified": sum(r["behavior"].get("status") == "verified" for r in rows),
                        "first_pass_semantic_correct": sum(r.get("first_candidate", {}).get("semantic", {}).get("status") == "verified" for r in rows),
                        "first_pass_usable": sum(bool(r.get("first_candidate", {}).get("usable")) for r in rows),
+                       "raw_model_semantic_correct": sum(r.get('first_candidate', {}).get('raw_model_candidate', {}).get('semantic', {}).get('status') == 'verified' for r in rows),
+                       "raw_model_native_evaluated_runs": sum(r.get('first_candidate', {}).get('raw_model_candidate', {}).get('semantic', {}).get('status') in {'verified', 'failed'} for r in rows),
+                       "native_parameter_rebindings": sum(sum(p.get('binding_mode') == 'native_read_parameter_rebinding'
+                            for p in r.get('first_candidate', {}).get('Core_binding', {}).get('receipts', [])) for r in rows),
                        "model_calls": sum(r.get("model_calls", len(r["attempts"])) for r in rows),
                        "median_end_to_end_ms": statistics.median(durations),
                        "p95_end_to_end_ms": durations[max(0, (95*len(durations)+99)//100-1)],
                        "reasoning_usage_known_runs": len(reasoning),
                        "median_reasoning_tokens": statistics.median(reasoning) if reasoning else None,
+                       'prompt_cache': {
+                           'known_calls': len(cache_calls), 'unreported_or_invalid_calls': observed_calls - len(cache_calls),
+                           'hit_tokens': sum(m['hit_tokens'] for m in cache_calls) if cache_calls else None,
+                           'reported_miss_tokens': (sum(m['miss_tokens'] for m in cache_calls)
+                               if cache_calls and all(m['miss_tokens'] is not None for m in cache_calls) else None),
+                           'measured_input_tokens': sum(m['input_tokens'] for m in cache_calls) if cache_calls else None,
+                           'input_token_hit_rate': (sum(m['hit_tokens'] for m in cache_calls)
+                               / sum(m['input_tokens'] for m in cache_calls) if cache_calls else None),
+                       },
                        **{name: {"known_runs": len(values), "median": statistics.median(values) if values else None}
                           for name, values in metering.items()}}
     pairs = {}
@@ -589,6 +887,23 @@ def summarize(records):
             matched.append({"case_id": case_id, "repeat": repeat,
                 "usable": {arm: pair[arm].get("first_candidate", {}).get("usable", False) for arm in PAIRED_ARMS},
                 "bound_minus_manual_ms": bound["end_to_end_ms"]-raw["end_to_end_ms"]})
+    binding_pairs = {}
+    for row in records:
+        if row['arm'] in BINDING_ARMS:
+            binding_pairs.setdefault((row['case_id'], row.get('repeat', 0)), {})[row['arm']] = row
+    binding_contrasts = []
+    for (case_id, repeat), pair in sorted(binding_pairs.items()):
+        if not all(arm in pair for arm in BINDING_ARMS):
+            continue
+        baseline, treatment = (pair[arm] for arm in BINDING_ARMS)
+        binding_contrasts.append({'case_id': case_id, 'repeat': repeat,
+            'baseline_usable': baseline.get('first_candidate', {}).get('usable', False),
+            'treatment_usable': treatment.get('first_candidate', {}).get('usable', False),
+            'treatment_minus_baseline_ms': treatment['end_to_end_ms'] - baseline['end_to_end_ms'],
+            'binding_reference_used': any(p.get('binding_mode') == 'operation_reference'
+                for p in (treatment.get('operation_binding') or {}).get('receipts', [])),
+            'native_parameters_rebound': any(p.get('binding_mode') == 'native_read_parameter_rebinding'
+                for p in (baseline.get('operation_binding') or {}).get('receipts', []))})
     factorial = []
     factor_blocks = {}
     for row in records:
@@ -606,7 +921,7 @@ def summarize(records):
                               'treatment_usable':block[treatment]['first_candidate']['usable'],
                               'treatment_minus_baseline_ms':block[treatment]['end_to_end_ms']-block[baseline]['end_to_end_ms']})
     return {"groups": result, "performance_acceptance": "not_established", "factorial_contrasts":factorial,
-            "paired_results": matched,
+            "paired_results": matched, 'binding_contrasts': binding_contrasts,
             "note": "Inspect matched case/repeat pairs, actual settings and behavioral coverage before drawing conclusions."}
 
 
@@ -626,6 +941,8 @@ def main(argv=None):
     parser.add_argument("--profile-id", help="Select an existing saved profile without changing the active profile")
     parser.add_argument("--require-endpoint", help="Abort before any transport if the saved endpoint differs")
     parser.add_argument("--cmp-relations", action="store_true", help="Six existing CMP cases, four factors, randomized adjacent blocks")
+    parser.add_argument('--require-reviewed-effects', action='store_true',
+                        help='Refuse to measure a partial selection of the reviewed effect forms')
     args = parser.parse_args(argv)
     try:
         cases = load_cases(args.cases)
@@ -635,7 +952,12 @@ def main(argv=None):
             if any(c.get('plc_model','FX3U')!='FX3U' or not c['evaluation'].get('cmp_behavior') for c in cases):
                 raise ValueError('CMP factorial requires FX3U cases with independent behavior truth traces')
             args.arms=','.join(FACTORIAL_ARMS)
-        tasks = schedule(cases, args.arms.split(","), args.repeat, args.seed, blocked=args.cmp_relations)
+        tasks = schedule(cases, args.arms.split(","), args.repeat, args.seed,
+                         blocked=args.cmp_relations or set(BINDING_ARMS).issubset(args.arms.split(',')))
+        case_coverage = reviewed_effect_case_coverage(cases) if args.require_reviewed_effects else None
+        if case_coverage and case_coverage['missing']:
+            raise ValueError('Independent cases are missing for reviewed forms: ' +
+                             ', '.join(row['target_model'] + ':' + row['opcode'] for row in case_coverage['missing']))
         if "oracle" in args.arms.split(",") and any(not c.get("oracle_reviewed") or not c.get("oracle_evidence") for c in cases):
             raise ValueError("Supply reviewed oracle_evidence for every oracle case")
     except (ValueError, OSError) as error:
@@ -679,9 +1001,13 @@ def main(argv=None):
     # Private output permissions where the platform supports them.
     import os
     evidence_cache = {}
-    if args.preflight or set(PAIRED_ARMS).issubset(args.arms.split(",")):
+    if args.preflight or set(PAIRED_ARMS).issubset(args.arms.split(",")) or set(BINDING_ARMS).issubset(args.arms.split(',')):
         preview = preflight_factorial if args.cmp_relations else preflight_pairs
+        if set(BINDING_ARMS).issubset(args.arms.split(',')):
+            preview = preflight_binding
         preflight = preview(cases, provider=provider, model=args.model, evidence_cache=evidence_cache)
+        if case_coverage is not None:
+            preflight['definition_case_coverage'] = case_coverage
         preflight.update(identity)
         path = args.output if args.preflight else args.output.with_suffix(".preflight.json")
         descriptor = os.open(path, os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o600)
@@ -703,6 +1029,8 @@ def main(argv=None):
             records.append(record)
             print(f"{case['case_id']} / {arm} / {repeat}: {record['generation_status']}", file=sys.stderr)
     summary = summarize(records)
+    if case_coverage is not None:
+        summary['definition_case_coverage'] = case_coverage
     descriptor = os.open(args.output.with_suffix(".summary.json"), os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
         json.dump(sanitize(summary), stream, ensure_ascii=False, allow_nan=False, indent=2)

@@ -27,7 +27,6 @@ import httpx
 
 DEEPSEEK_URL = "https://api.deepseek.com"
 MAX_REQUESTS = 12
-REQUEST_TIMEOUT = 120.0
 _request_kind = ContextVar("live_acceptance_request_kind", default="models")
 
 
@@ -61,8 +60,6 @@ class BoundedDeepSeekTransport(httpx.BaseTransport):
             raise AcceptanceLimitError("真实验收只允许访问固定 DeepSeek API。")
         kind = "models" if url.path == "/models" else _request_kind.get()
         self.budget.reserve(kind)
-        # SDK defaults and caller overrides cannot raise this per-operation bound.
-        request.extensions["timeout"] = {name: REQUEST_TIMEOUT for name in ("connect", "read", "write", "pool")}
         return self.transport.handle_request(request)
 
     def close(self):
@@ -75,7 +72,7 @@ def live_settings(directory, api_key, *, model="deepseek-v4-flash"):
     import storage.credentials as credential_store
     import model_runtime.provider as model_provider
     from application.settings import SettingsService
-    from openai import OpenAI
+    from openai import DefaultHttpxClient, OpenAI
 
     # The SDK may initialize its logger on first import, after main() ran.
     for name in ("httpx", "httpcore", "openai"):
@@ -109,9 +106,9 @@ def live_settings(directory, api_key, *, model="deepseek-v4-flash"):
     def create_client(provider):
         if str(provider.profile.get("baseUrl", "")).rstrip("/") != DEEPSEEK_URL:
             raise AcceptanceLimitError("真实验收只允许使用 https://api.deepseek.com。")
-        client = OpenAI(api_key=provider.api_key, base_url=DEEPSEEK_URL, timeout=REQUEST_TIMEOUT, max_retries=0,
-                        http_client=httpx.Client(transport=BoundedDeepSeekTransport(budget),
-                                                 timeout=REQUEST_TIMEOUT, follow_redirects=False, trust_env=False))
+        client = OpenAI(api_key=provider.api_key, base_url=DEEPSEEK_URL, max_retries=0,
+                        http_client=DefaultHttpxClient(transport=BoundedDeepSeekTransport(budget),
+                                                      follow_redirects=False, trust_env=False))
         clients.append(client)
         return client
 
@@ -122,7 +119,7 @@ def live_settings(directory, api_key, *, model="deepseek-v4-flash"):
         kind = kind if re.fullmatch(r"[a-z_]{1,40}", kind) else "model"
         token = _request_kind.set(kind)
         try:
-            for event in original_stream(provider, replace(request, timeout=REQUEST_TIMEOUT, max_retries=0)):
+            for event in original_stream(provider, replace(request, max_retries=0)):
                 if isinstance(event, model_provider.Usage):
                     print(f"LIVE_USAGE {kind} input={event.input_tokens} output={event.output_tokens} total={event.total_tokens}",
                           file=sys.stderr, flush=True)

@@ -26,23 +26,14 @@ import time
 import unicodedata
 from typing import Any, Iterable, Iterator
 
-try:
-    import pypdf
-    from pypdf import PdfReader
-except ImportError as error:  # pragma: no cover
-    raise SystemExit("pypdf is required to rebuild the knowledge database") from error
-
-try:
-    import pdfplumber
-except ImportError as error:  # pragma: no cover
-    raise SystemExit("pdfplumber is required to preserve tables and word geometry") from error
-
-
-BUILDER_VERSION = "3.0.3"
+BUILDER_VERSION = "3.0.4"
 SCHEMA_VERSION = 3
 TASK_TYPES = "*"
 DEFAULT_TARGET_CHARS = 4800
 DEFAULT_MAX_CHARS = 7600
+
+# Offline build tools share the document parser used by the fact compiler.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 CJK_RUN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
 FNC_RE = re.compile(r"(?<![A-Z0-9])FNC\s*0*(\d{1,3})(?!\d)", re.IGNORECASE)
@@ -273,6 +264,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--progress-every", type=int, default=50)
     parser.add_argument("--manual-id", action="append", default=[])
     parser.add_argument("--skip-tables", action="store_true")
+    parser.add_argument("--source-dir", type=Path, help="Local official manual directory")
     args = parser.parse_args(argv)
     if args.target_chars < 512:
         parser.error("--target-chars must be at least 512")
@@ -281,7 +273,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
-def load_manual_specs(config_path: Path, selected_ids: Iterable[str]) -> list[ManualSpec]:
+def load_manual_specs(config_path: Path, selected_ids: Iterable[str], source_dir=None) -> list[ManualSpec]:
     config_path = config_path.expanduser().resolve()
     payload = json.loads(config_path.read_text(encoding="utf-8"))
     selected = {str(item).strip() for item in selected_ids if str(item).strip()}
@@ -290,7 +282,8 @@ def load_manual_specs(config_path: Path, selected_ids: Iterable[str]) -> list[Ma
         manual_id = str(item["id"])
         if selected and manual_id not in selected:
             continue
-        source_path = (config_path.parent / str(item["file"])).resolve()
+        source_path = ((Path(source_dir) / Path(item["file"]).name) if source_dir else
+                       (config_path.parent / str(item["file"]))).resolve()
         spec = ManualSpec(
             id=manual_id,
             path=source_path,
@@ -490,6 +483,12 @@ def detect_instruction(
 ) -> tuple[str, str, str]:
     search_text = f"{outline_path}\n{text[:5000]}"
     if re.search(r"table of contents|contents >|index$", outline_path, flags=re.IGNORECASE):
+        return "", "", ""
+    leaf = outline_path.split(" > ")[-1]
+    if (manual_type == "programming" and re.match(r"^\d+(?:\.\d+)+\s", leaf)
+            and not FNC_HEADING_RE.search(leaf)):
+        # Examples in a reading guide are not instruction definitions.
+        # A numbered leaf section has stronger ownership than body mnemonics.
         return "", "", ""
     matches = list(FNC_HEADING_RE.finditer(search_text))
     if matches:
@@ -713,6 +712,11 @@ def extract_manual_pages(
     progress_every: int,
     started: float,
 ) -> tuple[list[PageArtifact], set[str], re.Pattern[str], list[dict[str, Any]]]:
+    try:
+        from pypdf import PdfReader
+        import pdfplumber
+    except ImportError as error:  # pragma: no cover
+        raise RuntimeError('pypdf and pdfplumber are required to rebuild PDF evidence') from error
     reader = PdfReader(str(manual.path))
     page_count = len(reader.pages)
     outline_entries = flatten_outline(reader)
@@ -1188,63 +1192,6 @@ def _compact_operand_rows(page: PageArtifact) -> list[tuple[str, str, str]]:
     return rows
 
 
-def _definition_table_rows(
-    page: PageArtifact,
-    expected_order: list[str],
-) -> list[tuple[str, str, str]]:
-    result: list[tuple[str, str, str]] = []
-    type_pattern = re.compile(
-        r"\b(?:ANY(?:16|32|_SIMPLE)|BIN\s*\d+(?:/\d+)?-?bit|bit|binary|word|double\s*word|integer|real|bool|string)\b",
-        flags=re.I,
-    )
-    for table in page.tables:
-        rows = table.get("rows") or []
-        table_text = normalize_line(str(table.get("text", "")))
-        if not rows or not re.search(r"\bDescription\b", table_text, flags=re.I):
-            continue
-        if re.search(r"Bit\s+Devices", table_text, flags=re.I) and re.search(r"Word\s+Devices", table_text, flags=re.I):
-            continue
-
-        header_index = -1
-        desc_col = -1
-        for row_index, row in enumerate(rows[:6]):
-            for column, raw in enumerate(row):
-                if re.search(r"\bDescription\b", _clean_table_cell(raw), flags=re.I):
-                    header_index, desc_col = row_index, column
-                    break
-            if header_index >= 0:
-                break
-        if header_index < 0 or desc_col < 0:
-            continue
-
-        expected_cursor = 0
-        consumed: set[str] = set()
-        for row in rows[header_index + 1:]:
-            cells = [_clean_table_cell(value) for value in row]
-            if desc_col >= len(cells):
-                continue
-            name_area = cells[:desc_col]
-            if any(str(value).upper() in {"EN", "ENO"} for value in name_area if value):
-                continue
-            explicit = next((_operand_name(value) for value in name_area if _operand_name(value)), "")
-            description = cells[desc_col]
-            if not description:
-                continue
-            data_type = next((value for value in cells[desc_col + 1:] if value and type_pattern.search(value)), "")
-            name = explicit
-            if not name:
-                while expected_cursor < len(expected_order) and expected_order[expected_cursor] in consumed:
-                    expected_cursor += 1
-                if expected_cursor < len(expected_order):
-                    name = expected_order[expected_cursor]
-                    expected_cursor += 1
-            if not name:
-                continue
-            consumed.add(name)
-            result.append((name, description, data_type))
-    return result
-
-
 def _applicable_devices_by_operand(
     page: PageArtifact,
     expected_order: list[str],
@@ -1276,8 +1223,6 @@ def _applicable_devices_by_operand(
             continue
 
         first_device_col = min(best_headers)
-        expected_cursor = 0
-        consumed: set[str] = set()
         for row in rows[best_index + 1:]:
             cells = [_clean_table_cell(value) for value in row]
             marked = [
@@ -1292,15 +1237,8 @@ def _applicable_devices_by_operand(
                 "",
             )
             name = explicit
-            if not name:
-                while expected_cursor < len(expected_order) and expected_order[expected_cursor] in consumed:
-                    expected_cursor += 1
-                if expected_cursor < len(expected_order):
-                    name = expected_order[expected_cursor]
-                    expected_cursor += 1
-            if not name:
+            if name not in expected_order:
                 continue
-            consumed.add(name)
             for column in marked:
                 found[name].add(best_headers[column])
     return found
@@ -1310,76 +1248,125 @@ def parse_operand_schema(
     pages: list[PageArtifact],
     opcode: str = "",
 ) -> list[dict[str, Any]]:
-    """Extract operand semantics and device applicability from manual tables.
+    """Extract candidates from the definition page, through explicit symbols.
 
-    The parser distinguishes operand-definition tables from Applicable-devices
-    matrices and uses instruction signatures only to align rows whose operand
-    glyph was lost by PDF table extraction.
+    Native mnemonic columns and ST signatures have separate source orders.
+    Device matrices never create operands or supply a missing row's identity.
     """
-    operands: list[dict[str, Any]] = []
-    by_name: dict[str, dict[str, Any]] = {}
+    from knowledge.instruction_document import (
+        _operand_evidence_bindings, _operand_table_units,
+    )
 
-    def remember(name: str, description: str = "", data_type: str = "") -> None:
-        if not name:
-            return
-        description = normalize_line(description)
-        data_type = normalize_line(data_type)
-        type_only = re.compile(
-            r"^(?:ANY(?:16|32|_SIMPLE)|BIN\s*\d+(?:/\d+)?-?bit|\d+-bit\s+binary|\d+-\s*or\s*\d+-bit\s+binary|bit|binary|word|double\s*word|integer|real|bool|string)(?:\s+binary)?$",
-            flags=re.I,
-        )
-        if description and not data_type and type_only.fullmatch(description):
-            data_type, description = description, ""
-        if description and re.fullmatch(
-            r"(?:(?:\[GLYPH-[0-9A-F]+\]|\(cid:\d+\))\d*\s*)+", description, flags=re.I
-        ):
-            description = ""
-        if description and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", description) and len(description) <= 3:
-            description = ""
-        if description and len(description) < 24:
-            words = re.findall(r"[A-Za-z]+", description)
-            if words and not any(len(word) >= 4 for word in words) and not re.search(r"\d{2,}", description):
-                description = ""
-        current = by_name.get(name)
-        if current is None:
-            current = {"position": name, "description": description, "data_type": data_type}
-            operands.append(current)
-            by_name[name] = current
+    native = []
+    for page in pages:
+        signature = _page_native_signature(page)
+        if signature and (opcode in signature['forms'] or opcode == signature['base']):
+            native.append((page, signature))
+    if len(native) > 1:
+        return []  # competing definitions need review, not a preferred page
+    if native:
+        primary, signature = native[0]
+        expected = signature['symbols']
+    else:
+        candidates = [page for page in pages if _signature_operand_order([page], opcode)]
+        if candidates:
+            primary = candidates[0]
+            expected = _signature_operand_order([primary], opcode)
         else:
-            if description and not current.get("description"):
-                current["description"] = description
-            if data_type and not current.get("data_type"):
-                current["data_type"] = data_type
-
-    compact_rows: list[tuple[str, str, str]] = []
-    for page in pages[:4]:
-        compact_rows.extend(_compact_operand_rows(page))
-    signature_order = _signature_operand_order(pages, opcode)
-    if signature_order:
-        compact_rows = [row for row in compact_rows if row[0] in signature_order]
-    compact_order = list(dict.fromkeys(name for name, _description, _data_type in compact_rows))
-    expected_order = signature_order or compact_order
-
-    for name, description, data_type in compact_rows:
-        remember(name, description, data_type)
-    for page in pages[:4]:
-        for name, description, data_type in _definition_table_rows(page, expected_order):
-            remember(name, description, data_type)
-
-    applicability: dict[str, set[str]] = defaultdict(set)
-    for page in pages[:4]:
-        for name, devices in _applicable_devices_by_operand(page, expected_order).items():
-            applicability[name].update(devices)
-    for name, devices in applicability.items():
-        remember(name)
+            # A table without a recoverable signature cannot define slot order.
+            return []
+    if not expected:
+        return []
+    table_text = '\n\n'.join(
+        '[TABLE page={} index={} bbox={}]\n{}'.format(
+            primary.pdf_page, table.get('table_index', index),
+            json.dumps(table.get('bbox') or []),
+            '\n'.join(' | '.join(str(cell or '<blank>') for cell in row)
+                      for row in table.get('rows') or []),
+        ) for index, table in enumerate(primary.tables)
+    )
+    text = f'[PAGE {primary.pdf_page} LAYOUT]\n{primary.compact_layout}\n\n{table_text}'
+    record = {'id': f'{primary.manual.id}:page:{primary.pdf_page}',
+              'manual_id': primary.manual.id, 'manual_number': primary.manual.manual_number,
+              'revision': primary.manual.revision, 'section': primary.section,
+              'pdf_page': primary.pdf_page, 'text': text,
+              'manual_operand_rows': [
+                  {'position': name, 'description': desc}
+                  for name, desc, _ in _compact_operand_rows(primary) if name in expected]}
+    gaps = [{'position': i + 1, 'facet': facet}
+            for i in range(len(expected)) for facet in ('purpose', 'operand_types')]
+    values = defaultdict(set)
+    for left, right in _operand_table_units(text):
+        for binding in _operand_evidence_bindings(record, left, right, gaps, expected):
+            if binding['source'].get('pdf_page') == primary.pdf_page:
+                values[(binding['symbol'], binding['facet'])].add(binding['value'])
+    operands = []
+    for symbol in expected:
+        descriptions = values[(symbol, 'purpose')]
+        types = values[(symbol, 'operand_types')]
+        item = {'position': symbol,
+                'description': next(iter(descriptions)) if len(descriptions) == 1 else '',
+                'data_type': next(iter(types)) if len(types) == 1 else '',
+                'extraction_status': 'candidate_evidence' if descriptions or types else 'unknown',
+                'source_pages': [primary.pdf_page]}
+        if len(descriptions) > 1 or len(types) > 1:
+            item['extraction_status'] = 'conflict'
+        operands.append(item)
+    applicability = _applicable_devices_by_operand(primary, expected)
+    for item in operands:
+        devices = applicability.get(item['position'], set()) - {'Modifier', 'String'}
         if devices:
-            by_name[name]["applicable_devices"] = sorted(devices)
+            item['applicable_devices'] = sorted(devices)
+    return operands
 
-    # Do not publish a placeholder that was seen only as an unlabeled/empty row.
-    return [
-        item for item in operands
-        if item.get("description") or item.get("data_type") or item.get("applicable_devices")
-    ]
+
+def _page_native_signature(page: PageArtifact):
+    from knowledge.instruction_document import extract_native_signature
+    from knowledge.instruction_compiler import instruction_heading_names
+    tables = [{'rows_json': json.dumps(table.get('rows') or []),
+               'bbox_json': json.dumps(table.get('bbox') or []),
+               'table_text': table.get('text', ''),
+               'table_index': table.get('table_index', index)}
+              for index, table in enumerate(page.tables)]
+    if not page.words:
+        return None
+    declared = next((names for heading in reversed((page.outline_path or page.section).split(' > '))
+                     if (names := instruction_heading_names(heading))), [])
+    return extract_native_signature(
+        {'word_geometry_json': json.dumps(page.words), 'pdf_page': page.pdf_page,
+         'section': page.section, 'manual_id': page.manual.id}, tables,
+        declared_base=declared[0] if len(declared) == 1 else None)
+
+
+def instruction_page_groups(pages: list[PageArtifact]):
+    """Associate definitions by literal outline ancestry, never body mentions."""
+    from knowledge.instruction_compiler import instruction_heading_names
+    groups = defaultdict(list)
+    for page in pages:
+        if page.manual.manual_type not in {'programming', 'positioning', 'structured_instruction', 'structured_function'}:
+            continue
+        path = (page.outline_path or page.section).split(' > ')
+        for heading in reversed(path):
+            names = instruction_heading_names(heading)
+            if names:
+                for name in names:
+                    groups[(page.manual.id, name, heading)].append(page)
+                break
+    by_opcode = defaultdict(list)
+    for (manual, opcode, heading), rows in groups.items():
+        # A real instruction-format section outranks a related-device/common
+        # rule heading which merely names the instruction in its title.
+        rank = (any(re.search(r'\bInstruction\s+Format\s*$', p.section, re.I) for p in rows),
+                any(_page_native_signature(p) is not None for p in rows),
+                any(_signature_operand_order([p], opcode) for p in rows))
+        by_opcode[(manual, opcode)].append((rank, heading, rows))
+    result = {}
+    for key, candidates in by_opcode.items():
+        best = max(item[0] for item in candidates)
+        selected = [item for item in candidates if item[0] == best]
+        if len(selected) == 1:
+            result[key] = sorted(selected[0][2], key=lambda p: p.pdf_page)
+    return result
 
 
 def instruction_summary(pages: list[PageArtifact]) -> str:
@@ -2121,28 +2108,35 @@ def insert_instruction_records(
     instruction_re_by_manual: dict[str, re.Pattern[str]],
     instruction_first_chunk: dict[tuple[str, str], int],
 ) -> int:
-    grouped: dict[tuple[str, str], list[PageArtifact]] = defaultdict(list)
-    for page in pages:
-        if page.instruction_opcode:
-            grouped[(page.manual.id, page.instruction_opcode)].append(page)
+    grouped = instruction_page_groups(pages)
     inserted = 0
     for (manual_id, opcode), instruction_pages in sorted(grouped.items()):
         instruction_pages.sort(key=lambda item: item.pdf_page)
         manual = instruction_pages[0].manual
         instruction_re = instruction_re_by_manual[manual_id]
-        variants = instruction_variants(instruction_pages, opcode, instruction_re)
+        native = [signature for page in instruction_pages
+                  if (signature := _page_native_signature(page)) is not None
+                  and (signature['base'] == opcode or opcode in signature['forms'])]
+        variants = (sorted(native[0]['forms']) if len(native) == 1 else
+                    [variant for variant in instruction_variants(instruction_pages, opcode, instruction_re)
+                     if _signature_operand_order(instruction_pages, variant)])
         operands = parse_operand_schema(instruction_pages, opcode)
         completion_flags = instruction_completion_flags(instruction_pages)
         restrictions = instruction_restrictions(instruction_pages)
-        title = next(
-            (page.instruction_title for page in instruction_pages if page.instruction_title),
-            instruction_pages[0].section,
-        )
+        title = instruction_pages[0].section
         fnc_number = next(
             (page.fnc_number for page in instruction_pages if page.fnc_number), ""
         )
         source_pages = sorted({page.pdf_page for page in instruction_pages})
-        chunk_id = instruction_first_chunk.get((manual_id, opcode))
+        primary_page = (native[0]['page'] if len(native) == 1 else next(
+            (page.pdf_page for page in instruction_pages
+             if re.search(r'\bInstruction\s+Format\s*$', page.section, re.I)
+             or _signature_operand_order([page], opcode)), source_pages[0]))
+        primary = next(page for page in instruction_pages if page.pdf_page == primary_page)
+        chunk_id = next((row[0] for row in connection.execute(
+            'SELECT id,section FROM chunks WHERE manual_id=? AND pdf_page<=? AND pdf_page_end>=? ORDER BY id',
+            (manual_id, primary_page, primary_page))
+            if str(row[1]).split(' > ')[-1] == primary.section), None)
         cursor = connection.execute(
             """
             INSERT INTO instructions(
@@ -2198,83 +2192,87 @@ def insert_instruction_records(
                 if normalize_line(alias)
             ],
         )
-        if chunk_id is not None:
-            operand_summary = "; ".join(
-                f"{item.get('position', '')}: {item.get('description', '')}"
-                + (f" [{item.get('data_type')}]" if item.get("data_type") else "")
-                + (" applicable=" + ",".join(item.get("applicable_devices") or [])
-                   if item.get("applicable_devices") else "")
-                for item in operands
-            )[:900]
-            restriction_summary = " | ".join(restrictions[:2])[:260]
-            structured_lines = ["[STRUCTURED INSTRUCTION RECORD]"]
-            if operand_summary:
-                structured_lines.append(f"OPERANDS: {operand_summary}")
-            if completion_flags:
-                structured_lines.append(
-                    f"COMPLETION_FLAGS: {', '.join(completion_flags)}"
-                )
-            if restriction_summary:
-                structured_lines.append(f"KEY_RESTRICTIONS: {restriction_summary}")
-            old_row = connection.execute(
-                "SELECT text,fidelity_flags FROM chunks WHERE id=?",
-                (chunk_id,),
-            ).fetchone()
-            if old_row and len(structured_lines) > 1:
-                enhanced_text = "\n".join(structured_lines) + "\n\n" + str(old_row[0])
-                enhanced_entities = extract_entities(
-                    enhanced_text,
-                    instruction_re,
-                    chunk_type="instruction",
-                )
-                entity_tokens = sorted(
-                    {entity for entity, _kind in enhanced_entities}
-                )
-                entity_json = [
-                    {"entity": entity, "type": kind, "occurrences": count}
-                    for (entity, kind), count in sorted(enhanced_entities.items())
-                ]
-                bigrams, _bigram_count = cjk_bigrams(enhanced_text)
-                connection.execute(
-                    "DELETE FROM entity_index WHERE chunk_id=?",
-                    (chunk_id,),
-                )
-                upsert_entity_rows(
-                    connection,
-                    manual_id=manual_id,
-                    plc_models=manual.plc_models,
-                    chunk_id=chunk_id,
-                    entities=enhanced_entities,
-                )
-                connection.execute(
-                    """
-                    UPDATE chunks
-                    SET text=?,char_count=?,text_sha256=?,entities=?,entities_json=?,
-                        cjk_bigrams=?,fidelity_flags=?
-                    WHERE id=?
-                    """,
-                    (
-                        enhanced_text,
-                        len(enhanced_text),
-                        hashlib.sha256(enhanced_text.encode("utf-8")).hexdigest(),
-                        " ".join(entity_tokens),
-                        json.dumps(
-                            entity_json,
-                            ensure_ascii=False,
-                            separators=(",", ":"),
-                        ),
-                        bigrams,
-                        ",".join(
-                            sorted(
-                                set(str(old_row[1] or "").split(","))
-                                | {"structured_instruction_record"}
-                            )
-                        ).strip(","),
-                        chunk_id,
-                    ),
-                )
         inserted += 1
     return inserted
+
+
+def refresh_instruction_index_copy(source: Path, output: Path) -> dict[str, Any]:
+    """Rebuild the derived index in a copy; keep frozen evidence byte-for-byte.
+
+    Chunks, geometry, FTS and embeddings are untouched. This is also useful
+    for inspecting a new builder against an old extraction without new PDFs.
+    It does not change source verification or the published promotion ledger.
+    """
+    source, output = Path(source).resolve(), Path(output).resolve()
+    if source == output:
+        raise ValueError('Refresh requires a separate output; the evidence source is read-only')
+    if output.exists():
+        raise ValueError('Refresh output already exists')
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(source.as_uri() + '?mode=ro', uri=True) as original:
+        with sqlite3.connect(output) as target:
+            original.backup(target)
+    with sqlite3.connect(output) as connection:
+        connection.row_factory = sqlite3.Row
+        connection.execute('PRAGMA foreign_keys=ON')
+        manuals = {}
+        for row in connection.execute('SELECT * FROM manuals'):
+            manuals[row['manual_id']] = ManualSpec(
+                id=row['manual_id'], path=Path(row['source_file']),
+                manual_number=row['manual_number'], revision=row['revision'],
+                published=row['published'], title=row['title'], language=row['language'],
+                manual_type=row['manual_type'], plc_models=row['plc_models'],
+                priority=row['priority'], official_url=row['official_url'],
+                expected_sha256=row['source_sha256'])
+        tables = defaultdict(list)
+        for row in connection.execute('SELECT * FROM tables ORDER BY table_index'):
+            tables[(row['manual_id'], row['pdf_page'])].append({
+                'rows': json.loads(row['rows_json']), 'text': row['table_text'],
+                'bbox': json.loads(row['bbox_json']), 'table_index': row['table_index']})
+        pages = []
+        for row in connection.execute('SELECT * FROM page_artifacts ORDER BY manual_id,pdf_page'):
+            pages.append(PageArtifact(
+                manual=manuals[row['manual_id']], pdf_page=row['pdf_page'],
+                printed_page=row['printed_page'], chapter=row['chapter'], section=row['section'],
+                outline_path=row['outline_path'], section_key=row['section_key'],
+                chunk_type=row['chunk_type'], instruction_opcode=row['instruction_opcode'],
+                fnc_number=row['fnc_number'], instruction_title=row['section'],
+                plain_text=row['plain_text'], clean_text=row['clean_text'],
+                layout_text=row['layout_text'], compact_layout=row['compact_layout'],
+                tables=tables[(row['manual_id'], row['pdf_page'])],
+                words=json.loads(row['word_geometry_json']), visual=json.loads(row['visual_json']),
+                fidelity_flags=set(str(row['fidelity_flags'] or '').split(','))))
+        groups = instruction_page_groups(pages)
+        vocabulary = set(BASE_INSTRUCTIONS) | {opcode for _, opcode in groups}
+        regexes = {manual: compile_instruction_re(vocabulary) for manual in manuals}
+        previous = {(row['manual_id'], row['opcode']): dict(row)
+                    for row in connection.execute('SELECT * FROM instructions')}
+        connection.execute('DELETE FROM instruction_aliases')
+        connection.execute('DELETE FROM instructions')
+        count = insert_instruction_records(connection, pages, regexes, {})
+        current = {(row['manual_id'], row['opcode']): dict(row)
+                   for row in connection.execute('SELECT * FROM instructions')}
+        fields = ('chunk_id', 'page_start', 'page_end', 'source_pages_json',
+                  'variants_json', 'operands_json', 'summary', 'completion_flags_json', 'restrictions_json')
+        changed = [{'manual_id': key[0], 'opcode': key[1],
+                    'fields': [field for field in fields if previous[key][field] != current[key][field]]}
+                   for key in sorted(previous.keys() & current.keys())
+                   if any(previous[key][field] != current[key][field] for field in fields)]
+        put_meta(connection, {'instruction_index_builder_version': BUILDER_VERSION,
+                              'instruction_index_verification': 'extraction_candidates_only'})
+        foreign = list(connection.execute('PRAGMA foreign_key_check'))
+        integrity = [row[0] for row in connection.execute('PRAGMA integrity_check')]
+        if foreign or integrity != ['ok']:
+            raise ValueError('Refreshed database failed integrity checks')
+        report = {'method': 'source-bound-instruction-index', 'before': len(previous), 'after': count,
+                  'changed_records': changed,
+                  'added': [{'manual_id': key[0], 'opcode': key[1]} for key in sorted(current.keys() - previous.keys())],
+                  'removed': [{'manual_id': key[0], 'opcode': key[1]} for key in sorted(previous.keys() - current.keys())],
+                  'source_tables_unchanged': ['manuals', 'page_artifacts', 'tables', 'chunks',
+                                              'entity_index', 'chunks_fts', 'vector_embeddings'],
+                  'source_verification_promoted': False,
+                  'integrity': integrity, 'foreign_key_violations': len(foreign)}
+    return report
 
 
 def insert_device_records(connection: sqlite3.Connection) -> int:
@@ -2606,7 +2604,7 @@ def verify_database(
     if "fx3_programming_r" in selected_ids:
         plsy_row = connection.execute(
             """
-            SELECT operands_json,page_start,page_end,chunk_id
+            SELECT operands_json,page_start,page_end,chunk_id,completion_flags_json
             FROM instructions
             WHERE opcode_norm='plsy' AND manual_id='fx3_programming_r'
             """
@@ -2664,11 +2662,9 @@ def verify_database(
             (int(plsy_row[3]),),
         ).fetchone()
         checks["plsy_first_chunk_characters"] = int(first_chunk[1]) if first_chunk else 0
-        checks["plsy_first_chunk_has_completion_flag"] = bool(
-            first_chunk and "M8029" in str(first_chunk[0])
-        )
-        if not first_chunk or "M8029" not in str(first_chunk[0]):
-            raise RuntimeError("PLSY first retrieval chunk lost completion flag M8029")
+        checks["plsy_structured_completion_flag"] = 'M8029' in json.loads(plsy_row[4])
+        if not first_chunk or not checks['plsy_structured_completion_flag']:
+            raise RuntimeError("PLSY indexed definition lost completion flag M8029")
         if int(first_chunk[1]) > 5900:
             raise RuntimeError(
                 f"PLSY first retrieval chunk exceeds prompt budget target: {first_chunk[1]}"
@@ -2776,7 +2772,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     debug_path = args.debug_cases.expanduser().resolve()
     output_path = args.output.expanduser().resolve()
     manifest_path = args.manifest.expanduser().resolve()
-    specs = load_manual_specs(config_path, args.manual_id)
+    specs = load_manual_specs(config_path, args.manual_id, getattr(args, "source_dir", None))
     if not debug_path.is_file():
         raise FileNotFoundError(f"debug case source not found: {debug_path}")
     debug_payload = json.loads(debug_path.read_text(encoding="utf-8"))

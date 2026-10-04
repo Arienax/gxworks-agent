@@ -51,6 +51,14 @@ def canonical_operand(value):
     return canonical_device(value)
 
 
+def decimal_region_address(base, offset):
+    """Resolve explicit decimal memory offsets; X/Y numbering is CPU-owned."""
+    match = re.fullmatch(r'(SM|SD|M|D|R)(\d+)', str(base), re.I)
+    if match is None or type(offset) is not int or int(match[2]) + offset < 0:
+        raise ValueError('Device offset policy is unavailable')
+    return match[1].upper() + str(int(match[2]) + offset)
+
+
 def canonical_expression(value):
     if not isinstance(value, str):
         return value

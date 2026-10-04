@@ -24,6 +24,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple
 
+from plc.instruction_definition import InstructionFactGroup
+
 
 class OperandRole(str, Enum):
     READ = "read"
@@ -191,6 +193,11 @@ class InstructionSpec:
     numeric_operand_boundaries: Tuple[NumericOperandBoundary, ...] = ()
     disjoint_bit_ranges: Tuple[DisjointBitRangeBoundary, ...] = ()
     cpu_replacements: Tuple[Tuple[str, str], ...] = ()
+    # Build-produced facts extend this same owner. They never admit an opcode,
+    # certify an unrelated field, or alter native operand order.
+    definition_facts: Tuple[InstructionFactGroup, ...] = ()
+    source_materials: Tuple[Mapping[str, Any], ...] = ()
+    uninterpreted_content: Tuple[Mapping[str, Any], ...] = ()
 
     def contract_coverage(self) -> Dict[str, str]:
         declared = {
@@ -315,6 +322,9 @@ class InstructionSpec:
             double_mnemonic=double_mnemonic,
             double_pulse_mnemonic=double_pulse_mnemonic,
             notes=str(payload.get("notes") or "").strip(),
+            definition_facts=tuple(InstructionFactGroup.from_mapping(item) for item in payload.get("definition_facts", [])),
+            source_materials=tuple(copy.deepcopy(payload.get("source_materials", []))),
+            uninterpreted_content=tuple(copy.deepcopy(payload.get("uninterpreted_content", []))),
         )
 
     @property
@@ -322,6 +332,8 @@ class InstructionSpec:
         return bool(self.double_mnemonic)
 
     def supports_cpu(self, cpu: Optional[str]) -> bool:
+        if cpu and self.replacement_for_cpu(cpu):
+            return False
         if not cpu or not self.cpu_support:
             return True
         return str(cpu).strip().upper() in self.cpu_support
@@ -389,6 +401,9 @@ class InstructionRegistry:
         self._variant_index: Optional[
             Dict[Tuple[str, str], InstructionResolution]
         ] = None
+        self.definition_inventory: Tuple[Mapping[str, Any], ...] = ()
+        self._definition_owners: Dict[Tuple[str, str, str], Mapping[str, Any]] = {}
+        self.definition_documents: Mapping[str, Mapping[str, Any]] = {}
         for spec in specs:
             self.register(spec)
 
@@ -501,6 +516,60 @@ class InstructionRegistry:
     ) -> Optional[InstructionSpec]:
         resolved = self.resolve_form(mnemonic, vendor=vendor, cpu=cpu)
         return resolved.spec if resolved is not None else None
+
+    def load_instruction_definitions(self, path: Path) -> None:
+        """Attach reproducible source facts to exact existing CPU/form owners.
+
+        The inventory also includes manual-only and unsupported entries. Those
+        remain inspectable inventory records, without registering them as calls.
+        """
+        if path.suffix == ".gz":
+            import gzip
+            payload = json.loads(gzip.decompress(path.read_bytes()).decode("utf-8"))
+        else:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        from plc.instruction_definition_storage import expand_definitions
+        payload = expand_definitions(payload)
+        if (not isinstance(payload, Mapping) or payload.get("schema_version") != 1
+                or payload.get("method") != "instruction-material-compiler-v1"
+                or not isinstance(payload.get("entries"), list)):
+            raise ValueError("Unsupported compiled instruction definitions")
+        pending, inventory, seen = {}, [], set()
+        for entry in payload["entries"]:
+            if not isinstance(entry, Mapping):
+                raise ValueError("Invalid compiled instruction entry")
+            opcode, model = entry.get("opcode"), entry.get("target_model")
+            vendor = entry.get("vendor", "mitsubishi")
+            if any(not isinstance(value, str) or not value for value in (opcode, model, vendor)):
+                raise ValueError("Compiled entry needs a literal form and model")
+            key = (vendor.lower(), opcode.upper(), model.upper())
+            if key in seen:
+                raise ValueError("Duplicate compiled instruction owner")
+            seen.add(key)
+            facts = tuple(InstructionFactGroup.from_mapping(f) for f in entry.get("facts", []))
+            if any(f.scope.get("models") != [model] or f.scope.get("forms") != [opcode] for f in facts):
+                raise ValueError("Compiled facts must have exact CPU/form scopes")
+            materials, uninterpreted = entry.get("source_materials", []), entry.get("uninterpreted_content", [])
+            if any(not isinstance(items, list) or any(not isinstance(item, Mapping) for item in items)
+                   for items in (materials, uninterpreted)):
+                raise ValueError("Invalid compiled source processing receipt")
+            form = self.resolve_form(opcode, vendor=vendor, cpu=model)
+            inventory.append(copy.deepcopy(dict(entry)))
+            if form is None or not form.spec.supports_cpu(model):
+                continue
+            pending[key] = replace(form.spec, definition_facts=facts,
+                                   source_materials=tuple(copy.deepcopy(materials)),
+                                   uninterpreted_content=tuple(copy.deepcopy(uninterpreted)))
+        self._cpu_contracts.update(pending)
+        self.definition_inventory = tuple(inventory)
+        self._definition_owners = {(e.get('vendor', 'mitsubishi').lower(), e['opcode'].upper(), e['target_model'].upper()): e
+                                   for e in inventory}
+        self.definition_documents = {d['id']: copy.deepcopy(d) for d in payload.get('documents', [])}
+
+    def definition_entry(self, opcode, *, cpu, vendor='mitsubishi'):
+        """Inspect an exact compiled owner without admitting it as a call."""
+        entry = self._definition_owners.get((str(vendor).lower(), str(opcode).strip().upper(), str(cpu).strip().upper()))
+        return copy.deepcopy(dict(entry)) if entry is not None else None
 
     def load_contract_promotions(self, path: Path) -> None:
         """Load build-time corroborated facts; never discover/promote at runtime.
@@ -1102,6 +1171,11 @@ def load_default_instruction_registry() -> InstructionRegistry:
             capabilities = directory / "instruction_capabilities.json"
             if capabilities.is_file():
                 registry.load_capability_contract(capabilities)
+            definitions = directory / "instruction_definitions.json.gz"
+            if not definitions.exists():
+                definitions = directory / "instruction_definitions.json"
+            if definitions.is_file():
+                registry.load_instruction_definitions(definitions)
             return registry
     searched = "\n - ".join(str(item) for item in _candidate_catalog_directories())
     raise RuntimeError(

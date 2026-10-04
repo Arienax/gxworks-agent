@@ -11,7 +11,8 @@ from pathlib import Path
 import tempfile
 
 from gxw.object_model import (default_baseline, export_object_model,
-                              generate_object_project, read_project_context)
+                              prepare_object_project, read_project_context)
+from gxw.project_writer import write_prepared_project
 from gxw.render import render_structured_svg
 from .workspace import ConflictError, atomic_json, canonical_hash, contained, read_json, record_id
 
@@ -99,12 +100,25 @@ def validate_candidate(artifacts):
         raise ValueError("FBD preview does not match the GXW project")
 
 
+def _write_candidate(model, baseline=None):
+    prepared = prepare_object_project(model, baseline=baseline)
+    if not prepared.requires_native_save:
+        return write_prepared_project(prepared)
+    from gxworks2.workspace_adapter import NativeWorkspaceSourceSave
+    from .execution import DesktopResourceLock, ExecutionUnavailableError
+    try:
+        with DesktopResourceLock():
+            return NativeWorkspaceSourceSave().save(prepared)
+    except ExecutionUnavailableError as error:
+        raise ConflictError('GX 原生资源正被其他操作占用，本次未生成候选工程。') from error
+
+
 def prepare_candidate(output, *, model=None, baseline=None, imported=None, program_name=None,
                       summary="FBD 候选工程", source_ladder=None, plc_model="FX3U"):
     if imported is None:
         if baseline is None and plc_model.upper() != "FX3U":
             raise ValueError("Native FBD generation currently has an FX3U project template only")
-        result = generate_object_project(model, baseline=baseline)
+        result = _write_candidate(model, baseline=baseline)
         raw, report = result.data, result.report
         program_name = model.get("program")
     else:
@@ -243,7 +257,7 @@ class FBDService:
         with wb.lock.thread_lock if wb.lock else nullcontext():
             try:
                 baseline = self._context(project_id, version_id, model.get('program')).raw
-                result = generate_object_project(model, baseline=baseline)
+                result = _write_candidate(model, baseline=baseline)
                 context = read_project_context(result.data, model.get('program'))
                 return {"model_sha256": canonical_hash(model),
                         "gxw_sha256": hashlib.sha256(result.data).hexdigest(),

@@ -57,7 +57,7 @@ class Provider:
         if self.calls > 6:
             raise ModelProviderError('Test request budget reached', code='protocol')
         if self.live:
-            for event in self.live.stream(replace(request, timeout=120, max_retries=0)):
+            for event in self.live.stream(replace(request, max_retries=0)):
                 if isinstance(event, Usage):
                     self.usage.append({'input_tokens': event.input_tokens, 'output_tokens': event.output_tokens})
                 yield event

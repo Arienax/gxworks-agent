@@ -16,7 +16,7 @@ from plc.specification.bindings import (
     bound_parameter_is_removed,
     confirmed_input_levels,
     merge_declared_bindings,
-    extract_declared_bindings,
+    recover_declared_bindings,
 )
 
 from plc.specification.approach import (
@@ -373,6 +373,12 @@ def validate_spec_draft(spec, plc_model=None):
             )
         )
         return {"errors": errors, "warnings": warnings}
+    if 'operation_intents' in spec:
+        from plc.instruction_binding import normalize_operation_intents
+        try:
+            normalize_operation_intents(spec['operation_intents'])
+        except ValueError as error:
+            errors.append(_validation_issue('invalid_operation_intent', str(error), '$.operation_intents'))
 
     approaches = [
         item for item in (spec.get("approaches") or []) if isinstance(item, dict)
@@ -1291,6 +1297,12 @@ def build_review_draft(analysis, previous_spec=None):
         "summary": analysis.get("summary") or previous.get("summary", ""),
         "approaches": approaches,
         "selected_approach": selected_approach,
+        "operation_intents": [copy.deepcopy(next((new for new in analysis.get('operation_intents', [])
+                               if new.get('id') == item.get('id')), item)) if item.get('status') != 'confirmed'
+                              else copy.deepcopy(item) for item in previous.get('operation_intents', [])] + [
+            copy.deepcopy(item) for item in analysis.get("operation_intents", [])
+            if item.get("id") not in {p.get("id") for p in previous.get("operation_intents", [])}
+        ],
         "parameters": parameters,
         "io_table": io_table,
         "io_allocation_raw": io_table_to_raw(io_table),
@@ -1502,6 +1514,9 @@ def canonicalize_confirmed_spec(spec):
     )
 
     canonical = copy.deepcopy(spec or {})
+    if "operation_intents" in canonical:
+        from plc.instruction_binding import normalize_operation_intents
+        canonical["operation_intents"] = normalize_operation_intents(canonical["operation_intents"])
     if is_legacy_confirmed_spec(canonical):
         canonical = migrate_legacy_confirmed_spec(canonical)
     canonical["approaches"] = [
@@ -1531,17 +1546,7 @@ def canonicalize_confirmed_spec(spec):
     # dropping hidden binding identities. Recover only explicit declarations
     # whose addresses are still active; existing bindings and operator edits
     # remain authoritative, and deleted/moved addresses are never resurrected.
-    intent = canonical.get("intent_context")
-    requests = intent.get("requests", []) if isinstance(intent, dict) else []
-    declared_bindings = []
-    model_for_bindings = str(canonical.get("plc_model") or "FX3U").strip().upper()
-    for request in requests:
-        if not isinstance(request, dict):
-            continue
-        declared_bindings.extend(
-            extract_declared_bindings(request.get("text", ""), model_for_bindings)
-        )
-    bindings = merge_declared_bindings(rows, bindings, declared_bindings)
+    rows, bindings = recover_declared_bindings(canonical, rows, bindings)
     for row in rows:
         row["address"] = str(row.get("address") or "").strip().upper()
         row["kind"] = str(row.get("kind") or _device_kind(row["address"])).strip()

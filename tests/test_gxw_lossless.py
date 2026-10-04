@@ -411,6 +411,47 @@ def test_project_text_context_rejects_broken_metadata_without_guessing_a_cpu(cha
         read_project_text_context(raw)
 
 
+@pytest.mark.parametrize('hiding', [False, True])
+def test_saved_native_compile_options_preserve_words_and_bind_the_hiding_flag(hiding):
+    import base64
+    from gxw.project_metadata import read_project_compile_options
+    witness = json.loads((ROOT / 'tests/fixtures/gxw_fbd_source_library.json').read_text())['label_hiding_native']
+    control = next(row for row in witness['controls'] if row['global_variable_hiding'] is hiding)
+    raw = base64.b64decode(control['metadata_base64'])
+    result = read_project_compile_options(raw)
+    assert result['count_offset'] == control['count_offset']
+    assert result['global_variable_hiding'] is hiding
+    assert result['values'] == (0x00010007, 0x00020001, 0x10040001, 0x0005007f,
+        0x00060001, 0x000b0001, 0x10030020, 0x20000001, 0x10070000,
+        *((0x10010001,) if hiding else ()), 0xffffffff)
+
+
+@pytest.mark.parametrize('damage', ['count-zero', 'count-overflow', 'short-count',
+                                  'short-array', 'early-sentinel', 'missing-sentinel'])
+def test_compile_option_gaps_are_explicit_instead_of_guessing_source_binding(damage):
+    import base64
+    from gxw.project_metadata import read_project_compile_options
+    witness = json.loads((ROOT / 'tests/fixtures/gxw_fbd_source_library.json').read_text())['label_hiding_native']
+    control = witness['controls'][1]
+    raw = bytearray(base64.b64decode(control['metadata_base64']))
+    offset = control['count_offset']
+    count = struct.unpack_from('<I', raw, offset)[0]
+    if damage == 'count-zero':
+        struct.pack_into('<I', raw, offset, 0)
+    elif damage == 'count-overflow':
+        struct.pack_into('<I', raw, offset, 33)
+    elif damage == 'short-count':
+        raw = raw[:offset + 3]
+    elif damage == 'short-array':
+        raw = raw[:offset + 4 * count + 3]
+    elif damage == 'early-sentinel':
+        struct.pack_into('<I', raw, offset + 4, 0xffffffff)
+    else:
+        struct.pack_into('<I', raw, offset + 4 * count, 0)
+    with pytest.raises(GXWFormatError, match='compile option'):
+        read_project_compile_options(raw)
+
+
 def test_project_context_keeps_unknown_codepages_and_cpus_explicit():
     from types import SimpleNamespace
 

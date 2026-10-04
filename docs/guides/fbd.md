@@ -12,6 +12,18 @@
 
 保存的 FBD 版本提供 `program.gxw`、`fbd.json`、`fbd.svg` 和写入报告。版本、产物及校验结果的关系见[生成交付](../architecture/generation-delivery.md)。
 
+带有原生保存状态的工程发生源码或声明变更时，预览和候选保存共用离线工作区适配器。它将原工程复制到隔离目录，核对实际 CPU、编码、所选 POU 和原始源码，再更新并保存；回读核对源码、声明和未编辑的源码对象。失败时不生成候选，也不改写原版本。原生资源占用时返回冲突，沿用共享资源锁。
+
+Windows 源码环境先构建适配器：
+
+```powershell
+.\tools\build_workspace_adapter.ps1
+```
+
+默认输出到 `%LOCALAPPDATA%\PLC AI Studio\workspace-adapter`，可用 `GX_WORKSPACE_ADAPTER_EXE` 指定可执行文件。GX Works2 安装路径复用 `GXWORKS2_EXE` 和 [GXWorks2Finder](../../src/gxworks2/finder.py)。[WorkspaceSourceSave](../../native_adapters/WorkspaceSourceSave.cs)绑定 32 位原生组件版本 `1.635.0.1`，不自动兼容其他版本。此适配器独立构建，尚未随 Web/MCP 发布包分发。
+
+当前调用计划由 [native_source_plan](../../src/gxw/native_write.py)生成：编辑已有 POU 图形、重命名已有局部声明，增删已验证的根局部声明，以及已验证的 BOOL 到 FB 类型变更。设备绑定、评论、任意初值修改、全局声明或库接口修改尚未接通，不能静默略过。新建 POU 和原生工程创建仍不在此保存入口的范围内。
+
 ## 导入现有 GXW
 
 选择“导入 GXW”，上传工程并选择目标 POU。文件大小限制与请求字段由 [Web schemas](../../src/integrations/web/schemas.py)和 [application.fbd](../../src/application/fbd.py)定义。保留原工程副本；导入后核对所选 POU、声明和连接。
@@ -25,5 +37,7 @@
 发送到 GX 时打开版本 GXW 的独立副本。先处理 GX 中已有保存提示，再执行全部编译、保存和关闭。重新导入保存后的文件可以检查原生处理后的结果。
 
 打开文件的结果记录为 `imported`；原生编译结果要在验证页单独记录。操作员填写的结论和附件绑定版本及文件 SHA-256，保留其人工报告来源。FBD 的仿真、诊断和 CSV 同步尚未接通。
+
+离线候选保存不请求公开编译或检查。写入报告分别记录工作区加载、原生保存、保存文件回读；候选的 `gx_compile` 仍为 `not_run`。原生保存内部可能更新厂商缓存，这不构成一次完整编译检查的证据。实例名还受原工程编码等原生约束：例如已有 FX3G／CP1252 库工程的中文实例名保存后冷编译被拒绝；同工程 ASCII 实例名对照通过。不能因 CP936 工程通过中文名称就推广到其他编码。
 
 模板的历史原生结果、失败样本和后续尝试见[研究记录索引](../../research/README.md)。具体样本的成功只适用于报告中登记的输入、模板和 GX 环境。

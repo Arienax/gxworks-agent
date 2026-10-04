@@ -653,17 +653,17 @@ def _iter_nested_elements(elements):
                 yield from _iter_nested_elements(branch)
 
 
-def _contact_predicate(element):
+def _contact_predicate(element, *, include_edges=False):
     if not isinstance(element, Mapping):
         return None
     kind = str(element.get("type") or "").strip().upper()
     address = str(element.get("address") or "").strip().upper()
-    if kind not in {"NO", "NC"} or not address:
+    if kind not in ({'NO', 'NC', 'P', 'F'} if include_edges else {'NO', 'NC'}) or not address:
         return None
     return f"{kind} {address}"
 
 
-def _expand_contact_paths(elements):
+def _expand_contact_paths(elements, *, include_edges=False):
     """Expand contact-only paths for structure-instance inspection."""
     paths = [set()]
     for element in elements or ():
@@ -672,12 +672,12 @@ def _expand_contact_paths(elements):
         if str(element.get("type") or "").strip().casefold() == "parallel_block":
             alternatives = []
             for branch in element.get("branches") or ():
-                alternatives.extend(_expand_contact_paths(branch))
+                alternatives.extend(_expand_contact_paths(branch, include_edges=include_edges))
             if not alternatives:
                 alternatives = [set()]
             paths = [base | option for base in paths for option in alternatives]
             continue
-        predicate = _contact_predicate(element)
+        predicate = _contact_predicate(element, include_edges=include_edges)
         if predicate:
             for path in paths:
                 path.add(predicate)
@@ -688,7 +688,7 @@ def _devices_in_value(value):
     return {item.upper() for item in _DEVICE_RE.findall(str(value or ""))}
 
 
-def inspect_ladder_features(ladder):
+def inspect_ladder_features(ladder, *, plc_model=None):
     opcodes = set()
     devices = set()
     structures = set()
@@ -712,9 +712,7 @@ def inspect_ladder_features(ladder):
         rung_writes = set()
         rung_has_edge = False
         header = rung.get("header_element")
-        input_elements = []
-        if isinstance(header, Mapping):
-            input_elements.append(header)
+        input_elements = list(_iter_nested_elements([header, *(rung.get('shared_inputs') or [])]))
         for branch in rung.get("branches") or []:
             if not isinstance(branch, Mapping):
                 continue
@@ -743,6 +741,18 @@ def inspect_ladder_features(ladder):
                     opcode = str(output.get("opcode") or "").strip().upper()
                     if opcode:
                         opcodes.add(opcode)
+                    if plc_model:
+                        # Consecutive result words/bits are used even when the
+                        # native call spells only their head address. Reuse the
+                        # same bounded definition footprint as effect checking;
+                        # unknown or dynamic regions do not invent neighbors.
+                        from plc.instruction_binding import instruction_write_footprint
+                        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+                        writes, _complete = instruction_write_footprint(
+                            output, plc_model, DEFAULT_INSTRUCTION_REGISTRY
+                        )
+                        devices.update(writes)
+                        rung_writes.update(writes)
                     target = operands[-1] if operands else ""
                     if target:
                         rung_writes.update(_devices_in_value(target))
@@ -755,6 +765,11 @@ def inspect_ladder_features(ladder):
                         set_devices.update(_devices_in_value(operands[0]))
                     if opcode == "RST" and operands:
                         reset_devices.update(_devices_in_value(operands[0]))
+                    if opcode == "ZRST":
+                        from plc.ir import analyze_instruction_access
+                        _reads, resets = analyze_instruction_access(opcode, operands, plc_model=plc_model or "FX3U")
+                        reset_devices.update(resets)
+                        rung_writes.update(resets)
                 elif output_type == "COUNTER":
                     opcodes.update({"OUT", "COUNTER"})
                     structures.add("hardware_counter")
@@ -772,6 +787,18 @@ def inspect_ladder_features(ladder):
                                 "branch_id": branch.get("branch_id"),
                                 "target": address,
                                 "feedback_predicate": feedback,
+                                "paths": [sorted(path) for path in branch_paths],
+                            })
+                        elif address.startswith("Y"):
+                            # A combinational output branch can coexist with a
+                            # state machine. Structures describe present blocks,
+                            # not mutually exclusive labels for the whole PLC.
+                            structures.add("direct_logic")
+                            structure_instances.append({
+                                "selector": "direct_output",
+                                "rung_id": rung.get("rung_id"),
+                                "branch_id": branch.get("branch_id"),
+                                "target": address,
                                 "paths": [sorted(path) for path in branch_paths],
                             })
                 elif output_type:
@@ -900,7 +927,7 @@ def validate_ladder_against_selected_approach(ladder, confirmed_spec):
     if definition_issues:
         return ["方案契约无效：" + "；".join(definition_issues)]
 
-    features = inspect_ladder_features(ladder)
+    features = inspect_ladder_features(ladder, plc_model=confirmed_spec.get("plc_model"))
     opcodes = set(features["opcodes"])
     devices = set(features["devices"])
     structures = set(features["structures"])

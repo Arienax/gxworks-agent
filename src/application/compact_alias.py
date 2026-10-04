@@ -71,7 +71,7 @@ def _hybrid_to_compact(value: Any) -> dict[str, Any] | None:
         if header is not None and not _nonempty_string(header):
             return None
         shared = rung.get("shared_inputs", [])
-        if not isinstance(shared, list) or any(not _nonempty_string(item) for item in shared):
+        if not isinstance(shared, list) or any(not _compact_input(item) for item in shared):
             return None
 
         raw_branches = rung.get("branches")

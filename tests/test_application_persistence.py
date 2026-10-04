@@ -31,6 +31,54 @@ def _bytes(root):
     return {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
 
 
+@pytest.mark.parametrize("winerror", [5, 32, 33])
+def test_atomic_record_survives_transient_windows_reader_lock(tmp_path, monkeypatch, winerror):
+    import storage.session as storage
+    path = tmp_path / "project.json"
+    atomic_json(path, {"revision": 1})
+    original_replace = storage.os.replace
+    calls, pauses = [], []
+
+    def replace(source, destination):
+        calls.append((source, destination))
+        assert json.loads(path.read_text(encoding="utf-8")) == {"revision": 1}
+        if len(calls) <= 2:
+            error = PermissionError("transient sharing failure")
+            error.winerror = winerror
+            raise error
+        return original_replace(source, destination)
+
+    monkeypatch.setattr(storage.os, "replace", replace)
+    monkeypatch.setattr(storage.time, "sleep", pauses.append)
+    atomic_json(path, {"revision": 2})
+    assert len(calls) == 3 and pauses == [0.01, 0.02]
+    assert json.loads(path.read_text(encoding="utf-8")) == {"revision": 2}
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+@pytest.mark.parametrize("winerror,attempts", [(32, 5), (None, 1), (87, 1)])
+def test_atomic_record_keeps_old_document_when_replace_remains_denied(tmp_path, monkeypatch, winerror, attempts):
+    import storage.session as storage
+    path = tmp_path / "project.json"
+    atomic_json(path, {"revision": 1})
+    calls = []
+
+    def replace(source, destination):
+        calls.append((source, destination))
+        error = PermissionError("persistent denied replacement")
+        if winerror is not None:
+            error.winerror = winerror
+        raise error
+
+    monkeypatch.setattr(storage.os, "replace", replace)
+    monkeypatch.setattr(storage.time, "sleep", lambda _: None)
+    with pytest.raises(PermissionError):
+        atomic_json(path, {"revision": 2})
+    assert len(calls) == attempts
+    assert json.loads(path.read_text(encoding="utf-8")) == {"revision": 1}
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
 def _program():
     from plc.ir import build_plc_ir
     return build_plc_ir({"device_comments": {}, "rungs": [{"rung_id": 1, "debug_note": "启动", "header_element": None,

@@ -99,6 +99,26 @@ class DeclarationDocument:
     owner_pou_status: int | None = None
 
 
+def resolve_label(documents, program_name, symbol, *, global_variable_hiding=False):
+    """Resolve one source name in the selected POU's local/global scope.
+
+    A unique local label hides a unique global label only when the project's
+    native option enables it. Duplicate declarations within a scope and an
+    unknown option remain ambiguous. No declaration is removed or rewritten.
+    """
+    local_name = program_name.removesuffix('.Program.pou') + '.Labels.lh'
+    local = [(local_name, row) for row in documents[local_name].rows
+             if row.name.casefold() == symbol.casefold()] if local_name in documents else []
+    globals_ = [(name, row) for name, doc in documents.items() if doc.scope == 'global'
+                for row in doc.rows if row.name.casefold() == symbol.casefold()]
+    if global_variable_hiding is True and len(local) == len(globals_) == 1:
+        return local[0]
+    matched = local + globals_
+    if len(matched) > 1:
+        raise GXWFormatError('ambiguous local/global source declaration name: ' + symbol)
+    return matched[0] if matched else None
+
+
 @dataclass(frozen=True)
 class StructureMember:
     name: str
@@ -262,8 +282,8 @@ def edit_declarations(document: DeclarationDocument, *, upserts=(), renames=None
     if len(set(names)) != len(names):
         raise GXWFormatError("ambiguous declaration names")
     ids = [r.record_id for r in rows]
-    if len(set(ids)) != len(ids):
-        raise GXWFormatError("duplicate declaration record IDs")
+    # This saved field is not the native ObjectId. In the observed FX0N
+    # workspace, several newly created BOOL rows legitimately retain zero.
     next_id = max(ids, default=0) + 1
     renames = renames or {}
     for old, new in renames.items():
@@ -318,7 +338,7 @@ def edit_declarations(document: DeclarationDocument, *, upserts=(), renames=None
         class_code = CLASS_CODES.get(class_name) if class_name else old.class_code if old else CLASS_CODES["VAR" if document.scope == "local" else "VAR_GLOBAL"]
         if class_code is None:
             raise GXWFormatError("unsupported declaration class")
-        if class_name and class_code in (3, 4, 5, 11, 12) and document.owner_pou_type not in (0x1000001, 0x1000002):
+        if class_name and class_code in (3, 4, 5, 11, 12) and document.owner_pou_type not in (0x1000002, 0x1000003):
             raise GXWFormatError('formal declaration class requires a function or function-block owner')
         # Zero/empty opaque defaults are repeated across all native type controls.
         row = old or LabelRecord(name, data_type, class_code, "", "", 0, initial, "", next_id, "", array_marker, code, reference)

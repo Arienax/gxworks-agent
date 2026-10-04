@@ -293,7 +293,9 @@ def build(database=DB):
         "cpu": "FX3U",
         "method": METHOD,
         "signature_ledger_method": signature_payload.get("method"),
-        "signature_ledger_sha256": sha(SIGNATURE_LEDGER.read_bytes()),
+        # The frozen JSON ledger is stored with LF in Git. Windows checkout
+        # CRLF must not change the identity of the same reproducible input.
+        "signature_ledger_sha256": sha(SIGNATURE_LEDGER.read_bytes().replace(b'\r\n', b'\n')),
         "source": source,
         "entries": promotions,
     }
@@ -336,8 +338,9 @@ def audit_operand_purpose_coverage(*, char_budget=24000, top_k=8):
     from knowledge import core
     from knowledge.evidence import KnowledgeQuery
     from knowledge.instruction_facts import (
-        _operand_evidence_bindings, _operand_gap_details, _operand_table_units, _related_units,
+        _operand_gap_details, _operand_table_units, _related_units,
     )
+    from knowledge.instruction_document import _operand_evidence_bindings
     from knowledge.retriever import build_knowledge_context
     from knowledge.structured_facts import resolve_instruction_records
     from plc.instruction_resolution import resolve_instruction_lanes
@@ -346,6 +349,7 @@ def audit_operand_purpose_coverage(*, char_budget=24000, top_k=8):
         raise ValueError("Purpose coverage requires the bundled runtime knowledge index")
     signatures, forms = _signature_map()
     rows, counts, buckets, samples = [], Counter(), Counter(), {}
+    used_manuals = set()
     complete_forms, verified_forms, off_definition = 0, 0, 0
     for opcode, signature in sorted(forms.items()):
         slots = resolve_instruction_lanes(opcode, plc_model="FX3U")["operand_slots"]
@@ -388,6 +392,8 @@ def audit_operand_purpose_coverage(*, char_budget=24000, top_k=8):
                       else requirements.get(position, {}).get("status", "unresolved"))
             item = {"position": position, "symbol": slot["symbol"], "status": status}
             if delivered:
+                used_manuals.update(binding['source']['manual_id'] for binding in delivered
+                                    if binding['source'].get('manual_id'))
                 # Literal forms share the ledger's native definition page.
                 matches = [binding["source"].get("pdf_page") == signature["native_page"]
                            and binding["source"].get("manual_id") == NATIVE for binding in delivered]
@@ -428,11 +434,26 @@ def audit_operand_purpose_coverage(*, char_budget=24000, top_k=8):
         complete_forms += all(item["status"] in {"source_verified", "candidate_evidence"} for item in form_rows)
         verified_forms += all(item["status"] == "source_verified" for item in form_rows)
         rows.append({"opcode": opcode, "native_page": signature["native_page"], "operands": form_rows})
+    # The purpose resolver may legitimately use a different official manual
+    # from the frozen signature ledger (for example positioning definitions).
+    # Keep the ledger's source lock and disclose every actual delivered source.
+    manual_sources = {key: dict(value) for key, value in signatures['sources'].items()}
+    with sqlite3.connect(core._index_path().resolve().as_uri() + '?mode=ro', uri=True) as connection:
+        connection.row_factory = sqlite3.Row
+        for manual_id in sorted(used_manuals - manual_sources.keys()):
+            source = connection.execute(
+                'SELECT manual_number,revision,source_sha256,official_url FROM manuals WHERE manual_id=?',
+                (manual_id,),
+            ).fetchone()
+            if source is None:
+                raise ValueError('Delivered manual is absent from the runtime source catalogue: ' + manual_id)
+            manual_sources[manual_id] = {'manual': source['manual_number'], 'revision': source['revision'],
+                                         'sha256': source['source_sha256'], 'url': source['official_url']}
     return {
         "schema_version": 1, "scope": "frozen_fx3u_signature_forms", "cpu": "FX3U",
         "signature_ledger": (SIGNATURE_LEDGER.relative_to(ROOT).as_posix()
                              if SIGNATURE_LEDGER.is_relative_to(ROOT) else SIGNATURE_LEDGER.as_posix()),
-        "manual_sources": signatures["sources"], "evidence_database": "resources/knowledge/fx3u_knowledge.sqlite",
+        "manual_sources": manual_sources, "evidence_database": "resources/knowledge/fx3u_knowledge.sqlite",
         "database_mutated": False, "promotion_performed": False,
         "measurement_stage": "shared_knowledge_context_receipt", "char_budget": char_budget, "top_k": top_k,
         "environment": {"python": platform.python_version(), "platform": platform.system()},

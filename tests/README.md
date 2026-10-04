@@ -146,7 +146,7 @@ Owns GXW container/object/ABI/declaration/network parsing, preservation and roun
 | --- | --- |
 | `tests/test_gxw_cfb_allocator.py` | focused coverage for gxw cfb allocator |
 | `tests/test_gxw_connectivity.py` | focused coverage for gxw connectivity |
-| `tests/test_gxw_compiler.py` | stored compiler artifacts, native component/table observations and source-to-cache bindings |
+| `tests/test_gxw_compiler.py` | stored compiler artifacts, offline native validation transport, phase completion and source-to-code bindings |
 | `tests/test_gxw_compiler_call_tree.py` | native CallTree framing, reference maps and replay/preservation boundaries |
 | `tests/test_gxw_container_appended_growth.py` | focused coverage for gxw container appended growth |
 | `tests/test_gxw_container_writer.py` | focused coverage for gxw container writer |
@@ -156,7 +156,7 @@ Owns GXW container/object/ABI/declaration/network parsing, preservation and roun
 | `tests/test_gxw_generation_roundtrip.py` | focused coverage for gxw generation roundtrip |
 | `tests/test_gxw_lossless.py` | native source/compiled token corpora, operand groups and labels, opaque preservation, bounded patches and failure replay |
 | `tests/test_gxw_network_blocks.py` | focused coverage for gxw network blocks |
-| `tests/test_gxw_object_model.py` | focused coverage for gxw object model |
+| `tests/test_gxw_object_model.py` | source-bound v2 editing, native save plans/readback, opaque preservation and generated edits against frozen interfaces |
 | `tests/test_gxw_project_import.py` | focused coverage for gxw project import |
 | `tests/test_gxw_project_roundtrip.py` | focused coverage for gxw project roundtrip |
 | `tests/test_gxw_project_writer.py` | focused coverage for gxw project writer |
@@ -242,7 +242,7 @@ Owns HTTP/Web contracts, presentation state, startup, FBD UI, workbench/applicat
 | `tests/test_web_architecture.py` | focused coverage for web architecture |
 | `tests/test_web_contract.py` | focused coverage for web contract |
 | `tests/test_web_demo_isolation.py` | focused coverage for web demo isolation |
-| `tests/test_web_fbd.py` | focused coverage for web fbd |
+| `tests/test_web_fbd.py` | shared FBD context, preview/candidate persistence, offline native-save routing, version preservation and resource conflicts |
 | `tests/test_web_live_acceptance.py` | focused coverage for web live acceptance |
 | `tests/test_web_source_entrypoints.py` | focused coverage for web source entrypoints |
 | `tests/test_web_startup.py` | focused coverage for web startup |

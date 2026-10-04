@@ -42,6 +42,9 @@ def test_deep_review_keeps_local_result_when_ai_fails(monkeypatch):
     assert result["status"] == "partial"
     assert result["base_version_id"] == "v1"
     assert result["ai_error"] == "模型服务调用失败，请检查配置或稍后重试。"
+    assert result["execution"]["status"] == "partial"
+    assert result["execution"]["ai"] == {"status": "failed", "error": result["ai_error"]}
+    assert result["execution"]["local"] == {"status": "complete", "error": ""}
 
 
 def test_deep_review_retains_fixed_version_bound_specialist_route(monkeypatch):
@@ -56,6 +59,60 @@ def test_deep_review_retains_fixed_version_bound_specialist_route(monkeypatch):
     assert calls == ["reviewer", "timing_planner"]
     assert result["multi_agent"]["binding"]["version_id"] == "v1"
     assert result["multi_agent"]["authority"]["may_import"] is False
+    assert result["execution"]["status"] == "complete"
+    assert result["execution"]["ai"] == {"status": "complete", "error": ""}
+
+
+def test_deep_review_preserves_completed_advice_when_timing_call_fails(monkeypatch):
+    calls = []
+    def specialist(role, payload, **kwargs):
+        calls.append(role)
+        if role == "timing_planner":
+            raise ValueError("Offline timing failure")
+        return _specialist_output(payload, title="completed_review")
+    monkeypatch.setattr(api, "run_multi_agent_specialist", specialist)
+    original = _ladder()
+    frozen = copy.deepcopy(original)
+    result = InspectionWorkflow("review", "program_review", {}, original, "v1", "FX3U",
+                                project_id="p1", provider=object()).run()
+    assert calls == ["reviewer", "timing_planner"]
+    assert original == frozen and result["base_version_id"] == "v1"
+    assert any(item["title"] == "completed_review" for item in result["findings"])
+    assert result["status"] == result["execution"]["status"] == "partial"
+    assert result["ai_status"] == result["execution"]["ai"]["status"] == "failed"
+    assert "multi_agent" not in result
+
+
+@pytest.mark.parametrize("partial_role", ["reviewer", "timing_planner"])
+def test_deep_review_does_not_report_incomplete_specialist_advice_as_complete(monkeypatch, partial_role):
+    def specialist(role, payload, **kwargs):
+        result = _specialist_output(payload, title=role)
+        if role == partial_role:
+            result["status"] = "partial"
+        return result
+    monkeypatch.setattr(api, "run_multi_agent_specialist", specialist)
+    result = InspectionWorkflow("review", "program_review", {}, _ladder(), "v1", "FX3U",
+                                project_id="p1", provider=object()).run()
+    assert result["status"] == result["execution"]["status"] == "partial"
+    assert result["ai_status"] == result["execution"]["ai"]["status"] == "partial"
+    assert result["base_version_id"] == "v1"
+
+
+def test_deep_review_without_api_key_has_consistent_terminal_state(monkeypatch):
+    monkeypatch.setattr(InspectionWorkflow, "_api_key_available", staticmethod(lambda: False))
+    result = InspectionWorkflow("review", "program_review", {}, _ladder(), "v1", "FX3U").run()
+    assert result["status"] == result["execution"]["status"] == "local_only"
+    assert result["ai_status"] == result["execution"]["ai"]["status"] == "skipped_no_key"
+    assert result["ai_error"] == result["execution"]["ai"]["error"]
+
+
+def test_deep_review_preserves_unsupported_result_without_calling_model(monkeypatch):
+    monkeypatch.setattr(api, "run_multi_agent_specialist", lambda *a, **k: pytest.fail("Unsupported review called model"))
+    result = InspectionWorkflow("review", "program_review", {}, {"st_code": "Y0 := X0;"}, "v1", "FX3U",
+                                project_id="p1", provider=object()).run()
+    assert result["status"] == result["execution"]["status"] == "unsupported"
+    assert result["execution"]["ai"]["status"] == "not_requested"
+    assert result["base_version_id"] == "v1"
 
 
 @pytest.mark.parametrize("stale", [False, True])

@@ -133,7 +133,7 @@ def test_generation_contract_uses_only_stdlib_and_authoritative_instruction_regi
     # registry. Keep that single source of truth instead of copying an allowlist.
     allowed = {"__future__", "copy", "re", "typing", "dataclasses", "json", "hashlib"}
     assert set(_imports(SOURCE_ROOT / "agent_runtime/messages.py")) <= allowed
-    assert set(_imports(SOURCE_ROOT / "plc/generation_contract.py")) <= allowed | {"plc.instructions"}
+    assert set(_imports(SOURCE_ROOT / "plc/generation_contract.py")) <= allowed | {"plc.instructions", "plc.instruction_binding"}
 
 
 def test_external_tool_runtime_has_no_model_or_credential_dependency():

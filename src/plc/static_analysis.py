@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 import json
 import re
+from collections import Counter
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from plc.ir import analyze_instruction_access
@@ -27,6 +28,8 @@ RULE_IDS = (
     "EDGE_MISUSE",
     "INIT_VALUE_OVERWRITE_WARNING",
     "TIMER_CANNOT_COMPLETE",
+    "REPEATED_GUARD_INVALIDATED",
+    "TIMER_OUTPUT_FEEDBACK",
     "UNREACHABLE_STATE",
     "DEAD_END_STATE",
     "SCAN_BUDGET_WARNING",
@@ -279,14 +282,16 @@ def normalize_analysis_config(
     }
 
 
-def _writer_index(networks: Sequence[Mapping[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+def _writer_index(
+    networks: Sequence[Mapping[str, Any]], *, plc_model: str = "FX3U"
+) -> Dict[str, List[Dict[str, Any]]]:
     result: Dict[str, List[Dict[str, Any]]] = {}
     for network in networks or []:
         for instruction in network.get("instructions") or []:
             if not isinstance(instruction, Mapping):
                 continue
             reads, writes = analyze_instruction_access(
-                instruction.get("op"), instruction.get("args") or []
+                instruction.get("op"), instruction.get("args") or [], plc_model=plc_model
             )
             for address in writes:
                 raw_path = str(instruction.get("path") or "")
@@ -309,11 +314,11 @@ def _writer_index(networks: Sequence[Mapping[str, Any]]) -> Dict[str, List[Dict[
 
 
 def build_device_dependency_graph(
-    networks: Sequence[Mapping[str, Any]],
+    networks: Sequence[Mapping[str, Any]], *, plc_model: str = "FX3U"
 ) -> Dict[str, Any]:
     """Build device and scan-order edges without assigning blame."""
 
-    writers = _writer_index(networks)
+    writers = _writer_index(networks, plc_model=plc_model)
     readers: Dict[str, List[Dict[str, Any]]] = {}
     direct_edges = {}
     nodes = set()
@@ -445,7 +450,7 @@ def _flatten_inputs(elements: Sequence[Mapping[str, Any]]) -> Iterable[Mapping[s
             yield element
 
 
-def _series_nc_for_output(network: Mapping[str, Any], path: str, other: str) -> bool:
+def _series_inputs_for_output(network: Mapping[str, Any], path: str) -> List[Mapping[str, Any]]:
     rung = network.get("ladder") or {}
     candidates = []
     header = rung.get("header_element")
@@ -468,11 +473,44 @@ def _series_nc_for_output(network: Mapping[str, Any], path: str, other: str) -> 
                 for item in (branches[index].get("inputs") or [])
                 if isinstance(item, Mapping) and item.get("type") != "parallel_block"
             )
+    return candidates
+
+
+def _series_nc_for_output(network: Mapping[str, Any], path: str, other: str) -> bool:
     return any(
         str(item.get("type") or "").upper() == "NC"
         and _device(item.get("address")) == other
-        for item in candidates
+        for item in _series_inputs_for_output(network, path)
     )
+
+
+def _initial_reset_owners(writers, by_id, plc_model):
+    from plc.semantics import _first_scan_devices
+    first_scan = _first_scan_devices(plc_model)
+    owners = set()
+    for address, rows in writers.items():
+        ordinary = [row for row in rows if row["op"] in {"OUT", "PLS", "PLF"}]
+        if len(ordinary) != 1 or len(rows) < 2:
+            continue
+        owner = ordinary[0]
+        if all(
+            row["op"] in {"RST", "ZRST"}
+            and row["order"] < owner["order"]
+            and any(
+                str(item.get("type") or "").upper() in {"NO", "P", "RISING"}
+                and _device(item.get("address")) in first_scan
+                for item in _series_inputs_for_output(by_id[row["network"]], row["path"])
+            )
+            for row in rows if row is not owner
+        ):
+            owners.add(address)
+    return owners
+
+
+def initial_reset_coil_owners(networks, *, plc_model="FX3U"):
+    """Ordinary/pulse coil owners with proven earlier first-scan resets."""
+    return _initial_reset_owners(_writer_index(networks, plc_model=plc_model),
+        {str(item.get("id") or ""): item for item in networks}, plc_model)
 
 
 def _timer_findings(networks: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
@@ -516,6 +554,162 @@ def _timer_findings(networks: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any
     return findings
 
 
+def _bit_condition_expression(elements, *, depth=0):
+    """Project understood contacts into the existing Core expression language."""
+    from plc.device_identity import canonical_device
+    from plc.instruction_definition import Expression, ValueType
+    if depth > 6 or len(elements) > 32:
+        return None
+    bit = ValueType("bool", 1)
+    result = Expression("constant", bit, value=True)
+    for element in elements:
+        if element is None:
+            continue
+        if not isinstance(element, Mapping):
+            return None
+        kind = str(element.get("type") or "").upper()
+        if kind == "PARALLEL_BLOCK":
+            children = [_bit_condition_expression(branch, depth=depth + 1)
+                        for branch in element.get("branches") or []]
+            if not children or any(child is None for child in children):
+                return None
+            value = Expression("constant", bit, value=False)
+            for child in children:
+                value = Expression("or", bit, (value, child))
+        else:
+            address = canonical_device(str(element.get("address") or ""))
+            if not re.fullmatch(r"(?:SM|[XYMSTC])\d+", address):
+                return None
+            value = Expression("device", bit, name=address)
+            if kind == "NC":
+                value = Expression("not", bit, (value,))
+            elif kind in {"P", "F"} and address.startswith("X"):
+                previous = Expression("state", bit, name=address)
+                positive, negative = (value, previous) if kind == "P" else (previous, value)
+                value = Expression("and", bit, (positive, Expression("not", bit, (negative,))))
+            elif kind != "NO":
+                return None
+        result = Expression("and", bit, (result, value))
+    return result
+
+
+def _repeated_guard_findings(networks):
+    """Find bit assignments where a repeated branch guard changes after writes.
+
+    The rung's common enable is evaluated once and reused. Branch-local
+    contacts are evaluated at each branch. This is a bounded local witness,
+    not proof that the whole program can reach the assignment.
+    """
+    from itertools import product
+    from plc.instruction_definition import evaluate_expression
+    findings = []
+    for network in networks:
+        rung = network.get("ladder") or {}
+        branches = rung.get("branches") or []
+        common = _bit_condition_expression([rung.get("header_element"), *rung.get("shared_inputs", [])])
+        if common is None:
+            continue
+        for index in range(len(branches) - 1):
+            before_branch, after_branch = branches[index:index + 2]
+            guard = _bit_condition_expression(before_branch.get("inputs") or [])
+            if guard is None or guard != _bit_condition_expression(after_branch.get("inputs") or []):
+                continue
+            updates, write_paths = {}, []
+            for output_index, output in enumerate(before_branch.get("outputs") or []):
+                kind = str(output.get("type") or "").upper()
+                op = str(output.get("opcode") or "").upper()
+                args = output.get("operands") or []
+                if kind == "COIL":
+                    address, value = _device(output.get("address")), True
+                elif kind == "APP_INSTR" and op in {"SET", "RST"} and len(args) == 1:
+                    address, value = _device(args[0]), op == "SET"
+                else:
+                    updates = {}
+                    break
+                if not address:
+                    updates = {}
+                    break
+                updates[address] = value
+                write_paths.append(f"branches[{index}].outputs[{output_index}]")
+            if not updates:
+                continue
+            def leaves(expression):
+                return ([(expression.op, expression.name)] if expression.op in {"device", "state"}
+                        else [leaf for child in expression.args for leaf in leaves(child)])
+            guard_devices = {name for op, name in leaves(guard) if op == "device"}
+            affected = sorted(set(updates) & guard_devices)
+            variables = sorted(set(leaves(common) + leaves(guard)))
+            if not affected or len(variables) > 10:
+                continue
+            witness = None
+            for values in product((False, True), repeat=len(variables)):
+                current = {name: value for (op, name), value in zip(variables, values) if op == "device"}
+                previous = {name: value for (op, name), value in zip(variables, values) if op == "state"}
+                if (evaluate_expression(common, current, state=previous)
+                        and evaluate_expression(guard, current, state=previous)
+                        and not evaluate_expression(guard, {**current, **updates}, state=previous)):
+                    witness = {"before": current, "previous_inputs": previous,
+                               "writes": updates, "next_branch_enabled": False}
+                    break
+            if witness is not None:
+                prefix = f"$.rungs[{int(network.get('order') or 0)}]."
+                findings.append(_finding(
+                    "REPEATED_GUARD_INVALIDATED", "warning",
+                    f"同一梯级重复判断 {'/'.join(affected)}；前一分支写入后，后一分支可能不再执行。",
+                    "若两项动作应同时执行，将使能放在公共条件中；核对各分支是否应读取写入前或写入后的值。",
+                    addresses=affected, networks=[network["id"]], rung_ids=[network.get("rung_id")],
+                    paths=[prefix + path for path in write_paths] + [prefix + f"branches[{index + 1}].inputs"],
+                    evidence=["proof_scope=adjacent_repeated_bit_guard", json.dumps(witness, sort_keys=True)],
+                    confidence="medium",
+                ))
+    return findings
+
+
+def _timer_feedback_findings(networks, plc_model):
+    from plc.semantics import timer_resets_when_disabled
+    from plc.specification.approach import _expand_contact_paths
+    timers, coils, timer_writers = [], [], Counter()
+    for network in networks:
+        rung = network.get("ladder") or {}
+        for branch_index, branch in enumerate(rung.get("branches") or []):
+            conditions = [rung.get("header_element"), *rung.get("shared_inputs", []), *branch.get("inputs", [])]
+            paths = _expand_contact_paths(conditions, include_edges=True)
+            for output_index, output in enumerate(branch.get("outputs") or []):
+                kind = str(output.get("type") or "").upper()
+                item = {"address": _device(output.get("address")), "network": network,
+                        "path": f"$.rungs[{int(network.get('order') or 0)}].branches[{branch_index}].outputs[{output_index}]",
+                        "paths": paths}
+                if kind == "TIMER":
+                    timer_writers[item["address"]] += 1
+                if kind == "TIMER" and timer_resets_when_disabled(item["address"], plc_model) is True:
+                    timers.append(item)
+                elif kind == "COIL" and re.fullmatch(r"(?:Y|M|S)\d+", item["address"]):
+                    coils.append(item)
+    findings = []
+    for timer in timers:
+        if timer_writers[timer["address"]] != 1:
+            continue
+        for coil in coils:
+            if (int(timer["network"].get("order") or 0) >= int(coil["network"].get("order") or 0)
+                    or not timer["paths"]
+                    or not all("NC " + coil["address"] in path for path in timer["paths"])
+                    or not any("NO " + timer["address"] in path for path in coil["paths"])):
+                continue
+            findings.append(_finding(
+                "TIMER_OUTPUT_FEEDBACK", "warning",
+                f"{coil['address']} 的输出路径要求 {timer['address']} 完成，但该定时器又要求 {coil['address']}=0；输出 ON 后该路径会因定时器复位而关断。",
+                "持续输出应由状态或保持条件驱动；若设计为单扫描脉冲，确认这一反馈符合规格。",
+                addresses=[timer["address"], coil["address"]],
+                networks=[timer["network"]["id"], coil["network"]["id"]],
+                rung_ids=[timer["network"].get("rung_id"), coil["network"].get("rung_id")],
+                paths=[timer["path"], coil["path"]],
+                evidence=["timer_disable_resets_contact=FX3-programming-Rev.R:pdf100",
+                          "timer NC output is present on every known path; output NO timer is present on a path"],
+                confidence="medium",
+            ))
+    return findings
+
+
 def analyze_static_program(
     networks: Sequence[Mapping[str, Any]],
     *,
@@ -528,16 +722,19 @@ def analyze_static_program(
     """Run all deterministic P4 rules over a canonical network list."""
 
     normalized_config = normalize_analysis_config(config, devices=devices)
-    graph = build_device_dependency_graph(networks)
+    graph = build_device_dependency_graph(networks, plc_model=plc_model)
     writers = graph["writers"]
     by_id = {str(item.get("id") or ""): item for item in networks or []}
+    initialized_coils = _initial_reset_owners(writers, by_id, plc_model)
     findings: List[Dict[str, Any]] = []
 
     for address, rows in writers.items():
         if not address.startswith(("Y", "M")) or len(rows) < 2:
             continue
         kinds = {row["op"] for row in rows}
-        if kinds <= {"SET", "RST"}:
+        if kinds <= {"SET", "RST", "ZRST"}:
+            continue
+        if address in initialized_coils:
             continue
         severity = "error" if kinds == {"OUT"} else "warning"
         findings.append(
@@ -556,7 +753,7 @@ def analyze_static_program(
 
     for address, rows in writers.items():
         sets = [row for row in rows if row["op"] == "SET"]
-        resets = [row for row in rows if row["op"] == "RST"]
+        resets = [row for row in rows if row["op"] in {"RST", "ZRST"}]
         if not sets or resets:
             continue
         context = " ".join(
@@ -696,6 +893,8 @@ def analyze_static_program(
         )
 
     findings.extend(_timer_findings(networks))
+    findings.extend(_repeated_guard_findings(networks))
+    findings.extend(_timer_feedback_findings(networks, plc_model))
 
     configured_terminal = normalized_config["terminal_states"]
     state_results = []
@@ -877,6 +1076,7 @@ __all__ = [
     "STATIC_ANALYSIS_SCHEMA_VERSION",
     "analyze_static_program",
     "build_device_dependency_graph",
+    "initial_reset_coil_owners",
     "normalize_analysis_config",
     "trace_upstream",
 ]

@@ -60,7 +60,12 @@ def test_verified_opcode_identity_does_not_harden_partial_signature():
         assert spec.min_operands is None
         assert spec.max_operands is None
         assert spec.operands == ()
-        assert opcode in generation_app_instr_mnemonics("FX3U")
+        # Opcode identity does not override a source-reviewed CPU exclusion.
+        if opcode == "ABS":
+            assert opcode not in generation_app_instr_mnemonics("FX3U")
+            assert DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu="FX3U").replacement_for_cpu("FX3U") == "DABS"
+        else:
+            assert opcode in generation_app_instr_mnemonics("FX3U")
 
     # Manually verified contracts keep their stronger semantics.
     zrst = DEFAULT_INSTRUCTION_REGISTRY.resolve("ZRST")
@@ -148,8 +153,12 @@ def test_exact_opcode_retrieval_uses_audited_manual_precedence():
     }
     for opcode, manual_id in expected.items():
         results = _opcode_instruction_results(opcode)
-        assert len(results) == 1, (opcode, results)
+        assert results, opcode
         assert results[0]["manual_id"] == manual_id, (opcode, results[0])
+        # Literal chapter ownership now returns the chapter's source units,
+        # rather than the historical first-mention row alone.
+        assert all(row.get("compiled_source_chapter") for row in results)
+        assert len({row['id'] for row in results}) == len(results)
 
 
 # Generation schema/prompt opcode exposure is owned here so the registry,
@@ -242,11 +251,13 @@ def test_native_order_is_not_replaced_by_structured_st_argument_order():
 
 @pytest.mark.parametrize("opcode", ["MOV", "DMOVP", "WSFL", "PID", "DRVA", "DDRVA", "ANR"])
 def test_fx3u_promotions_do_not_leak_into_fx5u_or_model_neutral_import(opcode):
+    from dataclasses import replace
     neutral = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode)
     fx3 = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu="FX3U")
     fx5 = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu="FX5U")
     assert fx3.verified_fields and not neutral.verified_fields and not fx5.verified_fields
-    assert fx5 is neutral
+    assert replace(fx5, definition_facts=(), source_materials=(), uninterpreted_content=()) == neutral
+    assert all(g.status != 'source_verified' for g in fx5.definition_facts)
     assert fx3.operands == neutral.operands  # no guessed read/write semantics
     assert fx3.cpu_support == neutral.cpu_support
 
@@ -285,7 +296,11 @@ def test_instruction_template_icon_is_not_an_executable_mnemonic():
     definition = native["EADD"][0]
     assert "EADD" in definition["format"]
     assert "EADD" not in definition["forms"] and "DEADD" in definition["forms"]
-    assert not DEFAULT_INSTRUCTION_REGISTRY.resolve("EADD", cpu="FX3U").verified_fields
+    spec = DEFAULT_INSTRUCTION_REGISTRY.resolve("EADD", cpu="FX3U")
+    assert spec.verified_fields == ("cpu_applicability",)
+    assert not spec.supports_cpu("FX3U")
+    assert spec.replacement_for_cpu("FX3U") == "DEADD"
+    assert "EADD" not in generation_app_instr_mnemonics("FX3U")
 
 
 @pytest.mark.parametrize("mutation", ["arity", "duplicate", "missing_proof", "foreign_cpu", "bad_symbol", "bad_metadata"])
@@ -336,6 +351,17 @@ def test_operand_semantic_audit_covers_entire_registry_and_is_read_only():
         key: value for key, value in report.items() if key != "rows"
     }
     assert json.loads(SUMMARY.read_text(encoding="utf-8")) == expected_summary
+
+
+@pytest.mark.parametrize('newline', [b'\n', b'\r\n'])
+def test_operand_audit_preserves_frozen_ledger_identity_across_checkout_newlines(tmp_path, monkeypatch, newline):
+    from tools import audit_operand_semantics as audit
+    source = audit.SIGNATURE_LEDGER.read_bytes().replace(b'\r\n', b'\n')
+    ledger_path = tmp_path / 'signature.json'
+    ledger_path.write_bytes(source.replace(b'\n', newline))
+    monkeypatch.setattr(audit, 'SIGNATURE_LEDGER', ledger_path)
+    ledger, _ = audit.build()
+    assert ledger == json.loads(audit.OUTPUT.read_text(encoding='utf-8'))
 
 
 def test_operand_semantic_verification_is_target_scoped():

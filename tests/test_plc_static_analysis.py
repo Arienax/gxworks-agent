@@ -1,5 +1,7 @@
 import copy
 
+import pytest
+
 from plc.ir import apply_network_patch, build_plc_ir, canonical_sha256
 from plc.semantics import infer_semantic_requirements
 from plc.static_analysis import trace_upstream
@@ -81,6 +83,101 @@ def test_dependency_graph_supports_forward_and_reverse_root_cause_trace():
     trace = trace_upstream(program["analysis"], "Y0")
     assert set(trace["devices"]) == {"X0", "M0", "D0", "Y0"}
     assert trace["roots"] == ["X0"]
+
+
+@pytest.mark.parametrize("model,first_scan,reset", [
+    ("FX3U", "M8002", "RST"), ("FX3U", "M8002", "ZRST"), ("FX5U", "SM402", "RST")])
+def test_first_scan_reset_before_single_coil_is_not_an_output_ownership_conflict(model, first_scan, reset):
+    args = ["Y0"] if reset == "RST" else ["Y0", "Y1"]
+    data = ladder(rung(1, inputs=[contact("NO", first_scan)], outputs=[instruction(reset, args)]),
+                  rung(2, inputs=[contact("NO", "X0")], outputs=[coil("Y0")]))
+    program = build_plc_ir(data, plc_model=model)
+    assert "MULTIPLE_WRITER" not in finding_codes(program)
+    assert len(program["analysis"]["dependency_graph"]["writers"]["Y0"]) == 2
+
+
+@pytest.mark.parametrize("output_type", ["PLS", "PLF"])
+@pytest.mark.parametrize("late", [False, True])
+def test_initial_range_reset_with_pulse_coil_respects_scan_order(output_type, late):
+    init = rung(1, inputs=[contact("NO", "M8002")], outputs=[instruction("ZRST", ["M10", "M19"])])
+    owner = rung(2, inputs=[contact("NO", "X0")], outputs=[{"type": output_type, "address": "M11"}])
+    program = build_plc_ir(ladder(owner, init) if late else ladder(init, owner))
+    assert ("MULTIPLE_WRITER" in finding_codes(program)) is late
+
+
+@pytest.mark.parametrize("guard,late", [("NO", True), ("NC", False), ("parallel", False), ("level", False)])
+def test_unproven_or_late_initial_reset_keeps_ownership_warning(guard, late):
+    inputs = [contact(guard, "M8002")]
+    if guard == "parallel":
+        inputs = [{"type": "parallel_block", "branches": [[contact("NO", "M8002")], [contact("NO", "X3")]]}]
+    elif guard == "level":
+        inputs = [contact("NO", "X3")]
+    init = rung(2 if late else 1, inputs=inputs, outputs=[instruction("ZRST", ["Y0", "Y1"])])
+    owner = rung(1 if late else 2, inputs=[contact("NO", "X0")], outputs=[coil("Y0")])
+    data = ladder(owner, init) if late else ladder(init, owner)
+    assert "MULTIPLE_WRITER" in finding_codes(build_plc_ir(data))
+
+
+@pytest.mark.parametrize("kind,opcode,changed", [
+    ("NO", "RST", True), ("NO", "SET", False), ("NC", "SET", True), ("NC", "RST", False)])
+def test_repeated_guard_finds_only_a_write_that_disables_the_next_branch(kind, opcode, changed):
+    data = ladder(rung(1))
+    data["rungs"][0]["branches"] = [
+        {"branch_id": 1, "inputs": [contact(kind, "M10"), contact("P", "X0")],
+         "outputs": [instruction(opcode, ["M10"])]},
+        {"branch_id": 2, "inputs": [contact(kind, "M10"), contact("P", "X0")],
+         "outputs": [instruction("RST", ["M11"])]},
+    ]
+    program = build_plc_ir(data)
+    matches = [f for f in program["analysis"]["findings"] if f["code"] == "REPEATED_GUARD_INVALIDATED"]
+    assert bool(matches) is changed
+    if changed:
+        assert matches[0]["addresses"] == ["M10"]
+        assert matches[0]["rung_ids"] == [1]
+        assert any("branches[1].inputs" in path for path in matches[0]["json_paths"])
+
+
+@pytest.mark.parametrize("mode", ["shared", "unrelated_write", "cancelled_write", "unknown_compare", "oversized"])
+def test_repeated_guard_does_not_guess_beyond_its_local_proof(mode):
+    data = ladder(rung(1))
+    inputs = [contact("NO", "M10")]
+    outputs = [instruction("RST", ["M10"])]
+    if mode == "shared":
+        data["rungs"][0]["shared_inputs"] = inputs
+        inputs = []
+    elif mode == "unrelated_write":
+        outputs = [instruction("RST", ["M12"])]
+    elif mode == "cancelled_write":
+        outputs.append(instruction("SET", ["M10"]))
+    elif mode == "unknown_compare":
+        inputs.append(compare("= D0 K1"))
+    elif mode == "oversized":
+        inputs += [contact("NO", f"X{i:o}") for i in range(11)]
+    data["rungs"][0]["branches"] = [
+        {"branch_id": 1, "inputs": copy.deepcopy(inputs), "outputs": outputs},
+        {"branch_id": 2, "inputs": copy.deepcopy(inputs), "outputs": [instruction("RST", ["M11"])]}]
+    assert "REPEATED_GUARD_INVALIDATED" not in finding_codes(build_plc_ir(data))
+
+
+@pytest.mark.parametrize("model,timer_address,output_type,timer_kind,expected", [
+    ("FX3U", "T0", "COIL", "NC", True), ("FX3U", "T200", "COIL", "NC", True),
+    ("FX3U", "T250", "COIL", "NC", False), ("FX3U", "T0", "PLS", "NC", False),
+    ("FX3U", "T0", "COIL", "NO", False), ("FX5U", "T0", "COIL", "NC", False),
+])
+def test_timer_output_feedback_uses_known_disable_behavior_and_explicit_contacts(model, timer_address, output_type, timer_kind, expected):
+    data = ladder(rung(1, inputs=[contact(timer_kind, "M10")], outputs=[timer(timer_address, "K20")]),
+                  rung(2, inputs=[contact("NO", timer_address)], outputs=[{"type": output_type, "address": "M10"}]))
+    assert ("TIMER_OUTPUT_FEEDBACK" in finding_codes(build_plc_ir(data, plc_model=model))) is expected
+
+
+def test_timer_feedback_does_not_assume_a_contact_resets_with_another_timer_writer():
+    data = ladder(
+        rung(1, inputs=[contact("NC", "M10")], outputs=[timer("T0", "K20")]),
+        rung(2, inputs=[contact("NO", "X0")], outputs=[timer("T0", "K20")]),
+        rung(3, inputs=[contact("NO", "T0")], outputs=[coil("M10")]),
+    )
+    codes = finding_codes(build_plc_ir(data))
+    assert "TIMER_OUTPUT_FEEDBACK" not in codes
 
 
 def test_scan_dependencies_are_facts_and_only_explicit_expectation_becomes_warning():

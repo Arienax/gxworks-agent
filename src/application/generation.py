@@ -384,6 +384,8 @@ class GenerationWorkflow:
                         "mode": "confirmed_spec",
                         "model_calls": int(result.get("model_calls", 1)),
                     }
+                    if (result.get('operation_binding') or {}).get('receipts'):
+                        generation_agent_metadata['operation_binding'] = copy.deepcopy(result['operation_binding'])
                     validation_messages.append(
                         tr('已由独立生成 Agent 根据确认规格一次生成完整 ladder_v1')
                     )

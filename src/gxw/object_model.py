@@ -20,7 +20,7 @@ from .models import (
     COIL_NODE_KINDS, CONTACT_NODE_KINDS, GXWFormatError, NodeKind, Point, PortDescriptor, Rect, StructuredBlock, StructuredProgram,
 )
 from .project_metadata import logical_mapping
-from .project_writer import build_gxw_project
+from .project_writer import prepare_project_write, write_prepared_project
 from .semantic import DEFAULT_FUNCTION_BLOCK_REGISTRY, build_semantic_model
 from .structured_pou import _parse_node, parse_structured_pou
 from .structured_pou_writer import serialize_structured_pou
@@ -155,7 +155,7 @@ def read_project(raw, logical_name=None):
     program = parse_structured_pou(payloads[mapping[logical_name]], logical_name=logical_name,
                                    preserve_unsupported_records=True)
     declarations = {k: parse_declarations(payloads[v], logical_name=k) for k, v in mapping.items()
-                    if k.endswith((".Labels.lh", ".gh")) and v in payloads}
+                    if k.endswith((".Labels.lh", ".gh", ".lnl")) and v in payloads}
     return program, declarations, names
 
 
@@ -214,7 +214,8 @@ def export_object_model(program, declarations=None, *, sources=None):
                       "ports": _ports(n, sources)})
     class_names = {v: k for k, v in CLASS_CODES.items()}
     labels = {name: [{"name": r.name, "data_type": r.data_type,
-                     "kind": "function_block" if r.type_code == 15 else "variable",
+                     "kind": sources.declaration_kind(r) if sources else
+                             "function_block" if r.type_code == 15 else "variable",
                      "class_name": class_names.get(r.class_code, str(r.class_code)),
                      "initial_value": r.initial_value, "device": r.device,
                      "iec_address": r.iec_address, "comment": r.comment}
@@ -447,7 +448,8 @@ def build_object_program(source, model, *, sources=None, original_sources=None):
     return result
 
 
-def generate_object_project(model, *, baseline=None):
+def prepare_object_project(model, *, baseline=None):
+    """Apply the existing editor rules before selecting a project save backend."""
     if not isinstance(model, dict):
         raise GXWFormatError("GXW object model must be an object")
     raw = default_baseline() if baseline is None else baseline
@@ -480,9 +482,12 @@ def generate_object_project(model, *, baseline=None):
         for old_name in patch.get('renames', {}):
             if patch['renames'][old_name].casefold() == old_name.casefold():
                 continue
-            reference = re.compile(r'(?<![A-Za-z0-9_])' + re.escape(old_name) + r'(?![A-Za-z0-9_])', re.IGNORECASE)
+            reference = re.compile(r'(?<!\w)' + re.escape(old_name) + r'(?!\w)', re.IGNORECASE)
             if any(node.kind != NodeKind.FUNCTION and reference.search(node.symbol) for node in program.nodes):
-                raise GXWFormatError('renamed label still has a graph reference; update graph and declaration together: ' + old_name)
+                original_sources = sources or ProjectCallableSources.from_project(raw, source.logical_name, documents)
+                binding = original_sources.label(old_name)
+                if binding is None or binding[0] == logical:
+                    raise GXWFormatError('renamed label still has a graph reference; update graph and declaration together: ' + old_name)
     # Reject edits that would silently re-create a removed/renamed FB instance,
     # or overwrite an explicitly edited type during automatic FB synchronization.
     if changed:
@@ -490,6 +495,10 @@ def generate_object_project(model, *, baseline=None):
             if node.kind == NodeKind.FUNCTION_BLOCK:
                 prior = (sources or context.with_declarations(documents)).label(node.symbol)
                 binding = context.label(node.symbol)
-                if prior and not binding or binding and (binding[1].type_code != 15 or binding[1].data_type != node.type_name):
+                if prior and not binding or binding and (binding[1].type_code not in (0, 15) or binding[1].data_type != node.type_name):
                     raise GXWFormatError('FB graph and edited declaration must have the same instance name and type: ' + node.symbol)
-    return build_gxw_project(raw, program, declarations=changed, sync_fb_declarations=True)
+    return prepare_project_write(raw, program, declarations=changed, sync_fb_declarations=True)
+
+
+def generate_object_project(model, *, baseline=None):
+    return write_prepared_project(prepare_object_project(model, baseline=baseline))

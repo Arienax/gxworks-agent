@@ -11,6 +11,18 @@
       "language": "en",
       "manual_type": "programming",
       "plc_models": ["FX3S", "FX3G", "FX3GC", "FX3U", "FX3UC"],
+      "instruction_layout": {
+        "model_badges": [
+          {"model": "FX3S", "bbox": [308.94, 105.12, 351.48, 127.74]},
+          {"model": "FX3G", "bbox": [357.12, 105.12, 399.72, 127.74]},
+          {"model": "FX3GC", "bbox": [404.82, 105.42, 447.42, 128.10]},
+          {"model": "FX3U", "bbox": [453.06, 105.12, 495.60, 127.74]},
+          {"model": "FX3UC", "bbox": [501.24, 105.12, 543.78, 127.74]}
+        ],
+        "highlight_fill_color": 1.0,
+        "coordinate_tolerance": 0.5,
+        "review_status": "candidate_evidence"
+      },
       "priority": 100,
       "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
       "sha256": "42ccf0ec3a210740354905a577012edfa2e030b6dc48fb856d91d40f175d1556"

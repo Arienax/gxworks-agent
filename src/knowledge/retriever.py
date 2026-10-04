@@ -338,8 +338,8 @@ def build_knowledge_context(
 
     available = budget - len(header)
     available_tokens = (token_limit - header_tokens) if token_limit is not None else None
-    # The public top_k still caps included blocks. Recall a bounded larger pool
-    # so a long first chunk does not hide a shorter usable factual reference.
+    # top_k caps primary references. Explicit process dependencies are packed
+    # separately below, within the same final character/token allowance.
     # Explicit opt-in only, including direct calls that bypass the assembler.
     design_enabled = task == "analysis" and bool(include_design)
     manifest["design_enabled"] = design_enabled
@@ -393,6 +393,7 @@ def build_knowledge_context(
         exclude_structured_target_hits, resolve_device_records,
         resolve_error_records, resolve_instruction_records,
         structured_fact_targets, without_structured_targets,
+        resolve_process_records,
     )
 
     provided_structured = (
@@ -420,6 +421,7 @@ def build_knowledge_context(
     instruction_targets = list(exact_targets.get("instructions") or ())
     device_targets = list(exact_targets.get("devices") or ())
     error_targets = list(exact_targets.get("errors") or ())
+    process_targets = list(exact_targets.get("process") or ())
     direct_results = []
     fact_report = None
 
@@ -429,6 +431,8 @@ def build_knowledge_context(
             targeted, fact_report = retrieve_instruction_facts(
                 query, plc_model=plc_model, task_type=task,
                 char_budget=available - design_used, targets=instruction_targets,
+                token_budget=available_tokens - design_used_tokens if available_tokens is not None else None,
+                primary_slots=fact_slots,
             )
             direct_results.extend(targeted)
         else:
@@ -443,6 +447,8 @@ def build_knowledge_context(
         direct_results.extend(resolve_error_records(
             error_targets, plc_model=plc_model, task_type=task,
         ))
+    if plan["facts"] and process_targets:
+        direct_results.extend(resolve_process_records(process_targets, plc_model=plc_model, task_type=task))
 
     # Close a structured owner lane only after every explicit target of that
     # kind actually produced eligible direct evidence. Unresolved direct lookup
@@ -453,7 +459,8 @@ def build_knowledge_context(
 
     # The broad retriever sees only the residual prose. Structured-owner rows
     # covered above are removed before entity/BM25/dense candidate limits.
-    residual_query = without_structured_targets(query, exact_targets)
+    residual_source = query_meta.get("residual_fact_query", query) if isinstance(query_meta, dict) else query
+    residual_query = without_structured_targets(residual_source, exact_targets)
     should_retrieve_residual = bool(plan["facts"] and residual_query.strip())
     if should_retrieve_residual and task in {"generate", "edit"} and getattr(query, "precompiled", False):
         from knowledge.analysis_router import has_generation_fact_target
@@ -473,6 +480,7 @@ def build_knowledge_context(
             "instructions": instruction_targets,
             "devices": device_targets,
             "errors": error_targets,
+            "process": process_targets,
         },
         "record_ids": [str(item.get("id")) for item in direct_results if item.get("id")],
         "direct_covered_kinds": sorted(covered_kinds),
@@ -490,8 +498,22 @@ def build_knowledge_context(
         "residual_query_sha256": text_sha256(residual_query),
     }
     fact_token_budget = (available_tokens - design_used_tokens) if available_tokens is not None else None
-    fact_blocks, fact_records, _, fact_used_tokens = select(
-        fact_results, fact_slots, available - design_used, fact_token_budget)
+    process_results = [row for row in fact_results if row.get("fact_kind") == "process"]
+    primary_results = [row for row in fact_results if row.get("fact_kind") != "process"]
+    fact_blocks, fact_records, fact_used, fact_used_tokens = select(
+        primary_results, fact_slots, available - design_used, fact_token_budget)
+    # FIRST_SCAN/TIMER/COUNTER facts answer explicit confirmed resource needs.
+    # They must not compete with the last designated instruction for top-k.
+    # No extra broad recall or budget increase is introduced.
+    process_blocks, process_records, _, process_used_tokens = select(
+        process_results, min(3, len(process_targets)), available - design_used - fact_used,
+        fact_token_budget - fact_used_tokens if fact_token_budget is not None else None,
+    )
+    fact_blocks.extend(process_blocks)
+    fact_records.extend(process_records)
+    fact_used_tokens += process_used_tokens
+    manifest["primary_top_k"] = count
+    manifest["process_dependency_ids"] = [record["id"] for record in process_records]
     included_fact_ids = [record["id"] for record in fact_records]
     from knowledge.fact_coverage import build_fact_coverage
     instruction_questions = (
@@ -504,7 +526,8 @@ def build_knowledge_context(
         included_fact_ids,
         instruction_questions=instruction_questions,
         extra_requirements=[*(fact_report.get("operand_requirements") or ()),
-                            *(fact_report.get("relation_requirements") or ())] if isinstance(fact_report, dict) else (),
+                            *(fact_report.get("relation_requirements") or ()),
+                            *(fact_report.get("definition_requirements") or ())] if isinstance(fact_report, dict) else (),
     )
     if fact_report is not None:
         manifest["instruction_facts"] = delivered_fact_report(

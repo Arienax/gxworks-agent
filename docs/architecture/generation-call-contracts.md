@@ -20,4 +20,12 @@ The shared candidate path performs compatibility normalization, permitted partia
 
 Candidate amendments and repair requests follow [repair boundaries](generation-repair.md). Saved artifact identity and diagnostic previews follow [generation delivery](generation-delivery.md). Native execution uses the separate [approval policy](approval-modes.md).
 
+For the observed compact representation with OR in `s`, normalization moves
+the whole ordered common condition into `i` only when the rung has one output
+branch. The condition still precedes every output, and the ordinary PLC checks
+remain authoritative. A common OR across several output branches is rejected:
+copying it into each branch could change later enables after an earlier write.
+The compact schema remains unchanged; the conversion has an explicit receipt
+and makes no additional model call.
+
 The regression owner is [test_call_contract_regressions.py](../../tests/test_call_contract_regressions.py), with external-path coverage in [test_mcp.py](../../tests/test_mcp.py).

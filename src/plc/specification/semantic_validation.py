@@ -22,7 +22,7 @@ def semantic_requirements(confirmed_spec):
         return []
     selected = confirmed_spec.get("selected_approach")
     if not isinstance(selected, Mapping):
-        return []
+        selected = {}
 
     from plc.specification.approach import (
         normalize_implementation_semantics,
@@ -123,6 +123,11 @@ def semantic_requirements(confirmed_spec):
             "opcode": item["opcode"],
             "operands": list(item["operands"]),
         })
+    from plc.instruction_binding import normalize_operation_intents
+    result.extend({"requirement_id": "operation_intents:" + intent["id"], "kind": "operation_effect",
+                   "status": "required" if intent["status"] == "confirmed" else "candidate",
+                   "intent_id": intent["id"]}
+                  for intent in normalize_operation_intents(confirmed_spec.get("operation_intents", [])))
     return result
 
 def _ladder_instruction_instances(ladder):
@@ -139,9 +144,9 @@ def _ladder_instruction_instances(ladder):
     return result
 
 
-def _feature_coverage(ladder, requirements):
+def _feature_coverage(ladder, requirements, *, plc_model=None):
     from plc.specification.approach import inspect_ladder_features
-    features = inspect_ladder_features(ladder)
+    features = inspect_ladder_features(ladder, plc_model=plc_model)
     available = {
         "structure": set(features.get("structures") or []),
         "opcode": set(features.get("opcodes") or []),
@@ -232,13 +237,14 @@ def _binding_role_addresses(confirmed_spec):
     return result
 
 
-def _binding_predicate_facts(confirmed_spec):
+def _binding_predicate_facts(confirmed_spec, *, plc_model=None):
     from plc.specification.conditions import generation_input_conditions
 
     facts = generation_input_conditions(
         (confirmed_spec or {}).get("io_bindings")
         if isinstance(confirmed_spec, Mapping)
-        else None
+        else None,
+        plc_model=plc_model or (confirmed_spec or {}).get("plc_model") or "FX3U",
     )
     indexed = {}
     for row in facts.get("level_predicates", []) or []:
@@ -274,7 +280,77 @@ def _predicate_matches_instance(requirement, expected, instance):
     return matched
 
 
-def _structure_obligation_coverage(ladder, confirmed_spec, requirements):
+def bind_confirmed_predicates(ladder, confirmed_spec, *, plc_model=None):
+    """Bind existing contacts to confirmed physical levels in one isolated instance.
+
+    Structure, addresses, outputs and path topology remain model inputs. Only
+    an explicit structure obligation with a uniquely identified sole output can
+    select contacts; missing or competing instances remain diagnostics.
+    """
+    import copy
+    import re
+    from plc.device_identity import canonical_device
+    original = copy.deepcopy(ladder)
+    value = copy.deepcopy(ladder)
+    requirements = semantic_requirements(confirmed_spec)
+    rows, _ = _structure_obligation_coverage(value, confirmed_spec, requirements, plc_model=plc_model)
+    proposals, diagnostics = [], []
+    for row in rows:
+        if row.get('check') != 'structure_binding_predicate' or row.get('status') != 'violated':
+            continue
+        expected = re.fullmatch(r'(NO|NC)\s+([A-Z][A-Z0-9.]*)', str(row.get('expected') or ''))
+        if not expected or row.get('reason') != 'binding_predicate_mismatch':
+            diagnostics.append({'requirement_id': row['requirement_id'], 'reason': row.get('reason')})
+            continue
+        rungs = [r for index, r in enumerate(value.get('rungs', []), 1)
+                 if r.get('id', index) == row.get('rung_id')]
+        if len(rungs) != 1:
+            diagnostics.append({'requirement_id': row['requirement_id'], 'reason': 'ambiguous_instance'})
+            continue
+        rung = rungs[0]
+        outputs = [out for branch in rung.get('branches', []) for out in branch.get('outputs', [])]
+        if (len(outputs) != 1 or outputs[0].get('type') != 'COIL' or
+                canonical_device(outputs[0].get('address')) != canonical_device(row.get('target'))):
+            diagnostics.append({'requirement_id': row['requirement_id'], 'reason': 'instance_has_other_outputs'})
+            continue
+        selected = []
+        def visit(contact):
+            if not isinstance(contact, Mapping):
+                return
+            if contact.get('type') in {'NO', 'NC'} and canonical_device(contact.get('address')) == expected[2]:
+                selected.append(contact)
+            elif contact.get('type') in {'OR', 'parallel_block'}:
+                for path in contact.get('paths', contact.get('branches', [])):
+                    for child in path:
+                        visit(child)
+        visit(rung.get('header_element'))
+        for contact in rung.get('shared_inputs', []):
+            visit(contact)
+        for branch in rung.get('branches', []):
+            for contact in branch.get('inputs', []):
+                visit(contact)
+        if not selected:
+            diagnostics.append({'requirement_id': row['requirement_id'], 'reason': 'required_contact_absent'})
+            continue
+        for contact in selected:
+            if contact['type'] != expected[1]:
+                proposals.append({'requirement_id': row['requirement_id'], 'rung_id': row['rung_id'],
+                                  'target': row['target'], 'address': expected[2],
+                                  'before': contact['type'], 'after': expected[1]})
+                contact['type'] = expected[1]
+    if proposals:
+        after, _ = _structure_obligation_coverage(value, confirmed_spec, requirements, plc_model=plc_model)
+        status = {row['requirement_id']: row['status'] for row in after}
+        before_verified = {row['requirement_id'] for row in rows if row['status'] == 'verified'}
+        if (any(status.get(item['requirement_id']) != 'verified' for item in proposals) or
+                any(status.get(identity) != 'verified' for identity in before_verified)):
+            diagnostics.append({'reason': 'confirmed_predicate_change_did_not_satisfy_obligations'})
+            value, proposals = original, []
+    return value, {'stage': 'Core_confirmed_predicate_binding', 'changes': proposals,
+                   'diagnostics': diagnostics, 'model_calls': 0}
+
+
+def _structure_obligation_coverage(ladder, confirmed_spec, requirements, *, plc_model=None):
     obligation_kinds = {
         "binding_role",
         "binding_relation",
@@ -286,7 +362,7 @@ def _structure_obligation_coverage(ladder, confirmed_spec, requirements):
         return [], []
 
     roles = _binding_role_addresses(confirmed_spec)
-    predicate_facts, _raw_predicate_facts = _binding_predicate_facts(confirmed_spec)
+    predicate_facts, _raw_predicate_facts = _binding_predicate_facts(confirmed_spec, plc_model=plc_model)
     rows, violations = [], []
 
     for requirement in scoped:
@@ -514,16 +590,16 @@ def _structure_obligation_coverage(ladder, confirmed_spec, requirements):
     return rows, violations
 
 
-def _feature_checker(ladder, _confirmed_spec, requirements):
-    return _feature_coverage(ladder, requirements)
+def _feature_checker(ladder, _confirmed_spec, requirements, *, plc_model=None):
+    return _feature_coverage(ladder, requirements, plc_model=plc_model)
 
 
-def _instruction_instance_checker(ladder, _confirmed_spec, requirements):
+def _instruction_instance_checker(ladder, _confirmed_spec, requirements, *, plc_model=None):
     return _instruction_instance_coverage(ladder, requirements)
 
 
-def _structure_obligation_checker(ladder, confirmed_spec, requirements):
-    return _structure_obligation_coverage(ladder, confirmed_spec, requirements)
+def _structure_obligation_checker(ladder, confirmed_spec, requirements, *, plc_model=None):
+    return _structure_obligation_coverage(ladder, confirmed_spec, requirements, plc_model=plc_model)
 
 
 _CHECKER_REGISTRY = (
@@ -559,7 +635,7 @@ def validate_confirmed_semantics(ladder, confirmed_spec, plc_model="FX3U"):
         return {"version": _VERSION, "status": "not_applicable", "requirements": [], "checks": [], "violations": []}
 
     selected = confirmed_spec.get("selected_approach")
-    canonical_sources = (
+    canonical_sources = bool(confirmed_spec.get("operation_intents")) or (
         isinstance(selected, Mapping)
         and (
             "implementation_semantics" in selected
@@ -581,9 +657,13 @@ def validate_confirmed_semantics(ladder, confirmed_spec, plc_model="FX3U"):
 
     checks, violations = [], []
     for _name, checker in _CHECKER_REGISTRY:
-        rows, failed = checker(ladder, confirmed_spec, requirements)
+        rows, failed = checker(ladder, confirmed_spec, requirements, plc_model=plc_model)
         checks.extend(rows)
         violations.extend(failed)
+    from plc.instruction_binding import check_operation_intents
+    rows, failed = check_operation_intents(ladder, confirmed_spec, target_model=plc_model)
+    checks.extend(rows)
+    violations.extend(failed)
 
     # Semantic contradictions are evidence about the generated candidate, not a
     # reason to discard an already-produced model response.  The generation

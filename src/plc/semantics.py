@@ -80,12 +80,63 @@ def _first_scan_devices(plc_model: str) -> set[str]:
     )
 
 
+def generation_process_fact_needs(spec: Mapping[str, Any], *, plc_model: str | None = None) -> List[Dict[str, Any]]:
+    """Plan technical questions from confirmed execution and resource references.
+
+    These are evidence requests, not new program requirements or inferred timer
+    settings. Concrete model facts remain owned by the device/manual sources.
+    """
+    from plc.generation_contract import generation_specification
+    from plc.validation import SUPPORTED_PLC_MODELS
+
+    if not isinstance(spec, Mapping):
+        return []
+    view = generation_specification(spec) or {}
+    semantics = {str(row.get("semantic") or "").upper()
+                 for row in view.get("execution_semantics") or [] if isinstance(row, Mapping)}
+    references = json.dumps(view, ensure_ascii=False)
+    needs = []
+    if "FIRST_SCAN" in semantics:
+        model = str(plc_model or spec.get("plc_model") or "").upper()
+        devices = sorted(_first_scan_devices(model)) if model in SUPPORTED_PLC_MODELS else []
+        needs.append({"target": "FIRST_SCAN", "dimension": "definition",
+                      "devices": devices, "basis": "confirmed_execution_semantics"})
+    timers = sorted({value.upper() for value in re.findall(r"(?<![A-Za-z0-9_])T\d+(?![A-Za-z0-9_])", references, re.I)})
+    if timers:
+        needs.append({"target": "TIMER", "dimension": "operation", "devices": timers,
+                      "basis": "declared_timer_references"})
+    contract = (view.get("selected_approach") or {}).get("generation_contract") or {}
+    if "hardware_counter" in (contract.get("required_structures") or []):
+        counters = sorted({value.upper() for value in re.findall(r"(?<![A-Za-z0-9_])C\d+(?![A-Za-z0-9_])", references, re.I)})
+        needs.append({"target": "COUNTER", "dimension": "operation", "devices": counters,
+                      "basis": "confirmed_hardware_counter_structure"})
+    return needs
+
+
 def _always_on_devices(plc_model: str) -> set[str]:
     return (
         {"SM400", "SM8000"}
         if str(plc_model or "").upper().startswith("FX5")
         else {"M8000"}
     )
+
+
+def timer_resets_when_disabled(address: str, plc_model: str) -> Optional[bool]:
+    """Known timer families only; an unverified CPU remains unknown.
+
+    FX3 programming Rev.R, PDF p.100, section 4.5.2: general timers reset
+    their elapsed value and output contact on disable; T246-T255 are latched.
+    """
+    from plc.validation import SUPPORTED_PLC_MODELS, parse_device_address
+    model = str(plc_model or "").strip().upper()
+    if model not in SUPPORTED_PLC_MODELS:
+        return None
+    parsed = parse_device_address(address, model)
+    if parsed is None or parsed[0] != "T":
+        return None
+    if model == "FX3U":
+        return not 246 <= parsed[1] <= 255
+    return None
 
 
 def _clock_periods(plc_model: str) -> Dict[str, float]:
@@ -694,6 +745,37 @@ def _build_regions(
     return regions, network_regions
 
 
+def _pulse_output_sources(network: Mapping[str, Any]) -> set[Tuple[str, str]]:
+    """Prove the source edge only for a single-contact pulse output enable.
+
+    A composite enable can rise when another condition changes while the source
+    stays high. It therefore cannot certify that source's edge requirement.
+    """
+    rung = network.get("ladder") or {}
+    shared = ([rung["header_element"]] if isinstance(rung.get("header_element"), Mapping) else [])
+    shared += list(rung.get("shared_inputs") or [])
+    sources = set()
+    for branch in rung.get("branches") or []:
+        if not isinstance(branch, Mapping):
+            continue
+        inputs = shared + list(branch.get("inputs") or [])
+        if len(inputs) != 1 or not isinstance(inputs[0], Mapping):
+            continue
+        contact = inputs[0]
+        kind = str(contact.get("type") or "").upper()
+        device = str(contact.get("address") or "").upper()
+        if kind not in {"NO", "NC"} or not device:
+            continue
+        for output in branch.get("outputs") or []:
+            if not isinstance(output, Mapping):
+                continue
+            opcode, _args = _output_parts(output)
+            if opcode in {"PLS", "PLF"}:
+                rising = (opcode == "PLS") == (kind == "NO")
+                sources.add(("RISING_EDGE" if rising else "FALLING_EDGE", device))
+    return sources
+
+
 def _semantic_coverage(
     requirements: Sequence[Mapping[str, Any]],
     networks: Sequence[Mapping[str, Any]],
@@ -705,14 +787,19 @@ def _semantic_coverage(
         candidates = []
         for network in networks:
             execution = network.get("execution") or {}
-            if semantic not in (execution.get("semantics") or []):
-                continue
             network_devices = {
                 str(trigger.get("device") or "")
                 for trigger in execution.get("triggers") or []
                 if trigger.get("device")
             }
-            if devices and not devices.intersection(network_devices):
+            input_match = semantic in (execution.get("semantics") or []) and (
+                not devices or bool(devices.intersection(network_devices))
+            )
+            output_match = any(
+                edge == semantic and (not devices or device in devices)
+                for edge, device in _pulse_output_sources(network)
+            )
+            if not (input_match or output_match):
                 continue
             candidates.append(str(network.get("id") or ""))
         if candidates:
@@ -904,4 +991,5 @@ __all__ = [
     "normalize_semantic_requirements",
     "semantic_requirements_from_spec",
     "strict_semantic_gaps",
+    "timer_resets_when_disabled",
 ]

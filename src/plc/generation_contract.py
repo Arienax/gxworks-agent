@@ -354,6 +354,9 @@ def generation_specification(confirmed_spec: Any) -> dict | None:
     if not isinstance(confirmed_spec, Mapping):
         return None
     result = _project(confirmed_spec, _SPEC_FIELDS)
+    if "operation_intents" in confirmed_spec:
+        from plc.instruction_binding import normalize_operation_intents
+        result["operation_intents"] = normalize_operation_intents(confirmed_spec["operation_intents"])
     # Compatibility is resolved once at this shared input boundary. Audit
     # envelopes never become generation facts, even for a direct legacy caller.
     intent = intent_context(confirmed_spec)

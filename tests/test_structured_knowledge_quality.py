@@ -3,6 +3,8 @@ import re
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from shared.paths import resource_path
 
 
@@ -152,3 +154,89 @@ def test_primary_structured_quality_audit_uses_semantic_device_evidence(tmp_path
     assert device_stats["placeholder_like_device_records"] == 0
     assert device_stats["placeholder_warnings_suppressed_by_concrete_evidence"] == 29
     assert device_stats["n_syntax_device_records"] == 0
+
+
+@pytest.fixture(scope='module')
+def refreshed_instruction_index(tmp_path_factory):
+    from tools.build_fx3u_knowledge_v3 import refresh_instruction_index_copy
+    output = tmp_path_factory.mktemp('source-bound-index') / 'knowledge.sqlite'
+    report = refresh_instruction_index_copy(_database(), output)
+    return output, report
+
+
+@pytest.mark.parametrize('manual,opcode,page,symbols', [
+    ('fx3_programming_r', 'ADD', 273, ['S1', 'S2', 'D']),
+    ('fx3_programming_r', 'WSFL', 310, ['S', 'D', 'N1', 'N2']),
+    ('fx3_programming_r', 'IVCK', 687, ['S1', 'S2', 'D', 'N']),
+    ('fx3_programming_r', 'TCMP', 565, ['S1', 'S2', 'S3', 'S', 'D']),
+    ('fx3_programming_r', 'CML', 256, ['S', 'D']),
+    ('fx3_positioning_k', 'DVIT', 176, ['S1', 'S2', 'D1', 'D2']),
+])
+def test_rebuilt_index_uses_definition_page_and_explicit_operands(
+        refreshed_instruction_index, manual, opcode, page, symbols):
+    output, _ = refreshed_instruction_index
+    with sqlite3.connect(output) as con:
+        row = con.execute('SELECT page_start,chunk_id,operands_json FROM instructions '
+                          'WHERE manual_id=? AND opcode=?', (manual, opcode)).fetchone()
+        assert row and row[0] == page
+        source = con.execute('SELECT pdf_page,pdf_page_end,section FROM chunks WHERE id=?', (row[1],)).fetchone()
+    assert source and source[0] <= page <= source[1]
+    assert 'How to Read' not in source[2] and 'Designation' not in source[2]
+    operands = json.loads(row[2])
+    assert [item['position'] for item in operands] == symbols
+    assert all(item['description'] for item in operands)
+    assert all(item['extraction_status'] == 'candidate_evidence' for item in operands)
+    assert all(item['source_pages'] == [page] for item in operands)
+
+
+def test_rebuilt_index_preserves_all_frozen_source_tables(refreshed_instruction_index):
+    from itertools import zip_longest
+    output, report = refreshed_instruction_index
+    assert report['integrity'] == ['ok'] and report['foreign_key_violations'] == 0
+    assert report['source_verification_promoted'] is False
+    with sqlite3.connect(_database()) as original, sqlite3.connect(output) as refreshed:
+        for table in report['source_tables_unchanged']:
+            # Stream source bytes, including geometry and embeddings; do not
+            # generate an expectation with the rebuilding parser.
+            sentinel = object()
+            for before, after in zip_longest(original.execute(f'SELECT * FROM {table}'),
+                                            refreshed.execute(f'SELECT * FROM {table}'), fillvalue=sentinel):
+                assert before == after, table
+        assert refreshed.execute("SELECT COUNT(*) FROM instructions WHERE manual_id='fxcpu_basic_applied_m'").fetchone()[0] > 77
+        assert refreshed.execute("SELECT COUNT(*) FROM instructions WHERE opcode='ST' AND manual_id='structured_fundamentals_o'").fetchone()[0] == 0
+
+
+def test_st_signature_does_not_inherit_native_call_order(refreshed_instruction_index):
+    output, _ = refreshed_instruction_index
+    with sqlite3.connect(output) as con:
+        row = con.execute("SELECT operands_json FROM instructions WHERE manual_id='fxcpu_basic_applied_m' AND opcode='WSFL'").fetchone()
+    operands = json.loads(row[0])
+    assert [item['position'] for item in operands] == ['S', 'N1', 'N2', 'D']
+    # Missing font glyphs are not repaired by assigning descriptions through
+    # physical row order. The available ST signature establishes order only.
+    assert all(item['extraction_status'] == 'unknown' for item in operands)
+
+
+def test_source_index_refresh_cannot_overwrite_frozen_database(tmp_path):
+    from tools.build_fx3u_knowledge_v3 import refresh_instruction_index_copy
+    with pytest.raises(ValueError, match='separate output'):
+        refresh_instruction_index_copy(_database(), _database())
+    existing = tmp_path / 'existing.sqlite'
+    existing.write_bytes(b'existing')
+    with pytest.raises(ValueError, match='already exists'):
+        refresh_instruction_index_copy(_database(), existing)
+    assert existing.read_bytes() == b'existing'
+
+
+@pytest.mark.parametrize('extra', ['N | fabricated | Word', 'N\nextra text'])
+def test_operand_projection_rejects_symbols_outside_st_signature(extra):
+    from tools.build_fx3u_knowledge_v3 import ManualSpec, PageArtifact, parse_operand_schema
+    manual = ManualSpec('fixture', Path('fixture.pdf'), 'Fixture', '1', '', '', 'en',
+                        'structured_instruction', 'FixtureCPU', 1, '', '')
+    text = ('XOP(EN,S1,D);\nVariable | Description | Data type\n'
+            'S1 | Value to read | Word\nD | Destination device | Word\n' + extra)
+    page = PageArtifact(manual, 1, '', '', '1.1 XOP / Fixture', '1.1 XOP / Fixture',
+                        '', 'instruction', 'XOP', '', '', text, text, text, text)
+    operands = parse_operand_schema([page], 'XOP')
+    assert [item['position'] for item in operands] == ['S1', 'D']
+    assert operands[0]['description'] == 'Value to read'

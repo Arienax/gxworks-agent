@@ -272,6 +272,774 @@
           "reference": "existing iQ-F review rule migrated as advisory capability metadata"
         }
       ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "HSCS"
+      ],
+      "unsupported_replacement": "DHSCS",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 352,
+          "section": "13.4 FNC 53 – HSCS / High-Speed Counter Set",
+          "reference": "Instruction format: literal Mnemonic columns list DHSCS. HSCS is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "HSCR"
+      ],
+      "unsupported_replacement": "DHSCR",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 358,
+          "section": "13.5 FNC 54 – HSCR / High-Speed Counter Reset",
+          "reference": "Instruction format: literal Mnemonic columns list DHSCR. HSCR is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "HSZ"
+      ],
+      "unsupported_replacement": "DHSZ",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 361,
+          "section": "13.6 FNC 55 – HSZ / High-Speed Counter Zone Compare",
+          "reference": "Instruction format: literal Mnemonic columns list DHSZ. HSZ is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ECMP"
+      ],
+      "unsupported_replacement": "DECMP",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 489,
+          "section": "18.1 FNC110 – ECMP / Floating Point Compare",
+          "reference": "Instruction format: literal Mnemonic columns list DECMP, DECMPP. ECMP is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "EZCP"
+      ],
+      "unsupported_replacement": "DEZCP",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 490,
+          "section": "18.2 FNC111 – EZCP / Floating Point Zone Compare",
+          "reference": "Instruction format: literal Mnemonic columns list DEZCP, DEZCPP. EZCP is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "EMOV"
+      ],
+      "unsupported_replacement": "DEMOV",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 492,
+          "section": "18.3 FNC112 – EMOV / Floating Point Move",
+          "reference": "Instruction format: literal Mnemonic columns list DEMOV, DEMOVP. EMOV is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ESTR"
+      ],
+      "unsupported_replacement": "DESTR",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 493,
+          "section": "18.4 FNC116 – ESTR / Floating Point to Character String Conversion",
+          "reference": "Instruction format: literal Mnemonic columns list DESTR, DESTRP. ESTR is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "EVAL"
+      ],
+      "unsupported_replacement": "DEVAL",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 499,
+          "section": "18.5 FNC117 – EVAL / Character String to Floating Point Conversion",
+          "reference": "Instruction format: literal Mnemonic columns list DEVAL, DEVALP. EVAL is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "EBCD"
+      ],
+      "unsupported_replacement": "DEBCD",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 504,
+          "section": "18.6 FNC118 – EBCD / Floating Point to Scientific Notation Conversion",
+          "reference": "Instruction format: literal Mnemonic columns list DEBCD, DEBCDP. EBCD is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "EBIN"
+      ],
+      "unsupported_replacement": "DEBIN",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 505,
+          "section": "18.7 FNC119 – EBIN / Scientific Notation to Floating Point Conversion",
+          "reference": "Instruction format: literal Mnemonic columns list DEBIN, DEBINP. EBIN is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "EADD"
+      ],
+      "unsupported_replacement": "DEADD",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 507,
+          "section": "18.8 FNC120 – EADD / Floating Point Addition",
+          "reference": "Instruction format: literal Mnemonic columns list DEADD, DEADDP. EADD is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ESUB"
+      ],
+      "unsupported_replacement": "DESUB",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 508,
+          "section": "18.9 FNC121 – ESUB / Floating Point Subtraction",
+          "reference": "Instruction format: literal Mnemonic columns list DESUB, DESUBP. ESUB is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "EMUL"
+      ],
+      "unsupported_replacement": "DEMUL",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 509,
+          "section": "18.10 FNC122 – EMUL / Floating Point Multiplication",
+          "reference": "Instruction format: literal Mnemonic columns list DEMUL, DEMULP. EMUL is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "EDIV"
+      ],
+      "unsupported_replacement": "DEDIV",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 510,
+          "section": "18.11 FNC123 – EDIV / Floating Point Division",
+          "reference": "Instruction format: literal Mnemonic columns list DEDIV, DEDIVP. EDIV is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "EXP"
+      ],
+      "unsupported_replacement": "DEXP",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 511,
+          "section": "18.12 FNC124 – EXP / Floating Point Exponent",
+          "reference": "Instruction format: literal Mnemonic columns list DEXP, DEXPP. EXP is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "LOGE"
+      ],
+      "unsupported_replacement": "DLOGE",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 513,
+          "section": "18.13 FNC125 – LOGE / Floating Point Natural Logarithm",
+          "reference": "Instruction format: literal Mnemonic columns list DLOGE, DLOGEP. LOGE is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "LOG10"
+      ],
+      "unsupported_replacement": "DLOG10",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 515,
+          "section": "18.14 FNC126 – LOG10 / Floating Point Common Logarithm",
+          "reference": "Instruction format: literal Mnemonic columns list DLOG10, DLOG10P. LOG10 is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ESQR"
+      ],
+      "unsupported_replacement": "DESQR",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 517,
+          "section": "18.15 FNC127 – ESQR / Floating Point Square Root",
+          "reference": "Instruction format: literal Mnemonic columns list DESQR, DESQRP. ESQR is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ENEG"
+      ],
+      "unsupported_replacement": "DENEG",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 518,
+          "section": "18.16 FNC128 – ENEG / Floating Point Negation",
+          "reference": "Instruction format: literal Mnemonic columns list DENEG, DENEGP. ENEG is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "SIN"
+      ],
+      "unsupported_replacement": "DSIN",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 521,
+          "section": "18.18 FNC130 – SIN / Floating Point Sine",
+          "reference": "Instruction format: literal Mnemonic columns list DSIN, DSINP. SIN is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "COS"
+      ],
+      "unsupported_replacement": "DCOS",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 522,
+          "section": "18.19 FNC131 – COS / Floating Point Cosine",
+          "reference": "Instruction format: literal Mnemonic columns list DCOS, DCOSP. COS is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "TAN"
+      ],
+      "unsupported_replacement": "DTAN",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 523,
+          "section": "18.20 FNC132 – TAN / Floating Point Tangent",
+          "reference": "Instruction format: literal Mnemonic columns list DTAN, DTANP. TAN is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ASIN"
+      ],
+      "unsupported_replacement": "DASIN",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 524,
+          "section": "18.21 FNC133 – ASIN / Floating Point Arc Sine",
+          "reference": "Instruction format: literal Mnemonic columns list DASIN, DASINP. ASIN is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ACOS"
+      ],
+      "unsupported_replacement": "DACOS",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 526,
+          "section": "18.22 FNC134 – ACOS / Floating Point Arc Cosine",
+          "reference": "Instruction format: literal Mnemonic columns list DACOS, DACOSP. ACOS is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ATAN"
+      ],
+      "unsupported_replacement": "DATAN",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 528,
+          "section": "18.23 FNC135 – ATAN / Floating Point Arc Tangent",
+          "reference": "Instruction format: literal Mnemonic columns list DATAN, DATANP. ATAN is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "RAD"
+      ],
+      "unsupported_replacement": "DRAD",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 530,
+          "section": "18.24 FNC136 – RAD / Floating Point Degrees to Radians Conversion",
+          "reference": "Instruction format: literal Mnemonic columns list DRAD, DRADP. RAD is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "DEG"
+      ],
+      "unsupported_replacement": "DDEG",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 532,
+          "section": "18.25 FNC137 – DEG / Floating Point Radians to Degrees Conversion",
+          "reference": "Instruction format: literal Mnemonic columns list DDEG, DDEGP. DEG is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "SORT2"
+      ],
+      "unsupported_replacement": "DSORT2",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 545,
+          "section": "19.7 FNC149 – SORT2 / Sort Tabulated Data 2",
+          "reference": "Instruction format: literal Mnemonic columns list DSORT2, SORT. SORT2 is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "TBL"
+      ],
+      "unsupported_replacement": "DTBL",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 554,
+          "section": "20.3 FNC152 – TBL / Batch Data Positioning Mode",
+          "reference": "Instruction format: literal Mnemonic columns list DTBL. TBL is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ABS"
+      ],
+      "unsupported_replacement": "DABS",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 555,
+          "section": "20.4 FNC155 – ABS / Absolute Current Value Read",
+          "reference": "Instruction format: literal Mnemonic columns list DABS. ABS is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "HCMOV"
+      ],
+      "unsupported_replacement": "DHCMOV",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 598,
+          "section": "24.5 FNC189 – HCMOV / High-Speed Counter Move",
+          "reference": "Instruction format: literal Mnemonic columns list DHCMOV. HCMOV is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "HSCT"
+      ],
+      "unsupported_replacement": "DHSCT",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 711,
+          "section": "32.1 FNC280 – HSCT / High-Speed Counter Compare With Data Table",
+          "reference": "Instruction format: literal Mnemonic columns list DHSCT. HSCT is the family icon, not an available literal mnemonic on FX3U.",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
     }
   ]
 }

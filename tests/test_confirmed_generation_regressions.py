@@ -1,4 +1,5 @@
 import json
+import pytest
 
 from application.model_api import _normalize_analysis_result
 from application.generation_agent import (
@@ -464,6 +465,24 @@ def test_construction_router_is_conservative_without_composite_motif():
     assert withheld.example_ids == ()
     assert withheld.text == ""
     assert withheld.route["reason"] == "multiple_primary_needs_without_composite_motif"
+
+
+@pytest.mark.parametrize("structures,semantics,expected", [
+    (["hardware_counter"], [], ("counter_reset_priority",)),
+    (["hardware_counter", "edge_trigger"], ["RISING_EDGE"], ("counter_reset_priority",)),
+    (["edge_trigger"], ["FALLING_EDGE"], ("edge_and_level",)),
+    (["self_hold", "edge_trigger"], ["FALLING_EDGE"], ()),
+])
+def test_construction_router_covers_combined_needs_without_adding_a_counter(structures, semantics, expected):
+    from application.construction_examples import prepare_construction_examples
+
+    spec = {"selected_approach": {"generation_contract": {"required_structures": structures}},
+            "execution_semantics": [{"semantic": item} for item in semantics]}
+    block = prepare_construction_examples("FX3U", True, spec)
+    assert block.example_ids == expected
+    if semantics == ["FALLING_EDGE"] and expected:
+        assert "F X0" in block.text
+        assert "COUNTER" not in block.text
 
 
 def test_confirmed_comments_are_short_server_owned_device_names():

@@ -27,8 +27,7 @@ _FACT_TERMS = {
     "limits": re.compile(r"range|limit|restrict|overflow|overlap|outside|exceed|maximum|minimum|caution|supported|≤|≥|范围|边界|限制|溢出|重叠|最大|最小", re.I),
 }
 _OFFICIAL = frozenset({"programming", "positioning", "structured_instruction", "structured_function"})
-_VERSION = "instruction-facts-v6-relation-evidence"
-_CMP_RELATION_DIMENSIONS = ("operation.result_mapping", "execution.disabled_retention")
+_VERSION = "instruction-facts-v7-compiled-definitions"
 
 _OPERAND_SLOT_FACETS = (
     ("operand_roles", "role_status", "operand_role_status"),
@@ -173,6 +172,10 @@ def _manual_fact_gaps(record):
 
 
 def _structured_fact_dimensions(record):
+    if record.get('definition_fact_groups') or record.get('structured_lanes_delivered') is False:
+        # These packets account actual compiled facts independently. Detached
+        # legacy lane metadata is not proof that the prompt contains that lane.
+        return frozenset()
     return frozenset(FACT_QUESTIONS) - _manual_fact_gaps(record)
 
 
@@ -260,6 +263,8 @@ def instruction_fact_targets(query, confirmed_spec=None):
         resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form,
     )
     requested = list(required) if isinstance(required, (list, tuple)) else []
+    requested.extend(item.get('opcode') for item in spec.get('operation_intents', [])
+                     if isinstance(item, Mapping) and item.get('status') == 'confirmed' and item.get('opcode'))
     routing_text = re.sub(r"\.(?=\s|$)", " ", route.query_text)
     boundary = r"[A-Za-z0-9_.$@+<>!=\-]"
     requested.extend(op for op in route.opcodes if re.search(
@@ -571,334 +576,6 @@ def _operand_table_units(text):
                 yield left, right
 
 
-def _source_offset_basis(result):
-    """Translate resolved text offsets back to the original chunk when possible."""
-    text = str(result.get("text") or "")
-    original = result.get("manual_text")
-    offset_delta, offset_basis = 0, "resolved_record.text"
-    if isinstance(original, str):
-        original_body = original.partition("\n\n")[2] if original.startswith("[STRUCTURED") else original
-        body = original_body.strip()
-        rendered = text.rstrip()
-        if body and rendered.endswith(body):
-            body_start = len(original) - len(original_body) + len(original_body) - len(original_body.lstrip())
-            offset_delta = body_start - (len(rendered) - len(body))
-            offset_basis = "chunks.text"
-    return offset_delta, offset_basis
-
-
-def _cmp_relation_groups(result, expected_order, *, target_model=None):
-    """Recover an atomic 16-bit result diagram from explicit layout cells.
-
-    This is source text projection, not a verified operation definition. A
-    complete group needs labelled outputs, one explicit comparison per output,
-    command-input context and the same page's disabled-retention sentence.
-    Unlabelled/reordered prose glyphs cannot supply missing associations.
-    """
-    model = target_model or result.get("plc_model") or (result.get("target_applicability") or {}).get("target_model")
-    if (model != "FX3U" or str(result.get("instruction_opcode") or "").upper() != "CMP"
-            or list(expected_order or ()) != ["S1", "S2", "D"]):
-        return []
-    text = str(result.get("text") or "")
-    delta, basis = _source_offset_basis(result)
-    groups = []
-    glyphs = re.compile(r"\[GLYPH-[0-9A-F]+\]", re.I)
-    clean = lambda value: re.sub(r"\s+", " ", glyphs.sub("", value)).strip()
-    label = re.compile(r"D(?:\s*\+\s*([12]))?$")
-    comparison = re.compile(r'^"?\s*\[\s*S1\s*([><=])\s*S2\s*\]\s*"?\.?$')
-    for left, right in _units(text):
-        raw = text[left:right]
-        page = re.match(r"\[PAGE (\d+) LAYOUT\]", raw)
-        if not page:
-            continue
-        # First-column projection keeps label/relation association. Other
-        # columns contain the waveform and running page headers, not this row.
-        lines, cursor = [], left
-        for line in raw.splitlines(keepends=True):
-            cell = line.split("|", 1)[0].rstrip()
-            lines.append((clean(cell), cursor, cursor + len(cell), line))
-            cursor += len(line)
-        headings = [i for i, row in enumerate(lines) if row[0] == "1. 16-bit operation (CMP and CMPP)"]
-        if len(headings) != 1:
-            continue
-        begin = headings[0]
-        body = lines[begin:]
-        command = [row for row in body if row[0] in {"Command", "input"}]
-        algebraic = [row for row in body if row[0].startswith("• Comparison is executed algebraically.")]
-        hold = [i for i, row in enumerate(body) if row[0] == (
-            "Even if the command input turns OFF and CMP instruction is not executed, D , D +1 and D +2 latch")]
-        if {row[0] for row in command} != {"Command", "input"} or len(algebraic) != 1 or len(hold) != 1:
-            continue
-        h = hold[0]
-        if h + 1 >= len(body):
-            continue
-        # A separate sidebar cell may intervene; do not infer a missing clause.
-        tails = [row for row in body[h+1:h+4] if row[0] == "the status just before the command input turns OFF from ON."]
-        if len(tails) != 1:
-            continue
-        found = {}
-        invalid = False
-        for i, row in enumerate(body[:h]):
-            match = label.fullmatch(row[0])
-            if not match:
-                continue
-            following = []
-            for item in body[i+1:h]:
-                if label.fullmatch(item[0]):
-                    break
-                if comparison.fullmatch(item[0]):
-                    following.append(item)
-            if not following:
-                continue  # waveform labels alone carry no relation
-            output = "D" + ("+" + match[1] if match[1] else "")
-            if output in found or len(following) != 1:
-                invalid = True
-                break
-            found[output] = (comparison.fullmatch(following[0][0])[1], row, following[0])
-        if invalid or set(found) != {"D", "D+1", "D+2"} or {v[0] for v in found.values()} != {">", "=", "<"}:
-            continue
-        first = found["D"][1][1]
-        last = found["D+2"][2][2]
-        on_cells = []
-        for row in body:
-            cursor = row[1]
-            for cell in row[3].rstrip('\r\n').split('|')[:2]:
-                if clean(cell) == "Turns ON in the case of" and first <= cursor < last:
-                    on_cells.append((clean(cell), cursor, cursor+len(cell), row[3]))
-                cursor += len(cell)+1
-        if len(on_cells) != 3:
-            continue
-        witness_rows = [body[0], algebraic[0], *command, *on_cells, body[h], tails[0]]
-        members = []
-        for output in ("D", "D+1", "D+2"):
-            operator, output_row, relation_row = found[output]
-            witness_rows.extend([output_row, relation_row])
-            members.append({"output": output, "comparison": f"S1 {operator} S2",
-                            "value_spans": [{"start": r[1]+delta, "end": r[2]+delta} for r in (output_row, relation_row)]})
-        source = {key: copy.deepcopy(result[key]) for key in (
-            "id", "manual_id", "manual_number", "revision", "source", "section", "plc_model",
-        ) if key in result}
-        source.update(pdf_page=int(page[1]), target_model=model, offset_basis=basis,
-                      source_spans=[{"start": left+delta, "end": right+delta}],
-                      value_spans=[{"start": r[1]+delta, "end": r[2]+delta} for r in witness_rows])
-        prose = "\n".join([
-            body[0][0], algebraic[0][0],
-            "Command input controls CMP execution. When the instruction executes:",
-            *[f"{m['output']}: Turns ON in the case of [{m['comparison']}]." for m in members],
-            body[h][0] + " " + tails[0][0],
-        ])
-        groups.append({"id": f"{result['id']}:cmp16:{page[1]}", "status": "candidate_evidence",
-                       "representation": "layout_cell_projection", "dimensions": list(_CMP_RELATION_DIMENSIONS),
-                       "members": members, "source": source, "text": prose})
-    return groups
-
-
-def _operand_evidence_bindings(result, start, end, gaps, expected_order):
-    """Bind explicit rows by unique native symbol, never their physical order."""
-    expected = [re.sub(r"\s+", "", str(item)).upper() for item in expected_order or ()]
-    if not expected or len(set(expected)) != len(expected):
-        return []
-    text = str(result.get("text") or "")
-    offset_delta, offset_basis = _source_offset_basis(result)
-    raw = text[start:end]
-    lines = raw.splitlines(keepends=True)
-    description_column, columns, cursor = None, {}, start
-    rows = []
-    pending = []
-    hints = {}
-    data_type = re.compile(
-        r"(?:Bit|Bool(?:ean)?|Word|Dword|Real|Float|String|ANY\d+|"
-        r"(?:16|32|64)(?:-\s*or\s*(?:32|64))?-bit(?:\s+(?:binary|integer|floating point))?)",
-        re.I,
-    )
-    for item in result.get("manual_operand_rows") or ():
-        if not isinstance(item, Mapping):
-            continue
-        symbol = re.sub(r"\s+", "", str(item.get("position") or "")).upper()
-        description = " ".join(str(item.get("description") or "").split())
-        if symbol in expected and description:
-            hints.setdefault(description, []).append(symbol)
-
-    def cell_parts(line, offset):
-        result, relative = [], 0
-        for raw_cell in line.rstrip("\r\n").split("|"):
-            cell = raw_cell.strip()
-            left = offset + relative + len(raw_cell) - len(raw_cell.lstrip())
-            result.append((cell, left, left + len(cell)))
-            relative += len(raw_cell) + 1
-        return result
-
-    def native_symbol(cell):
-        # Font placeholders decorate the symbol, not its identity. Other
-        # content in the same cell still makes that association ambiguous.
-        cell = re.sub(r"\[GLYPH-[0-9A-F]+\]", "", cell, flags=re.I)
-        return re.sub(r"\s+", "", cell).upper()
-
-    def description_fragment(cell):
-        if not cell or cell == "<blank>" or data_type.fullmatch(cell):
-            return False
-        if re.match(r"^(?:\*\d+[.:]|\[GLYPH-[0-9A-F]+\]\d+:)", cell, re.I):
-            return False  # notes stay in the source unit, outside row purpose
-        tokens = re.findall(r"[A-Za-z]+", cell)
-        return (bool(re.search(r"[\u3400-\u9fff]", cell))
-                or any(len(token) >= 4 for token in tokens)
-                or len(tokens) == 1 and len(tokens[0]) >= 3
-                or cell.startswith(("(", "[")) and bool(re.search(r"\d", cell)))
-
-    def source_page(offset):
-        markers = list(re.finditer(r"(?m)^\[(?:PAGE\s+(\d+)|TABLE\s+page=(\d+))\b", text[:offset]))
-        return int(next(group for group in markers[-1].groups() if group)) if markers else result.get("pdf_page")
-
-    def supports_split_cell(symbol, description, offset):
-        # Reconstruct only if another representation of this source page has
-        # the exact complete value on the same explicit native-symbol row. No
-        # spelling similarity, preferred length or cross-manual inference.
-        if not result.get("manual_id") or not result.get("revision") or not source_page(offset):
-            return False
-        for left, right in _operand_table_units(text):
-            if left == start and right == end or source_page(left) != source_page(offset):
-                continue
-            column = None
-            for other in text[left:right].splitlines():
-                other_cells = [cell.strip() for cell in other.split("|")]
-                if column is None:
-                    column = next((index for index, cell in enumerate(other_cells)
-                                   if re.fullmatch(r"Description|含义|说明", cell, re.I)), None)
-                    continue
-                if len(other_cells) <= column:
-                    continue
-                anchors = [native_symbol(cell) for cell in other_cells[:column]
-                           if native_symbol(cell) in expected]
-                if anchors == [symbol] and " ".join(other_cells[column].split()) == " ".join(description.split()):
-                    return True
-        return False
-
-    for line in lines:
-        parts = cell_parts(line, cursor)
-        cells = [part[0] for part in parts]
-        if description_column is None:
-            for index, cell in enumerate(cells):
-                if re.fullmatch(r"Description|含义|说明", cell, re.I):
-                    description_column = index
-            if description_column is not None:
-                for index, cell in enumerate(cells):
-                    for facet, pattern in (
-                        ("operand_types", r"Data\s*Type|数据类型"),
-                        ("operand_roles", r"Role|读写角色"),
-                        ("unit", r"Unit|单位"),
-                        ("encoding", r"Encoding|编码"),
-                        ("range", r"Range|范围"),
-                        ("condition", r"Condition|条件"),
-                    ):
-                        if re.fullmatch(pattern, cell, re.I):
-                            columns[facet] = index
-            cursor += len(line)
-            continue
-        description = cells[description_column] if description_column < len(cells) else ""
-        symbols = [native_symbol(cell) for cell in cells[:description_column]] if "|" in line else []
-        symbols = [symbol for symbol in symbols if symbol in expected]
-        hinted = hints.get(" ".join(description.split()), [])
-        # An indexed description may recover a dropped symbol only if the
-        # source description and its indexed association are both unambiguous.
-        if (not symbols and len(hinted) == 1
-                and all(cell in {"", "<blank>"} for cell in cells[:description_column])):
-            symbols = hinted
-        if len(symbols) > 1:
-            pending = []
-            cursor += len(line)
-            continue
-        if not symbols:
-            # Flattened PDF rows place their description before the symbol,
-            # with continuations after it. Bind only through that explicit
-            # symbol anchor; sidebar fragments and data types are excluded.
-            fragment = parts[0]
-            closing_range = bool(
-                rows and rows[-1]["parts"] and re.fullmatch(r"[\d\s,.:;+-]+[)\]]", fragment[0])
-                and any("[" in part[0] or "(" in part[0] for part in rows[-1]["parts"])
-            )
-            if description_fragment(fragment[0]) or closing_range:
-                if (rows and rows[-1]["wrapped"] and rows[-1]["parts"]
-                        and (closing_range or fragment[0].startswith(("(", "[")) or fragment[0][0].islower())):
-                    rows[-1]["parts"].append(fragment)
-                    rows[-1]["end"] = cursor + len(line.rstrip("\r\n"))
-                elif rows and fragment[0].startswith(("(", "[")):
-                    pass  # inline-row notes remain context, never a prefix of the next row
-                else:
-                    pending.append(fragment)
-            cursor += len(line)
-            continue
-        valid_description = (description_fragment(description)
-                             and native_symbol(description) not in expected)
-        wrapped = not valid_description or bool(pending and description.startswith(("(", "[", "-")))
-        fragments = list(pending) if wrapped else []
-        join_at = set()
-        if valid_description:
-            prefix = parts[description_column-1] if description_column else None
-            if (not wrapped and prefix and re.fullmatch(r"[A-Za-z]", prefix[0])
-                    and description and description[0].islower()
-                    and supports_split_cell(symbols[0], prefix[0]+description, cursor)):
-                fragments.append(prefix)
-                join_at.add(len(fragments))
-            fragments.append(parts[description_column])
-        pending = []
-        values = {
-            facet: cells[index] for facet, index in columns.items()
-            if index < len(cells) and cells[index] not in {"", "<blank>"}
-        }
-        if wrapped and data_type.fullmatch(description):
-            values["operand_types"] = description
-        if "operand_types" in values and not data_type.fullmatch(values["operand_types"]):
-            del values["operand_types"]
-        rows.append({"symbol": symbols[0], "start": min([cursor, *(part[1] for part in fragments)]),
-                     "end": cursor + len(line.rstrip("\r\n")), "parts": fragments,
-                     "wrapped": wrapped, "join_at": join_at, "values": values})
-        cursor += len(line)
-    symbol_counts = {symbol: sum(row["symbol"] == symbol for row in rows) for symbol in expected}
-    bindings = []
-    for row in rows:
-        symbol, row_start, row_end = row["symbol"], row["start"], row["end"]
-        if symbol_counts[symbol] != 1:
-            continue
-        values = dict(row["values"])
-        if row["parts"]:
-            values["purpose"] = "".join(("" if index == 0 or index in row["join_at"] else " ") + part[0]
-                                        for index, part in enumerate(row["parts"]))
-        position = expected.index(symbol) + 1
-        for gap in gaps or ():
-            facet = gap.get("facet")
-            if gap.get("position") != position or facet not in values:
-                continue
-            evidence = {
-                "id": str(result.get("original_id") or result.get("id") or ""),
-                "manual_id": result.get("manual_id"),
-                "manual": result.get("manual_number"),
-                "revision": result.get("revision"),
-                "page": result.get("page"),
-                "section": result.get("section"),
-                "row_span": {"start": row_start + offset_delta, "end": row_end + offset_delta},
-                "context_span": {"start": start + offset_delta, "end": end + offset_delta},
-                "offset_basis": offset_basis,
-            }
-            page_markers = list(re.finditer(r"(?m)^\[(?:PAGE\s+(\d+)|TABLE\s+page=(\d+))\b", text[:row_start]))
-            if page_markers:
-                evidence["pdf_page"] = int(next(group for group in page_markers[-1].groups() if group))
-            if facet == "purpose" and (row["wrapped"] or len(row["parts"]) > 1):
-                evidence["value_spans"] = [{"start": left + offset_delta, "end": right + offset_delta,
-                                           **({"join_before": ""} if index in row["join_at"] else {})}
-                                          for index, (_, left, right) in enumerate(row["parts"])]
-            binding = {
-                "position": position, "symbol": symbol, "facet": facet,
-                "value": values[facet], "status": "candidate_evidence", "source": evidence,
-            }
-            if facet not in {"operand_types", "operand_roles"}:
-                from plc.instructions import OperandUsageFact
-                binding["fact"] = OperandUsageFact(
-                    facet, values[facet], "candidate_evidence", (evidence,),
-                ).as_mapping()
-            bindings.append(binding)
-    return bindings
-
-
 def _render_units(result, selected, *, bindings=(), conflicts=(), structured_owner=None, relation_groups=()):
     """Preserve source offsets and provenance while grouping selected units.
 
@@ -1013,10 +690,169 @@ def _completion_sources(seed, plc_model, task_type):
                 break
     return results
 
+def _packing_cost(records):
+    from knowledge import core
+    from knowledge.evidence import estimate_tokens
+
+    blocks = [core._format_result_block(record) for record in records]
+    return (sum(len(block) + 40 for block in blocks),
+            sum(estimate_tokens('Reference role: technical_reference\n' + block) + 1 for block in blocks))
+
+
+def _within_packing_budget(records, allowance, token_allowance=None):
+    chars, tokens = _packing_cost(records)
+    return chars <= allowance and (token_allowance is None or tokens <= token_allowance)
+
+
+def _pack_definition_target(sources, allowance, owner, needed, order, opcodes, diagnostics,
+                            token_allowance=None):
+    """Pack compiled dependency closures before unresolved original evidence."""
+    from knowledge import core
+    from plc.instruction_definition import instruction_task_view
+    definition = owner['instruction_definition']
+    view = instruction_task_view(definition, questions=needed)
+    facts = {g['id']: g for g in view['groups']}
+    # A candidate source from another index/revision must not be attached just
+    # because its opcode happens to match. Registry declarations stay usable.
+    source_scopes = {(str(r.get('original_id') or r['id']), r.get('manual_id'), r.get('revision')) for r in sources}
+    packed, packed_ids, relations = [], set(), []
+    bundles = sorted(view['bundles'], key=lambda b: (not facts[b['root']]['dimension'].startswith('effects.'), b['root']))
+    for bundle in bundles:
+        if bundle['root'] in packed_ids:
+            continue
+        groups = [facts[identity] for identity in bundle['fact_ids']]
+        if any(g['status'] == 'candidate_evidence' and not any(
+                (str(s.get('id')), s.get('manual_id'), s.get('revision')) in source_scopes for s in g['sources'])
+               for g in groups):
+            view['gaps'].append({'root': bundle['root'], 'reason': 'source_not_in_current_index'})
+            continue
+        marker = {'opcode': definition['opcode'], 'target_model': definition['target_model'],
+                  'root': bundle['root'], 'source_verification':
+                  'source_checked' if all(g['status'] == 'source_verified' for g in groups) else 'not_complete'}
+        text = '[INSTRUCTION FACTS ' + json.dumps(marker, ensure_ascii=False) + ']\n'
+        text += json.dumps({'groups': [{k: g[k] for k in ('id', 'dimension', 'value', 'status', 'depends_on')}
+                                      for g in groups]}, ensure_ascii=False, separators=(',', ':'))
+        text += '\n[/INSTRUCTION FACTS]'
+        dimensions = ['definition.' + g['id'] for g in groups]
+        group_members = {'definition.' + g['id']: list(g['members']) for g in groups}
+        root = facts[bundle['root']]
+        relation_groups = []
+        if root['value'].get('behavior') == 'conditional_results':
+            lifecycle = [g['value'] for g in groups if g['dimension'].startswith('execution.')]
+            retain = any(v.get('disabled') == 'retain' or v.get('action') == 'retain' for v in lifecycle)
+            outputs = root['value']['outputs']
+            relation = {'id': root['id'], 'status': root['status'], 'representation': 'compiled_definition',
+                        'source': copy.deepcopy(root['sources'][0]),
+                        'members': [{**copy.deepcopy(o), 'output': o.get('output') or (o['target']['parameter'] +
+                                     ('+' + str(o['target']['offset']) if o['target'].get('offset') else '')),
+                                     'target': o['target'], 'expression': o['expression']} for o in outputs],
+                        'dimensions': ['operation.result_mapping', *(['execution.disabled_retention'] if retain else [])],
+                        'dependencies': copy.deepcopy(groups), 'text': root['value'].get('text') or
+                        json.dumps({'outputs': outputs, 'lifecycle': lifecycle}, ensure_ascii=False)}
+            relation_groups.append(relation)
+            dimensions.extend(relation['dimensions'])
+            group_members.update({dim: [m['output'] for m in relation['members']] for dim in relation['dimensions']})
+            text += '\n[RELATION EVIDENCE ' + json.dumps({k: relation[k] for k in ('id', 'status', 'representation')}) + \
+                    ']\n' + relation['text'] + '\n[/RELATION EVIDENCE]'
+        record = copy.deepcopy(sources[0])
+        record.update(id=str(sources[0]['id']) + '#definition:' + bundle['root'], text=text,
+                      fact_dimensions=dimensions, candidate_fact_categories=[], fact_group_members=group_members,
+                      definition_fact_groups=copy.deepcopy(groups), relation_evidence_groups=relation_groups,
+                      operand_evidence_bindings=[{'position': g['value']['position'], 'facet': g['value']['facet'],
+                          'symbol': g['value']['symbol'], 'value': g['value']['value'], 'status': g['status'],
+                          'source': g['sources'][0], 'fact': {'facet': g['value']['facet'], 'value': g['value']['value'],
+                          'status': g['status'], 'sources': g['sources']}}
+                          for g in groups if g['value'].get('facet') and g['value'].get('position')],
+                      content_sha256=_sha(text))
+        if not _within_packing_budget([*packed, record], allowance, token_allowance):
+            continue
+        packed.append(record)
+        packed_ids.update(bundle['fact_ids'])
+        relations.extend(relation_groups)
+    view['receipt']['packed_fact_ids'] = sorted(packed_ids)
+    if diagnostics is not None:
+        diagnostics.update(candidate_groups=[copy.deepcopy(g) for g in relations],
+                           packed_group_ids=[g['id'] for g in relations],
+                           packing_status='packed' if relations else 'candidate_conflict' if any(
+                               g['status'] == 'conflict' and g['dimension'].startswith('effects.')
+                               for g in definition['facts']) else 'budget_omitted' if any(
+                               g['value'].get('behavior') == 'conditional_results' for g in view['groups']) else 'no_complete_group',
+                           definition_requirements=view['requirements'], definition_task_view=view)
+    # The original units are still evidence for unresolved material, with the
+    # original order-conflict filter. They do not acquire interpreted meanings.
+    raw_sources = []
+    for source in sources:
+        raw = copy.deepcopy(source)
+        raw['text'] = str(source.get('manual_text') or source.get('text') or '')
+        if raw['text'].startswith('[STRUCTURED'):
+            raw['text'] = raw['text'].split('\n\n', 1)[-1]
+        raw['instruction_definition'] = {}
+        raw['structured_lanes_delivered'] = False
+        raw['definition_conflict_spans'] = [s.get('context_span') or s.get('row_span') for g in definition['facts']
+            if g['status'] == 'conflict' for candidate in g['value'].get('candidates', [])
+            for s in candidate.get('sources', []) if str(s.get('id')) == str(source.get('original_id') or source['id'])
+            and (s.get('context_span') or s.get('row_span'))]
+        raw_sources.append(raw)
+    cost, token_cost = _packing_cost(packed)
+    raw_records = _pack_target(raw_sources, max(0, allowance - cost), needed_categories=needed,
+                              verified_operand_order=order, verified_opcodes=opcodes,
+                              token_allowance=max(0, token_allowance - token_cost)
+                              if token_allowance is not None else None)
+    if not packed:
+        return raw_records
+    # One instruction packet remains atomic through the final Context Compiler.
+    # Its manifest retains original raw-unit locations separately from facts.
+    result = packed[0]
+    result['text'] = '\n\n'.join(r['text'] for r in packed)
+    result['definition_fact_groups'] = list({g['id']: g for r in packed for g in r['definition_fact_groups']}.values())
+    result['operand_evidence_bindings'] = [b for r in packed for b in r['operand_evidence_bindings']]
+    result['relation_evidence_groups'] = [g for r in packed for g in r['relation_evidence_groups']]
+    result['fact_dimensions'] = sorted({d for r in packed for d in r['fact_dimensions']})
+    result['fact_group_members'] = {d: members for r in packed for d, members in r['fact_group_members'].items()}
+    result['definition_task_view'] = copy.deepcopy(view)
+    from plc.instruction_semantics import attach_operand_usage
+    conflicts = [{'position': g['value']['position'], 'facet': g['value']['facet'], 'status': 'unresolved',
+                  'reason': 'candidate_conflict', 'candidates': copy.deepcopy(g['value']['candidates'])}
+                 for g in definition['facts'] if g['status'] == 'conflict' and 'position' in g['value']]
+    slots = copy.deepcopy(owner.get('operand_slots', []))
+    for slot in slots:
+        slot['usage_facts'] = []
+        slot['usage_conflicts'] = []
+        slot['purpose_status'] = 'unresolved'
+    result['operand_slots'] = attach_operand_usage(slots, result['operand_evidence_bindings'], conflicts=conflicts)
+    result['operand_candidate_conflicts'] = conflicts
+    if conflicts:
+        result['text'] += '\n' + json.dumps({'usage_conflicts': [{'position': c['position'], 'facet': c['facet'],
+                                                               'reason': c['reason']} for c in conflicts]})
+    if not _within_packing_budget([result], allowance, token_allowance):
+        view['receipt']['packed_fact_ids'] = []
+        view['gaps'].append({'reason': 'packet_budget_omitted'})
+        if diagnostics is not None:
+            diagnostics.update(packed_group_ids=[], packing_status='budget_omitted', definition_task_view=view)
+        return raw_records
+    result['raw_evidence_sources'] = []
+    delivered_raw = []
+    for raw in raw_records:
+        trial = copy.copy(result)
+        trial['text'] += '\n\n[UNINTERPRETED SOURCE ' + json.dumps({'id': raw.get('original_id'),
+                            'manual_id': raw.get('manual_id'), 'source_spans': raw.get('source_spans')}) + ']\n' + raw['text']
+        if not _within_packing_budget([trial], allowance, token_allowance):
+            view['gaps'].append({'reason': 'uninterpreted_source_budget_omitted', 'source_id': raw.get('original_id')})
+            continue
+        result['text'] = trial['text']
+        result['raw_evidence_sources'].append({k: raw[k] for k in ('original_id', 'manual_id', 'revision', 'source_spans') if k in raw})
+        delivered_raw.append(raw)
+    result['definition_task_view'] = copy.deepcopy(view)
+    result['candidate_fact_categories'] = sorted({c for r in delivered_raw for c in r.get('candidate_fact_categories', [])})
+    result['content_sha256'] = _sha(result['text'])
+    return [result]
+
+
 def _pack_target(
     results, allowance, *, needed_categories=None,
     verified_operand_order=None, verified_opcodes=(),
     operand_gap_details=(), structured_owner=None, relation_diagnostics=None,
+    token_allowance=None,
 ):
     """Pack definition, tables and cautions together before any top-k truncation.
 
@@ -1039,9 +875,12 @@ def _pack_target(
     document_key = lambda value: (value.get("manual_id") or value.get("source") or value.get("id"), value.get("revision"))
     primary = document_key(results[0])
     sources = [r for r in results if document_key(r) == primary]
+    definition = (structured_owner or {}).get('instruction_definition') or {}
+    if definition.get('facts'):
+        return _pack_definition_target(sources, allowance, structured_owner, needed, verified_operand_order,
+                                       verified_opcodes, relation_diagnostics, token_allowance)
     owner_model = ((structured_owner or {}).get("target_applicability") or {}).get("target_model")
-    relation_candidates = [(index, group) for index, result in enumerate(sources)
-                           for group in _cmp_relation_groups(result, verified_operand_order, target_model=owner_model)]
+    relation_candidates = []
     # Equivalent same-manual renditions may corroborate a group. Different
     # complete mappings remain a gap; representation priority cannot arbitrate.
     meanings = {tuple((m["output"], m["comparison"]) for m in group["members"])
@@ -1080,6 +919,8 @@ def _pack_target(
             )
             for start, end, embedded_layout in pieces:
                 raw = text[start:end]
+                if any(span['start'] < end and start < span['end'] for span in result.get('definition_conflict_spans', [])):
+                    continue
                 if _conflicts_with_verified_operand_order(
                     result,
                     raw,
@@ -1116,9 +957,7 @@ def _pack_target(
                 if focus and not result.get("instruction_opcode"):
                     priority += 5  # The referenced flag definition precedes opcode examples.
                 cats = [key for key, pattern in _FACT_TERMS.items() if pattern.search(raw)]
-                bindings = _operand_evidence_bindings(
-                    result, start, end, operand_gap_details, verified_operand_order,
-                ) if operand_table else []
+                bindings = []  # Operand interpretation belongs to the build compiler.
                 owner_target = (structured_owner or result).get("target_applicability") or {}
                 for binding in bindings:
                     binding["source"].update(
@@ -1185,9 +1024,8 @@ def _pack_target(
             sources[source_index], trial_units, bindings=trial_bindings,
             conflicts=conflicts, structured_owner=structured_owner,
         )
-        block_cost = lambda value: len(core._format_result_block(value)) + 40
-        cost = sum(block_cost(value) for index, value in rendered.items() if index != source_index) + block_cost(trial)
-        if cost > allowance:
+        trial_records = [value for index, value in rendered.items() if index != source_index] + [trial]
+        if not _within_packing_budget(trial_records, allowance, token_allowance):
             continue
         selected[source_index], rendered[source_index] = trial_units, trial
         selected_bindings[source_index] = trial_bindings
@@ -1197,7 +1035,7 @@ def _pack_target(
         prefix = _model_structured_prefix(sources[0].get("text"))
         if prefix or conflicts:
             trial = _render_units(sources[0], [], conflicts=conflicts, structured_owner=structured_owner)
-            if len(core._format_result_block(trial)) + 40 <= allowance:
+            if _within_packing_budget([trial], allowance, token_allowance):
                 rendered[0] = trial
     # A recovered relation group is a distinct atomic source projection. It
     # is neither a syntax-layout fallback nor evidence for an operand purpose.
@@ -1208,9 +1046,8 @@ def _pack_target(
             bindings=selected_bindings.get(source_index, []), conflicts=conflicts,
             structured_owner=structured_owner, relation_groups=[group],
         )
-        cost = sum(len(core._format_result_block(value)) + 40 for index,value in rendered.items()
-                   if index != source_index) + len(core._format_result_block(trial)) + 40
-        if cost > allowance:
+        trial_records = [value for index, value in rendered.items() if index != source_index] + [trial]
+        if not _within_packing_budget(trial_records, allowance, token_allowance):
             continue
         rendered[source_index] = trial
         if relation_diagnostics is not None:
@@ -1227,7 +1064,7 @@ def _pack_target(
 
 def retrieve_instruction_facts(
     query, *, plc_model, task_type, char_budget, candidates=(), targets=None,
-    retrieve=None, resolver=None,
+    retrieve=None, resolver=None, token_budget=None, primary_slots=None,
 ):
     """Resolve selected instructions directly, then pack their source evidence.
 
@@ -1262,6 +1099,13 @@ def retrieve_instruction_facts(
         return [], report
 
     allowance = max(0, int(char_budget) // max(1, len(targets)))
+    # Only this many primary packets can reach final top-k. Reserving a full
+    # share for later targets would starve an earlier dependency closure even
+    # when the first round fits. The final compiler still enforces the total.
+    primary_count = min(len(targets), max(1, int(primary_slots))) if primary_slots is not None else len(targets)
+    token_allowance = max(0, int(token_budget) // primary_count) if token_budget is not None else None
+    if token_allowance is not None:
+        report.update(token_budget=token_budget, target_token_allowance=token_allowance)
     groups = []
     companion_seen = set()
     for target in targets:
@@ -1277,7 +1121,7 @@ def retrieve_instruction_facts(
         for seed in seeds:
             if seed.get("id") in seen:
                 continue
-            for result in (seed, *_related_units(seed, plc_model, task_type)):
+            for result in (seed, *([] if seed.get('compiled_source_chapter') else _related_units(seed, plc_model, task_type))):
                 marker = result.get("id")
                 if not marker or marker in seen:
                     continue
@@ -1289,12 +1133,6 @@ def retrieve_instruction_facts(
 
         structured_owner = seeds[0] if seeds else {}
         relation_diagnostics = {"target": target["opcode"]}
-        if plc_model == "FX3U" and target["opcode"] == "CMP":
-            report["relation_requirements"].extend(
-                {"kind": "instruction", "target": "CMP", "dimension": dimension,
-                 "members": ["D", "D+1", "D+2"], "verification": "not_performed"}
-                for dimension in _CMP_RELATION_DIMENSIONS
-            )
         operand_gap_details = _operand_gap_details(structured_owner)
         manual_gaps = _manual_fact_gaps(structured_owner)
         report["lookups"][-1]["manual_gaps"] = sorted(manual_gaps)
@@ -1329,14 +1167,12 @@ def retrieve_instruction_facts(
                 # state. Never let an adjacent instruction operand table re-enter
                 # after structured operand semantics have closed that dimension.
                 needed_categories={"execution"},
+                token_allowance=token_allowance * 2 // 3 if token_allowance is not None else None,
             )
             if row["id"] not in companion_seen
         ]
         companion_seen.update(row["id"] for row in companion_pool)
-        companion_cost = sum(
-            len(core._format_result_block(row)) + 40
-            for row in companion_pool
-        )
+        companion_cost, companion_tokens = _packing_cost(companion_pool)
         target_overlay = (
             structured_owner.get("target_applicability")
             if isinstance(structured_owner, Mapping)
@@ -1359,15 +1195,24 @@ def retrieve_instruction_facts(
             operand_gap_details=operand_gap_details,
             structured_owner=structured_owner,
             relation_diagnostics=relation_diagnostics,
+            token_allowance=token_allowance - companion_tokens if token_allowance is not None else None,
         )
-        if plc_model == "FX3U" and target["opcode"] == "CMP":
+        if relation_diagnostics.get('definition_task_view'):
+            report.setdefault('definition_requirements', []).extend(relation_diagnostics['definition_requirements'])
+            report.setdefault('definition_views', []).append(relation_diagnostics['definition_task_view'])
             report["relation_evidence"].append(relation_diagnostics)
+            definition = structured_owner.get('instruction_definition') or {}
+            for group in definition.get('facts', []):
+                if group['value'].get('behavior') == 'conditional_results':
+                    report['relation_requirements'].extend(
+                        {'kind': 'instruction', 'target': target['opcode'], 'dimension': dim, 'members': group['members']}
+                        for dim in ('operation.result_mapping', 'execution.disabled_retention'))
         pool = primary_pool[:1] + companion_pool + primary_pool[1:]
         for value in pool:
             value["fact_kind"] = "instruction"
             value["fact_target"] = target["opcode"]
             value["fact_dimensions"] = sorted(
-                set(value.get("candidate_fact_categories") or ())
+                set(value.get("fact_dimensions") or ()) | set(value.get("candidate_fact_categories") or ())
                 | set(_structured_fact_dimensions(value))
                 | {
                     _operand_dimension(binding["position"], binding["facet"])
@@ -1403,6 +1248,8 @@ def retrieve_instruction_facts(
                 "instruction_step_width", "instruction_instance",
                 "relation_evidence_groups",
                 "fact_group_members",
+                "definition_fact_groups", "definition_task_view",
+                "raw_evidence_sources",
             )
             if key in item
         }

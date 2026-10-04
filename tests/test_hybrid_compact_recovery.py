@@ -1,6 +1,7 @@
 import json
 
 import pytest
+from hypothesis import given, settings, strategies as st
 
 import application.model_api as api
 from application.compact_alias import expand_hybrid_compact_ladder
@@ -30,6 +31,68 @@ def _hybrid_compact():
             },
         ],
     }
+
+
+@given(st.lists(st.lists(st.tuples(
+    st.sampled_from(["NO", "NC", "P", "F"]),
+    st.sampled_from(["X0", "X1", "X10", "M10", "M11"])),
+    min_size=1, max_size=4), min_size=1, max_size=4))
+@settings(max_examples=100, deadline=None)
+def test_single_branch_shared_parallel_preserves_condition_order_and_round_trips(alternatives):
+    import copy
+    from application.compact_protocol import expand_compact_ladder, normalize_compact, validate_compact_structure
+    from application.construction_examples import _compact_from_ir
+    from plc.ir import build_plc_ir, ir_to_ladder
+
+    parallel = {"or": [[f"{kind} {address}" for kind, address in series] for series in alternatives]}
+    compact = {"r": [{"h": "NO X2", "s": ["NC X1", parallel, "NO X0"],
+                      "b": [{"i": ["NO X3"], "o": ["RST M10", "SET M11"]}]}]}
+    before = copy.deepcopy(compact)
+    canonical, changes = normalize_compact(compact)
+    assert canonical == {"r": [{"h": "NO X2", "s": [], "b": [
+        {"i": ["NC X1", parallel, "NO X0", "NO X3"], "o": ["RST M10", "SET M11"]}]}]}
+    assert [x["rule"] for x in changes] == ["single_branch_shared_parallel"]
+    assert normalize_compact(canonical) == (canonical, [])
+    validate_compact_structure(canonical)
+    ladder = expand_compact_ladder(compact)
+    assert compact == before
+    assert ladder["rungs"][0]["header_element"] == {"type": "NO", "address": "X2"}
+    assert ladder["rungs"][0]["shared_inputs"] == []
+    assert ladder["rungs"][0]["branches"][0]["inputs"] == [
+        {"type": "NC", "address": "X1"}, {"type": "parallel_block", "branches": [
+            [{"type": kind, "address": address} for kind, address in series] for series in alternatives]},
+        {"type": "NO", "address": "X0"}, {"type": "NO", "address": "X3"}]
+    from plc.validation import validate_ladder_candidate_structure
+    validate_ladder_candidate_structure(ladder)
+    program = build_plc_ir(ladder)
+    assert ir_to_ladder(program) == ladder
+    assert _compact_from_ir(program) == canonical
+    assert not any(f["code"] == "REPEATED_GUARD_INVALIDATED" for f in program["analysis"]["findings"])
+
+
+def test_long_key_alias_relocates_parallel_only_when_there_is_one_output_branch():
+    value = {"rungs": [{"shared_inputs": [{"or": [["NO M10"], ["NO X0"]]}],
+                        "branches": [{"inputs": [], "outputs": ["RST M10", "SET M11"]}]}]}
+    ladder = expand_hybrid_compact_ladder(value)
+    assert ladder["rungs"][0]["shared_inputs"] == []
+    assert ladder["rungs"][0]["branches"][0]["inputs"] == [{"type": "parallel_block", "branches": [
+        [{"type": "NO", "address": "M10"}], [{"type": "NO", "address": "X0"}]]}]
+
+
+def test_shared_parallel_is_not_repeated_across_mutating_output_branches():
+    from application.compact_protocol import CompactProtocolError, expand_compact_ladder
+    with pytest.raises(CompactProtocolError):
+        expand_compact_ladder({"r": [{"h": None, "s": [{"or": [["NO M10"], ["NO X0"]]}],
+                                      "b": [{"i": [], "o": ["RST M10"]},
+                                            {"i": [], "o": ["SET M11"]}]}]})
+
+
+@pytest.mark.parametrize("condition", [{"or": []}, {"or": [[]]}, {"or": [[{"or": [["NO X0"]]}]]},
+                                        {"or": [["NO X0"]], "unknown": True}])
+def test_shared_parallel_rejects_empty_nested_or_ambiguous_shapes(condition):
+    from application.compact_protocol import CompactProtocolError, expand_compact_ladder
+    with pytest.raises(CompactProtocolError):
+        expand_compact_ladder({"r": [{"h": None, "s": [condition], "b": [{"i": [], "o": ["COIL Y0"]}]}]})
 
 
 def test_long_key_compact_alias_expands_without_changing_plc_tokens():
@@ -116,6 +179,32 @@ def test_compact_alias_never_discards_ambiguity_or_bypasses_schema(value):
     from application.compact_protocol import CompactProtocolError, expand_compact_ladder
     with pytest.raises(CompactProtocolError):
         expand_compact_ladder(value)
+
+
+def test_transport_annotation_is_logic_preserving_detached_and_idempotent():
+    import copy
+    from application.compact_protocol import normalize_compact, expand_compact_ladder
+    canonical = {'r': [{'h': None, 's': ['NC X1'], 'b': [
+        {'i': ['NO X0'], 'o': ['SUB D14 K3 D100']}]}]}
+    raw = {'type': 'json_object', **copy.deepcopy(canonical)}
+    before = copy.deepcopy(raw)
+    normalized, changes = normalize_compact(raw)
+    assert normalized == canonical and raw == before
+    assert [c['rule'] for c in changes] == ['transport_format_annotation']
+    assert normalize_compact(normalized) == (normalized, [])
+    assert expand_compact_ladder(raw) == expand_compact_ladder(canonical)
+
+
+@pytest.mark.parametrize('fields', [
+    {'type': 'instruction'}, {'type': {'json_object': True}},
+    {'type': 'json_object', 'instructions': ['MOV K0 D0']},
+    {'type': 'json_object', 'root': []},
+])
+def test_transport_annotation_never_discards_competing_or_unknown_fields(fields):
+    from application.compact_protocol import CompactProtocolError, expand_compact_ladder
+    raw = {**fields, 'r': [{'b': [{'o': ['COIL Y0']}]}]}
+    with pytest.raises(CompactProtocolError):
+        expand_compact_ladder(raw)
 
 
 @pytest.mark.parametrize("field,value,keyword,path", [

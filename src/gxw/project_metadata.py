@@ -67,6 +67,33 @@ def read_project_text_context(raw: bytes) -> dict:
                 handling="partially-decoded")
 
 
+def read_project_compile_options(raw: bytes) -> dict:
+    """Read the observed saved option array, retaining unknown option words.
+
+    The code-page DWORD is followed by the 88-byte SystemVariablesInfo record
+    and a counted DWORD array including its final 0xffffffff sentinel. Native
+    PLCProjectData.Set/GetCompileOption stores at most 32 words. Only the
+    global-variable hiding tag is interpreted, as in OnMemoryDataManager's
+    ParseData; this describes source binding, not CPU or runtime acceptance.
+    """
+    context = read_project_text_context(raw)
+    offset = context['codepage_offset'] + 4 + 88
+    if offset + 4 > len(raw):
+        raise GXWFormatError('truncated project compile option count')
+    count = struct.unpack_from('<I', raw, offset)[0]
+    end = offset + 4 + 4 * count
+    if not 1 <= count <= 32 or end > len(raw):
+        raise GXWFormatError('project compile options outside native storage bound')
+    values = struct.unpack_from('<' + str(count) + 'I', raw, offset + 4)
+    if values[-1] != 0xffffffff or 0xffffffff in values[:-1]:
+        raise GXWFormatError('unsupported project compile option sentinel')
+    hiding = False
+    for value in values[:-1]:
+        if value & 0xffff0000 == 0x10010000:
+            hiding = bool(value & 1)
+    return dict(count_offset=offset, values=values, global_variable_hiding=hiding)
+
+
 @dataclass
 class XmlElement:
     name: str

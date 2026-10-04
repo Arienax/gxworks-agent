@@ -14,7 +14,7 @@ import json
 import os
 
 ENV_NAME = "GXWORKS_CONSTRUCTION_EXAMPLES"
-PACK_VERSION = "routed_construction/2"
+PACK_VERSION = "routed_construction/4"
 # Applicability is explicit; do not relabel an FX example as another CPU's facts.
 SUPPORTED_MODELS = ("FX3U",)
 
@@ -117,12 +117,14 @@ def _definitions():
         ),
         (
             "edge_and_level",
-            "X0从0变1时M0仅ON一个扫描周期；Y0持续跟随X0，Y1跟随该单扫描脉冲。观察从X0=0开始的扫描序列。",
-            {"X0": "输入信号", "M0": "上升沿脉冲", "Y0": "电平输出", "Y1": "事件输出"},
+            "X0从0变1时M0仅ON一个扫描周期，从1变0时M1仅ON一个扫描周期；Y0持续跟随X0，Y1跟随上升沿脉冲，Y2跟随下降沿脉冲。观察从X0=0开始的扫描序列；P/F检测变化，NO/NC检测当前位值。",
+            {"X0": "输入信号", "M0": "上升沿脉冲", "M1": "下降沿脉冲", "Y0": "电平输出", "Y1": "上升沿输出", "Y2": "下降沿输出"},
             [
                 _rung(1, ([_contact("P", "X0")], [coil("M0")])),
                 _rung(2, ([no("X0")], [coil("Y0")])),
                 _rung(3, ([no("M0")], [coil("Y1")])),
+                _rung(4, ([_contact("F", "X0")], [coil("M1")])),
+                _rung(5, ([no("M1")], [coil("Y2")])),
             ],
         ),
         (
@@ -144,6 +146,34 @@ def _definitions():
                 _rung(3, ([no("C0")], [coil("Y0")])),
             ],
         ),
+        (
+            "timed_bit_sequence",
+            "M0/M1分别表示工作与完成，首扫清零。X0上升沿从空闲进入工作，工作期间T0持续计时2秒，然后同时清M0、置M1。X1停止优先并清状态；Y0/Y1持续表示工作/完成。公共转换条件只求值一次，后续分支不重复读取刚改写的M0。",
+            {"X0": "启动沿", "X1": "停止", "M0": "工作", "M1": "完成", "T0": "工作延时", "Y0": "工作输出", "Y1": "完成输出"},
+            [
+                _rung(1, ([no("M8002")], [_app("RST", "M0"), _app("RST", "M1")])),
+                _rung(2, ([_contact("P", "X0"), nc("X1"), nc("M0"), nc("M1")], [_app("SET", "M0")])),
+                _rung(3, ([no("M0"), nc("X1")], [{"type": "TIMER", "address": "T0", "value": "K20"}])),
+                _rung(4, ([], [_app("RST", "M0")]), ([], [_app("SET", "M1")]), shared=[no("M0"), nc("X1"), no("T0")]),
+                _rung(5, ([no("X1")], [_app("RST", "M0"), _app("RST", "M1")])),
+                _rung(6, ([no("M0"), nc("X1")], [coil("Y0")])),
+                _rung(7, ([no("M1"), nc("X1")], [coil("Y1")])),
+            ],
+        ),
+        (
+            "timed_register_sequence",
+            "D0为步骤：0空闲、1工作、2完成。首扫置0。X0上升沿从0进入1；步骤1使T0持续计时2秒，到时进入2。X1停止优先并回0。Y0/Y1持续表示步骤1/2，计时完成触点只用于转换，不能持续门控输出。",
+            {"X0": "启动沿", "X1": "停止", "D0": "步骤", "T0": "工作延时", "Y0": "工作输出", "Y1": "完成输出"},
+            [
+                _rung(1, ([no("M8002")], [_app("MOV", "K0", "D0")])),
+                _rung(2, ([_contact("P", "X0"), nc("X1"), {"type": "COMPARE", "expression": "= D0 K0"}], [_app("MOV", "K1", "D0")])),
+                _rung(3, ([{"type": "COMPARE", "expression": "= D0 K1"}, nc("X1")], [{"type": "TIMER", "address": "T0", "value": "K20"}])),
+                _rung(4, ([{"type": "COMPARE", "expression": "= D0 K1"}, nc("X1"), no("T0")], [_app("MOV", "K2", "D0")])),
+                _rung(5, ([no("X1")], [_app("MOV", "K0", "D0")])),
+                _rung(6, ([{"type": "COMPARE", "expression": "= D0 K1"}, nc("X1")], [coil("Y0")])),
+                _rung(7, ([{"type": "COMPARE", "expression": "= D0 K2"}, nc("X1")], [coil("Y1")])),
+            ],
+        ),
     )
 
 
@@ -158,7 +188,21 @@ _ROUTING_METADATA = {
         "primary_execution_semantics": ["RISING_EDGE", "FALLING_EDGE"],
     },
     "calculate_then_compare": {},
-    "counter_reset_priority": {"primary_structures": ["hardware_counter"]},
+    "counter_reset_priority": {
+        "requires_structures": ["hardware_counter"],
+        "primary_structures": ["hardware_counter", "edge_trigger"],
+        "primary_execution_semantics": ["RISING_EDGE"],
+    },
+    "timed_bit_sequence": {
+        "requires_structures": ["bit_state_machine"],
+        "primary_structures": ["bit_state_machine", "edge_trigger", "state_transition"],
+        "primary_execution_semantics": ["FIRST_SCAN", "RISING_EDGE"],
+    },
+    "timed_register_sequence": {
+        "requires_structures": ["register_state_machine"],
+        "primary_structures": ["register_state_machine", "edge_trigger", "state_transition"],
+        "primary_execution_semantics": ["FIRST_SCAN", "RISING_EDGE"],
+    },
 }
 
 

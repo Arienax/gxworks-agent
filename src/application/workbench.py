@@ -168,6 +168,13 @@ class WorkbenchService:
             if not matches_migrated_spec_hash(project, expected_hash):
                 raise ConflictError("确认规格已变化，请重新加载。")
             candidate_spec = preserve_io_user_edits(current, spec)
+            candidate_spec = copy.deepcopy(candidate_spec)
+            intent_ids = candidate_spec.pop("confirmed_operation_intent_ids", [])
+            if intent_ids:
+                from plc.instruction_binding import confirm_operation_intents
+                candidate_spec["operation_intents"] = confirm_operation_intents(
+                    candidate_spec.get("operation_intents", []), intent_ids,
+                )
             issues = validate_spec_draft(candidate_spec, project.get("plc_model"))
             if issues.get("errors"):
                 return audited({"valid": False, "issues": public(issues)})

@@ -459,6 +459,16 @@ def test_provider_normalizes_transport_errors(status, expected_code, retryable):
     assert captured.value.status_code == status
 
 
+def test_local_progress_storage_permission_is_not_model_authentication():
+    provider = OpenAICompatibleProvider(
+        _profile("deepseek-default"), "key", client=_Client([PermissionError("local storage denied")])
+    )
+    with pytest.raises(ModelProviderError) as captured:
+        list(provider.stream(ModelRequest((UserMessage("hi"),), stream=True)))
+    assert captured.value.code == "provider_error"
+    assert captured.value.status_code is None
+
+
 def test_provider_rejects_protocol_response_without_choices():
     provider = OpenAICompatibleProvider(
         _profile("deepseek-default"),

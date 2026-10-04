@@ -444,7 +444,8 @@ def _normalize_error(error: Exception) -> ModelProviderError:
         code, retryable = error.code, error.retryable
     elif is_explicit_stream_rejection(error):
         code, retryable = "stream_not_supported", False
-    elif status in {401, 403} or "authentication" in name or "permission" in name:
+    elif status in {401, 403} or "authentication" in name or (
+            "permission" in name and not isinstance(error, PermissionError)):
         code, retryable = "authentication", False
     elif status == 429 or "ratelimit" in name or "rate_limit" in name:
         code, retryable = "rate_limit", True

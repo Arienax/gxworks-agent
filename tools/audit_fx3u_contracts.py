@@ -36,93 +36,22 @@ def sha(value):
 
 
 def page_lines(page):
-    """Restore horizontal rows; exclude the rotated right-side chapter tabs."""
-    lines = []
-    for word in sorted(json.loads(page["word_geometry_json"]), key=lambda w: (w["top"], w["x0"])):
-        if word["x0"] >= 538:
-            continue
-        if lines and abs(word["top"] - lines[-1][0]) < 3.5:
-            lines[-1][1].append(word)
-        else:
-            lines.append((word["top"], [word]))
-    return [(y, " ".join(w["text"] for w in sorted(words, key=lambda w: w["x0"])), words)
-            for y, words in lines]
+    from knowledge.instruction_document import geometric_page_lines
+    return geometric_page_lines(page)
 
 
 def native_definition(page, tables):
-    lines = page_lines(page)
-    text = "\n".join(line for _, line, _ in lines)
-    heading = re.search(r"FNC\s*(\d+)\s*[–—−-]\s*(" + TOKEN + r")\s*/", text[:700])
-    if not heading:
+    """Use the production structural parser; keep the frozen review receipt."""
+    from knowledge.instruction_document import extract_native_signature
+    value = extract_native_signature(page, tables)
+    if value is None:
         return None
-    starts = [y for y, line, _ in lines if re.match(r"2\.\s*Set data\b", line, re.I)]
-    ends = [y for y, line, _ in lines if re.match(r"3\.\s*Applicable devices\b", line, re.I)]
-    formats = re.search(r"1\.\s*Instruction format(.*?)2\.\s*Set data", text, re.S | re.I)
-    if not starts or not ends or not formats:
-        return None
-    boxes = []
-    for table in tables:
-        rows = json.loads(table["rows_json"])
-        header = " ".join(rows[0]).lower() if rows else ""
-        box = json.loads(table["bbox_json"])
-        if "operand" in header and "description" in header and "data" in header and starts[0] < box[1] < ends[0]:
-            boxes.append((box, table))
-    if len(boxes) > 1:
-        return None
-    if boxes:
-        box, table = boxes[0]
-    else:
-        # A failed table detector is not permission to use the partial
-        # instructions.operands_json. Use the original complete geometric
-        # set-data region, and still require independent full-call agreement.
-        body_lines = [(y, line) for y, line, _ in lines if starts[0] < y < ends[0]]
-        if not any("operand" in line.lower() and "description" in line.lower() for _, line in body_lines):
-            return None
-        footnotes = [y for y, line in body_lines if re.match(r"\*\d+\.", line)]
-        box = [48, starts[0] + 10, 538, min(footnotes) if footnotes else ends[0]]
-        table = {"table_index": 0, "table_text": "\n".join(line for _, line in body_lines),
-                 "rows_json": "[]", "bbox_json": json.dumps(box)}
-    symbols = []
-    for y, line, words in lines:
-        if not box[1] <= y < box[3]:
-            continue
-        # Symbol column only. Do not mistake symbols mentioned in descriptions,
-        # footnotes, instruction examples or chapter tabs for operand rows.
-        candidates = [w for w in words if box[0] <= w["x0"] < min(140, box[2]) and SYMBOL.fullmatch(w["text"])]
-        if len(candidates) == 1:
-            symbols.append(candidates[0]["text"].upper())
-        elif candidates:
-            return None  # conditional/composite cells require a separate review
-    no_data = "no set data" in table["table_text"].lower()
-    if (not symbols and not no_data) or len(set(symbols)) != len(symbols):
-        return None
-    # The native extraction must account for every nonempty data row. Merged
-    # descriptions or extra conditional rows are not silently dropped.
-    rows = json.loads(table["rows_json"])
-    if rows and symbols and len(rows) - 1 != len(symbols):
-        return None
-    y_format = next(y for y, line, _ in lines if re.match(r"1\.\s*Instruction format", line, re.I))
-    format_words = [w for y, _, words in lines if y_format < y < starts[0] for w in words]
-    columns = [w for w in format_words if w["text"] == "Mnemonic"]
-    forms = {}
-    for column in columns:
-        for word in format_words:
-            token = word["text"]
-            if (word["top"] <= column["top"] + 5 or abs(word["x0"] - column["x0"]) > 16
-                    or not re.fullmatch(TOKEN, token)):
-                continue
-            # Only the actual Mnemonic columns count. The left-side instruction
-            # icon prints base EADD even where only DEADD is a supported form.
-            conditions = [w for w in format_words if w["text"] in ("Continuous", "Pulse")
-                          and 40 < w["x0"] - column["x0"] < 110
-                          and abs(w["top"] - word["top"]) < 10]
-            widths = [w["text"] for w in format_words if w["text"] in ("16-bit", "32-bit")
-                      and 25 < column["x0"] - w["x0"] < 85 and abs(w["top"] - column["top"]) < 5]
-            forms[token] = {"execution_form": conditions[0]["text"].lower() if len(conditions) == 1 else None,
-                            "instruction_width": int(widths[0][:2]) if len(widths) == 1 else None}
-    return {"base": heading[2], "fnc": heading[1], "symbols": symbols,
-            "format": formats[1], "forms": forms, "page": page["pdf_page"],
-            "section": page["section"], "table_index": table["table_index"],
+    table = value['table_source']
+    return {"base": value['base'], "fnc": value['fnc'], "symbols": value['symbols'],
+            "format": value['format_text'],
+            "forms": {form: {key: metadata[key] for key in ('execution_form', 'instruction_width')}
+                      for form, metadata in value['forms'].items()},
+            "page": value['page'], "section": value['section'], "table_index": value['table_index'],
             "proof": sha(page["word_geometry_json"] + "\n" + table["rows_json"] + "\n" + table["bbox_json"])}
 
 

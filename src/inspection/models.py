@@ -788,6 +788,34 @@ def _merge_finding(left: Mapping[str, Any], right: Mapping[str, Any]) -> Dict[st
     return merged
 
 
+def _same_local_proof(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:
+    """Recognize an AI explanation of the same located Core proof.
+
+    Every local address and path must be retained. Additional explanatory
+    locations are allowed, but neither prose similarity nor a shared rung alone
+    establishes identity. The caller also requires a unique matching proof.
+    """
+    code = left.get("code")
+    if left.get("source") != "local" or right.get("source") != "ai" or not code:
+        return False
+    if right.get("code"):
+        if right["code"] != code:
+            return False
+    elif right.get("category") != code.lower():
+        return False
+    local_rungs = set(left.get("rung_ids") or [])
+    local_addresses = set(left.get("addresses") or [])
+    local_paths = left.get("json_paths") or []
+    if (not local_rungs or local_rungs != set(right.get("rung_ids") or [])
+            or not local_addresses or not local_addresses <= set(right.get("addresses") or [])
+            or not local_paths):
+        return False
+    ai_paths = right.get("json_paths") or []
+    return all(any(path == candidate or candidate.startswith(path + ".")
+                   or candidate.startswith(path + "[") for candidate in ai_paths)
+               for path in local_paths)
+
+
 def merge_inspection_reports(local: Any, ai: Any) -> Dict[str, Any]:
     """Merge local and deep reports while preserving version/hash binding."""
 
@@ -822,6 +850,11 @@ def merge_inspection_reports(local: Any, ai: Any) -> Dict[str, Any]:
         index = id_positions.get(finding_id) if finding_id else None
         if index is None:
             index = positions.get(key)
+        if index is None:
+            matches = [i for i, existing in enumerate(merged_findings)
+                       if _same_local_proof(existing, finding)]
+            if len(matches) == 1:
+                index = matches[0]
         if index is not None:
             merged_findings[index] = _merge_finding(merged_findings[index], finding)
         else:

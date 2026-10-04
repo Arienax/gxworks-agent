@@ -28,17 +28,16 @@ CONFIRMED_GENERATION_REQUEST = (
 
 
 # Prompt policy only: no reasoning-token limit, truncation, retry or acceptance gate.
-GENERATION_EXECUTION_POLICY_VERSION = "settled-facts-v1"
+GENERATION_EXECUTION_POLICY_VERSION = "settled-facts-v4"
 GENERATION_EXECUTION_POLICY = """# Generation execution policy
-当前是实现阶段：确认规格 → 只核对未定技术事实 → 固定一个实现 → 输出。即使前阶段选择了 Design，此处也只实现已选方案，不重新列方案或比较等价写法。
-已确认 I/O、参数和本轮明确修改是已定输入。参数/绑定优先于方案说明和 unverified_constraints 中过时的表述；保留其他未冲突的方案语义，不把参考文字升级成额外硬约束。已有结构化硬约束仍须遵守。
-形成决定后不反复重开；只有新的用户修订、技术证据或具体正确性矛盾才重审受影响部分。不要因冗余触点、等价布局或猜测评测器偏好重做整个方案。
-技术事实只作必要的定向核对（操作数/方向/触发/范围）；反复回忆不增加证据。检索文本存在不代表覆盖全部事实，缺证据也不等于禁止；不得编造已查证、测试通过或工具调用。不为缩短推理而跳过实际发现的错误。
-下面的输入谓词由当前绑定确定性推导，只表示电平测试，不替代边沿语义或完整控制逻辑；edit 时本轮明确修改优先于这些 baseline 谓词。未定电平不从名称或物理常闭字样猜测。
-完成一次必要的一致性检查后按既有协议输出一份程序；不输出中间计划，不在同次 completion 反复重写。"""
+只实现当前确认规格与所选方案。已确认绑定、参数及本轮修改优先于过时的参考说明；保留其余方案约束。仅因具体矛盾、新证据或用户修订重审。
+技术事实按需核对；检索文本不代表完整覆盖，缺证据不等于禁用，不编造查证或测试结果。
+NO 在位=1时导通，NC 在位=0时导通；二者只读位值，不设定初始值。按下/释放含义取自确认电平，现场接线不直接决定程序触点。P 检测0→1，F 检测1→0。
+下方谓词是当前绑定的电平事实；active 表示信号用途成立，run_permit 表示停止未生效。未定电平保持未知；edit 时本轮修改优先。边沿与完整工艺逻辑仍按规格实现。
+检查启动可达性、串联条件一致性及停止/故障与计数、状态转移的同扫描优先级。按既有协议输出一份最终程序。"""
 
 
-def generation_execution_prompt(confirmed_spec, *, evidence_text="", task_type="generate"):
+def generation_execution_prompt(confirmed_spec, *, evidence_text="", task_type="generate", plc_model=None):
     """Render one shared materialization policy from the current public snapshot.
 
     No persisted spec fields are removed or reconciled by parsing natural language.
@@ -48,7 +47,7 @@ def generation_execution_prompt(confirmed_spec, *, evidence_text="", task_type="
         return ""
     from plc.specification.conditions import generation_input_conditions
     spec = confirmed_spec if isinstance(confirmed_spec, Mapping) else {}
-    facts = generation_input_conditions(spec.get("io_bindings"))
+    facts = generation_input_conditions(spec.get("io_bindings"), plc_model=plc_model or spec.get("plc_model") or "FX3U")
     facts["basis"] = "edit_baseline" if task_type == "edit" else "current_confirmed_bindings"
     facts["retrieved_text_present"] = bool(str(evidence_text or "").strip())
     return ("\n\n" + GENERATION_EXECUTION_POLICY + "\n# Settled input predicates (not a new requirement)\n"
@@ -153,7 +152,10 @@ def build_confirmed_generation_context(
     # Exact device/error facts come from the active request, not from the
     # compiler's projection of settled implementation devices. Required opcodes
     # still come from the confirmed generation contract inside the resolver.
-    structured_targets = structured_fact_targets(request, projected)
+    # The fixed first-generation prompt contains transport/topology guidance
+    # (for example OR), not additional user lookup needs. Edits still route the
+    # actual user delta, alongside the confirmed specification.
+    structured_targets = structured_fact_targets(request if task_type == "edit" else "", projected, plc_model=model)
     retrieval_query = KnowledgeQuery(
         precompiled.retrieval_packet["query"],
         precompiled=True,
@@ -162,6 +164,10 @@ def build_confirmed_generation_context(
             "rag_evidence_token_budget": precompiled.budget_report.get("rag_evidence_token_budget"),
             "structured_fact_mode": "direct",
             "structured_fact_targets": structured_targets,
+            # First generation uses the explicit fact plan. Flattened I/O and
+            # process prose must not backfill arbitrary manuals about pulses or
+            # unrelated instructions. Edits retain the current user delta.
+            "residual_fact_query": request if task_type == "edit" else "",
             # Compatibility for older diagnostics/readers while the structured
             # fact receipt becomes the canonical handoff.
             "instruction_fact_mode": "targeted",

@@ -786,6 +786,488 @@ def test_current_code_checks_preserve_stale_reads_incomplete_diagnostics_and_emp
         assert case['selection']['empty_task'] and not case['selection']['selected_sources']
 
 
+@pytest.mark.parametrize('owned,traced,completed,errors,expected', [
+    ('current', 'not_observed', True, [], True),
+    ('stale', 'current', True, [], False),
+    ('unresolved', 'current', True, [], False),
+    ('partial_targets', 'not_observed', True, [], False),
+    ('current', 'stale', True, [], False),
+    ('current', 'not_observed', False, [], False),
+    ('current', 'not_observed', True, ['failed independent read'], False),
+])
+def test_native_check_code_guard_keeps_stale_conflicting_and_incomplete_evidence(
+        monkeypatch, owned, traced, completed, errors, expected):
+    monkeypatch.syspath_prepend(str(ROOT/'research'))
+    from program_check_evidence import has_current_native_check_code
+    evidence = {'owned_check_inputs': {'correspondence': owned},
+        'checker_resources': {'correspondence': traced, 'observation_errors': errors},
+        'raw_backend_check': {'completed': completed}}
+    assert has_current_native_check_code(evidence) is expected
+
+
+def native_check_input_snapshots(body, padding=b''):
+    from copy import deepcopy
+    # Captured ECCompiler 15.50 task header: outer=64, inner=4, mode=1.
+    # Synthetic opaque padding varies framing independently of the primary
+    # code. These tests concern byte binding, not native code acceptance.
+    header = bytes.fromhex('40002201' + '20' * 32 +
+        '0402d100030301080403000000000004071000ffffffffffffffffff0400ffff')
+    assert len(header) == 68
+    first = bytearray(header[:64])
+    first.extend(padding)
+    first[:2] = len(first).to_bytes(2, 'little')
+    header = bytes(first) + header[64:]
+    full = header + body
+    submitted = {'operation': 'OwnedCheckInput', 'target': [1] + [0] * 11,
+        'stage': 'submitted', 'mask': 0x7fffffff, 'manager': 'owned-task',
+        'compiler_member_offset': 12, 'manager_records_offset': 32,
+        'provenance': 'original ProcessManager.ProgramCheck owned code copy; read-only; no interception',
+        'rows': [{'resource': 'MAIN', 'bytes': len(full), 'file': 'submitted.bin', 'tag': -1,
+            'framing': {'reader_module': 'ECCompiler_IEC.dll', 'reader_version': '15.50',
+                'reader_rva': 0x39f30, 'code': 0, 'mode': 1, 'body_offset': len(header),
+                'body_bytes': len(body), 'first_length': len(first), 'second_length': 4,
+                'provenance': 'original checker envelope helper; optional tables omitted; read-only'}}]}
+    completed = deepcopy(submitted)
+    completed['stage'] = 'completed'
+    completed['rows'][0]['file'] = 'completed.bin'
+    return submitted, completed, {'generated': {'MAIN': body},
+        'snapshots': {'submitted.bin': full, 'completed.bin': full},
+        'native_version': '1.635.0.1', 'checker_version': '15.50'}
+
+
+def native_validation_observation():
+    """Synthetic collector transport over a frozen source, not native acceptance."""
+    from copy import deepcopy
+    from gxw.object_model import default_baseline
+    from gxw.container_writer import validate_cfb_streams
+    raw = default_baseline()
+    _, _, source = native_source_chain_inputs()
+    selected = deepcopy(source['selections'][0])
+    selected['name'] = selected['source_object']['name'] = '1'
+    selected['source_object']['owner']['read_name']['name'] = '1'
+    body = source['snapshots']['LEAF-body.bin']
+    submitted, completed, code = native_check_input_snapshots(b'current compiled code')
+    snapshots = {**code['snapshots'], 'imported-hdb.bin': validate_cfb_streams(raw)['_hdb'],
+                 'generated.bin': b'current compiled code', 'second.bin': b'', 'third.bin': b'',
+                 'published.bin': b'current compiled code'}
+    target = submitted['target']
+    def facts(identity, kind, name):
+        return {'id': identity, 'read_type': {'hresult': 0, 'code': 0, 'data_type': kind},
+                'read_name': {'hresult': 0, 'code': 0, 'name': name}}
+    resource = facts(target, 8, 'MAIN')
+    events = [selected, {'operation': 'NativeTaskSelection', 'resource': resource,
+        'tasks': [{'task': facts([30] + [0] * 11, 10, 'TASK'),
+                   'programs': [facts([31] + [0] * 11, 12, '1')]}],
+        'provenance': 'original Workspace collection, child, type, name and parent reads before compilation'}]
+    for stage in ('before-build', 'after-build', 'after-check'):
+        filename = stage + '.bin'; snapshots[filename] = body
+        events.append({**source['reads'][0], 'file': filename, 'stage': stage})
+    events.extend({'operation': 'OwnedBackendModule', 'name': name, 'version': '1.635.0.1'}
+        for name in ('DZDataABS_CompilerAdapter.dll', 'DZDataABS_Compiler_IEC.dll', 'DZDataABS_SICConverter_IEC.dll'))
+    diagnostic = {'kind': 2, 'code': 0x050c9300, 'step': 28, 'library': {'text': ''},
+                  'name': {'text': 'MAIN'}, 'arguments': [{'text': 'Y0'}]}
+    events.extend([
+        {'operation': 'OwnedBackendModule', 'name': 'ECCompiler_IEC.dll', 'version': '15.50'},
+        {'operation': 'Compiler.Build', 'hresult': 0, 'code': 0},
+        {'operation': 'Progress', 'poll': 1, 'hresult': 0, 'code': 0, 'percent': 100, 'count': 0},
+        {'operation': 'CompileRawReports', 'poll': 1, 'percent': 100, 'reports': []},
+        {'operation': 'Resource', 'name': 'MAIN', 'index': 0, 'channels': [
+            {'channel': i, 'bytes': len(snapshots[name]), 'file': name}
+            for i, name in enumerate(('generated.bin', 'second.bin', 'third.bin'))]},
+        {'operation': 'Workspace.UpdatePCodeBeforeProgramCheck', 'hresult': 0, 'code': 0},
+        {'operation': 'ProgramCheckTargetOrder', 'targets': [target]},
+        {'operation': 'NativeObject', 'id': target, 'name': 'MAIN', 'name_hresult': 0, 'name_code': 0},
+        {'operation': 'PublishedResourceCodeRead', 'target': target, 'name': 'MAIN',
+         'hresult': 0, 'code': 0, 'sizes': [len(snapshots['published.bin']), 0, 0]},
+        {'operation': 'PublishedResourceCodeCorrespondence', 'target': target, 'resource': resource, 'status': 'current',
+         'channels': [{'channel': i, 'published_size': len(snapshots[name]), 'published_snapshot': name}
+                      for i, name in enumerate(('published.bin', 'second.bin', 'third.bin'))]},
+        {'operation': 'ProgramCheckTarget', 'id': target},
+        {'operation': 'Compiler.ProgramCheck', 'hresult': 0, 'code': 0},
+        {'operation': 'ProgramCheckReportContext', 'target': target, 'path': 'owned-native-backend'}, submitted,
+        {'operation': 'ProgramCheckRawProgress', 'poll': 1, 'percent': 100, 'count': 2, 'hresult': 0, 'code': 0},
+        {'operation': 'ProgramCheckRawReports', 'poll': 1, 'percent': 100, 'reports': [diagnostic,
+            {'kind': 1, 'code': 0x23, 'name': {'text': 'MAIN'}, 'arguments': [{'text': '1'}, {'text': '0'}]}]},
+        completed,
+        {'operation': 'NativeDiagnosticLocation', 'target_resource': 'MAIN',
+         'original': {'poll': 1, 'report_index': 0, 'kind': 2, 'code': 0x050c9300, 'resource': 'MAIN', 'step': 28},
+         'source_location': {'resource': 'MAIN', 'code_step': 28, 'hresult': 0, 'code': 0,
+             'location': {'library': '', 'pou': '1', 'program_kind': 208, 'network': 1, 'start_step': 1},
+             'source_object': selected['source_object']}},
+        {'operation': 'ProgramCheckTargetOutcome', 'target': target, 'backend_check': 'completed-rejected'},
+        {'operation': 'ProgramCheckPollingFinished', 'targets': 1}])
+    # Retain the collector's actual ordering around compilation and checking.
+    for stage, before_operation in [('after-build', 'Resource'), ('after-check', 'ProgramCheckPollingFinished')]:
+        read = next(row for row in events if row.get('operation') == 'NativeBodyRead' and row.get('stage') == stage)
+        events.remove(read)
+        index = next(i for i, row in enumerate(events) if row.get('operation') == before_operation)
+        events.insert(index, read)
+    return raw, {'protocol_version': 1, 'status': 'observed', 'native_version': '1.635.0.1', 'cpu': 'FX3U/FX3UC',
+                 'validation': {'project': source['project_id'], 'events': events}}, snapshots
+
+
+@pytest.mark.parametrize('damage', ['missing-task-selection', 'unbound-task-program', 'empty-task',
+    'missing-source-phase', 'changed-global-declarations', 'missing-generated-buffer', 'missing-compile-reports',
+    'wrong-end-count', 'missing-check-start', 'unstarted-target', 'conversion-failed-cached-output', 'source-read-before-check'])
+def test_native_validation_keeps_failed_or_partial_stages_distinct(damage):
+    from gxw.native_diagnostics import project_native_validation
+    raw, observation, snapshots = native_validation_observation()
+    result = project_native_validation(raw, observation, snapshots)
+    assert result['current_raw_source_check'] == 'established'
+    assert result['raw_backend_check']['status'] == 'completed-rejected'
+    assert result['native_source_locations']['status'] == 'completed'
+    assert result['public_check'] == {'status': 'incomplete', 'completed': False}
+    assert not result['diagnostic_projection']['empty_public_list_means_no_errors']
+    events = observation['validation']['events']
+    event = lambda operation: next(row for row in events if row.get('operation') == operation)
+    if damage == 'missing-task-selection':
+        events.remove(event('NativeTaskSelection'))
+    elif damage == 'unbound-task-program':
+        event('NativeTaskSelection')['tasks'][0]['programs'][0]['read_name']['name'] = 'UNSELECTED'
+    elif damage == 'empty-task':
+        event('NativeTaskSelection')['tasks'][0]['programs'] = []
+    elif damage == 'missing-source-phase':
+        del snapshots['before-build.bin']
+    elif damage == 'changed-global-declarations':
+        from gxw.container_writer import replace_project_stream, validate_cfb_streams
+        from gxw.project_metadata import logical_mapping
+        mapping = logical_mapping(validate_cfb_streams(raw)['projectdatalist.xml'])
+        key = mapping['Global1.gh']
+        original = validate_cfb_streams(snapshots['imported-hdb.bin'])[key]
+        snapshots['imported-hdb.bin'], _ = replace_project_stream(snapshots['imported-hdb.bin'], key, original[:-1] + bytes([original[-1] ^ 1]))
+    elif damage == 'missing-generated-buffer':
+        del snapshots['generated.bin']
+    elif damage == 'missing-compile-reports':
+        events.remove(event('CompileRawReports'))
+    elif damage == 'wrong-end-count':
+        event('ProgramCheckRawReports')['reports'][-1]['arguments'][0]['text'] = '2'
+    elif damage == 'missing-check-start':
+        events.remove(event('Compiler.ProgramCheck'))
+    elif damage == 'unstarted-target':
+        event('ProgramCheckTargetOrder')['targets'].append([99] + [0] * 11)
+    elif damage == 'source-read-before-check':
+        read = next(row for row in events if row.get('operation') == 'NativeBodyRead' and row.get('stage') == 'after-check')
+        events.remove(read)
+        events.insert(0, read)
+    else:
+        event('Progress')['count'] = 1
+        event('CompileRawReports')['reports'] = [{'kind': 1, 'code': 0x20}]
+    result = project_native_validation(raw, observation, snapshots)
+    assert result['current_raw_source_check'] == 'not_established'
+    if damage == 'conversion-failed-cached-output':
+        assert result['compilation']['acceptance'] == 'rejected'
+        assert result['generated_resources']
+
+
+def test_native_validation_ignores_stored_match_flags_when_original_buffers_change():
+    from hypothesis import given, settings, strategies as st
+    from gxw.native_diagnostics import project_native_validation
+    @settings(max_examples=80, deadline=None, derandomize=True)
+    @given(st.sampled_from(['before-build.bin', 'after-build.bin', 'after-check.bin',
+                           'generated.bin', 'published.bin', 'submitted.bin', 'completed.bin']),
+           st.integers(min_value=0, max_value=100000))
+    def check(filename, index):
+        raw, observation, snapshots = native_validation_observation()
+        original = snapshots[filename]
+        offset = index % len(original)
+        snapshots[filename] = original[:offset] + bytes([original[offset] ^ 1]) + original[offset + 1:]
+        result = project_native_validation(raw, observation, snapshots)
+        assert result['current_raw_source_check'] == 'not_established'
+        assert not result['public_check']['completed']
+    check()
+
+
+def test_native_validation_missing_location_preserves_the_original_error():
+    from gxw.native_diagnostics import project_native_validation
+    raw, observation, snapshots = native_validation_observation()
+    observation['validation']['events'] = [row for row in observation['validation']['events']
+        if row.get('operation') != 'NativeDiagnosticLocation']
+    result = project_native_validation(raw, observation, snapshots)
+    assert result['current_raw_source_check'] == 'established'
+    assert result['raw_backend_check']['status'] == 'completed-rejected'
+    assert result['native_source_locations']['status'] == 'partial_or_unresolved'
+    assert result['raw_diagnostics'][0]['original']['code'] == 0x050c9300
+    assert result['raw_diagnostics'][0]['source_projection']['status'] == 'unresolved'
+
+
+@pytest.mark.parametrize('partial', [False, True])
+def test_native_validation_transport_reads_copies_before_removing_its_workspace(tmp_path, monkeypatch, partial):
+    import types
+    import gxworks2.workspace_adapter as adapter
+    raw, observation, snapshots = native_validation_observation()
+    if partial:
+        observation['status'] = 'failed'
+        observation['message'] = 'native_check_incomplete_timeout'
+        observation['validation']['events'] = [row for row in observation['validation']['events']
+            if row.get('operation') not in ('ProgramCheckRawReports', 'ProgramCheckPollingFinished')]
+    executable = tmp_path / 'adapter.exe'; executable.write_bytes(b'transport double')
+    roots, cleaned = [], []
+    class Process:
+        pid = 123
+        returncode = 1 if partial else 0
+        def __init__(self, arguments, **kwargs):
+            assert arguments == [str(executable.resolve())]
+            roots.append(Path(kwargs['cwd']))
+        def communicate(self, payload, timeout):
+            request = json.loads(payload)
+            assert request['operation'] == 'validate_project'
+            assert (roots[-1] / 'input.gxw').read_bytes() == raw
+            assert request['source']['programs'][0]['name'] == '1'
+            for name, data in snapshots.items():
+                (roots[-1] / name).write_bytes(data)
+            return json.dumps(observation), ''
+        def poll(self):
+            return self.returncode
+    monkeypatch.setattr(adapter, 'os', types.SimpleNamespace(name='nt', environ=adapter.os.environ))
+    monkeypatch.setattr(adapter.subprocess, 'Popen', Process)
+    monkeypatch.setattr(adapter, '_clean_native_temp', lambda pid, token: cleaned.append((pid, token)))
+    result = adapter.NativeWorkspaceValidation(executable, tmp_path).validate(raw)
+    assert cleaned and cleaned[0][0] == 123 and len(cleaned[0][1]) == 32
+    assert not roots[0].exists()
+    assert result['adapter']['exit_code'] == (1 if partial else 0)
+    assert result['compilation']['acceptance'] == 'accepted'
+    assert result['raw_backend_check']['completed'] is not partial
+    assert result['current_raw_source_check'] == ('not_established' if partial else 'established')
+
+
+def test_native_validation_transport_stops_timed_out_child_before_native_cleanup(tmp_path, monkeypatch):
+    import types
+    import gxworks2.workspace_adapter as adapter
+    from gxw.object_model import default_baseline
+    executable = tmp_path / 'adapter.exe'; executable.write_bytes(b'transport double')
+    lifecycle = []
+    class Process:
+        pid = 456
+        returncode = None
+        def __init__(self, *args, **kwargs):
+            pass
+        def communicate(self, *args, **kwargs):
+            if self.returncode is None:
+                raise adapter.subprocess.TimeoutExpired('isolated child', 1)
+            lifecycle.append('drained')
+            return '', ''
+        def kill(self):
+            lifecycle.append('stopped')
+            self.returncode = 1
+        def poll(self):
+            return self.returncode
+    monkeypatch.setattr(adapter, 'os', types.SimpleNamespace(name='nt', environ=adapter.os.environ))
+    monkeypatch.setattr(adapter.subprocess, 'Popen', Process)
+    monkeypatch.setattr(adapter, '_clean_native_temp', lambda pid, token: lifecycle.append('owned-cleanup'))
+    with pytest.raises(adapter.WorkspaceValidationError, match='超时'):
+        adapter.NativeWorkspaceValidation(executable, tmp_path).validate(default_baseline(), timeout=1)
+    assert lifecycle == ['stopped', 'drained', 'owned-cleanup']
+
+
+@pytest.mark.parametrize('damage', ['missing-copy', 'different-target', 'different-resource',
+                                  'different-framing', 'different-version', 'different-header'])
+def test_native_check_input_binding_refuses_missing_or_unbound_task_copies(damage):
+    from gxw.native_diagnostics import bind_native_check_input
+    submitted, completed, evidence = native_check_input_snapshots(b'original code')
+    assert bind_native_check_input(submitted, completed, **evidence)['status'] == 'current'
+    if damage == 'missing-copy':
+        del evidence['snapshots']['completed.bin']
+    elif damage == 'different-target':
+        completed['target'][0] = 2
+    elif damage == 'different-resource':
+        completed['rows'][0]['resource'] = 'OTHER'
+    elif damage == 'different-framing':
+        completed['rows'][0]['framing']['body_offset'] = 69
+    elif damage == 'different-version':
+        evidence['checker_version'] = '15.51'
+    else:
+        full = bytearray(evidence['snapshots']['completed.bin'])
+        full[4] ^= 1
+        evidence['snapshots']['completed.bin'] = bytes(full)
+    assert bind_native_check_input(submitted, completed, **evidence)['status'] == 'unresolved'
+
+
+def test_native_check_input_binding_never_promotes_changed_generated_or_task_bytes():
+    from hypothesis import example, given, settings, strategies as st
+    from gxw.native_diagnostics import bind_native_check_input
+
+    @settings(max_examples=80, deadline=None, derandomize=True)
+    @given(st.binary(min_size=1, max_size=128), st.integers(min_value=0, max_value=127),
+           st.binary(max_size=32))
+    @example(b'\0', 0, b'')
+    def check(body, index, padding):
+        submitted, completed, evidence = native_check_input_snapshots(body, padding)
+        assert bind_native_check_input(submitted, completed, **evidence)['status'] == 'current'
+        position = index % len(body)
+        changed = bytearray(body)
+        changed[position] ^= 1
+        evidence['generated']['MAIN'] = bytes(changed)
+        stale = bind_native_check_input(submitted, completed, **evidence)
+        assert stale['status'] == 'stale' and stale['task_copy_stable']
+        assert not stale['public_check_promoted']
+        evidence['generated']['MAIN'] = body
+        full = bytearray(evidence['snapshots']['completed.bin'])
+        full[completed['rows'][0]['framing']['body_offset'] + position] ^= 1
+        evidence['snapshots']['completed.bin'] = bytes(full)
+        unstable = bind_native_check_input(submitted, completed, **evidence)
+        assert unstable['status'] == 'unresolved' and not unstable['task_copy_stable']
+
+    check()
+
+
+def test_native_source_snapshot_requires_the_last_original_read_buffer(monkeypatch):
+    monkeypatch.syspath_prepend(str(ROOT/'research'))
+    from program_check_evidence import bind_native_source_snapshot
+    from src.gxw.object_model import default_baseline, read_project
+    from src.gxw.native_write import workspace_body
+    source, _, _ = read_project(default_baseline())
+    body = workspace_body(source.raw)
+    identity = [1] + [0] * 11
+    before = {'operation': 'NativeBodyRead', 'body': identity, 'bytes': len(body),
+        'file': 'before.bin',
+        'provenance': 'original Workspace.GetPOUBodyData(1692); source bytes, not compiled PCode'}
+    after = {**before, 'bytes': len(body) + 2, 'file': 'after.bin', 'stored_match': True}
+    snapshots = {'before.bin': body, 'after.bin': body + b'\0\0'}
+    result = bind_native_source_snapshot(source.raw, body_id=identity,
+        reads=[before, after], snapshots=snapshots)
+    assert result['status'] == 'stale' and result['native_snapshot'] == 'after.bin'
+    assert result['source_body_bytes'] + 2 == result['native_body_bytes']
+    assert bind_native_source_snapshot(source.raw, body_id=identity,
+        reads=[before, after], snapshots={'before.bin': body})['status'] == 'unresolved'
+    assert bind_native_source_snapshot(source.raw, body_id=[0] * 12,
+        reads=[before], snapshots=snapshots)['status'] == 'unresolved'
+
+
+def test_native_source_snapshot_binding_isolated_from_other_body_reads(monkeypatch):
+    hypothesis = pytest.importorskip('hypothesis')
+    from hypothesis import strategies as st
+    monkeypatch.syspath_prepend(str(ROOT/'research'))
+    from program_check_evidence import bind_native_source_snapshot
+    from src.gxw.object_model import default_baseline, read_project
+    from src.gxw.native_write import workspace_body
+    source, _, _ = read_project(default_baseline())
+    body = workspace_body(source.raw)
+    identity, other = [1] + [0] * 11, [2] + [0] * 11
+
+    def read(filename, raw, selected):
+        return {'operation': 'NativeBodyRead', 'body': selected, 'bytes': len(raw), 'file': filename,
+            'provenance': 'original Workspace.GetPOUBodyData(1692); source bytes, not compiled PCode'}
+
+    @hypothesis.settings(max_examples=80, deadline=None, derandomize=True)
+    @hypothesis.given(st.lists(st.binary(max_size=64), max_size=16), st.binary(min_size=1, max_size=64))
+    @hypothesis.example([], b'\0\0')
+    def check(unrelated, extra):
+        snapshots = {'current.bin': body}
+        reads = [read('current.bin', body, identity)]
+        for index, raw in enumerate(unrelated):
+            filename = f'other-{index}.bin'
+            snapshots[filename] = raw
+            reads.append(read(filename, raw, other))
+        result = bind_native_source_snapshot(source.raw, body_id=identity, reads=reads, snapshots=snapshots)
+        assert result['status'] == 'current' and result['native_snapshot'] == 'current.bin'
+        # Later unrelated reads cannot revive the stale selected-body snapshot.
+        changed = body + extra
+        snapshots['changed.bin'] = changed
+        reads.insert(1, read('changed.bin', changed, identity))
+        result = bind_native_source_snapshot(source.raw, body_id=identity, reads=reads, snapshots=snapshots)
+        assert result['status'] == 'stale' and result['native_snapshot'] == 'changed.bin'
+        del snapshots['changed.bin']
+        assert bind_native_source_snapshot(source.raw, body_id=identity,
+            reads=reads, snapshots=snapshots)['status'] == 'unresolved'
+
+    check()
+
+
+def native_source_chain_inputs():
+    from src.gxw.object_model import default_baseline, read_project
+    from src.gxw.native_write import workspace_body
+    source, _, _ = read_project(default_baseline())
+    project = [9] + [0] * 11
+    names = ['LEAF', 'PARENT', 'CALLER']
+    programs, selections, reads, snapshots = {}, [], [], {}
+    body = workspace_body(source.raw)
+    for index, name in enumerate(names, 1):
+        owner_id, body_id = [1, index] + [0] * 10, [2, index] + [0] * 10
+        source_object = {'status': 'verified-source-object', 'parent': project,
+            'lookup_type': 32, 'name': name,
+            'lookup': {'hresult': 0, 'code': 0, 'id': body_id},
+            'owner_lookup': {'lookup_type': 26, 'hresult': 0, 'code': 0, 'id': owner_id},
+            'body_parent': {'hresult': 0, 'code': 0, 'id': owner_id},
+            'body': {'id': body_id, 'read_type': {'hresult': 0, 'code': 0, 'data_type': 32},
+                     'read_name': {'hresult': 0, 'code': 0, 'name': 'Program'}},
+            'owner': {'id': owner_id, 'read_type': {'hresult': 0, 'code': 0, 'data_type': 26},
+                      'read_name': {'hresult': 0, 'code': 0, 'name': name}},
+            'language': {'hresult': 0, 'code': 0, 'object_id': owner_id, 'value': 208, 'expected': 208}}
+        selections.append({'operation': 'NativeBodySelection', 'name': name,
+                           'program_kind': 208, 'source_object': source_object})
+        filename = name + '-body.bin'
+        reads.append({'operation': 'NativeBodyRead', 'body': body_id, 'bytes': len(body), 'file': filename,
+            'provenance': 'original Workspace.GetPOUBodyData(1692); source bytes, not compiled PCode'})
+        programs[name], snapshots[filename] = source.raw, body
+    return programs, names, dict(project_id=project, native_version='1.635.0.1',
+                                 selections=selections, reads=reads, snapshots=snapshots)
+
+
+@pytest.mark.parametrize('missing', ['LEAF', 'PARENT', 'CALLER'])
+def test_native_source_chain_cannot_replace_a_missing_body_with_identical_other_sources(monkeypatch, missing):
+    monkeypatch.syspath_prepend(str(ROOT/'research'))
+    from program_check_evidence import bind_native_source_chain
+    programs, names, evidence = native_source_chain_inputs()
+    result = bind_native_source_chain(programs, names, **evidence)
+    assert result['status'] == 'current' and len(result['sources']) == 3
+    # All bodies contain identical bytes, but each belongs to a different POU.
+    del evidence['snapshots'][missing + '-body.bin']
+    result = bind_native_source_chain(programs, names, **evidence)
+    assert result['status'] == 'unresolved'
+    assert next(row for row in result['sources'] if row['pou'] == missing)['status'] == 'unresolved'
+    assert bind_native_source_chain(programs, [], **evidence)['status'] == 'unresolved'
+
+
+@pytest.mark.parametrize('damage', ['owner_name', 'parent', 'language', 'latest_selection', 'version'])
+def test_native_source_chain_requires_original_identity_for_every_caller(monkeypatch, damage):
+    monkeypatch.syspath_prepend(str(ROOT/'research'))
+    from program_check_evidence import bind_native_source_chain
+    programs, names, evidence = native_source_chain_inputs()
+    parent = evidence['selections'][1]
+    source = parent['source_object']
+    if damage == 'owner_name':
+        source['owner']['read_name']['name'] = 'UNRELATED'
+    elif damage == 'parent':
+        source['body_parent']['id'] = evidence['selections'][2]['source_object']['owner_lookup']['id']
+    elif damage == 'language':
+        source['language']['value'] = 193
+    elif damage == 'latest_selection':
+        evidence['selections'].append({'operation': 'NativeBodySelection', 'name': 'PARENT'})
+    else:
+        evidence['native_version'] = 'unobserved'
+    assert bind_native_source_chain(programs, names, **evidence)['status'] == 'unresolved'
+
+
+def test_native_source_chain_status_is_independent_of_required_order_and_unrelated_reads(monkeypatch):
+    from hypothesis import example, given, settings, strategies as st
+    monkeypatch.syspath_prepend(str(ROOT/'research'))
+    from program_check_evidence import bind_native_source_chain
+
+    @settings(max_examples=80, deadline=None, derandomize=True)
+    @given(st.permutations(['LEAF', 'PARENT', 'CALLER']), st.sampled_from(['LEAF', 'PARENT', 'CALLER']),
+           st.binary(min_size=1, max_size=32), st.lists(st.binary(max_size=32), max_size=8))
+    @example(['CALLER', 'PARENT', 'LEAF'], 'PARENT', b'\0', [b''])
+    def check(order, changed, extra, unrelated):
+        programs, _, evidence = native_source_chain_inputs()
+        read = next(row for row in evidence['reads'] if row['file'] == changed + '-body.bin')
+        data = evidence['snapshots'][read['file']] + extra
+        latest = {**read, 'bytes': len(data), 'file': 'changed.bin'}
+        evidence['reads'].append(latest)
+        evidence['snapshots']['changed.bin'] = data
+        for index, raw in enumerate(unrelated):
+            filename = 'unrelated-' + str(index) + '.bin'
+            evidence['reads'].append({**read, 'body': [99, index] + [0] * 10,
+                                      'file': filename, 'bytes': len(raw)})
+            evidence['snapshots'][filename] = raw
+        result = bind_native_source_chain(programs, order, **evidence)
+        assert result['status'] == 'stale'
+        assert next(row for row in result['sources'] if row['pou'] == changed)['native_snapshot'] == 'changed.bin'
+        del evidence['snapshots']['changed.bin']
+        assert bind_native_source_chain(programs, order, **evidence)['status'] == 'unresolved'
+
+    check()
+
+
 def diagnostic_source_witnesses():
     with open_evidence_archive(ROOT/'research/evidence/gxw-native-diagnostic-sources-20261002.zip') as archive:
         return json.loads(archive.read('cpu-source-witnesses.json'))

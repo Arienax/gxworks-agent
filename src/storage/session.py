@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import sys
+import time
 import uuid
 from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
@@ -154,7 +155,17 @@ class SessionStore:
                 json.dump(payload, f, ensure_ascii=False, indent=2)
                 f.flush()
                 os.fsync(f.fileno())
-            os.replace(str(temp_path), str(path))
+            # Windows readers/virus scanners can briefly deny replacing a
+            # complete file. Retry only the known Windows access/share errors;
+            # retain the old document until the atomic replacement succeeds.
+            for attempt in range(5):
+                try:
+                    os.replace(str(temp_path), str(path))
+                    break
+                except PermissionError as error:
+                    if getattr(error, "winerror", None) not in {5, 32, 33} or attempt == 4:
+                        raise
+                    time.sleep(0.01 * 2 ** attempt)
         finally:
             try:
                 temp_path.unlink()

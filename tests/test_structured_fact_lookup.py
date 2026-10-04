@@ -26,6 +26,32 @@ def _bundled_index():
     return path
 
 
+@pytest.mark.parametrize("char_budget,token_budget,delivered", [(96000, 12000, True), (1000, 200, False)])
+def test_process_dependencies_share_final_budget_without_displacing_designated_instructions(char_budget, token_budget, delivered):
+    _bundled_index()
+    from knowledge.retriever import build_knowledge_context
+    from knowledge.evidence import estimate_tokens
+    targets = {"instructions": [{"opcode": op, "base_opcode": op} for op in ("TCMP", "MUL", "DDIV", "WSFL", "BMOV")],
+               "devices": [], "errors": [], "process": [
+                   {"target": "FIRST_SCAN", "dimension": "definition", "devices": ["M8002"]},
+                   {"target": "TIMER", "dimension": "operation", "devices": ["T0"]}]}
+    query = KnowledgeQuery("TCMP MUL DDIV WSFL BMOV", precompiled=True,
+        metadata={"structured_fact_targets": targets, "residual_fact_query": ""})
+    context = build_knowledge_context(query, top_k=5, char_budget=char_budget, token_budget=token_budget)
+    assert len(context) <= char_budget and estimate_tokens(context) <= token_budget
+    assert context.manifest["primary_top_k"] == 5
+    process_requirements = [r for r in context.manifest["fact_coverage"]["requirements"] if r["kind"] == "process"]
+    assert len(process_requirements) == 2
+    expected_status = "candidate_evidence" if delivered else "budget_omitted"
+    assert {r["status"] for r in process_requirements} == {expected_status}
+    if delivered:
+        assert {r.get("instruction_opcode") for r in context.manifest["records"] if r["chunk_type"] == "instruction"} >= {"TCMP", "MUL", "DDIV", "WSFL", "BMOV"}
+        assert len(context.manifest["process_dependency_ids"]) == 2
+        assert all(source in context for r in process_requirements for source in r["source_ids"])
+    else:
+        assert context.manifest["process_dependency_ids"] == []
+
+
 def test_broad_retrieval_uses_unweighted_rrf_without_plc_topic_boosts():
     import knowledge.core as knowledge_core
 
@@ -71,6 +97,59 @@ def test_direct_fact_module_has_no_broad_retriever_calls():
     assert "_fts_references" not in calls
 
 
+@pytest.mark.parametrize("model,expected", [("FX3U", ["M8002"]),
+                                            ("FX5U", ["SM402", "SM8002"]),
+                                            ("unknown_cpu", [])])
+def test_process_fact_plan_uses_confirmed_semantics_and_keeps_model_scope(model, expected):
+    from plc.semantics import generation_process_fact_needs
+
+    spec = {"plc_model": model, "io_table": [{"address": "X0", "label": "按钮"}],
+            "execution_semantics": [{"semantic": "FIRST_SCAN"}],
+            "selected_approach": {"generation_guide": "T0至T19定时器，C0单瓶计数",
+                "generation_contract": {"required_structures": ["hardware_counter"]}}}
+    needs = generation_process_fact_needs(spec)
+    assert needs == [{"target": "FIRST_SCAN", "dimension": "definition", "devices": expected,
+                      "basis": "confirmed_execution_semantics"},
+                     {"target": "TIMER", "dimension": "operation", "devices": ["T0", "T19"],
+                      "basis": "declared_timer_references"},
+                     {"target": "COUNTER", "dimension": "operation", "devices": ["C0"],
+                      "basis": "confirmed_hardware_counter_structure"}]
+    assert generation_process_fact_needs({"plc_model": model, "io_table": spec["io_table"]}) == []
+
+
+def test_process_facts_resolve_official_operating_sections_and_preserve_raw_sources():
+    from knowledge.structured_facts import resolve_process_records
+    _bundled_index()
+    needs = [{"target": "FIRST_SCAN", "dimension": "definition", "devices": ["M8002"]},
+             {"target": "TIMER", "dimension": "operation", "devices": ["T0", "T200"]},
+             {"target": "COUNTER", "dimension": "operation", "devices": ["C0", "C1"]}]
+    rows = resolve_process_records(needs, plc_model="FX3U")
+    assert {row["fact_target"] for row in rows} == {"FIRST_SCAN", "TIMER", "COUNTER"}
+    with sqlite3.connect(f"file:{_bundled_index().as_posix()}?mode=ro", uri=True) as connection:
+        for row in rows:
+            original = connection.execute("SELECT text FROM chunks WHERE id=?", (row["id"],)).fetchone()[0]
+            assert row["text"] == original
+            assert row["structured_lookup"] is True
+    assert resolve_process_records(needs, plc_model="FX5U") == []
+    assert resolve_process_records([{"target": "COUNTER", "dimension": "operation",
+                                     "devices": ["C235"]}], plc_model="FX3U") == []
+    assert resolve_process_records([{"target": "TIMER", "dimension": "operation",
+                                     "devices": ["T250"]}], plc_model="FX3U") == []
+
+
+def test_projected_process_plan_keeps_the_explicit_runtime_cpu():
+    from application.confirmed_generation_context import build_confirmed_generation_context
+    queries = []
+    def retrieve(query, **_kwargs):
+        queries.append(query)
+        return ""
+    spec = {"plc_model": "FX3U", "execution_semantics": [{"semantic": "FIRST_SCAN"}]}
+    build_confirmed_generation_context(spec, "FX3U", knowledge_builder=retrieve)
+    targets = queries[0].metadata["structured_fact_targets"]
+    assert targets["process"][0]["devices"] == ["M8002"]
+    assert queries[0].metadata["residual_fact_query"] == ""
+
+
 @pytest.mark.parametrize("opcode", ["SFTL", "ZRN", "MOV"])
 def test_exact_instruction_is_resolved_from_structured_table(opcode):
     _bundled_index()
@@ -93,7 +172,7 @@ def test_verified_form_source_pages_own_lookup_even_without_an_exact_indexed_for
     rows = resolve_instruction_records([{"opcode": opcode}], plc_model="FX3U", task_type="generate")
     assert rows
     primary = rows[0]
-    assert primary["instruction_lookup_basis"] == "verified_contract_source_page"
+    assert primary["instruction_lookup_basis"] == "compiled_definition_section"
     assert primary["instruction_opcode"] == opcode
     assert primary["manual_instruction_opcode"] == manual_opcode
     assert primary["instruction_contract_source"]["pdf_page"] == page
@@ -310,7 +389,7 @@ def test_structured_step_width_uses_shared_owner_for_instruction_instance():
         assert fact["operands"] == operands
         assert "STEP_WIDTH:" not in rows[0]["text"]
         if opcode == "RST":
-            assert rows[0]["instruction_lookup_basis"] == "official_section_heading"
+            assert rows[0]["instruction_lookup_basis"] == "compiled_definition_section"
             assert rows[0]["manual_number"] == "JY997D16601"
             assert rows[0]["instruction_contract"]["opcode"] == "RST"
 

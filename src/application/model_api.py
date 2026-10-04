@@ -667,7 +667,7 @@ def debug_ladder(
     local_findings=None,
     model_name=None,
     effort=None,
-    request_timeout=120,
+    request_timeout=None,
     raise_errors=False,
     plc_model="FX3U",
     debug_context=None,
@@ -727,7 +727,7 @@ def debug_ladder(
             stream=False,
             response_contract=DEBUG_RESPONSE,
             request_timeout=request_timeout,
-            max_retries=0 if request_timeout is not None else None,
+            max_retries=0,
         )
         raw = _clean_json_response(response.message.content)
         report = json.loads(raw)
@@ -765,12 +765,13 @@ def _call_debug_evidence_json(
     *,
     model_name=None,
     effort=None,
-    request_timeout=120,
+    request_timeout=None,
     raise_errors=False,
     on_reasoning_chunk=None,
     on_content_chunk=None,
     on_progress=None,
     response_contract=INSPECTION_RESPONSE,
+    prefer_stream=False,
 ):
     config = load_full_config()
     selected_model = model_name or _active_model_name(config)
@@ -778,7 +779,7 @@ def _call_debug_evidence_json(
     messages.append(
         {
             "role": "user",
-            "content": json.dumps(payload, ensure_ascii=False, indent=2),
+            "content": json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
         }
     )
     try:
@@ -786,6 +787,17 @@ def _call_debug_evidence_json(
             callback is not None
             for callback in (on_reasoning_chunk, on_content_chunk, on_progress)
         )
+        if prefer_stream:
+            from model_runtime.runtime_profile import materialize_runtime_profile
+            provider = current_provider()
+            wants_stream = True
+            profile = getattr(provider, "profile", None)
+            if profile is not None:
+                runtime = materialize_runtime_profile(
+                    profile, api_key=getattr(provider, "api_key", None), model=selected_model,
+                )
+                streaming = runtime.contract.capabilities.get("streaming")
+                wants_stream = not (streaming and streaming.status == "unsupported")
         if wants_stream and on_progress:
             on_progress(str(tr("AI 正在生成仿真测试方案（流式）")))
         response = _request_model(
@@ -796,7 +808,7 @@ def _call_debug_evidence_json(
             response_contract=response_contract,
             preserved_annotations=source_annotations(payload),
             request_timeout=request_timeout,
-            max_retries=0 if request_timeout is not None else None,
+            max_retries=0,
             on_reasoning_chunk=on_reasoning_chunk,
             on_content_chunk=on_content_chunk,
             fallback_to_non_stream=wants_stream,
@@ -832,7 +844,7 @@ def debug_evidence_diagnosis(
     *,
     model_name=None,
     effort=None,
-    request_timeout=120,
+    request_timeout=None,
     raise_errors=False,
 ):
     """Ask the model for a diagnosis; deterministic validation happens later."""
@@ -855,7 +867,7 @@ def debug_evidence_patch(
     *,
     model_name=None,
     effort=None,
-    request_timeout=120,
+    request_timeout=None,
     raise_errors=False,
 ):
     """Ask the model for a local patch; deterministic validation happens later."""
@@ -879,7 +891,7 @@ def generate_simulator_test_suite(
     *,
     model_name=None,
     effort=None,
-    request_timeout=120,
+    request_timeout=None,
     raise_errors=False,
     on_reasoning_chunk=None,
     on_content_chunk=None,
@@ -910,7 +922,7 @@ def run_multi_agent_specialist(
     *,
     model_name=None,
     effort=None,
-    request_timeout=120,
+    request_timeout=None,
     raise_errors=False,
 ):
     """Call one advisory P9 specialist; its JSON is validated by Supervisor."""
@@ -947,6 +959,7 @@ def run_multi_agent_specialist(
         effort=None,
         request_timeout=request_timeout,
         raise_errors=raise_errors,
+        prefer_stream=True,
     )
 
 
@@ -998,7 +1011,7 @@ def inspect_ladder(
     conversation_history=None,
     model_name=None,
     effort=None,
-    request_timeout=120,
+    request_timeout=None,
     raise_errors=False,
 ):
     """Return an AI inspection candidate for later strict local normalization."""
@@ -1062,7 +1075,7 @@ def inspect_ladder(
             effort=None,
             stream=False,
             request_timeout=request_timeout,
-            max_retries=0 if request_timeout is not None else None,
+            max_retries=0,
             response_contract=INSPECTION_RESPONSE,
         )
         raw = _clean_json_response(response.message.content)

@@ -109,11 +109,18 @@ def review_ladder(data, confirmed_spec=None, plc_model="FX3U", request=None):
     rungs = data.get("rungs", [])
     if not isinstance(rungs, list):
         return []
+    from plc.ir import lower_rung_instructions
+    from plc.static_analysis import initial_reset_coil_owners
+    initialized_coils = initial_reset_coil_owners([
+        {"id": f"N{index:04d}", "order": index, "rung_id": rung.get("rung_id"),
+         "ladder": rung, "instructions": lower_rung_instructions(rung)}
+        for index, rung in enumerate(rungs)
+    ], plc_model=model)
     findings = []
     findings.extend(_review_model_compatibility(data, model))
     findings.extend(_review_confirmed_io(data, confirmed_spec))
-    findings.extend(_review_output_ownership(rungs))
-    findings.extend(_review_set_reset_ownership(data))
+    findings.extend(_review_output_ownership(rungs, initialized_coils, plc_model=model))
+    findings.extend(_review_set_reset_ownership(data, initialized_coils, plc_model=model))
     findings.extend(_review_same_scan_set_reset_toggle(rungs))
     findings.extend(_review_state_machine(data, model))
     findings.extend(_review_timer_and_counter_paths(data))
@@ -302,7 +309,7 @@ def _output_descriptor(output):
     return opcode, [str(item).upper() for item in operands]
 
 
-def _bit_writes(output):
+def _bit_writes(output, *, plc_model="FX3U"):
     opcode, operands = _output_descriptor(output)
     if opcode == "COIL":
         address = operands[0] if operands else ""
@@ -314,7 +321,8 @@ def _bit_writes(output):
     if opcode in {"MOV", "DMOV"}:
         targets = operands[1:2]
     elif opcode == "ZRST":
-        targets = operands[:2]
+        from plc.ir import analyze_instruction_access
+        _reads, targets = analyze_instruction_access(opcode, operands, plc_model=plc_model)
     else:
         targets = operands[:1]
     for operand in targets:
@@ -322,12 +330,12 @@ def _bit_writes(output):
             yield operand, opcode
 
 
-def _review_output_ownership(rungs):
+def _review_output_ownership(rungs, initialized_coils=(), *, plc_model="FX3U"):
     writers = {}
     for rung_idx, rung in enumerate(rungs):
         for branch_idx, branch in enumerate(rung.get("branches", []) or []):
             for output_idx, output in enumerate(branch.get("outputs", []) or []):
-                for address, writer_type in _bit_writes(output):
+                for address, writer_type in _bit_writes(output, plc_model=plc_model):
                     writers.setdefault(address, []).append(
                         {
                             "writer_type": writer_type,
@@ -340,7 +348,7 @@ def _review_output_ownership(rungs):
                     )
     findings = []
     for address, entries in sorted(writers.items()):
-        if len(entries) < 2:
+        if len(entries) < 2 or address in initialized_coils:
             continue
         rung_ids = {entry["rung_id"] for entry in entries}
         writer_types = {entry["writer_type"] for entry in entries}
@@ -349,7 +357,7 @@ def _review_output_ownership(rungs):
         # COILs, spreading pure SET/RST writers across rungs is not itself a
         # conflict; scan order and reset priority are design semantics, not a
         # reason to reject the ownership pattern wholesale.
-        if writer_types <= {"SET", "RST"}:
+        if writer_types <= {"SET", "RST", "ZRST"}:
             continue
         if writer_types == {"COIL"}:
             # Duplicate COIL is already a hard validation error.
@@ -374,40 +382,46 @@ def _review_output_ownership(rungs):
     return findings
 
 
-def _review_set_reset_ownership(data):
+def _review_set_reset_ownership(data, initialized_coils=(), *, plc_model="FX3U"):
     rungs = data.get("rungs", []) or []
     comments = {
         str(address).upper(): str(label)
         for address, label in (data.get("device_comments") or {}).items()
     }
     ownership = {}
+    range_resets = {}
     for rung_idx, rung in enumerate(rungs):
         for branch_idx, branch in enumerate(rung.get("branches", []) or []):
             for output_idx, output in enumerate(branch.get("outputs", []) or []):
                 opcode, operands = _output_descriptor(output)
-                if opcode not in {"SET", "RST"} or not operands:
+                if opcode not in {"SET", "RST", "ZRST"} or not operands:
                     continue
-                address = operands[0]
-                if not BIT_OWNER_RE.fullmatch(address):
-                    continue
-                ownership.setdefault(address, {}).setdefault(opcode, []).append(
-                    {
-                        "rung_id": rung.get("rung_id"),
-                        "path": (
-                            f"$.rungs[{rung_idx}].branches[{branch_idx}]"
-                            f".outputs[{output_idx}]"
-                        ),
-                        "context": " ".join(
-                            (
-                                str(rung.get("debug_note", "")),
-                                str(output.get("label", "")),
-                                comments.get(address, ""),
-                            )
-                        ),
-                    }
-                )
+                for address, _kind in _bit_writes(output, plc_model=plc_model):
+                    owners = range_resets if opcode == "ZRST" else ownership
+                    owners.setdefault(address, {}).setdefault("RST" if opcode == "ZRST" else opcode, []).append(
+                        {
+                            "rung_id": rung.get("rung_id"),
+                            "path": (
+                                f"$.rungs[{rung_idx}].branches[{branch_idx}]"
+                                f".outputs[{output_idx}]"
+                            ),
+                            "context": " ".join(
+                                (
+                                    str(rung.get("debug_note", "")),
+                                    str(output.get("label", "")),
+                                    comments.get(address, ""),
+                                )
+                            ),
+                        }
+                    )
     findings = []
     for address, operations in sorted(ownership.items()):
+        # Clearing a whole region does not imply that every spare bit needs
+        # a SET owner. Use the range to discharge explicit latch warnings.
+        if address in range_resets:
+            operations.setdefault("RST", []).extend(range_resets[address]["RST"])
+        if address in initialized_coils:
+            continue
         sets = operations.get("SET", [])
         resets = operations.get("RST", [])
         if sets and resets:

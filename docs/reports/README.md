@@ -4,6 +4,8 @@
 
 ## 运行时与交付
 
+- [2026-10-04 ModelScope 复杂需求用户路径](2026-10-04-modelscope-complex-user-path.md)：四份确认规格、构造范例开关对照、独立程序审阅、实际检索质量及操作路径修复。
+- [2026-10-04 统一指令定义与效果绑定](2026-10-04-instruction-definition-binding.md)：720 个联合形式、3,925 个形式／型号 owner，67 个形式的独立验收与最终 196 次 DeepSeek 对照，Prompt cache 和 SQLite 旧索引构建修复。
 - [2026-10-03 Agent B 操作数用途对照](2026-10-03-agent-b-operand-purpose.md)：ModelScope 两轮各实测 52 次及 CMP 四组 48 次，用途与必要关系的独立增量、剩余错误及验证边界。
 - [2026-10-03 FX3U 操作数用途交付](2026-10-03-fx3u-operand-purpose.md)：227 个形式的候选仲裁、全量覆盖、通用解析修复及剩余缺口。
 - [2026-09-21 运行时所有权回归](2026-09-21-runtime-ownership.md)：`f2f1781` 与基线的原始 CI 对照。
@@ -13,6 +15,8 @@
 
 ## GXW 与原生实验
 
+- [原生局部声明与 FBD 联合更新（2026-10-04）](gxw/2026-10-04-fbd-native-declarations.md)
+- [FBD 标签作用域编辑与 CPU 扩测（2026-10-04）](gxw/2026-10-04-fbd-label-scope.md)
 - [原生诊断源码映射与技能实测（2026-10-02）](gxw/2026-10-02-native-diagnostic-source-mapping.md)
 - [FBD v2 应用贯通与当前代码检查（2026-10-02）](gxw/2026-10-02-fbd-v2-application-native-check.md)
 - [临时分配与 ST 参数转移快照（2026-09-30）](gxw/2026-09-30-st-transfer-checkpoint.md)
