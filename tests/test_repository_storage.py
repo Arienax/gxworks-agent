@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from scripts import check_repository_storage as storage
+from scripts.package_documentation import stage_documentation
 
 POINTER = (b"version https://git-lfs.github.com/spec/v1\n"
            b"oid sha256:" + b"a" * 64 + b"\nsize 123456789\n")
@@ -236,6 +237,75 @@ class RepositoryStorageTests(unittest.TestCase):
             self.assertEqual(storage.pre_push(self.repo, "origin", "url", data), 17)
             upload.assert_called_once_with(["git", "lfs", "pre-push", "origin", "url"],
                                           cwd=self.repo, input=data, check=False)
+
+
+class DocumentationEvidenceStorageTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name) / "source"
+        self.root.mkdir()
+        self.destination = Path(self.tmp.name) / "release"
+
+    def write(self, name, data):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        return path
+
+    def test_missing_and_present_local_evidence_are_excluded_from_releases(self):
+        paths = ("research/evidence/nested/a.ZIP", "research/evidence/a.tar.gz",
+                 "research/results/raw/trace.json", "research/results/raw")
+        for present in (False, True):
+            with self.subTest(present=present):
+                if present:
+                    for path in paths[:-1]:
+                        self.write(path, b"local evidence")
+                document = "\n".join(f"[Evidence {i}]({path}#details)"
+                                     for i, path in enumerate(paths))
+                self.write("README.md", document.encode())
+                manifest = stage_documentation(self.root, self.destination)
+                rendered = (self.destination / "README.md").read_text(encoding="utf-8")
+                self.assertEqual(set(manifest["files"]), {"README.md"})
+                self.assertEqual(rendered.count("local evidence:"), len(paths))
+                for i, path in enumerate(paths):
+                    self.assertIn(f"Evidence {i} (local evidence: `{path}`)", rendered)
+                self.assertEqual((self.root / "README.md").read_text(), document)
+                if present:
+                    self.assertEqual((self.root / paths[0]).read_bytes(), b"local evidence")
+
+    def test_small_witnesses_and_licenses_keep_their_original_bytes(self):
+        witness = b"minimal witness\n"
+        license_bytes = b"MIT fixture attribution\r\n"
+        self.write("research/evidence/witness.gxw", witness)
+        self.write("LICENSE", license_bytes)
+        self.write("README.md", b"[Witness](research/evidence/witness.gxw)")
+        manifest = stage_documentation(self.root, self.destination)
+        self.assertEqual((self.destination / "docs/source/research/evidence/witness.gxw.txt").read_bytes(), witness)
+        self.assertEqual((self.destination / "LICENSE").read_bytes(), license_bytes)
+        self.assertEqual(len(manifest["files"]), 3)
+
+    def test_directory_indexes_exclude_local_evidence(self):
+        self.write("research/evidence/a.zip", b"local evidence")
+        self.write("research/evidence/witness.gxw", b"witness")
+        self.write("research/results/raw/trace.json", b"{}")
+        self.write("research/results/summary.json", b"{}")
+        self.write("README.md", b"[Evidence](research/evidence/)\n[Results](research/results/)")
+        stage_documentation(self.root, self.destination)
+        evidence = (self.destination / "docs/source/research/evidence/index.md").read_text()
+        results = (self.destination / "docs/source/research/results/index.md").read_text()
+        self.assertIn("witness.gxw", evidence)
+        self.assertNotIn("a.zip", evidence)
+        self.assertIn("summary.json", results)
+        self.assertNotIn("raw/", results)
+
+    def test_missing_non_evidence_and_links_outside_source_still_fail(self):
+        for link, error in (("missing.py", FileNotFoundError),
+                            ("../research/evidence/a.zip", ValueError)):
+            with self.subTest(link=link):
+                self.write("README.md", f"[Source]({link})".encode())
+                with self.assertRaises(error):
+                    stage_documentation(self.root, self.destination)
 
 
 if __name__ == "__main__":

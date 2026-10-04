@@ -276,7 +276,7 @@ Owns source/import ownership, architecture constraints, issue-to-test linkage, W
 | `tests/test_architecture_boundaries.py` | focused coverage for architecture boundaries |
 | `tests/test_architecture_boundary_cleanup.py` | retired runtime control surfaces stay retired: no context-policy import, no workflow reasoning-effort defaults, no dedicated self-hold checker module |
 | `tests/test_issue_test_links.py` | focused coverage for issue test links |
-| `tests/test_repository_storage.py` | Git-object size/LFS pointer policy and intermediate-commit coverage in isolated repositories; standard-library-only Linux/Windows storage checks |
+| `tests/test_repository_storage.py` | Git-object size/LFS pointer policy, intermediate-commit coverage and local-evidence exclusion from release documentation; standard-library-only Linux/Windows storage checks |
 | `tests/test_source_layout.py` | source/import ownership plus completeness of this test-boundary registry |
 | `tests/test_windows_credentials.py` | focused coverage for windows credentials |
 

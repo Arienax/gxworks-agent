@@ -4,7 +4,7 @@
 
 普通 Git 保存可审查的机器可读摘要、freeze/replay 脚本、必要的小型 witness、截图、研究结论及其环境和失败边界。现有 `research/results/*.json` 不因行数多就整体迁走或压成一行；先判断它是摘要、消费接口还是可重建的原始输出，保留已有消费者和引用。
 
-证据归档和大型原始输出仅保存在本地。`research/evidence/` 下的 ZIP、7z、rar、tar、gz、bz2、xz、zst、tgz、tbz、tbz2、txz，以及 `research/results/raw/` 下的所有文件，不进入普通 Git 或 Git LFS，也不作为 Actions artifact 或 release asset 上传。`.gitignore` 忽略这些产物，`.gitattributes` 禁用这些目录的 LFS filter；摘要和必要的小型未压缩 witness 继续纳入 Git。
+证据归档和大型原始输出仅保存在本地。`research/evidence/` 下的 ZIP、7z、rar、tar、gz、bz2、xz、zst、tgz、tbz、tbz2、txz，以及 `research/results/raw/` 下的所有文件，不进入普通 Git 或 Git LFS，也不作为 Actions artifact 或 release asset 上传。`.gitignore` 忽略这些产物，`.gitattributes` 禁用这些目录的 LFS filter；摘要和必要的小型未压缩 witness 继续纳入 Git。文档打包时把这些产物的链接呈现为本地证据路径，即使本机文件存在也不复制到发布目录；源报告保持原样。
 
 freeze 脚本继续生成真实归档供本地复现。摘要记录本地归档路径、生成命令、具体 CPU、GX 版本、来源和未通过项；该路径不代表 GitHub 上存在可下载的包。保留原始证据和冻结快照的内容，不增加新的哈希验证体系。
 
