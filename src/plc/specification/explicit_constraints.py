@@ -75,6 +75,7 @@ def _remove_device(result, device):
 def apply_explicit_constraint_operations(previous, operations):
     """Apply already-grounded structured edits without interpreting prose."""
     result = normalize_explicit_user_constraints(previous)
+    replaced_instance_opcodes = set()
     for raw in operations or []:
         if not isinstance(raw, Mapping):
             continue
@@ -139,7 +140,11 @@ def apply_explicit_constraint_operations(previous, operations):
                 result["forbidden_opcodes"] = [value for value in result["forbidden_opcodes"] if value != opcode]
                 if opcode not in result["required_opcodes"]:
                     result["required_opcodes"].append(opcode)
-                result["instruction_instances"] = [item for item in result["instruction_instances"] if item["opcode"] != opcode]
+                # A later request replaces prior calls of this opcode once. All
+                # calls specified together in the current request must survive.
+                if opcode not in replaced_instance_opcodes:
+                    result["instruction_instances"] = [item for item in result["instruction_instances"] if item["opcode"] != opcode]
+                    replaced_instance_opcodes.add(opcode)
                 result["instruction_instances"].append(copy.deepcopy(instance))
 
     return normalize_explicit_user_constraints(result)

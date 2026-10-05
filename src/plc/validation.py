@@ -279,6 +279,15 @@ def normalize_plc_model(plc_model="FX3U"):
     return model
 
 
+def device_address_radix(prefix, plc_model="FX3U"):
+    """Address spelling follows the device family, not a CPU-wide radix."""
+    model = normalize_plc_model(plc_model)
+    kind = str(prefix or "").strip().upper()
+    if kind not in DEVICE_LIMITS[model]:
+        return None
+    return 8 if model == "FX3U" and kind in {"X", "Y"} else 10
+
+
 def parse_device_address(value, plc_model="FX3U"):
     """Parse and range-check a simple Mitsubishi device address.
 
@@ -297,12 +306,11 @@ def parse_device_address(value, plc_model="FX3U"):
     limits = DEVICE_LIMITS[model]
     if prefix not in limits:
         return None
-    if model == "FX3U" and prefix in {"X", "Y"}:
+    radix = device_address_radix(prefix, model)
+    if radix == 8:
         if any(character not in "01234567" for character in raw_index):
             return None
-        index = int(raw_index, 8)
-    else:
-        index = int(raw_index, 10)
+    index = int(raw_index, radix)
     maximum = limits[prefix]
     if maximum is not None and index > maximum:
         return None

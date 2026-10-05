@@ -48,7 +48,10 @@ semantics only. Free-form scan/event language is carried separately as
 `execution_intent_claims`: Agent A supplies a non-authoritative trigger frame plus
 exact spans copied from the current user request. Core verifies the evidence and
 device grounding before projecting a claim into `execution_semantics`. Agent A
-never emits the final execution enum directly. Formal notation such as an explicit
+must quote a span containing every reported device, including equivalent address
+spellings; addresses elsewhere in the request cannot fill gaps in that span.
+Button purpose alone cannot supply an unconfirmed trigger edge or active level.
+Agent A never emits the final execution enum directly. Formal notation such as an explicit
 `0 -> 1`, `上升沿`, `首扫` or numeric cycle remains a narrow deterministic fast
 path; summary/description/generation_guide prose is never re-parsed into hard
 execution constraints.
@@ -72,6 +75,69 @@ opcode+operands instances. Pinned reanalysis starts from persisted constraints f
 the same approach and applies only grounded current-turn operations. A later global
 opcode ban removes any persisted exact instance for that opcode, preventing stale
 self-conflicts.
+
+The first exact-instance requirement for an opcode replaces its prior-turn calls;
+additional calls of that opcode in the same operation batch accumulate. Explicit
+later clear/forbid operations still take effect in order. Three SFTL calls specified
+together therefore remain three exact instances in every approach's contract.
+
+## Analysis protocol repair
+
+`plc.specification.explicit_constraint_claims.TARGET_CONTRACTS` defines the fields,
+operations and examples for `opcode`, `device`, `instruction_instance` and
+`category`. Both prompts and the validator use this table. An exact instance has
+`opcode` and `operands` directly in the target; category supports only `clear`.
+`AnalysisProtocolError.violations` retains its string interface, and `details`
+adds paths, actual values and the applicable Core contract. Device evidence uses
+canonical device identity, including `Y000/Y0`, with the existing token boundaries
+and exact current-request span checks.
+
+`application.analysis_repair` converts recognized plural target names and exact
+instance lists without supplying evidence or changing meaning. It then gathers
+protocol failures and individual claim-compiler rejections. The shared analysis
+entry allows one further model request with an independent short prompt: current
+request, failed fragments, valid shapes and identified targets. Manuals, model
+profiles and analysis history are excluded from this repair prompt.
+
+The private `analysis_repair` response contains only
+`{"repairs":[{"path":"/…","value":…}]}`. Every whitelisted path must appear
+exactly once. Claim replacements are arrays and may split one failed claim into
+several grounded claims. Other fields are value replacements; forbidden metadata
+uses null removal. The application applies baseline indices in descending order,
+preserves valid operations/scopes and identified devices/opcode+operands, then
+rechecks the complete merged object. No third request follows a rejected patch.
+Internal patches do not reach content callbacks, provisional previews or Web/MCP
+analysis objects; diagnostics retain the literal responses of both attempts.
+
+Unbacked scan candidates can be removed. A method description is not a supported
+device/opcode candidate: its exact original text is retained in the application
+repair receipt and in `intent_context.requests`, which still reaches generation.
+The receipt does not turn these descriptions into machine-validated device bans.
+Unprojected original target values are recorded as `unresolved_values` with
+`projection_status=not_projected`.
+Model-authored repair receipts are discarded. JSON syntax errors use the same
+one-repair budget and a separate short prompt that preserves draft contents; the
+full corrected object must pass protocol and grounding checks.
+
+Initial analyses may leave structure tags empty. They must not approximate SFTL
+tracking as a register counter. Per-item registration requires process facts about
+the no-material value between pieces, classification changes within a piece,
+rearming and the result's consumption at Encoder shift; numerical change alone
+does not identify a new piece. Button purpose/address does not establish its
+active input level. These questions belong to the first analysis and confirmation,
+not protocol repair. Passing a repair proves its local scope and grounding; it
+does not certify frozen scheme fields as correct PLC engineering.
+
+The initial execution frame includes a literal Core example using scalar `from`
+and `to`; failed transition frames receive the same example in their error
+details. A request to generate immediately does not resolve missing process
+facts. Neither prompt size reduction nor successful patch acceptance establishes
+lower reasoning usage or latency; first-pass acceptance is measured separately.
+The relevant model profile also scopes its existing `addressing` value to X/Y
+and supplies per-device radix from `plc.validation.device_address_radix`, the
+same rule used by the address parser. FX3U M/D numbering remains decimal; the
+analysis must not turn a correct memory range into a wiring question because
+X/Y use octal spelling. Retrieval and information-stage selection are unchanged.
 
 Core projects `implementation_semantics + explicit_user_constraints` into
 `generation_contract`. Model-authored `generation_contract` is not requested for

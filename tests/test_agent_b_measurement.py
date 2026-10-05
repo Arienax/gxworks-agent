@@ -1,6 +1,7 @@
 """Actual generation-path measurement contract; all providers here are offline."""
 import copy
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -80,6 +81,94 @@ def test_analysis_entry_metrics_keep_first_call_repair_and_unavailable_usage_sep
     assert result["local_and_gaps_ms"] == 2000 and result["total_ms"] == 70000
     assert result["reasoning_tokens"] == [5705, None]
     assert result["request_count"] == 2 and result["models"] == ["glm-5.3"]
+
+
+def test_repair_measurement_dry_run_keeps_alternating_pairs_and_never_loads_credentials(tmp_path, monkeypatch, capsys):
+    from scripts.benchmark_analysis_repair import main as repair_main
+    from storage import config
+    monkeypatch.setattr(config, "get_api_key", lambda *args: pytest.fail("dry run loaded a key"))
+    destination = tmp_path / "repair"
+    assert repair_main(["--output", str(destination)]) == 0
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["network_calls"] == 0 and plan["baseline"] == "26b57a6"
+    assert plan["repair_order"] == [["baseline", 1], ["repaired", 1], ["repaired", 2], ["baseline", 2], ["baseline", 3], ["repaired", 3]]
+    assert plan["fresh_runs"] == 3 and not destination.exists()
+    assert repair_main(["--output", str(destination), "--phase", "fresh", "--first-only"]) == 0
+    assert json.loads(capsys.readouterr().out)["first_only"] is True
+    assert repair_main(["--output", str(destination), "--phase", "fresh", "--provider", "official", "--first-only"]) == 0
+    official = json.loads(capsys.readouterr().out)
+    assert official["provider"] == "official" and official["network_calls"] == 0
+    assert official["scheduled_jobs"] == [["fresh", 1], ["fresh", 2], ["fresh", 3]]
+
+
+@pytest.mark.parametrize("provider,profile,accepted", [
+    ("diagnostic", {"name": "intern-ai", "model": "deepseek-v4-flash-0731", "baseUrl": "https://discovery-api.intern-ai.org.cn/v1"}, True),
+    ("official", {"name": "DeepSeek", "model": "deepseek-flash", "baseUrl": "https://api.deepseek.com"}, True),
+    ("official", {"name": "DeepSeek", "model": "deepseek-flash", "baseUrl": "https://api.deepseek.com/v1/"}, True),
+    ("diagnostic", {"name": "DeepSeek", "model": "deepseek-flash", "baseUrl": "https://api.deepseek.com"}, False),
+    ("official", {"model": "deepseek-v4-flash-0731", "baseUrl": "https://api.deepseek.com"}, False),
+    ("official", {"model": "deepseek-flash", "baseUrl": "https://discovery-api.intern-ai.org.cn/v1"}, False),
+])
+def test_analysis_measurement_uses_only_the_selected_saved_provider(provider, profile, accepted):
+    from scripts.benchmark_analysis_repair import validate_measurement_profile
+    before = copy.deepcopy(profile)
+    if accepted:
+        validate_measurement_profile(profile, provider)
+    else:
+        with pytest.raises(ValueError, match="selected_provider"):
+            validate_measurement_profile(profile, provider)
+    assert profile == before
+
+
+def test_repair_metrics_exclude_replay_time_and_keep_absent_reasoning_unknown():
+    from scripts.benchmark_analysis_repair import live_metrics
+    metrics = live_metrics({"replay_transport_ms": 123456,
+        "attempts": [{"transport_ms": 80, "raw_content": "{}", "usage": {"input_tokens": 9, "output_tokens": 2}}],
+        "actual_requests": [{"model": "intern-saved", "messages": [{"role": "system", "content": "short"}]}],
+        "diagnostics": [{"event": "provider_result", "model": "returned-model"}]})
+    assert metrics["live_transport_ms"] == 80 and metrics["replay_transport_ms"] == 123456
+    assert metrics["network_request_count"] == 1 and metrics["reasoning_tokens"] == [None]
+    assert metrics["system_characters"] == [5] and metrics["body_characters"] == [2]
+    assert metrics["requested_models"] == ["intern-saved"] and metrics["returned_models"] == ["returned-model"]
+
+
+def test_repair_export_redacts_records_and_excludes_private_config(tmp_path):
+    import zipfile
+    from scripts.benchmark_analysis_repair import export_evidence
+    private = tmp_path / "private"
+    run = private / "runs" / "repaired-1"
+    run.mkdir(parents=True)
+    (private / "isolated-config.json").write_text('{"api_key":"not-exported"}', encoding="utf-8")
+    (run / "result.json").write_text('{"api_key":"private-key","status":"failed"}', encoding="utf-8")
+    (private / "summary.json").write_text('{"Authorization":"Bearer secret","failed":1}', encoding="utf-8")
+    (private / "verification.json").write_text('{"passed":17,"api_key":"private-verification-key"}', encoding="utf-8")
+    destination = tmp_path / "evidence.zip"
+    export_evidence(private, destination)
+    with zipfile.ZipFile(destination) as bundle:
+        assert not any("isolated-config" in name for name in bundle.namelist())
+        row = json.loads(bundle.read("runs/repaired-1/result.json"))
+        assert row["api_key"] == "<redacted>" and row["status"] == "failed"
+        assert "secret" not in bundle.read("summary.json").decode("utf-8")
+        verification = json.loads(bundle.read("verification.json"))
+        assert verification["passed"] == 17 and verification["api_key"] == "<redacted>"
+
+
+def test_measured_patch_replay_keeps_original_record_and_uses_no_model(tmp_path, monkeypatch):
+    from scripts.benchmark_analysis_repair import replay_repairs
+    from application import model_api
+    fixture = json.loads((Path(__file__).parent / "fixtures/analysis_sftl_repair.json").read_text(encoding="utf-8"))
+    (tmp_path / "witness.json").write_text(json.dumps(fixture, ensure_ascii=False), encoding="utf-8")
+    path = tmp_path / "runs/repaired-1/result.json"
+    path.parent.mkdir(parents=True)
+    original = json.dumps({"status": "completed", "quality": {"output_device_aliases_bound": False},
+                          "attempts": [{"response_contract": "analysis_repair",
+                                        "raw_content": json.dumps(fixture["repair_response"], ensure_ascii=False)}]})
+    path.write_text(original, encoding="utf-8")
+    monkeypatch.setattr(model_api, "_request_model", lambda *args, **kwargs: pytest.fail("offline replay called a model"))
+    result = replay_repairs(tmp_path)
+    assert result["network_calls"] == 0 and result["reviews"][0]["passed"]
+    assert result["reviews"][0]["quality"]["output_device_aliases_bound"]
+    assert path.read_text(encoding="utf-8") == original
 
 
 @pytest.mark.parametrize("contact,passed", [("NC X0", True), ("NO X0", False)])

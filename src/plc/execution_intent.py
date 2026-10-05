@@ -250,6 +250,78 @@ def _claim_id(frame):
     return "EC-" + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
 
 
+def execution_intent_claim_example():
+    """Literal transition fields shared by initial and repair delivery."""
+    return {"trigger": {"kind": "transition", "source_devices": ["X0"], "from": 0, "to": 1},
+            "evidence": ["exact current-request span"]}
+
+
+def execution_intent_claim_details(value, path="$.execution_intent_claims"):
+    """Detailed projections of the existing shape validator, without NLP rules."""
+    result = []
+    for violation in execution_intent_claim_violations(value, path):
+        location, message = violation.split(": ", 1)
+        current = value
+        suffix = location[len(path):]
+        for segment in re.findall(r"\[(\d+)\]|\.([A-Za-z_][A-Za-z0-9_]*)", suffix):
+            key = int(segment[0]) if segment[0] else segment[1]
+            try:
+                current = current[key]
+            except (TypeError, KeyError, IndexError):
+                current = None
+                break
+        result.append({"path": location, "code": "invalid_claim_shape", "message": message,
+                       "actual": copy.deepcopy(current), "allowed_types": sorted(TRIGGER_KINDS),
+                       "required_fields": ["trigger", "evidence"],
+                       "example": execution_intent_claim_example()})
+    return result
+
+
+def execution_claim_anchors(claim, user_text, confirmed_spec=None):
+    """Existing reported device identities, checked against current facts."""
+    if not isinstance(claim, Mapping):
+        return {"source_devices": [], "effect_devices": []}
+    aliases = _confirmed_device_aliases(confirmed_spec)
+    trigger = claim.get("trigger") if isinstance(claim.get("trigger"), Mapping) else {}
+    effect = claim.get("effect") if isinstance(claim.get("effect"), Mapping) else {}
+    return {name: [device for device in _canonical_devices(values)
+                   if _device_grounded(device, [str(user_text or "")], aliases)]
+            for name, values in (("source_devices", trigger.get("source_devices")), ("effect_devices", effect.get("devices")))}
+
+
+def execution_claim_preservable_fields(claim):
+    """Retain valid non-binding fields while allowing broken fields to be repaired."""
+    if not isinstance(claim, Mapping):
+        return {}
+    preserved = {}
+    trigger = claim.get("trigger")
+    if isinstance(trigger, Mapping):
+        fields = copy.deepcopy(dict(trigger))
+        fields.pop("source_devices", None)
+        if str(fields.get("kind") or "").strip().casefold() not in TRIGGER_KINDS:
+            fields.pop("kind", None)
+        for name in ("from", "to"):
+            if name in fields and _state(fields[name]) is None:
+                fields.pop(name)
+        if "period_ms" in fields and fields["period_ms"] is not None:
+            try:
+                if float(fields["period_ms"]) <= 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                fields.pop("period_ms")
+        preserved["trigger"] = fields
+    effect = claim.get("effect")
+    if isinstance(effect, Mapping):
+        fields = copy.deepcopy(dict(effect))
+        fields.pop("devices", None)
+        if fields.get("kind") is not None and (not isinstance(fields["kind"], str) or len(fields["kind"].strip()) > 64):
+            fields.pop("kind")
+        preserved["effect"] = fields
+    if isinstance(claim.get("rearm"), (str, bool)):
+        preserved["rearm"] = claim["rearm"]
+    return preserved
+
+
 def compile_execution_intent_claims(
     value, user_text, *, source="agent_a_claim", confirmed_spec=None
 ):
@@ -281,6 +353,13 @@ def compile_execution_intent_claims(
         source_devices = _canonical_devices(trigger.get("source_devices") or [])
         effect = dict(claim.get("effect") or {})
         effect_devices = _canonical_devices(effect.get("devices") or [])
+        invalid_devices = next((reason for values, reason in (
+            (trigger.get("source_devices") or [], "invalid_source_device"),
+            (effect.get("devices") or [], "invalid_effect_device"),
+        ) if any(not _canonical_devices([item]) for item in values)), None)
+        if invalid_devices:
+            rejected.append({"index": index, "reason": invalid_devices})
+            continue
         if trigger_kind in {"level", "transition", "interrupt", "clear"} and not source_devices:
             rejected.append({"index": index, "reason": "invalid_source_device"})
             continue
@@ -515,5 +594,9 @@ __all__ = [
     "TRIGGER_KINDS",
     "compile_execution_intent_claims",
     "execution_intent_claim_violations",
+    "execution_intent_claim_details",
+    "execution_intent_claim_example",
+    "execution_claim_anchors",
+    "execution_claim_preservable_fields",
     "extract_explicit_execution_semantics",
 ]

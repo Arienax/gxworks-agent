@@ -607,8 +607,8 @@
       "id": "agent_a_current_protocol_boundary",
       "category": "analysis_protocol",
       "state": "enforced",
-      "owner": "application.analysis_results.validate_current_analysis_protocol + application.model_api._request_analysis_response",
-      "summary": "Fresh Agent-A provider responses must use the current implementation_semantics protocol; missing/mixed legacy generation_contract output gets one bounded response-format repair and never falls through to PLC validation or legacy inference. Persisted old specs migrate only through plc.specification.legacy_migration.",
+      "owner": "application.analysis_results + application.analysis_repair + application.model_api._request_analysis_response + plc.specification.explicit_constraint_claims",
+      "summary": "Fresh Agent-A claims are checked for protocol and current-request grounding before publication. Core owns the four target contracts used by both initial and short repair prompts. One private patch may replace only failed paths; the application freezes other fields, validates identified targets and publishes an assembled analysis object. JSON syntax has the same single repair budget. Persisted old specs retain their compatibility path.",
       "checks": [
         {
           "kind": "python_symbol",
@@ -621,14 +621,29 @@
           "symbol": "AnalysisProtocolError"
         },
         {
-          "kind": "contains",
-          "path": "src/application/model_api.py",
-          "text": "_validate_fresh_analysis_content(first.message.content)"
+          "kind": "python_symbol",
+          "path": "src/application/analysis_repair.py",
+          "symbol": "plan_analysis_repair"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/application/analysis_repair.py",
+          "symbol": "apply_analysis_repair"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/plc/specification/explicit_constraint_claims.py",
+          "symbol": "explicit_target_contracts"
+        },
+        {
+          "kind": "python_symbol",
+          "path": "src/application/analysis_results.py",
+          "symbol": "analysis_grounding_details"
         },
         {
           "kind": "contains",
           "path": "src/application/model_api.py",
-          "text": "except AnalysisProtocolError as protocol_error:"
+          "text": "return publish(repaired)"
         },
         {
           "kind": "contains",

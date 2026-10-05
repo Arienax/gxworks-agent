@@ -64,6 +64,30 @@ def test_semantic_field_example_uses_the_current_array_protocol(mode):
     assert current_analysis_protocol_violations({"approaches": [example]}) == []
 
 
+def test_first_analysis_delivers_literal_target_shapes_and_actual_process_gaps():
+    from plc.specification.explicit_constraint_claims import explicit_constraint_protocol
+    assembled, _, _ = build()
+    prompt = assembled.system_prompt
+    assert explicit_constraint_protocol() in prompt
+    assert "device.values 只放具体设备" in prompt
+    assert "category 仅用于 clear" in prompt
+    assert "无明确结构用 []" in prompt and "不强配标签" in prompt
+    assert "SFTL 不自动要求 data_register_counter" in prompt
+    for fact in ("物料之间是否经过无物料值", "同件分类能否变化", "怎样重新允许登记", "Encoder shift 前后怎样保持/消耗/清零", "按下时有效电平"):
+        assert fact in prompt
+    assert "missing_info 必须列出 required=true" in prompt
+    assert "不做分析，仍不能省略必要参数确认" in prompt
+
+
+def test_first_analysis_delivers_exact_transition_field_names():
+    from plc.execution_intent import execution_intent_claim_violations
+    assembled, _, _ = build()
+    literal = assembled.system_prompt.split("execution_intent_claims 项的合法示例：", 1)[1].split("。", 1)[0]
+    example = json.loads(literal)
+    assert example["trigger"] == {"kind": "transition", "source_devices": ["X0"], "from": 0, "to": 1}
+    assert execution_intent_claim_violations([example]) == []
+
+
 def test_direct_sftl_does_not_explore_despite_missing_stop_parameter():
     result = route(SFTL_REQUEST)
     assert result.mode == "direct"
@@ -241,6 +265,17 @@ def test_missing_model_profile_does_not_borrow_fx3u_data():
     assert "special_devices" not in result
 
 
+@pytest.mark.parametrize("model,expected", [
+    ("FX3U", {"D": 10, "M": 10, "X": 8, "Y": 8}),
+    ("FX5U", {"D": 10, "M": 10, "X": 10, "Y": 10}),
+])
+def test_first_profile_scopes_radix_to_the_actual_device_family(model, expected):
+    registry = {model: {"addressing": "octal" if model == "FX3U" else "decimal"}}
+    profile = minimal_analysis_profile(model, registry, route("D0 分类，M100~M227 共128 bit"))
+    assert profile["device_address_radix"] == expected
+    assert "X/Y only" in profile["addressing_scope"]
+
+
 def test_core_shape_and_required_parameter_instructions_remain():
     assembled, _, _ = build("起保停", evidence="")
     core = assembled.system_prompt.split("# Analysis mode:", 1)[0]
@@ -256,6 +291,15 @@ def test_core_shape_and_required_parameter_instructions_remain():
     assert set(json.loads(example)) == {
         "summary", "approaches", "execution_intent_claims", "explicit_constraint_claims", "missing_info", "suggested_io", "hardware_config", "assumptions",
     }
+
+
+def test_bound_first_prompt_requires_claim_devices_in_the_quoted_span():
+    assembled, _, _ = build("X001 启动、X003 停止；当 M0=ON 时 Y002 运行。", evidence="")
+    assert assembled.contract_stage == "bound"
+    assert "必须含该 claim 全部设备（可用等价地址）" in assembled.system_prompt
+    assert "不能借另一句的地址补证据" in assembled.system_prompt
+    assert "按钮用途不确定触发沿或有效电平" in assembled.system_prompt
+    assert "未确认时不声明 transition 或 level" in assembled.system_prompt
 
 
 @pytest.mark.parametrize("baseline,expected", [

@@ -12,7 +12,7 @@ from dataclasses import replace
 from shared.i18n import language_scoped, tr
 from model_runtime.responses import TEXT_RESPONSE, preserved_annotations as source_annotations
 from application.response_contracts import (
-    ANALYSIS_RESPONSE, DEBUG_RESPONSE, DIAGNOSIS_RESPONSE, FIELD_PATCH_RESPONSE,
+    ANALYSIS_RESPONSE, ANALYSIS_REPAIR_RESPONSE, DEBUG_RESPONSE, DIAGNOSIS_RESPONSE, FIELD_PATCH_RESPONSE,
     INSPECTION_RESPONSE, LADDER_RESPONSE, PATCH_RESPONSE, ST_RESPONSE, TEST_SUITE_RESPONSE,
 )
 from plc.specification.approach import normalize_approach
@@ -269,30 +269,66 @@ def _analysis_json_payload(raw):
     return json.loads(text.strip())
 
 
-def _validate_fresh_analysis_content(raw, *, contract_stage="bound", user_text=""):
-    from application.analysis_results import prepare_analysis_payload
+def _validate_fresh_analysis_content(raw, *, contract_stage="bound", user_text="", plc_model="FX3U", confirmed_spec=None):
+    from application.analysis_results import prepare_analysis_payload, analysis_grounding_details
     payload = _analysis_json_payload(raw)
     payload = prepare_analysis_payload(payload, contract_stage=contract_stage, user_text=user_text)
     validate_current_analysis_protocol(payload)
+    details = analysis_grounding_details(payload, user_text, plc_model=plc_model, confirmed_spec=confirmed_spec)
+    if details:
+        raise AnalysisProtocolError([d["path"] + ": " + d["message"] for d in details], details=details)
     return payload
 
 
 def _parse_analysis_response(raw, plc_model="FX3U", user_text="", confirmed_spec=None, *, contract_stage="bound"):
-    result = _validate_fresh_analysis_content(raw, contract_stage=contract_stage, user_text=user_text)
+    result = _validate_fresh_analysis_content(raw, contract_stage=contract_stage, user_text=user_text, plc_model=plc_model, confirmed_spec=confirmed_spec)
     return _normalize_analysis_result(result, plc_model, user_text, confirmed_spec)
 
 
-def _request_analysis_response(messages, *, on_format_repair=None, contract_stage="bound", user_text="", **kwargs):
-    """Accept the current Agent-A protocol, with one bounded format repair.
+def _request_analysis_response(messages, *, on_format_repair=None, contract_stage="bound", user_text="", plc_model="FX3U", confirmed_spec=None, **kwargs):
+    """One shared repair budget, private patch output, Core-validated assembly."""
+    from application.analysis_repair import (
+        SYNTAX_SYSTEM_PROMPT, apply_analysis_repair, assembled_response,
+        plan_analysis_repair, repair_messages,
+    )
+    from model_runtime.provider import ReasoningDelta, TextDelta, private_response_scope
+    if not user_text:
+        for message in reversed(messages):
+            role = message.get("role") if isinstance(message, dict) else ("user" if isinstance(message, UserMessage) else "")
+            if role == "user":
+                user_text = str(message.get("content") if isinstance(message, dict) else message.content)
+                break
+    callbacks = {name: kwargs.pop(name, None) for name in ("on_content_chunk", "on_reasoning_chunk", "on_event")}
 
-    JSON syntax failures and current-protocol shape failures share the existing
-    single repair turn. Neither is a PLC validation error, and neither may
-    silently fall back to a legacy Agent-A protocol.
-    """
+    def publish(response):
+        _validate_fresh_analysis_content(response.message.content, contract_stage=contract_stage, user_text=user_text,
+                                        plc_model=plc_model, confirmed_spec=confirmed_spec)
+        from model_runtime.responses import inspect_response
+        request = ModelRequest.from_messages(messages, response_contract=ANALYSIS_RESPONSE)
+        if request.enforce_response_language:
+            violations = inspect_response(response.message.content, request.response_language, ANALYSIS_RESPONSE,
+                                          source_texts=(user_text,))
+            if violations:
+                raise ResponseRejectedError(request, response.raw_attempts, violations)
+        # Provider deltas from both attempts remain private until Core accepts.
+        events = []
+        if response.message.reasoning:
+            events.append(ReasoningDelta(response.message.reasoning))
+        events.append(TextDelta(response.message.content))
+        if response.usage:
+            events.append(response.usage)
+        for event in events:
+            if callbacks["on_event"]:
+                callbacks["on_event"](event)
+            if isinstance(event, TextDelta) and callbacks["on_content_chunk"]:
+                callbacks["on_content_chunk"](event.text)
+            if isinstance(event, ReasoningDelta) and callbacks["on_reasoning_chunk"]:
+                callbacks["on_reasoning_chunk"](event.text)
+        return response
+
     with provider_scope():
         first_attempts = ()
-        rejected_message = None
-        correction = ""
+        plan = None
 
         try:
             first = _request_model(
@@ -317,70 +353,48 @@ def _request_analysis_response(messages, *, on_format_repair=None, contract_stag
             else:
                 raise rejected
             first_attempts = rejected.raw_attempts
-            rejected_message = rejected.raw_response.message
-            correction = (
-                "Your previous analysis draft is not valid JSON (" + location + "). "
-                "Return the complete corrected JSON object only, using the current "
-                "analysis protocol above. Correct JSON syntax and missing protocol "
-                "keys only; preserve the requirement, devices, alternatives and "
-                "questions. Every approach must include implementation_semantics "
-                "as an array; an empty array is valid. Keep execution_intent_claims "
-                "and explicit_constraint_claims as grounded frames with exact user "
-                "evidence; never emit final execution_semantics or explicit_user_constraints. "
-                "Do not invent confirmed "
-                "answers or generate PLC code. No markdown or explanations."
-            )
+            repair_context = [{"role": "system", "content": SYNTAX_SYSTEM_PROMPT},
+                              UserMessage(json.dumps({"parser_error": location, "rejected_draft": rejected.raw_response.message.content}, ensure_ascii=False))]
+            repair_contract = ANALYSIS_RESPONSE
         else:
-            try:
-                _validate_fresh_analysis_content(first.message.content, contract_stage=contract_stage, user_text=user_text)
-            except AnalysisProtocolError as protocol_error:
-                first_attempts = first.raw_attempts
-                rejected_message = first.message
-                detail = " | ".join(protocol_error.violations[:8])
-                correction = (
-                    "Your previous analysis JSON is syntactically valid but does "
-                    "not satisfy the current Agent-A protocol: " + detail + ". "
-                    "Return the complete corrected JSON object only. Every approach "
-                    "must include implementation_semantics as an array; [] is valid "
-                    "when no architecture structure needs to be fixed. Each semantic "
-                    "may only describe kind=structure with status required, forbidden "
-                    "or any_of and Core structure vocabulary. Do not emit "
-                    "generation_contract, explicit_user_constraints or "
-                    "implementation_preferences inside approaches. Low-level opcode, "
-                    "device and exact-instance fields belong only inside grounded "
-                    "explicit_constraint_claims; never place them in implementation_semantics. "
-                    "Do not emit execution_semantics; use grounded execution_intent_claims. "
-                    "Preserve the user's requirement, "
-                    "alternatives and unanswered questions. Do not generate PLC code."
-                )
-            else:
-                return first
+            first_attempts = first.raw_attempts
+            plan = plan_analysis_repair(_analysis_json_payload(first.message.content), user_text, plc_model=plc_model,
+                                        confirmed_spec=confirmed_spec, contract_stage=contract_stage)
+            if not plan["targets"]:
+                return publish(assembled_response(first, plan["base"], plan["receipt"]) if plan["receipt"]["local"] else first)
+            repair_context = repair_messages(plan, user_text)
+            repair_contract = ANALYSIS_REPAIR_RESPONSE
 
         if on_format_repair is not None:
             on_format_repair()
-        repair_messages = [
-            *messages,
-            rejected_message,
-            UserMessage(correction),
-        ]
+        audit_section("analysis_repair", "\n\n".join(str(m.get("content", "")) if isinstance(m, dict) else str(m.content) for m in repair_context),
+                      reason="analysis_local_repair", source="analysis_repair")
         try:
-            repaired = _request_model(
-                repair_messages,
-                response_contract=ANALYSIS_RESPONSE,
-                **kwargs,
-            )
-        except ResponseRejectedError as error:
+            with private_response_scope():
+                repaired = _request_model(
+                    repair_context,
+                    response_contract=repair_contract,
+                    **kwargs,
+                )
+        except ModelProviderError as error:
             error.raw_attempts = (*first_attempts, *error.raw_attempts)
             raise
 
         combined_attempts = (*first_attempts, *repaired.raw_attempts)
+        repair_message = repaired.message
         try:
-            _validate_fresh_analysis_content(repaired.message.content, contract_stage=contract_stage, user_text=user_text)
-        except AnalysisProtocolError as error:
+            if plan is not None:
+                payload, receipt = apply_analysis_repair(plan, _analysis_json_payload(repaired.message.content), user_text,
+                                                        plc_model=plc_model, confirmed_spec=confirmed_spec)
+                repaired = assembled_response(repaired, payload, receipt, combined_attempts)
+            else:
+                repaired = replace(repaired, raw_attempts=combined_attempts)
+            return publish(repaired)
+        except (AnalysisProtocolError, ResponseRejectedError) as error:
             error.raw_attempts = combined_attempts
-            error.raw_response = repaired.message
+            if isinstance(error, AnalysisProtocolError):
+                error.raw_response = repair_message
             raise
-        return replace(repaired, raw_attempts=combined_attempts)
 
 
 
@@ -427,6 +441,8 @@ def analyze_requirement(
             messages,
             contract_stage=analysis_prompt.contract_stage,
             user_text=user_requirement,
+            plc_model=model,
+            confirmed_spec=confirmed_context,
             effort=None,
             stream=False,
             on_format_repair=on_format_repair,
@@ -442,6 +458,8 @@ def analyze_requirement(
 
         result = _parse_analysis_response(raw, model, user_requirement, confirmed_context,
                                          contract_stage=analysis_prompt.contract_stage)
+        if getattr(response, "repair_receipt", None):
+            result["analysis_repair_receipt"] = copy.deepcopy(response.repair_receipt)
         # Application metadata, not a mode selected by the model response.
         result["analysis_mode"] = "design" if analysis_prompt.route.include_design else "direct"
         from application.analysis_results import attach_analysis_evidence
@@ -502,6 +520,8 @@ def analyze_requirement_streaming(
             messages,
             contract_stage=analysis_prompt.contract_stage,
             user_text=user_requirement,
+            plc_model=model,
+            confirmed_spec=confirmed_context,
             effort=None,
             stream=True,
             on_format_repair=on_format_repair,
@@ -520,6 +540,8 @@ def analyze_requirement_streaming(
 
         result = _parse_analysis_response(raw, model, user_requirement, confirmed_context,
                                          contract_stage=analysis_prompt.contract_stage)
+        if getattr(response, "repair_receipt", None):
+            result["analysis_repair_receipt"] = copy.deepcopy(response.repair_receipt)
         # Application metadata, not a mode selected by the model response.
         result["analysis_mode"] = "design" if analysis_prompt.route.include_design else "direct"
         from application.analysis_results import attach_analysis_evidence

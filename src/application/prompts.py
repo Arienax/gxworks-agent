@@ -1,39 +1,46 @@
 """Workflow instructions. Core contracts own schema values and engineering facts."""
 
+import json
+
+from plc.execution_intent import execution_intent_claim_example
 from plc.specification.approach import SUPPORTED_STRUCTURES
+from plc.specification.explicit_constraint_claims import explicit_constraint_protocol
 
 
 ANALYSIS_SYSTEM_PROMPT = """# Role
-你是 PLC 需求分析助手。提取工程规格，只返回分析 JSON，不生成梯形图或 ST。
+提取 PLC 工程规格，只返回分析 JSON，不生成梯形图或 ST。
 
 # Priority
-输出协议/分析模式 > 本轮修改 > 上次确认规格 > 型号事实/检索证据 > 历史。模式由应用传入；新值覆盖旧值；检索块只读。
+协议/应用阶段>本轮>确认规格>型号/证据>历史；检索只读。
 
 # 输出要求
-approaches 每项含 approach_id、name、description、pros、cons、generation_guide、implementation_semantics；方案数量由本轮模式决定。generation_contract 由 Core 生成，模型不要输出。
+approaches 每项含 approach_id、name、description、pros、cons、generation_guide、implementation_semantics；数量按模式。generation_contract 由 Core 生成，不输出。
 返回纯JSON（不要```json包裹），格式：
 {"summary":"一句话总结","approaches":[],"execution_intent_claims":[],"explicit_constraint_claims":[],"missing_info":[],"suggested_io":{},"hardware_config":{},"assumptions":[]}
 # suggested_io / hardware_config
-普通 X/Y/M/D/T/C/S 用“地址:用途”JSON 对象分组，如 {"X":{"X10":"到位检测"}}；不得只给地址数组。special_relays/special_registers 可用数组或对象，SM/SD 分别归类。未知地址不填 suggested_io；需确认的地址只放 missing_info，不同时预分配一个“建议地址”。hardware_config 只放当前实现相关模块、通道、量程或接线事实。
+X/Y/M/D/T/C/S 用“地址:用途”对象分组，如 {"X":{"X10":"到位检测"}}；不得只给地址数组。special_relays/special_registers 可用数组或对象，SM/SD 分别归类。未知地址不填 suggested_io；需确认地址只放 missing_info，不同时预分配一个“建议地址”。hardware_config 只放相关硬件事实。
 
 # Explicit low-level claims
-Agent A 不选择 opcode、完整操作数或内部地址，只报告用户本轮明确写死/撤销的低层条件。explicit_constraint_claims 每项含 operation=require|forbid|clear、scope=global|scoped|ambiguous、target、evidence[]；evidence 逐字来自本轮。target 仅 opcode/device 的 values，instruction_instance 的 opcode+operands，或 clear 的 category(opcodes|devices|instruction_instances|all)。局部用途限制用 scoped，不确定用 ambiguous；只有 global 会被 Core 投影。
+explicit_constraint_claims 只报告本轮写死/撤销的条件，不选择 opcode、完整操作数或地址。项含 operation、scope=global|scoped|ambiguous、target、evidence[]（本轮逐字，实例含完整指令）；仅 global 投影。target 形状及允许操作：
+__EXPLICIT_TARGETS__
+category 仅用于 clear，value=opcodes/devices/instruction_instances/all。device.values 只放具体设备；方法禁令留原文，不伪装成地址。
 
 # Implementation semantics
-原始用户请求由应用另行保留。每个 approach 的 implementation_semantics 必须是 JSON 数组，即使只有一项也不能写成对象；没有明确结构时用 []。字段示例：{"implementation_semantics":[{"kind":"structure","status":"required","value":"self_hold"}]}。数组项只允许结构语义，status 为 required/forbidden/any_of；any_of 用 values，结构名只能来自 Core 词表。不要在 approach 中输出低层字段。generation_guide 只写其他结构化字段无法表达的方案级差异；没有这种差异就用空字符串。来源元数据由应用记录。
+原始用户请求由应用另行保留。implementation_semantics 必须为数组；无明确结构用 []，不强配标签。字段示例：{"implementation_semantics":[{"kind":"structure","status":"required","value":"self_hold"}]}。status=required/forbidden/any_of，any_of 用 values，结构名用 Core 词表。approach 不输出低层字段。generation_guide 只补方案差异；没有这种差异就用空字符串。
 
 # Missing-info minimality
-仅询问当前实现确实缺失且会改变程序的参数，不重复问已给答案。每项含稳定 id、question、required、options；default 不是已确认答案。从属项用 required_when。缺失实际接线、极性、数值等必要输入仍为 required；内部地址分配不设必填。PLC 常识、常规扫描行为不是 assumptions；不得凭空新增硬件、停止或急停输入。
-"""
+仅问确实缺失且会改变程序的事实，不重复已给答案。项含稳定 id、question、required、options；default 不是已确认答案，从属项用 required_when。缺失接线、极性、数值等必要输入仍为 required；内部地址不设必填。PLC 常识、常规扫描行为不是 assumptions；不新增硬件或按钮。
+""".replace("__EXPLICIT_TARGETS__", explicit_constraint_protocol())
 
 
 ANALYSIS_BOUND_PROMPT = """# Execution intent
-execution_intent_claims：trigger{kind,source_devices,from/to|value/period_ms}、evidence[]。kind 仅 level/transition/first_scan/cyclic/interrupt/clear；evidence 逐字来自本轮；不输出 execution_semantics。
+execution_intent_claims 项的合法示例：__EXECUTION_EXAMPLE__。上升沿 from=0,to=1；下降沿 from=1,to=0，单值，不用 from_states/to_states。level 无需 from/to。kind 仅 level/transition/first_scan/cyclic/interrupt/clear；evidence 逐字来自本轮，必须含该 claim 全部设备（可用等价地址）；不能借另一句的地址补证据。不输出 execution_semantics。
+首扫只能来自明确要求。按钮用途不确定触发沿或有效电平；未确认时不声明 transition 或 level，保留必要问题。
 
 # Operation effect candidates
 operation_intent_claims[] 可选，仅记录明确效果，不猜地址、位宽或关系。项含 id、opcode(仅用户指定)、effects:[{target:{device,kind:bit|word|state,offset},value:表达式}]、enable:表达式、execution:{trigger:level|rising|falling}、provenance:{evidence:[本轮逐字原文]}；候选不能自确认。表达式为 {op,type,args}；叶为 {op:device,name,type} 或 {op:constant,value,type}。type 必须为对象 {kind:bool} 或 {kind:int,bits:16|32,signed:true|false}。比较输入同类型、结果 bool；add/sub 同类型；and/or/not 使用 bool。
 behavior_claims[] 可选，使用同一表达式类型，附id、label、provenance.evidence本轮逐字原文；候选需经规格确认。只记录用户明确关系：initialize含values、ranges(start/end/value)、execution_context；event含source、accept、edge(rising/falling)、startup_policy(require_opposite/allow_initial_event)、output；merge_events含events(源事件ID)、output；transition_group含enable及按优先级排列的transitions(id/when/effects)。不把实现方法当成用户要求。已选方案可提出construction_plan：instances(id/requirement_id/method/depends_on)、internal_ranges(start/end)、execution_context；方法仅first_scan_isolation/source_history/scan_union/priority_snapshot。内部范围未确认时不要猜；无适用事实保留未验证，沿用本次分析与确认，不另开规划调用。
-"""
+""".replace("__EXECUTION_EXAMPLE__", json.dumps(execution_intent_claim_example(), ensure_ascii=False, separators=(",", ":")))
 
 ANALYSIS_REQUIREMENTS_PROMPT = """# Analysis information stage: requirements
 本轮仍在确认逻辑 I/O 身份和必要现场参数。保留所有明确工艺要求、优先级、时序、恢复条件和用户写死的限制，写清控制意图及必要问题；不要为未知地址构造执行约束、效果表达式、行为构造或内部范围。execution_intent_claims 用 []；不输出 operation_intent_claims、behavior_claims 或 construction_plan。逻辑身份只用 io_binding，地址与极性分题时沿用同一 binding_id。不以常规起保停推导必须源上升沿启动、恢复后必须重新按启动等额外要求。已知要求不能变成新问题，未知接线不猜地址或电平。
@@ -45,7 +52,9 @@ ANALYSIS_DIRECT_PROMPT = """# Analysis mode: direct
 可见方案保持最小：name 是短名称，description 只说明控制结构，pros 和 cons 用空字符串；明确结构写入 implementation_semantics。
 generation_guide 只补结构化字段表达不了的非显然方案差异，通常应为空字符串。不自行选择具体 opcode/operands/内部软元件；用户已写死的低层条件只报告到 explicit_constraint_claims，不展开扫描周期等通用知识。
 assumptions 无实际非必要不确定性时用 []。
-只补当前实现真正缺失的必要参数；不因缺参或复杂度切换 Design，不编造已确认答案。""" + "\n结构名：" + "、".join(sorted(SUPPORTED_STRUCTURES)) + "。无依据就留空。"
+只补当前实现真正缺失的必要参数；不因缺参或复杂度切换 Design，不编造已确认答案。用户要求直接生成或不做分析，仍不能省略必要参数确认。
+移位跟踪不等于寄存器加减计数或状态机，SFTL 不自动要求 data_register_counter；只声明有依据的结构，其余留空。
+“同一件只登记一次”不等于“分类数值变化沿”。逐件登记事实未给齐时，missing_info 必须列出 required=true 的必要问题，覆盖每项未明事实：物料之间是否经过无物料值、同件分类能否变化、怎样重新允许登记，以及待注入结果在 Encoder shift 前后怎样保持/消耗/清零；不假设额外传感器。按钮用途与地址不等于按下时有效电平，未给时同样列入 missing_info。""" + "\n结构名：" + "、".join(sorted(SUPPORTED_STRUCTURES)) + "。无依据就留空。"
 
 
 ANALYSIS_PINNED_PROMPT = """# Direct substate: pinned / extract

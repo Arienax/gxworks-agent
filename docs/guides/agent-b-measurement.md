@@ -327,3 +327,35 @@ python scripts/benchmark_user_path.py --experiment analysis-entry --phase summar
 示例的 `deepseek-flash` 是本次用户明确批准的官方实际型号，与内置预设原型号 `deepseek-v4-flash` 分开记录。首次调用、协议修复、本地处理及间隙、分析总耗时、供应商返回模型、推理 token 和请求次数分别记录；生成单独计时。全局活动配置不写入。
 
 如果确认归属修复是在取得响应后完成，可用同一目录的 `--phase confirm --live` 回放已接受的原始分析响应，再走 HTTP 填表、一次保存、回读和生成。回放不发送新的分析请求；已有成功生成复用原记录，其他新组生成各调用一次。首次在线结果与确认回放目录均保留，不能把回放耗时计为在线分析提速，或把回放成功称为首次在线全路径成功。本次结果及限制见[入口报告](../reports/2026-10-05-analysis-entry.md)。
+
+### 首次分析协议与局部修复
+
+[benchmark_analysis_repair.py](../../scripts/benchmark_analysis_repair.py) 从指定诊断包冻结当前用户原文、首次请求和首个响应。旧组为 `26b57a6`，新组为运行前复制的工作树；三个相邻配对交替使用旧/新、新/旧、旧/新顺序。首个响应由本地回放提供，只有随后的一次修复请求真实联网。回放时间和用量不计入网络指标。
+
+另三次通过共享 `analyze_requirement_streaming(..., analysis_mode="direct")` 运行真实首次分析，手册检索和 `bound/requirements` 划分保持产品行为。这是应用服务入口测量，未经过 HTTP 作业调度、浏览器或原生设备。首次调用与后续修复必须分别报告；最终对象被接受不能替代首次通过率，也不能证明必要工艺问题已经问齐。
+
+```powershell
+$resultPath = Join-Path $env:LOCALAPPDATA 'GXWorksAgent/measurements/analysis-sftl'
+$savedProfileId = '<诊断包对应的已保存 intern-ai profile id>'
+$diagnosticPath = '<原诊断 ZIP 的绝对路径>'
+python scripts/benchmark_analysis_repair.py --output $resultPath
+python scripts/benchmark_analysis_repair.py --output $resultPath --profile-id $savedProfileId --attachment $diagnosticPath --live
+python scripts/benchmark_analysis_repair.py --output $resultPath --phase replay
+python scripts/benchmark_analysis_repair.py --output $resultPath --phase summary --export research/evidence/analysis-repair/<新归档名>.zip
+```
+
+`--phase repair` 或 `--phase fresh` 可在新的独立目录只运行对应组；已用目录不覆盖。非 `--live` 预检不读凭据、不联网。保存预设的供应商、端点、型号及调参原样使用；请求型号与供应商返回型号分别记录，不自动改用官方端点或其他模型。实际请求、原始正文与推理、用量、失败、调用次数、各阶段源码都留在记录中；供应商未返回的推理 token 保持未知。
+
+用户明确要求官方 Flash 时，在新目录传 `--provider official` 和已保存的官方 profile id。预检只接受 `https://api.deepseek.com`（或 `/v1`）与 `deepseek-flash`；原 intern-ai 记录保留，两个接口分别统计。官方产品适配器的实际请求含 `thinking=enabled` 时原样保留，不修改思考设置或借用其他实验的传输省略策略。
+
+```powershell
+$officialPath = Join-Path $env:LOCALAPPDATA 'GXWorksAgent/measurements/analysis-sftl-official-first'
+$officialProfileId = '<已保存的官方 DeepSeek profile id>'
+python scripts/benchmark_analysis_repair.py --output $officialPath --phase fresh --first-only --provider official --profile-id $officialProfileId --attachment $diagnosticPath --live
+```
+
+只验收首次输出时可加 `--phase fresh --first-only`。首次请求、参数、检索和 Core 接收规则不变；如果入口决定需要修复，测量回调在第二次请求前停止并记录失败。该失败的耗时只能叫首次调用耗时，不能代替产品完整失败路径；一次通过时则仍完成共享入口的完整分析结果发布。
+
+`--phase replay` 用最终 Core 只读重放已经测得的局部补丁，另写 `final_review.json`，不修改原始在线观察。独立预期为三条完整 SFTL、M8011/M8012 禁令及原文规定的 Y 输出；冻结方案和问题只验证没有被改写，不认证旧方案的工程正确性。真实首次分析的结构标签、输入电平和逐件登记问题另行逐项审阅。更正测量判据时保留原判据输出，并在新复核中说明差异。
+
+导出遵循既有 LFS 规则，脱敏记录并排除隔离配置和凭据。若继续修正首次提示，应重新冻结到另一个目录，保留此前失败样本，不能用新结果覆盖它们。具体实测及性能限制见[分析协议报告](../reports/2026-10-05-analysis-repair.md)。

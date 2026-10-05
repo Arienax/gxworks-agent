@@ -154,6 +154,16 @@ def response_policy_scope(*, enforce_language=True, on_progress=None, on_preview
         _language_enforcement.reset(language_token)
 
 
+@contextmanager
+def private_response_scope():
+    """Keep internal protocol output out of provisional presentation callbacks."""
+    token = _preview_observer.set(None)
+    try:
+        yield
+    finally:
+        _preview_observer.reset(token)
+
+
 @dataclass(frozen=True)
 class ModelRequest:
     messages: Tuple[ModelMessage, ...]

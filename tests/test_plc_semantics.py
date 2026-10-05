@@ -1,6 +1,7 @@
 import copy
 
 import pytest
+from hypothesis import given, strategies as st
 
 from application.model_api import _normalize_analysis_result
 from plc.ir import PLCIRValidationError, build_plc_ir, validate_plc_ir
@@ -10,6 +11,88 @@ from plc.semantics import (
     semantic_requirements_from_spec,
     strict_semantic_gaps,
 )
+
+
+@pytest.mark.parametrize("target,operation,evidence", [
+    ({"kind": "opcode", "values": ["SFTL"]}, "forbid", "禁止 SFTL。"),
+    ({"kind": "device", "values": ["Y0"]}, "require", "指定 Y000 输出。"),
+    ({"kind": "instruction_instance", "opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]},
+     "require", "指定 SFTL M10 M100 K128 K1。"),
+    ({"kind": "category", "value": "devices"}, "clear", "清除设备限制。"),
+])
+def test_explicit_target_protocol_uses_four_core_shapes(target, operation, evidence):
+    from plc.specification.explicit_constraint_claims import (
+        explicit_target_contracts, explicit_constraint_claim_details, compile_explicit_constraint_claims,
+    )
+    claim = {"operation": operation, "scope": "global", "target": target, "evidence": [evidence]}
+    assert explicit_constraint_claim_details([claim]) == []
+    assert compile_explicit_constraint_claims([claim], evidence)["rejected"] == []
+    required = {"opcode": ["kind", "values"], "device": ["kind", "values"],
+                "instruction_instance": ["kind", "opcode", "operands"], "category": ["kind", "value"]}
+    contract = explicit_target_contracts()[target["kind"]]
+    assert contract["required_fields"] == required[target["kind"]]
+    assert operation in contract["allowed_operations"]
+
+
+@pytest.mark.parametrize("operation,kind,fields", [
+    ("require", "category", {"value": "all"}),
+    ("forbid", "category", {"value": "devices"}),
+    ("forbid", "instruction_instance", {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}),
+])
+def test_explicit_target_invalid_operation_has_path_actual_and_required_fields(operation, kind, fields):
+    from plc.specification.explicit_constraint_claims import explicit_constraint_claim_details, explicit_constraint_claim_violations
+    target = {"kind": kind, **fields}
+    claim = {"operation": operation, "scope": "global", "target": target, "evidence": ["用户原文"]}
+    details = explicit_constraint_claim_details([claim])
+    assert len(details) == 1 and details[0]["path"] == "$.explicit_constraint_claims[0].target"
+    assert details[0]["actual"] == target and "kind" in details[0]["required_fields"]
+    assert operation not in details[0]["allowed_operations"]
+    assert explicit_constraint_claim_violations([claim]) == [details[0]["path"] + ": " + details[0]["message"]]
+
+
+def test_missing_target_kind_exposes_all_legal_contracts_without_guessing():
+    from plc.specification.explicit_constraint_claims import explicit_constraint_claim_details
+    claim = {"operation": "require", "scope": "global", "target": {"category": "opcodes", "values": ["SFTL"]}, "evidence": []}
+    details = explicit_constraint_claim_details([claim])
+    assert {d["path"] for d in details} == {"$.explicit_constraint_claims[0].evidence", "$.explicit_constraint_claims[0].target.kind"}
+    error = next(d for d in details if d["path"].endswith(".kind"))
+    assert error["actual"] == claim["target"]
+    assert error["allowed_types"] == ["category", "device", "instruction_instance", "opcode"]
+    assert error["contracts"]["instruction_instance"]["example"] == {
+        "kind": "instruction_instance", "opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]}
+
+
+@given(prefix=st.sampled_from(["X", "Y", "M", "D", "SM", "SD"]), index=st.integers(0, 127),
+       evidence_padding=st.integers(0, 5), target_padding=st.integers(0, 5), lower=st.booleans())
+def test_device_evidence_aliases_use_identity_and_do_not_renumber(prefix, index, evidence_padding, target_padding, lower):
+    from plc.specification.explicit_constraint_claims import compile_explicit_constraint_claims
+    evidence_device = prefix + "0" * evidence_padding + str(index)
+    target_device = prefix + "0" * target_padding + str(index)
+    if lower:
+        evidence_device, target_device = evidence_device.lower(), target_device.lower()
+    text = "指定 " + evidence_device + "。"
+    receipt = compile_explicit_constraint_claims([{
+        "operation": "require", "scope": "global", "target": {"kind": "device", "values": [target_device]}, "evidence": [text],
+    }], text)
+    assert receipt["rejected"] == []
+    assert receipt["operations"] == [{"operation": "require", "kind": "device", "values": [prefix + str(index)]}]
+
+
+@pytest.mark.parametrize("text,evidence,values,reason", [
+    ("禁止 M8011 和手工逐位移位。", "禁止 M8011 和手工逐位移位。", ["M8011", "手工逐位移位"], "target_not_grounded_in_evidence"),
+    ("使用 Y000。", "使用 Y0。", ["Y0"], "evidence_not_in_current_request"),
+    ("禁止 M8011。", "禁止 M8011。", ["M8012"], "target_not_grounded_in_evidence"),
+    ("@Y000", "@Y000", ["Y0"], "target_not_grounded_in_evidence"),
+    ("Y000+K1", "Y000+K1", ["Y0"], "target_not_grounded_in_evidence"),
+    ("MY000", "MY000", ["Y0"], "target_not_grounded_in_evidence"),
+    ("Y000Z0", "Y000Z0", ["Y0"], "target_not_grounded_in_evidence"),
+])
+def test_device_grounding_retains_exact_evidence_and_token_boundaries(text, evidence, values, reason):
+    from plc.specification.explicit_constraint_claims import compile_explicit_constraint_claims
+    receipt = compile_explicit_constraint_claims([{
+        "operation": "forbid", "scope": "global", "target": {"kind": "device", "values": values}, "evidence": [evidence],
+    }], text)
+    assert receipt["operations"] == [] and receipt["rejected"][0]["reason"] == reason
 
 
 @pytest.mark.parametrize('bits', [8, 16, 32, 64])

@@ -1,0 +1,118 @@
+{
+  "source_job_id": "job_485443a0265c40ce97d4cb5363d799a8",
+  "plc_model": "FX3U",
+  "request": "从零生成一份 Mitsubishi FX3U / GX Works2 Simple Project 梯形图。\n\n只生成梯形图，不做需求分析，不生成 ST，不修改已有程序。\n\n必须使用 FX3U 的 SFTL 指令实现物料位置跟踪。禁止用定时器、M8011、M8012、逐件计时器或者手工逐位移位代替 SFTL。\n\nPLC：\nMitsubishi FX3U\n\n编程环境：\nGX Works2 Simple Project\n\nI/O 定义：\n\nX001：启动按钮  \nX003：停止按钮  \nX004：主输送带 Encoder pulse\n\nD0：Vision Sensor 分类结果\n\n分类规则：\n\nD0 = 1~3：蓝色物料  \nD0 = 4~6：绿色物料  \nD0 = 7~9：灰色物料  \nD0 = 0：无物料\n\n输出：\n\nY000：Entry conveyor  \nY002：Exit conveyor  \nY003：Sorter 1 turn  \nY004：Sorter 1 belt  \nY005：Sorter 2 turn  \nY006：Sorter 2 belt  \nY007：Sorter 3 turn  \nY010：Sorter 3 belt\n\n内部软元件：\n\nM0：系统运行保持\n\nM10：本次 Encoder shift 注入的蓝色物料 bit  \nM11：本次 Encoder shift 注入的绿色物料 bit  \nM12：本次 Encoder shift 注入的灰色物料 bit\n\n蓝色物料位置跟踪区：\n\nM100 ~ M227，共 128 bit\n\n绿色物料位置跟踪区：\n\nM300 ~ M427，共 128 bit\n\n灰色物料位置跟踪区：\n\nM500 ~ M627，共 128 bit\n\n控制要求：\n\n1. X001 启动系统，X003 停止系统，使用 M0 实现运行保持，停止优先。\n\n2. 系统运行期间，Y000、Y002、Y004、Y006、Y010 保持运行。\n\n3. Vision Sensor 检测到新物料时，根据 D0 的分类结果生成本次待注入的分类 bit：\n\nD0 = 1~3 → M10 = 1  \nD0 = 4~6 → M11 = 1  \nD0 = 7~9 → M12 = 1  \nD0 = 0 → M10、M11、M12 均为 0\n\n同一件物料只能登记一次，不能因为 D0 在多个 PLC scan 内保持不变而重复登记。\n\n4. X004 每出现一次上升沿，表示输送带前进一个物料节拍。\n\n当 X004 出现上升沿，并且 M0 = ON、Y002 = ON 时，同步执行一次以下三条指令：\n\nSFTL M10 M100 K128 K1  \nSFTL M11 M300 K128 K1  \nSFTL M12 M500 K128 K1\n\n这三条 SFTL 必须由同一个 Encoder pulse 触发，并在同一个输送节拍同步更新。\n\n不得改变以上三条 SFTL 的 opcode、操作数顺序或操作数值。\n\n5. 分拣位置：\n\n蓝色物料到达 M108 时，驱动 Y003。  \n绿色物料到达 M331 时，驱动 Y005。  \n灰色物料到达 M555 时，驱动 Y007。\n\n对应分拣动作应根据跟踪位状态执行，不能使用独立定时延时模拟物料到达。\n\n6. 停止系统后，不允许继续执行 Encoder shift 或分拣动作。\n\n7. 不要自行添加未要求的传感器、按钮、输出地址或替代控制方式。\n\n8. 生成完整、可用于 GX Works2 的 Ladder 程序，不要用“其余同理”“重复若干次”等省略写法。",
+  "first_response": "{\"summary\":\"直接从零生成一套用于 Mitsubishi FX3U / GX Works2 Simple Project 的完整梯形图，使用三条 SFTL 跟踪蓝/绿/灰物料位置并按跟踪位驱动分拣输出。\",\"approaches\":[{\"approach_id\":\"direct_1\",\"name\":\"FX3U SFTL 物料位置跟踪\",\"description\":\"使用 M0 自保持运行；系统运行时输出 Y000/Y002/Y004/Y006/Y010；根据 D0 分类结果生成 M10/M11/M12 物料登记 bit，只在分类结果变化沿登记；X004 上升沿且 M0=ON、Y002=ON 时，以同一个 Encoder pulse 同步执行 SFTL M10 M100 K128 K1、SFTL M11 M300 K128 K1、SFTL M12 M500 K128 K1；M108/M331/M555 到达时分别驱动 Y003/Y005/Y007；停止后屏蔽 shift 与分拣。\",\"pros\":\"\",\"cons\":\"\",\"generation_guide\":\"完整直接实现，不使用定时器/手工移位；三条 SFTL 由同一 X004 上升沿触发；分类登记用边沿检测防止重复。\",\"implementation_semantics\":[{\"kind\":\"structure\",\"status\":\"required\",\"value\":\"bit_state_machine\"},{\"kind\":\"structure\",\"status\":\"required\",\"value\":\"self_hold\"},{\"kind\":\"structure\",\"status\":\"required\",\"value\":\"state_transition\"},{\"kind\":\"structure\",\"status\":\"required\",\"value\":\"edge_trigger\"},{\"kind\":\"structure\",\"status\":\"required\",\"value\":\"data_register_counter\"},{\"kind\":\"structure\",\"status\":\"forbidden\",\"value\":\"direct_logic\"}]}],\"execution_intent_claims\":[{\"trigger\":{\"kind\":\"first_scan\",\"source_devices\":[\"M8002\"]},\"evidence\":[]},{\"trigger\":{\"kind\":\"level\",\"source_devices\":[\"X003\"]},\"evidence\":[\"X003：停止按钮\"]},{\"trigger\":{\"kind\":\"level\",\"source_devices\":[\"X001\"]},\"evidence\":[\"X001：启动按钮\"]},{\"trigger\":{\"kind\":\"transition\",\"source_devices\":[\"X004\"],\"from\":\"OFF\",\"to\":\"ON\"},\"evidence\":[\"X004：主输送带 Encoder pulse\",\"X004 每出现一次上升沿，表示输送带前进一个物料节拍。\"]}],\"explicit_constraint_claims\":[{\"operation\":\"require\",\"scope\":\"global\",\"target\":{\"category\":\"opcodes\",\"values\":[\"SFTL\"]},\"evidence\":[\"必须使用 FX3U 的 SFTL 指令实现物料位置跟踪\",\"SFTL M10 M100 K128 K1\",\"SFTL M11 M300 K128 K1\",\"SFTL M12 M500 K128 K1\"]},{\"operation\":\"forbid\",\"scope\":\"global\",\"target\":{\"category\":\"opcodes\",\"values\":[\"定时器\",\"M8011\",\"M8012\",\"逐件计时器\"]},\"evidence\":[\"禁止用定时器、M8011、M8012、逐件计时器或者手工逐位移位代替 SFTL\"]},{\"operation\":\"require\",\"scope\":\"global\",\"target\":{\"category\":\"instruction_instances\",\"values\":[{\"opcode\":\"SFTL\",\"operands\":[\"M10\",\"M100\",\"K128\",\"K1\"]},{\"opcode\":\"SFTL\",\"operands\":[\"M11\",\"M300\",\"K128\",\"K1\"]},{\"opcode\":\"SFTL\",\"operands\":[\"M12\",\"M500\",\"K128\",\"K1\"]}]},\"evidence\":[\"这三条 SFTL 必须由同一个 Encoder pulse 触发，并在同一个输送节拍同步更新。\",\"不得改变以上三条 SFTL 的 opcode、操作数顺序或操作数值。\"]},{\"operation\":\"forbid\",\"scope\":\"global\",\"target\":{\"category\":\"devices\",\"values\":[\"定时器\",\"M8011\",\"M8012\"]},\"evidence\":[\"禁止用定时器、M8011、M8012、逐件计时器或者手工逐位移位代替 SFTL\"]},{\"operation\":\"require\",\"scope\":\"global\",\"target\":{\"category\":\"devices\",\"values\":[\"M0\"]},\"evidence\":[\"M0：系统运行保持\",\"使用 M0 实现运行保持\"]},{\"operation\":\"require\",\"scope\":\"global\",\"target\":{\"category\":\"devices\",\"values\":[\"Y000\",\"Y002\",\"Y004\",\"Y006\",\"Y010\"]},\"evidence\":[\"系统运行期间，Y000、Y002、Y004、Y006、Y010 保持运行。\"]}],\"missing_info\":[],\"suggested_io\":{\"X\":{\"X001\":\"启动按钮\",\"X003\":\"停止按钮\",\"X004\":\"主输送带 Encoder pulse\"},\"Y\":{\"Y000\":\"Entry conveyor\",\"Y002\":\"Exit conveyor\",\"Y003\":\"Sorter 1 turn\",\"Y004\":\"Sorter 1 belt\",\"Y005\":\"Sorter 2 turn\",\"Y006\":\"Sorter 2 belt\",\"Y007\":\"Sorter 3 turn\",\"Y010\":\"Sorter 3 belt\"},\"M\":{\"M0\":\"系统运行保持\",\"M10\":\"本次 Encoder shift 注入的蓝色物料 bit\",\"M11\":\"本次 Encoder shift 注入的绿色物料 bit\",\"M12\":\"本次 Encoder shift 注入的灰色物料 bit\",\"M100\":\"蓝色物料位置跟踪区起点 M100~M227（128bit）\",\"M300\":\"绿色物料位置跟踪区起点 M300~M427（128bit）\",\"M500\":\"灰色物料位置跟踪区起点 M500~M627（128bit）\",\"M108\":\"蓝色物料分拣到位位\",\"M331\":\"绿色物料分拣到位位\",\"M555\":\"灰色物料分拣到位位\"},\"D\":{\"D0\":\"Vision Sensor 分类结果\"}},\"hardware_config\":{\"plc_model\":\"Mitsubishi FX3U\",\"programming_environment\":\"GX Works2 Simple Project\",\"encoder_pulse\":\"X004 主输送带 Encoder pulse（上升沿触发 shift）\"},\"assumptions\":[\"M0 的启动/停止采用 PLC 常规扫描逻辑，X001 为常开启动、X003 为常开停止（停止优先）。\",\"X004 上升沿检测使用 FX3U 上升沿触点（LDP/ANDP 或 M 上升沿辅助），不依赖 M8011/M8012。\",\"D0 分类结果在 Vision Sensor 每次扫描期间可能保持，因此采用分类结果边沿（变化沿）登记，避免同一物料重复登记。\",\"三个 SFTL 的启动条件为 X004 上升沿且 M0=ON 且 Y002=ON，三条指令在同一扫描周期执行。\",\"分拣输出 Y003/Y005/Y007 使用对应跟踪位 M108/M331/M555 常开触点驱动，不使用定时延时。\"]}",
+  "repair_response": {
+    "repairs": [
+      {
+        "path": "/execution_intent_claims/0",
+        "value": []
+      },
+      {
+        "path": "/explicit_constraint_claims/1",
+        "value": [
+          {
+            "operation": "forbid",
+            "scope": "global",
+            "target": {
+              "kind": "device",
+              "values": [
+                "M8011",
+                "M8012"
+              ]
+            },
+            "evidence": [
+              "禁止用定时器、M8011、M8012、逐件计时器或者手工逐位移位代替 SFTL"
+            ]
+          }
+        ]
+      },
+      {
+        "path": "/explicit_constraint_claims/5",
+        "value": [
+          {
+            "operation": "forbid",
+            "scope": "global",
+            "target": {
+              "kind": "device",
+              "values": [
+                "M8011",
+                "M8012"
+              ]
+            },
+            "evidence": [
+              "禁止用定时器、M8011、M8012、逐件计时器或者手工逐位移位代替 SFTL"
+            ]
+          }
+        ]
+      },
+      {
+        "path": "/explicit_constraint_claims/2",
+        "value": [
+          {
+            "operation": "require",
+            "scope": "global",
+            "target": {
+              "kind": "instruction_instance",
+              "opcode": "SFTL",
+              "operands": [
+                "M10",
+                "M100",
+                "K128",
+                "K1"
+              ]
+            },
+            "evidence": [
+              "SFTL M10 M100 K128 K1"
+            ]
+          }
+        ]
+      },
+      {
+        "path": "/explicit_constraint_claims/3",
+        "value": [
+          {
+            "operation": "require",
+            "scope": "global",
+            "target": {
+              "kind": "instruction_instance",
+              "opcode": "SFTL",
+              "operands": [
+                "M11",
+                "M300",
+                "K128",
+                "K1"
+              ]
+            },
+            "evidence": [
+              "SFTL M11 M300 K128 K1"
+            ]
+          }
+        ]
+      },
+      {
+        "path": "/explicit_constraint_claims/4",
+        "value": [
+          {
+            "operation": "require",
+            "scope": "global",
+            "target": {
+              "kind": "instruction_instance",
+              "opcode": "SFTL",
+              "operands": [
+                "M12",
+                "M500",
+                "K128",
+                "K1"
+              ]
+            },
+            "evidence": [
+              "SFTL M12 M500 K128 K1"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

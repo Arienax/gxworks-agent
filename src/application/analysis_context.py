@@ -41,6 +41,10 @@ def minimal_analysis_profile(model, registry, route):
     result["addressing"] = source.get("addressing")
     kinds = {re.match(r"[A-Z]+", address).group() for address in route.devices}
     kinds.update(("X", "Y"))
+    from plc.validation import device_address_radix
+    result["addressing_scope"] = "addressing describes X/Y only; other devices use their own radix"
+    result["device_address_radix"] = {kind: radix for kind in sorted(kinds)
+                                       if (radix := device_address_radix(kind, model)) is not None}
     result["soft_limits"] = {kind: value for kind, value in source.get("soft_limits", {}).items() if kind in kinds}
     requested = set(route.devices)
     specials = {}

@@ -247,6 +247,30 @@ def test_valid_response_bytes_and_event_callbacks_unchanged(tmp_path):
     assert 'PRIVATE_RESULT' not in json.dumps(rows(tmp_path))
 
 
+@pytest.mark.parametrize("stream", [False, True])
+def test_analysis_diagnostics_preserve_original_response_and_internal_patch(tmp_path, stream):
+    from application import model_api as api
+    from model_runtime.provider import TextDelta, response_policy_scope
+    fixture = json.loads((Path(__file__).parent / "fixtures/analysis_sftl_repair.json").read_text(encoding="utf-8"))
+    patch = json.dumps(fixture["repair_response"], ensure_ascii=False)
+    class Replay:
+        def __init__(self):
+            self.contents = [fixture["first_response"], patch]
+        def stream(self, request):
+            yield TextDelta(self.contents.pop(0))
+    published = []
+    with d.diagnostic_scope(tmp_path, "job_test"), api.provider_scope(Replay()), response_policy_scope(enforce_language=False):
+        result = api._request_analysis_response([UserMessage(fixture["request"])], stream=stream, on_content_chunk=published.append)
+    archive = zipfile.ZipFile(io.BytesIO(d.export_diagnostics(tmp_path, {"id": "job_test"})))
+    with archive:
+        transcript = [json.loads(line) for line in archive.read("transcript.jsonl").decode("utf-8").splitlines()]
+    replies = [r["content"] for r in transcript if r["event"] == "model_response"]
+    contracts = [r["response_contract"]["name"] for r in transcript if r["event"] == "model_request"]
+    assert replies == [fixture["first_response"], patch]
+    assert contracts == ["analysis", "analysis_repair"]
+    assert published == [result.message.content] and "repairs" not in json.loads(published[0])
+
+
 def test_stream_failure_records_metadata_and_original_cause(tmp_path):
     def broken():
         yield {'choices':[{'delta':{'content':'{"x":'}}]}

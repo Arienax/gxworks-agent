@@ -46,10 +46,10 @@ def isolated_profile(profile_id, model):
     return {"language": "zh-CN", "activeModelProfileId": profile["id"], "modelProfiles": [profile]}
 
 
-def freeze_sources(directory):
+def freeze_sources(directory, *, baseline=BASELINE):
     """Freeze old code literally; materialize unchanged LFS resources locally."""
     archive = directory / "baseline-source.zip"
-    subprocess.run(["git", "archive", BASELINE, "src", "resources", "--format=zip", "--output", str(archive)],
+    subprocess.run(["git", "archive", baseline, "src", "resources", "--format=zip", "--output", str(archive)],
                    cwd=ROOT, check=True)
     old = directory / "sources" / "baseline"
     old.mkdir(parents=True)

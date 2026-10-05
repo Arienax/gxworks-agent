@@ -175,6 +175,64 @@ def test_user_prose_without_constraint_claim_is_never_reparsed_into_hard_constra
     assert contract["instruction_instances"] == []
 
 
+@pytest.mark.parametrize("old_instances", [[], [
+    {"opcode": "SFTL", "operands": ["M0", "M900", "K8", "K1"]},
+    {"opcode": "MOV", "operands": ["K1", "D0"]},
+]])
+def test_current_request_keeps_all_exact_calls_of_same_opcode(old_instances):
+    from plc.specification.explicit_constraints import apply_explicit_constraint_operations
+
+    specified = [
+        {"opcode": "SFTL", "operands": ["M10", "M100", "K128", "K1"]},
+        {"opcode": "SFTL", "operands": ["M11", "M300", "K128", "K1"]},
+        {"opcode": "SFTL", "operands": ["M12", "M500", "K128", "K1"]},
+    ]
+    result = apply_explicit_constraint_operations(
+        {"instruction_instances": old_instances},
+        [{"operation": "require", "kind": "instruction_instance", "instance": item}
+         for item in [*specified, specified[0]]],
+    )
+    untouched = [item for item in old_instances if item["opcode"] == "MOV"]
+    assert result["instruction_instances"] == [*untouched, *specified]
+    assert result["required_opcodes"] == ["SFTL"]
+
+
+def test_repaired_method_bans_and_exact_calls_reach_generation_without_reclassifying_frozen_scheme(monkeypatch):
+    from pathlib import Path
+    from application.analysis_repair import plan_analysis_repair, apply_analysis_repair
+    from application.confirmed_generation_context import project_confirmed_specification
+    import application.generation_agent as agent
+    fixture = json.loads((Path(__file__).parent / "fixtures/analysis_sftl_repair.json").read_text(encoding="utf-8"))
+    raw = json.loads(fixture["first_response"])
+    plan = plan_analysis_repair(raw, fixture["request"])
+    repaired, receipt = apply_analysis_repair(plan, fixture["repair_response"], fixture["request"])
+    normalized = _normalize_analysis_result(repaired, "FX3U", fixture["request"])
+    draft = build_review_draft(normalized)
+    projected = project_confirmed_specification(draft)
+    monkeypatch.setattr(agent, "_build_knowledge_context", lambda *args, **kwargs: "")
+    prompt = _build_agent_b_prompt(projected, "FX3U")
+    assert "禁止用定时器、M8011、M8012、逐件计时器或者手工逐位移位代替 SFTL" in prompt
+    assert len(projected["selected_approach"]["generation_contract"]["instruction_instances"]) == 3
+    assert projected["intent_context"]["requests"][0]["text"] == fixture["request"]
+    assert any("手工逐位移位" in "".join(r["evidence"]) for r in receipt["retained_text"])
+    # Its preexisting, questionable counter tag is frozen; repair does not
+    # authenticate the scheme or answer the missing per-item process facts.
+    assert normalized["approaches"][0]["implementation_semantics"] == raw["approaches"][0]["implementation_semantics"]
+
+
+@pytest.mark.parametrize("last_edit", [
+    {"operation": "forbid", "kind": "opcode", "values": ["SFTL"]},
+    {"operation": "clear", "kind": "category", "value": "instruction_instances"},
+])
+def test_later_edit_in_batch_can_remove_all_exact_calls(last_edit):
+    from plc.specification.explicit_constraints import apply_explicit_constraint_operations
+
+    operations = [{"operation": "require", "kind": "instruction_instance", "instance": {
+        "opcode": "SFTL", "operands": [source, base, "K128", "K1"],
+    }} for source, base in [("M10", "M100"), ("M11", "M300")]]
+    assert apply_explicit_constraint_operations({}, [*operations, last_edit])["instruction_instances"] == []
+
+
 def test_scoped_low_level_claims_remain_non_global_and_do_not_poison_contract():
     raw = {
         "summary": "运行保持与批次控制",

@@ -50,8 +50,9 @@ _CURRENT_ROOT_FORBIDDEN_FIELDS = frozenset({"execution_semantics"})
 class AnalysisProtocolError(ValueError):
     """Fresh Agent-A JSON does not satisfy the current analysis wire protocol."""
 
-    def __init__(self, violations):
+    def __init__(self, violations, *, details=()):
         self.violations = tuple(str(item) for item in violations if str(item).strip())
+        self.details = tuple(copy.deepcopy(item) for item in details)
         super().__init__("; ".join(self.violations) or "analysis protocol violation")
 
 
@@ -91,10 +92,10 @@ def current_analysis_protocol_violations(result):
         return ["$: analysis response must be a JSON object"]
 
     approaches = result.get("approaches")
-    if not isinstance(approaches, list):
-        return ["$.approaches: current protocol requires an array"]
-
     violations = []
+    if not isinstance(approaches, list):
+        violations.append("$.approaches: current protocol requires an array")
+        approaches = []
     forbidden_root = sorted(_CURRENT_ROOT_FORBIDDEN_FIELDS.intersection(result))
     if forbidden_root:
         violations.append(
@@ -213,11 +214,68 @@ def current_analysis_protocol_violations(result):
     return violations
 
 
+def current_analysis_protocol_details(result):
+    """Keep legacy messages and expose actual values plus Core-owned contracts."""
+    from plc.execution_intent import execution_intent_claim_details
+    from plc.specification.explicit_constraint_claims import explicit_constraint_claim_details
+    claim_details = []
+    if isinstance(result, dict):
+        claim_details = [*execution_intent_claim_details(result.get("execution_intent_claims")),
+                         *explicit_constraint_claim_details(result.get("explicit_constraint_claims"))]
+    by_path = {item["path"]: item for item in claim_details}
+    details = []
+    for violation in current_analysis_protocol_violations(result):
+        path, message = violation.split(": ", 1)
+        if path in by_path:
+            details.append(copy.deepcopy(by_path[path]))
+            continue
+        actual = result
+        for index, field in re.findall(r"\[(\d+)\]|\.([A-Za-z_][A-Za-z0-9_]*)", path):
+            try:
+                actual = actual[int(index) if index else field]
+            except (IndexError, KeyError, TypeError):
+                actual = None
+                break
+        details.append({"path": path, "code": "invalid_analysis_shape", "message": message,
+                        "actual": copy.deepcopy(actual)})
+    return details
+
+
+def analysis_grounding_details(result, user_text, *, plc_model="FX3U", confirmed_spec=None, contract_stage="bound"):
+    """Inspect each claim independently so one malformed frame cannot mask others."""
+    from plc.execution_intent import compile_execution_intent_claims, execution_intent_claim_violations
+    from plc.specification.explicit_constraint_claims import compile_explicit_constraint_claims, explicit_constraint_claim_violations
+    if not isinstance(result, dict) or not str(user_text or "").strip():
+        return []
+    details = []
+    for name, check, compile_claim in (
+        ("explicit_constraint_claims", explicit_constraint_claim_violations,
+         lambda claims: compile_explicit_constraint_claims(claims, user_text, plc_model)),
+        ("execution_intent_claims", execution_intent_claim_violations,
+         lambda claims: compile_execution_intent_claims(claims, user_text, confirmed_spec=confirmed_spec)),
+    ):
+        claims = result.get(name)
+        if not isinstance(claims, list):
+            continue
+        for index, claim in enumerate(claims):
+            if check([claim]):
+                continue
+            for rejected in compile_claim([claim]).get("rejected", []):
+                rows = rejected.get("details") or [{"path": f"$.{name}[0]", "code": rejected["reason"],
+                    "message": "claim must bind to exact current-request evidence and its reported devices",
+                    "actual": copy.deepcopy(claim)}]
+                for item in rows:
+                    item = copy.deepcopy(item)
+                    item["path"] = item["path"].replace(f"$.{name}[0]", f"$.{name}[{index}]", 1)
+                    details.append(item)
+    return details
+
+
 def validate_current_analysis_protocol(result):
     """Raise an analysis-protocol error before normalization or PLC validation."""
     violations = current_analysis_protocol_violations(result)
     if violations:
-        raise AnalysisProtocolError(violations)
+        raise AnalysisProtocolError(violations, details=current_analysis_protocol_details(result))
     return result
 
 
@@ -376,6 +434,7 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     normalized.pop("intent_context", None)
     normalized.pop("decision_receipt", None)
     normalized.pop("explicit_constraint_receipt", None)
+    normalized.pop("analysis_repair_receipt", None)
     normalized.pop("declared_io_bindings", None)
     # Legacy UI/classification fields are not part of the current model contract.
     # Do not replay them into later model requests or migrate saved revisions.
