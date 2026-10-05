@@ -57,6 +57,58 @@ def test_user_journey_raw_directory_excludes_repository():
         private_directory(ROOT / "benchmarks" / "raw")
 
 
+def test_analysis_entry_dry_run_is_direct_and_does_not_load_credentials(tmp_path, monkeypatch, capsys):
+    from scripts.benchmark_user_path import main as journey_main
+    from scripts import benchmark_analysis_entry as entry
+    monkeypatch.setattr(entry, "isolated_profile", lambda *a: pytest.fail("dry run read credentials"))
+    directory = tmp_path / "entry"
+    assert journey_main(["--experiment", "analysis-entry", "--phase", "analysis", "--profile-id", "fixture",
+                         "--entry-model", "deepseek-flash", "--output", str(directory)]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["analysis_mode"] == "direct" and result["repeats_per_arm"] == 5
+    assert result["requested_model"] == "deepseek-flash" and result["network_calls"] == 0
+    assert not directory.exists()
+
+
+def test_analysis_entry_metrics_keep_first_call_repair_and_unavailable_usage_separate():
+    from scripts.benchmark_analysis_entry import describe_metrics
+    result = describe_metrics({"attempts": [{"transport_ms": 62000, "usage": {"reasoning_tokens": 5705}},
+        {"transport_ms": 6000}], "actual_requests": [{"messages": [{"role": "system", "content": "a"}]}] * 2,
+        "diagnostics": [{"event": "provider_result", "model": "glm-5.3"},
+                        {"event": "job_finished", "elapsed_ms": 70000}], "wall_ms": 70300})
+    assert result["first_call_ms"] == 62000 and result["protocol_repair_ms"] == 6000
+    assert result["local_and_gaps_ms"] == 2000 and result["total_ms"] == 70000
+    assert result["reasoning_tokens"] == [5705, None]
+    assert result["request_count"] == 2 and result["models"] == ["glm-5.3"]
+
+
+@pytest.mark.parametrize("contact,passed", [("NC X0", True), ("NO X0", False)])
+def test_entry_trace_oracle_detects_wrong_stop_and_level_restart(contact, passed):
+    from scripts.benchmark_analysis_entry import check_entry_program
+    from application.compact_protocol import expand_compact_ladder
+    from plc.ir import build_plc_ir
+    ladder = expand_compact_ladder({"r": [{"b": [{"i": [{"or": [["NO X1"], ["NO Y0"]]}, contact],
+                                                    "o": ["COIL Y0"]}]}]})
+    result = check_entry_program(build_plc_ir(ladder))
+    assert result["traces"] == 512 and result["passed"] == passed
+
+
+def test_entry_evidence_export_excludes_private_config_and_redacts_observed_secrets(tmp_path):
+    import zipfile
+    from scripts.benchmark_analysis_entry import export_evidence
+    directory = tmp_path / "private"
+    run = directory / "runs" / "repaired-1"
+    run.mkdir(parents=True)
+    (run / "isolated-config.json").write_text('{"api_key":"CONFIG_SECRET"}', encoding="utf-8")
+    (run / "analysis.json").write_text('{"api_key":"OBSERVED_SECRET","value":"起保停"}', encoding="utf-8")
+    archive = tmp_path / "evidence.zip"
+    export_evidence(directory, archive)
+    with zipfile.ZipFile(archive) as bundle:
+        assert not any("isolated-config" in name for name in bundle.namelist())
+        record = bundle.read("runs/repaired-1/analysis.json").decode("utf-8")
+        assert "OBSERVED_SECRET" not in record and "起保停" in record
+
+
 @pytest.mark.parametrize("change", ["evidence", "specification", "temperature"])
 def test_user_journey_preflight_rejects_non_example_changes(change, monkeypatch):
     from scripts import benchmark_user_path as journey

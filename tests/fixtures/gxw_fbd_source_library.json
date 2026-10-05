@@ -12,7 +12,19 @@
     "description_offset": 42,
     "description_end": 108,
     "metadata_base64": "BgAAAE8AawBvAG0AYQAAAAsAAABGAFgAMwBVAC8ARgBYADMAVQBDAAAAHwAAAE0AYQBjAGgAaQBuAGUAIABmAG8AcgAgAHcAaQBuAGQAbwB3AHMAIABwAHIAbwBkAHUAYwB0AGkAbwBuAAAAAAAAAAAAAAAcAAAAAQAAAAEAAAAAAOgHCwAGAAkADAAzAAIAAAACAAAA5AQAAAACAABMBAAA/////////////////////2QAAADHAAAA//////////9kAAAAxwAAAAAPAAD/HQAA//////////8ACAAA/w8AAAAIAAD/DwAA3AAAAPUAAAALAAAABwABAAEAAgABAAQQfwAFAAEABgABAAsAIAADEAEAACABAAEgAAAHEP////8BAAAAAAAAAAEAAAABAAAAAAACAAAAAQAAAAEAAAAAAAIAAAABAAAAAQAAAAAA5AAAAAACAABMBAAA/////////////////////2QAAADHAAAA//////////9kAAAAxwAAAAAPAAD/HQAA//////////8ACAAA/w8AAAAIAAD/DwAA3AAAAPUAAAD/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////AAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAQAAAAEAAAAAAAAABQAAAE0AQQBJAE4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAA=",
-    "compile_option_values": [65543, 131073, 268697601, 327807, 393217, 720897, 268632096, 536870913, 536936449, 268894208, 4294967295],
+    "compile_option_values": [
+      65543,
+      131073,
+      268697601,
+      327807,
+      393217,
+      720897,
+      268632096,
+      536870913,
+      536936449,
+      268894208,
+      4294967295
+    ],
     "native_getters": "Original Workspace project attributes, GetProjectCodePage, GetSystemVariableInfo and GetCompileOptionPointer agree with these stored fields; isolated unmodified author project.",
     "native_run": "research/experiments/sfc-graph-20260926/public-corpus-discovery/v161-independent-described-project/okoma-a1/native-events.jsonl"
   },
@@ -55,5 +67,69 @@
     "saved_reopened_pcode_channels_equal": true,
     "public_adapter_check": "not-called",
     "runtime_execution": "not-tested"
+  },
+  "reordered_project_formals_native": {
+    "source": "https://github.com/tarman3/okoma_uf3s/blob/37dcc76c32173b14c18195b1cfaafc380455e132/Project_PLC/project.gxw",
+    "cpu": "FX3U/FX3UC",
+    "codepage": 1252,
+    "component_version": "1.635.0.1",
+    "converter_version": "15.31",
+    "logical_name": "FB_DOUBLE_CLICK.Labels.lh",
+    "declarations_base64": "AQAAAAAAAQAAAAAAAQAKAAAAAAACAAAAAQAAAAEAAAAAAOgHCgABABwADQAsAAkAAAAAAAAAEAAAAEYAQgBfAEQATwBVAEIATABFAF8AQwBMAEkAQwBLAAAAAgAAAQEAAAABAAAAAAABAAAAAAAEAAAABwAAAFAARQBSAEkATwBEAAAABQAAAFQASQBNAEUAAAADAAAAAQAAAAAAAQAAAAAAAAAAAAUAAABUACMAMABzAAAAAQAAAAAAAgAAAAEAAAAAAAAAAAAHAAAAAQAAAAAAAgAAAFEAAAAFAAAAQgBPAE8ATAAAAAQAAAABAAAAAAABAAAAAAAAAAAABgAAAEYAQQBMAFMARQAAAAEAAAAAAAQAAAABAAAAAAAAAAAAAQAAAAEAAAAAABAAAAB0AGkAbQBlAEMAbABpAGMAawBCAGUAZgBvAHIAZQAAAAUAAABUAEkATQBFAAAAAQAAAAEAAAAAAAEAAAAAAAAAAAAFAAAAVAAjADAAcwAAAAEAAAAAAAMAAAABAAAAAAAAAAAABwAAAAEAAAAAAAMAAABJAE4AAAAFAAAAQgBPAE8ATAAAAAMAAAABAAAAAAABAAAAAAAAAAAABgAAAEYAQQBMAFMARQAAAAEAAAAAAAEAAAABAAAAAAAAAAAAAQAAAAEAAAAAAOgHCgABABwADQAsAAkAAAD/AAAAAAAAAA==",
+    "compiler_declarations_base64": "QAAiASAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg/////////////////////////////////////8cAAAAAAAAAAAAAAAEAAAABAAAAAQAAAAAEAAAAAQAAAAMAAABJTgAFAAAAQk9PTAADAAAABgAAAEZBTFNFAAEAAAAAAgAAAAcAAABQRVJJT0QABQAAAFRJTUUAAwAAAAUAAABUIzBzAAEAAAAAAwAAABAAAAB0aW1lQ2xpY2tCZWZvcmUABQAAAFRJTUUAAQAAAAUAAABUIzBzAAEAAAAABAAAAAIAAABRAAUAAABCT09MAAQAAAAGAAAARkFMU0UAAQAAAAA=",
+    "displayed_order": [
+      "PERIOD",
+      "Q",
+      "timeClickBefore",
+      "IN"
+    ],
+    "saved_numbers": [
+      2,
+      4,
+      3,
+      1
+    ],
+    "native_compiler_order": [
+      "IN",
+      "PERIOD",
+      "timeClickBefore",
+      "Q"
+    ],
+    "native_input_formals": [
+      [
+        "IN",
+        "BOOL",
+        3
+      ],
+      [
+        "PERIOD",
+        "TIME",
+        3
+      ]
+    ],
+    "native_output_formals": [
+      [
+        "Q",
+        "BOOL",
+        4
+      ]
+    ],
+    "native_rejected_control": {
+      "code": "0x500c2025",
+      "argument": "IN",
+      "input_order": [
+        "PERIOD",
+        "IN"
+      ]
+    },
+    "native_accepted_control": {
+      "input_order": [
+        "IN",
+        "PERIOD"
+      ],
+      "source_body_bytes_exact_after_save_and_cold_reopen": true
+    },
+    "limits": "Interface ordering and original native compilation; whole resource check still rejected, no PLC execution.",
+    "native_run": "research\\experiments\\sfc-graph-20260926\\public-corpus-discovery\\v162-author-native-fbd\\cold\\cold-a2"
   }
 }

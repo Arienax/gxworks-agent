@@ -9,11 +9,10 @@ from plc.specification.bindings import (
     bind_answers,
     bind_known_question_rows,
     binding_hint,
+    binding_reference,
     single_address,
     restore_bound_choices,
-    resolve_parameter_address,
-    parameter_uses_bound_address,
-    bound_parameter_is_removed,
+    resolve_answer_bindings,
     confirmed_input_levels,
     merge_declared_bindings,
     recover_declared_bindings,
@@ -536,45 +535,19 @@ def validate_spec_draft(spec, plc_model=None):
         binding_rows = raw_to_io_table(spec.get("io_allocation_raw", ""))
     binding_history = spec.get("io_bindings", [])
 
-    seen_bindings = {}
-    address_owners = {}
-    for index, parameter in enumerate(parameters):
-        if not isinstance(parameter, dict) or not str(parameter.get("value") or "").strip():
+    resolution = resolve_answer_bindings(binding_rows, parameters, binding_history, protected_ids=QUESTION_IDS)
+    errors.extend(resolution["issues"])
+    for index, entry in resolution["answers"].items():
+        parameter, hint = entry["item"], entry["hint"]
+        if entry["removed"] or not str(parameter.get("value") or "").strip():
             continue
-        if not parameter_is_applicable(parameter, parameters):
-            continue
-        hint = binding_hint(parameter)
-        if hint is None or parameter.get("id") in QUESTION_IDS:
-            continue
-        if bound_parameter_is_removed(parameter, binding_rows, binding_history):
-            continue
-        if not parameter_uses_bound_address(parameter):
-            # A question may be associated with D/M/T/etc. without selecting
-            # that address. Semantic answers are ordinary parameters, not an
-            # invalid I/O answer and therefore create no confirmation gate.
-            continue
-        address = resolve_parameter_address(parameter, binding_rows, binding_history)
+        address = entry["address"]
         if address is None:
-            errors.append(_validation_issue("invalid_io_answer", "请为该输入/输出选择一个明确的软元件地址",
-                                            f"$.parameters[{index}].value", row=index))
             continue
         error, _warning, _prefix, _number = _validate_device_address(address, model)
         if error:
             errors.append(_validation_issue("invalid_io_address", error,
-                                            f"$.parameters[{index}].value", row=index))
-        identity = hint["binding_id"]
-        if identity in seen_bindings and seen_bindings[identity] != address:
-            errors.append(_validation_issue("conflicting_io_binding", "同一输入/输出绑定选择了不同地址，请统一选择",
-                                            f"$.parameters[{index}].value", row=index))
-        seen_bindings[identity] = address
-        owner = hint.get("row_id") or identity
-        previous = address_owners.get(address)
-        if previous and previous[0] != owner and hint["kind"] in {"X", "Y"}:
-            errors.append(_validation_issue(
-                "conflicting_io_owners", f"{address} 被不同输入/输出用途重复选择：{previous[1]}、{hint.get('label') or parameter.get('name') or identity}；请更换地址；有意共用时应显式关联同一 I/O 行",
-                f"$.parameters[{index}].value", row=index, address=address, first_row=previous[2]))
-        else:
-            address_owners[address] = (owner, hint.get("label") or str(parameter.get("name") or identity), index)
+                                             f"$.parameters[{index}].value", row=index))
         # When the question explicitly asks for a bit level, an address alone
         # does not answer it. Apply to every typed input, not only start/stop.
         question = str(parameter.get("name") or "")
@@ -985,10 +958,9 @@ def _suggested_io_to_table(suggested_io):
 def _parameter_choice_metadata(item):
     """Keep choices separate from prose and from the user's confirmed value."""
     metadata = parameter_metadata(item)
-    if isinstance(item.get("io_binding"), dict):
-        hint = binding_hint(item)
-        if hint is not None:
-            metadata["io_binding"] = hint
+    hint = binding_hint(item) or binding_reference(item)
+    if hint is not None:
+        metadata["io_binding"] = hint
     if isinstance(item.get("options"), (list, tuple)):
         metadata["options"] = [str(option) for option in item["options"] if str(option).strip()]
     if "suggested_default" in item:
@@ -999,7 +971,8 @@ def _parameter_choice_metadata(item):
 
 def _missing_info_to_parameters(missing_info):
     parameters = []
-    for item in normalize_missing_info(missing_info):
+    questions = normalize_missing_info(missing_info)
+    for item in questions:
         if not isinstance(item, dict):
             continue
         name = str(item.get("question", "")).strip()
@@ -1026,10 +999,9 @@ def _missing_info_to_parameters(missing_info):
             "options": options,
         }
         parameter.update({k: v for k, v in parameter_metadata(item).items() if k != "note_provenance"})
-        if isinstance(item.get("io_binding"), dict):
-            hint = binding_hint(item)
-            if hint is not None:
-                parameter["io_binding"] = hint
+        hint = binding_hint(item, questions) or binding_reference(item)
+        if hint is not None:
+            parameter["io_binding"] = hint
         if default is not None:
             parameter["suggested_default"] = str(default)
         if isinstance(item.get("required_when"), dict):

@@ -55,6 +55,36 @@ class AnalysisProtocolError(ValueError):
         super().__init__("; ".join(self.violations) or "analysis protocol violation")
 
 
+def prepare_analysis_payload(result, *, contract_stage="bound", user_text=""):
+    """Separate optional unbound proposals from the active wire contract.
+
+    Only a missing source binding is deferrable. Other shape failures and
+    fabricated evidence still use the normal bounded protocol repair.
+    """
+    if not isinstance(result, dict):
+        return result
+    prepared = copy.deepcopy(result)
+    prepared.pop("_deferred_execution_claims", None)
+    claims = prepared.get("execution_intent_claims")
+    if contract_stage != "requirements" or not isinstance(claims, list):
+        return prepared
+    from plc.execution_intent import execution_intent_claim_violations
+    retained, pending = [], []
+    text = " ".join(str(user_text or "").split())
+    for index, claim in enumerate(claims):
+        violations = execution_intent_claim_violations([claim])
+        evidence = claim.get("evidence", []) if isinstance(claim, dict) else []
+        if (violations == ["$.execution_intent_claims[0].trigger.source_devices: this trigger kind requires a source device"]
+                and text and all(" ".join(span.split()) in text for span in evidence)):
+            pending.append({"index": index, "status": "pending_binding", "reason": "source_binding_missing", "candidate": claim})
+        else:
+            retained.append(claim)
+    prepared["execution_intent_claims"] = retained
+    if pending:
+        prepared["_deferred_execution_claims"] = pending
+    return prepared
+
+
 def current_analysis_protocol_violations(result):
     """Validate only the current Agent-A wire shape, never PLC engineering behavior."""
     if not isinstance(result, dict):
@@ -676,6 +706,7 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
     normalized["execution_intent_receipt"] = {
         "accepted": copy.deepcopy(claim_receipt.get("accepted") or []),
         "rejected": copy.deepcopy(claim_receipt.get("rejected") or []),
+        "pending": normalized.pop("_deferred_execution_claims", []),
     }
     from plc.specification.behavior import normalize_behavior_constraints
     normalized['behavior_constraints'] = []

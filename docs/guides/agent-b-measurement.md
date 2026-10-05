@@ -311,3 +311,19 @@ python scripts/benchmark_user_path.py --experiment construction-value --phase su
 
 20份ModelScope结果与52项官方补跑的实际计数、检查器纠错及统计边界见
 [2026-10-05实验报告](../reports/2026-10-05-core-construction-value.md)。
+
+### Direct 分析与首次确认入口
+
+`analysis-entry` 在独立进程中运行 `0592933` 与当前冻结源码，每次通过隔离的本机 HTTP 服务新建 FX3U 工程，从“起保停”开始；不预填确认规格。默认各 5 次，轮次内相邻、交替交换两组顺序。`--profile-id` 只选择已有官方凭据的归属，实际参数取内置 `deepseek-v4-flash` 预设。模型标识由 `--entry-model` 明确指定；预检不提供该模型时停止，不自动替换或改思考预算。
+
+```powershell
+$resultPath = Join-Path $env:LOCALAPPDATA 'GXWorksAgent/measurements/analysis-entry'
+$officialProfileId = '<已有官方凭据的 profile id>'
+python scripts/benchmark_user_path.py --experiment analysis-entry --phase preflight --output $resultPath --profile-id $officialProfileId --entry-model deepseek-flash --live
+python scripts/benchmark_user_path.py --experiment analysis-entry --phase analysis --output $resultPath --profile-id $officialProfileId --entry-model deepseek-flash --live
+python scripts/benchmark_user_path.py --experiment analysis-entry --phase summary --output $resultPath --profile-id $officialProfileId
+```
+
+示例的 `deepseek-flash` 是本次用户明确批准的官方实际型号，与内置预设原型号 `deepseek-v4-flash` 分开记录。首次调用、协议修复、本地处理及间隙、分析总耗时、供应商返回模型、推理 token 和请求次数分别记录；生成单独计时。全局活动配置不写入。
+
+如果确认归属修复是在取得响应后完成，可用同一目录的 `--phase confirm --live` 回放已接受的原始分析响应，再走 HTTP 填表、一次保存、回读和生成。回放不发送新的分析请求；已有成功生成复用原记录，其他新组生成各调用一次。首次在线结果与确认回放目录均保留，不能把回放耗时计为在线分析提速，或把回放成功称为首次在线全路径成功。本次结果及限制见[入口报告](../reports/2026-10-05-analysis-entry.md)。

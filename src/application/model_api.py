@@ -269,18 +269,20 @@ def _analysis_json_payload(raw):
     return json.loads(text.strip())
 
 
-def _validate_fresh_analysis_content(raw):
+def _validate_fresh_analysis_content(raw, *, contract_stage="bound", user_text=""):
+    from application.analysis_results import prepare_analysis_payload
     payload = _analysis_json_payload(raw)
+    payload = prepare_analysis_payload(payload, contract_stage=contract_stage, user_text=user_text)
     validate_current_analysis_protocol(payload)
     return payload
 
 
-def _parse_analysis_response(raw, plc_model="FX3U", user_text="", confirmed_spec=None):
-    result = _validate_fresh_analysis_content(raw)
+def _parse_analysis_response(raw, plc_model="FX3U", user_text="", confirmed_spec=None, *, contract_stage="bound"):
+    result = _validate_fresh_analysis_content(raw, contract_stage=contract_stage, user_text=user_text)
     return _normalize_analysis_result(result, plc_model, user_text, confirmed_spec)
 
 
-def _request_analysis_response(messages, *, on_format_repair=None, **kwargs):
+def _request_analysis_response(messages, *, on_format_repair=None, contract_stage="bound", user_text="", **kwargs):
     """Accept the current Agent-A protocol, with one bounded format repair.
 
     JSON syntax failures and current-protocol shape failures share the existing
@@ -330,7 +332,7 @@ def _request_analysis_response(messages, *, on_format_repair=None, **kwargs):
             )
         else:
             try:
-                _validate_fresh_analysis_content(first.message.content)
+                _validate_fresh_analysis_content(first.message.content, contract_stage=contract_stage, user_text=user_text)
             except AnalysisProtocolError as protocol_error:
                 first_attempts = first.raw_attempts
                 rejected_message = first.message
@@ -373,7 +375,7 @@ def _request_analysis_response(messages, *, on_format_repair=None, **kwargs):
 
         combined_attempts = (*first_attempts, *repaired.raw_attempts)
         try:
-            _validate_fresh_analysis_content(repaired.message.content)
+            _validate_fresh_analysis_content(repaired.message.content, contract_stage=contract_stage, user_text=user_text)
         except AnalysisProtocolError as error:
             error.raw_attempts = combined_attempts
             error.raw_response = repaired.message
@@ -423,6 +425,8 @@ def analyze_requirement(
     try:
         response = _request_analysis_response(
             messages,
+            contract_stage=analysis_prompt.contract_stage,
+            user_text=user_requirement,
             effort=None,
             stream=False,
             on_format_repair=on_format_repair,
@@ -436,7 +440,8 @@ def analyze_requirement(
             raw = raw.rsplit("\n", 1)[0]
         raw = raw.strip()
 
-        result = _parse_analysis_response(raw, model, user_requirement, confirmed_context)
+        result = _parse_analysis_response(raw, model, user_requirement, confirmed_context,
+                                         contract_stage=analysis_prompt.contract_stage)
         # Application metadata, not a mode selected by the model response.
         result["analysis_mode"] = "design" if analysis_prompt.route.include_design else "direct"
         from application.analysis_results import attach_analysis_evidence
@@ -495,6 +500,8 @@ def analyze_requirement_streaming(
     try:
         response = _request_analysis_response(
             messages,
+            contract_stage=analysis_prompt.contract_stage,
+            user_text=user_requirement,
             effort=None,
             stream=True,
             on_format_repair=on_format_repair,
@@ -511,7 +518,8 @@ def analyze_requirement_streaming(
             raw = raw.rsplit("\n", 1)[0]
         raw = raw.strip()
 
-        result = _parse_analysis_response(raw, model, user_requirement, confirmed_context)
+        result = _parse_analysis_response(raw, model, user_requirement, confirmed_context,
+                                         contract_stage=analysis_prompt.contract_stage)
         # Application metadata, not a mode selected by the model response.
         result["analysis_mode"] = "design" if analysis_prompt.route.include_design else "direct"
         from application.analysis_results import attach_analysis_evidence

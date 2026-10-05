@@ -339,11 +339,50 @@ def recover_declared_bindings(spec, rows, bindings=()):
     return rows, sorted(bindings, key=lambda item: str(item.get("binding_id") or ""))
 
 
-def binding_hint(parameter):
-    """Return bounded typed metadata; ordinary parameter prose is not metadata."""
+def binding_reference(parameter):
+    """Keep an explicit logical identity even before its kind is available."""
     raw = parameter.get("io_binding")
+    if not isinstance(raw, dict) and parameter.get("binding_id"):
+        raw = parameter  # A response may place explicit metadata on the question.
+    if not isinstance(raw, dict):
+        return None
+    identity = str(raw.get("binding_id") or "").strip()
+    if not identity or len(identity) > 128:
+        return None
+    result = {"binding_id": identity}
+    for key in ("kind", "role", "row_id", "label"):
+        value = raw.get(key)
+        if isinstance(value, str) and (key == "label" or len(value) <= 128):
+            result[key] = value.upper() if key == "kind" else value.strip()
+    return result
+
+
+def binding_hint(parameter, related=()):
+    """Return bounded typed metadata; ordinary parameter prose is not metadata."""
+    raw = binding_reference(parameter)
     if isinstance(raw, dict):
+        raw = dict(raw)
         binding_id = str(raw.get("binding_id") or "").strip()
+        # An attribute question may reference an explicitly declared sibling
+        # identity. Complete absent metadata only, never repair contradictory
+        # declarations or infer identity/kind from natural-language labels.
+        if binding_id and related:
+            siblings = [binding_reference(p) for p in related if isinstance(p, dict)]
+            siblings = [p for p in siblings if p and p["binding_id"] == binding_id]
+            for key in ("kind", "role", "row_id", "label"):
+                values = {p[key] for p in siblings if isinstance(p.get(key), str)}
+                if key not in raw and len(values) == 1:
+                    raw[key] = values.pop()
+            if "kind" not in raw:
+                addresses = [single_address(p.get("value", "")) for p in related if isinstance(p, dict)
+                             and (binding_reference(p) or {}).get("binding_id") == binding_id]
+                kinds = {re.match(r"[A-Z]+", a).group() for a in addresses if a}
+                if len(kinds) == 1:
+                    raw["kind"] = kinds.pop()
+        if "kind" not in raw:
+            address = single_address(parameter.get("value", ""))
+            if address:
+                raw["kind"] = re.match(r"[A-Z]+", address).group()
         kind = str(raw.get("kind") or "").upper()
         if binding_id and len(binding_id) <= 128 and kind in _ORDER:
             result = {"binding_id": binding_id, "kind": kind}
@@ -567,6 +606,135 @@ def resolve_parameter_address(parameter, rows, bindings=()):
 
 
 
+def resolve_answer_bindings(rows, parameters, bindings=(), *, protected_ids=()):
+    """Resolve a complete submission against current ownership, before allocation.
+
+    Sibling answers join only by explicit binding identity. Retained answers
+    follow table edits and removals; defaults and new rows are never evidence.
+    """
+    from plc.specification.parameters import parameter_is_applicable
+
+    aliases = copy.deepcopy(list(rows or []))
+    rows = canonical_io_rows(aliases)
+    previous = {str(b["binding_id"]): copy.deepcopy(b) for b in bindings or ()
+                if isinstance(b, dict) and b.get("binding_id")}
+    owners = {r.get("address"): r.get("binding_id") for r in rows if isinstance(r, dict)}
+    old_owners = {r.get("binding_id"): canonical_device(r.get("address"))
+                  for r in aliases if isinstance(r, dict) and r.get("binding_id")}
+    for identity, binding in previous.items():
+        binding["address"] = canonical_device(binding.get("address"))
+        address = old_owners.get(binding.get("row_binding_id") or identity)
+        if address in owners and owners[address]:
+            binding["row_binding_id"] = owners[address]
+
+    answers, groups, issues = {}, {}, []
+    related = [*parameters, *({"io_binding": b} for b in previous.values())]
+    for index, parameter in enumerate(parameters or ()):
+        if not isinstance(parameter, dict) or not parameter_is_applicable(parameter, parameters):
+            continue
+        item = copy.deepcopy(parameter)
+        if not isinstance(item.get("io_binding"), dict):
+            saved = _saved_parameter_binding(item, previous.values())
+            hint = binding_hint({"io_binding": saved}) if saved else None
+            if hint is not None:
+                item["io_binding"] = hint
+        hint = binding_hint(item, related)
+        if hint is not None:
+            item["io_binding"] = hint
+        name = str(item.get("name") or "").strip()
+        if item.get("id") in protected_ids or not name:
+            continue
+        if hint is None:
+            reference = binding_reference(item)
+            if reference and (_is_io_attribute_answer(item.get("value")) or single_address(item.get("value"))):
+                hint = {"kind": "", **reference}
+                entry = {"index": index, "item": item, "hint": hint, "address": None,
+                         "removed": False, "explicit_address": bool(_DEVICE.search(str(item.get("value") or "")))}
+                answers[index] = entry
+                groups.setdefault(hint["binding_id"], []).append(entry)
+                continue
+            address = single_address(item.get("value", "")) if _question_is_address(name) else None
+            if address is None:
+                continue
+            identifier = str(item.get("id") or "") or hashlib.sha256(name.encode("utf-8")).hexdigest()[:16]
+            hint = {"binding_id": "question_" + identifier, "kind": re.match(r"[A-Z]+", address).group()}
+        elif not parameter_uses_bound_address(item):
+            continue
+        value = str(item.get("value") or "")
+        address = resolve_parameter_address(item, rows, previous.values()) if binding_hint(item) else single_address(value)
+        prior = previous.get(hint["binding_id"])
+        if address and prior:
+            old_address = single_address(prior.get("value", ""), hint["kind"]) or single_address(prior.get("address", ""), hint["kind"])
+            owner = _bound_row(rows, hint["binding_id"], prior)
+            if address == old_address and owner is not None:
+                address = single_address(owner.get("address"), hint["kind"])
+        entry = {"index": index, "item": item, "hint": hint, "address": address,
+                 "removed": bound_parameter_is_removed(item, rows, previous.values()),
+                 "explicit_address": bool(_DEVICE.search(value))}
+        answers[index] = entry
+        if value.strip():
+            groups.setdefault(hint["binding_id"], []).append(entry)
+
+    def issue(code, message, entry, **details):
+        issues.append({"code": code, "message": message,
+                       "path": f"$.parameters[{entry['index']}].value", "row": entry["index"], **details})
+
+    merged = {}
+    for identity, entries in groups.items():
+        explicit = {e["address"] for e in entries if e["explicit_address"] and e["address"] and not e["removed"]}
+        for entry in entries:
+            # Invalid explicit addresses never borrow a sibling's valid answer.
+            if not entry["explicit_address"] and _is_io_attribute_answer(entry["item"].get("value")) and len(explicit) == 1:
+                entry.update(address=next(iter(explicit)), removed=False)
+        entries = [e for e in entries if not e["removed"]]
+        groups[identity] = entries
+        if not entries:
+            merged[identity] = {"removed": True, "address": None, "attributes": {}}
+            continue
+        addresses = {e["address"] for e in entries if e["address"]}
+        levels = {confirmed_input_levels(e["item"].get("value")).get("active_level") for e in entries}
+        levels.discard(None)
+        metadata_conflict = any(len({e["hint"][key] for e in entries if e["hint"].get(key)}) > 1
+                                for key in ("kind", "role", "row_id"))
+        if len(addresses) > 1 or metadata_conflict:
+            issue("conflicting_io_binding", "同一输入/输出绑定选择了不同地址或身份，请统一选择", entries[-1])
+        if len(levels) > 1:
+            issue("conflicting_io_attributes", "同一输入/输出绑定的有效电平或触点极性相互矛盾，请统一选择", entries[-1])
+        merged[identity] = {"removed": False, "address": next(iter(addresses)) if len(addresses) == 1 else None,
+                            "attributes": {"active_level": next(iter(levels)), "inactive_level": 1-next(iter(levels))} if len(levels) == 1 else {}}
+        for entry in entries:
+            if entry["address"] is None:
+                issue("invalid_io_answer", "请为该输入/输出选择一个明确的软元件地址", entry)
+
+    # Current owned rows also occupy addresses. Apply the whole batch of
+    # declared moves before detecting collisions, so a legitimate swap works.
+    effective_owners = {str(row.get("row_id") or row["binding_id"]):
+                        (row.get("address"), row.get("kind"), None)
+                        for row in rows if row.get("binding_id")}
+    for entry in answers.values():
+        if entry["removed"] or not entry["address"]:
+            continue
+        hint, address = entry["hint"], entry["address"]
+        owner = hint.get("row_id") or hint["binding_id"]
+        previous_owner = (previous.get(hint["binding_id"]) or {}).get("row_binding_id")
+        matches = [row for row in rows if row.get("binding_id") == hint["binding_id"]
+                   or previous_owner and row.get("binding_id") == previous_owner
+                   or hint.get("row_id") and hint["row_id"] in {row.get("row_id"), row.get("binding_id")}]
+        if len(matches) == 1:
+            owner = matches[0].get("row_id") or matches[0].get("binding_id")
+        effective_owners[owner] = (address, hint["kind"], entry)
+    address_owners = {}
+    for owner, (address, kind, entry) in effective_owners.items():
+        prior = address_owners.get(address)
+        if prior and prior[0] != owner and kind in {"X", "Y"} and (entry or prior[1]):
+            issue("conflicting_io_owners", f"{address} 被不同输入/输出用途重复选择；有意共用时应显式关联同一 I/O 行", entry or prior[1],
+                  address=address, first_row=prior[1]["index"] if prior[1] else None)
+        else:
+            address_owners[address] = (owner, entry)
+    return {"rows": rows, "bindings": previous, "answers": answers, "groups": groups,
+            "merged": merged, "issues": issues}
+
+
 def bind_known_question_rows(rows, parameters):
     """Anchor a displayed one-point polarity question before the first answer.
 
@@ -603,90 +771,45 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
     exact legacy role label, then an already allocated exact address. Newly appended rows cannot become
     another answer's replacement target. This removes parameter-order dependence.
     """
-    original_alias_rows = copy.deepcopy(list(rows or []))
-    rows = canonical_io_rows(original_alias_rows)
-    previous = {str(item.get("binding_id")): copy.deepcopy(item)
-                for item in bindings or () if isinstance(item, dict) and item.get("binding_id")}
-    owners = {r.get("address"): r.get("binding_id") for r in rows if isinstance(r, dict)}
-    old_owners = {r.get("binding_id"): canonical_device(r.get("address"))
-                  for r in original_alias_rows if isinstance(r, dict) and r.get("binding_id")}
-    for identity, binding in previous.items():
-        binding["address"] = canonical_device(binding.get("address"))
-        old_owner = binding.get("row_binding_id") or identity
-        owner_address = old_owners.get(old_owner)
-        if owner_address in owners and owners[owner_address]:
-            binding["row_binding_id"] = owners[owner_address]
+    resolution = resolve_answer_bindings(rows, parameters, bindings, protected_ids=protected_ids)
+    rows, previous = resolution["rows"], resolution["bindings"]
     original_count = len(rows)
     original_rows = copy.deepcopy(rows)
-    pending, remaining, applied = [], [], {}
-    for parameter in parameters or ():
-        item = copy.deepcopy(parameter)
-        if not isinstance(item, dict):
-            remaining.append(item)
+    pending, remaining, applied = {}, [], {}
+    invalid = {resolution["answers"][issue["row"]]["hint"]["binding_id"]
+               for issue in resolution["issues"] if issue["code"] in
+               {"conflicting_io_binding", "conflicting_io_attributes", "invalid_io_answer"}}
+    for index, parameter in enumerate(parameters or ()):
+        entry = resolution["answers"].get(index)
+        if entry is not None and entry["removed"]:
             continue
-        from plc.specification.parameters import parameter_is_applicable
-        if not parameter_is_applicable(item, parameters):
-            remaining.append(item)
+        if entry is None or not entry["address"] or entry["hint"]["binding_id"] in invalid:
+            remaining.append(copy.deepcopy(parameter))
             continue
-        name = str(item.get("name") or "").strip()
-        identifier = str(item.get("id") or "").strip()
-        hint = binding_hint(item)
-        if not isinstance(item.get("io_binding"), dict):
-            # A generation projection drops parameter metadata but retains
-            # binding provenance. Recover that identity before using the
-            # legacy question fallback; never create a second binding for it.
-            saved = _saved_parameter_binding(item, previous.values())
-            restored_hint = binding_hint({"io_binding": saved}) if saved else None
-            if restored_hint is not None:
-                item["io_binding"] = restored_hint
-                hint = restored_hint
-        if identifier in protected_ids or not name or (hint is None and not _question_is_address(name)):
-            remaining.append(item)
-            continue
-        if hint is not None and not parameter_uses_bound_address(item):
-            # Device-associated semantic choices stay as confirmed parameters;
-            # they are not I/O-address edits and must never be consumed here.
-            remaining.append(item)
-            continue
-        if hint is not None and bound_parameter_is_removed(item, original_rows, previous.values()):
-            continue
-        address = resolve_parameter_address(item, original_rows, previous.values()) if hint else single_address(item.get("value", ""))
-        if address is None:
-            remaining.append(item)
-            continue
-        if hint is None:
-            identity = identifier or hashlib.sha256(name.encode("utf-8")).hexdigest()[:16]
-            hint = {"binding_id": "question_" + identity, "kind": re.match(r"[A-Z]+", address).group()}
-        # Normalize only a confirmed address answer, not arbitrary prose. Keep
-        # physical-contact wording while removing the address's padding alias.
+        item, hint, address = entry["item"], entry["hint"], entry["address"]
         item["value"] = _DEVICE.sub(lambda _m: address, str(item["value"]), count=1)
-        prior = previous.get(hint["binding_id"])
-        if prior:
-            prior_address = (single_address(prior.get("value", ""), hint["kind"])
-                             or single_address(prior.get("address", ""), hint["kind"]))
-            linked_row = _bound_row(original_rows, hint["binding_id"], prior)
-            if address == prior_address and linked_row is not None:
-                # A combined answer such as "X1，常闭" remains editable for its
-                # polarity. If only its historical address was retained, an
-                # explicit I/O-table edit wins; preserve all the contact text.
-                current_address = str(linked_row.get("address") or "").strip().upper()
-                if current_address and current_address != address:
-                    item["value"] = _DEVICE.sub(lambda _m: current_address, str(item["value"]), count=1)
-                    address = current_address
-            elif address == prior_address and linked_row is None:
-                # Explicitly removing a bound row must not re-create it from an
-                # unchanged retained answer. Its original value remains in the
-                # operator audit, not in the active generation specification.
-                continue
-        pending.append((hint, item, address))
+        pending.setdefault(hint["binding_id"], []).append((hint, item, address))
+        applied[str(item["name"])] = str(item.get("value") or "")
         if _is_io_attribute_answer(item.get("value")) or isinstance(item.get("required_when"), dict):
-            # Preserve an exact recovered identity through reanalysis even if
-            # the next question's display wording no longer contains an address.
             item.setdefault("io_binding", copy.deepcopy(hint))
             remaining.append(item)
 
+    merged = []
+    for identity, answers in pending.items():
+        # Attribute provenance survives when the consumed address question is
+        # absent on the next save. Pick by stable identifiers, never input order.
+        answers.sort(key=lambda a: (not bool(confirmed_input_levels(a[1].get("value"))),
+                                   not _is_io_attribute_answer(a[1].get("value")),
+                                   str(a[1].get("id") or ""), str(a[1].get("name") or "")))
+        hint, item, address = answers[0]
+        hint = copy.deepcopy(hint)
+        for other, _item, _address in answers:
+            for key, value in other.items():
+                hint.setdefault(key, value)
+        merged.append((hint, item, address))
+
     claimed = set()
-    for hint, item, address in sorted(pending, key=lambda x: (x[0]["binding_id"], x[2], str(x[1].get("id") or ""), str(x[1].get("name") or ""))):
+    for hint, item, address in sorted(merged, key=lambda x: x[0]["binding_id"]):
         identity = hint["binding_id"]
         name = str(item["name"])
         matches = [i for i, row in enumerate(original_rows) if isinstance(row, dict)
@@ -733,6 +856,7 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
                               "value": str(item.get("value") or ""),
                               "source": item.get("source") or "user",
                               "row_binding_id": row.get("binding_id") or identity}
+        previous[identity].update(resolution["merged"][identity]["attributes"])
         applied[name] = str(item.get("value") or "")
 
     # Stable order for additions, without changing the order of existing rows.
@@ -794,7 +918,10 @@ def restore_bound_choices(questions, rows, bindings):
         address = str(row.get("address") or "").strip().upper()
         if not single_address(address):
             continue
-        if single_address(value):
+        name = str(question.get("name") or question.get("question") or "")
+        if _question_is_address(name) and not _is_io_attribute_answer(name):
+            question["value"] = address
+        elif single_address(value):
             question["value"] = _DEVICE.sub(lambda _m: address, value, count=1)
         elif _is_io_attribute_answer(value):
             question["value"] = value

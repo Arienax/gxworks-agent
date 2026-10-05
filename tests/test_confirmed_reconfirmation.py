@@ -10,6 +10,110 @@ from plc.specification.confirmed import build_review_draft, canonicalize_confirm
 from test_confirmed_compatibility import operator_spec, profile_for
 
 
+@pytest.mark.parametrize("contact,active", [("常开", 1), ("常闭", 0)])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_http_unbound_analysis_split_confirmation_save_and_regeneration(tmp_path, contact, active, reverse):
+    from fastapi.testclient import TestClient
+    from integrations.web.app import create_app
+    from application.workbench import WorkbenchService
+    from application.confirmed_generation_context import project_confirmed_specification
+    from plc.specification.conditions import generation_input_conditions
+    from model_runtime.provider import TextDelta, SystemMessage
+    from test_web_api import ORIGIN, OPERATOR, _login, _complete, offline_runtime_profile
+    from test_spec_choice_metadata import ENTRY_FIXTURE
+    from plc.ir import ir_to_ladder
+
+    class Provider:
+        profile = offline_runtime_profile("offline-entry-replay")
+
+        def __init__(self):
+            self.requests = []
+            self.stop_address = "X0"
+
+        def stream(self, request):
+            self.requests.append(request)
+            if request.response_contract.name == "analysis":
+                assert len(self.requests) == 1
+                payload = ENTRY_FIXTURE["analysis"]
+            else:
+                prompt = next(m.content for m in request.messages if isinstance(m, SystemMessage))
+                projected, _ = json.JSONDecoder().raw_decode(prompt.split("# Confirmed project specification\n", 1)[1])
+                stop = next((b for b in projected["io_bindings"] if b.get("role") == "stop"), None)
+                assert not projected.get("execution_semantics")
+                facts = generation_input_conditions(projected["io_bindings"])
+                delivered, _ = json.JSONDecoder().raw_decode(prompt.split("# Settled input predicates (not a new requirement)\n", 1)[1])
+                inputs = [{"or": [["NO X1"], ["NO Y0"]]}]
+                if self.stop_address is None:
+                    assert stop is None
+                    assert not any(p.get("role") == "stop" for p in delivered["level_predicates"])
+                else:
+                    assert stop["address"] == self.stop_address and stop["active_level"] == active
+                    predicate = next(p for p in delivered["level_predicates"] if p.get("role") == "stop")
+                    expected = ("NC " if active else "NO ") + self.stop_address
+                    assert predicate["run_permit_when"] == expected
+                    assert predicate["active_when"] == ("NO " if active else "NC ") + self.stop_address
+                    assert predicate in facts["level_predicates"]
+                    inputs.append(expected)
+                payload = {"r": [{"b": [{"i": inputs, "o": ["COIL Y0"]}]}]}
+                if request.response_contract.name != "compact_ladder":
+                    # Regeneration with a saved version enters the existing edit
+                    # protocol, which requests ladder_v1 rather than compact JSON.
+                    from application.compact_protocol import expand_compact_ladder
+                    payload = expand_compact_ladder(payload)
+                    payload.update(mode="partial", delete_rung_ids=[])
+            yield TextDelta(json.dumps(payload, ensure_ascii=False))
+
+    provider = Provider()
+    service = WorkbenchService(tmp_path / "workspace", tmp_path / "state", model_factory=lambda: (provider, provider.profile))
+    app = create_app(service.store.base_dir, state_dir=service.state_dir, service=service, origin=ORIGIN, operator_token=OPERATOR)
+    with TestClient(app, base_url=ORIGIN) as client:
+        headers = _login(client)
+        pid = client.post("/api/projects", headers=headers, json={"name": "split input entry", "plc_model": "FX3U"}).json()["id"]
+        _, output = _complete(client, service, client.post("/api/jobs", headers=headers, json={
+            "kind": "analysis", "project_id": pid, "request_id": "entry-analysis", "analysis_mode": "direct", "text": ENTRY_FIXTURE["request"]}))
+        assert len(provider.requests) == 1
+        draft = output["spec_draft"]
+        assert draft["io_table"] == [] and not draft.get("io_bindings")
+        for p in draft["parameters"]:
+            p.update(value=contact if p["id"] == "stop_button_polarity" else ENTRY_FIXTURE["answers"][p["id"]], source="user")
+        if reverse:
+            draft["parameters"].reverse()
+        saved = client.put(f"/api/projects/{pid}/spec", headers=headers, json={"spec": draft, "expected_hash": None}).json()
+        assert saved["valid"] and len(provider.requests) == 1
+        assert service.projects.raw_project(pid)["confirmed_spec"] == saved["spec"]
+        for repeat in range(2):
+            if repeat:
+                next(r for r in saved["spec"]["io_table"] if r["binding_id"] == "stop_button")["address"] = "X2"
+                saved = client.put(f"/api/projects/{pid}/spec", headers=headers, json={"spec": saved["spec"], "expected_hash": saved["hash"]}).json()
+                assert saved["valid"]
+                provider.stop_address = "X2"
+            _, generation = _complete(client, service, client.post("/api/jobs", headers=headers, json={
+                "kind": "generation", "project_id": pid, "request_id": f"entry-generate-{repeat}",
+                "text": "按确认规格生成"}))
+            assert generation["status"] == "saved", json.dumps(generation, ensure_ascii=False)
+            ladder = ir_to_ladder(service.projects.program(pid, generation["version_id"]))
+            _truth_table(ladder, "NO" if active else "NC", addresses=("X1", provider.stop_address, "Y0"))
+        assert len(provider.requests) == 3
+        saved["spec"]["io_table"] = [r for r in saved["spec"]["io_table"] if r["binding_id"] != "stop_button"]
+        removed = client.put(f"/api/projects/{pid}/spec", headers=headers, json={"spec": saved["spec"], "expected_hash": saved["hash"]}).json()
+        assert removed["valid"]
+        projected = project_confirmed_specification(service.projects.raw_project(pid)["confirmed_spec"])
+        assert all(b.get("role") != "stop" for b in projected["io_bindings"])
+        assert all(p.get("role") != "stop" for p in generation_input_conditions(projected["io_bindings"])["level_predicates"])
+        assert len(provider.requests) == 3
+        provider.stop_address = None
+        _, after_delete = _complete(client, service, client.post("/api/jobs", headers=headers, json={
+            "kind": "generation", "project_id": pid, "request_id": "entry-generate-removed",
+            "text": "删除停止输入后按当前规格重新生成"}))
+        assert after_delete["status"] == "saved" and len(provider.requests) == 4
+        program = service.projects.program(pid, after_delete["version_id"])
+        assert not {"X0", "X2"} & set(program["io_map"])
+        # Editing retains historical comments; a declared-only comment is not
+        # a resurrected physical binding or a runnable input reference.
+        assert all(not {"X0", "X2"} & set(network["reads"] + network["writes"])
+                   for network in program["networks"])
+
+
 def _truth_table(ladder, polarity="NO", *, addresses=("X0", "X1", "Y0")):
     def evaluate(item, state):
         if item is None:

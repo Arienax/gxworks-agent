@@ -1,0 +1,1226 @@
+{
+  "baseline": "0592933",
+  "groups": {
+    "baseline": {
+      "runs": [
+        {
+          "started_at": "2026-10-05T12:13:41.444871+00:00",
+          "confirmation_success": false,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis": {
+            "first_call_ms": 8519.077699998888,
+            "protocol_repair_ms": 2181.542599999375,
+            "local_and_gaps_ms": 1336.3797000017366,
+            "total_ms": 12037,
+            "http_wall_ms": 12140.89310000054,
+            "request_count": 2,
+            "models": [
+              "deepseek-flash",
+              "deepseek-flash"
+            ],
+            "reasoning_tokens": [
+              1168,
+              46
+            ],
+            "input_tokens": [
+              1926,
+              2510
+            ],
+            "output_tokens": [
+              1573,
+              449
+            ],
+            "prompt_characters": [
+              5175,
+              5175
+            ],
+            "transport_observations_complete": true
+          },
+          "analysis_status": "completed",
+          "failure": "unsupported_confirmation_question:io.start_button.address"
+        },
+        {
+          "started_at": "2026-10-05T12:14:38.010091+00:00",
+          "confirmation_success": false,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis": {
+            "first_call_ms": 4800.271700001758,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 756.7282999982417,
+            "total_ms": 5557,
+            "http_wall_ms": 5646.654599997419,
+            "request_count": 1,
+            "models": [
+              "deepseek-flash"
+            ],
+            "reasoning_tokens": [
+              523
+            ],
+            "input_tokens": [
+              1926
+            ],
+            "output_tokens": [
+              847
+            ],
+            "prompt_characters": [
+              5175
+            ],
+            "transport_observations_complete": true
+          },
+          "analysis_status": "completed",
+          "failure": "unsupported_confirmation_question:run_output"
+        },
+        {
+          "started_at": "2026-10-05T12:14:50.959050+00:00",
+          "confirmation_success": false,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis": {
+            "first_call_ms": 11636.524699999427,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 779.475300000573,
+            "total_ms": 12416,
+            "http_wall_ms": 12535.74959999969,
+            "request_count": 1,
+            "models": [
+              "deepseek-flash"
+            ],
+            "reasoning_tokens": [
+              1979
+            ],
+            "input_tokens": [
+              1926
+            ],
+            "output_tokens": [
+              2514
+            ],
+            "prompt_characters": [
+              5175
+            ],
+            "transport_observations_complete": true
+          },
+          "analysis_status": "completed",
+          "confirmation_errors": [
+            {
+              "code": "invalid_io_answer",
+              "message": "请为该输入/输出选择一个明确的软元件地址",
+              "path": "$.parameters[1].value",
+              "row": 1
+            },
+            {
+              "code": "invalid_io_answer",
+              "message": "请为该输入/输出选择一个明确的软元件地址",
+              "path": "$.parameters[3].value",
+              "row": 3
+            }
+          ],
+          "failure": "confirmation_rejected"
+        },
+        {
+          "started_at": "2026-10-05T12:15:48.537278+00:00",
+          "confirmation_success": false,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis": {
+            "first_call_ms": 7073.768400001427,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 733.2315999985731,
+            "total_ms": 7807,
+            "http_wall_ms": 7921.051699999225,
+            "request_count": 1,
+            "models": [
+              "deepseek-flash"
+            ],
+            "reasoning_tokens": [
+              847
+            ],
+            "input_tokens": [
+              1926
+            ],
+            "output_tokens": [
+              1259
+            ],
+            "prompt_characters": [
+              5175
+            ],
+            "transport_observations_complete": true
+          },
+          "analysis_status": "completed",
+          "confirmation_errors": [
+            {
+              "code": "contact_type_missing",
+              "message": "参数“启动按钮接在哪个输入点？其触点是常开（NO）还是常闭（NC）？”还需明确常开或常闭",
+              "path": "$.parameters[0].value",
+              "row": 0
+            },
+            {
+              "code": "contact_type_missing",
+              "message": "参数“停止按钮接在哪个输入点？其触点是常闭（NC）还是常开（NO）？”还需明确常开或常闭",
+              "path": "$.parameters[1].value",
+              "row": 1
+            }
+          ],
+          "failure": "confirmation_rejected"
+        },
+        {
+          "started_at": "2026-10-05T12:16:03.690489+00:00",
+          "confirmation_success": false,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis": {
+            "first_call_ms": 7870.741099999577,
+            "protocol_repair_ms": 3256.654400000116,
+            "local_and_gaps_ms": 942.6045000003069,
+            "total_ms": 12070,
+            "http_wall_ms": 12115.602399997442,
+            "request_count": 2,
+            "models": [
+              "deepseek-flash",
+              "deepseek-flash"
+            ],
+            "reasoning_tokens": [
+              1063,
+              350
+            ],
+            "input_tokens": [
+              1926,
+              2553
+            ],
+            "output_tokens": [
+              1510,
+              776
+            ],
+            "prompt_characters": [
+              5175,
+              5175
+            ],
+            "transport_observations_complete": true
+          },
+          "analysis_status": "completed",
+          "confirmation_errors": [
+            {
+              "code": "invalid_io_answer",
+              "message": "请为该输入/输出选择一个明确的软元件地址",
+              "path": "$.parameters[2].value",
+              "row": 2
+            }
+          ],
+          "failure": "confirmation_rejected"
+        }
+      ],
+      "metrics": {
+        "first_call_ms": {
+          "count": 5,
+          "median": 7870.741099999577,
+          "min": 4800.271700001758,
+          "max": 11636.524699999427
+        },
+        "protocol_repair_ms": {
+          "count": 5,
+          "median": 0,
+          "min": 0,
+          "max": 3256.654400000116
+        },
+        "local_and_gaps_ms": {
+          "count": 5,
+          "median": 779.475300000573,
+          "min": 733.2315999985731,
+          "max": 1336.3797000017366
+        },
+        "total_ms": {
+          "count": 5,
+          "median": 12037,
+          "min": 5557,
+          "max": 12416
+        },
+        "request_count": {
+          "count": 5,
+          "median": 1,
+          "min": 1,
+          "max": 2
+        }
+      },
+      "confirmation_successes": 0,
+      "generation_saved": 0,
+      "confirmation_replays": [
+        {
+          "started_at": "2026-10-05T12:28:26.739061+00:00",
+          "confirmation_success": true,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis_replayed": true,
+          "analysis": {
+            "first_call_ms": 21.31110000118497,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 680.688899998815,
+            "total_ms": 702,
+            "http_wall_ms": 772.8341000001819,
+            "request_count": 0,
+            "models": [],
+            "reasoning_tokens": [
+              null
+            ],
+            "input_tokens": [
+              null
+            ],
+            "output_tokens": [
+              null
+            ],
+            "prompt_characters": [],
+            "transport_observations_complete": false
+          },
+          "analysis_status": "completed",
+          "confirmation_errors": [],
+          "save_readback_matches": true,
+          "input_predicates": {
+            "level_predicates": [
+              {
+                "binding_id": "question_io.start_button.address",
+                "address": "X1",
+                "active_level": 1,
+                "inactive_level": 0,
+                "active_when": "NO X1",
+                "inactive_when": "NC X1"
+              },
+              {
+                "binding_id": "question_io.stop_button.address_polarity",
+                "address": "X0",
+                "active_level": 1,
+                "inactive_level": 0,
+                "active_when": "NO X0",
+                "inactive_when": "NC X0"
+              }
+            ],
+            "unresolved_input_bindings": []
+          },
+          "stop_predicates_correct": false
+        },
+        {
+          "started_at": "2026-10-05T12:28:46.369286+00:00",
+          "confirmation_success": true,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis_replayed": true,
+          "analysis": {
+            "first_call_ms": 20.831000001635402,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 667.1689999983646,
+            "total_ms": 688,
+            "http_wall_ms": 777.5182999976096,
+            "request_count": 0,
+            "models": [],
+            "reasoning_tokens": [
+              null
+            ],
+            "input_tokens": [
+              null
+            ],
+            "output_tokens": [
+              null
+            ],
+            "prompt_characters": [],
+            "transport_observations_complete": false
+          },
+          "analysis_status": "completed",
+          "confirmation_errors": [],
+          "save_readback_matches": true,
+          "input_predicates": {
+            "level_predicates": [
+              {
+                "binding_id": "question_start_signal",
+                "address": "X1",
+                "active_level": 1,
+                "inactive_level": 0,
+                "active_when": "NO X1",
+                "inactive_when": "NC X1",
+                "label": "启动输入",
+                "role": "start"
+              },
+              {
+                "binding_id": "question_stop_signal",
+                "address": "X0",
+                "active_level": 1,
+                "inactive_level": 0,
+                "active_when": "NO X0",
+                "inactive_when": "NC X0",
+                "label": "停止输入",
+                "role": "stop",
+                "run_permit_when": "NC X0"
+              }
+            ],
+            "unresolved_input_bindings": []
+          },
+          "stop_predicates_correct": true
+        },
+        {
+          "started_at": "2026-10-05T12:29:08.980052+00:00",
+          "confirmation_success": false,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis_replayed": true,
+          "analysis": {
+            "first_call_ms": 23.649200000363635,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 686.3507999996364,
+            "total_ms": 710,
+            "http_wall_ms": 759.9269000020286,
+            "request_count": 0,
+            "models": [],
+            "reasoning_tokens": [
+              null
+            ],
+            "input_tokens": [
+              null
+            ],
+            "output_tokens": [
+              null
+            ],
+            "prompt_characters": [],
+            "transport_observations_complete": false
+          },
+          "analysis_status": "completed",
+          "confirmation_errors": [
+            {
+              "code": "invalid_io_answer",
+              "message": "请为该输入/输出选择一个明确的软元件地址",
+              "path": "$.parameters[1].value",
+              "row": 1
+            },
+            {
+              "code": "invalid_io_answer",
+              "message": "请为该输入/输出选择一个明确的软元件地址",
+              "path": "$.parameters[3].value",
+              "row": 3
+            }
+          ],
+          "failure": "confirmation_rejected"
+        },
+        {
+          "started_at": "2026-10-05T12:29:24.288147+00:00",
+          "confirmation_success": true,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis_replayed": true,
+          "analysis": {
+            "first_call_ms": 20.01430000018445,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 731.9856999998156,
+            "total_ms": 752,
+            "http_wall_ms": 780.7747999977437,
+            "request_count": 0,
+            "models": [],
+            "reasoning_tokens": [
+              null
+            ],
+            "input_tokens": [
+              null
+            ],
+            "output_tokens": [
+              null
+            ],
+            "prompt_characters": [],
+            "transport_observations_complete": false
+          },
+          "analysis_status": "completed",
+          "confirmation_errors": [],
+          "save_readback_matches": true,
+          "input_predicates": {
+            "level_predicates": [
+              {
+                "binding_id": "io.start_signal",
+                "address": "X1",
+                "active_level": 1,
+                "inactive_level": 0,
+                "active_when": "NO X1",
+                "inactive_when": "NC X1",
+                "label": "启动按钮",
+                "role": "start"
+              },
+              {
+                "binding_id": "io.stop_signal",
+                "address": "X0",
+                "active_level": 1,
+                "inactive_level": 0,
+                "active_when": "NO X0",
+                "inactive_when": "NC X0",
+                "label": "停止按钮",
+                "role": "stop",
+                "run_permit_when": "NC X0"
+              }
+            ],
+            "unresolved_input_bindings": []
+          },
+          "stop_predicates_correct": true
+        },
+        {
+          "started_at": "2026-10-05T12:29:43.427234+00:00",
+          "confirmation_success": false,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis_replayed": true,
+          "analysis": {
+            "first_call_ms": 20.985799998015864,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 703.0142000019841,
+            "total_ms": 724,
+            "http_wall_ms": 774.4282000021485,
+            "request_count": 0,
+            "models": [],
+            "reasoning_tokens": [
+              null
+            ],
+            "input_tokens": [
+              null
+            ],
+            "output_tokens": [
+              null
+            ],
+            "prompt_characters": [],
+            "transport_observations_complete": false
+          },
+          "analysis_status": "completed",
+          "confirmation_errors": [
+            {
+              "code": "invalid_io_answer",
+              "message": "请为该输入/输出选择一个明确的软元件地址",
+              "path": "$.parameters[2].value",
+              "row": 2
+            }
+          ],
+          "failure": "confirmation_rejected"
+        }
+      ],
+      "replayed_confirmation_successes": 3
+    },
+    "repaired": {
+      "runs": [
+        {
+          "started_at": "2026-10-05T12:14:02.213610+00:00",
+          "confirmation_success": false,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis": {
+            "first_call_ms": 11206.658600000083,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 1203.3413999999175,
+            "total_ms": 12410,
+            "http_wall_ms": 12523.041000000376,
+            "request_count": 1,
+            "models": [
+              "deepseek-flash"
+            ],
+            "reasoning_tokens": [
+              1774
+            ],
+            "input_tokens": [
+              1499
+            ],
+            "output_tokens": [
+              2215
+            ],
+            "prompt_characters": [
+              4030
+            ],
+            "transport_observations_complete": true
+          },
+          "analysis_status": "completed",
+          "failure": "unsupported_confirmation_question:io_start_contact"
+        },
+        {
+          "started_at": "2026-10-05T12:14:22.037502+00:00",
+          "confirmation_success": false,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis": {
+            "first_call_ms": 7546.468000000459,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 780.5319999995409,
+            "total_ms": 8327,
+            "http_wall_ms": 8412.289200001396,
+            "request_count": 1,
+            "models": [
+              "deepseek-flash"
+            ],
+            "reasoning_tokens": [
+              1082
+            ],
+            "input_tokens": [
+              1499
+            ],
+            "output_tokens": [
+              1506
+            ],
+            "prompt_characters": [
+              4030
+            ],
+            "transport_observations_complete": true
+          },
+          "analysis_status": "completed",
+          "failure": "unsupported_confirmation_question:io.start.polarity"
+        },
+        {
+          "started_at": "2026-10-05T12:15:10.951426+00:00",
+          "confirmation_success": true,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis": {
+            "first_call_ms": 6070.739300001151,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 802.2606999988493,
+            "total_ms": 6873,
+            "http_wall_ms": 6964.033399999607,
+            "request_count": 1,
+            "models": [
+              "deepseek-flash"
+            ],
+            "reasoning_tokens": [
+              686
+            ],
+            "input_tokens": [
+              1499
+            ],
+            "output_tokens": [
+              1143
+            ],
+            "prompt_characters": [
+              4030
+            ],
+            "transport_observations_complete": true
+          },
+          "analysis_status": "completed",
+          "confirmation_errors": [],
+          "save_readback_matches": true,
+          "generation": {
+            "first_call_ms": 1782.2664999985136,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 557.7335000014864,
+            "total_ms": 2340,
+            "http_wall_ms": 2381.430500001443,
+            "request_count": 1,
+            "models": [
+              "deepseek-flash"
+            ],
+            "reasoning_tokens": [
+              201
+            ],
+            "input_tokens": [
+              2530
+            ],
+            "output_tokens": [
+              251
+            ],
+            "prompt_characters": [
+              6680
+            ],
+            "transport_observations_complete": true
+          },
+          "generation_status": "saved"
+        },
+        {
+          "started_at": "2026-10-05T12:15:27.729058+00:00",
+          "confirmation_success": false,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis": {
+            "first_call_ms": 8382.268500001373,
+            "protocol_repair_ms": 4145.727399998577,
+            "local_and_gaps_ms": 895.0041000000492,
+            "total_ms": 13423,
+            "http_wall_ms": 13455.88719999796,
+            "request_count": 2,
+            "models": [
+              "deepseek-flash",
+              "deepseek-flash"
+            ],
+            "reasoning_tokens": [
+              1166,
+              474
+            ],
+            "input_tokens": [
+              1499,
+              2183
+            ],
+            "output_tokens": [
+              1728,
+              1034
+            ],
+            "prompt_characters": [
+              4030,
+              4030
+            ],
+            "transport_observations_complete": true
+          },
+          "analysis_status": "completed",
+          "failure": "unsupported_confirmation_question:io_binding.start_address"
+        },
+        {
+          "started_at": "2026-10-05T12:16:23.157238+00:00",
+          "confirmation_success": false,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis": {
+            "first_call_ms": 7711.8893999977445,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 769.1106000022555,
+            "total_ms": 8481,
+            "http_wall_ms": 8540.181900003518,
+            "request_count": 1,
+            "models": [
+              "deepseek-flash"
+            ],
+            "reasoning_tokens": [
+              1143
+            ],
+            "input_tokens": [
+              1499
+            ],
+            "output_tokens": [
+              1434
+            ],
+            "prompt_characters": [
+              4030
+            ],
+            "transport_observations_complete": true
+          },
+          "analysis_status": "completed",
+          "failure": "unsupported_confirmation_question:io.start.address"
+        }
+      ],
+      "metrics": {
+        "first_call_ms": {
+          "count": 5,
+          "median": 7711.8893999977445,
+          "min": 6070.739300001151,
+          "max": 11206.658600000083
+        },
+        "protocol_repair_ms": {
+          "count": 5,
+          "median": 0,
+          "min": 0,
+          "max": 4145.727399998577
+        },
+        "local_and_gaps_ms": {
+          "count": 5,
+          "median": 802.2606999988493,
+          "min": 769.1106000022555,
+          "max": 1203.3413999999175
+        },
+        "total_ms": {
+          "count": 5,
+          "median": 8481,
+          "min": 6873,
+          "max": 13423
+        },
+        "request_count": {
+          "count": 5,
+          "median": 1,
+          "min": 1,
+          "max": 2
+        }
+      },
+      "confirmation_successes": 1,
+      "generation_saved": 1,
+      "confirmation_replays": [
+        {
+          "started_at": "2026-10-05T12:28:34.373855+00:00",
+          "confirmation_success": true,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis_replayed": true,
+          "analysis": {
+            "first_call_ms": 22.45989999937592,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 776.5401000006241,
+            "total_ms": 799,
+            "http_wall_ms": 893.3911999993143,
+            "request_count": 0,
+            "models": [],
+            "reasoning_tokens": [
+              null
+            ],
+            "input_tokens": [
+              null
+            ],
+            "output_tokens": [
+              null
+            ],
+            "prompt_characters": [],
+            "transport_observations_complete": false
+          },
+          "analysis_status": "completed",
+          "confirmation_errors": [],
+          "save_readback_matches": true,
+          "input_predicates": {
+            "level_predicates": [
+              {
+                "binding_id": "io_binding.start",
+                "address": "X1",
+                "active_level": 1,
+                "inactive_level": 0,
+                "active_when": "NO X1",
+                "inactive_when": "NC X1",
+                "label": "启动按钮",
+                "role": "start"
+              },
+              {
+                "binding_id": "io_binding.stop",
+                "address": "X0",
+                "active_level": 1,
+                "inactive_level": 0,
+                "active_when": "NO X0",
+                "inactive_when": "NC X0",
+                "label": "停止按钮",
+                "role": "stop",
+                "run_permit_when": "NC X0"
+              }
+            ],
+            "unresolved_input_bindings": []
+          },
+          "stop_predicates_correct": true,
+          "generation": {
+            "first_call_ms": 3523.9126999986183,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 386.08730000138166,
+            "total_ms": 3910,
+            "http_wall_ms": 4014.2544000009366,
+            "request_count": 1,
+            "models": [
+              "deepseek-flash"
+            ],
+            "reasoning_tokens": [
+              450
+            ],
+            "input_tokens": [
+              2569
+            ],
+            "output_tokens": [
+              500
+            ],
+            "prompt_characters": [
+              6781
+            ],
+            "transport_observations_complete": true
+          },
+          "generation_status": "saved",
+          "program_check": {
+            "traces": 512,
+            "scans_per_trace": 4,
+            "passed": true,
+            "failures": [],
+            "oracle": "next_Y0=(X1 or previous_Y0) and not X0",
+            "native_execution": false
+          }
+        },
+        {
+          "started_at": "2026-10-05T12:28:53.913151+00:00",
+          "confirmation_success": true,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis_replayed": true,
+          "analysis": {
+            "first_call_ms": 21.073100000648992,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 675.926899999351,
+            "total_ms": 697,
+            "http_wall_ms": 773.4638000001723,
+            "request_count": 0,
+            "models": [],
+            "reasoning_tokens": [
+              null
+            ],
+            "input_tokens": [
+              null
+            ],
+            "output_tokens": [
+              null
+            ],
+            "prompt_characters": [],
+            "transport_observations_complete": false
+          },
+          "analysis_status": "completed",
+          "confirmation_errors": [],
+          "save_readback_matches": true,
+          "input_predicates": {
+            "level_predicates": [
+              {
+                "binding_id": "start",
+                "address": "X1",
+                "active_level": 1,
+                "inactive_level": 0,
+                "active_when": "NO X1",
+                "inactive_when": "NC X1",
+                "label": "启动按钮",
+                "role": "start"
+              },
+              {
+                "binding_id": "stop",
+                "address": "X0",
+                "active_level": 1,
+                "inactive_level": 0,
+                "active_when": "NO X0",
+                "inactive_when": "NC X0",
+                "label": "停止按钮",
+                "role": "stop",
+                "run_permit_when": "NC X0"
+              }
+            ],
+            "unresolved_input_bindings": []
+          },
+          "stop_predicates_correct": true,
+          "generation": {
+            "first_call_ms": 7021.100800000568,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 339.8991999994323,
+            "total_ms": 7361,
+            "http_wall_ms": 7468.526700002258,
+            "request_count": 1,
+            "models": [
+              "deepseek-flash"
+            ],
+            "reasoning_tokens": [
+              1180
+            ],
+            "input_tokens": [
+              2558
+            ],
+            "output_tokens": [
+              1230
+            ],
+            "prompt_characters": [
+              6738
+            ],
+            "transport_observations_complete": true
+          },
+          "generation_status": "saved",
+          "program_check": {
+            "traces": 512,
+            "scans_per_trace": 4,
+            "passed": true,
+            "failures": [],
+            "oracle": "next_Y0=(X1 or previous_Y0) and not X0",
+            "native_execution": false
+          }
+        },
+        {
+          "started_at": "2026-10-05T12:29:16.574238+00:00",
+          "confirmation_success": true,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis_replayed": true,
+          "analysis": {
+            "first_call_ms": 20.748599999933504,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 708.2514000000665,
+            "total_ms": 729,
+            "http_wall_ms": 792.851400001382,
+            "request_count": 0,
+            "models": [],
+            "reasoning_tokens": [
+              null
+            ],
+            "input_tokens": [
+              null
+            ],
+            "output_tokens": [
+              null
+            ],
+            "prompt_characters": [],
+            "transport_observations_complete": false
+          },
+          "analysis_status": "completed",
+          "confirmation_errors": [],
+          "save_readback_matches": true,
+          "input_predicates": {
+            "level_predicates": [
+              {
+                "binding_id": "start",
+                "address": "X1",
+                "active_level": 1,
+                "inactive_level": 0,
+                "active_when": "NO X1",
+                "inactive_when": "NC X1",
+                "label": "启动按钮",
+                "role": "start"
+              },
+              {
+                "binding_id": "stop",
+                "address": "X0",
+                "active_level": 1,
+                "inactive_level": 0,
+                "active_when": "NO X0",
+                "inactive_when": "NC X0",
+                "label": "停止按钮",
+                "role": "stop",
+                "run_permit_when": "NC X0"
+              }
+            ],
+            "unresolved_input_bindings": []
+          },
+          "stop_predicates_correct": true,
+          "generation": {
+            "first_call_ms": 1782.2664999985136,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 557.7335000014864,
+            "total_ms": 2340,
+            "http_wall_ms": 2381.430500001443,
+            "request_count": 1,
+            "models": [
+              "deepseek-flash"
+            ],
+            "reasoning_tokens": [
+              201
+            ],
+            "input_tokens": [
+              2530
+            ],
+            "output_tokens": [
+              251
+            ],
+            "prompt_characters": [
+              6680
+            ],
+            "transport_observations_complete": true
+          },
+          "generation_status": "saved",
+          "generation_source": "original_online_run",
+          "program_check": {
+            "traces": 512,
+            "scans_per_trace": 4,
+            "passed": true,
+            "failures": [],
+            "oracle": "next_Y0=(X1 or previous_Y0) and not X0",
+            "native_execution": false
+          },
+          "generation_context_unchanged": true
+        },
+        {
+          "started_at": "2026-10-05T12:29:31.677720+00:00",
+          "confirmation_success": true,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis_replayed": true,
+          "analysis": {
+            "first_call_ms": 23.415200001181802,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 696.5847999988182,
+            "total_ms": 720,
+            "http_wall_ms": 772.4989000016649,
+            "request_count": 0,
+            "models": [],
+            "reasoning_tokens": [
+              null
+            ],
+            "input_tokens": [
+              null
+            ],
+            "output_tokens": [
+              null
+            ],
+            "prompt_characters": [],
+            "transport_observations_complete": false
+          },
+          "analysis_status": "completed",
+          "confirmation_errors": [],
+          "save_readback_matches": true,
+          "input_predicates": {
+            "level_predicates": [
+              {
+                "binding_id": "start",
+                "address": "X1",
+                "active_level": 1,
+                "inactive_level": 0,
+                "active_when": "NO X1",
+                "inactive_when": "NC X1",
+                "label": "启动按钮",
+                "role": "start"
+              },
+              {
+                "binding_id": "stop",
+                "address": "X0",
+                "active_level": 1,
+                "inactive_level": 0,
+                "active_when": "NO X0",
+                "inactive_when": "NC X0",
+                "label": "停止按钮",
+                "role": "stop",
+                "run_permit_when": "NC X0"
+              }
+            ],
+            "unresolved_input_bindings": []
+          },
+          "stop_predicates_correct": true,
+          "generation": {
+            "first_call_ms": 3601.3911000009102,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 354.6088999990898,
+            "total_ms": 3956,
+            "http_wall_ms": 4019.4468000008783,
+            "request_count": 1,
+            "models": [
+              "deepseek-flash"
+            ],
+            "reasoning_tokens": [
+              445
+            ],
+            "input_tokens": [
+              2573
+            ],
+            "output_tokens": [
+              495
+            ],
+            "prompt_characters": [
+              6750
+            ],
+            "transport_observations_complete": true
+          },
+          "generation_status": "saved",
+          "program_check": {
+            "traces": 512,
+            "scans_per_trace": 4,
+            "passed": true,
+            "failures": [],
+            "oracle": "next_Y0=(X1 or previous_Y0) and not X0",
+            "native_execution": false
+          }
+        },
+        {
+          "started_at": "2026-10-05T12:29:50.932752+00:00",
+          "confirmation_success": true,
+          "analysis_mode": "direct",
+          "plc_model": "FX3U",
+          "request": "起保停",
+          "analysis_replayed": true,
+          "analysis": {
+            "first_call_ms": 17.926600001374027,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 673.073399998626,
+            "total_ms": 691,
+            "http_wall_ms": 775.474200003373,
+            "request_count": 0,
+            "models": [],
+            "reasoning_tokens": [
+              null
+            ],
+            "input_tokens": [
+              null
+            ],
+            "output_tokens": [
+              null
+            ],
+            "prompt_characters": [],
+            "transport_observations_complete": false
+          },
+          "analysis_status": "completed",
+          "confirmation_errors": [],
+          "save_readback_matches": true,
+          "input_predicates": {
+            "level_predicates": [
+              {
+                "binding_id": "start",
+                "address": "X1",
+                "active_level": 1,
+                "inactive_level": 0,
+                "active_when": "NO X1",
+                "inactive_when": "NC X1",
+                "label": "启动信号",
+                "role": "start"
+              },
+              {
+                "binding_id": "stop",
+                "address": "X0",
+                "active_level": 1,
+                "inactive_level": 0,
+                "active_when": "NO X0",
+                "inactive_when": "NC X0",
+                "label": "停止信号",
+                "role": "stop",
+                "run_permit_when": "NC X0"
+              }
+            ],
+            "unresolved_input_bindings": []
+          },
+          "stop_predicates_correct": true,
+          "generation": {
+            "first_call_ms": 2124.3837000001804,
+            "protocol_repair_ms": 0,
+            "local_and_gaps_ms": 400.6162999998196,
+            "total_ms": 2525,
+            "http_wall_ms": 2577.2983000024396,
+            "request_count": 1,
+            "models": [
+              "deepseek-flash"
+            ],
+            "reasoning_tokens": [
+              176
+            ],
+            "input_tokens": [
+              2521
+            ],
+            "output_tokens": [
+              226
+            ],
+            "prompt_characters": [
+              6648
+            ],
+            "transport_observations_complete": true
+          },
+          "generation_status": "saved",
+          "program_check": {
+            "traces": 512,
+            "scans_per_trace": 4,
+            "passed": true,
+            "failures": [],
+            "oracle": "next_Y0=(X1 or previous_Y0) and not X0",
+            "native_execution": false
+          }
+        }
+      ],
+      "replayed_confirmation_successes": 5
+    }
+  },
+  "scope": "Direct FX3U entry over loopback HTTP; native execution not measured",
+  "environment": {
+    "python": "3.13.14",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "cpu": "FX3U",
+    "execution": "isolated loopback HTTP and Core finite scan model"
+  },
+  "actual_request_parameters": {
+    "extra_body": {
+      "thinking": {
+        "type": "enabled"
+      }
+    },
+    "model": "deepseek-flash",
+    "stream": true
+  },
+  "parameters_identical_all_analysis_calls": true,
+  "first_live_analysis_pipeline": "sources/repaired; prompt and response acceptance unchanged by later binding metadata completion",
+  "confirmation_pipeline": "sources/repaired-confirmation; raw accepted responses replayed without network analysis",
+  "later_changes": "final source additionally checks ownership of existing rows, covered by isolated HTTP and property regressions",
+  "initial_harness_limitations": [
+    "Role metadata dropped for partial bindings; live failures preserved",
+    "Answer filler initially required complete typed hint; later uses explicit question roles without editing spec metadata"
+  ]
+}

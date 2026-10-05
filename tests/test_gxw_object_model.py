@@ -2,6 +2,7 @@ from copy import deepcopy
 import base64
 from dataclasses import replace
 import json
+from itertools import permutations
 from pathlib import Path
 import xml.etree.ElementTree as ET
 import zipfile
@@ -431,6 +432,34 @@ def test_named_port_link_creates_native_wire_and_local_fb_bindings():
     assert net["connection"] == "wire_network"
     assert (net["sources"][0]["instance"], net["sinks"][0]["instance"]) == ("TIMER_A", "TIMER_B")
     assert [(r.name, r.type_reference) for r in labels['1.Labels.lh'].rows] == [("TIMER_A", "TON"), ("TIMER_B", "TON")]
+
+
+@pytest.mark.parametrize('order', list(permutations(range(4))))
+def test_project_callable_formals_follow_native_saved_numbers_after_display_reorder(order):
+    from src.gxw.callable_sources import ProjectCallableSources
+    from src.gxw.declarations import parse_declarations
+    witness = json.loads((Path(__file__).parent / 'fixtures/gxw_fbd_source_library.json').read_text())['reordered_project_formals_native']
+    document = parse_declarations(base64.b64decode(witness['declarations_base64']), logical_name=witness['logical_name'])
+    reordered = replace(document, rows=tuple(document.rows[i] for i in order))
+    sources = ProjectCallableSources(witness['cpu'], 'AUTHOR_FBD.Program.pou',
+                                    {witness['logical_name']: reordered}, {})
+    interface = sources.fixed_interface('FB_DOUBLE_CLICK')
+    assert [[r['name'], r['declared_type'], r['class_code']] for r in interface['inputs']] == witness['native_input_formals']
+    assert [[r['name'], r['declared_type'], r['class_code']] for r in interface['outputs']] == witness['native_output_formals']
+    assert [r['source_offset'] for r in interface['inputs']] == [412, 114]
+    assert [r.name for r in document.rows] == witness['displayed_order']
+
+
+def test_project_callable_cannot_guess_a_formal_order_from_duplicate_saved_numbers():
+    from src.gxw.callable_sources import ProjectCallableSources
+    from src.gxw.declarations import parse_declarations
+    witness = json.loads((Path(__file__).parent / 'fixtures/gxw_fbd_source_library.json').read_text())['reordered_project_formals_native']
+    document = parse_declarations(base64.b64decode(witness['declarations_base64']), logical_name=witness['logical_name'])
+    document = replace(document, rows=tuple(replace(r, record_id=1) if r.name == 'PERIOD' else r for r in document.rows))
+    sources = ProjectCallableSources(witness['cpu'], 'AUTHOR_FBD.Program.pou',
+                                    {witness['logical_name']: document}, {})
+    with pytest.raises(GXWFormatError, match='ambiguous saved declaration order'):
+        sources.fixed_interface('FB_DOUBLE_CLICK')
 
 
 @pytest.mark.parametrize('index', range(29))

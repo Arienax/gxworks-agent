@@ -1,6 +1,9 @@
 """Candidate controls retain user choices across analysis, review and storage."""
 
 import copy
+import itertools
+import json
+from pathlib import Path
 
 import pytest
 
@@ -10,6 +13,124 @@ from plc.specification.confirmed import (
     restore_review_choices,
     validate_spec_draft,
 )
+
+
+ENTRY_FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "analysis_entry_regression.json").read_text(encoding="utf-8"))
+
+
+def split_entry_draft(contact="常开"):
+    draft = build_review_draft(ENTRY_FIXTURE["analysis"])
+    for parameter in draft["parameters"]:
+        value = ENTRY_FIXTURE["answers"][parameter["id"]]
+        parameter.update(value=contact if parameter["id"] == "stop_button_polarity" else value, source="user")
+    return draft
+
+
+@pytest.mark.parametrize("contact,active", [("常开", 1), ("常闭", 0)])
+@pytest.mark.parametrize("order", list(itertools.permutations(range(4))))
+def test_empty_io_split_address_and_polarity_merge_once_in_any_order(contact, active, order):
+    from application.confirmed_generation_context import project_confirmed_specification
+    from plc.specification.conditions import generation_input_conditions
+    draft = split_entry_draft(contact)
+    draft["parameters"] = [draft["parameters"][i] for i in order]
+    original = copy.deepcopy(draft)
+    assert draft["io_table"] == [] and not draft.get("io_bindings")
+    assert validate_spec_draft(draft)["errors"] == []
+    saved = canonicalize_confirmed_spec(draft)
+    assert draft == original
+    assert canonicalize_confirmed_spec(saved) == saved
+    assert {r["address"] for r in saved["io_table"]} == {"X0", "X1", "Y0"}
+    stop = next(b for b in saved["io_bindings"] if b["role"] == "stop")
+    assert (stop["address"], stop["active_level"], stop["inactive_level"]) == ("X0", active, 1-active)
+    projected = project_confirmed_specification(saved)
+    predicate = next(p for p in generation_input_conditions(projected["io_bindings"])["level_predicates"] if p["role"] == "stop")
+    assert predicate["active_when"] == ("NO X0" if active else "NC X0")
+    assert predicate["run_permit_when"] == ("NC X0" if active else "NO X0")
+
+
+@pytest.mark.parametrize("conflict,code", [("address", "conflicting_io_binding"), ("level", "conflicting_io_attributes"),
+                                         ("owner", "conflicting_io_owners"), ("kind", "invalid_io_answer")])
+def test_split_binding_conflicts_cannot_be_saved_as_last_answer_wins(conflict, code):
+    draft = split_entry_draft()
+    address, polarity = draft["parameters"][1:3]
+    if conflict == "address":
+        other = copy.deepcopy(address)
+        other.update(id="other_address", name="Other input address?", value="X2")
+        draft["parameters"].append(other)
+    elif conflict == "level":
+        other = copy.deepcopy(polarity)
+        other.update(id="other_level", name="Input active level?", value="按下为 OFF")
+        draft["parameters"].append(other)
+    elif conflict == "owner":
+        draft["parameters"][0]["value"] = "X0"
+    else:
+        polarity["value"] = "Y0，常开"
+    assert code in {issue["code"] for issue in validate_spec_draft(draft)["errors"]}
+
+
+def test_split_address_choice_binds_but_register_semantic_choice_is_retained():
+    draft = split_entry_draft()
+    draft["parameters"][1].update(value_kind="choice", options=["X0", "X2"])
+    semantic = {"id": "classification", "name": "Classification meaning", "value": "D0=0 means no material",
+                "value_kind": "choice", "io_binding": {"binding_id": "vision", "kind": "D"}}
+    draft["parameters"].append(semantic)
+    assert not validate_spec_draft(draft)["errors"]
+    saved = canonicalize_confirmed_spec(draft)
+    assert any(p["id"] == "classification" and p["value"] == semantic["value"] for p in saved["parameters"])
+    assert all(b["binding_id"] != "vision" for b in saved["io_bindings"])
+
+
+@pytest.mark.parametrize("metadata", ["reference", "flat", "kind_from_answer"])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_split_identity_metadata_survives_until_confirmed_address_supplies_kind(metadata, reverse):
+    analysis = copy.deepcopy(ENTRY_FIXTURE["analysis"])
+    questions = analysis["missing_info"]
+    if metadata == "reference":
+        questions[2]["io_binding"] = {"binding_id": "stop_button"}
+    elif metadata == "flat":
+        for q in questions:
+            q.update(q.pop("io_binding"))
+        questions[2].pop("kind")
+    else:
+        for q in questions:
+            q["io_binding"].pop("kind")
+    if reverse:
+        questions.reverse()
+    draft = build_review_draft(analysis)
+    for p in draft["parameters"]:
+        p.update(value=ENTRY_FIXTURE["answers"][p["id"]], source="user")
+    assert not validate_spec_draft(draft)["errors"]
+    saved = canonicalize_confirmed_spec(draft)
+    stop = next(b for b in saved["io_bindings"] if b.get("role") == "stop")
+    assert (stop["address"], stop["active_level"], stop["kind"]) == ("X0", 1, "X")
+    assert canonicalize_confirmed_spec(saved) == saved
+
+
+@pytest.mark.parametrize("unowned", [False, True])
+def test_new_binding_cannot_consume_an_existing_different_owner_address(unowned):
+    saved = canonicalize_confirmed_spec(split_entry_draft())
+    if unowned:
+        saved["io_table"] = [{"kind": "X", "address": "X3", "label": "unowned"}]
+        saved.pop("io_bindings")
+        saved["parameters"].append({"id": "new_start", "name": "Start input address", "value": "X1",
+            "io_binding": {"binding_id": "fresh_start", "kind": "X", "role": "start"}})
+    saved["parameters"].append({"id": "other_input", "name": "Other input address", "value": "X1，常开",
+        "io_binding": {"binding_id": "sensor", "kind": "X", "role": "interlock", "label": "到位"}})
+    assert "conflicting_io_owners" in {e["code"] for e in validate_spec_draft(saved)["errors"]}
+
+
+@pytest.mark.parametrize("model,valid", [("FX3U", False), ("FX5U", True)])
+def test_split_resolution_keeps_the_selected_cpu_address_policy(model, valid):
+    draft = split_entry_draft()
+    draft["plc_model"] = model
+    draft["parameters"][1]["value"] = "x0008"
+    errors = validate_spec_draft(draft)["errors"]
+    if valid:
+        assert not errors
+        stop = next(b for b in canonicalize_confirmed_spec(draft)["io_bindings"] if b.get("role") == "stop")
+        assert stop["address"] == "X8" and stop["active_level"] == 1
+    else:
+        assert "invalid_io_address" in {e["code"] for e in errors}
 
 
 def _analysis():
@@ -381,9 +502,9 @@ def test_io_purpose_prompt_contract_is_present_in_both_modes_and_pinned():
                 knowledge_builder=lambda *a, **kw: (calls.append(kw) or ""),
                 audit=lambda *a, **kw: audits.append((a, kw)))
             assert "# I/O purpose metadata" in prompt.system_prompt
-            assert "label 为独立用途名称" in prompt.system_prompt
+            assert "label 只是人类可读用途/注释" in prompt.system_prompt
             assert "答案不必重复地址" in prompt.system_prompt
-            assert "不为注释新增确认问题" in prompt.system_prompt
+            assert "不为注释新增问题" in prompt.system_prompt
             assert len(calls) == 1 and calls[0]["include_design"] == (mode == "design")
             base = next(args[1] for args, _ in audits if args[0] == "base_prompt")
             assert "# I/O purpose metadata" in base

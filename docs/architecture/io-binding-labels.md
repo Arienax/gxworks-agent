@@ -20,6 +20,8 @@ Legacy labels are not rewritten merely because they resemble questions: old reco
 
 ## Input levels
 
+`resolve_answer_bindings` resolves an entire submission before rows are allocated. It collects explicit addresses by binding identity, then attaches sibling polarity/level answers. `validate_spec_draft` and `bind_answers` use the same resolution; question order and choice-widget type do not decide ownership. An identity-only reference may obtain absent metadata from a sibling or its confirmed address, without deriving a role from prose. Conflicting addresses, levels or physical owners are rejected; explicit references to the same physical row remain supported.
+
 An address already present in a question need not be repeated in its polarity answer. Current binding identity resolves the owning point. Physical action levels and Ladder NO/NC instructions are distinct: an active-low stop uses a low-level action predicate and a high-level run-permit predicate.
 
 [generation_input_conditions](../../src/plc/specification/conditions.py) derives these predicates for known input bindings. Contradictory or missing levels remain unresolved; register-value semantics are ordinary parameters, not address selection.

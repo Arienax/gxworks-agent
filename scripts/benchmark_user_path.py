@@ -750,8 +750,11 @@ def main(argv=None):
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--include-no-rag", action="store_true",
                         help="Add an unassisted generation arm; disable all retrieval and construction examples")
-    parser.add_argument("--experiment", choices=("examples", "evidence-value", "construction-value"), default="examples",
+    parser.add_argument("--experiment", choices=("examples", "evidence-value", "construction-value", "analysis-entry"), default="examples",
                         help="Evidence-only diagnostic, preserving common Core bindings")
+    parser.add_argument("--entry-model", default="deepseek-v4-flash",
+                        help="Explicit official model for the analysis-entry experiment; never substituted automatically")
+    parser.add_argument("--entry-export", type=Path, help="Write a sanitized analysis-entry evidence ZIP during summary")
     parser.add_argument("--curated-evidence", type=Path, help="Private source-reviewed excerpt packet indexed by case_id")
     parser.add_argument("--confirmed-specs", type=Path, help="Directory of the shared confirmed complex-case snapshots")
     parser.add_argument("--supplement-from", type=Path,
@@ -759,6 +762,9 @@ def main(argv=None):
     parser.add_argument("--workers", type=int, default=1, help="Independent process partitions; each block stays serial")
     parser.add_argument("--worker-index", type=int, default=0)
     args = parser.parse_args(argv)
+    if args.experiment == "analysis-entry":
+        from scripts.benchmark_analysis_entry import entry_main
+        return entry_main(args, private_directory(args.output))
     diagnostic = args.experiment == "evidence-value"
     args.repeats = args.repeats if args.repeats is not None else (3 if diagnostic or args.experiment == 'construction-value' else 2)
     args.cases = args.cases or ROOT / ('benchmarks/user_path_construction_cases.json' if args.experiment == 'construction-value' else "benchmarks/user_path_evidence_cases.json" if diagnostic else "benchmarks/user_path_complex_cases.json")

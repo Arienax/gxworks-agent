@@ -12,6 +12,58 @@ from model_runtime.provider import (
 from application.response_contracts import ANALYSIS_RESPONSE
 
 
+@pytest.mark.parametrize("stream", [False, True])
+def test_unbound_entry_candidates_are_deferred_without_rewriting_usable_confirmation(monkeypatch, stream):
+    from test_spec_choice_metadata import ENTRY_FIXTURE
+    monkeypatch.setattr(api, "_build_knowledge_context", lambda *args, **kwargs: "")
+    raw = json.dumps(ENTRY_FIXTURE["analysis"], ensure_ascii=False)
+    provider = Provider(raw)
+    repairs = []
+    function = api.analyze_requirement_streaming if stream else api.analyze_requirement
+    with api.provider_scope(provider):
+        result = function(ENTRY_FIXTURE["request"], on_format_repair=lambda: repairs.append(True))
+    assert len(provider.requests) == 1 and repairs == []
+    assert provider.responses == []
+    assert result["execution_semantics"] == []
+    assert len(result["execution_intent_receipt"]["pending"]) == 2
+    assert result["execution_intent_claims"] == []
+    assert result["missing_info"] == ENTRY_FIXTURE["analysis"]["missing_info"]
+    assert not result["suggested_io"]
+    assert "上升沿" not in result["summary"] and "重新按" not in result["summary"]
+
+
+@pytest.mark.parametrize("damage", ["evidence", "states", "shape"])
+def test_unbound_candidate_deferral_does_not_hide_other_protocol_errors(damage):
+    from test_spec_choice_metadata import ENTRY_FIXTURE
+    from application.analysis_results import prepare_analysis_payload, current_analysis_protocol_violations
+    result = copy.deepcopy(ENTRY_FIXTURE["analysis"])
+    result["execution_intent_claims"] = result["execution_intent_claims"][:1]
+    claim = result["execution_intent_claims"][0]
+    if damage == "evidence":
+        claim["evidence"] = ["fabricated evidence"]
+    elif damage == "states":
+        claim["trigger"].pop("from")
+    else:
+        claim["trigger"]["source_devices"] = "X0"
+    prepared = prepare_analysis_payload(result, contract_stage="requirements", user_text=ENTRY_FIXTURE["request"])
+    assert current_analysis_protocol_violations(prepared)
+    assert not prepared.get("_deferred_execution_claims")
+
+
+def test_explicit_bound_rising_requirement_is_preserved_and_never_deferred(monkeypatch):
+    from test_spec_choice_metadata import ENTRY_FIXTURE
+    monkeypatch.setattr(api, "_build_knowledge_context", lambda *args, **kwargs: "")
+    result = copy.deepcopy(ENTRY_FIXTURE["analysis"])
+    text = "X1 上升沿启动 Y0"
+    result["execution_intent_claims"] = [{"trigger": {"kind": "transition", "source_devices": ["X1"], "from": False, "to": True}, "evidence": [text]}]
+    provider = Provider(json.dumps(result, ensure_ascii=False))
+    with api.provider_scope(provider):
+        normalized = api.analyze_requirement(text)
+    assert len(provider.requests) == 1
+    assert any(r["semantic"] == "RISING_EDGE" for r in normalized["execution_semantics"])
+    assert normalized["execution_intent_receipt"]["pending"] == []
+
+
 # Minimized from the 2026-09-10 GLM stream, which ended with finish_reason=stop
 # even though the transition object was missing its label key.
 BROKEN = '{"summary":"起保停控制","approaches":[],"flowchart_steps":[{"type":"transition":"X0启动"}]}'

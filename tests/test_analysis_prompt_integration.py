@@ -22,7 +22,7 @@ def test_analysis_entry_uses_routed_assembly_and_one_model_call(monkeypatch, str
         "soft_limits": {"X": "X000-X367", "Y": "Y000-Y367", "M": "M0-M7679"},
     }})
     monkeypatch.setattr(api, "_build_clean_messages", lambda history, prompt: [{"role": "system", "content": prompt}])
-    monkeypatch.setattr(api, "_parse_analysis_response", lambda raw, *args: json.loads(raw))
+    monkeypatch.setattr(api, "_parse_analysis_response", lambda raw, *args, **kwargs: json.loads(raw))
     monkeypatch.setattr(analysis_results, "attach_analysis_evidence", lambda result, *args, **kwargs: result)
 
     def knowledge(query, **kwargs):

@@ -59,9 +59,17 @@ def type_mask(text):
 
 def interface(definition, input_count=None):
     if definition.get('source_kind') == 'project_labels':
+        # The original compiler frontend orders project declarations by their
+        # saved number, independently of displayed row order and live IDs.
+        # Reordered author rows and the captured compiler buffer establish
+        # this binding; the number is not an identity for editable local rows.
+        declared = definition['declarations'].rows
+        formals = [r for r in declared if r.class_code in (3, 4, 5, 11, 12)]
+        if len({r.record_id for r in formals}) != len(formals):
+            raise GXWFormatError('ambiguous saved declaration order in project callable')
         rows = [dict(name=r.name, class_code=r.class_code,
                      declared_type=r.data_type, source_offset=r.offset)
-                for r in definition['declarations'].rows]
+                for r in sorted(declared, key=lambda r: r.record_id)]
         if any(r['class_code'] not in CLASS.values() for r in rows):
             raise GXWFormatError('project declaration class outside observed interfaces')
     else:

@@ -18,6 +18,10 @@ Agent A's output fields belong to [application.analysis_results](../../src/appli
 
 ## Review and retries
 
+The assembler selects an internal information stage independently of Direct/Design. With unresolved required I/O questions or no current device facts it uses the requirements contract: control intent, one implementation in Direct, logical identities and necessary questions. It retains explicit timing, recovery and low-level restrictions but omits address-based effects, behavior and construction protocol instructions. Current device facts or current I/O rows allow the bound contract; historical/deleted bindings alone do not.
+
+In the requirements stage, a structurally valid optional execution claim whose only failure is an absent source binding is retained in the execution-intent receipt as `pending_binding`, with evidence checked against the current request. It contributes no executable constraint and filling addresses never promotes it. Other syntax/shape failures retain the existing single repair limit. The stage does not change model parameters, add another analysis call or select Design.
+
 The sole Direct approach can be preselected. Suggested parameter defaults are not confirmed answers; real missing required parameters remain unresolved. Mode changes affect the next submitted job, while retries retain the original mode and request identity.
 
 I/O question identity, polarity and labels are covered in [I/O purpose labels](io-binding-labels.md). Regression owners are [test_analysis_prompt_routing.py](../../tests/test_analysis_prompt_routing.py), [test_analysis_prompt_integration.py](../../tests/test_analysis_prompt_integration.py) and [test_analysis_mode_jobs.py](../../tests/test_analysis_mode_jobs.py).

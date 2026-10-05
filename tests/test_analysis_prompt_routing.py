@@ -242,8 +242,12 @@ def test_missing_model_profile_does_not_borrow_fx3u_data():
 
 
 def test_core_shape_and_required_parameter_instructions_remain():
-    # Typed effect candidates add a bounded wire contract, not manual facts.
-    assert len(ANALYSIS_SYSTEM_PROMPT) < 2400
+    assembled, _, _ = build("起保停", evidence="")
+    core = assembled.system_prompt.split("# Analysis mode:", 1)[0]
+    assert len(core) < 2400
+    assert assembled.contract_stage == "requirements"
+    assert "# Operation effect candidates" not in core
+    assert "transition_group" not in core
     example = ANALYSIS_SYSTEM_PROMPT.split("返回纯JSON（不要```json包裹），格式：\n", 1)[1].split("\n# suggested_io", 1)[0]
     assert isinstance(json.loads(example), dict)
     assert "必要输入仍为 required" in ANALYSIS_SYSTEM_PROMPT
@@ -252,6 +256,28 @@ def test_core_shape_and_required_parameter_instructions_remain():
     assert set(json.loads(example)) == {
         "summary", "approaches", "execution_intent_claims", "explicit_constraint_claims", "missing_info", "suggested_io", "hardware_config", "assumptions",
     }
+
+
+@pytest.mark.parametrize("baseline,expected", [
+    (None, "requirements"),
+    ({"io_table": [], "io_bindings": [{"address": "X0"}]}, "requirements"),
+    ({"io_table": [{"address": "X0"}]}, "bound"),
+    ({"io_table": [{"address": "X0"}], "parameters": [{"id": "stop", "required": True, "value": "",
+      "io_binding": {"binding_id": "stop", "kind": "X"}}]}, "requirements"),
+])
+def test_analysis_information_stage_uses_current_facts_not_historical_bindings(baseline, expected):
+    assembled, _, _ = build("起保停", baseline, evidence="")
+    assert assembled.contract_stage == expected
+    assert ("# Operation effect candidates" in assembled.system_prompt) == (expected == "bound")
+    assert assembled.route.mode != "design"
+
+
+def test_requirements_contract_retains_explicit_process_and_low_level_restrictions():
+    text = "启动后运行十秒再停止，停止优先；必须使用 SET。"
+    assembled, _, _ = build(text, evidence="")
+    assert assembled.contract_stage == "requirements"
+    assert "# Explicit low-level claims" in assembled.system_prompt
+    assert "保留所有明确工艺要求" in assembled.system_prompt
 
 
 def test_partly_fixed_request_can_delegate_the_remaining_design():

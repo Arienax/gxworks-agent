@@ -855,3 +855,58 @@ def test_recovered_signal_facts_follow_owned_row_edits_not_historical_text(signa
     assert facts["unresolved_input_bindings"] == []
     assert project_confirmed_specification(projected) == projected
     assert spec == original
+
+
+@settings(max_examples=150, deadline=None, derandomize=True)
+@given(namespace=st.text(alphabet="abcXYZ_中文", min_size=1, max_size=24),
+       signals=st.lists(st.tuples(st.integers(0, 63), st.integers(0, 1)), min_size=1, max_size=4,
+                        unique_by=lambda pair: pair[0]),
+       mutations=st.lists(st.tuples(st.integers(0, 3), st.sampled_from(("move", "delete", "polarity"))),
+                          min_size=1, max_size=8), data=st.data())
+def test_split_submission_facts_survive_permutations_and_owned_edits(namespace, signals, mutations, data):
+    from plc.specification.confirmed import canonicalize_confirmed_spec, validate_spec_draft
+    from application.confirmed_generation_context import project_confirmed_specification
+    from plc.specification.conditions import generation_input_conditions
+    parameters = []
+    expected = {}
+    for index, level in signals:
+        identity = f"{namespace}.{index}"
+        hint = {"binding_id": identity, "kind": "X", "role": "stop", "label": f"sensor_{index}"}
+        expected[f"X{index:o}"] = level
+        parameters.extend([
+            {"id": f"{identity}.z_address", "name": f"{identity} input address?", "value": f"x{index:03o}", "io_binding": hint},
+            {"id": f"{identity}.a_level", "name": f"{identity} input active level?", "value": "按下为 ON" if level else "按下为 OFF", "io_binding": hint},
+        ])
+    order = data.draw(st.permutations(range(len(parameters))))
+    draft = {"plc_model": "FX3U", "io_table": [], "parameters": [parameters[i] for i in order]}
+    original = copy.deepcopy(draft)
+    assert not validate_spec_draft(draft)["errors"]
+    saved = canonicalize_confirmed_spec(draft)
+    assert canonicalize_confirmed_spec(saved) == saved
+    for slot, mutation in mutations:
+        number = signals[slot % len(signals)][0]
+        identity = f"{namespace}.{number}"
+        row = next((r for r in saved["io_table"] if r.get("binding_id") == identity), None)
+        if row is not None:
+            old = row["address"]
+            if mutation == "move":
+                new = f"X{number+64:o}" if old == f"X{number:o}" else f"X{number:o}"
+                row["address"] = new.lower()
+                expected[new] = expected.pop(old)
+            elif mutation == "delete":
+                saved["io_table"].remove(row)
+                expected.pop(old)
+            else:
+                expected[old] = 1-expected[old]
+                parameter = next(p for p in saved["parameters"] if p["io_binding"]["binding_id"] == identity)
+                parameter["value"] = "按下为 ON" if expected[old] else "按下为 OFF"
+        assert not validate_spec_draft(saved)["errors"]
+        saved = canonicalize_confirmed_spec(saved)
+        projected = project_confirmed_specification(saved)
+        facts = generation_input_conditions(projected.get("io_bindings", []))
+        assert {p["address"]: p["active_level"] for p in facts["level_predicates"]} == expected
+        assert {r["address"] for r in projected["io_table"]} == set(expected)
+        assert facts["unresolved_input_bindings"] == []
+        assert canonicalize_confirmed_spec(saved) == saved
+        assert project_confirmed_specification(projected) == projected
+    assert draft == original

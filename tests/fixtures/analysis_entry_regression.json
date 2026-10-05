@@ -1,0 +1,118 @@
+{
+  "source_job": "job_716259d0a93a4ef7b3034bc806a00d71",
+  "base_commit": "0592933",
+  "plc_model": "FX3U",
+  "request": "起保停",
+  "provider_model": "glm-5.3",
+  "analysis": {
+    "summary": "用户要求实现标准起保停（自锁）控制回路：起动按钮触发后输出自保持，停止按钮切断输出，具体输入输出地址尚未指定。",
+    "approaches": [
+      {
+        "approach_id": "a1",
+        "name": "标准起保停自锁电路",
+        "description": "起动按钮触点与输出自锁触点并联，再串入停止按钮条件驱动输出线圈，实现起动后自保持、停止后复位。",
+        "pros": "",
+        "cons": "",
+        "generation_guide": "",
+        "implementation_semantics": [
+          {
+            "kind": "structure",
+            "status": "required",
+            "value": "direct_logic"
+          },
+          {
+            "kind": "structure",
+            "status": "required",
+            "value": "self_hold"
+          }
+        ]
+      }
+    ],
+    "execution_intent_claims": [
+      {
+        "trigger": {
+          "kind": "transition",
+          "source_devices": [],
+          "from": false,
+          "to": true
+        },
+        "evidence": [
+          "起保停"
+        ]
+      },
+      {
+        "trigger": {
+          "kind": "level",
+          "source_devices": []
+        },
+        "evidence": [
+          "起保停"
+        ]
+      }
+    ],
+    "explicit_constraint_claims": [],
+    "missing_info": [
+      {
+        "id": "start_button_input",
+        "question": "起动按钮接入哪个输入点（X）？",
+        "required": true,
+        "options": [],
+        "io_binding": {
+          "binding_id": "start_button",
+          "kind": "X",
+          "label": "起动按钮",
+          "role": "start"
+        }
+      },
+      {
+        "id": "stop_button_input",
+        "question": "停止按钮接入哪个输入点（X）？",
+        "required": true,
+        "options": [],
+        "io_binding": {
+          "binding_id": "stop_button",
+          "kind": "X",
+          "label": "停止按钮",
+          "role": "stop"
+        }
+      },
+      {
+        "id": "stop_button_polarity",
+        "question": "停止按钮外部接线是常闭还是常开触点？",
+        "required": true,
+        "options": [
+          "常闭",
+          "常开"
+        ],
+        "value_kind": "choice",
+        "io_binding": {
+          "binding_id": "stop_button",
+          "kind": "X",
+          "label": "停止按钮",
+          "role": "stop"
+        }
+      },
+      {
+        "id": "output_coil",
+        "question": "输出使用哪个线圈（Y）？",
+        "required": true,
+        "options": [],
+        "io_binding": {
+          "binding_id": "output_coil",
+          "kind": "Y",
+          "label": "输出",
+          "role": "output"
+        }
+      }
+    ],
+    "suggested_io": {},
+    "hardware_config": {},
+    "assumptions": []
+  },
+  "answers": {
+    "start_button_input": "x1",
+    "stop_button_input": "x0",
+    "stop_button_polarity": "常开",
+    "output_coil": "y0"
+  }
+}
