@@ -25,7 +25,7 @@ def check_package(package, archive_path=None):
     required = (
         "GXWorks-Agent-Web.exe", "gxworks-agent-mcp.exe", "gxworks-agent-mcp.cmd",
         "web/dist/index.html", "config.default.json",
-        "pattern_library.json", "plc_models.json", "knowledge/fx3u_knowledge.sqlite",
+        "pattern_library.json", "plc_models.json", "resources/instructions/control_runtime.json", "knowledge/fx3u_knowledge.sqlite",
         "knowledge/fx3u_dense_lsa.npz", "knowledge/manifest.json",
         "knowledge/THIRD_PARTY_NOTICES.md", "resources/locales/en.json",
         "resources/locales/ja.json", "simulator-gateway/PlcAi.GxSimulator2Gateway.exe",

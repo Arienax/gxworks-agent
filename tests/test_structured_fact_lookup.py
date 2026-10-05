@@ -130,7 +130,15 @@ def test_process_facts_resolve_official_operating_sections_and_preserve_raw_sour
             original = connection.execute("SELECT text FROM chunks WHERE id=?", (row["id"],)).fetchone()[0]
             assert row["text"] == original
             assert row["structured_lookup"] is True
-    assert resolve_process_records(needs, plc_model="FX5U") == []
+    fx5 = resolve_process_records(needs, plc_model='FX5U')
+    assert {r['fact_target'] for r in fx5} == {'FIRST_SCAN','TIMER'}
+    assert all(r['plc_models'] == ['FX5U'] and r['revision'] in {'AG','AB'} for r in fx5)
+    first = json.loads(next(r['text'] for r in fx5 if r['fact_target']=='FIRST_SCAN'))
+    assert first['conditions'] == {'program_type':'scan','initial_execution_program':False}
+    timer = json.loads(next(r['text'] for r in fx5 if r['fact_target']=='TIMER'))
+    assert timer['forms']['OUT'][0]['unit_ms'] == 100
+    assert timer['forms']['OUTH'][0]['unit_ms'] == 10
+    assert timer['forms']['OUTHS'][0]['unit_ms'] == 1
     assert resolve_process_records([{"target": "COUNTER", "dimension": "operation",
                                      "devices": ["C235"]}], plc_model="FX3U") == []
     assert resolve_process_records([{"target": "TIMER", "dimension": "operation",

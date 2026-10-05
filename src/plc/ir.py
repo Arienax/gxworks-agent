@@ -311,8 +311,9 @@ def _walk_input_elements(elements: Sequence[Mapping[str, Any]]) -> Iterable[Mapp
 def _zero_reset_range(operands: Sequence[Any], plc_model: str) -> Optional[Set[str]]:
     """Resolve a bounded, explicit ZRST range without guessing dynamic writes.
 
-    FX3 programming manual, FNC 40, pp. 316-319: both endpoints belong to the
-    same device family, and every intervening device is reset. A descending
+    FX3 programming manual, FNC 40, pp. 316-319, and FX5 JY997D55801-AB,
+    printed pp. 317-318: both endpoints belong to the same device family,
+    and every intervening device is reset. A descending
     range resets only its first device. Counter widths must not be mixed.
     Address validity and X/Y numbering remain owned by the CPU validator.
     """
@@ -330,6 +331,10 @@ def _zero_reset_range(operands: Sequence[Any], plc_model: str) -> Optional[Set[s
     prefix, start = first
     end = last[1]
     if prefix not in {"Y", "M", "S", "T", "C", "D"}:
+        return None
+    # FX5 Y numbering is not corroborated by the current CPU address policy.
+    # Keep endpoint access conservative instead of inventing interior devices.
+    if model == "FX5U" and prefix == "Y":
         return None
     if model == "FX3U" and prefix == "C" and (start < 200) != (end < 200):
         return None

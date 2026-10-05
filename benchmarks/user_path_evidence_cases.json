@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "scope": "Synthetic requirements for generation-stage evidence diagnostics on the saved ModelScope DeepSeek V4.1 profile only. No native execution certification.",
+  "include_cases": ["user_path_complex_cases.json"],
+  "cases": [
+    {
+      "case_id": "conveyor_interlock", "category": "ordinary", "name": "输送机起停与堵料联锁", "plc_model": "FX3U",
+      "initial_request": "设计输送机启停、堵料超时、报警复位与安全恢复控制。",
+      "confirmation": "FX3U普通扫描程序，扫描周期不超过10ms。X0=1安全正常，X1=1启动按钮按下，X2=1停止按下，X3=1出口堵料，X4=1复位按下；Y0输送电机，Y1堵料锁存报警。启动仅认X1上升沿且安全正常、停止未按、无报警；运行时再次启动不改变状态。X3连续ON达到3秒才锁存报警、同扫描停机，堵料中途OFF重新计时。计时仅运行期间有效，使用普通T0。停止或安全失效立即停机并清运行许可及计时；恢复安全、释放停止、启动一直按住不能自行重启。复位仅X4上升沿且安全正常、停止未按、X3=0、已停机时清报警，复位不启动；停止与启动或堵料到时同时发生，停止优先。进入RUN的首扫描清全部内部状态、T0、报警和Y0，不依赖先前M状态。内部仅M100至M119、T0，无其他I/O或D写入。",
+      "io": {"X0":"安全正常","X1":"启动","X2":"停止","X3":"堵料","X4":"复位","Y0":"输送电机","Y1":"堵料报警"},
+      "rag_needs": ["FX3U普通T0计时与断使能复位", "首次RUN扫描", "上升沿、SET/RST执行关系"],
+      "acceptance": [
+        {"id":"boot","requirement":"首扫描无条件安全初始化，不依赖旧M值"},
+        {"id":"start","requirement":"仅健康的新启动沿建立许可，运行中重复启动无额外作用"},
+        {"id":"stop_restart","requirement":"停止或安全失效立即停机，恢复需新启动沿"},
+        {"id":"block_delay","requirement":"运行中连续堵料3秒报警；中断重新计时"},
+        {"id":"alarm_hold","requirement":"报警停机并保持，堵料消失本身不解锁"},
+        {"id":"reset","requirement":"仅满足全部复位条件的新沿清报警，复位不启动"},
+        {"id":"priority","requirement":"停止同时发生时优先于启动及超时动作"},
+        {"id":"scope","requirement":"地址、T0时间换算、X只读和输出owner正确"}
+      ]
+    },
+    {
+      "case_id": "delayed_exhaust", "category": "ordinary", "name": "停工后延时排风", "plc_model": "FX3U",
+      "initial_request": "设计加工许可、排风延时与停机恢复控制。",
+      "confirmation": "FX3U普通扫描程序，扫描周期不超过10ms。X0=1安全正常，X1=1启动按下，X2=1停止按下，X3=1加工排风需求；Y0排风机，Y1加工许可。启动仅X1上升沿建立运行许可，停止与安全失效立即清许可并关闭全部输出，恢复后必须新的启动沿。已建立许可且X3=1时Y0和Y1开启；X3从1变0时Y1立即关闭，Y0继续排风7秒后关闭，使用普通T0。延时期间X3重新为1，Y0连续保持不出现OFF扫描，取消并清旧延时，下次需求结束重新完整计时。许可已建立但从未发生加工需求时，Y0必须OFF，不能凭启动或定时器默认状态自动吹风。延时期间停止或安全失效立即关闭Y0并取消延时；启动一直按住不能重启。首扫描清许可、需求历史、延时及输出；内部仅M100至M119、T0，禁止新增I/O。",
+      "io": {"X0":"安全正常","X1":"启动","X2":"停止","X3":"加工需求","Y0":"排风机","Y1":"加工许可"},
+      "rag_needs": ["普通T0计时与断使能复位", "FX3U首次扫描", "边沿与电平区别"],
+      "acceptance": [
+        {"id":"boot","requirement":"首扫描许可、延时、需求历史和输出初始化"},
+        {"id":"start_stop","requirement":"启动沿建立许可，停止/安全优先且恢复不自启"},
+        {"id":"active_demand","requirement":"有许可且加工需求存在时排风与加工许可均ON"},
+        {"id":"tail_delay","requirement":"需求结束加工许可立即OFF，排风延时7秒再OFF"},
+        {"id":"redemand","requirement":"延时中重来需求无排风OFF扫描，旧计时取消"},
+        {"id":"no_phantom","requirement":"从未有需求时启动不产生排风或虚假延时"},
+        {"id":"cancel","requirement":"延时中停止/安全失效立即关闭且取消延时"},
+        {"id":"scope","requirement":"T0时间换算、输出唯一owner、地址与X只读正确"}
+      ]
+    },
+    {
+      "case_id": "level_hysteresis", "category": "ordinary", "name": "液位需求保持与矛盾报警", "plc_model": "FX3U",
+      "initial_request": "设计低位启泵高位停泵、液位矛盾报警与安全恢复。",
+      "confirmation": "FX3U普通扫描程序。X0=1安全正常，X1=1启动按下，X2=1停止按下，X3=1低液位，X4=1高液位，X5=1复位按下。Y0补水泵，Y1锁存故障。启动仅新X1上升沿建立许可，需X0=1、X2=0、无故障。许可建立后X3=1且X4=0锁存补水需求；X3返回0仍继续补水，X4=1正常结束需求停泵；下一次低位可再次补水，不需每次重按启动。X3和X4同时1为矛盾，运行或停机时都锁存故障并立即停泵、清许可及需求。停止或安全失效同扫描优先停泵并清许可和需求，恢复后需新的启动沿。仅X5上升沿且X0=1、X2=0、无矛盾、泵已OFF时清故障，复位不能建立许可或启动。首扫描清全部内部状态与报警，运动输出OFF；仅M100至M119作为内部状态，禁止新增I/O、T/C/D。",
+      "io": {"X0":"安全正常","X1":"启动","X2":"停止","X3":"低液位","X4":"高液位","X5":"故障复位","Y0":"补水泵","Y1":"矛盾故障"},
+      "rag_needs": ["FX3U首次扫描", "SET/RST保持与执行顺序", "上升沿与持续条件"],
+      "acceptance": [
+        {"id":"boot","requirement":"首扫描清状态/报警且泵OFF"},
+        {"id":"permission","requirement":"健康的新启动沿建立许可，重复启动不绕过联锁"},
+        {"id":"hysteresis","requirement":"低位建立需求，低位退出仍保持，高位结束"},
+        {"id":"next_cycle","requirement":"正常结束后保留许可，可进行下一补水周期"},
+        {"id":"contradiction","requirement":"双液位同时ON在运行或停机时都锁存故障并停泵"},
+        {"id":"stop_priority","requirement":"停止/安全优先清许可及需求，恢复需新沿"},
+        {"id":"reset","requirement":"全部条件满足才沿复位，复位不启动"},
+        {"id":"scope","requirement":"无新增I/O或T/C/D、X只读、Y唯一owner"}
+      ]
+    },
+    {
+      "case_id": "counted_rejection", "category": "ordinary", "name": "分类计数与定长剔除", "plc_model": "FX3U",
+      "initial_request": "设计入口分类、合格计数、废品定时剔除和停机计数保持。",
+      "confirmation": "FX3U普通扫描程序，扫描周期不超过10ms。X0=1安全正常，X1=1启动，X2=1停止，X3=1产品到达，X4=1废品/0合格，X5=1计数复位。X3高电平至少50ms，相邻产品到达沿至少1.2秒。Y0输送电机，Y1剔除阀，C0合格数，D100废品数。启动仅新X1沿建立许可，需安全正常且停止未按；运行中仅X3上升沿按当时X4分类，合格使C0只增1，废品使D100只增1并开启Y1持续700ms后关闭，普通T0负责剔除时间，废品不计C0，合格不触发Y1。仅运行时收产品，长高X3不能重复计数或剔除。C0固定预置30000，不因达到预置值停止输送；本次需求范围内两类总计均不超过1000。停止或安全失效立即关Y0/Y1并清许可和剔除状态，保留两类累计，恢复需新启动沿；停止与产品沿同扫描不计数。X5沿仅停机且X0=1、X2=0时清C0/D100，不启动。首扫描清累计、许可、剔除状态及输出；内部仅M100至M119、T0，禁止写其他D。",
+      "io": {"X0":"安全正常","X1":"启动","X2":"停止","X3":"到件","X4":"废品","X5":"计数复位","Y0":"输送","Y1":"剔除","C0":"合格数","D100":"废品数"},
+      "rag_needs": ["FX3U 16位普通C0计数器与复位", "T0时间单位", "首次扫描与输入沿"],
+      "acceptance": [
+        {"id":"boot","requirement":"首扫描累计、许可、剔除和输出清零"},
+        {"id":"permission","requirement":"新启动沿建立许可，停机和安全恢复不自启"},
+        {"id":"classification","requirement":"按到件沿当时X4分类，两类互斥且各只计一次"},
+        {"id":"edge_scope","requirement":"仅运行中收沿，长高不重复，停止同扫描不计数"},
+        {"id":"reject_pulse","requirement":"每废品只剔除700ms，合格不剔除"},
+        {"id":"stop_hold","requirement":"停止立即关输出并取消剔除，累计保留"},
+        {"id":"reset","requirement":"仅健康停机新复位沿清累计，不启动"},
+        {"id":"scope","requirement":"普通C0、预置30000、T0时间换算和写入范围正确"}
+      ]
+    },
+    {
+      "case_id": "startup_initialization_fx3u", "category": "boundary", "name": "每次RUN初始化与受控计数（FX3U）", "plc_model": "FX3U",
+      "initial_request": "实现每次进入RUN初始化、单次计数和清零优先。",
+      "confirmation": "FX3U只有一个普通循环扫描主程序。X0=1安全正常，X1=1计数按钮，X2=1清零按钮，X3=1使能；D100为计数，D101为计数镜像，Y0为计数发生的一扫描脉冲，Y1为计数达到9。每次STOP到RUN的首扫描必须无条件清D100/D101、内部状态及Y0/Y1，即使内部M此前为1也不能漏初始化；首扫描按钮高电平不计数，须释放后新沿。后续仅X0=1、X3=1、X2=0且X1新上升沿时计数加1并同扫描更新镜像，最大9，达到9后再按不增加也不发Y0。健康条件下X2=1电平立即清两寄存器，清零优先于计数；清零本身不发Y0。失去安全或使能时不改计数且Y0必须OFF，恢复时持续高的X1不能补计；每次有效计数脉冲只持续一扫描，Y1始终准确反映达到9。仅M100至M119、D100/D101，禁止其他D、T/C或I/O。",
+      "io": {"X0":"安全正常","X1":"计数按钮","X2":"清零","X3":"使能","D100":"计数","D101":"镜像","Y0":"计数脉冲","Y1":"达到9"},
+      "rag_needs": ["FX3U每次RUN首次扫描继电器", "输入沿历史与持续电平", "16位INC/MOV"],
+      "acceptance": [
+        {"id":"boot","requirement":"每次RUN首扫描无条件清状态/计数/输出，不依赖旧M"},
+        {"id":"initial_high","requirement":"首扫描高按钮不计数，释放后新沿才有效"},
+        {"id":"count_edge","requirement":"健康且使能新沿只计一次并同步镜像"},
+        {"id":"limit","requirement":"计数限9，到限后不增加、不发计数脉冲"},
+        {"id":"clear_priority","requirement":"健康清零电平优先清两字，不发脉冲"},
+        {"id":"permit_recovery","requirement":"失去许可不计数，恢复时高按钮不补计"},
+        {"id":"indicators","requirement":"Y0仅真实计数一扫描，Y1准确反映9"},
+        {"id":"scope","requirement":"首扫设备型号正确，地址与写入范围正确"}
+      ]
+    },
+    {
+      "case_id": "startup_initialization_fx5u", "category": "boundary", "name": "每次RUN初始化与受控计数（FX5U）", "plc_model": "FX5U",
+      "initial_request": "实现每次进入RUN初始化、单次计数和清零优先。",
+      "confirmation": "FX5U只有一个scan execution普通扫描主程序，没有initial execution类型程序或其他初始执行程序。X0=1安全正常，X1=1计数按钮，X2=1清零按钮，X3=1使能；D100为计数，D101为计数镜像，Y0为计数发生的一扫描脉冲，Y1为计数达到9。每次STOP到RUN的首扫描必须无条件清D100/D101、内部状态及Y0/Y1，即使内部M此前为1也不能漏初始化；首扫描按钮高电平不计数，须释放后新沿。后续仅X0=1、X3=1、X2=0且X1新上升沿时计数加1并同扫描更新镜像，最大9，达到9后再按不增加也不发Y0。健康条件下X2=1电平立即清两寄存器，清零优先于计数；清零本身不发Y0。失去安全或使能时不改计数且Y0必须OFF，恢复时持续高的X1不能补计；每次有效计数脉冲只持续一扫描，Y1始终准确反映达到9。仅M100至M119、D100/D101，禁止其他D、T/C或I/O。",
+      "io": {"X0":"安全正常","X1":"计数按钮","X2":"清零","X3":"使能","D100":"计数","D101":"镜像","Y0":"计数脉冲","Y1":"达到9"},
+      "rag_needs": ["FX5U首次扫描设备及scan execution程序条件", "输入沿历史", "16位INC/MOV"],
+      "acceptance": [
+        {"id":"boot","requirement":"每次RUN首扫描无条件清状态/计数/输出，不依赖旧M"},
+        {"id":"initial_high","requirement":"首扫描高按钮不计数，释放后新沿才有效"},
+        {"id":"count_edge","requirement":"健康且使能新沿只计一次并同步镜像"},
+        {"id":"limit","requirement":"计数限9，到限后不增加、不发计数脉冲"},
+        {"id":"clear_priority","requirement":"健康清零电平优先清两字，不发脉冲"},
+        {"id":"permit_recovery","requirement":"失去许可不计数，恢复时高按钮不补计"},
+        {"id":"indicators","requirement":"Y0仅真实计数一扫描，Y1准确反映9"},
+        {"id":"scope","requirement":"首次扫描设备符合FX5U及给定执行类型，写入范围正确"}
+      ]
+    },
+    {
+      "case_id": "timer_alarm_fx3u", "category": "boundary", "name": "普通T200持续报警及复位（FX3U）", "plc_model": "FX3U",
+      "initial_request": "用普通T200实现持续条件报警，核对当前型号时间单位。",
+      "confirmation": "FX3U普通循环扫描主程序，扫描周期不超过10ms。X0=1安全正常，X1=1异常条件，X2=1复位按钮。Y0锁存报警输出，Y1监视有效指示。使用普通非保持T200：仅X0=1且X1=1时连续计时，达到1.2秒锁存内部报警；任意一项OFF立即将当前计时归零，下次重新完整计时，报警本身仍保持。Y0只有X0=1时显示内部锁存报警，安全失效立即关闭外部Y0但不清内部报警，恢复后重新显示原报警；Y1始终等于X0与X1同时为1。仅X2上升沿且X0=1、X1=0时清内部报警，异常未解除不能复位，复位不产生新报警或虚假计时。首扫描清内部报警、计时和输出，随后按实时输入开始正常监视。只允许M100至M119和T200，不使用D/C，不新增I/O。",
+      "io": {"X0":"安全正常","X1":"异常条件","X2":"复位","Y0":"锁存报警","Y1":"监视有效"},
+      "rag_needs": ["FX3U普通T200时间单位", "非保持定时器断使能复位", "首次扫描"],
+      "acceptance": [
+        {"id":"boot","requirement":"首扫描报警/计时/输出初始化，后续正常监视"},
+        {"id":"timebase","requirement":"按FX3U普通T200实际时基换算1.2秒"},
+        {"id":"continuous","requirement":"只在安全且异常连续成立时计时，任一OFF归零重计"},
+        {"id":"latch","requirement":"到时锁存，异常解除不自动清报警"},
+        {"id":"safety_display","requirement":"安全失效Y0立即OFF但锁存保留，恢复重新显示"},
+        {"id":"reset","requirement":"仅健康且异常解除的新复位沿清报警"},
+        {"id":"monitor","requirement":"Y1准确反映安全与异常，无复位副作用"},
+        {"id":"scope","requirement":"无D/C或新增I/O，X只读、输出owner正确"}
+      ]
+    },
+    {
+      "case_id": "timer_alarm_fx5u", "category": "boundary", "name": "普通OUT T200持续报警及复位（FX5U）", "plc_model": "FX5U",
+      "initial_request": "用普通OUT T200实现持续条件报警，核对当前型号时间单位。",
+      "confirmation": "FX5U只有一个scan execution普通扫描主程序，没有initial execution类型程序，扫描周期不超过10ms。X0=1安全正常，X1=1异常条件，X2=1复位按钮。Y0锁存报警输出，Y1监视有效指示。使用普通非保持OUT T200，不使用OUTH、OUTHS或保持型ST：仅X0=1且X1=1时连续计时，达到1.2秒锁存内部报警；任意一项OFF立即将当前计时归零，下次重新完整计时，报警本身仍保持。Y0只有X0=1时显示内部锁存报警，安全失效立即关闭外部Y0但不清内部报警，恢复后重新显示原报警；Y1始终等于X0与X1同时为1。仅X2上升沿且X0=1、X1=0时清内部报警，异常未解除不能复位，复位不产生新报警或虚假计时。首扫描清内部报警、计时和输出，随后按实时输入开始正常监视。只允许M100至M119和T200，不使用D/C，不新增I/O。",
+      "io": {"X0":"安全正常","X1":"异常条件","X2":"复位","Y0":"锁存报警","Y1":"监视有效"},
+      "rag_needs": ["FX5U普通OUT T时基，不能沿用FX3U按编号选时基", "非保持定时器断使能复位", "首次扫描及执行类型条件"],
+      "acceptance": [
+        {"id":"boot","requirement":"首扫描报警/计时/输出初始化，符合给定执行类型"},
+        {"id":"timebase","requirement":"按FX5U普通OUT T实际时基换算1.2秒"},
+        {"id":"continuous","requirement":"只在安全且异常连续成立时计时，任一OFF归零重计"},
+        {"id":"latch","requirement":"到时锁存，异常解除不自动清报警"},
+        {"id":"safety_display","requirement":"安全失效Y0立即OFF但锁存保留，恢复重新显示"},
+        {"id":"reset","requirement":"仅健康且异常解除的新复位沿清报警"},
+        {"id":"monitor","requirement":"Y1准确反映安全与异常，无复位副作用"},
+        {"id":"scope","requirement":"普通OUT T语义、无D/C或新增I/O、X只读"}
+      ]
+    }
+  ]
+}

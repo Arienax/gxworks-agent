@@ -51,6 +51,19 @@ def test_corrupted_trace_is_exported_as_unavailable_not_a_pass(version, tmp_path
     assert "evidence\\_unavailable" in result["markdown"]
 
 
+@pytest.mark.parametrize('status,label,blocked',[
+    ('violated','找到违反',True),('no_violation_found_in_tested_scope','受测范围内未发现违反',False),
+    ('unverified','未验证',False)])
+def test_delivery_keeps_bounded_behavior_status_and_activation_distinct(version,tmp_path,status,label,blocked):
+    store,pid,vid,_,_ = version
+    report={'status':status,'coverage':{'traces_tested':8,'maximum_scans':6},
+        'assumptions':['declared inputs only'],'violations':[],'activation_blocked':blocked}
+    store.update_version_metadata(pid,vid,{'behavior_check':report,'activation_blocked':blocked})
+    result=delivery_summary(WorkbenchService(store.base_dir,tmp_path/'read-state',read_only=True),pid,vid)
+    assert result['behavior_check'] == report and result['activation_blocked'] is blocked
+    assert label in result['markdown'] and '短轨迹执行证据' in result['markdown']
+
+
 def test_delivery_redacts_private_metadata_and_treats_report_text_as_literal(version, tmp_path):
     store, pid, vid, _, _ = version
     store.update_version_metadata(pid, vid, {
@@ -66,6 +79,28 @@ def test_delivery_redacts_private_metadata_and_treats_report_text_as_literal(ver
     assert result["confirmed_spec"] == {"text": "保留工程说明"}
     assert "![tracking](" not in result["markdown"] and "\n# forged-heading" not in result["markdown"]
     assert "保留工程说明" in result["markdown"] and "仅静态检查" in result["markdown"]
+
+
+def test_delivery_exposes_actual_bounded_witness_and_unknown_scope(version,tmp_path):
+    store,pid,vid,_,_ = version
+    report = {'status':'violated','activation_blocked':True,
+        'coverage':{'traces_tested':12,'maximum_scans':8},
+        'violations':[{'requirement_id':'boot','construct_group':'init_group','scan':0,
+            'device':'D100','expected':7,'actual':0,
+            'writes':[{'location':{'rung_id':5,'instruction_index':3}}]}],
+        'checks':[{'requirement_id':'event','status':'unverified','reasons':['source_edge_history_unverified']}],
+        'unsupported_or_missing':[{'reason':'unknown_instruction_write_scope'}],
+        'construction_violations':[{'instance_id':'source_event','reason':'missing_reference','position':2}],
+        'construction_gaps':[{'id':'other_group','reason':'missing_cpu_control_facts'}]}
+    store.update_version_metadata(pid,vid,{'behavior_check':report,'activation_blocked':True})
+    result = delivery_summary(WorkbenchService(store.base_dir,tmp_path/'read-state',read_only=True),pid,vid)
+    markdown = result['markdown']
+    for expected in ('12 条轨迹','8 扫描','D100 预期 7，实际 0','扫描 0',
+            'init\\_group','梯级 5，指令 3','要求 event','source\\_edge\\_history\\_unverified',
+            'unknown\\_instruction\\_write\\_scope','source\\_event','missing\\_reference','输出位置 2',
+            'other\\_group','missing\\_cpu\\_control\\_facts'):
+        assert expected in markdown
+    assert result['behavior_check'] == report
 
 
 def test_fbd_handoff_contains_source_and_returned_file_fingerprints_and_operator_origin(service):

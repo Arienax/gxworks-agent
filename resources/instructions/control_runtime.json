@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "scope": "Source-checked control subset; no native execution certification. Entries enable only the named CPU and execution conditions.",
+  "FX3U": {
+    "first_scan": {"devices": ["M8002"], "execution_type": "scan", "conditions": {"program_type": "scan"}, "source": {"manual_number": "JY997D16601", "revision": "R", "pdf_page": 867}},
+    "always_on": ["M8000"],
+    "control": {"forms": ["LD", "LDI", "AND", "ANI", "OR", "ORI", "ORB", "ANB", "MPS", "MRD", "MPP", "OUT", "SET", "RST", "MOV", "ZRST"], "immediate_memory_writes": true, "disabled_coil": false, "disabled_set_reset": "retain", "shared_condition": "saved_accumulator", "sources": [{"manual_number": "JY997D16601", "revision": "R", "pdf_pages": [172, 184, 192, 204, 205, 216, 218, 251, 318, 319]}]},
+    "timers": {"OUT": [{"first": 0, "last": 199, "unit_ms": 100, "reset_on_disable": true}, {"first": 200, "last": 245, "unit_ms": 10, "reset_on_disable": true}, {"first": 256, "last": 511, "unit_ms": 1, "reset_on_disable": true}], "source": {"manual_number": "JY997D16601", "revision": "R", "pdf_page": 100}},
+    "counter": {"first": 0, "last": 99, "bits": 16, "trigger": "rising", "holds_on_disable": true, "stops_at_preset": true, "source": {"manual_number": "JY997D16601", "revision": "R", "pdf_pages": [105, 106]}}
+  },
+  "FX5U": {
+    "first_scan": {"devices": ["SM402", "SM8002"], "execution_type": "scan", "conditions": {"program_type": "scan", "initial_execution_program": false}, "source": {"manual_number": "JY997D55401", "revision": "AG", "pdf_pages": [34, 843]}},
+    "always_on": ["SM400", "SM8000"],
+    "control": {"forms": ["LD", "LDI", "AND", "ANI", "OR", "ORI", "ORB", "ANB", "MPS", "MRD", "MPP", "OUT", "SET", "RST", "MOV", "ZRST"], "immediate_memory_writes": true, "disabled_coil": false, "disabled_set_reset": "retain", "shared_condition": "saved_accumulator", "sources": [{"manual_number": "JY997D55801", "revision": "AB", "pdf_pages": [119, 129, 134, 135, 145, 146, 147, 148, 319, 320, 321, 401, 402]}]},
+    "timers": {"OUT": [{"first": 0, "last": 1023, "unit_ms": 100, "reset_on_disable": true}], "OUTH": [{"first": 0, "last": 1023, "unit_ms": 10, "reset_on_disable": true}], "OUTHS": [{"first": 0, "last": 1023, "unit_ms": 1, "reset_on_disable": true}], "source": {"manual_number": "JY997D55801", "revision": "AB", "pdf_pages": [136, 137], "conditions": ["ordinary T device", "executed once per scan", "time trace supplied separately; no scan-count conversion"]}}
+  }
+}

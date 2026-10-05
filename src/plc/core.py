@@ -201,6 +201,8 @@ class PLCCore:
             raise ValueError(
                 "候选补丁未通过 PLC 校验：" + str(validation.get("error") or validation.get("counts"))
             )
+        from simulator.bounded import check_confirmed_behavior
+        behavior_check = check_confirmed_behavior(candidate, confirmed_spec)
         return {
             "candidate_id": "candidate_" + uuid.uuid4().hex[:16],
             "base_revision": int(program.get("revision") or 0),
@@ -210,6 +212,7 @@ class PLCCore:
             "candidate_ir": candidate,
             "diff": _program_diff(program, candidate),
             "diagnostics": validation,
+            "behavior_check": behavior_check,
         }
 
     def create_program_candidate(
@@ -253,6 +256,7 @@ class PLCCore:
             "ladder_sha256": program_ir["source"]["ladder_sha256"],
             "candidate_ir": program_ir,
             "diagnostics": validation,
+            "behavior_check": prepared.get('behavior_check'),
             "summary": {
                 "network_count": len(program_ir["networks"]),
                 "network_ids": [network["id"] for network in program_ir["networks"]],
@@ -354,6 +358,8 @@ def accept_candidate_patch(store: Any, action: Mapping[str, Any]) -> Mapping[str
                 "lifecycle_status": "accepted",
             }
         )
+        if action.get('_construction_binding'):
+            metadata.setdefault('generation_metadata', {})['construction_binding'] = copy.deepcopy(action['_construction_binding'])
         return store.complete_version(project_id, version_id, metadata, activate=True)
     except Exception:
         if version_id is not None and store.get_version(project_id, version_id) is None:

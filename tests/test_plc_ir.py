@@ -103,6 +103,17 @@ def test_zrst_access_uses_the_documented_inclusive_range_and_descending_exceptio
     assert analyze_instruction_access("ZRST", operands) == ([], expected)
 
 
+@pytest.mark.parametrize("operands,expected", [
+    (["M100", "M103"], ["M100", "M101", "M102", "M103"]),
+    (["D98", "D100"], ["D98", "D99", "D100"]),
+    (["M103", "M100"], ["M103"]),
+    (["M100", "M100"], ["M100"]),
+])
+def test_fx5u_zrst_source_checked_range_and_descending_exception(operands, expected):
+    # JY997D55801-AB PDF319-320: like devices, inclusive; start>=end resets start only.
+    assert analyze_instruction_access("ZRST", operands, plc_model="FX5U") == ([], expected)
+
+
 @pytest.mark.parametrize("model,operands,reads,writes", [
     ("FX3U", ["M10", "D13"], [], ["M10", "D13"]),
     ("FX3U", ["M10Z0", "M13Z0"], ["Z0"], ["M10", "M13"]),
@@ -117,12 +128,13 @@ def test_zrst_unknown_or_invalid_ranges_do_not_claim_interior_writes(model, oper
     assert analyze_instruction_access("ZRST", operands, plc_model=model) == (reads, writes)
 
 
+@pytest.mark.parametrize("model", ["FX3U", "FX5U"])
 @settings(max_examples=150)
 @given(first=st.integers(min_value=0, max_value=7000), span=st.integers(min_value=0, max_value=50))
 @example(first=500, span=50)
 @example(first=0, span=0)
-def test_zrst_memory_range_has_exact_bounds_and_no_gaps(first, span):
-    reads, writes = analyze_instruction_access("ZRST", [f"M{first}", f"M{first + span}"])
+def test_zrst_memory_range_has_exact_bounds_and_no_gaps(model, first, span):
+    reads, writes = analyze_instruction_access("ZRST", [f"M{first}", f"M{first + span}"], plc_model=model)
     assert reads == []
     assert len(writes) == span + 1
     assert writes[0] == f"M{first}"

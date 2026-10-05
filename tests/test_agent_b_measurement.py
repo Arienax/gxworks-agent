@@ -994,3 +994,607 @@ def test_replay_failure_before_provider_creation_has_zero_consumptions(monkeypat
     assert not report["passed"] and report["failure_stage"] == "runtime_setup"
     assert report["provider_fixture_calls"] == report["generation_evidence_count"] == 0
     assert "private-test-secret" not in json.dumps(report)
+
+
+def _curated_fixture():
+    return {"review": {"performed_by": "Codex", "human_signoff": False,
+        "method": "Read original source and inspect table", "completed_at": "2026-10-05T00:00:00Z"},
+        "required_fact_ids": ["timer.base"], "records": [{"id": "source.fixture",
+        "source": "synthetic_manual.pdf", "manual_number": "fixture", "revision": "R",
+        "pdf_page": 100, "page": "98", "plc_models": ["FX3U"], "fact_ids": ["timer.base"],
+        "conditions": ["ordinary timer"], "text": "FX3U ordinary timer; 100ms count time."}]}
+
+
+def test_evidence_diagnostic_dry_run_is_twelve_cases_and_108_jobs(tmp_path, monkeypatch, capsys):
+    from scripts.benchmark_user_path import main as journey_main
+    import model_runtime.provider as providers
+    monkeypatch.setattr(providers, "get_active_provider", lambda *args: pytest.fail("loaded credentials"))
+    assert journey_main(["--experiment", "evidence-value", "--phase", "generation",
+        "--profile-id", "fixture", "--output", str(tmp_path / "private")]) == 0
+    plan = json.loads(capsys.readouterr().out)
+    assert len(plan["cases"]) == 12 and plan["scheduled_jobs"] == 108
+    assert plan["generation_arms"] == ["no_manual", "current_rag", "curated_evidence"]
+    assert plan["network_calls"] == 0 and not (tmp_path / "private").exists()
+
+
+@pytest.mark.parametrize("defect", ["human", "cpu", "condition", "fact", "page", "filled", "program", "duplicate"])
+def test_curated_evidence_rejects_leakage_wrong_cpu_missing_conditions_and_false_signoff(defect):
+    from scripts.benchmark_agent_b import curated_evidence_context
+    packet = _curated_fixture()
+    row = packet["records"][0]
+    if defect == "human": packet["review"]["human_signoff"] = True
+    elif defect == "cpu": row["plc_models"] = ["FX5U"]
+    elif defect == "condition": row["conditions"] = ["missing condition"]
+    elif defect == "fact": packet["required_fact_ids"].append("missing.fact")
+    elif defect == "page": row["pdf_page"] = 0
+    elif defect == "filled": row["text"] += '\n{"operands":["D0","D1"]}'
+    elif defect == "program": row["text"] += '\nOP known_answer\n'
+    else: packet["records"].append(copy.deepcopy(row))
+    with pytest.raises(ValueError):
+        curated_evidence_context({"plc_model": "FX3U", "curated_evidence": packet})
+
+
+def test_evidence_preflight_real_compiler_keeps_core_and_suppresses_examples():
+    from scripts.benchmark_user_path import evidence_preflight
+    case = copy.deepcopy(_purpose_cases()[0])
+    case["curated_evidence"] = _curated_fixture()
+    # The fixture is merely a delivery check, not a manually reviewed fact oracle.
+    provider = OpenAICompatibleProvider(offline_runtime_profile(), "fixture-key", client=object())
+    before = copy.deepcopy(case)
+    flight = evidence_preflight(case, case["confirmed_spec"], provider)
+    assert flight["passed"] and flight["Core_binding_policy_identical"]
+    assert flight["network_calls"] == 0 and case == before
+    a, b, c = (flight["requests"][arm] for arm in ("no_manual", "current_rag", "curated_evidence"))
+    assert "# Retrieved PLC evidence" not in a["messages"][0]["content"]
+    assert "synthetic_manual.pdf" in c["messages"][0]["content"]
+    assert a != b and b != c
+
+
+@pytest.mark.parametrize("defect", ["tuning", "core", "budget", "examples"])
+def test_evidence_preflight_rejects_drift_and_budget_loss(defect, monkeypatch):
+    from scripts import benchmark_user_path as journey
+    from scripts.benchmark_agent_b import curated_evidence_context
+    case = {"case_id": "fixture", "plc_model": "FX3U", "curated_evidence": _curated_fixture()}
+    context = curated_evidence_context(case)
+    def fake_run(case, arm, **kwargs):
+        evidence = context if arm != "no_manual" else ""
+        request = {"model": "fixture", "temperature": 0.1, "messages": [
+            {"role": "system", "content": "common Core" + str(evidence)}]}
+        if arm == "curated_evidence":
+            if defect == "tuning": request["temperature"] = 0.2
+            if defect == "core": request["messages"][0]["content"] += " changed binding"
+            if defect == "budget":
+                evidence = "truncated"
+                request["messages"][0]["content"] = "common Coretruncated"
+            if defect == "examples": request["messages"][0]["content"] += "# Routed construction examples"
+        return {"actual_requests": [request], "evidence": [{"text": str(evidence), "manifest": {"records": []}}]}
+    monkeypatch.setattr(journey, "run_case", fake_run)
+    with pytest.raises(ValueError):
+        journey.evidence_preflight(case, {}, SimpleNamespace(profile={"model": "fixture"}, api_key="fixture"))
+
+
+def test_request_check_rejects_before_transport_and_forwards_valid_stream():
+    from scripts.benchmark_user_path import RequestCheckedProvider
+    calls = []
+    class Provider:
+        def _request_params(self, request): return {"model": "fixed", "temperature": request.temperature}
+        def stream(self, request): calls.append(request); yield TextDelta("{}")
+    request = SimpleNamespace(response_contract=SimpleNamespace(name="compact_ladder"), temperature=0.1)
+    checked = RequestCheckedProvider(Provider(), lambda: {"model": "fixed", "temperature": 0.1})
+    assert len(list(checked.stream(request))) == 1 and len(calls) == 1
+    request.temperature = 0.2
+    with pytest.raises(ValueError, match="frozen offline preflight"):
+        list(checked.stream(request))
+    assert len(calls) == 1
+
+
+def test_case_cluster_statistics_do_not_treat_three_repetitions_as_three_tasks():
+    from scripts.benchmark_user_path import case_cluster_test
+    cases = [{"case_id": "a"}, {"case_id": "b"}]
+    grading = {(c["case_id"], r, arm): {"final": "failed" if arm == "no_manual" else "passed"}
+        for c in cases for r in range(3) for arm in ("no_manual", "current_rag")}
+    result = case_cluster_test(grading, cases, 3, "current_rag", "final")
+    assert result["eligible_cases"] == 2 and result["mean_difference"] == 1
+    assert result["two_sided_p"] == 0.5  # two independent cases, not six independent repeats
+    grading[("a", 1, "current_rag")]["final"] = "unverified"
+    result = case_cluster_test(grading, cases, 3, "current_rag", "final")
+    assert result["excluded_cases"] == ["a"] and result["two_sided_p"] == 1
+
+
+@pytest.mark.parametrize("baseline,treatment,expected", [
+    ("passed", "failed", "harm"), ("failed", "passed", "rescue"),
+    ("passed", "passed", "both_pass"), ("not_delivered", "failed", "both_fail"),
+    ("unverified", "passed", "undetermined"), ("missing", "failed", "undetermined")])
+def test_paired_whole_program_outcomes_preserve_unknowns(baseline, treatment, expected):
+    from scripts.benchmark_user_path import paired_outcome
+    assert paired_outcome(baseline, treatment) == expected
+
+
+def test_resume_never_repeats_started_jobs_and_recovers_blind_export(tmp_path, monkeypatch):
+    import zipfile
+    from scripts import benchmark_user_path as journey
+    identity = {"profile_id": "fixture", "profile_model": "model", "endpoint": "endpoint",
+        "user_model_settings": {}, "seed": 7}
+    case = {"case_id": "a", "category": "ordinary", "name": "a", "plc_model": "FX3U",
+        "confirmed_spec": {}, "acceptance": []}
+    tasks = [{"case_id": "a", "arm": "no_manual", "repeat": r, "block": r,
+        "run_id": f"a.{r}", "blind_id": f"blind{r}"} for r in range(3)]
+    journey.write_new(tmp_path / "experiment.json", {"identity": identity, "cases": [case],
+        "tasks": tasks, "expected_requests": {}})
+    with zipfile.ZipFile(tmp_path / "materials_snapshot.zip", "w") as archive:
+        archive.write(tmp_path / "experiment.json", "experiment.json")
+    journey.write_new(tmp_path / "runs/a.0.started.json", {"started": True})
+    completed = {"first_candidate": {}, "job": {"status": "failed"}, "attempts": []}
+    journey.write_new(tmp_path / "runs/a.1.json", completed)
+    calls = []
+    class OfflineJourney:
+        def __init__(self, *args, **kwargs):
+            self.service = SimpleNamespace(create_project=lambda **kwargs: {"id": "project"},
+                set_spec=lambda *args: {"valid": True, "spec": {}})
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def job(self, *args, **kwargs): calls.append(kwargs["repeat"]); return copy.deepcopy(completed)
+    monkeypatch.setattr(journey, "Journey", OfflineJourney)
+    monkeypatch.setattr(journey, "assert_frozen_code", lambda directory: None)
+    provider = SimpleNamespace(profile={"id": "fixture", "model": "model", "baseUrl": "endpoint", "userModelSettings": {}})
+    journey.run_evidence_experiment(tmp_path, provider)
+    assert calls == [2] and (tmp_path / "blind/blind1.json").exists()
+    journey.run_evidence_experiment(tmp_path, provider)
+    assert calls == [2]
+    frozen = json.loads((tmp_path / "experiment.json").read_text())
+    frozen["cases"][0]["confirmed_spec"] = {"summary": "drift"}
+    (tmp_path / "experiment.json").write_text(json.dumps(frozen))
+    with pytest.raises(ValueError, match="schedule changed"):
+        journey.run_evidence_experiment(tmp_path, provider)
+
+
+@pytest.mark.parametrize("defect", ["duplicate", "missing_stage", "empty_stage", "empty_review"])
+def test_diagnostic_summary_requires_every_criterion_and_retains_missing_jobs(tmp_path, defect):
+    from scripts import benchmark_user_path as journey
+    case = {"case_id": "a", "category": "ordinary", "acceptance": [{"id": "safety", "requirement": "safe"}]}
+    tasks = [{"case_id": "a", "arm": arm, "repeat": repeat, "run_id": f"a.{repeat}.{arm}",
+              "blind_id": f"blind.{repeat}.{arm}"} for repeat in range(2) for arm in journey.EVIDENCE_ARMS]
+    journey.write_new(tmp_path / "experiment.json", {"identity": {"repeats": 2}, "cases": [case], "tasks": tasks})
+    for task, status in zip(tasks[:3], ("passed", "failed", "unverified")):
+        journey.write_new(tmp_path / "runs" / (task["run_id"] + ".json"), {**task,
+            "category": "ordinary", "wall_ms": 10, "attempts": [], "job": {"status": "completed"},
+            "output": {"status": "saved", "generation": {"validation_profile": "generation_structural"}},
+            "ladder": {"rungs": ["fixture"]}, "first_candidate": {"ladder": {"rungs": ["fixture"]}, "structural_valid": True},
+            "provider_results": [{"model": "response-model"}]})
+        checks = [{"id": "safety", "status": status, "evidence": "rung 1 static assessment"}]
+        journey.write_new(tmp_path / "reviews" / (task["blind_id"] + ".json"), {"blind_id": task["blind_id"],
+            "performed_by": "Codex", "human_signoff": False, "native_execution": "not_measured",
+            "method": "blinded static review", "completed_at": "2026-10-05T00:00:00Z", "first": checks, "final": checks})
+    result = journey.summarize_evidence_experiment(tmp_path)
+    a = result["groups"]["all"]["no_manual"]
+    assert a["scheduled_runs"] == 2 and a["missing_runs"] == 1 and a["final_full_pass_rate"] == 0.5
+    assert result["contrast_counts"]["all"]["current_rag"]["final"]["harm"] == 1
+    assert result["contrast_counts"]["all"]["curated_evidence"]["final"]["undetermined"] == 2
+    assert result["response_models"] == ["response-model"] and result["response_model_known_jobs"] == 3
+    path = tmp_path / "reviews" / (tasks[0]["blind_id"] + ".json")
+    review = json.loads(path.read_text())
+    if defect == "duplicate":
+        review["final"].append(copy.deepcopy(review["final"][0]))
+    elif defect == "missing_stage":
+        del review["first"]
+    elif defect == "empty_stage":
+        review["final"] = []
+    else:
+        review = {}
+    path.write_text(json.dumps(review))
+    with pytest.raises(ValueError, match="exactly once|provenance"):
+        journey.summarize_evidence_experiment(tmp_path)
+
+
+@pytest.mark.parametrize("output,job_status,ladder,expected", [
+    ({"status": "saved", "generation": {}}, "completed", {"rungs": ["fixture"]}, "delivered"),
+    ({"status": "saved_invalid", "generation": {}}, "completed", {"rungs": ["fixture"]}, "diagnostic_only"),
+    ({"status": "saved", "generation": {"diagnostic_only": True}}, "completed", {"rungs": ["fixture"]}, "diagnostic_only"),
+    ({"status": "saved", "generation": {"validation": {"status": "invalid_candidate"}}}, "completed", {"rungs": ["fixture"]}, "diagnostic_only"),
+    ({"status": "saved", "generation": {"validation_profile": "rejected_diagnostic"}}, "completed", {"rungs": ["fixture"]}, "diagnostic_only"),
+    ({"status": "saved", "generation": {"validation": {"profile": "rejected_diagnostic"}}}, "completed", {"rungs": ["fixture"]}, "diagnostic_only"),
+    (None, "completed", {"rungs": ["fixture"]}, "unverified"),
+    ({"status": "saved", "generation": {}}, "failed", {"rungs": ["fixture"]}, "not_delivered"),
+    ({"status": "saved", "generation": {}}, "completed", None, "not_delivered"),
+])
+def test_evidence_formal_delivery_does_not_confuse_completed_diagnostic_saving(output, job_status, ladder, expected):
+    from scripts.benchmark_user_path import final_delivery_status
+    assert final_delivery_status({"output": output, "job": {"status": job_status}, "ladder": ladder}) == expected
+
+
+def test_blind_evidence_export_preserves_diagnostic_program_without_arm_or_retrieval(tmp_path):
+    from scripts.benchmark_user_path import export_blind_candidate
+    ladder = {"rungs": ["fixture"]}
+    export_blind_candidate(tmp_path, {"blind_id": "anonymous", "arm": "curated_evidence"},
+        {"plc_model": "FX5U", "confirmed_spec": {}, "acceptance": []},
+        {"job": {"status": "completed"}, "output": {"status": "saved_invalid"}, "ladder": ladder,
+         "attempts": [], "retrieval": [{"text": "private treatment evidence"}]})
+    packet = json.loads((tmp_path / "blind/anonymous.json").read_text(encoding="utf-8"))
+    assert packet["final_candidate"]["ladder"] == ladder
+    assert packet["final_candidate"]["delivered"] is False
+    assert packet["final_candidate"]["delivery_status"] == "diagnostic_only"
+    assert "curated_evidence" not in json.dumps(packet) and "private treatment" not in json.dumps(packet)
+
+
+@pytest.mark.parametrize("output,expected", [
+    ({"status": "saved_invalid", "generation": {"repair_attempts": 0}}, "not_delivered"),
+    (None, "unverified"),
+    ({"status": "saved", "generation": {"repair_attempts": 0}}, "passed"),
+])
+@pytest.mark.parametrize("structural_valid", [True, False])
+def test_evidence_summary_separates_static_full_pass_and_formal_delivery(tmp_path, output, expected, structural_valid):
+    from scripts import benchmark_user_path as journey
+    task = {"case_id": "a", "arm": "curated_evidence", "repeat": 0, "run_id": "a.0", "blind_id": "anonymous"}
+    case = {"case_id": "a", "category": "boundary", "acceptance": [{"id": "timer", "requirement": "correct timing"}]}
+    journey.write_new(tmp_path / "experiment.json", {"identity": {"repeats": 1}, "cases": [case], "tasks": [task]})
+    journey.write_new(tmp_path / "runs/a.0.json", {**task, "category": "boundary", "wall_ms": 20,
+        "attempts": [], "job": {"status": "completed"}, "output": output, "ladder": {"rungs": ["fixture"]},
+        "first_candidate": {"ladder": {"rungs": ["fixture"]}, "structural_valid": structural_valid}})
+    check = [{"id": "timer", "status": "passed", "evidence": "official source and complete program reviewed"}]
+    journey.write_new(tmp_path / "reviews/anonymous.json", {"blind_id": "anonymous", "performed_by": "Codex",
+        "human_signoff": False, "native_execution": "not_measured", "method": "blinded static review",
+        "completed_at": "2026-10-05T00:00:00Z", "first": check, "final": check})
+    group = journey.summarize_evidence_experiment(tmp_path)["groups"]["all"]["curated_evidence"]
+    assert group["job_completed"] == 1
+    assert group["whole_program_static"]["final"]["passed"] == 1
+    assert group["whole_program_static"]["first"]["passed"] == 1
+    assert group["first_pass_semantic_correct"] == 1
+    assert group["raw_model_semantic_correct"] is None
+    assert group["raw_model_semantic_reviewed_runs"] == 0
+    assert group["first_usable_rate"] == (1 if structural_valid else 0)
+    assert group["whole_program"]["final"][expected] == 1
+    assert group["final_full_pass_rate"] == (1 if expected == "passed" else 0)
+    assert group["formal_delivery"][journey.final_delivery_status({"output": output, "job": {"status": "completed"}, "ladder": {"rungs": ["fixture"]}})] == 1
+    assert group["repair_attempts"]["known_runs"] == (0 if output is None else 1)
+
+
+def test_evidence_summary_refuses_unblinding_before_anonymous_reviews(tmp_path):
+    from scripts import benchmark_user_path as journey
+    task = {"case_id": "a", "arm": "no_manual", "repeat": 0, "run_id": "a.0", "blind_id": "anonymous"}
+    journey.write_new(tmp_path / "experiment.json", {"identity": {"repeats": 1},
+        "cases": [{"case_id": "a", "category": "ordinary", "acceptance": [{"id": "safe"}]}], "tasks": [task]})
+    journey.write_new(tmp_path / "runs/a.0.json", {**task, "ladder": {"rungs": ["fixture"]}})
+    with pytest.raises(ValueError, match="anonymous reviews"):
+        journey.summarize_evidence_experiment(tmp_path)
+
+
+def test_evidence_request_exposure_marks_identical_current_rag_controls():
+    from scripts.benchmark_user_path import request_exposure
+    common = {"model": "same", "messages": [{"role": "system", "content": "same Core"}]}
+    expected = {"a": {"no_manual": common, "current_rag": copy.deepcopy(common),
+        "curated_evidence": {"model": "same", "messages": [{"role": "system", "content": "same Core plus source"}]}}}
+    assert request_exposure(expected, "a", "current_rag") == "same_request"
+    assert request_exposure(expected, "a", "curated_evidence") == "manual_evidence_added"
+    assert request_exposure({}, "a", "current_rag") == "unverified"
+
+
+def _construction_measurement_fixture():
+    case = copy.deepcopy(_purpose_cases()[0])
+    spec = case['confirmed_spec']
+    spec['behavior_constraints'] = [{'id':'boot','kind':'initialize','status':'confirmed','values':{'M100':False},
+        'execution_context':{'program_type':'scan','initial_execution_program':False},'provenance':{'source':'user_authored','evidence':['首扫描清内部状态']}}]
+    spec.setdefault('selected_approach',{})['construction_plan'] = {'instances':[
+        {'id':'init','requirement_id':'boot','method':'first_scan_isolation'}], 'internal_ranges':[],
+        'execution_context':{'program_type':'scan','initial_execution_program':False}}
+    return case
+
+
+@pytest.mark.parametrize('model',['FX3U','FX5U'])
+def test_construction_preflight_keeps_real_compiled_requests_equal_except_mechanism(model):
+    from scripts.benchmark_construction import construction_preflight, common_construction_request
+    from scripts.benchmark_user_path import CONSTRUCTION_ARMS
+    case = _construction_measurement_fixture()
+    case['plc_model'] = model
+    provider = OpenAICompatibleProvider(offline_runtime_profile(),'fixture-key',client=object())
+    flight = construction_preflight(case,case['confirmed_spec'],provider)
+    assert flight['passed'] and flight['network_calls'] == 0
+    assert flight['candidate_decode_validated'] and flight['runtime_cpu'] == case['plc_model']
+    assert flight['candidate_check_cpu_validated'] and flight['complete_relation_and_method_values_validated']
+    a,b = (flight['requests'][arm] for arm in CONSTRUCTION_ARMS)
+    assert a != b and common_construction_request(a) == common_construction_request(b)
+    for missing in ('', '\n# Core construction delivery\nincomplete'):
+        with pytest.raises(ValueError): common_construction_request({'messages':[{'content':missing}]})
+
+
+@pytest.mark.parametrize('damage,message',[
+    ('relation','Complete confirmed relations'),
+    ('plan','Complete confirmed relations'),
+    ('method','Complete construction method'),
+])
+def test_construction_preflight_rejects_equal_arm_requests_with_ids_but_changed_values(monkeypatch,damage,message):
+    from scripts import benchmark_construction as runner
+    original = runner.run_case
+    def damaged_request(*args,**kwargs):
+        record = original(*args,**kwargs)
+        wire = record['actual_requests'][0]['messages'][0]
+        content = wire['content']
+        if damage == 'method':
+            block = runner._BLOCK.search(content)
+            # Keep every instance ID and the entire common request intact.
+            altered = block.group().replace('"method":"first_scan_isolation"','"method":"unsupported"')
+            assert altered != block.group()
+            wire['content'] = content[:block.start()]+altered+content[block.end():]
+        else:
+            marker = '\n# Confirmed project specification\n'
+            prefix,tail = content.split(marker,1)
+            body = tail.lstrip()
+            spec,end = json.JSONDecoder().raw_decode(body)
+            if damage == 'relation':
+                spec['behavior_constraints'][0]['values']['M100'] = True
+            else:
+                spec['selected_approach']['construction_plan']['instances'][0]['method'] = 'source_history'
+            wire['content'] = prefix+marker+json.dumps(spec,ensure_ascii=False)+body[end:]
+        return record
+    monkeypatch.setattr(runner,'run_case',damaged_request)
+    case = _construction_measurement_fixture()
+    provider = OpenAICompatibleProvider(offline_runtime_profile(),'fixture-key',client=object())
+    with pytest.raises(ValueError,match=message):
+        runner.construction_preflight(case,case['confirmed_spec'],provider)
+
+
+def test_construction_schedule_excludes_all_started_tasks_and_preserves_worker_pairs(tmp_path):
+    from scripts.benchmark_construction import pending_construction_tasks
+    tasks = [{'run_id':str(i),'block':i//2} for i in range(8)]
+    (tmp_path/'runs').mkdir()
+    (tmp_path/'runs/0.started.json').write_text('{}')
+    (tmp_path/'runs/3.json').write_text('{}')
+    frozen = {'tasks':tasks}
+    assert [t['run_id'] for t in pending_construction_tasks(tmp_path,frozen,worker_index=0,workers=2)] == ['1','4','5']
+    assert [t['run_id'] for t in pending_construction_tasks(tmp_path,frozen,worker_index=1,workers=2)] == ['2','6','7']
+    with pytest.raises(ValueError): pending_construction_tasks(tmp_path,frozen,worker_index=2,workers=2)
+
+
+def test_construction_offline_recheck_retains_original_observations_and_separates_reference_gate(tmp_path,monkeypatch):
+    import zipfile
+    from application.compact_protocol import expand_compact_ladder
+    from plc.ir import build_plc_ir
+    from scripts import benchmark_construction as runner
+    from scripts.benchmark_user_path import CONSTRUCTION_ARMS,freeze_code,write_new
+    import model_runtime.provider as providers
+    import simulator.bounded as bounded
+    monkeypatch.setattr(providers,'get_active_provider',lambda *a,**k:pytest.fail('Offline recheck loaded a provider'))
+    source,destination = tmp_path/'original',tmp_path/'recheck'
+    source.mkdir();destination.mkdir()
+    case = _construction_measurement_fixture()
+    case['plc_model'] = 'FX5U'
+    tasks = [{'case_id':case['case_id'],'arm':arm,'repeat':0,'run_id':arm} for arm in CONSTRUCTION_ARMS]
+    write_new(source/'experiment.json',{'cases':[case],'tasks':tasks})
+    with zipfile.ZipFile(source/'materials_snapshot.zip','x') as archive:
+        archive.write(source/'experiment.json','experiment.json')
+    # Independent golden program, not obtained from the constructor.
+    ladder = expand_compact_ladder({'r':[{'h':None,'s':[],'b':[{'i':['NO SM402'],'o':['RST M100']}]}]})
+    for task in tasks:
+        receipt = {'reference_violations':[{'instance_id':'init','reason':'missing_reference'}]
+                   if task['arm']==CONSTRUCTION_ARMS[1] else []}
+        write_new(source/'runs'/(task['run_id']+'.json'),{'first_candidate':{'ladder':ladder,
+            'structural_valid':True,'construction_binding':receipt,'behavior_check':{'status':'unverified'}},
+            'program':build_plc_ir(ladder,plc_model='FX5U'),'version_id':'v0001'})
+    before = {str(p.relative_to(source)):p.read_bytes() for p in source.rglob('*') if p.is_file()}
+    freeze_code(destination)
+    result = runner.recheck_frozen_construction_candidates(source,destination)
+    assert result['network_calls'] == 0 and len(result['observations']) == 4
+    for observation in result['observations']:
+        assert observation['plc_model'] == 'FX5U'
+        assert observation['execution_status'] == 'no_violation_found_in_tested_scope'
+        assert observation['activation_blocked'] is (observation['arm']==CONSTRUCTION_ARMS[1])
+    assert {str(p.relative_to(source)):p.read_bytes() for p in source.rglob('*') if p.is_file()} == before
+    monkeypatch.setattr(bounded,'check_confirmed_behavior',lambda *a,**k:pytest.fail('Completed offline check reran'))
+    assert runner.recheck_frozen_construction_candidates(source,destination) == result
+
+
+def test_construction_summary_preserves_unknown_usage_and_checks_complete_blind_reviews(tmp_path):
+    from scripts import benchmark_construction as runner
+    from scripts.benchmark_user_path import CONSTRUCTION_ARMS, write_new
+    case={'case_id':'a','category':'ordinary','confirmed_spec':{},'acceptance':[{'id':'progress'}]}
+    tasks=[{'case_id':'a','arm':arm,'repeat':0,'run_id':arm,'blind_id':arm+'.anonymous'} for arm in CONSTRUCTION_ARMS]
+    requests={'a':{arm:{'model':'fixture'} for arm in CONSTRUCTION_ARMS}}
+    write_new(tmp_path/'experiment.json',{'identity':{'repeats':1},'cases':[case],'tasks':tasks,'expected_requests':requests})
+    for task in tasks:
+        write_new(tmp_path/'runs'/(task['run_id']+'.json'),{**task,'wall_ms':None if task['arm']==CONSTRUCTION_ARMS[0] else 12,
+            'attempts':[],'actual_requests':[requests['a'][task['arm']]],'confirmed_spec_after':{},
+            'first_candidate':{'ladder':{'rungs':['fixture']},'structural_valid':True},'ladder':{'rungs':['fixture']},
+            'job':{'status':'completed'},'output':{'status':'saved'}})
+    with pytest.raises(ValueError,match='anonymous reviews'): runner.summarize_construction_experiment(tmp_path)
+    for task in tasks:
+        status='failed' if task['arm']==CONSTRUCTION_ARMS[0] else 'passed'
+        checks=[{'id':'progress','status':status,'evidence':'independent complete-program review'}]
+        write_new(tmp_path/'reviews'/(task['blind_id']+'.json'),{'blind_id':task['blind_id'],'performed_by':'Codex',
+            'human_signoff':False,'native_execution':'not_measured','method':'anonymous static review',
+            'completed_at':'2026-10-05T00:00:00Z','first':checks,'final':checks})
+    result=runner.summarize_construction_experiment(tmp_path)
+    assert result['contrast_counts']['first']['rescue'] == 1
+    assert result['case_cluster_tests']['first']['eligible_cases'] == 1
+    assert result['case_cluster_tests']['first']['two_sided_p'] == 1
+    assert result['arms'][CONSTRUCTION_ARMS[0]]['latency_ms']['median'] is None
+    assert result['arms'][CONSTRUCTION_ARMS[1]]['raw_model_semantic_correct'] is None
+    assert result['arms'][CONSTRUCTION_ARMS[1]]['prompt_cache']['hit_tokens'] is None
+    path=tmp_path/'reviews'/(tasks[0]['blind_id']+'.json')
+    review=json.loads(path.read_text()); review['first']*=2; path.write_text(json.dumps(review))
+    with pytest.raises(ValueError,match='exactly once'): runner.summarize_construction_experiment(tmp_path)
+
+
+def _construction_supplement_source(tmp_path, *, cases=1, repeats=1):
+    import zipfile
+    from scripts import benchmark_construction as runner
+    from scripts.benchmark_user_path import CONSTRUCTION_ARMS, write_new
+    source=tmp_path/'original'; source.mkdir()
+    identity={'experiment':'construction-value','repeats':repeats,'seed':41004,
+        'frozen_at_utc':'2026-10-05T08:33:46Z','endpoint':'https://api-inference.modelscope.cn/v1',
+        'profile_model':'deepseek-ai/DeepSeek-V4.1-Flash','profile_id':'original','user_model_settings':{'parameters':{}}}
+    materials, tasks, requests = [], [], {}
+    for index in range(cases):
+        case={'case_id':f'case_{index}','category':'ordinary','name':'Synthetic','plc_model':'FX3U',
+              'confirmed_spec':{},'acceptance':[{'id':'progress','requirement':'normal progress'}],
+              'frozen_evidence':{'text':'source evidence','manifest':{}}}
+        materials.append(case)
+        requests[case['case_id']]={arm:{'model':identity['profile_model'],
+            'messages':[{'role':'system','content':'same evidence and confirmed requirements'}],'stream':True}
+            for arm in CONSTRUCTION_ARMS}
+        for repeat in range(repeats):
+            for arm in CONSTRUCTION_ARMS:
+                run_id=f'{case["case_id"]}.{repeat}.{arm}'
+                tasks.append({'case_id':case['case_id'],'arm':arm,'repeat':repeat,'block':len(tasks)//2,
+                              'run_id':run_id,'blind_id':'original_'+str(len(tasks))})
+        write_new(source/'preflight'/(case['case_id']+'.json'),{'complete_relation_and_method_values_validated':True})
+    frozen={'identity':identity,'cases':materials,'tasks':tasks,'expected_requests':requests}
+    write_new(source/'experiment.json',frozen)
+    with zipfile.ZipFile(source/'materials_snapshot.zip','x') as archive:
+        archive.write(source/'experiment.json','experiment.json')
+    with zipfile.ZipFile(source/'code_snapshot.zip','x') as archive:
+        archive.write(runner.ROOT/'resources/plc_models.json','resources/plc_models.json')
+    provider=SimpleNamespace(profile={'id':'official','model':'deepseek-flash','baseUrl':'https://api.deepseek.com',
+                                    'userModelSettings':{'parameters':{}}}, _request_params=lambda r:{})
+    return source,frozen,provider
+
+
+def _supplement_preview(monkeypatch, frozen, *, damage=None):
+    from scripts import benchmark_construction as runner
+    def preview(case,spec,provider):
+        requests=copy.deepcopy(frozen['expected_requests'][case['case_id']])
+        for value in requests.values():
+            value['model']=provider.profile['model']
+            if damage=='messages':value['messages'][0]['content']='different facts'
+            if damage=='parameters':value['temperature']=0.2
+        return {'passed':True,'network_calls':0,'requests':requests,'frozen_evidence':case['frozen_evidence']}
+    monkeypatch.setattr(runner,'construction_preflight',preview)
+
+
+def test_construction_supplement_selects_52_and_preserves_success_diagnostics(tmp_path):
+    from scripts import benchmark_construction as runner
+    from scripts.benchmark_user_path import write_new
+    source,frozen,_=_construction_supplement_source(tmp_path,cases=12,repeats=3)
+    for index,task in enumerate(frozen['tasks'][:55]):
+        write_new(source/'runs'/(task['run_id']+'.started.json'),{'run_id':task['run_id']})
+        if index==54:continue
+        record=({'job':{'status':'completed'},'first_candidate':{'ladder':{'rungs':['reviewed program']}},
+                 'output':{'status':'saved_invalid'}} if index<20 else
+                {'job':{'status':'failed'},'transport_errors':[{'type':'RateLimitError','message':'insufficient balance'}]})
+        write_new(source/'runs'/(task['run_id']+'.json'),record)
+    before={str(p.relative_to(source)):p.read_bytes()for p in source.rglob('*')if p.is_file()}
+    tasks=runner.select_construction_supplement_tasks(source,frozen)
+    assert len(tasks)==52 and {t['run_id']for t in tasks}.isdisjoint({t['run_id']for t in frozen['tasks'][:20]})
+    assert {s:sum(t['source_status']==s for t in tasks)for s in ('transport_failed','interrupted','unstarted')} == {
+        'transport_failed':34,'interrupted':1,'unstarted':17}
+    assert all(t['blind_id']!=t['source_blind_id']and t['source_run_id']==t['run_id']for t in tasks)
+    assert {str(p.relative_to(source)):p.read_bytes()for p in source.rglob('*')if p.is_file()}==before
+
+
+@pytest.mark.parametrize('damage',['messages','parameters'])
+def test_construction_supplement_rejects_request_drift_before_freezing(tmp_path,monkeypatch,damage):
+    from scripts import benchmark_construction as runner
+    source,frozen,provider=_construction_supplement_source(tmp_path)
+    _supplement_preview(monkeypatch,frozen,damage=damage)
+    destination=tmp_path/'official'
+    with pytest.raises(ValueError,match='beyond model identity'):
+        runner.prepare_construction_supplement(destination,source,provider)
+    assert not (destination/'experiment.json').exists()
+
+
+def test_official_alignment_omits_only_known_defaults_and_restores_resolver(tmp_path):
+    from scripts.benchmark_construction import source_aligned_official_request
+    _,frozen,provider=_construction_supplement_source(tmp_path)
+    wire={'model':'deepseek-flash','stream':True,'messages':['same'],
+          'response_format':{'type':'json_object'},'extra_body':{'thinking':{'type':'enabled'}},'temperature':0.4}
+    original=lambda r:copy.deepcopy(wire)
+    provider._request_params=original
+    with source_aligned_official_request(provider,frozen):
+        assert provider._request_params(None)=={'model':'deepseek-flash','stream':True,'messages':['same'],'temperature':0.4}
+    assert provider._request_params is original
+    assert wire['extra_body']=={'thinking':{'type':'enabled'}}
+    provider.profile['userModelSettings']['parameters']={'temperature':0.4}
+    with pytest.raises(ValueError,match='saved model parameters'):
+        with source_aligned_official_request(provider,frozen):pass
+
+
+def test_construction_supplement_freezes_originals_and_summary_excludes_cross_endpoint_pair(tmp_path,monkeypatch):
+    from scripts import benchmark_construction as runner
+    from scripts.benchmark_user_path import CONSTRUCTION_ARMS,write_new
+    source,frozen,provider=_construction_supplement_source(tmp_path,cases=2)
+    for index,task in enumerate(frozen['tasks']):
+        write_new(source/'runs'/(task['run_id']+'.started.json'),task)
+        record={**task,'arm':task['arm'],'attempts':[],'actual_requests':[frozen['expected_requests'][task['case_id']][task['arm']]],
+                'wall_ms':10,'job':{'status':'failed'},'transport_errors':[{'type':'RateLimitError','message':'insufficient balance'}]}
+        if index==0:
+            record.update(job={'status':'completed'},transport_errors=[],confirmed_spec_after={},
+                first_candidate={'ladder':{'rungs':['independent golden']},'structural_valid':True},
+                ladder={'rungs':['independent golden']},output={'status':'saved'})
+            checks=[{'id':'progress','status':'passed','evidence':'confirmed progress'}]
+            write_new(source/'reviews'/(task['blind_id']+'.json'),{'blind_id':task['blind_id'],'performed_by':'Codex',
+                'human_signoff':False,'native_execution':'not_measured','method':'anonymous review','completed_at':'now',
+                'first':checks,'final':checks})
+        write_new(source/'runs'/(task['run_id']+'.json'),record)
+    before={str(p.relative_to(source)):p.read_bytes()for p in source.rglob('*')if p.is_file()}
+    _supplement_preview(monkeypatch,frozen)
+    destination=tmp_path/'official'
+    prepared=runner.prepare_construction_supplement(destination,source,provider)
+    assert prepared['scheduled_jobs']==3 and prepared['retained_source_jobs']==1
+    with pytest.raises(ValueError,match='prepared again'):
+        runner.prepare_construction_supplement(destination,source,provider)
+    supplement=runner._frozen_materials(destination)
+    for task in supplement['tasks']:
+        status='failed'if task['case_id']=='case_1'and task['arm']==CONSTRUCTION_ARMS[0]else'passed'
+        record={**task,'wall_ms':20,'attempts':[],'actual_requests':[supplement['expected_requests'][task['case_id']][task['arm']]],
+            'confirmed_spec_after':{},'first_candidate':{'ladder':{'rungs':['golden']},'structural_valid':True},
+            'ladder':{'rungs':['golden']},'job':{'status':'completed'},'output':{'status':'saved'}}
+        write_new(destination/'runs'/(task['run_id']+'.json'),record)
+        checks=[{'id':'progress','status':status,'evidence':'independently frozen requirement'}]
+        write_new(destination/'reviews'/(task['blind_id']+'.json'),{'blind_id':task['blind_id'],'performed_by':'Codex',
+            'human_signoff':False,'native_execution':'not_measured','method':'anonymous review','completed_at':'now',
+            'first':checks,'final':checks})
+    result=runner.summarize_construction_experiment(destination)
+    assert result['scheduled_jobs']==result['recorded_jobs']==result['reviewed_jobs']==4
+    assert result['pair_provider_counts']=={'modelscope':0,'deepseek_official':1,'cross_endpoint':1}
+    assert result['contrast_counts']['first']['both_pass']==1
+    assert result['same_endpoint_contrast_counts']['first']['both_pass']==0
+    assert result['same_endpoint_contrast_counts']['first']['rescue']==1
+    assert result['case_cluster_tests']['first']['excluded_cases']==['case_0']
+    assert result['case_cluster_tests']['first']['eligible_cases']==1
+    assert result['call_history']['original_transport_failed_jobs']==3
+    assert result['provider_metrics']['deepseek_official'][CONSTRUCTION_ARMS[0]]['prompt_cache']['hit_tokens']is None
+    assert result['provider_metrics']['deepseek_official'][CONSTRUCTION_ARMS[0]]['raw_model_semantic_correct'] is None
+    assert result['provider_metrics']['deepseek_official'][CONSTRUCTION_ARMS[0]]['input_tokens']['total'] is None
+    assert result['provider_metrics']['deepseek_official'][CONSTRUCTION_ARMS[1]]['whole_program']['first']['passed']==2
+    assert 'latency_ms'not in result['arms'][CONSTRUCTION_ARMS[0]]
+    assert {str(p.relative_to(source)):p.read_bytes()for p in source.rglob('*')if p.is_file()}==before
+    write_new(source/'runs/new.started.json',{})
+    with pytest.raises(ValueError,match='inventory changed'):runner.summarize_construction_experiment(destination)
+
+
+@pytest.mark.parametrize('kind,message,expected',[
+    ('RateLimitError','insufficient balance','quota_exhausted'),
+    ('RateLimitError','burst rate exceeded',None),
+    ('AuthenticationError','invalid key','authentication_or_permission_failure'),
+    ('PermissionDeniedError','not permitted','authentication_or_permission_failure'),
+    ('RemoteProtocolError','closed chunked stream',None),
+])
+def test_construction_fatal_transport_classification(kind,message,expected):
+    from scripts.benchmark_construction import fatal_construction_transport_failure
+    assert fatal_construction_transport_failure({'transport_errors':[{'type':kind,'message':message}]})==expected
+
+
+def test_construction_worker_stops_on_quota_and_never_restarts_started_jobs(tmp_path,monkeypatch):
+    from scripts import benchmark_construction as runner
+    source,frozen,provider=_construction_supplement_source(tmp_path)
+    monkeypatch.setattr(runner,'assert_frozen_code',lambda *a:None)
+    # Use the original execution loop with a profile matching its frozen identity.
+    provider.profile={'id':'original','model':frozen['identity']['profile_model'],
+        'baseUrl':frozen['identity']['endpoint'],'userModelSettings':{'parameters':{}}}
+    calls=[]
+    class Service:
+        def create_project(self,**kwargs):return {'id':'p'}
+        def set_spec(self,project_id,spec,value):return {'valid':True,'spec':spec}
+    class FakeJourney:
+        def __init__(self,*a,**k):self.service=Service()
+        def __enter__(self):return self
+        def __exit__(self,*a):pass
+        def job(self,*a,**k):
+            calls.append(k)
+            return {'job':{'status':'failed'},'attempts':[],'actual_requests':[],
+                    'transport_errors':[{'type':'RateLimitError','message':'insufficient balance'}]}
+    monkeypatch.setattr(runner,'Journey',FakeJourney)
+    result=runner.run_construction_experiment(source,provider)
+    assert result=={'stopped':True,'reason':'quota_exhausted'} and len(calls)==1
+    assert len(list((source/'runs').glob('*.started.json')))==1
+    runner.run_construction_experiment(source,provider)
+    assert len(calls)==1
+    assert len(runner.pending_construction_tasks(source,frozen))==1

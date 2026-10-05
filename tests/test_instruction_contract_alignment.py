@@ -490,19 +490,26 @@ def test_contract_audit_cannot_overwrite_its_source_database(tmp_path, monkeypat
 
 
 # Model-specific instruction regressions belong to the registry/validator alignment owner.
-def test_fx3u_registry_exposes_zrst_with_exact_two_operand_arity():
-    zrst = DEFAULT_INSTRUCTION_REGISTRY.resolve("ZRST")
+@pytest.mark.parametrize("model", ["FX3U", "FX5U"])
+def test_source_checked_registry_exposes_zrst_with_exact_two_operand_arity(model):
+    zrst = DEFAULT_INSTRUCTION_REGISTRY.resolve("ZRST", cpu=model)
     assert zrst is not None
-    assert zrst.supports_cpu("FX3U")
+    assert zrst.supports_cpu(model)
     assert zrst.accepts_arity(2)
     assert not zrst.accepts_arity(1)
     assert not zrst.accepts_arity(16)
-    assert "ZRST" in generation_app_instr_mnemonics("FX3U")
+    assert "ZRST" in generation_app_instr_mnemonics(model)
 
 
-def test_fx3u_zrst_m100_m115_is_a_valid_generated_instruction():
+@pytest.mark.parametrize("model", ["FX3U", "FX5U"])
+def test_source_checked_zrst_m100_m115_is_a_valid_generated_instruction(model):
     ladder = _app_ladder("ZRST", ["M100", "M115"])
-    assert validate_ladder_full(ladder, plc_model="FX3U") is ladder
+    assert validate_ladder_full(ladder, plc_model=model) is ladder
+
+
+def test_fx5u_zrst_support_preserves_read_only_system_relay_policy():
+    with pytest.raises(PLCJsonValidationError):
+        validate_ladder_full(_app_ladder("ZRST", ["SM402", "SM403"]), plc_model="FX5U")
 
 
 def test_rst_does_not_masquerade_as_two_operand_zone_reset():

@@ -8,7 +8,7 @@ from PyInstaller.utils.hooks import collect_all
 
 root = Path(SPECPATH).resolve().parents[1]
 required = (
-    "resources/pattern_library.json", "resources/plc_models.json",
+    "resources/pattern_library.json", "resources/plc_models.json", "resources/instructions/control_runtime.json",
     "resources/knowledge/fx3u_knowledge.sqlite", "resources/knowledge/fx3u_dense_lsa.npz",
     "resources/knowledge/manifest.json", "resources/knowledge/THIRD_PARTY_NOTICES.md",
     "resources/app.ico", "LICENSE", "docs/integrations/mcp.md",
@@ -25,6 +25,7 @@ datas = [
     (str(root / "resources/pattern_library.json"), "."),
     (str(root / "resources/plc_models.json"), "."),
     (str(root / "resources/instructions/mitsubishi"), "resources/instructions/mitsubishi"),
+    (str(root / "resources/instructions/control_runtime.json"), "resources/instructions"),
     (str(root / "resources/knowledge"), "knowledge"),
     (str(root / "resources/app.ico"), "."),
     (str(root / "LICENSE"), "."),

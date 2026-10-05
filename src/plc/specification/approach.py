@@ -542,6 +542,9 @@ def normalize_approach(approach):
     ) and not isinstance(approach.get("generation_contract"), Mapping):
         return {}
     normalized = copy.deepcopy(dict(approach))
+    if 'construction_plan' in normalized:
+        from plc.specification.behavior import normalize_construction_plan
+        normalized['construction_plan'] = normalize_construction_plan(normalized['construction_plan'])
     name = str(normalized.get("name") or "").strip()
     guide = str(normalized.get("generation_guide") or "").strip()
     normalized["name"] = name

@@ -170,6 +170,11 @@ class WorkbenchService:
             candidate_spec = preserve_io_user_edits(current, spec)
             candidate_spec = copy.deepcopy(candidate_spec)
             intent_ids = candidate_spec.pop("confirmed_operation_intent_ids", [])
+            behavior_ids = candidate_spec.pop('confirmed_behavior_ids', [])
+            if behavior_ids:
+                from plc.specification.behavior import confirm_behavior_constraints
+                candidate_spec['behavior_constraints'] = confirm_behavior_constraints(
+                    candidate_spec.get('behavior_constraints', []), behavior_ids)
             if intent_ids:
                 from plc.instruction_binding import confirm_operation_intents
                 candidate_spec["operation_intents"] = confirm_operation_intents(
@@ -729,6 +734,7 @@ class WorkbenchService:
                        "_validation_profile": metadata.get("validation_profile", "strict"),
                        "_generation_handoff": copy.deepcopy(metadata.get("generation_handoff")),
                        "normalization": metadata.get("normalization"),
+                       "_construction_binding": copy.deepcopy((metadata.get('first_pass_pipeline') or {}).get('construction_binding')),
                        "change_scope": snapshot.get("change_scope")}
             if metadata["target_mode"] == "ladder":
                 payload["_candidate_ir"] = json.loads((out_dir / metadata["artifacts"]["ir"]).read_text(encoding="utf-8"))
@@ -744,7 +750,8 @@ class WorkbenchService:
                     base_version_id=(version or {}).get("id"), request_id=ctx.job_id)
                 ctx.checkpoint()
                 proposal = self._save_local_proposal(proposal)
-            output.update(proposal_id=proposal["id"], version_id=proposal["result"]["version_id"], status="saved")
+            output.update(proposal_id=proposal["id"], version_id=proposal["result"]["version_id"],
+                          status='saved_behavior_draft' if proposal['result'].get('status') == 'saved_behavior_draft' else 'saved')
             ctx.emit("progress", {"stage": "version_saved", "version_id": output["version_id"],
                 "message": "程序已根据确认规格生成并自动保存；可选 Review、仿真或 GX 验证。"})
         elif kind == "agent":

@@ -26,12 +26,15 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 NO_RAG_ARM = "no_rag"
+EVIDENCE_ARMS = ("no_manual", "current_rag", "curated_evidence")
 ARMS = ("manual_text", "usage_bound", "oracle", "legacy_retrieval", "automatic", NO_RAG_ARM)
+ARMS = (*ARMS, *EVIDENCE_ARMS)
 PAIRED_ARMS = ("manual_text", "usage_bound")
 FACTORIAL_ARMS = ("manual_text_no_relations", "usage_bound_no_relations", *PAIRED_ARMS)
 ARMS = (*ARMS, *FACTORIAL_ARMS[:2])
 BINDING_ARMS = ('native_parameters', 'core_binding')
 ARMS = (*ARMS, *BINDING_ARMS)
+ARMS = (*ARMS, 'construction_description', 'core_instantiation')
 RELATION_DIMENSIONS = ("operation.result_mapping", "execution.disabled_retention")
 
 
@@ -40,6 +43,60 @@ def no_rag_context():
     from knowledge.evidence import KnowledgeContext
     return KnowledgeContext("", {"status": "experiment_disabled", "experiment_arm": NO_RAG_ARM,
                                  "retrieval_enabled": False, "records": []})
+
+
+def curated_evidence_context(case):
+    """Source-checked excerpts, without pretending Codex is a human operator.
+
+    This is an experiment input, never an instruction promotion or a second
+    retriever. Required facts and their conditions are frozen before transport.
+    """
+    from knowledge.core import _format_result_block
+    from knowledge.evidence import KnowledgeContext, evidence_record
+    packet = case.get("curated_evidence") or {}
+    review = packet.get("review") or {}
+    rows = packet.get("records")
+    required = packet.get("required_fact_ids")
+    if (review.get("performed_by") != "Codex" or review.get("human_signoff") is not False
+            or not review.get("method") or not review.get("completed_at")
+            or not isinstance(rows, list) or not rows
+            or not isinstance(required, list) or not required):
+        raise ValueError("Curated evidence requires a completed, honest source review and required facts")
+    model = case.get("plc_model", "FX3U")
+    identities, facts = set(), set()
+    for row in rows:
+        if not isinstance(row, dict) or any(not isinstance(row.get(k), str) or not row[k].strip()
+                for k in ("id", "source", "text", "manual_number", "revision")):
+            raise ValueError("Curated records require original text and manual provenance")
+        if (row["id"] in identities or type(row.get("pdf_page")) is not int or row["pdf_page"] < 1
+                or not isinstance(row.get("plc_models"), list) or model not in row["plc_models"]
+                or not isinstance(row.get("fact_ids"), list) or not row["fact_ids"]
+                or any(not isinstance(f, str) or not f for f in row["fact_ids"])
+                or not isinstance(row.get("conditions"), list)):
+            raise ValueError("Curated source identity, page, CPU or fact coverage is invalid")
+        if any(not isinstance(condition, str) or not condition or condition not in row["text"]
+               for condition in row["conditions"]):
+            raise ValueError("A required applicability condition is absent from the excerpt")
+        if re.search(r'(?m)"(?:rungs|operands|instruction_instances)"\s*:|^\s*OP\s+', row["text"]):
+            raise ValueError("Curated evidence cannot supply a program or filled calls")
+        identities.add(row["id"])
+        facts.update(row["fact_ids"])
+    if not set(required).issubset(facts):
+        raise ValueError("Curated evidence is missing required facts")
+    text = "\n\n# Retrieved PLC evidence\n" + "\n\n".join(_format_result_block(row) for row in rows) + "\n"
+    return KnowledgeContext(text, {"status": "codex_source_checked_excerpts",
+        "retrieval_enabled": False, "experiment_arm": "curated_evidence", "review": review,
+        "required_fact_ids": required, "records": [evidence_record(row) for row in rows]})
+
+
+def evidence_experiment_context(case, arm, original_builder, query, **kwargs):
+    if arm == "no_manual":
+        from knowledge.evidence import KnowledgeContext
+        return KnowledgeContext("", {"status": "experiment_disabled", "experiment_arm": arm,
+                                     "retrieval_enabled": False, "records": []})
+    if arm == "curated_evidence":
+        return curated_evidence_context(case)
+    return original_builder(query, **kwargs)
 
 
 @contextmanager
@@ -446,7 +503,9 @@ def run_case(case, arm, *, provider, model=None, effort=None, evaluator=None, ev
 
     def builder(query, **kwargs):
         started = time.perf_counter()
-        if arm == NO_RAG_ARM:
+        if arm in EVIDENCE_ARMS:
+            context = evidence_experiment_context(case, arm, original_builder, query, **kwargs)
+        elif arm == NO_RAG_ARM:
             context = no_rag_context()
         elif arm == "oracle":
             rows = case.get("oracle_evidence")
@@ -493,7 +552,7 @@ def run_case(case, arm, *, provider, model=None, effort=None, evaluator=None, ev
         with sink_scope, binding_prompt_scope, retrieval_scope, patch.object(agent, "_build_knowledge_context", builder), provider_scope(observed, model_name=model):
             result = agent.generate_confirmed_ladder(case["confirmed_spec"], case.get("plc_model", "FX3U"),
                 model_name=model, effort=effort,
-                construction_examples=False if arm == NO_RAG_ARM else case.get("construction_examples"),
+                construction_examples=False if arm == NO_RAG_ARM or arm in EVIDENCE_ARMS else case.get("construction_examples"),
                 on_context=lambda handoff: record.update(handoff=handoff))
         record["generation_status"] = "completed"
         record["ladder"] = result["ladder"]
@@ -780,13 +839,12 @@ def assess_first_candidate(case, record, *, evaluator=None):
                 raw_candidate['status'] = 'not_native_or_invalid'
                 raw_candidate['error'] = {'type': type(error).__name__, 'code': getattr(error, 'code', None)}
         outcome['raw_model_candidate'] = raw_candidate
-        compact, binding = agent.materialize_operation_references(compact, spec, target_model=model)
-        outcome['Core_binding'] = binding
+        prepared = agent.prepare_model_candidate(compact, spec, model, construction_delivery=case.get('construction_delivery'))
+        outcome['Core_binding'] = prepared['operation_binding']
+        outcome['construction_binding'] = prepared['construction_binding']
         outcome['raw_model_candidate_retained'] = True
-        ladder, _ = agent._decode_generated_ladder(compact, spec, model)
-        from plc.specification.semantic_validation import bind_confirmed_predicates
-        ladder, predicate_binding = bind_confirmed_predicates(ladder, spec)
-        outcome['Core_predicate_binding'] = predicate_binding
+        ladder = prepared['ladder']
+        outcome['Core_predicate_binding'] = prepared['confirmed_predicate_binding']
         outcome.update(status="decoded", ladder=ladder)
         if evaluator and record["generation_status"] == "completed" and len(generators) == 1:
             outcome["semantic"] = copy.deepcopy(record["behavior"])
@@ -795,6 +853,11 @@ def assess_first_candidate(case, record, *, evaluator=None):
         validate_ladder_candidate_structure(ladder, plc_model=model)
         validate_plc_ir(build_plc_ir(ladder, plc_model=model), validate_ladder=False)
         outcome["structural_valid"] = True
+        from simulator.bounded import check_confirmed_behavior
+        outcome['behavior_check'] = check_confirmed_behavior(build_plc_ir(ladder, plc_model=model), spec,
+            frozen_time_traces=case.get('bounded_time_traces', ()))
+        from plc.construction import apply_construction_check
+        outcome['behavior_check'] = apply_construction_check(outcome['behavior_check'], outcome.get('construction_binding') or {})
         receipt = validate_confirmed_semantics(ladder, spec, model)
         outcome["contract_status"] = receipt["status"]
         outcome["usable"] = (record["generation_status"] == "completed"

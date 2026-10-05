@@ -94,6 +94,11 @@ export function SpecEditor({
   const parameters = draft.parameters || [];
   const operationIntents = Array.isArray(draft.operation_intents) ? draft.operation_intents.filter((v): v is Record<string, Json> => !!v && typeof v === "object" && !Array.isArray(v)) : [];
   const confirmedIntentIds = Array.isArray(draft.confirmed_operation_intent_ids) ? draft.confirmed_operation_intent_ids.map(String) : [];
+  const behaviors = Array.isArray(draft.behavior_constraints) ? draft.behavior_constraints.filter((v): v is Record<string, Json> => !!v && typeof v === "object" && !Array.isArray(v)) : [];
+  const confirmedBehaviorIds = Array.isArray(draft.confirmed_behavior_ids) ? draft.confirmed_behavior_ids.map(String) : [];
+  const rawPlan = draft.selected_approach?.construction_plan;
+  const plan = rawPlan && typeof rawPlan === "object" && !Array.isArray(rawPlan) ? rawPlan : {};
+  const methods: Record<string, string> = { first_scan_isolation: "首次扫描初始化隔离", source_history: "源信号边沿与接受条件分离", scan_union: "同扫描事件合并", priority_snapshot: "按优先级选择一次转换" };
   return (
     <fieldset className="spec-editor" disabled={disabled}>
       <div className="spec-intro">
@@ -153,6 +158,34 @@ export function SpecEditor({
           </span>
         </label>)}
       </fieldset>}
+      {behaviors.length > 0 && <fieldset>
+        <legend>{t("核对行为关系")}</legend>
+        {behaviors.map((relation) => <label key={String(relation.id)}>
+          <input type="checkbox" checked={relation.status === "confirmed" || confirmedBehaviorIds.includes(String(relation.id))}
+            disabled={relation.status === "confirmed"}
+            onChange={(e) => patch({ ...draft, confirmed_behavior_ids: e.target.checked
+              ? [...confirmedBehaviorIds, String(relation.id)] : confirmedBehaviorIds.filter((id) => id !== String(relation.id)) })} />
+          <span>{String(relation.label || relation.id)}
+            {relation.source && <small>{t("源信号")}：{describeExpression(relation.source)}</small>}
+            {relation.accept && <small>{t("接受条件")}：{describeExpression(relation.accept)}</small>}
+            {relation.enable && <small>{t("执行条件")}：{describeExpression(relation.enable)}</small>}
+            {relation.provenance && typeof relation.provenance === "object" && !Array.isArray(relation.provenance) &&
+              Array.isArray(relation.provenance.evidence) && relation.provenance.evidence.map((e, i) => <small key={i}>{String(e)}</small>)}
+          </span>
+        </label>)}
+      </fieldset>}
+      {!!draft.selected_approach?.construction_plan && <details>
+        <summary>{t("所选方案的构造方法")}</summary>
+        <p>{t("系统根据型号、可用地址和依赖顺序检查这些实现方法。")}</p>
+        {Array.isArray(plan.instances) && plan.instances.map((item, i) => {
+          if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+          const relation = behaviors.find((row) => row.id === item.requirement_id);
+          return <p key={i}>{String(relation?.label || item.requirement_id)}：{t(methods[String(item.method)] || "方法待核对")}
+            {Array.isArray(item.depends_on) && item.depends_on.length > 0 && <small>{t("在依赖步骤完成后执行")}</small>}</p>;
+        })}
+        {Array.isArray(plan.internal_ranges) && plan.internal_ranges.map((region, i) => region && typeof region === "object" && !Array.isArray(region)
+          ? <p key={i}>{t("可用内部地址")}：{String(region.start)}–{String(region.end)}</p> : null)}
+      </details>}
       {!!draft.decision_receipt && <details>
         <summary>{t("确认前分析记录（仅审计）")}</summary>
         <p>{t("分析与检索记录单独保存，不进入生成规格；可从任务诊断 ZIP 追溯。")}</p>

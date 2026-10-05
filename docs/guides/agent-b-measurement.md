@@ -173,3 +173,141 @@ python scripts/benchmark_user_path.py --output $resultPath --profile-id $profile
 一个阶段失败时保留已完成阶段的证据并标为部分完成；不能把作业结束当作完整审阅通过。
 复杂控制的独立审阅需检查扫描顺序、故障与复位、重入、持续电平和占用区域；结构合法及
 合同特征通过不能替代完整流程正确性。用量缺失保持缺失，耗时波动与失败同时报告。
+
+## ModelScope 手册证据诊断
+
+`benchmark_user_path.py --experiment evidence-value` 固定使用保存的
+`deepseek-ai/DeepSeek-V4.1-Flash` 与 ModelScope 端点，三组均关闭构造范例，
+保留相同 Core 绑定和校验。旧的 `no_rag` 消融及范例对照含义不变。
+
+| 组 | 标识 | 手册交付 |
+| --- | --- | --- |
+| A | `no_manual` | 空手册上下文，保留共同 Core 事实及绑定 |
+| B | `current_rag` | 当前 knowledge builder 的实际结果 |
+| C | `curated_evidence` | Codex依据原始手册复核的必要片段，含型号、修订、页码与适用条件 |
+
+[12例公开案例](../../benchmarks/user_path_evidence_cases.json)包含普通需求、型号／边界
+各四例，并引用原有四个复杂案例；默认每组三轮，共108个首次生成作业。
+确认规格和已选方案共用，不传递前一个程序、不预填完整指令调用。
+这仅评价确认规格后的生成阶段，不推论需求分析阶段的检索价值。
+
+C包保存到仓库外，按 `case_id` 索引；`curated_evidence_context` 检查来源、正页码、
+CPU范围、`required_fact_ids` 完整性和 `conditions` 是否逐字存在于片段内，拒绝预填调用、
+程序及虚假的人类审签。`review.performed_by=Codex`、`human_signoff=false`；
+此审核不修改知识库或事实验证等级。表格符号的视觉转录需在私有来源记录说明。
+FX5U的C资料可补齐官方手册，B继续使用当前知识库。
+
+```powershell
+$resultPath = Join-Path $env:LOCALAPPDATA 'GXWorksAgent/measurements/evidence-value-new'
+$profileId = '<已保存的 ModelScope profile id>'
+python scripts/benchmark_user_path.py --experiment evidence-value --phase generation --output $resultPath --profile-id $profileId
+python scripts/benchmark_user_path.py --experiment evidence-value --phase prepare --output $resultPath --profile-id $profileId --curated-evidence <私有C包.json> --confirmed-specs <共享复杂规格目录>
+python scripts/benchmark_user_path.py --experiment evidence-value --phase generation --output $resultPath --profile-id $profileId --live
+```
+
+首条只查看计划，不加载凭据或联网。`prepare` 经 `set_spec` 验证后，用同一Context Compiler
+编译36份实际供应商请求，要求除证据及存在标记外完全一致、无范例／历史，C每个必要块完整交付。
+代码和实验材料保存私有字节快照；实际生成请求在发送前与冻结请求比较，漂移即拒绝。
+`--workers N --worker-index I` 支持独立进程分区，每个案例／轮次的三组仍随机相邻串行执行。
+首次运行固定分区数；续跑只执行既无结果也无开始标记的作业。已开始但无结果的作业保持未定，
+不会隐式重试；结果已写但匿名包未写完时仅补匿名导出。
+
+`blind/<随机ID>.json` 交付共同规格、验收条目、首次与最终完整程序，不交付arm、证据或作业编号。
+逐项静态审阅后将同ID结果写入 `reviews/`，再运行 `--phase summary` 解盲统计。
+审阅记录必须含 `performed_by=Codex`、`human_signoff=false`、`native_execution=not_measured`、
+方法与时间；`first`、`final` 各包含全部冻结验收ID，状态为 `passed/failed/unverified`，
+每项保留具体梯级／触发条件证据。任一关键项失败或未验证不能计全项通过。
+原始输出自身若透露来源，应在审阅限制中保留这一情况；匿名文件名不保证绝对盲法。
+Core结构／合同检查是辅助，原始模型候选及共同Core处理后的首次候选均保留，本轮不做原生仿真。
+首次可用率评价第一次解码并经共同Core绑定的候选；原始响应另外保存，不能将此指标改称模型原始输出正确率。
+Workbench会将被拒候选保存为诊断版本，保存作业可能显示 `completed`；统计还必须识别
+`saved_invalid`、`diagnostic_only` 和拒绝校验状态。诊断程序可逐项审阅，但不能计为正式交付。
+作业完成、正式交付、静态全项通过分别报告，缺少交付依据时保持未验证。
+
+汇总分别统计B、C相对A的救回、弄错、共同通过、共同失败与无法判定，按类别和案例展开。
+通过率使用计划作业为分母，保留缺失与未完成。实际用量、推理与缓存未返回则保持缺失，
+不以字符估算冒充实际token。配对耗时包含失败；修复及调用数由实际记录计算。
+此实验的实时worker不复用预检进程的检索缓存：每个worker第一次检索包含其本地冷启动，
+后续请求沿用原应用缓存。该耗时条件区别于前面的Agent B独立CLI缓存回放。
+探索性配对符号翻转检验以案例的三轮通过率差为单位，不把重复轮次当成独立需求；
+无法判定的案例不进入该检验，并保留排除名单。类别不按未知使用频率加权。
+结论只适用于本次ModelScope提供的DeepSeek V4.1、保存参数和受测需求，不推广到其他模型、
+服务商或RAG的普遍价值。仓库保存公开案例、测试与结果摘要，原始材料留在私有目录。
+
+## Core构造对照
+
+`--experiment construction-value`复用同一runner，保留原有实验含义。公开输入在
+[构造流程变体](../../benchmarks/user_path_construction_cases.json)：普通、型号边界、
+复杂组合各四例，默认两组各三轮，共72个首次生成作业。
+
+| 组 | 标识 | 构造交付 |
+| --- | --- | --- |
+| 构造说明 | `construction_description` | 相同已确认关系与方法，由模型输出普通梯级 |
+| Core实例化 | `core_instantiation` | 模型引用实例ID，由Core展开并隔离初始化写入 |
+
+两组共用冻结规格、构造选择、知识证据、Core校验和保存的ModelScope参数，关闭参考范例，
+不传递上一份程序。预检经实际Context Compiler检查最终请求只差完整构造交付块及引用
+协议，并经过真实规格正向投影解码最小候选，检查运行时CPU、资源与展开边界。
+预检比较完整关系值、计划及方法说明块，不只查找实例ID；已选择且可用的方法不能在
+最终请求中被标成缺事实。说明块、解码和有界检查均须保留确切CPU身份。
+生成前冻结源文件及材料，实际发送前再比对请求。用独立进程分区随机相邻的成对作业，
+续跑只执行未开始任务；失败、开始后中断和未知计量保留，不能隐式重试。
+
+```powershell
+$resultPath = Join-Path $env:LOCALAPPDATA 'GXWorksAgent/measurements/construction-value-new'
+$profileId = '<已保存的 ModelScope profile id>'
+python scripts/benchmark_user_path.py --experiment construction-value --phase preflight --output $resultPath --profile-id $profileId
+python scripts/benchmark_user_path.py --experiment construction-value --phase generation --output $resultPath --profile-id $profileId --live
+python scripts/benchmark_user_path.py --experiment construction-value --phase summary --output $resultPath --profile-id $profileId
+```
+
+沿用匿名逐项完整程序审阅格式，在所有已有结果完成审阅后才解盲。分别评价首次Core处理
+候选与最终交付，保留原始响应；构造机制是实验差异，因此Core展开的收益不能叫作模型
+原始输出正确率。局部反例、资源／引用冲突和完整工艺失败分别记录，自动检查未发现
+反例也不能代替全部关键项通过。先审阅再统计救回／弄错、首次可用率、最终全项通过率、
+确认关系违反、有限覆盖、耗时、调用和实际用量／缓存；重复轮次只属于12个需求簇。
+
+旧108份候选可用`scripts.benchmark_construction.replay_frozen_candidates`只读回放，传入
+独立编写的行为与时间轨迹，输出另一个私有目录；旧程序、审阅和原报告保持冻结。
+这属于后验局部检查，不能把新增要求追溯算入旧实验完整通过率。
+
+需要修正检查器后复核构造候选时，先在新的私有目录调用`freeze_code`冻结当前代码，再用
+`recheck_frozen_construction_candidates`读取原材料。执行反例与构造引用检查分别保存；
+不调用模型、不改原程序，也不把复核结果替换成原始交付观察。若最终模型请求本身漏交付
+必要方法，则原批次不能作为有效收益对照，需保留失败记录并重新冻结实验。
+
+### 官方接口补跑
+
+仅在明确授权后，`--supplement-from <原有效批次目录>`使用保存的官方
+`https://api.deepseek.com`、`deepseek-flash`预设补齐传输失败或未完成作业。
+已经返回程序的作业保留，即使它只保存为诊断版本或语义审阅失败，也不重新生成。
+旧的实验入口仍使用ModelScope；补跑只属于测量脚本。
+
+```powershell
+$sourcePath = Join-Path $env:LOCALAPPDATA 'GXWorksAgent/measurements/<原有效批次>'
+$resultPath = Join-Path $env:LOCALAPPDATA 'GXWorksAgent/measurements/<单独补跑目录>'
+$officialProfileId = '<已保存的官方 DeepSeek profile id>'
+python scripts/benchmark_user_path.py --experiment construction-value --phase prepare --output $resultPath --supplement-from $sourcePath --profile-id $officialProfileId
+python scripts/benchmark_user_path.py --experiment construction-value --phase generation --output $resultPath --supplement-from $sourcePath --profile-id $officialProfileId --live
+python scripts/benchmark_user_path.py --experiment construction-value --phase summary --output $resultPath --profile-id $officialProfileId
+```
+
+补跑目录必须独立于原目录；原结果、开始标记和已有审阅逐字节冻结，不覆盖或删除。
+原已开始但无结果的作业只有在这次明确授权的补跑清单中才重新发起，原请求是否完成
+仍保持未知。补跑自身的开始标记继续阻止隐式重试。额度不足、鉴权或权限失败写入共享
+停发记录，其他worker停止发起新任务；已经在途的任务仍保留实际结果。
+
+预检要求产品代码及冻结材料不变，允许测量适配器更新。两个端点的保存参数须一致；
+补跑最终请求只允许模型标识变化。官方适配器自动增加的`json_object`和
+`thinking=enabled`在实验传输层省略，沿用原请求未显式指定这些参数的方式。
+该处理不修改用户预设或产品Provider；未指定的服务端默认行为不能据此认定相同。
+任何其他参数、正文或证据差异均在联网前拒绝，实际请求发送前再逐项比对。
+
+完成匿名审阅后，汇总按“原已完成程序优先，否则使用补跑记录”选择每个作业的主结果。
+原失败调用另计；额度失败不能算成模型语义错误。合并质量统计保留接口身份，耗时、
+用量及缓存分别按接口记录。跨接口配对只做描述统计，不进入构造收益检验；包含这种
+配对或无法判定轮次的案例不进入案例级检验，并公开排除名单。混合接口实验的结论仅
+适用于该批次实际运行条件，不替换原ModelScope实验的结论边界。
+
+20份ModelScope结果与52项官方补跑的实际计数、检查器纠错及统计边界见
+[2026-10-05实验报告](../reports/2026-10-05-core-construction-value.md)。

@@ -25,6 +25,7 @@
 | I/O 身份与用途注释 | [I/O 标签](architecture/io-binding-labels.md) |
 | 生成调用、传输与候选处理 | [调用契约](architecture/generation-call-contracts.md) |
 | 已确认决策的生成策略 | [生成执行策略](architecture/generation-execution-policy.md) |
+| 行为关系、Core构造与反例 | [构造与有界检查](architecture/behavior-constructions.md) |
 | 结果展示与交付 | [生成交付](architecture/generation-delivery.md) |
 | 修复范围 | [修复边界](architecture/generation-repair.md) |
 | 操作审批 | [审批策略](architecture/approval-modes.md) |

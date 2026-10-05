@@ -35,6 +35,11 @@ owns bounded reference behaviors, and [instruction_binding](../../src/plc/instru
 binds confirmed effects before existing IR generation. Their contracts and limits
 are documented in [instruction-fact delivery](instruction-fact-delivery.md).
 
+[construction](../../src/plc/construction.py) instantiates confirmed behavior
+relations; [bounded](../../src/simulator/bounded.py) checks their short instruction-order
+traces. Specification, exact CPU fact and activation contracts are documented in
+[behavior constructions](behavior-constructions.md).
+
 ## Resources and state
 
 Bundled resources are separate from writable user settings and project workspaces. Configuration lookup and migration belong to [storage.config](../../src/storage/config.py); query and backup instructions are in [model settings](../guides/model-settings.md#storage).

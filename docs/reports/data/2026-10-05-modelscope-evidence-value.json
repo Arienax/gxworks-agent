@@ -1,0 +1,6430 @@
+{
+  "schema_version": 1,
+  "model": "deepseek-ai/DeepSeek-V4.1-Flash",
+  "endpoint": "https://api-inference.modelscope.cn/v1",
+  "supplier_response_models": [
+    "deepseek-ai/DeepSeek-V4.1-Flash"
+  ],
+  "supplier_response_model_known_jobs": 108,
+  "user_parameters": {},
+  "actual_request_parameters": {
+    "model": "deepseek-ai/DeepSeek-V4.1-Flash",
+    "stream": true
+  },
+  "frozen_at_utc": "2026-10-04T16:54:04.089689+00:00",
+  "generation_started_at_utc": "2026-10-04T16:54:42.497720+00:00",
+  "generation_finished_at_utc": "2026-10-04T19:05:40.409949+00:00",
+  "baseline_commit": "e65c29146012e1307266e38e9eca2e3e2ae1317d",
+  "baseline_worktree_dirty": true,
+  "runtime": {
+    "python": "3.13.14 (tags/v3.13.14:fd17997, Jun 10 2026, 13:03:48) [MSC v.1944 64 bit (AMD64)]",
+    "platform": "win32"
+  },
+  "seed": 20261005,
+  "repeats": 3,
+  "scheduled_jobs": 108,
+  "recorded_jobs": 108,
+  "independent_cases": 12,
+  "conclusion_scope": "This saved ModelScope DeepSeek V4.1 configuration and these confirmed tasks only",
+  "native_execution": "not_measured",
+  "curation": "Codex; no independent human signoff",
+  "human_review_ms": null,
+  "codex_review_ms": null,
+  "groups": {
+    "all": {
+      "no_manual": {
+        "runs": 36,
+        "completed": 33,
+        "behavior_verified": 4,
+        "first_pass_semantic_correct": 4,
+        "first_pass_usable": 4,
+        "raw_model_semantic_correct": null,
+        "raw_model_native_evaluated_runs": 0,
+        "native_parameter_rebindings": 0,
+        "model_calls": 36,
+        "median_end_to_end_ms": 146893.56344999396,
+        "p95_end_to_end_ms": 664048.2024000084,
+        "reasoning_usage_known_runs": 0,
+        "median_reasoning_tokens": null,
+        "prompt_cache": {
+          "known_calls": 0,
+          "unreported_or_invalid_calls": 36,
+          "hit_tokens": null,
+          "reported_miss_tokens": null,
+          "measured_input_tokens": null,
+          "input_token_hit_rate": null
+        },
+        "input_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "output_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "total_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "raw_model_semantic_reviewed_runs": 0,
+        "whole_program": {
+          "first": {
+            "passed": 4,
+            "failed": 29,
+            "unverified": 0,
+            "not_delivered": 3
+          },
+          "final": {
+            "passed": 4,
+            "failed": 24,
+            "unverified": 0,
+            "not_delivered": 8
+          }
+        },
+        "whole_program_static": {
+          "first": {
+            "passed": 4,
+            "failed": 29,
+            "unverified": 0,
+            "not_delivered": 3
+          },
+          "final": {
+            "passed": 4,
+            "failed": 29,
+            "unverified": 0,
+            "not_delivered": 3
+          }
+        },
+        "job_completed": 33,
+        "formal_delivery": {
+          "delivered": 28,
+          "diagnostic_only": 5,
+          "not_delivered": 3,
+          "unverified": 0
+        },
+        "repair_attempts": {
+          "known_runs": 28,
+          "unreported_runs": 8,
+          "total": 0
+        },
+        "generation_followup_model_calls": 0,
+        "transport_failed_runs": 2,
+        "no_program_runs": 3,
+        "latency_ms": {
+          "all_jobs": {
+            "known_runs": 36,
+            "median": 146893.56344999396,
+            "p95": 664048.2024000084
+          },
+          "first_usable": {
+            "known_runs": 4,
+            "median": 127672.42499998247,
+            "p95": 211895.99080002517
+          },
+          "final_passed": {
+            "known_runs": 4,
+            "median": 127672.42499998247,
+            "p95": 211895.99080002517
+          }
+        },
+        "codex_review_ms": {
+          "known_runs": 0,
+          "median": null
+        },
+        "human_review_ms": null,
+        "scheduled_runs": 36,
+        "missing_runs": 0,
+        "first_usable_rate": 0.1111111111111111,
+        "final_full_pass_rate": 0.1111111111111111
+      },
+      "curated_evidence": {
+        "runs": 36,
+        "completed": 35,
+        "behavior_verified": 13,
+        "first_pass_semantic_correct": 14,
+        "first_pass_usable": 13,
+        "raw_model_semantic_correct": null,
+        "raw_model_native_evaluated_runs": 0,
+        "native_parameter_rebindings": 0,
+        "model_calls": 36,
+        "median_end_to_end_ms": 114375.21530000959,
+        "p95_end_to_end_ms": 821349.6598000056,
+        "reasoning_usage_known_runs": 0,
+        "median_reasoning_tokens": null,
+        "prompt_cache": {
+          "known_calls": 0,
+          "unreported_or_invalid_calls": 36,
+          "hit_tokens": null,
+          "reported_miss_tokens": null,
+          "measured_input_tokens": null,
+          "input_token_hit_rate": null
+        },
+        "input_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "output_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "total_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "raw_model_semantic_reviewed_runs": 0,
+        "whole_program": {
+          "first": {
+            "passed": 13,
+            "failed": 22,
+            "unverified": 0,
+            "not_delivered": 1
+          },
+          "final": {
+            "passed": 13,
+            "failed": 20,
+            "unverified": 0,
+            "not_delivered": 3
+          }
+        },
+        "whole_program_static": {
+          "first": {
+            "passed": 14,
+            "failed": 21,
+            "unverified": 0,
+            "not_delivered": 1
+          },
+          "final": {
+            "passed": 14,
+            "failed": 21,
+            "unverified": 0,
+            "not_delivered": 1
+          }
+        },
+        "job_completed": 35,
+        "formal_delivery": {
+          "delivered": 33,
+          "diagnostic_only": 2,
+          "not_delivered": 1,
+          "unverified": 0
+        },
+        "repair_attempts": {
+          "known_runs": 33,
+          "unreported_runs": 3,
+          "total": 0
+        },
+        "generation_followup_model_calls": 0,
+        "transport_failed_runs": 1,
+        "no_program_runs": 1,
+        "latency_ms": {
+          "all_jobs": {
+            "known_runs": 36,
+            "median": 114375.21530000959,
+            "p95": 821349.6598000056
+          },
+          "first_usable": {
+            "known_runs": 13,
+            "median": 72103.29729999648,
+            "p95": 165385.271200008
+          },
+          "final_passed": {
+            "known_runs": 13,
+            "median": 72103.29729999648,
+            "p95": 165385.271200008
+          }
+        },
+        "codex_review_ms": {
+          "known_runs": 0,
+          "median": null
+        },
+        "human_review_ms": null,
+        "scheduled_runs": 36,
+        "missing_runs": 0,
+        "first_usable_rate": 0.3611111111111111,
+        "final_full_pass_rate": 0.3611111111111111
+      },
+      "current_rag": {
+        "runs": 36,
+        "completed": 36,
+        "behavior_verified": 9,
+        "first_pass_semantic_correct": 10,
+        "first_pass_usable": 9,
+        "raw_model_semantic_correct": null,
+        "raw_model_native_evaluated_runs": 0,
+        "native_parameter_rebindings": 0,
+        "model_calls": 36,
+        "median_end_to_end_ms": 141857.2605500085,
+        "p95_end_to_end_ms": 339339.07879999606,
+        "reasoning_usage_known_runs": 0,
+        "median_reasoning_tokens": null,
+        "prompt_cache": {
+          "known_calls": 0,
+          "unreported_or_invalid_calls": 36,
+          "hit_tokens": null,
+          "reported_miss_tokens": null,
+          "measured_input_tokens": null,
+          "input_token_hit_rate": null
+        },
+        "input_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "output_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "total_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "raw_model_semantic_reviewed_runs": 0,
+        "whole_program": {
+          "first": {
+            "passed": 9,
+            "failed": 26,
+            "unverified": 1,
+            "not_delivered": 0
+          },
+          "final": {
+            "passed": 9,
+            "failed": 22,
+            "unverified": 1,
+            "not_delivered": 4
+          }
+        },
+        "whole_program_static": {
+          "first": {
+            "passed": 10,
+            "failed": 25,
+            "unverified": 1,
+            "not_delivered": 0
+          },
+          "final": {
+            "passed": 10,
+            "failed": 25,
+            "unverified": 1,
+            "not_delivered": 0
+          }
+        },
+        "job_completed": 36,
+        "formal_delivery": {
+          "delivered": 32,
+          "diagnostic_only": 4,
+          "not_delivered": 0,
+          "unverified": 0
+        },
+        "repair_attempts": {
+          "known_runs": 32,
+          "unreported_runs": 4,
+          "total": 0
+        },
+        "generation_followup_model_calls": 0,
+        "transport_failed_runs": 0,
+        "no_program_runs": 0,
+        "latency_ms": {
+          "all_jobs": {
+            "known_runs": 36,
+            "median": 141857.2605500085,
+            "p95": 339339.07879999606
+          },
+          "first_usable": {
+            "known_runs": 9,
+            "median": 117963.18459999748,
+            "p95": 168660.94749997137
+          },
+          "final_passed": {
+            "known_runs": 9,
+            "median": 117963.18459999748,
+            "p95": 168660.94749997137
+          }
+        },
+        "codex_review_ms": {
+          "known_runs": 0,
+          "median": null
+        },
+        "human_review_ms": null,
+        "scheduled_runs": 36,
+        "missing_runs": 0,
+        "first_usable_rate": 0.25,
+        "final_full_pass_rate": 0.25
+      }
+    },
+    "ordinary": {
+      "current_rag": {
+        "runs": 12,
+        "completed": 12,
+        "behavior_verified": 6,
+        "first_pass_semantic_correct": 6,
+        "first_pass_usable": 6,
+        "raw_model_semantic_correct": null,
+        "raw_model_native_evaluated_runs": 0,
+        "native_parameter_rebindings": 0,
+        "model_calls": 12,
+        "median_end_to_end_ms": 117486.24529999506,
+        "p95_end_to_end_ms": 161677.30039998423,
+        "reasoning_usage_known_runs": 0,
+        "median_reasoning_tokens": null,
+        "prompt_cache": {
+          "known_calls": 0,
+          "unreported_or_invalid_calls": 12,
+          "hit_tokens": null,
+          "reported_miss_tokens": null,
+          "measured_input_tokens": null,
+          "input_token_hit_rate": null
+        },
+        "input_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "output_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "total_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "raw_model_semantic_reviewed_runs": 0,
+        "whole_program": {
+          "first": {
+            "passed": 6,
+            "failed": 6,
+            "unverified": 0,
+            "not_delivered": 0
+          },
+          "final": {
+            "passed": 6,
+            "failed": 6,
+            "unverified": 0,
+            "not_delivered": 0
+          }
+        },
+        "whole_program_static": {
+          "first": {
+            "passed": 6,
+            "failed": 6,
+            "unverified": 0,
+            "not_delivered": 0
+          },
+          "final": {
+            "passed": 6,
+            "failed": 6,
+            "unverified": 0,
+            "not_delivered": 0
+          }
+        },
+        "job_completed": 12,
+        "formal_delivery": {
+          "delivered": 12,
+          "diagnostic_only": 0,
+          "not_delivered": 0,
+          "unverified": 0
+        },
+        "repair_attempts": {
+          "known_runs": 12,
+          "unreported_runs": 0,
+          "total": 0
+        },
+        "generation_followup_model_calls": 0,
+        "transport_failed_runs": 0,
+        "no_program_runs": 0,
+        "latency_ms": {
+          "all_jobs": {
+            "known_runs": 12,
+            "median": 117486.24529999506,
+            "p95": 161677.30039998423
+          },
+          "first_usable": {
+            "known_runs": 6,
+            "median": 115478.87019999325,
+            "p95": 161677.30039998423
+          },
+          "final_passed": {
+            "known_runs": 6,
+            "median": 115478.87019999325,
+            "p95": 161677.30039998423
+          }
+        },
+        "codex_review_ms": {
+          "known_runs": 0,
+          "median": null
+        },
+        "human_review_ms": null,
+        "scheduled_runs": 12,
+        "missing_runs": 0,
+        "first_usable_rate": 0.5,
+        "final_full_pass_rate": 0.5
+      },
+      "no_manual": {
+        "runs": 12,
+        "completed": 12,
+        "behavior_verified": 2,
+        "first_pass_semantic_correct": 2,
+        "first_pass_usable": 2,
+        "raw_model_semantic_correct": null,
+        "raw_model_native_evaluated_runs": 0,
+        "native_parameter_rebindings": 0,
+        "model_calls": 12,
+        "median_end_to_end_ms": 90249.79770000209,
+        "p95_end_to_end_ms": 211895.99080002517,
+        "reasoning_usage_known_runs": 0,
+        "median_reasoning_tokens": null,
+        "prompt_cache": {
+          "known_calls": 0,
+          "unreported_or_invalid_calls": 12,
+          "hit_tokens": null,
+          "reported_miss_tokens": null,
+          "measured_input_tokens": null,
+          "input_token_hit_rate": null
+        },
+        "input_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "output_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "total_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "raw_model_semantic_reviewed_runs": 0,
+        "whole_program": {
+          "first": {
+            "passed": 2,
+            "failed": 10,
+            "unverified": 0,
+            "not_delivered": 0
+          },
+          "final": {
+            "passed": 2,
+            "failed": 10,
+            "unverified": 0,
+            "not_delivered": 0
+          }
+        },
+        "whole_program_static": {
+          "first": {
+            "passed": 2,
+            "failed": 10,
+            "unverified": 0,
+            "not_delivered": 0
+          },
+          "final": {
+            "passed": 2,
+            "failed": 10,
+            "unverified": 0,
+            "not_delivered": 0
+          }
+        },
+        "job_completed": 12,
+        "formal_delivery": {
+          "delivered": 12,
+          "diagnostic_only": 0,
+          "not_delivered": 0,
+          "unverified": 0
+        },
+        "repair_attempts": {
+          "known_runs": 12,
+          "unreported_runs": 0,
+          "total": 0
+        },
+        "generation_followup_model_calls": 0,
+        "transport_failed_runs": 0,
+        "no_program_runs": 0,
+        "latency_ms": {
+          "all_jobs": {
+            "known_runs": 12,
+            "median": 90249.79770000209,
+            "p95": 211895.99080002517
+          },
+          "first_usable": {
+            "known_runs": 2,
+            "median": 155711.16380000603,
+            "p95": 211895.99080002517
+          },
+          "final_passed": {
+            "known_runs": 2,
+            "median": 155711.16380000603,
+            "p95": 211895.99080002517
+          }
+        },
+        "codex_review_ms": {
+          "known_runs": 0,
+          "median": null
+        },
+        "human_review_ms": null,
+        "scheduled_runs": 12,
+        "missing_runs": 0,
+        "first_usable_rate": 0.16666666666666666,
+        "final_full_pass_rate": 0.16666666666666666
+      },
+      "curated_evidence": {
+        "runs": 12,
+        "completed": 12,
+        "behavior_verified": 3,
+        "first_pass_semantic_correct": 3,
+        "first_pass_usable": 3,
+        "raw_model_semantic_correct": null,
+        "raw_model_native_evaluated_runs": 0,
+        "native_parameter_rebindings": 0,
+        "model_calls": 12,
+        "median_end_to_end_ms": 103983.72930000187,
+        "p95_end_to_end_ms": 165008.26329999836,
+        "reasoning_usage_known_runs": 0,
+        "median_reasoning_tokens": null,
+        "prompt_cache": {
+          "known_calls": 0,
+          "unreported_or_invalid_calls": 12,
+          "hit_tokens": null,
+          "reported_miss_tokens": null,
+          "measured_input_tokens": null,
+          "input_token_hit_rate": null
+        },
+        "input_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "output_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "total_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "raw_model_semantic_reviewed_runs": 0,
+        "whole_program": {
+          "first": {
+            "passed": 3,
+            "failed": 9,
+            "unverified": 0,
+            "not_delivered": 0
+          },
+          "final": {
+            "passed": 3,
+            "failed": 9,
+            "unverified": 0,
+            "not_delivered": 0
+          }
+        },
+        "whole_program_static": {
+          "first": {
+            "passed": 3,
+            "failed": 9,
+            "unverified": 0,
+            "not_delivered": 0
+          },
+          "final": {
+            "passed": 3,
+            "failed": 9,
+            "unverified": 0,
+            "not_delivered": 0
+          }
+        },
+        "job_completed": 12,
+        "formal_delivery": {
+          "delivered": 12,
+          "diagnostic_only": 0,
+          "not_delivered": 0,
+          "unverified": 0
+        },
+        "repair_attempts": {
+          "known_runs": 12,
+          "unreported_runs": 0,
+          "total": 0
+        },
+        "generation_followup_model_calls": 0,
+        "transport_failed_runs": 0,
+        "no_program_runs": 0,
+        "latency_ms": {
+          "all_jobs": {
+            "known_runs": 12,
+            "median": 103983.72930000187,
+            "p95": 165008.26329999836
+          },
+          "first_usable": {
+            "known_runs": 3,
+            "median": 107513.68720000028,
+            "p95": 116371.39260000549
+          },
+          "final_passed": {
+            "known_runs": 3,
+            "median": 107513.68720000028,
+            "p95": 116371.39260000549
+          }
+        },
+        "codex_review_ms": {
+          "known_runs": 0,
+          "median": null
+        },
+        "human_review_ms": null,
+        "scheduled_runs": 12,
+        "missing_runs": 0,
+        "first_usable_rate": 0.25,
+        "final_full_pass_rate": 0.25
+      }
+    },
+    "boundary": {
+      "current_rag": {
+        "runs": 12,
+        "completed": 12,
+        "behavior_verified": 3,
+        "first_pass_semantic_correct": 4,
+        "first_pass_usable": 3,
+        "raw_model_semantic_correct": null,
+        "raw_model_native_evaluated_runs": 0,
+        "native_parameter_rebindings": 0,
+        "model_calls": 12,
+        "median_end_to_end_ms": 129946.7685000127,
+        "p95_end_to_end_ms": 202566.05659998604,
+        "reasoning_usage_known_runs": 0,
+        "median_reasoning_tokens": null,
+        "prompt_cache": {
+          "known_calls": 0,
+          "unreported_or_invalid_calls": 12,
+          "hit_tokens": null,
+          "reported_miss_tokens": null,
+          "measured_input_tokens": null,
+          "input_token_hit_rate": null
+        },
+        "input_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "output_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "total_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "raw_model_semantic_reviewed_runs": 0,
+        "whole_program": {
+          "first": {
+            "passed": 3,
+            "failed": 8,
+            "unverified": 1,
+            "not_delivered": 0
+          },
+          "final": {
+            "passed": 3,
+            "failed": 4,
+            "unverified": 1,
+            "not_delivered": 4
+          }
+        },
+        "whole_program_static": {
+          "first": {
+            "passed": 4,
+            "failed": 7,
+            "unverified": 1,
+            "not_delivered": 0
+          },
+          "final": {
+            "passed": 4,
+            "failed": 7,
+            "unverified": 1,
+            "not_delivered": 0
+          }
+        },
+        "job_completed": 12,
+        "formal_delivery": {
+          "delivered": 8,
+          "diagnostic_only": 4,
+          "not_delivered": 0,
+          "unverified": 0
+        },
+        "repair_attempts": {
+          "known_runs": 8,
+          "unreported_runs": 4,
+          "total": 0
+        },
+        "generation_followup_model_calls": 0,
+        "transport_failed_runs": 0,
+        "no_program_runs": 0,
+        "latency_ms": {
+          "all_jobs": {
+            "known_runs": 12,
+            "median": 129946.7685000127,
+            "p95": 202566.05659998604
+          },
+          "first_usable": {
+            "known_runs": 3,
+            "median": 151258.95099999616,
+            "p95": 168660.94749997137
+          },
+          "final_passed": {
+            "known_runs": 3,
+            "median": 151258.95099999616,
+            "p95": 168660.94749997137
+          }
+        },
+        "codex_review_ms": {
+          "known_runs": 0,
+          "median": null
+        },
+        "human_review_ms": null,
+        "scheduled_runs": 12,
+        "missing_runs": 0,
+        "first_usable_rate": 0.25,
+        "final_full_pass_rate": 0.25
+      },
+      "no_manual": {
+        "runs": 12,
+        "completed": 12,
+        "behavior_verified": 2,
+        "first_pass_semantic_correct": 2,
+        "first_pass_usable": 2,
+        "raw_model_semantic_correct": null,
+        "raw_model_native_evaluated_runs": 0,
+        "native_parameter_rebindings": 0,
+        "model_calls": 12,
+        "median_end_to_end_ms": 107514.7769000032,
+        "p95_end_to_end_ms": 286077.1205999772,
+        "reasoning_usage_known_runs": 0,
+        "median_reasoning_tokens": null,
+        "prompt_cache": {
+          "known_calls": 0,
+          "unreported_or_invalid_calls": 12,
+          "hit_tokens": null,
+          "reported_miss_tokens": null,
+          "measured_input_tokens": null,
+          "input_token_hit_rate": null
+        },
+        "input_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "output_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "total_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "raw_model_semantic_reviewed_runs": 0,
+        "whole_program": {
+          "first": {
+            "passed": 2,
+            "failed": 10,
+            "unverified": 0,
+            "not_delivered": 0
+          },
+          "final": {
+            "passed": 2,
+            "failed": 8,
+            "unverified": 0,
+            "not_delivered": 2
+          }
+        },
+        "whole_program_static": {
+          "first": {
+            "passed": 2,
+            "failed": 10,
+            "unverified": 0,
+            "not_delivered": 0
+          },
+          "final": {
+            "passed": 2,
+            "failed": 10,
+            "unverified": 0,
+            "not_delivered": 0
+          }
+        },
+        "job_completed": 12,
+        "formal_delivery": {
+          "delivered": 10,
+          "diagnostic_only": 2,
+          "not_delivered": 0,
+          "unverified": 0
+        },
+        "repair_attempts": {
+          "known_runs": 10,
+          "unreported_runs": 2,
+          "total": 0
+        },
+        "generation_followup_model_calls": 0,
+        "transport_failed_runs": 0,
+        "no_program_runs": 0,
+        "latency_ms": {
+          "all_jobs": {
+            "known_runs": 12,
+            "median": 107514.7769000032,
+            "p95": 286077.1205999772
+          },
+          "first_usable": {
+            "known_runs": 2,
+            "median": 111150.17214998079,
+            "p95": 155818.51319997804
+          },
+          "final_passed": {
+            "known_runs": 2,
+            "median": 111150.17214998079,
+            "p95": 155818.51319997804
+          }
+        },
+        "codex_review_ms": {
+          "known_runs": 0,
+          "median": null
+        },
+        "human_review_ms": null,
+        "scheduled_runs": 12,
+        "missing_runs": 0,
+        "first_usable_rate": 0.16666666666666666,
+        "final_full_pass_rate": 0.16666666666666666
+      },
+      "curated_evidence": {
+        "runs": 12,
+        "completed": 12,
+        "behavior_verified": 10,
+        "first_pass_semantic_correct": 11,
+        "first_pass_usable": 10,
+        "raw_model_semantic_correct": null,
+        "raw_model_native_evaluated_runs": 0,
+        "native_parameter_rebindings": 0,
+        "model_calls": 12,
+        "median_end_to_end_ms": 71576.30040000367,
+        "p95_end_to_end_ms": 165385.271200008,
+        "reasoning_usage_known_runs": 0,
+        "median_reasoning_tokens": null,
+        "prompt_cache": {
+          "known_calls": 0,
+          "unreported_or_invalid_calls": 12,
+          "hit_tokens": null,
+          "reported_miss_tokens": null,
+          "measured_input_tokens": null,
+          "input_token_hit_rate": null
+        },
+        "input_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "output_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "total_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "raw_model_semantic_reviewed_runs": 0,
+        "whole_program": {
+          "first": {
+            "passed": 10,
+            "failed": 2,
+            "unverified": 0,
+            "not_delivered": 0
+          },
+          "final": {
+            "passed": 10,
+            "failed": 1,
+            "unverified": 0,
+            "not_delivered": 1
+          }
+        },
+        "whole_program_static": {
+          "first": {
+            "passed": 11,
+            "failed": 1,
+            "unverified": 0,
+            "not_delivered": 0
+          },
+          "final": {
+            "passed": 11,
+            "failed": 1,
+            "unverified": 0,
+            "not_delivered": 0
+          }
+        },
+        "job_completed": 12,
+        "formal_delivery": {
+          "delivered": 11,
+          "diagnostic_only": 1,
+          "not_delivered": 0,
+          "unverified": 0
+        },
+        "repair_attempts": {
+          "known_runs": 11,
+          "unreported_runs": 1,
+          "total": 0
+        },
+        "generation_followup_model_calls": 0,
+        "transport_failed_runs": 0,
+        "no_program_runs": 0,
+        "latency_ms": {
+          "all_jobs": {
+            "known_runs": 12,
+            "median": 71576.30040000367,
+            "p95": 165385.271200008
+          },
+          "first_usable": {
+            "known_runs": 10,
+            "median": 52140.70190000348,
+            "p95": 165385.271200008
+          },
+          "final_passed": {
+            "known_runs": 10,
+            "median": 52140.70190000348,
+            "p95": 165385.271200008
+          }
+        },
+        "codex_review_ms": {
+          "known_runs": 0,
+          "median": null
+        },
+        "human_review_ms": null,
+        "scheduled_runs": 12,
+        "missing_runs": 0,
+        "first_usable_rate": 0.8333333333333334,
+        "final_full_pass_rate": 0.8333333333333334
+      }
+    },
+    "complex": {
+      "no_manual": {
+        "runs": 12,
+        "completed": 9,
+        "behavior_verified": 0,
+        "first_pass_semantic_correct": 0,
+        "first_pass_usable": 0,
+        "raw_model_semantic_correct": null,
+        "raw_model_native_evaluated_runs": 0,
+        "native_parameter_rebindings": 0,
+        "model_calls": 12,
+        "median_end_to_end_ms": 265073.44205000845,
+        "p95_end_to_end_ms": 826653.4940999991,
+        "reasoning_usage_known_runs": 0,
+        "median_reasoning_tokens": null,
+        "prompt_cache": {
+          "known_calls": 0,
+          "unreported_or_invalid_calls": 12,
+          "hit_tokens": null,
+          "reported_miss_tokens": null,
+          "measured_input_tokens": null,
+          "input_token_hit_rate": null
+        },
+        "input_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "output_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "total_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "raw_model_semantic_reviewed_runs": 0,
+        "whole_program": {
+          "first": {
+            "passed": 0,
+            "failed": 9,
+            "unverified": 0,
+            "not_delivered": 3
+          },
+          "final": {
+            "passed": 0,
+            "failed": 6,
+            "unverified": 0,
+            "not_delivered": 6
+          }
+        },
+        "whole_program_static": {
+          "first": {
+            "passed": 0,
+            "failed": 9,
+            "unverified": 0,
+            "not_delivered": 3
+          },
+          "final": {
+            "passed": 0,
+            "failed": 9,
+            "unverified": 0,
+            "not_delivered": 3
+          }
+        },
+        "job_completed": 9,
+        "formal_delivery": {
+          "delivered": 6,
+          "diagnostic_only": 3,
+          "not_delivered": 3,
+          "unverified": 0
+        },
+        "repair_attempts": {
+          "known_runs": 6,
+          "unreported_runs": 6,
+          "total": 0
+        },
+        "generation_followup_model_calls": 0,
+        "transport_failed_runs": 2,
+        "no_program_runs": 3,
+        "latency_ms": {
+          "all_jobs": {
+            "known_runs": 12,
+            "median": 265073.44205000845,
+            "p95": 826653.4940999991
+          },
+          "first_usable": {
+            "known_runs": 0,
+            "median": null,
+            "p95": null
+          },
+          "final_passed": {
+            "known_runs": 0,
+            "median": null,
+            "p95": null
+          }
+        },
+        "codex_review_ms": {
+          "known_runs": 0,
+          "median": null
+        },
+        "human_review_ms": null,
+        "scheduled_runs": 12,
+        "missing_runs": 0,
+        "first_usable_rate": 0.0,
+        "final_full_pass_rate": 0.0
+      },
+      "curated_evidence": {
+        "runs": 12,
+        "completed": 11,
+        "behavior_verified": 0,
+        "first_pass_semantic_correct": 0,
+        "first_pass_usable": 0,
+        "raw_model_semantic_correct": null,
+        "raw_model_native_evaluated_runs": 0,
+        "native_parameter_rebindings": 0,
+        "model_calls": 12,
+        "median_end_to_end_ms": 266069.5857499959,
+        "p95_end_to_end_ms": 899808.6751000083,
+        "reasoning_usage_known_runs": 0,
+        "median_reasoning_tokens": null,
+        "prompt_cache": {
+          "known_calls": 0,
+          "unreported_or_invalid_calls": 12,
+          "hit_tokens": null,
+          "reported_miss_tokens": null,
+          "measured_input_tokens": null,
+          "input_token_hit_rate": null
+        },
+        "input_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "output_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "total_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "raw_model_semantic_reviewed_runs": 0,
+        "whole_program": {
+          "first": {
+            "passed": 0,
+            "failed": 11,
+            "unverified": 0,
+            "not_delivered": 1
+          },
+          "final": {
+            "passed": 0,
+            "failed": 10,
+            "unverified": 0,
+            "not_delivered": 2
+          }
+        },
+        "whole_program_static": {
+          "first": {
+            "passed": 0,
+            "failed": 11,
+            "unverified": 0,
+            "not_delivered": 1
+          },
+          "final": {
+            "passed": 0,
+            "failed": 11,
+            "unverified": 0,
+            "not_delivered": 1
+          }
+        },
+        "job_completed": 11,
+        "formal_delivery": {
+          "delivered": 10,
+          "diagnostic_only": 1,
+          "not_delivered": 1,
+          "unverified": 0
+        },
+        "repair_attempts": {
+          "known_runs": 10,
+          "unreported_runs": 2,
+          "total": 0
+        },
+        "generation_followup_model_calls": 0,
+        "transport_failed_runs": 1,
+        "no_program_runs": 1,
+        "latency_ms": {
+          "all_jobs": {
+            "known_runs": 12,
+            "median": 266069.5857499959,
+            "p95": 899808.6751000083
+          },
+          "first_usable": {
+            "known_runs": 0,
+            "median": null,
+            "p95": null
+          },
+          "final_passed": {
+            "known_runs": 0,
+            "median": null,
+            "p95": null
+          }
+        },
+        "codex_review_ms": {
+          "known_runs": 0,
+          "median": null
+        },
+        "human_review_ms": null,
+        "scheduled_runs": 12,
+        "missing_runs": 0,
+        "first_usable_rate": 0.0,
+        "final_full_pass_rate": 0.0
+      },
+      "current_rag": {
+        "runs": 12,
+        "completed": 12,
+        "behavior_verified": 0,
+        "first_pass_semantic_correct": 0,
+        "first_pass_usable": 0,
+        "raw_model_semantic_correct": null,
+        "raw_model_native_evaluated_runs": 0,
+        "native_parameter_rebindings": 0,
+        "model_calls": 12,
+        "median_end_to_end_ms": 279242.440550006,
+        "p95_end_to_end_ms": 505190.95980000566,
+        "reasoning_usage_known_runs": 0,
+        "median_reasoning_tokens": null,
+        "prompt_cache": {
+          "known_calls": 0,
+          "unreported_or_invalid_calls": 12,
+          "hit_tokens": null,
+          "reported_miss_tokens": null,
+          "measured_input_tokens": null,
+          "input_token_hit_rate": null
+        },
+        "input_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "output_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "total_tokens": {
+          "known_runs": 0,
+          "median": null
+        },
+        "raw_model_semantic_reviewed_runs": 0,
+        "whole_program": {
+          "first": {
+            "passed": 0,
+            "failed": 12,
+            "unverified": 0,
+            "not_delivered": 0
+          },
+          "final": {
+            "passed": 0,
+            "failed": 12,
+            "unverified": 0,
+            "not_delivered": 0
+          }
+        },
+        "whole_program_static": {
+          "first": {
+            "passed": 0,
+            "failed": 12,
+            "unverified": 0,
+            "not_delivered": 0
+          },
+          "final": {
+            "passed": 0,
+            "failed": 12,
+            "unverified": 0,
+            "not_delivered": 0
+          }
+        },
+        "job_completed": 12,
+        "formal_delivery": {
+          "delivered": 12,
+          "diagnostic_only": 0,
+          "not_delivered": 0,
+          "unverified": 0
+        },
+        "repair_attempts": {
+          "known_runs": 12,
+          "unreported_runs": 0,
+          "total": 0
+        },
+        "generation_followup_model_calls": 0,
+        "transport_failed_runs": 0,
+        "no_program_runs": 0,
+        "latency_ms": {
+          "all_jobs": {
+            "known_runs": 12,
+            "median": 279242.440550006,
+            "p95": 505190.95980000566
+          },
+          "first_usable": {
+            "known_runs": 0,
+            "median": null,
+            "p95": null
+          },
+          "final_passed": {
+            "known_runs": 0,
+            "median": null,
+            "p95": null
+          }
+        },
+        "codex_review_ms": {
+          "known_runs": 0,
+          "median": null
+        },
+        "human_review_ms": null,
+        "scheduled_runs": 12,
+        "missing_runs": 0,
+        "first_usable_rate": 0.0,
+        "final_full_pass_rate": 0.0
+      }
+    }
+  },
+  "case_results": [
+    {
+      "case_id": "conveyor_interlock",
+      "category": "ordinary",
+      "groups": {
+        "no_manual": {
+          "first_passed": 1,
+          "final_passed": 1,
+          "static_final_passed": 1
+        },
+        "current_rag": {
+          "first_passed": 2,
+          "final_passed": 2,
+          "static_final_passed": 2
+        },
+        "curated_evidence": {
+          "first_passed": 1,
+          "final_passed": 1,
+          "static_final_passed": 1
+        }
+      },
+      "contrasts": [
+        {
+          "case_id": "conveyor_interlock",
+          "category": "ordinary",
+          "repeat": 0,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "rescue",
+          "final": "rescue",
+          "treatment_minus_baseline_ms": 22962.23960001953
+        },
+        {
+          "case_id": "conveyor_interlock",
+          "category": "ordinary",
+          "repeat": 0,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 90635.38479999988
+        },
+        {
+          "case_id": "conveyor_interlock",
+          "category": "ordinary",
+          "repeat": 1,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "rescue",
+          "final": "rescue",
+          "treatment_minus_baseline_ms": 65392.50439996249
+        },
+        {
+          "case_id": "conveyor_interlock",
+          "category": "ordinary",
+          "repeat": 1,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "rescue",
+          "final": "rescue",
+          "treatment_minus_baseline_ms": 20086.59659998375
+        },
+        {
+          "case_id": "conveyor_interlock",
+          "category": "ordinary",
+          "repeat": 2,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "harm",
+          "final": "harm",
+          "treatment_minus_baseline_ms": 39233.80960000213
+        },
+        {
+          "case_id": "conveyor_interlock",
+          "category": "ordinary",
+          "repeat": 2,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "harm",
+          "final": "harm",
+          "treatment_minus_baseline_ms": 3909.4930000137538
+        }
+      ]
+    },
+    {
+      "case_id": "delayed_exhaust",
+      "category": "ordinary",
+      "groups": {
+        "no_manual": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 0
+        },
+        "current_rag": {
+          "first_passed": 2,
+          "final_passed": 2,
+          "static_final_passed": 2
+        },
+        "curated_evidence": {
+          "first_passed": 1,
+          "final_passed": 1,
+          "static_final_passed": 1
+        }
+      },
+      "contrasts": [
+        {
+          "case_id": "delayed_exhaust",
+          "category": "ordinary",
+          "repeat": 0,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "rescue",
+          "final": "rescue",
+          "treatment_minus_baseline_ms": -8217.220900027314
+        },
+        {
+          "case_id": "delayed_exhaust",
+          "category": "ordinary",
+          "repeat": 0,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 7714.818199980073
+        },
+        {
+          "case_id": "delayed_exhaust",
+          "category": "ordinary",
+          "repeat": 1,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 86846.42310001072
+        },
+        {
+          "case_id": "delayed_exhaust",
+          "category": "ordinary",
+          "repeat": 1,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "rescue",
+          "final": "rescue",
+          "treatment_minus_baseline_ms": 51645.35350000369
+        },
+        {
+          "case_id": "delayed_exhaust",
+          "category": "ordinary",
+          "repeat": 2,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "rescue",
+          "final": "rescue",
+          "treatment_minus_baseline_ms": 7123.247499985155
+        },
+        {
+          "case_id": "delayed_exhaust",
+          "category": "ordinary",
+          "repeat": 2,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 3566.4664000214543
+        }
+      ]
+    },
+    {
+      "case_id": "level_hysteresis",
+      "category": "ordinary",
+      "groups": {
+        "no_manual": {
+          "first_passed": 1,
+          "final_passed": 1,
+          "static_final_passed": 1
+        },
+        "current_rag": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 0
+        },
+        "curated_evidence": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 0
+        }
+      },
+      "contrasts": [
+        {
+          "case_id": "level_hysteresis",
+          "category": "ordinary",
+          "repeat": 0,
+          "treatment": "current_rag",
+          "request_exposure": "same_request",
+          "first": "harm",
+          "final": "harm",
+          "treatment_minus_baseline_ms": -94839.01360002346
+        },
+        {
+          "case_id": "level_hysteresis",
+          "category": "ordinary",
+          "repeat": 0,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "harm",
+          "final": "harm",
+          "treatment_minus_baseline_ms": -107364.36200002208
+        },
+        {
+          "case_id": "level_hysteresis",
+          "category": "ordinary",
+          "repeat": 1,
+          "treatment": "current_rag",
+          "request_exposure": "same_request",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 5398.209799983306
+        },
+        {
+          "case_id": "level_hysteresis",
+          "category": "ordinary",
+          "repeat": 1,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": -33721.430600009626
+        },
+        {
+          "case_id": "level_hysteresis",
+          "category": "ordinary",
+          "repeat": 2,
+          "treatment": "current_rag",
+          "request_exposure": "same_request",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 43402.745999977924
+        },
+        {
+          "case_id": "level_hysteresis",
+          "category": "ordinary",
+          "repeat": 2,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 63558.43710000045
+        }
+      ]
+    },
+    {
+      "case_id": "counted_rejection",
+      "category": "ordinary",
+      "groups": {
+        "no_manual": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 0
+        },
+        "current_rag": {
+          "first_passed": 2,
+          "final_passed": 2,
+          "static_final_passed": 2
+        },
+        "curated_evidence": {
+          "first_passed": 1,
+          "final_passed": 1,
+          "static_final_passed": 1
+        }
+      },
+      "contrasts": [
+        {
+          "case_id": "counted_rejection",
+          "category": "ordinary",
+          "repeat": 0,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 25703.920300031314
+        },
+        {
+          "case_id": "counted_rejection",
+          "category": "ordinary",
+          "repeat": 0,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "rescue",
+          "final": "rescue",
+          "treatment_minus_baseline_ms": -829.7883999766782
+        },
+        {
+          "case_id": "counted_rejection",
+          "category": "ordinary",
+          "repeat": 1,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "rescue",
+          "final": "rescue",
+          "treatment_minus_baseline_ms": -20804.635200009216
+        },
+        {
+          "case_id": "counted_rejection",
+          "category": "ordinary",
+          "repeat": 1,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": -45188.77509998856
+        },
+        {
+          "case_id": "counted_rejection",
+          "category": "ordinary",
+          "repeat": 2,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "rescue",
+          "final": "rescue",
+          "treatment_minus_baseline_ms": 33748.38520001504
+        },
+        {
+          "case_id": "counted_rejection",
+          "category": "ordinary",
+          "repeat": 2,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 5801.275900012115
+        }
+      ]
+    },
+    {
+      "case_id": "startup_initialization_fx3u",
+      "category": "boundary",
+      "groups": {
+        "no_manual": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 0
+        },
+        "current_rag": {
+          "first_passed": 2,
+          "final_passed": 2,
+          "static_final_passed": 2
+        },
+        "curated_evidence": {
+          "first_passed": 2,
+          "final_passed": 2,
+          "static_final_passed": 2
+        }
+      },
+      "contrasts": [
+        {
+          "case_id": "startup_initialization_fx3u",
+          "category": "boundary",
+          "repeat": 0,
+          "treatment": "current_rag",
+          "request_exposure": "same_request",
+          "first": "rescue",
+          "final": "rescue",
+          "treatment_minus_baseline_ms": 39509.091599989915
+        },
+        {
+          "case_id": "startup_initialization_fx3u",
+          "category": "boundary",
+          "repeat": 0,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "rescue",
+          "final": "rescue",
+          "treatment_minus_baseline_ms": 52927.43059998611
+        },
+        {
+          "case_id": "startup_initialization_fx3u",
+          "category": "boundary",
+          "repeat": 1,
+          "treatment": "current_rag",
+          "request_exposure": "same_request",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": -14387.078799976734
+        },
+        {
+          "case_id": "startup_initialization_fx3u",
+          "category": "boundary",
+          "repeat": 1,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "rescue",
+          "final": "rescue",
+          "treatment_minus_baseline_ms": -38354.27939999499
+        },
+        {
+          "case_id": "startup_initialization_fx3u",
+          "category": "boundary",
+          "repeat": 2,
+          "treatment": "current_rag",
+          "request_exposure": "same_request",
+          "first": "rescue",
+          "final": "rescue",
+          "treatment_minus_baseline_ms": -117416.17310000584
+        },
+        {
+          "case_id": "startup_initialization_fx3u",
+          "category": "boundary",
+          "repeat": 2,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": -178602.54989998066
+        }
+      ]
+    },
+    {
+      "case_id": "startup_initialization_fx5u",
+      "category": "boundary",
+      "groups": {
+        "no_manual": {
+          "first_passed": 1,
+          "final_passed": 1,
+          "static_final_passed": 1
+        },
+        "current_rag": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 1
+        },
+        "curated_evidence": {
+          "first_passed": 2,
+          "final_passed": 2,
+          "static_final_passed": 3
+        }
+      },
+      "contrasts": [
+        {
+          "case_id": "startup_initialization_fx5u",
+          "category": "boundary",
+          "repeat": 0,
+          "treatment": "current_rag",
+          "request_exposure": "same_request",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 55184.06239998876
+        },
+        {
+          "case_id": "startup_initialization_fx5u",
+          "category": "boundary",
+          "repeat": 0,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": -33307.31649999507
+        },
+        {
+          "case_id": "startup_initialization_fx5u",
+          "category": "boundary",
+          "repeat": 1,
+          "treatment": "current_rag",
+          "request_exposure": "same_request",
+          "first": "harm",
+          "final": "harm",
+          "treatment_minus_baseline_ms": -29111.35439996724
+        },
+        {
+          "case_id": "startup_initialization_fx5u",
+          "category": "boundary",
+          "repeat": 1,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_pass",
+          "final": "both_pass",
+          "treatment_minus_baseline_ms": -66834.0619999799
+        },
+        {
+          "case_id": "startup_initialization_fx5u",
+          "category": "boundary",
+          "repeat": 2,
+          "treatment": "current_rag",
+          "request_exposure": "same_request",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 37720.06990000955
+        },
+        {
+          "case_id": "startup_initialization_fx5u",
+          "category": "boundary",
+          "repeat": 2,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "rescue",
+          "final": "rescue",
+          "treatment_minus_baseline_ms": 62105.57680000784
+        }
+      ]
+    },
+    {
+      "case_id": "timer_alarm_fx3u",
+      "category": "boundary",
+      "groups": {
+        "no_manual": {
+          "first_passed": 1,
+          "final_passed": 1,
+          "static_final_passed": 1
+        },
+        "current_rag": {
+          "first_passed": 1,
+          "final_passed": 1,
+          "static_final_passed": 1
+        },
+        "curated_evidence": {
+          "first_passed": 3,
+          "final_passed": 3,
+          "static_final_passed": 3
+        }
+      },
+      "contrasts": [
+        {
+          "case_id": "timer_alarm_fx3u",
+          "category": "boundary",
+          "repeat": 0,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 83832.35109999077
+        },
+        {
+          "case_id": "timer_alarm_fx3u",
+          "category": "boundary",
+          "repeat": 0,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "rescue",
+          "final": "rescue",
+          "treatment_minus_baseline_ms": 22380.87019996601
+        },
+        {
+          "case_id": "timer_alarm_fx3u",
+          "category": "boundary",
+          "repeat": 1,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "undetermined",
+          "final": "undetermined",
+          "treatment_minus_baseline_ms": -30097.659399994882
+        },
+        {
+          "case_id": "timer_alarm_fx3u",
+          "category": "boundary",
+          "repeat": 1,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "rescue",
+          "final": "rescue",
+          "treatment_minus_baseline_ms": -50234.98749997816
+        },
+        {
+          "case_id": "timer_alarm_fx3u",
+          "category": "boundary",
+          "repeat": 2,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_pass",
+          "final": "both_pass",
+          "treatment_minus_baseline_ms": -32925.91429996537
+        },
+        {
+          "case_id": "timer_alarm_fx3u",
+          "category": "boundary",
+          "repeat": 2,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_pass",
+          "final": "both_pass",
+          "treatment_minus_baseline_ms": -39390.11499998742
+        }
+      ]
+    },
+    {
+      "case_id": "timer_alarm_fx5u",
+      "category": "boundary",
+      "groups": {
+        "no_manual": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 0
+        },
+        "current_rag": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 0
+        },
+        "curated_evidence": {
+          "first_passed": 3,
+          "final_passed": 3,
+          "static_final_passed": 3
+        }
+      },
+      "contrasts": [
+        {
+          "case_id": "timer_alarm_fx5u",
+          "category": "boundary",
+          "repeat": 0,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": -19550.16769998474
+        },
+        {
+          "case_id": "timer_alarm_fx5u",
+          "category": "boundary",
+          "repeat": 0,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "rescue",
+          "final": "rescue",
+          "treatment_minus_baseline_ms": -98568.39629999013
+        },
+        {
+          "case_id": "timer_alarm_fx5u",
+          "category": "boundary",
+          "repeat": 1,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": -53889.900300011504
+        },
+        {
+          "case_id": "timer_alarm_fx5u",
+          "category": "boundary",
+          "repeat": 1,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "rescue",
+          "final": "rescue",
+          "treatment_minus_baseline_ms": -61979.02840000461
+        },
+        {
+          "case_id": "timer_alarm_fx5u",
+          "category": "boundary",
+          "repeat": 2,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": -21572.796899999958
+        },
+        {
+          "case_id": "timer_alarm_fx5u",
+          "category": "boundary",
+          "repeat": 2,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "rescue",
+          "final": "rescue",
+          "treatment_minus_baseline_ms": -25446.695099992212
+        }
+      ]
+    },
+    {
+      "case_id": "dual_pump_rotation",
+      "category": "complex",
+      "groups": {
+        "no_manual": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 0
+        },
+        "current_rag": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 0
+        },
+        "curated_evidence": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 0
+        }
+      },
+      "contrasts": [
+        {
+          "case_id": "dual_pump_rotation",
+          "category": "complex",
+          "repeat": 0,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 24593.789199978346
+        },
+        {
+          "case_id": "dual_pump_rotation",
+          "category": "complex",
+          "repeat": 0,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": -58843.22640002938
+        },
+        {
+          "case_id": "dual_pump_rotation",
+          "category": "complex",
+          "repeat": 1,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": -102372.73850000929
+        },
+        {
+          "case_id": "dual_pump_rotation",
+          "category": "complex",
+          "repeat": 1,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 87262.6625999983
+        },
+        {
+          "case_id": "dual_pump_rotation",
+          "category": "complex",
+          "repeat": 2,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 35143.91399998567
+        },
+        {
+          "case_id": "dual_pump_rotation",
+          "category": "complex",
+          "repeat": 2,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": -13601.740100013558
+        }
+      ]
+    },
+    {
+      "case_id": "batch_filling",
+      "category": "complex",
+      "groups": {
+        "no_manual": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 0
+        },
+        "current_rag": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 0
+        },
+        "curated_evidence": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 0
+        }
+      },
+      "contrasts": [
+        {
+          "case_id": "batch_filling",
+          "category": "complex",
+          "repeat": 0,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 103445.082500024
+        },
+        {
+          "case_id": "batch_filling",
+          "category": "complex",
+          "repeat": 0,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 2958.42900002026
+        },
+        {
+          "case_id": "batch_filling",
+          "category": "complex",
+          "repeat": 1,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": -92105.88940003072
+        },
+        {
+          "case_id": "batch_filling",
+          "category": "complex",
+          "repeat": 1,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": -100302.56980002741
+        },
+        {
+          "case_id": "batch_filling",
+          "category": "complex",
+          "repeat": 2,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 84042.46849997435
+        },
+        {
+          "case_id": "batch_filling",
+          "category": "complex",
+          "repeat": 2,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 114601.54089998105
+        }
+      ]
+    },
+    {
+      "case_id": "sorting_pipeline",
+      "category": "complex",
+      "groups": {
+        "no_manual": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 0
+        },
+        "current_rag": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 0
+        },
+        "curated_evidence": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 0
+        }
+      },
+      "contrasts": [
+        {
+          "case_id": "sorting_pipeline",
+          "category": "complex",
+          "repeat": 0,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": -72085.89200000279
+        },
+        {
+          "case_id": "sorting_pipeline",
+          "category": "complex",
+          "repeat": 0,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 7578.742199984845
+        },
+        {
+          "case_id": "sorting_pipeline",
+          "category": "complex",
+          "repeat": 1,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": -13880.25570003083
+        },
+        {
+          "case_id": "sorting_pipeline",
+          "category": "complex",
+          "repeat": 1,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 24350.287999986904
+        },
+        {
+          "case_id": "sorting_pipeline",
+          "category": "complex",
+          "repeat": 2,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 83131.81750001968
+        },
+        {
+          "case_id": "sorting_pipeline",
+          "category": "complex",
+          "repeat": 2,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": -14830.766400002176
+        }
+      ]
+    },
+    {
+      "case_id": "windowed_logging",
+      "category": "complex",
+      "groups": {
+        "no_manual": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 0
+        },
+        "current_rag": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 0
+        },
+        "curated_evidence": {
+          "first_passed": 0,
+          "final_passed": 0,
+          "static_final_passed": 0
+        }
+      },
+      "contrasts": [
+        {
+          "case_id": "windowed_logging",
+          "category": "complex",
+          "repeat": 0,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": -362254.3036999996
+        },
+        {
+          "case_id": "windowed_logging",
+          "category": "complex",
+          "repeat": 0,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 157301.45739999716
+        },
+        {
+          "case_id": "windowed_logging",
+          "category": "complex",
+          "repeat": 1,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": -15312.364000012167
+        },
+        {
+          "case_id": "windowed_logging",
+          "category": "complex",
+          "repeat": 1,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 246719.1429999657
+        },
+        {
+          "case_id": "windowed_logging",
+          "category": "complex",
+          "repeat": 2,
+          "treatment": "current_rag",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": -321462.5342999934
+        },
+        {
+          "case_id": "windowed_logging",
+          "category": "complex",
+          "repeat": 2,
+          "treatment": "curated_evidence",
+          "request_exposure": "manual_evidence_added",
+          "first": "both_fail",
+          "final": "both_fail",
+          "treatment_minus_baseline_ms": 73155.18100000918
+        }
+      ]
+    }
+  ],
+  "contrast_counts": {
+    "all": {
+      "current_rag": {
+        "first": {
+          "rescue": 8,
+          "harm": 3,
+          "both_pass": 1,
+          "both_fail": 23,
+          "undetermined": 1
+        },
+        "final": {
+          "rescue": 8,
+          "harm": 3,
+          "both_pass": 1,
+          "both_fail": 23,
+          "undetermined": 1
+        }
+      },
+      "curated_evidence": {
+        "first": {
+          "rescue": 11,
+          "harm": 2,
+          "both_pass": 2,
+          "both_fail": 21,
+          "undetermined": 0
+        },
+        "final": {
+          "rescue": 11,
+          "harm": 2,
+          "both_pass": 2,
+          "both_fail": 21,
+          "undetermined": 0
+        }
+      }
+    },
+    "ordinary": {
+      "current_rag": {
+        "first": {
+          "rescue": 6,
+          "harm": 2,
+          "both_pass": 0,
+          "both_fail": 4,
+          "undetermined": 0
+        },
+        "final": {
+          "rescue": 6,
+          "harm": 2,
+          "both_pass": 0,
+          "both_fail": 4,
+          "undetermined": 0
+        }
+      },
+      "curated_evidence": {
+        "first": {
+          "rescue": 3,
+          "harm": 2,
+          "both_pass": 0,
+          "both_fail": 7,
+          "undetermined": 0
+        },
+        "final": {
+          "rescue": 3,
+          "harm": 2,
+          "both_pass": 0,
+          "both_fail": 7,
+          "undetermined": 0
+        }
+      }
+    },
+    "boundary": {
+      "current_rag": {
+        "first": {
+          "rescue": 2,
+          "harm": 1,
+          "both_pass": 1,
+          "both_fail": 7,
+          "undetermined": 1
+        },
+        "final": {
+          "rescue": 2,
+          "harm": 1,
+          "both_pass": 1,
+          "both_fail": 7,
+          "undetermined": 1
+        }
+      },
+      "curated_evidence": {
+        "first": {
+          "rescue": 8,
+          "harm": 0,
+          "both_pass": 2,
+          "both_fail": 2,
+          "undetermined": 0
+        },
+        "final": {
+          "rescue": 8,
+          "harm": 0,
+          "both_pass": 2,
+          "both_fail": 2,
+          "undetermined": 0
+        }
+      }
+    },
+    "complex": {
+      "current_rag": {
+        "first": {
+          "rescue": 0,
+          "harm": 0,
+          "both_pass": 0,
+          "both_fail": 12,
+          "undetermined": 0
+        },
+        "final": {
+          "rescue": 0,
+          "harm": 0,
+          "both_pass": 0,
+          "both_fail": 12,
+          "undetermined": 0
+        }
+      },
+      "curated_evidence": {
+        "first": {
+          "rescue": 0,
+          "harm": 0,
+          "both_pass": 0,
+          "both_fail": 12,
+          "undetermined": 0
+        },
+        "final": {
+          "rescue": 0,
+          "harm": 0,
+          "both_pass": 0,
+          "both_fail": 12,
+          "undetermined": 0
+        }
+      }
+    }
+  },
+  "contrast_counts_by_exposure": {
+    "current_rag": {
+      "same_request": {
+        "first": {
+          "rescue": 2,
+          "harm": 2,
+          "both_pass": 0,
+          "both_fail": 5,
+          "undetermined": 0
+        },
+        "final": {
+          "rescue": 2,
+          "harm": 2,
+          "both_pass": 0,
+          "both_fail": 5,
+          "undetermined": 0
+        }
+      },
+      "manual_evidence_added": {
+        "first": {
+          "rescue": 6,
+          "harm": 1,
+          "both_pass": 1,
+          "both_fail": 18,
+          "undetermined": 1
+        },
+        "final": {
+          "rescue": 6,
+          "harm": 1,
+          "both_pass": 1,
+          "both_fail": 18,
+          "undetermined": 1
+        }
+      },
+      "unverified": {
+        "first": {
+          "rescue": 0,
+          "harm": 0,
+          "both_pass": 0,
+          "both_fail": 0,
+          "undetermined": 0
+        },
+        "final": {
+          "rescue": 0,
+          "harm": 0,
+          "both_pass": 0,
+          "both_fail": 0,
+          "undetermined": 0
+        }
+      }
+    },
+    "curated_evidence": {
+      "same_request": {
+        "first": {
+          "rescue": 0,
+          "harm": 0,
+          "both_pass": 0,
+          "both_fail": 0,
+          "undetermined": 0
+        },
+        "final": {
+          "rescue": 0,
+          "harm": 0,
+          "both_pass": 0,
+          "both_fail": 0,
+          "undetermined": 0
+        }
+      },
+      "manual_evidence_added": {
+        "first": {
+          "rescue": 11,
+          "harm": 2,
+          "both_pass": 2,
+          "both_fail": 21,
+          "undetermined": 0
+        },
+        "final": {
+          "rescue": 11,
+          "harm": 2,
+          "both_pass": 2,
+          "both_fail": 21,
+          "undetermined": 0
+        }
+      },
+      "unverified": {
+        "first": {
+          "rescue": 0,
+          "harm": 0,
+          "both_pass": 0,
+          "both_fail": 0,
+          "undetermined": 0
+        },
+        "final": {
+          "rescue": 0,
+          "harm": 0,
+          "both_pass": 0,
+          "both_fail": 0,
+          "undetermined": 0
+        }
+      }
+    }
+  },
+  "case_cluster_tests": {
+    "all": {
+      "current_rag": {
+        "first": {
+          "unit": "case",
+          "eligible_cases": 11,
+          "excluded_cases": [
+            "timer_alarm_fx3u"
+          ],
+          "mean_difference": 0.15151515151515152,
+          "two_sided_p": 0.3125,
+          "method": "exact paired sign-flip of case-level pass-rate differences",
+          "interpretation": "exploratory; no population-frequency weighting or multiplicity correction"
+        },
+        "final": {
+          "unit": "case",
+          "eligible_cases": 11,
+          "excluded_cases": [
+            "timer_alarm_fx3u"
+          ],
+          "mean_difference": 0.15151515151515152,
+          "two_sided_p": 0.3125,
+          "method": "exact paired sign-flip of case-level pass-rate differences",
+          "interpretation": "exploratory; no population-frequency weighting or multiplicity correction"
+        }
+      },
+      "curated_evidence": {
+        "first": {
+          "unit": "case",
+          "eligible_cases": 12,
+          "excluded_cases": [],
+          "mean_difference": 0.25,
+          "two_sided_p": 0.078125,
+          "method": "exact paired sign-flip of case-level pass-rate differences",
+          "interpretation": "exploratory; no population-frequency weighting or multiplicity correction"
+        },
+        "final": {
+          "unit": "case",
+          "eligible_cases": 12,
+          "excluded_cases": [],
+          "mean_difference": 0.25,
+          "two_sided_p": 0.078125,
+          "method": "exact paired sign-flip of case-level pass-rate differences",
+          "interpretation": "exploratory; no population-frequency weighting or multiplicity correction"
+        }
+      }
+    },
+    "ordinary": {
+      "current_rag": {
+        "first": {
+          "unit": "case",
+          "eligible_cases": 4,
+          "excluded_cases": [],
+          "mean_difference": 0.3333333333333333,
+          "two_sided_p": 0.375,
+          "method": "exact paired sign-flip of case-level pass-rate differences",
+          "interpretation": "exploratory; no population-frequency weighting or multiplicity correction"
+        },
+        "final": {
+          "unit": "case",
+          "eligible_cases": 4,
+          "excluded_cases": [],
+          "mean_difference": 0.3333333333333333,
+          "two_sided_p": 0.375,
+          "method": "exact paired sign-flip of case-level pass-rate differences",
+          "interpretation": "exploratory; no population-frequency weighting or multiplicity correction"
+        }
+      },
+      "curated_evidence": {
+        "first": {
+          "unit": "case",
+          "eligible_cases": 4,
+          "excluded_cases": [],
+          "mean_difference": 0.08333333333333333,
+          "two_sided_p": 1.0,
+          "method": "exact paired sign-flip of case-level pass-rate differences",
+          "interpretation": "exploratory; no population-frequency weighting or multiplicity correction"
+        },
+        "final": {
+          "unit": "case",
+          "eligible_cases": 4,
+          "excluded_cases": [],
+          "mean_difference": 0.08333333333333333,
+          "two_sided_p": 1.0,
+          "method": "exact paired sign-flip of case-level pass-rate differences",
+          "interpretation": "exploratory; no population-frequency weighting or multiplicity correction"
+        }
+      }
+    },
+    "boundary": {
+      "current_rag": {
+        "first": {
+          "unit": "case",
+          "eligible_cases": 3,
+          "excluded_cases": [
+            "timer_alarm_fx3u"
+          ],
+          "mean_difference": 0.1111111111111111,
+          "two_sided_p": 1.0,
+          "method": "exact paired sign-flip of case-level pass-rate differences",
+          "interpretation": "exploratory; no population-frequency weighting or multiplicity correction"
+        },
+        "final": {
+          "unit": "case",
+          "eligible_cases": 3,
+          "excluded_cases": [
+            "timer_alarm_fx3u"
+          ],
+          "mean_difference": 0.1111111111111111,
+          "two_sided_p": 1.0,
+          "method": "exact paired sign-flip of case-level pass-rate differences",
+          "interpretation": "exploratory; no population-frequency weighting or multiplicity correction"
+        }
+      },
+      "curated_evidence": {
+        "first": {
+          "unit": "case",
+          "eligible_cases": 4,
+          "excluded_cases": [],
+          "mean_difference": 0.6666666666666666,
+          "two_sided_p": 0.125,
+          "method": "exact paired sign-flip of case-level pass-rate differences",
+          "interpretation": "exploratory; no population-frequency weighting or multiplicity correction"
+        },
+        "final": {
+          "unit": "case",
+          "eligible_cases": 4,
+          "excluded_cases": [],
+          "mean_difference": 0.6666666666666666,
+          "two_sided_p": 0.125,
+          "method": "exact paired sign-flip of case-level pass-rate differences",
+          "interpretation": "exploratory; no population-frequency weighting or multiplicity correction"
+        }
+      }
+    },
+    "complex": {
+      "current_rag": {
+        "first": {
+          "unit": "case",
+          "eligible_cases": 4,
+          "excluded_cases": [],
+          "mean_difference": 0.0,
+          "two_sided_p": 1.0,
+          "method": "exact paired sign-flip of case-level pass-rate differences",
+          "interpretation": "exploratory; no population-frequency weighting or multiplicity correction"
+        },
+        "final": {
+          "unit": "case",
+          "eligible_cases": 4,
+          "excluded_cases": [],
+          "mean_difference": 0.0,
+          "two_sided_p": 1.0,
+          "method": "exact paired sign-flip of case-level pass-rate differences",
+          "interpretation": "exploratory; no population-frequency weighting or multiplicity correction"
+        }
+      },
+      "curated_evidence": {
+        "first": {
+          "unit": "case",
+          "eligible_cases": 4,
+          "excluded_cases": [],
+          "mean_difference": 0.0,
+          "two_sided_p": 1.0,
+          "method": "exact paired sign-flip of case-level pass-rate differences",
+          "interpretation": "exploratory; no population-frequency weighting or multiplicity correction"
+        },
+        "final": {
+          "unit": "case",
+          "eligible_cases": 4,
+          "excluded_cases": [],
+          "mean_difference": 0.0,
+          "two_sided_p": 1.0,
+          "method": "exact paired sign-flip of case-level pass-rate differences",
+          "interpretation": "exploratory; no population-frequency weighting or multiplicity correction"
+        }
+      }
+    }
+  },
+  "criteria": {
+    "dual_pump_rotation": {
+      "no_manual": {
+        "first": {
+          "boot": {
+            "passed": 1,
+            "failed": 1,
+            "unverified": 1
+          },
+          "start_stop": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "demand_hold": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "rotation_once": {
+            "passed": 0,
+            "failed": 2,
+            "unverified": 1
+          },
+          "overload_fallback": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "dead_time": {
+            "passed": 1,
+            "failed": 0,
+            "unverified": 2
+          },
+          "mutex": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "manual": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "reset": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "scope": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 1,
+            "failed": 1,
+            "unverified": 1
+          },
+          "start_stop": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "demand_hold": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "rotation_once": {
+            "passed": 0,
+            "failed": 2,
+            "unverified": 1
+          },
+          "overload_fallback": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "dead_time": {
+            "passed": 1,
+            "failed": 0,
+            "unverified": 2
+          },
+          "mutex": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "manual": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "reset": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "scope": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          }
+        }
+      },
+      "curated_evidence": {
+        "first": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "start_stop": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "demand_hold": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "rotation_once": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "overload_fallback": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "dead_time": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "mutex": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "manual": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "start_stop": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "demand_hold": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "rotation_once": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "overload_fallback": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "dead_time": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "mutex": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "manual": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          }
+        }
+      },
+      "current_rag": {
+        "first": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "start_stop": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "demand_hold": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "rotation_once": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "overload_fallback": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "dead_time": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "mutex": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "manual": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "start_stop": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "demand_hold": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "rotation_once": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "overload_fallback": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "dead_time": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "mutex": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "manual": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      }
+    },
+    "startup_initialization_fx3u": {
+      "current_rag": {
+        "first": {
+          "boot": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "initial_high": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "count_edge": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "limit": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "clear_priority": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "permit_recovery": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "indicators": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "initial_high": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "count_edge": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "limit": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "clear_priority": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "permit_recovery": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "indicators": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      },
+      "no_manual": {
+        "first": {
+          "boot": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "initial_high": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "count_edge": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "limit": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "clear_priority": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "permit_recovery": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "indicators": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "initial_high": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "count_edge": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "limit": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "clear_priority": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "permit_recovery": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "indicators": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          }
+        }
+      },
+      "curated_evidence": {
+        "first": {
+          "boot": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "initial_high": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "count_edge": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "limit": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "clear_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "permit_recovery": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "indicators": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "initial_high": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "count_edge": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "limit": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "clear_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "permit_recovery": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "indicators": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      }
+    },
+    "sorting_pipeline": {
+      "no_manual": {
+        "first": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "classification": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "shift_mapping": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "exit_order": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reject_station": {
+            "passed": 1,
+            "failed": 0,
+            "unverified": 2
+          },
+          "encoder_edges": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stuck_fault": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "stop_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset_restart": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "classification": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "shift_mapping": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "exit_order": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reject_station": {
+            "passed": 1,
+            "failed": 0,
+            "unverified": 2
+          },
+          "encoder_edges": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stuck_fault": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "stop_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset_restart": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          }
+        }
+      },
+      "current_rag": {
+        "first": {
+          "boot": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "classification": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "shift_mapping": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "exit_order": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reject_station": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "encoder_edges": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stuck_fault": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "stop_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset_restart": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "classification": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "shift_mapping": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "exit_order": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reject_station": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "encoder_edges": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stuck_fault": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "stop_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset_restart": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      },
+      "curated_evidence": {
+        "first": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "classification": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "shift_mapping": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "exit_order": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reject_station": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "encoder_edges": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stuck_fault": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "stop_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset_restart": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "classification": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "shift_mapping": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "exit_order": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reject_station": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "encoder_edges": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stuck_fault": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "stop_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset_restart": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      }
+    },
+    "counted_rejection": {
+      "current_rag": {
+        "first": {
+          "boot": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "permission": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "classification": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "edge_scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reject_pulse": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_hold": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "permission": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "classification": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "edge_scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reject_pulse": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_hold": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      },
+      "no_manual": {
+        "first": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "permission": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "classification": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "edge_scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reject_pulse": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_hold": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "permission": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "classification": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "edge_scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reject_pulse": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_hold": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      },
+      "curated_evidence": {
+        "first": {
+          "boot": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "permission": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "classification": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "edge_scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reject_pulse": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_hold": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "permission": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "classification": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "edge_scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reject_pulse": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_hold": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      }
+    },
+    "delayed_exhaust": {
+      "no_manual": {
+        "first": {
+          "boot": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "start_stop": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "active_demand": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "tail_delay": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "redemand": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "no_phantom": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "cancel": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "start_stop": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "active_demand": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "tail_delay": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "redemand": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "no_phantom": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "cancel": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      },
+      "curated_evidence": {
+        "first": {
+          "boot": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "start_stop": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "active_demand": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "tail_delay": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "redemand": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "no_phantom": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "cancel": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "start_stop": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "active_demand": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "tail_delay": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "redemand": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "no_phantom": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "cancel": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      },
+      "current_rag": {
+        "first": {
+          "boot": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "start_stop": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "active_demand": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "tail_delay": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "redemand": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "no_phantom": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "cancel": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "start_stop": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "active_demand": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "tail_delay": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "redemand": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "no_phantom": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "cancel": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      }
+    },
+    "timer_alarm_fx5u": {
+      "curated_evidence": {
+        "first": {
+          "boot": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "timebase": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "continuous": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "latch": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "safety_display": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "monitor": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "timebase": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "continuous": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "latch": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "safety_display": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "monitor": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      },
+      "no_manual": {
+        "first": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "timebase": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "continuous": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "latch": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "safety_display": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "monitor": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "timebase": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "continuous": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "latch": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "safety_display": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "monitor": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          }
+        }
+      },
+      "current_rag": {
+        "first": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "timebase": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "continuous": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "latch": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "safety_display": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "monitor": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "timebase": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "continuous": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "latch": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "safety_display": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "monitor": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          }
+        }
+      }
+    },
+    "batch_filling": {
+      "curated_evidence": {
+        "first": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "parameter_guard": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "sequence": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "flow_edges": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "completion_once": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reject": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "no_flow": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "stop_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "batch_reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "parameter_guard": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "sequence": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "flow_edges": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "completion_once": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reject": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "no_flow": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "stop_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "batch_reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      },
+      "no_manual": {
+        "first": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "parameter_guard": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "sequence": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "flow_edges": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "completion_once": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "reject": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "no_flow": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "stop_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "batch_reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "parameter_guard": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "sequence": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "flow_edges": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "completion_once": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "reject": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "no_flow": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "stop_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "batch_reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      },
+      "current_rag": {
+        "first": {
+          "boot": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "parameter_guard": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "sequence": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "flow_edges": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "completion_once": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reject": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "no_flow": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "batch_reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "parameter_guard": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "sequence": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "flow_edges": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "completion_once": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reject": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "no_flow": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "batch_reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      }
+    },
+    "windowed_logging": {
+      "current_rag": {
+        "first": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "time_window": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "invalid_guard": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "width_math": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "sample_event": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "history": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "snapshot": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "hysteresis": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset_order": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "time_window": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "invalid_guard": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "width_math": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "sample_event": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "history": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "snapshot": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "hysteresis": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset_order": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      },
+      "no_manual": {
+        "first": {
+          "boot": {
+            "passed": 0,
+            "failed": 1,
+            "unverified": 2
+          },
+          "time_window": {
+            "passed": 0,
+            "failed": 1,
+            "unverified": 2
+          },
+          "invalid_guard": {
+            "passed": 0,
+            "failed": 1,
+            "unverified": 2
+          },
+          "width_math": {
+            "passed": 1,
+            "failed": 0,
+            "unverified": 2
+          },
+          "sample_event": {
+            "passed": 0,
+            "failed": 1,
+            "unverified": 2
+          },
+          "history": {
+            "passed": 0,
+            "failed": 1,
+            "unverified": 2
+          },
+          "snapshot": {
+            "passed": 1,
+            "failed": 0,
+            "unverified": 2
+          },
+          "hysteresis": {
+            "passed": 1,
+            "failed": 0,
+            "unverified": 2
+          },
+          "reset_order": {
+            "passed": 0,
+            "failed": 1,
+            "unverified": 2
+          },
+          "scope": {
+            "passed": 0,
+            "failed": 1,
+            "unverified": 2
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 0,
+            "failed": 1,
+            "unverified": 2
+          },
+          "time_window": {
+            "passed": 0,
+            "failed": 1,
+            "unverified": 2
+          },
+          "invalid_guard": {
+            "passed": 0,
+            "failed": 1,
+            "unverified": 2
+          },
+          "width_math": {
+            "passed": 1,
+            "failed": 0,
+            "unverified": 2
+          },
+          "sample_event": {
+            "passed": 0,
+            "failed": 1,
+            "unverified": 2
+          },
+          "history": {
+            "passed": 0,
+            "failed": 1,
+            "unverified": 2
+          },
+          "snapshot": {
+            "passed": 1,
+            "failed": 0,
+            "unverified": 2
+          },
+          "hysteresis": {
+            "passed": 1,
+            "failed": 0,
+            "unverified": 2
+          },
+          "reset_order": {
+            "passed": 0,
+            "failed": 1,
+            "unverified": 2
+          },
+          "scope": {
+            "passed": 0,
+            "failed": 1,
+            "unverified": 2
+          }
+        }
+      },
+      "curated_evidence": {
+        "first": {
+          "boot": {
+            "passed": 0,
+            "failed": 2,
+            "unverified": 1
+          },
+          "time_window": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "invalid_guard": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "width_math": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "sample_event": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "history": {
+            "passed": 1,
+            "failed": 1,
+            "unverified": 1
+          },
+          "snapshot": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "hysteresis": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "reset_order": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "scope": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 0,
+            "failed": 2,
+            "unverified": 1
+          },
+          "time_window": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "invalid_guard": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "width_math": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "sample_event": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "history": {
+            "passed": 1,
+            "failed": 1,
+            "unverified": 1
+          },
+          "snapshot": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "hysteresis": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "reset_order": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          },
+          "scope": {
+            "passed": 2,
+            "failed": 0,
+            "unverified": 1
+          }
+        }
+      }
+    },
+    "conveyor_interlock": {
+      "curated_evidence": {
+        "first": {
+          "boot": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "start": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_restart": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "block_delay": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "alarm_hold": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "priority": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "start": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_restart": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "block_delay": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "alarm_hold": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "priority": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      },
+      "no_manual": {
+        "first": {
+          "boot": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "start": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_restart": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "block_delay": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "alarm_hold": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "priority": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "start": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_restart": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "block_delay": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "alarm_hold": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "priority": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      },
+      "current_rag": {
+        "first": {
+          "boot": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "start": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_restart": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "block_delay": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "alarm_hold": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "priority": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "start": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_restart": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "block_delay": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "alarm_hold": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "priority": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      }
+    },
+    "timer_alarm_fx3u": {
+      "curated_evidence": {
+        "first": {
+          "boot": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "timebase": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "continuous": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "latch": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "safety_display": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "monitor": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "timebase": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "continuous": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "latch": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "safety_display": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "monitor": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      },
+      "current_rag": {
+        "first": {
+          "boot": {
+            "passed": 1,
+            "failed": 1,
+            "unverified": 1
+          },
+          "timebase": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "continuous": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "latch": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "safety_display": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "monitor": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 1,
+            "failed": 1,
+            "unverified": 1
+          },
+          "timebase": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "continuous": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "latch": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "safety_display": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "monitor": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      },
+      "no_manual": {
+        "first": {
+          "boot": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "timebase": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "continuous": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "latch": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "safety_display": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "monitor": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "timebase": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "continuous": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "latch": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "safety_display": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "monitor": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      }
+    },
+    "startup_initialization_fx5u": {
+      "current_rag": {
+        "first": {
+          "boot": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "initial_high": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "count_edge": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "limit": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "clear_priority": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "permit_recovery": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "indicators": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "initial_high": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "count_edge": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "limit": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "clear_priority": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "permit_recovery": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "indicators": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          }
+        }
+      },
+      "curated_evidence": {
+        "first": {
+          "boot": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "initial_high": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "count_edge": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "limit": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "clear_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "permit_recovery": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "indicators": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "initial_high": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "count_edge": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "limit": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "clear_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "permit_recovery": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "indicators": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      },
+      "no_manual": {
+        "first": {
+          "boot": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "initial_high": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "count_edge": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "limit": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "clear_priority": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "permit_recovery": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "indicators": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "initial_high": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "count_edge": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "limit": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "clear_priority": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "permit_recovery": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "indicators": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          }
+        }
+      }
+    },
+    "level_hysteresis": {
+      "no_manual": {
+        "first": {
+          "boot": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "permission": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "hysteresis": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "next_cycle": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "contradiction": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 1,
+            "failed": 2,
+            "unverified": 0
+          },
+          "permission": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "hysteresis": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "next_cycle": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "contradiction": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      },
+      "current_rag": {
+        "first": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "permission": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "hysteresis": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "next_cycle": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "contradiction": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "permission": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "hysteresis": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "next_cycle": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "contradiction": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          }
+        }
+      },
+      "curated_evidence": {
+        "first": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "permission": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "hysteresis": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "next_cycle": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "contradiction": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          }
+        },
+        "final": {
+          "boot": {
+            "passed": 0,
+            "failed": 3,
+            "unverified": 0
+          },
+          "permission": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "hysteresis": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "next_cycle": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "contradiction": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "stop_priority": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "reset": {
+            "passed": 3,
+            "failed": 0,
+            "unverified": 0
+          },
+          "scope": {
+            "passed": 2,
+            "failed": 1,
+            "unverified": 0
+          }
+        }
+      }
+    }
+  },
+  "delivery": [
+    {
+      "case_id": "conveyor_interlock",
+      "category": "ordinary",
+      "plc_model": "FX3U",
+      "arms": {
+        "no_manual": {
+          "evidence_chars": 0,
+          "source_records": 0,
+          "request_chars": 7425
+        },
+        "current_rag": {
+          "evidence_chars": 7160,
+          "source_records": 1,
+          "request_chars": 14584
+        },
+        "curated_evidence": {
+          "evidence_chars": 4270,
+          "source_records": 7,
+          "request_chars": 11694
+        }
+      },
+      "A_B_same_request": false
+    },
+    {
+      "case_id": "delayed_exhaust",
+      "category": "ordinary",
+      "plc_model": "FX3U",
+      "arms": {
+        "no_manual": {
+          "evidence_chars": 0,
+          "source_records": 0,
+          "request_chars": 7105
+        },
+        "current_rag": {
+          "evidence_chars": 7160,
+          "source_records": 1,
+          "request_chars": 14264
+        },
+        "curated_evidence": {
+          "evidence_chars": 4270,
+          "source_records": 7,
+          "request_chars": 11374
+        }
+      },
+      "A_B_same_request": false
+    },
+    {
+      "case_id": "level_hysteresis",
+      "category": "ordinary",
+      "plc_model": "FX3U",
+      "arms": {
+        "no_manual": {
+          "evidence_chars": 0,
+          "source_records": 0,
+          "request_chars": 7740
+        },
+        "current_rag": {
+          "evidence_chars": 0,
+          "source_records": 0,
+          "request_chars": 7740
+        },
+        "curated_evidence": {
+          "evidence_chars": 3097,
+          "source_records": 5,
+          "request_chars": 10836
+        }
+      },
+      "A_B_same_request": true
+    },
+    {
+      "case_id": "counted_rejection",
+      "category": "ordinary",
+      "plc_model": "FX3U",
+      "arms": {
+        "no_manual": {
+          "evidence_chars": 0,
+          "source_records": 0,
+          "request_chars": 8114
+        },
+        "current_rag": {
+          "evidence_chars": 13003,
+          "source_records": 2,
+          "request_chars": 21116
+        },
+        "curated_evidence": {
+          "evidence_chars": 5690,
+          "source_records": 9,
+          "request_chars": 13803
+        }
+      },
+      "A_B_same_request": false
+    },
+    {
+      "case_id": "startup_initialization_fx3u",
+      "category": "boundary",
+      "plc_model": "FX3U",
+      "arms": {
+        "no_manual": {
+          "evidence_chars": 0,
+          "source_records": 0,
+          "request_chars": 7639
+        },
+        "current_rag": {
+          "evidence_chars": 0,
+          "source_records": 0,
+          "request_chars": 7639
+        },
+        "curated_evidence": {
+          "evidence_chars": 3097,
+          "source_records": 5,
+          "request_chars": 10735
+        }
+      },
+      "A_B_same_request": true
+    },
+    {
+      "case_id": "startup_initialization_fx5u",
+      "category": "boundary",
+      "plc_model": "FX5U",
+      "arms": {
+        "no_manual": {
+          "evidence_chars": 0,
+          "source_records": 0,
+          "request_chars": 7729
+        },
+        "current_rag": {
+          "evidence_chars": 0,
+          "source_records": 0,
+          "request_chars": 7729
+        },
+        "curated_evidence": {
+          "evidence_chars": 2807,
+          "source_records": 6,
+          "request_chars": 10535
+        }
+      },
+      "A_B_same_request": true
+    },
+    {
+      "case_id": "timer_alarm_fx3u",
+      "category": "boundary",
+      "plc_model": "FX3U",
+      "arms": {
+        "no_manual": {
+          "evidence_chars": 0,
+          "source_records": 0,
+          "request_chars": 6764
+        },
+        "current_rag": {
+          "evidence_chars": 7160,
+          "source_records": 1,
+          "request_chars": 13923
+        },
+        "curated_evidence": {
+          "evidence_chars": 4270,
+          "source_records": 7,
+          "request_chars": 11033
+        }
+      },
+      "A_B_same_request": false
+    },
+    {
+      "case_id": "timer_alarm_fx5u",
+      "category": "boundary",
+      "plc_model": "FX5U",
+      "arms": {
+        "no_manual": {
+          "evidence_chars": 0,
+          "source_records": 0,
+          "request_chars": 6896
+        },
+        "current_rag": {
+          "evidence_chars": 1603,
+          "source_records": 1,
+          "request_chars": 8498
+        },
+        "curated_evidence": {
+          "evidence_chars": 3905,
+          "source_records": 7,
+          "request_chars": 10800
+        }
+      },
+      "A_B_same_request": false
+    },
+    {
+      "case_id": "dual_pump_rotation",
+      "category": "complex",
+      "plc_model": "FX3U",
+      "arms": {
+        "no_manual": {
+          "evidence_chars": 0,
+          "source_records": 0,
+          "request_chars": 12840
+        },
+        "current_rag": {
+          "evidence_chars": 12975,
+          "source_records": 2,
+          "request_chars": 25814
+        },
+        "curated_evidence": {
+          "evidence_chars": 4270,
+          "source_records": 7,
+          "request_chars": 17109
+        }
+      },
+      "A_B_same_request": false
+    },
+    {
+      "case_id": "batch_filling",
+      "category": "complex",
+      "plc_model": "FX3U",
+      "arms": {
+        "no_manual": {
+          "evidence_chars": 0,
+          "source_records": 0,
+          "request_chars": 12578
+        },
+        "current_rag": {
+          "evidence_chars": 19279,
+          "source_records": 3,
+          "request_chars": 31856
+        },
+        "curated_evidence": {
+          "evidence_chars": 5690,
+          "source_records": 9,
+          "request_chars": 18267
+        }
+      },
+      "A_B_same_request": false
+    },
+    {
+      "case_id": "sorting_pipeline",
+      "category": "complex",
+      "plc_model": "FX3U",
+      "arms": {
+        "no_manual": {
+          "evidence_chars": 0,
+          "source_records": 0,
+          "request_chars": 13143
+        },
+        "current_rag": {
+          "evidence_chars": 25496,
+          "source_records": 3,
+          "request_chars": 38638
+        },
+        "curated_evidence": {
+          "evidence_chars": 5425,
+          "source_records": 9,
+          "request_chars": 18567
+        }
+      },
+      "A_B_same_request": false
+    },
+    {
+      "case_id": "windowed_logging",
+      "category": "complex",
+      "plc_model": "FX3U",
+      "arms": {
+        "no_manual": {
+          "evidence_chars": 0,
+          "source_records": 0,
+          "request_chars": 13128
+        },
+        "current_rag": {
+          "evidence_chars": 46017,
+          "source_records": 7,
+          "request_chars": 59144
+        },
+        "curated_evidence": {
+          "evidence_chars": 8783,
+          "source_records": 14,
+          "request_chars": 21910
+        }
+      },
+      "A_B_same_request": false
+    }
+  ],
+  "paired_latency": {
+    "all": {
+      "current_rag": {
+        "pairs": 36,
+        "median_ms": -1409.5055500220042,
+        "mean_ms": -15163.104444447123
+      },
+      "curated_evidence": {
+        "pairs": 36,
+        "median_ms": 3262.447700020857,
+        "mean_ms": 3634.973841665164
+      }
+    },
+    "ordinary": {
+      "current_rag": {
+        "pairs": 12,
+        "median_ms": 24333.07995002542,
+        "mean_ms": 17162.551316660636
+      },
+      "curated_evidence": {
+        "pairs": 12,
+        "median_ms": 4855.384450012934,
+        "mean_ms": 4984.455783334852
+      }
+    },
+    "boundary": {
+      "current_rag": {
+        "pairs": 12,
+        "median_ms": -20561.48229999235,
+        "mean_ms": -8558.789158327272
+      },
+      "curated_evidence": {
+        "pairs": 12,
+        "median_ms": -38872.197199991206,
+        "mean_ms": -37941.962708328596
+      }
+    },
+    "complex": {
+      "current_rag": {
+        "pairs": 12,
+        "median_ms": -14596.309850021498,
+        "mean_ms": -54093.07549167473
+      },
+      "curated_evidence": {
+        "pairs": 12,
+        "median_ms": 15964.515099985874,
+        "mean_ms": 43862.42844998924
+      }
+    }
+  },
+  "request_audit": {
+    "passed": true,
+    "recorded_jobs": 108,
+    "final_request_checks": 108,
+    "curated_delivery_checks": 36,
+    "transport_failure_jobs": 3,
+    "reviewed_jobs": 108,
+    "auxiliary_reviews": 108,
+    "extra_model_review_calls": 0,
+    "construction_examples": false,
+    "previous_program_delivered": false,
+    "preflight_calls": 36,
+    "preflight_network_calls": 0,
+    "missing_supplier_metering_is_unknown": true,
+    "native_execution": "not_measured"
+  },
+  "first_candidate_definition": "First decoded and common-Core-bound candidate before final normalization; raw response retained privately, not independently fully graded.",
+  "analysis_correction": "Before unblinding, classify saved_invalid/diagnostic_only as nonformal delivery. Programs and semantic judgments unchanged.",
+  "code_scope": "All live jobs used frozen pre-ZRST-fix Core; later local ZRST correction is excluded from these measured pass counts.",
+  "frequency_weighting": "not_available",
+  "performance_acceptance": "not_established"
+}

@@ -21,6 +21,31 @@ from application.compact_protocol import (
 
 from application.construction_examples import prepare_construction_examples
 from plc.instruction_binding import operation_intent_prompt, materialize_operation_references
+from plc.construction import construction_prompt, materialize_construction_references, isolate_initialization
+
+
+def _construction_delivery():
+    """Experiment runner may substitute description delivery; no product setting."""
+    return 'instantiate'
+
+
+def prepare_model_candidate(value, projected, plc_model, *, construction_delivery=None):
+    """One shared first-candidate boundary for production and measurements."""
+    # The engineering projection intentionally omits the CPU. The runtime owns
+    # this value; construction compilation must not infer it from that projection.
+    runtime_spec = {**projected, 'plc_model': plc_model}
+    compact, changes = normalize_compact(value)
+    compact, construction = materialize_construction_references(
+        compact, runtime_spec, delivery=construction_delivery or _construction_delivery(), output_expander=_output)
+    compact, binding = materialize_operation_references(compact, projected, target_model=plc_model)
+    ladder, representation = _decode_generated_ladder(compact, projected, plc_model)
+    if (construction_delivery or _construction_delivery()) == 'instantiate':
+        ladder, construction = isolate_initialization(ladder, runtime_spec, construction)
+    from plc.specification.semantic_validation import bind_confirmed_predicates
+    ladder, predicates = bind_confirmed_predicates(ladder, projected, plc_model=plc_model)
+    return {'ladder': ladder, 'representation': representation, 'changes': changes,
+            'operation_binding': binding, 'construction_binding': construction,
+            'confirmed_predicate_binding': predicates}
 
 from model_runtime.provider import TextDelta
 from application.generation_context import _build_knowledge_context
@@ -81,6 +106,7 @@ def _compact_wire_renderer(plc_model, *, example_block=None):
             + "\n# Confirmed project specification\n"
             + confirmed
             + operation_intent_prompt(runtime_spec, target_model=model)
+            + construction_prompt({**runtime_spec, 'plc_model':model}, delivery=_construction_delivery())
             + render_context_checkpoint(context_checkpoint)
             + generation_execution_prompt(
                 runtime_spec,
@@ -265,6 +291,7 @@ def generate_confirmed_ladder(
     on_context=None,
     decision_receipt_id=None,
     construction_examples: bool | None = None,
+    project_occupied_devices=(),
 ):
     """Generate once after any optional pre-generation context compaction."""
     import application.model_api as api
@@ -273,6 +300,9 @@ def generate_confirmed_ladder(
     projected = _strict_generation_projection(confirmed_spec)
     if not projected:
         raise ValueError("confirmed generation specification is empty")
+    plan = (projected.get('selected_approach') or {}).get('construction_plan')
+    if plan is not None and project_occupied_devices:
+        plan['occupied_devices'] = sorted(set(plan.get('occupied_devices', [])) | set(project_occupied_devices))
 
     examples = prepare_construction_examples(
         model, construction_examples, projected
@@ -309,7 +339,8 @@ def generate_confirmed_ladder(
     provider = _FirstJSONObjectProvider(base_provider)
     from model_runtime.response_format import response_plan
     options, streaming = response_plan(
-        getattr(base_provider, "profile", {}), _compact_response_schema(),
+        getattr(base_provider, "profile", {}), _compact_response_schema(allow_construct=bool(
+            (projected.get('selected_approach') or {}).get('construction_plan')) and _construction_delivery() == 'instantiate'),
         model=model_name, api_key=getattr(base_provider, "api_key", None),
         hints=None,
     )
@@ -331,14 +362,14 @@ def generate_confirmed_ladder(
                          canonical_sha256=hashlib.sha256(json.dumps(compact, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest())
         if on_stage:
             on_stage("compact_normalized", "已在本地兼容确定性的表示差异；正在展开梯形图，未增加模型请求")
-    compact, binding_receipt = materialize_operation_references(compact, projected, target_model=model)
+    prepared = prepare_model_candidate(compact, projected, model)
+    binding_receipt = prepared['operation_binding']
     if binding_receipt["receipts"]:
         diagnostics.emit("operation_binding", stage="Core_operation_binding", receipt=binding_receipt)
         if on_stage:
             on_stage("operation_binding", "已按确认效果绑定指令参数")
-    ladder, representation = _decode_generated_ladder(compact, projected, model)
-    from plc.specification.semantic_validation import bind_confirmed_predicates
-    ladder, predicate_binding = bind_confirmed_predicates(ladder, projected, plc_model=model)
+    ladder, representation = prepared['ladder'], prepared['representation']
+    predicate_binding = prepared['confirmed_predicate_binding']
     if predicate_binding['changes'] or predicate_binding['diagnostics']:
         diagnostics.emit('confirmed_predicate_binding', stage=predicate_binding['stage'], receipt=predicate_binding)
     diagnostics.emit("generation_representation", stage="compact_protocol", representation=representation)
@@ -352,5 +383,6 @@ def generate_confirmed_ladder(
         "model_calls": 1 + compaction_calls,
         "generation_handoff": handoff,
         "operation_binding": binding_receipt,
+        "construction_binding": prepared['construction_binding'],
         "confirmed_predicate_binding": predicate_binding,
     }

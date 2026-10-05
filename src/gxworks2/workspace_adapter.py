@@ -175,6 +175,8 @@ def _validation_snapshots(root, events):
             names.update(item.get('file') for item in row.get('rows', []))
         elif row.get('operation') == 'PublishedResourceCodeCorrespondence':
             names.update(channel.get('published_snapshot') for channel in row.get('channels', []))
+        elif row.get('operation') == 'NativeCodeLexicalRead':
+            names.update(row[key] for key in ('input_file', 'output_file') if key in row)
     snapshots = {}
     root = root.resolve()
     for name in names:

@@ -326,7 +326,7 @@ class ProposalService:
         project_id, base_id = record["project_id"], record["base_version_id"]
         if "_candidate_ir" in payload and base_id:
             version = accept_candidate_patch(_NoMigrationStore(self.store), payload)
-            return {"version_id": version["id"], "status": "accepted", "target_mode": "ladder"}
+            return {"version_id": version["id"], "status": 'saved_behavior_draft' if version.get('activation_blocked') else "accepted", "target_mode": "ladder"}
         version_id = None
         try:
             version_id, output = self.store.prepare_version(project_id)
@@ -342,6 +342,8 @@ class ProposalService:
                                 validation_profile=validation_profile)
                 metadata["normalization"] = copy.deepcopy(payload.get("normalization"))
                 metadata["generation_handoff"] = copy.deepcopy(payload.get("_generation_handoff"))
+                if payload.get('_construction_binding'):
+                    metadata.setdefault('generation_metadata', {})['construction_binding'] = copy.deepcopy(payload['_construction_binding'])
                 if compiled["artifacts"].get("st_from_ir"):
                     from plc.st_renderer import ST_RENDERER_SCHEMA_VERSION
                     metadata["st_from_ir_sha256"] = hashlib.sha256((output / compiled["artifacts"]["st_from_ir"]).read_bytes()).hexdigest()
@@ -366,7 +368,7 @@ class ProposalService:
             from plc.ir import canonical_sha256
             metadata["confirmed_spec_hash"] = canonical_sha256(payload["_confirmed_spec"]) if payload.get("_confirmed_spec") is not None else None
             version = self.store.complete_version(project_id, version_id, metadata, activate=True)
-            return {"version_id": version["id"], "status": "accepted", "target_mode": version["target_mode"]}
+            return {"version_id": version["id"], "status": 'saved_behavior_draft' if version.get('activation_blocked') else "accepted", "target_mode": version["target_mode"]}
         except Exception:
             if version_id is not None and self.store.get_version(project_id, version_id) is None:
                 self.store.discard_version(project_id, version_id)

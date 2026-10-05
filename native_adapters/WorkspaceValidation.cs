@@ -17,6 +17,7 @@ namespace PlcAi.NativeAdapter
         readonly List<object> validationEvents = new List<object>();
         string validationRoot;
         int nativeCodePage;
+        List<Dictionary<string, object>> nativeReferences;
         [StructLayout(LayoutKind.Sequential)] struct CompilerInitialize { public IntPtr Path; public ObjectId Project; }
         [StructLayout(LayoutKind.Sequential)] struct NativeCodeRange { public IntPtr Resource; public int Start, Count, Timestamp; }
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int ProjectFunctionCall(IntPtr self, ObjectId project, int kind, out IntPtr value, out int code);
@@ -28,6 +29,8 @@ namespace PlcAi.NativeAdapter
             ref int firstSize, IntPtr first, ref int secondSize, IntPtr second, ref int thirdSize, IntPtr third, out int code);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int LanguageCall(IntPtr self, ObjectId id, out byte language, out int code);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int LocationCall(IntPtr self, NativeCodeRange range, IntPtr location, out int code);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int SourceRangeCall(IntPtr self, int count, IntPtr locations, out IntPtr ranges, out int code);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int AnalysisCreateCall(IntPtr self, uint declared, uint plural, IntPtr name, IntPtr instance, out int code);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int CollectionCall(IntPtr self, ObjectId parent, int kind, out ObjectId collection, out int code);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int IdCheckCall(IntPtr self, ObjectId id, int mask, out int code);
         [UnmanagedFunctionPointer(CallingConvention.ThisCall)] delegate int ContextCall(IntPtr self);
@@ -38,6 +41,119 @@ namespace PlcAi.NativeAdapter
         [DllImport("msvcr71.dll", CallingConvention = CallingConvention.Cdecl, EntryPoint = "_mbctolower")] static extern int NativeLower(int value);
         [DllImport("msvcr71.dll", CallingConvention = CallingConvention.Cdecl, EntryPoint = "_mbctoupper")] static extern int NativeUpper(int value);
         [DllImport("msvcr71.dll", CallingConvention = CallingConvention.Cdecl, EntryPoint = "_ismbclower")] static extern int NativeIsLower(int value);
+        [DllImport("kernel32", CharSet = CharSet.Ansi, ExactSpelling = true)] static extern IntPtr GetProcAddress(IntPtr module, string name);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr ReaderNewCall();
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int ReaderOpenCall(IntPtr handle, int cpu, int mode);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int ReaderVersionCall(IntPtr handle, int count, [In] uint[] versions);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int ReaderCloseCall(IntPtr handle);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void ReaderDeleteCall(IntPtr handle);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int ReaderDecodeCall(IntPtr handle,
+            [In] byte[] input, ref int inputSize, [Out] byte[] output, ref int outputSize);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int ReaderStepsCall(IntPtr handle,
+            int inputSize, [In] byte[] input, ref int steps);
+
+        static T ReaderExport<T>(IntPtr module, string name) where T : class
+        {
+            IntPtr address = GetProcAddress(module, name);
+            if (address == IntPtr.Zero) throw new InvalidOperationException("native_lexical_export_missing: " + name);
+            return Marshal.GetDelegateForFunctionPointer(address, typeof(T)) as T;
+        }
+        void ReadCodeLexical(object requested, string cpu, Dictionary<string, byte[][]> generated)
+        {
+            if (requested == null) return;
+            var scope = Fields(requested, "scope_cpu", "profile", "module", "version", "native_cpu", "native_versions");
+            if (Text(scope["scope_cpu"]) != cpu) throw new ArgumentException("native_lexical_cpu_scope_differs");
+            string moduleName = Text(scope["module"]), version = Text(scope["version"]);
+            if (!((moduleName == "ECCodeGenerator2.dll" && version == "15.41")
+                    || (moduleName == "ECCodeGeneratorFX2.dll" && version == "15.31")))
+                throw new ArgumentException("native_lexical_export_abi_unobserved");
+            int nativeCpu = NativeRequest.Integer(scope["native_cpu"]);
+            object[] requestedVersions = Entries(scope["native_versions"]);
+            if (nativeCpu < 0 || nativeCpu > 65535 || requestedVersions.Length > 16)
+                throw new ArgumentException("native_lexical_context_exceeds_bound");
+            uint[] versions = new uint[requestedVersions.Length];
+            for (int i = 0; i < versions.Length; i++)
+            {
+                int value = NativeRequest.Integer(requestedVersions[i]);
+                if (value < 0 || value > 65535) throw new ArgumentException("native_lexical_version_exceeds_bound");
+                versions[i] = (uint)value;
+            }
+            int resourceIndex = 0;
+            foreach (var resource in generated)
+            {
+                byte[] body = resource.Value[0]; int index = resourceIndex++;
+                if (body.Length == 0) continue;
+                var calls = new Dictionary<string, object> { { "object_new", false }, { "open", null },
+                    { "set_version", null }, { "decode", null }, { "close", null } };
+                var prefixes = new List<object>();
+                var observation = new Dictionary<string, object>(scope) {
+                    { "operation", "NativeCodeLexicalRead" }, { "resource", resource.Key }, { "body_bytes", body.Length },
+                    { "calls", calls }, { "prefixes", prefixes }, { "completed", false },
+                    { "provenance", "original ChangePToILcode and GetStepSize; retained generated primary bytes after check; not execution" } };
+                IntPtr handle = IntPtr.Zero; ReaderCloseCall close = null; ReaderDeleteCall destroy = null;
+                try
+                {
+                    if (body.Length > 32768) throw new InvalidOperationException("native_lexical_body_exceeds_observation_bound");
+                    // Frame physical byte records only. Core selects instructions and
+                    // interprets steps; this collector has no opcode/operand model.
+                    var boundaries = new List<int>(); int cursor = 0;
+                    while (cursor < body.Length)
+                    {
+                        int size = body[cursor];
+                        if (size < 2 || cursor + size > body.Length || body[cursor + size - 1] != size)
+                            throw new InvalidOperationException("native_lexical_body_framing_unresolved");
+                        cursor += size; boundaries.Add(cursor);
+                        if (boundaries.Count > 4096) throw new InvalidOperationException("native_lexical_prefixes_exceed_observation_bound");
+                    }
+                    IntPtr module = Module(moduleName, version, "Easysocket/CodeGenerator");
+                    close = ReaderExport<ReaderCloseCall>(module, "Close"); destroy = ReaderExport<ReaderDeleteCall>(module, "ObjectDelete");
+                    var open = ReaderExport<ReaderOpenCall>(module, "Open");
+                    var decode = ReaderExport<ReaderDecodeCall>(module, "ChangePToILcode");
+                    var steps = ReaderExport<ReaderStepsCall>(module, "GetStepSize");
+                    handle = ReaderExport<ReaderNewCall>(module, "ObjectNew")();
+                    calls["object_new"] = handle != IntPtr.Zero;
+                    if (handle == IntPtr.Zero) throw new InvalidOperationException("native_lexical_object_unavailable");
+                    int result = open(handle, nativeCpu, 0); calls["open"] = result;
+                    if (result != 0) throw new InvalidOperationException("native_lexical_open_rejected");
+                    if (versions.Length > 0)
+                    {
+                        result = ReaderExport<ReaderVersionCall>(module, "SetVersion")(handle, versions.Length, versions);
+                        calls["set_version"] = result;
+                        if (result != 0) throw new InvalidOperationException("native_lexical_version_rejected");
+                    }
+                    byte[] input = new byte[body.Length + 1], output = new byte[4 * 1024 * 1024];
+                    Array.Copy(body, input, body.Length);
+                    string inputFile = "native-il-input-" + index + ".bin", outputFile = "native-il-output-" + index + ".bin";
+                    File.WriteAllBytes(Path.Combine(validationRoot, inputFile), input);
+                    observation["input_file"] = inputFile; observation["provided_bytes"] = input.Length;
+                    int consumed = input.Length, outputSize = output.Length;
+                    result = decode(handle, input, ref consumed, output, ref outputSize); calls["decode"] = result;
+                    observation["consumed_bytes"] = consumed; observation["output_bytes"] = outputSize;
+                    if (result != 0 || consumed != body.Length || outputSize < 1 || outputSize > output.Length)
+                        throw new InvalidOperationException("native_lexical_decode_rejected_or_partial");
+                    byte[] exactOutput = new byte[outputSize]; Array.Copy(output, exactOutput, outputSize);
+                    File.WriteAllBytes(Path.Combine(validationRoot, outputFile), exactOutput); observation["output_file"] = outputFile;
+                    foreach (int length in boundaries)
+                    {
+                        byte[] prefix = new byte[length]; Array.Copy(body, prefix, length); int count = 0;
+                        result = steps(handle, length, prefix, ref count);
+                        prefixes.Add(new { input_bytes = length, return_code = result, steps = count });
+                        if (result != 0 || count < 0) throw new InvalidOperationException("native_lexical_prefix_step_rejected");
+                    }
+                    observation["completed"] = true;
+                }
+                catch (Exception error) { observation["reason"] = error.Message; }
+                finally
+                {
+                    if (handle != IntPtr.Zero)
+                    {
+                        try { calls["close"] = close(handle); }
+                        finally { destroy(handle); }
+                    }
+                    Event(observation);
+                }
+            }
+        }
 
         void Event(object value) { validationEvents.Add(value); }
         IntPtr Module(string name, string version, string folder)
@@ -187,7 +303,110 @@ namespace PlcAi.NativeAdapter
             }
             finally { Marshal.FreeCoTaskMem(outputs); Marshal.FreeCoTaskMem(guard); }
         }
-        List<Dictionary<string, object>> PollReports(IntPtr compiler, ObjectId target, string name, bool checking, out bool rejected)
+        Dictionary<string, object> PublicReportText(IntPtr value)
+        {
+            string text = value == IntPtr.Zero ? "" : ReadBStr(value);
+            int length = value == IntPtr.Zero ? 0 : Marshal.ReadInt32(value, -4);
+            byte[] bytes = new byte[length]; if (length > 0) Marshal.Copy(value, bytes, 0, length);
+            return new Dictionary<string, object> { { "text", text }, { "is_null", value == IntPtr.Zero },
+                { "raw_hex_utf16le", BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant() } };
+        }
+        static int PublicArgumentCount(IntPtr arguments, out IntPtr values)
+        {
+            values = arguments == IntPtr.Zero ? IntPtr.Zero : Marshal.ReadIntPtr(arguments);
+            int count = arguments == IntPtr.Zero ? 0 : Marshal.ReadInt32(arguments, 4);
+            if (count < 0 || count > 128 || (count > 0 && values == IntPtr.Zero))
+                throw new InvalidOperationException("native_public_report_arguments_extent_invalid");
+            return count;
+        }
+        void DisposePublicReports(IntPtr reports, int count, int poll)
+        {
+            // Adapter 1.635.0.1 RVA 9674 allocates a zeroed 100-byte array;
+            // RVA 8e48 transfers BSTRs and a CoTaskMem argument structure;
+            // RVA 3def allocates its pointer array and BSTR elements. None
+            // of these public allocations is retained by the adapter.
+            if (reports != IntPtr.Zero)
+            {
+                try
+                {
+                    for (int i = 0; i < count; i++)
+                    {
+                        IntPtr row = IntPtr.Add(reports, i * 100);
+                        foreach (int offset in new[] { 8, 16 })
+                        {
+                            IntPtr value = Marshal.ReadIntPtr(row, offset);
+                            if (value != IntPtr.Zero) Marshal.FreeBSTR(value);
+                        }
+                        IntPtr arguments = Marshal.ReadIntPtr(row, 96);
+                        if (arguments == IntPtr.Zero) continue;
+                        IntPtr values; int n = PublicArgumentCount(arguments, out values);
+                        try
+                        {
+                            for (int j = 0; j < n; j++)
+                            {
+                                IntPtr value = Marshal.ReadIntPtr(values, j * 4);
+                                if (value != IntPtr.Zero) Marshal.FreeBSTR(value);
+                            }
+                        }
+                        finally { Marshal.FreeCoTaskMem(values); Marshal.FreeCoTaskMem(arguments); }
+                    }
+                }
+                finally { Marshal.FreeCoTaskMem(reports); }
+            }
+            Event(new { operation = "CompilePublicReportCleanup", poll = poll, count = count,
+                report_interface = "public-compiler", record_size = 100 });
+        }
+        List<Dictionary<string, object>> PollCompileReports(IntPtr compiler, out bool rejected)
+        {
+            IntPtr module = Module("DZDataABS_CompilerAdapter.dll", NativeVersion, "DNaviZero/DataAbsorber");
+            if (Marshal.ReadIntPtr(Marshal.ReadIntPtr(compiler), 40) != IntPtr.Add(module, 0x13e2e))
+                throw new InvalidOperationException("native_public_progress_entry_differs");
+            var watch = Stopwatch.StartNew(); var all = new List<Dictionary<string, object>>(); rejected = false;
+            for (int poll = 1; poll <= 3000 && watch.ElapsedMilliseconds < 30000; poll++)
+            {
+                Application.DoEvents(); int percent = 0, count = 0, code = 0; IntPtr reports = IntPtr.Zero;
+                int hr = Slot<CompilerProgressCall>(compiler, 40)(compiler, ref percent, ref count, ref reports, ref code);
+                Event(new { operation = "Progress", poll = poll, hresult = hr, code = code, percent = percent,
+                    count = count, report_interface = "public-compiler" });
+                if (count < 0 || count > 10000 || (count > 0 && reports == IntPtr.Zero))
+                    throw new InvalidOperationException("native_public_report_array_extent_invalid");
+                try
+                {
+                    // A failed conversion can leave a partially filled, zeroed
+                    // public array. Release it but do not interpret it as a
+                    // complete diagnostic list, even at terminal progress.
+                    Check("Compiler.BuildProgress", hr, code);
+                    if (percent < 0 || percent > 100) throw new InvalidOperationException("native_compile_progress_invalid");
+                    var rows = new List<Dictionary<string, object>>();
+                    for (int i = 0; i < count; i++)
+                    {
+                        IntPtr row = IntPtr.Add(reports, i * 100); var arguments = new List<object>();
+                        IntPtr values; int n = PublicArgumentCount(Marshal.ReadIntPtr(row, 96), out values);
+                        for (int j = 0; j < n; j++) arguments.Add(PublicReportText(Marshal.ReadIntPtr(values, j * 4)));
+                        uint[] identity = new uint[12];
+                        for (int j = 0; j < identity.Length; j++) identity[j] = unchecked((uint)Marshal.ReadInt32(row, 24 + j * 4));
+                        var item = new Dictionary<string, object> {
+                            {"kind",Marshal.ReadInt32(row)}, {"code",Marshal.ReadInt32(row,4)},
+                            {"name",PublicReportText(Marshal.ReadIntPtr(row,8))}, {"instance_kind",Marshal.ReadInt32(row,12)},
+                            {"instance",PublicReportText(Marshal.ReadIntPtr(row,16))}, {"program_kind",Marshal.ReadInt32(row,20)},
+                            {"source_object_id",identity}, {"step",Marshal.ReadInt32(row,72)}, {"network",Marshal.ReadInt32(row,76)},
+                            {"left",Marshal.ReadInt32(row,80)}, {"top",Marshal.ReadInt32(row,84)},
+                            {"right",Marshal.ReadInt32(row,88)}, {"bottom",Marshal.ReadInt32(row,92)},
+                            {"arguments",arguments}, {"poll",poll}, {"report_index",i},
+                            {"report_interface","public-compiler"}, {"record_size",100} };
+                        if ((int)item["kind"] == 2 || ((int)item["kind"] == 1 && (int)item["code"] == 0x20)) rejected = true;
+                        rows.Add(item); all.Add(item);
+                    }
+                    Event(new { operation = "CompilePublicReports", poll = poll, percent = percent, reports = rows,
+                        report_interface = "public-compiler", record_size = 100 });
+                }
+                finally { DisposePublicReports(reports, count, poll); }
+                if (percent == 100) return all;
+                Thread.Sleep(10);
+            }
+            throw new InvalidOperationException("native_compile_incomplete_timeout");
+        }
+        List<Dictionary<string, object>> PollRawReports(IntPtr compiler, ObjectId target, bool checking, out bool rejected)
         {
             IntPtr adapter, backend = Backend(compiler, out adapter); var watch = Stopwatch.StartNew();
             var all = new List<Dictionary<string, object>>(); rejected = false;
@@ -197,8 +416,8 @@ namespace PlcAi.NativeAdapter
             {
                 Application.DoEvents(); int percent = 0, count = 0, code = 0; IntPtr reports = IntPtr.Zero;
                 int hr = Slot<CompilerProgressCall>(backend, 44)(backend, ref percent, ref count, ref reports, ref code);
-                Event(new { operation = checking ? "ProgramCheckRawProgress" : "Progress", poll = poll, hresult = hr, code = code, percent = percent, count = count });
-                Check(checking ? "Compiler.CheckProgress" : "Compiler.BuildProgress", hr, code);
+                Event(new { operation = checking ? "ProgramCheckRawProgress" : "NativeReferenceProgress", poll = poll, hresult = hr, code = code, percent = percent, count = count });
+                Check(checking ? "Compiler.CheckProgress" : "Compiler.ReferenceProgress", hr, code);
                 if (count < 0 || count > 10000 || (count > 0 && reports == IntPtr.Zero)) throw new InvalidOperationException("native_report_array_extent_invalid");
                 var rows = new List<Dictionary<string, object>>();
                 try
@@ -216,15 +435,16 @@ namespace PlcAi.NativeAdapter
                         var item = new Dictionary<string, object> {
                             {"kind", Marshal.ReadInt32(row)}, {"code", Marshal.ReadInt32(row,4)},
                             {"library", ReportText(row,8,12)}, {"name", ReportText(row,16,20)},
-                            {"instance", ReportText(row,28,32)}, {"program_kind",Marshal.ReadInt32(row,36)},
+                            {"instance_kind",Marshal.ReadInt32(row,24)}, {"instance", ReportText(row,28,32)},
+                            {"program_kind",Marshal.ReadInt32(row,36)},
                             {"step",Marshal.ReadInt32(row,40)}, {"network",Marshal.ReadInt32(row,44)},
                             {"left",Marshal.ReadInt32(row,48)}, {"top",Marshal.ReadInt32(row,52)},
                             {"right",Marshal.ReadInt32(row,56)}, {"bottom",Marshal.ReadInt32(row,60)},
                             {"arguments",arguments}, {"poll",poll}, {"report_index",i} };
-                        if ((int)item["kind"] == 2 || (!checking && (int)item["kind"] == 1 && (int)item["code"] == 0x20)) rejected = true;
+                        if ((int)item["kind"] == 2) rejected = true;
                         rows.Add(item); all.Add(item);
                     }
-                    Event(new { operation = checking ? "ProgramCheckRawReports" : "CompileRawReports", poll = poll, percent = percent, reports = rows });
+                    Event(new { operation = checking ? "ProgramCheckRawReports" : "NativeReferenceRawReports", poll = poll, percent = percent, reports = rows });
                 }
                 finally { DisposeReports(adapter, reports, count); }
                 if (percent == 100)
@@ -234,7 +454,89 @@ namespace PlcAi.NativeAdapter
                 }
                 Thread.Sleep(10);
             }
-            throw new InvalidOperationException(checking ? "native_check_incomplete_timeout" : "native_compile_incomplete_timeout");
+            throw new InvalidOperationException(checking ? "native_check_incomplete_timeout" : "native_reference_incomplete_timeout");
+        }
+        static string NullableBStr(IntPtr value) { return value == IntPtr.Zero ? null : ReadBStr(value); }
+        void ReadReferences(IntPtr compiler, ObjectId project)
+        {
+            int code; Validation["reference_status"] = "incomplete";
+            Check("Compiler.CreateProgramAnalysis3", Slot<AnalysisCreateCall>(compiler, 216)(compiler, 0, 0, BStr(""), BStr(""), out code), code);
+            bool rejected; PollRawReports(compiler, project, false, out rejected);
+            Validation["reference_status"] = rejected ? "completed_rejected" : "completed_accepted";
+            if (rejected) return;
+            int count = 0; IntPtr data = IntPtr.Zero; var rows = new List<Dictionary<string, object>>();
+            try
+            {
+                int hr = Slot<CompilerCodeCall>(compiler, 220)(compiler, out count, out data, out code);
+                Event(new { operation = "Compiler.GetProgramAnalysis3", hresult = hr, code = code, count = count });
+                if (count < 0 || count > 100000 || (count > 0 && data == IntPtr.Zero)) throw new InvalidOperationException("native_reference_extent_invalid");
+                Check("Compiler.ReadProgramAnalysis3", hr, code);
+                for (int i = 0; i < count; i++)
+                {
+                    IntPtr row = IntPtr.Add(data, i * 88); var item = new Dictionary<string, object>();
+                    string[] texts = { "name", "address", "library", "source", "instance", "type", "instruction", "initial_value", "comment", "resource", "task" };
+                    int[] offsets = { 0, 4, 9, 13, 17, 27, 39, 43, 47, 52, 56 };
+                    for (int j = 0; j < offsets.Length; j++) item[texts[j]] = NullableBStr(Marshal.ReadIntPtr(row, offsets[j]));
+                    item["address_status"] = (int)Marshal.ReadByte(row, 8); item["division"] = (int)Marshal.ReadByte(row, 21);
+                    item["range"] = (int)Marshal.ReadByte(row, 22); item["attribute"] = (int)Marshal.ReadByte(row, 51);
+                    string[] numbers = { "class_code", "data_type", "array_data_type", "program_kind", "step", "network", "left", "top", "right", "bottom" };
+                    int[] positions = { 23, 31, 35, 60, 64, 68, 72, 76, 80, 84 };
+                    for (int j = 0; j < positions.Length; j++) item[numbers[j]] = Marshal.ReadInt32(row, positions[j]);
+                    rows.Add(item);
+                }
+                nativeReferences = rows;
+                Event(new { operation = "NativeSourceReferences", query = "all-references", declared = 0, plural = 0,
+                    symbol = "", scope = "", hresult = hr, code = code, count = count, rows = rows,
+                    provenance = "original CreateProgramAnalysis3 and GetProgramAnalysis3; current compilation; 88-byte public records" });
+            }
+            finally
+            {
+                if (data != IntPtr.Zero)
+                {
+                    if (count >= 0 && count <= 100000) for (int i = 0; i < count; i++)
+                        foreach (int offset in new[] { 0, 4, 9, 13, 17, 27, 39, 43, 47, 52, 56 })
+                        { IntPtr value = Marshal.ReadIntPtr(data, i * 88 + offset); if (value != IntPtr.Zero) Marshal.FreeBSTR(value); }
+                    Marshal.FreeCoTaskMem(data);
+                }
+            }
+        }
+        object InstanceRanges(IntPtr compiler, string resource, int step, string pou, IntPtr location)
+        {
+            if (nativeReferences == null) return new { status = "not-observed", reason = "current native references unavailable" };
+            int kind = Marshal.ReadInt32(location, 8), network = Marshal.ReadInt32(location, 12), line = Marshal.ReadInt32(location, 16);
+            int span = kind == 193 ? 1 : Marshal.ReadInt32(location, 20); var candidates = new List<object>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            if (kind != 193 && kind != 208) return new { status = "not-observed", reason = "source language outside observed native range queries" };
+            foreach (var row in nativeReferences)
+            {
+                if ((int)row["program_kind"] != kind || (string)row["library"] != "" || (string)row["source"] != pou || (string)row["resource"] != resource) continue;
+                if (kind == 193 && ((int)row["top"] != line || (int)row["attribute"] != 2)) continue;
+                if (kind == 208 && (int)row["network"] != network) continue;
+                string instance = (string)row["instance"], task = (string)row["task"];
+                if (String.IsNullOrEmpty(instance) || String.IsNullOrEmpty(task) || !seen.Add(task + "\0" + instance)) continue;
+                if (candidates.Count >= 4096) throw new InvalidOperationException("native_instance_ranges_exceed_bound");
+                IntPtr source = Marshal.AllocCoTaskMem(32), ranges = IntPtr.Zero;
+                try
+                {
+                    Marshal.Copy(new byte[32], 0, source, 32);
+                    Marshal.WriteIntPtr(source, BStr("")); Marshal.WriteIntPtr(source, 4, BStr(instance));
+                    int[] values = { kind, network, line, span, Marshal.ReadInt32(location, 24) };
+                    for (int i = 0; i < values.Length; i++) Marshal.WriteInt32(source, 8 + i * 4, values[i]);
+                    int code; int hr = Slot<SourceRangeCall>(compiler, 96)(compiler, 1, source, out ranges, out code);
+                    object range = ranges == IntPtr.Zero ? null : new { resource = NullableBStr(Marshal.ReadIntPtr(ranges)),
+                        start_step = Marshal.ReadInt32(ranges, 4), step_count = Marshal.ReadInt32(ranges, 8), timestamp = Marshal.ReadInt32(ranges, 12) };
+                    candidates.Add(new { original_reference = row, hresult = hr, code = code, range = range,
+                        query = new { library = "", pou = instance, program_kind = kind, network = network,
+                            start_step = line, step_count = span, element_id = values[4] } });
+                }
+                finally
+                {
+                    if (ranges != IntPtr.Zero) { IntPtr name = Marshal.ReadIntPtr(ranges); if (name != IntPtr.Zero) Marshal.FreeBSTR(name); Marshal.FreeCoTaskMem(ranges); }
+                    Marshal.FreeCoTaskMem(source);
+                }
+            }
+            return new { status = "completed", resource = resource, diagnostic_step = step, candidates = candidates,
+                provenance = "original GetPCodeRange queried with current native instance references after check reached 100" };
         }
         Dictionary<string, byte[][]> GeneratedCode(IntPtr compiler)
         {
@@ -346,10 +648,10 @@ namespace PlcAi.NativeAdapter
             {
                 Marshal.Copy(new byte[32], 0, location, 32);
                 int hr = Slot<LocationCall>(compiler, 100)(compiler, new NativeCodeRange { Resource = BStr(resource), Start = step, Count = 1, Timestamp = 0 }, location, out code);
-                object decoded = null, identity = null;
+                object decoded = null, identity = null, ranges = null;
                 if (hr == 0 && code == 0)
                 {
-                    string library = ReadBStr(Marshal.ReadIntPtr(location)), pou = ReadBStr(Marshal.ReadIntPtr(location, 4));
+                    string library = NullableBStr(Marshal.ReadIntPtr(location)), pou = NullableBStr(Marshal.ReadIntPtr(location, 4));
                     int language = Marshal.ReadInt32(location, 8);
                     decoded = new { library = library, pou = pou, program_kind = language, network = Marshal.ReadInt32(location, 12),
                         start_step = Marshal.ReadInt32(location, 16), step_count = Marshal.ReadInt32(location, 20), element_id = Marshal.ReadInt32(location, 24),
@@ -358,11 +660,12 @@ namespace PlcAi.NativeAdapter
                     {
                         try { SourceIdentity(project, pou, language, "diagnostic", out identity); }
                         catch (Exception error) { identity = new { status = "unresolved-source-object", reason = error.Message }; }
+                        ranges = InstanceRanges(compiler, resource, step, pou, location);
                     }
                 }
                 Event(new { operation = "NativeDiagnosticLocation", target_resource = resource,
                     original = new { poll = report["poll"], report_index = report["report_index"], kind = report["kind"], code = report["code"], resource = resource, step = step },
-                    source_location = new { resource = resource, code_step = step, hresult = hr, code = code, location = decoded, source_object = identity } });
+                    source_location = new { resource = resource, code_step = step, hresult = hr, code = code, location = decoded, source_object = identity, instance_ranges = ranges } });
             }
             finally
             {
@@ -375,13 +678,13 @@ namespace PlcAi.NativeAdapter
         void ValidateProject(string root, IDictionary<string, object> request)
         {
             NativeRequest.Version(request, 1);
-            var source = Fields(request["source"], "cpu", "codepage", "programs"); object[] programs = Entries(source["programs"]);
+            var source = Fields(request["source"], "cpu", "codepage", "programs", "lexical_reader"); object[] programs = Entries(source["programs"]);
             if (programs.Length == 0 || programs.Length > 64) throw new ArgumentException("native_validation_source_selection_empty");
             string input = Path.Combine(root, "input.gxw");
             if (!File.Exists(input) || new FileInfo(input).Length == 0 || new FileInfo(input).Length > 30 * 1024 * 1024) throw new ArgumentException("invalid_isolated_project_files");
             validationRoot = root; nativeCodePage = NativeRequest.Integer(source["codepage"]);
             Validation = new Dictionary<string, object> { { "events", validationEvents }, { "compile_status", "not_started" }, { "check_status", "not_started" },
-                { "public_adapter_projection", "not_called" }, { "project", null }, { "requested_check_mask", 0x7fffffff } };
+                { "public_adapter_projection", "not_called" }, { "project", null }, { "requested_check_mask", 0x7fffffff }, { "reference_status", "not_started" } };
             PrepareTemporaryDirectory(Text(request["owner_token"])); Initialize(Text(request["installation"]));
             IntPtr home, ws, projectName; ObjectId project = Open(root, Text(source["cpu"]), nativeCodePage, out home, out ws, out projectName);
             Validation["project"] = project.Words; Event(new { operation = "ProjectID", words = project.Words });
@@ -399,11 +702,12 @@ namespace PlcAi.NativeAdapter
             Check("Compiler.PrepareBuildData", Slot<CodeCall>(compiler, 132)(compiler, out code), code);
             VerifyCharacterCase(); Validation["compile_status"] = "incomplete";
             Check("Compiler.Build", Slot<CompilerBuildCall>(compiler, 28)(compiler, 0, -1, out code), code);
-            bool rejected; PollReports(compiler, project, "", false, out rejected); VerifyCharacterCase();
+            bool rejected; PollCompileReports(compiler, out rejected); VerifyCharacterCase();
             Validation["compile_status"] = rejected ? "completed_rejected" : "completed_accepted";
             ReadSources(project, programs, "after-build");
             Dictionary<string, byte[][]> generated = GeneratedCode(compiler);
             if (rejected) { Validation["check_status"] = "not_requested_compile_rejected"; return; }
+            ReadReferences(compiler, project);
             Check("Workspace.UpdatePCodeBeforeProgramCheck", Slot<DeleteCall>(workspace, 1736)(workspace, project, out code), code);
             ObjectId collection;
             Check("Workspace.GetProgramCheckCollection", Slot<CollectionCall>(workspace, 36)(workspace, project, 7, out collection, out code), code);
@@ -420,7 +724,7 @@ namespace PlcAi.NativeAdapter
                     name_hresult = readName["hresult"], name_code = readName["code"] });
                 PublishedCode(target, name, generated); Event(new { operation = "ProgramCheckTarget", id = target.Words });
                 Check("Compiler.ProgramCheck", Slot<IdCheckCall>(compiler, 180)(compiler, target, 0x7fffffff, out code), code);
-                var reports = PollReports(compiler, target, name, true, out rejected); anyRejected |= rejected;
+                var reports = PollRawReports(compiler, target, true, out rejected); anyRejected |= rejected;
                 var markers = reports.FindAll(delegate(Dictionary<string, object> row) {
                     return (int)row["kind"] == 1 && (int)row["code"] == 0x23 && (string)((Dictionary<string, object>)row["name"])["text"] == name;
                 });
@@ -439,6 +743,7 @@ namespace PlcAi.NativeAdapter
             }
             ReadSources(project, programs, "after-check");
             Validation["check_status"] = anyRejected ? "completed_rejected" : "completed_accepted";
+            ReadCodeLexical(source["lexical_reader"], Text(source["cpu"]), generated);
             Event(new { operation = "ProgramCheckPollingFinished", targets = targets.Count, validation_failed = anyRejected });
         }
     }

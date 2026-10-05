@@ -843,6 +843,7 @@ def native_validation_observation():
     raw = default_baseline()
     _, _, source = native_source_chain_inputs()
     selected = deepcopy(source['selections'][0])
+    selected['stage'] = 'before-build'
     selected['name'] = selected['source_object']['name'] = '1'
     selected['source_object']['owner']['read_name']['name'] = '1'
     body = source['snapshots']['LEAF-body.bin']
@@ -861,6 +862,8 @@ def native_validation_observation():
         'provenance': 'original Workspace collection, child, type, name and parent reads before compilation'}]
     for stage in ('before-build', 'after-build', 'after-check'):
         filename = stage + '.bin'; snapshots[filename] = body
+        if stage != 'before-build':
+            events.append({**deepcopy(selected), 'stage': stage})
         events.append({**source['reads'][0], 'file': filename, 'stage': stage})
     events.extend({'operation': 'OwnedBackendModule', 'name': name, 'version': '1.635.0.1'}
         for name in ('DZDataABS_CompilerAdapter.dll', 'DZDataABS_Compiler_IEC.dll', 'DZDataABS_SICConverter_IEC.dll'))
@@ -899,9 +902,10 @@ def native_validation_observation():
     # Retain the collector's actual ordering around compilation and checking.
     for stage, before_operation in [('after-build', 'Resource'), ('after-check', 'ProgramCheckPollingFinished')]:
         read = next(row for row in events if row.get('operation') == 'NativeBodyRead' and row.get('stage') == stage)
-        events.remove(read)
+        selection = next(row for row in events if row.get('operation') == 'NativeBodySelection' and row.get('stage') == stage)
+        events.remove(read); events.remove(selection)
         index = next(i for i, row in enumerate(events) if row.get('operation') == before_operation)
-        events.insert(index, read)
+        events[index:index] = [selection, read]
     return raw, {'protocol_version': 1, 'status': 'observed', 'native_version': '1.635.0.1', 'cpu': 'FX3U/FX3UC',
                  'validation': {'project': source['project_id'], 'events': events}}, snapshots
 
@@ -988,6 +992,639 @@ def test_native_validation_missing_location_preserves_the_original_error():
     assert result['native_source_locations']['status'] == 'partial_or_unresolved'
     assert result['raw_diagnostics'][0]['original']['code'] == 0x050c9300
     assert result['raw_diagnostics'][0]['source_projection']['status'] == 'unresolved'
+
+
+def native_reference_observation():
+    """Synthetic reference/range transport; acceptance still comes from native runs."""
+    raw, observation, snapshots = native_validation_observation()
+    events = observation['validation']['events']
+    reference = {'library': '', 'source': '1', 'program_kind': 208, 'network': 1,
+                 'name': 'Y0', 'resource': 'MAIN', 'task': 'TASK', 'instance': '1'}
+    records = {'operation': 'NativeSourceReferences', 'hresult': 0, 'code': 0,
+        'query': 'all-references', 'declared': 0, 'plural': 0, 'symbol': '', 'scope': '',
+        'count': 1, 'rows': [reference],
+        'provenance': 'original CreateProgramAnalysis3 and GetProgramAnalysis3; current compilation; 88-byte public records'}
+    # These are ordinary informational analysis messages, not conversion failure.
+    reports = [{'kind': 1, 'code': code} for code in (0x19, 0x20)]
+    analysis = [
+        {'operation': 'Compiler.CreateProgramAnalysis3', 'hresult': 0, 'code': 0},
+        {'operation': 'NativeReferenceProgress', 'poll': 1, 'hresult': 0, 'code': 0, 'count': 2, 'percent': 100},
+        {'operation': 'NativeReferenceRawReports', 'poll': 1, 'percent': 100, 'reports': reports},
+        {'operation': 'Compiler.GetProgramAnalysis3', 'hresult': 0, 'code': 0, 'count': 1}, records]
+    index = next(i for i, row in enumerate(events) if row.get('operation') == 'Workspace.UpdatePCodeBeforeProgramCheck')
+    events[index:index] = analysis
+    query = next(row['source_location'] for row in events if row.get('operation') == 'NativeDiagnosticLocation')
+    query['location'].update(step_count=-1, element_id=-1)
+    query['instance_ranges'] = {'status': 'completed', 'resource': 'MAIN', 'diagnostic_step': 28,
+        'candidates': [{'original_reference': reference, 'hresult': 0, 'code': 0,
+            'query': {'library': '', 'pou': '1', 'program_kind': 208, 'network': 1,
+                      'start_step': 1, 'step_count': -1, 'element_id': -1},
+            'range': {'resource': 'MAIN', 'start_step': 28, 'step_count': 1, 'timestamp': 0}}]}
+    return raw, observation, snapshots
+
+
+def native_lexical_observation():
+    """Synthetic prefix transport over independently recorded FX3U IL text."""
+    from gxw.native_diagnostics import native_code_reader_scope
+    case = json.loads((ROOT/'tests/fixtures/gxw_fx3g_lexical_native.json').read_text(encoding='utf8'))['cases'][0]
+    body = bytes.fromhex(case['body_hex'])
+    output = base64.b64decode(case['native']['520']['output_base64'])
+    scope = native_code_reader_scope('FX3U/FX3UC')
+    # This frozen MOV has a five-step header followed by K1 and R0 tokens.
+    read = {**scope, 'operation': 'NativeCodeLexicalRead', 'resource': 'MAIN',
+        'body_bytes': 13, 'provided_bytes': 14, 'consumed_bytes': 13,
+        'input_file': 'native-input.bin', 'output_file': 'native-output.bin', 'output_bytes': len(output),
+        'calls': {'object_new': True, 'open': 0, 'set_version': None, 'decode': 0, 'close': 0},
+        'prefixes': [{'input_bytes': offset, 'return_code': 0, 'steps': 5} for offset in (5, 9, 13)],
+        'completed': True,
+        'provenance': 'original ChangePToILcode and GetStepSize; retained generated primary bytes after check; not execution'}
+    events = [{'operation': 'OwnedBackendModule', 'name': scope['module'], 'version': scope['version']},
+              {'operation': 'ProgramCheckRawProgress', 'percent': 100, 'hresult': 0, 'code': 0}, read]
+    return events, {'MAIN': (body, b'', b'')}, {'native-input.bin': body+b'\0', 'native-output.bin': output}
+
+
+@pytest.mark.parametrize('damage', ['missing-prefix', 'wrong-prefix-step', 'duplicate-prefix', 'wrong-native-text',
+    'missing-output', 'changed-input', 'partial-decode', 'wrong-version', 'wrong-cpu', 'boolean-code',
+    'before-check', 'failed-reader', 'opaque-text', 'multiple-readers'])
+def test_native_lexical_binding_keeps_incomplete_or_conflicting_reads_unresolved(damage):
+    from gxw.native_diagnostics import bind_native_code_lexical_read
+    events, generated, snapshots = native_lexical_observation()
+    bind = lambda: bind_native_code_lexical_read(events, generated, snapshots, cpu='FX3U/FX3UC', codepage=936)[0]
+    actual = bind()
+    assert actual['status'] == 'current'
+    assert actual['records'] == [{'record_index': 0, 'native_step': 0, 'source_offset': 0,
+                                 'source_end': 13, 'op': 'MOV', 'args': ['K1', 'R0']}]
+    read = events[-1]
+    if damage == 'missing-prefix':
+        read['prefixes'].pop()
+    elif damage == 'wrong-prefix-step':
+        read['prefixes'][-1]['steps'] += 1
+    elif damage == 'duplicate-prefix':
+        read['prefixes'][-1] = dict(read['prefixes'][0])
+    elif damage == 'wrong-native-text':
+        snapshots['native-output.bin'] = snapshots['native-output.bin'].replace(b'R0', b'R1')
+    elif damage == 'missing-output':
+        del snapshots['native-output.bin']
+    elif damage == 'changed-input':
+        snapshots['native-input.bin'] = b'?' + snapshots['native-input.bin'][1:]
+    elif damage == 'partial-decode':
+        read['consumed_bytes'] -= 1
+    elif damage == 'wrong-version':
+        events[0]['version'] = '15.32'
+    elif damage == 'wrong-cpu':
+        read['native_cpu'] = 521
+    elif damage == 'boolean-code':
+        read['calls']['decode'] = False
+    elif damage == 'before-check':
+        events.remove(read); events.insert(0, read)
+    elif damage == 'failed-reader':
+        read['calls']['close'] = 1
+    elif damage == 'opaque-text':
+        snapshots['native-output.bin'] = snapshots['native-output.bin'].replace(b'R0', b'\x81\x30')
+    else:
+        events.append(dict(read))
+    actual = bind()
+    assert actual['status'] == 'unresolved' and not actual['records']
+    assert not actual['public_check_promoted']
+
+
+@pytest.mark.parametrize('cpu,native_cpu', [('Q03UDV', 209), ('FX3U/FX3UC', 520),
+                                         ('Q02', None), ('FX3G', None), ('FX0N', None)])
+def test_native_lexical_reader_scope_is_bound_to_exact_observed_cpu_menu(cpu, native_cpu):
+    from gxw.native_diagnostics import native_code_reader_scope
+    scope = native_code_reader_scope(cpu)
+    assert (scope['native_cpu'] if scope else None) == native_cpu
+    if scope:
+        assert scope['scope_cpu'] == cpu
+
+
+def test_native_lexical_binding_never_accepts_changed_input_or_missing_prefixes():
+    from copy import deepcopy
+    from hypothesis import given, settings, strategies as st
+    from gxw.native_diagnostics import bind_native_code_lexical_read
+
+    @settings(max_examples=40, deadline=None, derandomize=True)
+    @given(st.integers(min_value=0, max_value=13), st.integers(min_value=0, max_value=2))
+    def check(position, prefix):
+        events, generated, snapshots = native_lexical_observation()
+        original = bind_native_code_lexical_read(events, generated, snapshots, cpu='FX3U/FX3UC', codepage=936)
+        assert original[0]['status'] == 'current'
+        altered = bytearray(snapshots['native-input.bin']); altered[position] ^= 1
+        changed = {**snapshots, 'native-input.bin': bytes(altered)}
+        assert bind_native_code_lexical_read(events, generated, changed, cpu='FX3U/FX3UC', codepage=936)[0]['status'] == 'unresolved'
+        partial = deepcopy(events); del partial[-1]['prefixes'][prefix]
+        assert bind_native_code_lexical_read(partial, generated, snapshots, cpu='FX3U/FX3UC', codepage=936)[0]['status'] == 'unresolved'
+    check()
+
+
+def fbd_output_projection_inputs():
+    """Two synthetic FBs write the same address through separate current ports."""
+    query = {'hresult': 0, 'code': 0, 'resource': 'MAIN', 'code_step': 1,
+             'location': {'library': '', 'pou': 'FBD_MAIN', 'program_kind': 208, 'network': 1}}
+    diagnostic = {'kind': 2, 'code': 0x050c9300, 'name': {'text': 'MAIN'}, 'step': 1, 'arguments': [{'text': 'Y00'}]}
+    records = [{'record_index': i, 'native_step': i, 'source_offset': i*8, 'source_end': (i+1)*8,
+                'op': 'LD' if i % 2 == 0 else 'OUT', 'args': [f'M{100+i//2}' if i%2 == 0 else 'Y0']}
+               for i in range(4)]
+    model = {'cpu': 'Q03UDV', 'schema_version': 2, 'unknown_record_count': 0,
+             'program': 'FBD_MAIN.Program.pou', 'nodes': [], 'wires': []}
+    references = []
+    for i, symbol in enumerate(('FIRST', 'SECOND')):
+        y, offset = i*4, 100+i*100
+        model['nodes'].extend([
+            {'id': f'n{offset}', 'source_offset': offset, 'symbol': symbol, 'template': 'function_block:TEST_FB',
+             'x': 0, 'y': y, 'width': 2, 'height': 3,
+             'ports': [{'name': 'RESULT', 'formal_name': 'RESULT', 'class_code': 4, 'data_type': 'BOOL',
+                        'side': 'out', 'x': 2, 'y': 1, 'negated': False}]},
+            {'id': f'n{offset+50}', 'source_offset': offset+50, 'symbol': 'Y0', 'template': 'output',
+             'x': 2, 'y': y, 'width': 2, 'height': 2, 'ports': [{'x': 0, 'y': 1, 'negated': False}]}])
+        base = {'library': '', 'source': 'FBD_MAIN', 'program_kind': 208, 'network': 1, 'resource': 'MAIN',
+                'task': 'TASK', 'instance': 'FBD_MAIN', 'array_data_type': 0, 'left': 0, 'top': y, 'right': 2, 'bottom': y+3}
+        references.extend([
+            {**base, 'name': symbol+'.RESULT', 'address': f'M{100+i}', 'attribute': 1, 'class_code': 4, 'data_type': 1},
+            {**base, 'name': symbol, 'type': 'TEST_FB', 'attribute': 1, 'class_code': 1},
+            {**base, 'name': 'Y0', 'address': 'Y00', 'attribute': 2, 'class_code': 0, 'data_type': 0,
+             'left': 2, 'right': 4, 'bottom': y+2}])
+    return query, diagnostic, records, references, model
+
+
+def test_fbd_output_projection_keeps_instance_and_port_identity_under_permutations():
+    from copy import deepcopy
+    from hypothesis import given, settings, strategies as st
+    from gxw.native_diagnostics import correlate_fbd_bool_output
+
+    @settings(max_examples=60, deadline=None, derandomize=True)
+    @given(st.integers(min_value=0, max_value=1), st.permutations(range(6)), st.permutations(range(4)),
+           st.text(alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ_', min_size=1, max_size=24))
+    def check(selected, order, node_order, renamed):
+        query, diagnostic, records, references, model = fbd_output_projection_inputs()
+        step = selected*2+1; query['code_step'] = diagnostic['step'] = step
+        source = model['nodes'][selected*2]; source['symbol'] = renamed
+        references[selected*3]['name'] = renamed+'.RESULT'; references[selected*3+1]['name'] = renamed
+        # A same-address, same-geometry reference in another instance is not this call.
+        foreign = {**references[selected*3], 'task': 'OTHER_TASK', 'instance': 'FOREIGN'}
+        shuffled = [references[i] for i in order] + [foreign]
+        model['nodes'] = [model['nodes'][i] for i in node_order]
+        project = lambda rows=shuffled: correlate_fbd_bool_output(query, diagnostic, records, rows, model,
+            selected_pou='FBD_MAIN', instance=('TASK', 'FBD_MAIN'))
+        actual = project()
+        assert actual['status'] == 'uniquely_correlated'
+        assert actual['source']['object_id'] == f'n{100+selected*100}'
+        assert actual['source']['formal'] == 'RESULT' and actual['source']['side'] == 'out'
+        assert actual['source']['instance'] == renamed
+        assert actual['output']['object_id'] == f'n{150+selected*100}'
+        assert not actual['public_check_promoted']
+        # Conflicting current facts cannot be resolved by reference/node order.
+        assert project(shuffled+[deepcopy(references[selected*3])])['status'] == 'unresolved'
+        source['ports'][0]['class_code'] = 5
+        assert project()['status'] == 'unresolved'
+    check()
+
+
+def test_fbd_output_projection_uses_network_membership_with_coincident_nodes_and_empty_blocks():
+    from copy import deepcopy
+    from dataclasses import replace
+    from hypothesis import given, settings, strategies as st
+    from gxw.connectivity import ConnectivityGraph, ConnectivityNet, PortRef
+    from gxw.models import NodeKind, Point
+    from gxw.native_diagnostics import correlate_fbd_bool_output
+
+    @settings(max_examples=60, deadline=None, derandomize=True)
+    @given(st.integers(min_value=2, max_value=5), st.data())
+    def check(count, data):
+        selected = data.draw(st.integers(min_value=0, max_value=count-1))
+        # The empty block occupies an ordinal but has no code, nodes or nets.
+        order = data.draw(st.permutations(range(count+1)))
+        query, diagnostic, _, original_refs, original_model = fbd_output_projection_inputs()
+        model = {**original_model, 'blocks': [{} for _ in order], 'nodes': [], 'wires': []}
+        records, references, nets = [], [], []
+        for identity in range(count):
+            block = order.index(identity)
+            offset = 100+identity*200
+            source, output = deepcopy(original_model['nodes'][:2])
+            source.update(id=f'n{offset}', source_offset=offset, symbol=f'STAGE_{identity}', y=0, block=block)
+            output.update(id=f'n{offset+50}', source_offset=offset+50, x=4, y=0, block=block)
+            model['nodes'].extend([source, output])
+            model['wires'].append({'source_offset': offset+75, 'block': block, 'start': [2,1], 'end': [4,1]})
+            member, call, terminal = deepcopy(original_refs[:3])
+            for row in (member, call, terminal):
+                row.update(network=block+1, top=0)
+            member.update(name=source['symbol']+'.RESULT', address=f'M{100+identity}', bottom=3)
+            call.update(name=source['symbol'], bottom=3)
+            terminal.update(left=4, right=6, bottom=2)
+            references.extend([member, call, terminal])
+            records.extend([
+                {'record_index': identity*2, 'native_step': identity*2, 'source_offset': identity*16,
+                 'source_end': identity*16+8, 'op': 'LD', 'args': [member['address']]},
+                {'record_index': identity*2+1, 'native_step': identity*2+1, 'source_offset': identity*16+8,
+                 'source_end': identity*16+16, 'op': 'OUT', 'args': ['Y0']}])
+            nets.append(ConnectivityNet(identity, (
+                PortRef(offset, 0, NodeKind.FUNCTION_BLOCK, source['symbol'], 0, Point(2,1)),
+                PortRef(offset+50, 0, NodeKind.OUTPUT, 'Y0', 3, Point(4,1))), (offset+75,), block))
+        query['location']['network'] = order.index(selected)+1
+        query['code_step'] = diagnostic['step'] = selected*2+1
+        model['nodes'] = list(data.draw(st.permutations(model['nodes'])))
+        model['wires'] = list(data.draw(st.permutations(model['wires'])))
+        references = list(data.draw(st.permutations(references)))
+        connectivity = ConnectivityGraph(model['program'], tuple(data.draw(st.permutations(nets))))
+        project = lambda graph=connectivity: correlate_fbd_bool_output(query, diagnostic, records, references,
+            model, selected_pou='FBD_MAIN', instance=('TASK', 'FBD_MAIN'), connectivity=graph)
+        actual = project()
+        assert actual['status'] == 'uniquely_correlated'
+        assert actual['source']['object_id'] == f'n{100+selected*200}'
+        assert actual['output']['object_id'] == f'n{150+selected*200}'
+        assert actual['network'] == order.index(selected)+1
+        assert actual['connection']['block_index'] == order.index(selected)
+        assert not actual['public_check_promoted']
+        # Source, native reference and topology membership must agree. A valid
+        # membership in another block is still not this diagnostic's source.
+        foreign = order.index(count)
+        chosen = next(node for node in model['nodes'] if node['id'] == actual['source']['object_id'])
+        chosen['block'] = foreign
+        assert project()['status'] == 'unresolved'
+        chosen['block'] = order.index(selected)
+        wire = next(w for w in model['wires'] if w['source_offset'] == 175+selected*200)
+        wire['block'] = foreign
+        assert project()['status'] == 'unresolved'
+        wire['block'] = order.index(selected)
+        damaged = replace(connectivity, nets=tuple(replace(net, block_index=foreign) if net.index == selected else net
+                                                  for net in connectivity.nets))
+        assert project(damaged)['status'] == 'unresolved'
+        query['location']['network'] = foreign+1
+        assert project()['status'] == 'unresolved'
+        query['location']['network'] = order.index(selected)+1
+        model['cpu'] = 'FX3U/FX3UC'
+        assert project()['status'] == 'unresolved'  # Multi-network FX scope has no native control yet.
+    check()
+
+
+def test_native_compile_positions_keep_in_out_formal_ambiguity_and_current_writeback_direction():
+    from dataclasses import replace
+    from hypothesis import given, settings, strategies as st
+    from gxw.connectivity import ConnectivityGraph, ConnectivityNet, PortRef
+    from gxw.models import NodeKind, Point
+    from gxw.native_diagnostics import correlate_native_compile_position
+
+    @settings(max_examples=60, deadline=None, derandomize=True)
+    @given(st.integers(min_value=1, max_value=5), st.integers(min_value=0, max_value=64),
+           st.integers(min_value=0, max_value=64), st.data())
+    def check(network, x, y, data):
+        # The native controls identify a FB by network/bbox plus formal name,
+        # or identify its writeback terminal by network/bbox without that name.
+        model = {'cpu': 'Q03UDV', 'schema_version': 2, 'program': 'FBD_MAIN.Program.pou',
+                 'unknown_record_count': 0, 'blocks': [{} for _ in range(network+1)], 'nodes': [], 'wires': []}
+        for block in range(network+1):
+            offset = 100+block*200
+            model['nodes'].extend([
+                {'id': f'n{offset}', 'source_offset': offset, 'block': block, 'symbol': 'STAGE_'+str(block),
+                 'template': 'function_block:TEST_FB', 'x': x, 'y': y, 'width': 2, 'height': 3,
+                 'ports': [{'name': side+'.STATE', 'formal_name': 'STATE', 'side': side, 'class_code': 5,
+                            'data_type': 'WORD', 'x': px, 'y': 1} for side, px in [('in',0), ('out',2)]]},
+                {'id': f'n{offset+50}', 'source_offset': offset+50, 'block': block, 'symbol': 'Y1',
+                 'template': 'output', 'x': x+2, 'y': y, 'width': 2, 'height': 2,
+                 'ports': [{'name': 'IN', 'x': 0, 'y': 1}]}])
+        model['nodes'] = list(data.draw(st.permutations(model['nodes'])))
+        report = {'kind': 2, 'code': 0x500c2025, 'instance_kind': 6, 'library': {'text': ''},
+            'name': {'text': 'FBD_MAIN'}, 'instance': {'text': 'FBD_MAIN'}, 'program_kind': 208,
+            'network': network, 'step': -1, 'left': x, 'top': y, 'right': x+2, 'bottom': y+3,
+            'arguments': [{'text': 'STATE'}]}
+        project = lambda r=report, graph=None: correlate_native_compile_position(r, cpu='Q03UDV', pou='FBD_MAIN',
+            program_kind=208, model=model, connectivity=graph)
+        actual = project(); graph = actual['graph_projection']
+        offset = 100+(network-1)*200
+        assert actual['status'] == 'source-resolved' and actual['instance_resolution'] == 'not_available_in_compile_report'
+        assert graph['object']['object_id'] == f'n{offset}'
+        assert graph['port_association']['status'] == 'ambiguous'
+        assert {(p['port_name'], p['side']) for p in graph['port_association']['candidates']} == {
+            ('in.STATE','in'), ('out.STATE','out')}
+        # Original report coordinates select the terminal. The current Core
+        # connectivity associates it with out.STATE; no error-code side rule.
+        writeback = {**report, 'code': 0x500c2017, 'left': x+2, 'right': x+4, 'bottom': y+2, 'arguments': []}
+        net = ConnectivityNet(0, (
+            PortRef(offset, 1, NodeKind.FUNCTION_BLOCK, 'STAGE_'+str(network-1), 0, Point(x+2,y+1)),
+            PortRef(offset+50, 0, NodeKind.OUTPUT, 'Y1', 3, Point(x+2,y+1))), (), network-1)
+        connectivity = ConnectivityGraph(model['program'], (net,))
+        resolved = project(writeback, connectivity)
+        association = resolved['graph_projection']['port_association']
+        assert association['status'] == 'uniquely_correlated'
+        assert association['candidates'][0]['port_name'] == 'out.STATE'
+        assert not resolved['public_check_promoted']
+        # Public reports carry an original native body ID. Names, network
+        # and coordinates cannot substitute for that identity.
+        body_id = [1, *data.draw(st.lists(st.integers(min_value=0, max_value=0xffffffff), min_size=11, max_size=11))]
+        public = {**writeback, 'report_interface': 'public-compiler', 'record_size': 100,
+                  'source_object_id': body_id}
+        public.pop('library')  # There is no library string in the public record.
+        public_project = lambda r=public, identity=body_id: correlate_native_compile_position(r, cpu='Q03UDV',
+            pou='FBD_MAIN', program_kind=208, model=model, connectivity=connectivity, source_body_id=identity)
+        assert public_project()['graph_projection'] == resolved['graph_projection']
+        changed_id = list(body_id); index = data.draw(st.integers(min_value=0, max_value=11))
+        changed_id[index] = (changed_id[index]+1) & 0xffffffff
+        assert public_project({**public, 'source_object_id': changed_id})['status'] == 'unresolved'
+        assert public_project(identity=changed_id)['status'] == 'unresolved'
+        assert public_project(identity=None)['status'] == 'unresolved'
+        assert public_project({**public, 'record_size': 68})['status'] == 'unresolved'
+        damaged = replace(connectivity, nets=(replace(net, block_index=network),))
+        assert project(writeback, damaged)['graph_projection']['port_association']['status'] == 'unresolved'
+        wrong_endpoint = replace(net.ports[0], port_index=0, point=Point(x,y+1))
+        damaged = replace(connectivity, nets=(replace(net, ports=(wrong_endpoint,net.ports[1])),))
+        assert project(writeback, damaged)['graph_projection']['port_association']['status'] == 'unresolved'
+        assert project({**report, 'instance_kind': 3})['status'] == 'unresolved'
+        # Another current object at the same location is genuinely ambiguous.
+        chosen = next(n for n in model['nodes'] if n['id'] == f'n{offset}')
+        model['nodes'].append({**chosen, 'id': 'duplicate', 'source_offset': 9999})
+        assert project()['graph_projection']['status'] == 'unresolved'
+    check()
+
+
+@pytest.mark.parametrize('damage', ['conversion-failure', 'missing-record', 'duplicate-poll',
+                                  'mixed-interfaces', 'missing-layout'])
+def test_native_validation_public_compile_conversion_is_separate_from_compile_and_check(damage):
+    from copy import deepcopy
+    from gxw.native_diagnostics import project_native_validation
+    raw, observation, snapshots = native_validation_observation()
+    events = observation['validation']['events']
+    poll = next(row for row in events if row.get('operation') == 'Progress')
+    record = next(row for row in events if row.get('operation') == 'CompileRawReports')
+    poll['report_interface'] = 'public-compiler'
+    record.update(operation='CompilePublicReports', report_interface='public-compiler', record_size=100)
+    actual = project_native_validation(raw, observation, snapshots)
+    assert actual['compilation']['acceptance'] == 'accepted'
+    assert actual['compilation']['diagnostic_conversion'] == {'status': 'completed', 'failures': []}
+    assert actual['compilation']['source_context']['status'] == 'current'
+    assert actual['raw_backend_check']['status'] == 'completed-rejected'
+    assert not actual['public_check']['completed']
+    if damage == 'conversion-failure':
+        # A later empty successful poll must not erase an earlier public
+        # conversion error or turn it into an ordinary source rejection.
+        poll['poll'] = record['poll'] = 2
+        events.insert(events.index(poll), {**poll, 'poll': 1, 'hresult': -2147467259,
+            'code': 0x2d010025, 'percent': 90, 'count': 1})
+    elif damage == 'missing-record':
+        events.remove(record)
+    elif damage == 'duplicate-poll':
+        events.insert(events.index(poll), deepcopy(poll))
+    elif damage == 'mixed-interfaces':
+        record['operation'] = 'CompileRawReports'
+    else:
+        del record['record_size']
+    actual = project_native_validation(raw, observation, snapshots)
+    assert actual['compilation']['acceptance'] == 'not_established'
+    assert actual['compilation']['diagnostics_complete'] is False
+    assert actual['compilation']['source_context']['status'] == 'unresolved'
+    assert actual['compilation']['diagnostic_conversion']['status'] == (
+        'failed' if damage == 'conversion-failure' else 'incomplete')
+    assert actual['current_raw_source_check'] == 'not_established'
+
+
+@pytest.mark.parametrize('damage', ['missing-before', 'missing-after', 'stale-before', 'stale-after',
+                                  'read-order', 'configuration', 'partial-reports', 'body-identity'])
+def test_native_compile_source_context_requires_both_original_phase_reads_and_complete_reports(damage):
+    from copy import deepcopy
+    from gxw.native_diagnostics import project_native_validation
+    raw, observation, snapshots = native_validation_observation()
+    actual = project_native_validation(raw, observation, snapshots)
+    assert actual['compilation']['source_context']['status'] == 'current'
+    events = observation['validation']['events']
+    before = next(row for row in events if row.get('operation') == 'NativeBodyRead' and row.get('stage') == 'before-build')
+    after = next(row for row in events if row.get('operation') == 'NativeBodyRead' and row.get('stage') == 'after-build')
+    if damage == 'missing-before':
+        events.remove(before)
+    elif damage == 'missing-after':
+        events.remove(after)
+    elif damage.startswith('stale-'):
+        row = before if damage == 'stale-before' else after
+        snapshots[row['file']] = snapshots[row['file']][:-1] + b'!'
+    elif damage == 'read-order':
+        events.remove(before); events.append(before)
+    elif damage == 'configuration':
+        snapshots['imported-hdb.bin'] = b'unrelated configuration'
+    elif damage == 'partial-reports':
+        events.remove(next(row for row in events if row.get('operation') == 'CompileRawReports'))
+    else:
+        selection = next(row for row in events if row.get('operation') == 'NativeBodySelection' and row.get('stage') == 'after-build')
+        identity = deepcopy(selection['source_object']); selection['source_object'] = identity
+        changed = list(identity['lookup']['id']); changed[-1] += 1
+        identity['lookup']['id'] = identity['body']['id'] = changed
+        after['body'] = changed
+    actual = project_native_validation(raw, observation, snapshots)
+    assert actual['compilation']['source_context']['status'] == 'unresolved'
+    assert not actual['compilation']['source_context']['public_check_promoted']
+
+
+def test_native_compile_st_position_retains_source_line_without_inventing_expanded_instance():
+    from gxw.native_diagnostics import correlate_native_compile_position
+    report = {'kind': 2, 'code': 0x500c1200, 'instance_kind': 6, 'library': {'text': ''},
+              'name': {'text': 'INNER_FB'}, 'instance': {'text': 'INNER_FB'}, 'program_kind': 193,
+              'network': -1, 'step': 1, 'left': -1, 'top': 1, 'right': -1, 'bottom': -1}
+    project = lambda row=report, cpu='Q03UDV': correlate_native_compile_position(row, cpu=cpu,
+        pou='INNER_FB', program_kind=193, text='\nRESULT :? SIGNAL;')
+    actual = project()
+    assert actual['status'] == 'source-resolved'
+    assert actual['source']['zero_based_line'] == 1 and actual['source']['text'] == 'RESULT :? SIGNAL;'
+    assert actual['instance_resolution'] == 'not_available_in_compile_report'
+    assert 'instance' not in actual and not actual['public_check_promoted']
+    assert project({**report, 'step': 0})['status'] == 'unresolved'
+    assert project({**report, 'top': 2, 'step': 2})['status'] == 'unresolved'
+    assert project(cpu='FX3U/FX3UC')['status'] == 'unresolved'
+
+
+@pytest.mark.parametrize('damage', ['two-outputs', 'array-producer', 'unknown-record', 'multiple-blocks',
+                                  'wrong-network', 'negated-port', 'broken-code-adjacency',
+                                  'missing-producer-name', 'missing-producer-position'])
+def test_fbd_output_projection_retains_ambiguity_and_unobserved_boundaries(damage):
+    from copy import deepcopy
+    from gxw.native_diagnostics import correlate_fbd_bool_output
+    query, diagnostic, records, references, model = fbd_output_projection_inputs()
+    if damage == 'two-outputs':
+        duplicate = {**deepcopy(model['nodes'][1]), 'id': 'n999', 'source_offset': 999}
+        model['nodes'].append(duplicate)
+    elif damage == 'array-producer':
+        references[0]['array_data_type'] = 1
+    elif damage == 'unknown-record':
+        model['unknown_record_count'] = 1
+    elif damage == 'multiple-blocks':
+        model['blocks'] = [{}, {}]
+    elif damage == 'wrong-network':
+        query['location']['network'] = 2
+    elif damage == 'negated-port':
+        model['nodes'][0]['ports'][0]['negated'] = True
+    elif damage == 'broken-code-adjacency':
+        records[1]['source_offset'] += 1
+    elif damage == 'missing-producer-name':
+        del references[0]['name']
+    else:
+        del references[0]['left']
+    actual = correlate_fbd_bool_output(query, diagnostic, records, references, model, selected_pou='FBD_MAIN',
+                                       instance=('TASK', 'FBD_MAIN'))
+    assert actual['status'] == 'unresolved' and not actual['public_check_promoted']
+    if damage == 'two-outputs':
+        assert actual['source_status'] == 'uniquely_correlated'
+        assert actual['output_status'] == 'ambiguous' and set(actual['output_candidates']) == {'n150', 'n999'}
+
+
+@pytest.mark.parametrize('damage', ['missing-analysis', 'missing-reports', 'partial-analysis', 'rejected-analysis',
+    'truncated-rows', 'query-failure', 'old-analysis-order', 'duplicate-analysis', 'conflicting-version',
+    'missing-instance-range', 'foreign-source-range', 'stale-check-code'])
+def test_native_validation_instance_locations_require_current_complete_original_analysis(damage):
+    from gxw.native_diagnostics import project_native_validation
+    raw, observation, snapshots = native_reference_observation()
+    result = project_native_validation(raw, observation, snapshots)
+    assert result['source_references']['status'] == 'current'
+    assert result['native_instance_locations']['status'] == 'completed'
+    assert result['raw_diagnostics'][0]['source_projection']['instance_projection']['instance'] == '1'
+    assert result['raw_diagnostics'][0]['graph_projection']['status'] == 'unresolved'
+    events = observation['validation']['events']
+    event = lambda operation: next(row for row in events if row.get('operation') == operation)
+    if damage == 'missing-analysis':
+        events.remove(event('Compiler.CreateProgramAnalysis3'))
+    elif damage == 'missing-reports':
+        events.remove(event('NativeReferenceRawReports'))
+    elif damage == 'partial-analysis':
+        event('NativeReferenceProgress')['percent'] = event('NativeReferenceRawReports')['percent'] = 99
+    elif damage == 'rejected-analysis':
+        event('NativeReferenceRawReports')['reports'][0]['kind'] = 2
+    elif damage == 'truncated-rows':
+        event('NativeSourceReferences')['rows'] = []
+    elif damage == 'query-failure':
+        event('Compiler.GetProgramAnalysis3')['hresult'] = -2147467259
+    elif damage == 'old-analysis-order':
+        row = event('Compiler.CreateProgramAnalysis3'); events.remove(row); events.insert(0, row)
+    elif damage == 'duplicate-analysis':
+        events.append(dict(event('NativeSourceReferences')))
+    elif damage == 'conflicting-version':
+        events.append({'operation': 'OwnedBackendModule', 'name': 'DZDataABS_Compiler_IEC.dll', 'version': 'unobserved'})
+    elif damage in ('missing-instance-range', 'foreign-source-range'):
+        query = event('NativeDiagnosticLocation')['source_location']['instance_ranges']
+        if damage == 'missing-instance-range':
+            query['candidates'] = []
+        else:
+            query['candidates'][0]['query']['pou'] = 'FOREIGN'
+    else:
+        snapshots['submitted.bin'] = snapshots['submitted.bin'][:-1] + b'!'
+    result = project_native_validation(raw, observation, snapshots)
+    assert result['native_instance_locations']['status'] != 'completed'
+    assert result['raw_diagnostics'][0]['source_projection'].get('instance_projection', {}).get('status') != 'instance-resolved'
+    assert result['raw_diagnostics'][0]['original']['code'] == 0x050c9300
+    assert result['raw_backend_check']['status'] == 'completed-rejected'
+    assert not result['public_check']['completed']
+
+
+def test_native_instance_ranges_preserve_identity_under_order_and_code_position_changes():
+    from copy import deepcopy
+    from hypothesis import example, given, settings, strategies as st
+    from gxw.native_diagnostics import bind_native_instance_interval
+
+    @settings(max_examples=100, deadline=None, derandomize=True)
+    @given(st.sampled_from([193, 208]), st.integers(min_value=0, max_value=100000),
+           st.integers(min_value=1, max_value=1024), st.integers(min_value=0, max_value=3),
+           st.permutations(range(8)))
+    @example(193, 0, 1, 0, list(reversed(range(8))))
+    def check(kind, shift, size, selected, order):
+        location = {'program_kind': kind, 'network': -1 if kind == 193 else 1,
+                    'start_step': 3 if kind == 193 else 1, 'step_count': -1, 'element_id': -1}
+        step = shift + selected * size
+        query = {'query': {'resource': 'MAIN', 'start_step': step}, 'location': location}
+        refs, candidates = [], []
+        for index in range(8):
+            path = ('CALLER_A' if index < 4 else 'INACTIVE') + '.MODULE_' + str(index) + '.INNER'
+            row = {'task': 'TASK', 'instance': path}
+            refs.append(row)
+            value = {'resource': 'MAIN', 'start_step': shift + index * size, 'step_count': size, 'timestamp': 0}
+            if index >= 4:
+                value = {'resource': None, 'start_step': -1, 'step_count': -1, 'timestamp': -1}
+            candidates.append({'original_reference': row, 'hresult': 0, 'code': 0, 'range': value,
+                'query': {'library': '', 'pou': path, **location, 'step_count': 1 if kind == 193 else -1}})
+        evidence = {'status': 'completed', 'resource': 'MAIN', 'diagnostic_step': step,
+                    'candidates': [candidates[index] for index in order]}
+        result = bind_native_instance_interval(query, list(reversed(refs)), evidence)
+        assert result['interval']['name'] == 'TASK.' + refs[selected]['instance']
+        assert result['interval']['step_count'] == size
+        # Omitting even a nonexecuting declaration makes the selection incomplete.
+        for missing in range(8):
+            partial = {**evidence, 'candidates': [row for row in evidence['candidates'] if row is not candidates[missing]]}
+            assert bind_native_instance_interval(query, refs, partial)['interval'] is None
+        ambiguous = deepcopy(evidence)
+        other = next(row for row in ambiguous['candidates'] if row['original_reference'] == refs[(selected + 1) % 4])
+        other['range'] = dict(candidates[selected]['range'])
+        assert bind_native_instance_interval(query, refs, ambiguous)['interval'] is None
+    check()
+
+
+def test_native_st_call_chain_uses_explicit_calls_and_current_caller_offsets():
+    from copy import deepcopy
+    from hypothesis import given, settings, strategies as st
+    from gxw.native_diagnostics import correlate_st_diagnostic
+
+    @settings(max_examples=80, deadline=None, derandomize=True)
+    @given(st.integers(min_value=1, max_value=4), st.integers(min_value=0, max_value=1),
+           st.integers(min_value=1, max_value=10000), st.integers(min_value=1, max_value=5), st.data())
+    def check(depth, selected, current_offset, block_count, data):
+        references, leaf_refs, nodes, paths = [], [], [], []
+        texts = {'INNER_FB': '\n\n\nY1 := SIGNAL;'}
+        network = data.draw(st.integers(min_value=1, max_value=block_count))
+        for caller_index, caller in enumerate(['FBD_LEFT', 'FBD_RIGHT']):
+            parent_instance = caller
+            task = 'TASK_' + str(caller_index)
+            for level in range(depth + 1):
+                parent_pou = caller if level == 0 else 'WRAPPER_' + str(level - 1)
+                child_pou = 'WRAPPER_' + str(level) if level < depth else 'INNER_FB'
+                member = 'SHARED_STAGE' if level == 0 else 'NESTED_' + str(level)
+                row = {'library': '', 'resource': 'MAIN', 'task': task, 'instance': parent_instance,
+                    'name': member, 'type': child_pou, 'source': parent_pou, 'class_code': 1, 'attribute': 1,
+                    'program_kind': 208 if level == 0 else 193, 'network': network if level == 0 else -1,
+                    'left': 8, 'top': 9 if level == 0 else 0, 'right': 13, 'bottom': 14}
+                references.append(row)
+                if level:
+                    texts[parent_pou] = member + '();'
+                parent_instance += '.' + member
+            paths.append(parent_instance)
+            leaf = {'library': '', 'resource': 'MAIN', 'task': task, 'instance': parent_instance,
+                    'name': 'Y1', 'source': 'INNER_FB', 'attribute': 2, 'program_kind': 193, 'top': 3}
+            references.append(leaf); leaf_refs.append(leaf)
+            nodes.append({'id': 'current-' + caller, 'source_offset': current_offset + caller_index,
+                          'symbol': 'SHARED_STAGE', 'template': 'function_block:WRAPPER_0',
+                          'x': 8, 'y': 9, 'width': 5, 'height': 5, 'block': network-1})
+        # Both callers deliberately share the same symbol, FB type and geometry.
+        # Their tasks, explicit call references and native ranges distinguish them.
+        query = {'hresult': 0, 'code': 0, 'query': {'resource': 'MAIN', 'start_step': 20 + selected * 10},
+            'location': {'library': '', 'pou': 'INNER_FB', 'program_kind': 193,
+                         'network': -1, 'start_step': 3, 'step_count': -1, 'element_id': -1}}
+        ranges = {'status': 'completed', 'resource': 'MAIN', 'diagnostic_step': query['query']['start_step'],
+            'candidates': [{'original_reference': row, 'hresult': 0, 'code': 0,
+                'query': {'library': '', 'pou': row['instance'], 'program_kind': 193,
+                          'network': -1, 'start_step': 3, 'step_count': 1, 'element_id': -1},
+                'range': {'resource': 'MAIN', 'start_step': 20 + index * 10, 'step_count': 3, 'timestamp': 0}}
+                for index, row in enumerate(leaf_refs)]}
+        references = list(data.draw(st.permutations(references)))
+        caller = ['FBD_LEFT', 'FBD_RIGHT'][selected]
+        caller_nodes = [nodes[selected]] + [{**nodes[selected], 'id': 'foreign-block-'+str(block),
+                        'source_offset': current_offset+100+block, 'block': block}
+                        for block in range(block_count) if block != network-1]
+        caller_nodes = list(data.draw(st.permutations(caller_nodes)))
+        actual = correlate_st_diagnostic(query, [], references, texts, caller_nodes,
+                                         caller_pou=caller, native_ranges=ranges, caller_block_count=block_count)
+        assert actual['status'] == 'uniquely_correlated'
+        assert actual['instance'] == paths[selected]
+        assert len(actual['call_chain']) == depth + 1
+        assert actual['caller']['object_id'] == 'current-' + caller
+        assert actual['caller']['source_offset'] == current_offset + selected
+        # One missing intermediate call cannot be inferred by splitting the path.
+        for call in actual['call_chain']:
+            partial = [row for row in references if row is not call['native_reference']]
+            assert correlate_st_diagnostic(query, [], partial, texts, caller_nodes,
+                caller_pou=caller, native_ranges=ranges, caller_block_count=block_count)['status'] == 'unresolved'
+        # A matching cached link interval must not override incomplete original API evidence.
+        partial_ranges = deepcopy(ranges); partial_ranges['candidates'].pop()
+        assert correlate_st_diagnostic(query, [actual['compiled_interval']], references, texts, caller_nodes,
+            caller_pou=caller, native_ranges=partial_ranges, caller_block_count=block_count)['status'] == 'unresolved'
+        assert correlate_st_diagnostic(query, [], references, texts, [nodes[1 - selected]],
+            caller_pou=['FBD_LEFT', 'FBD_RIGHT'][1 - selected], native_ranges=ranges,
+            caller_block_count=block_count)['status'] == 'unresolved'
+        if block_count > 1:
+            del nodes[selected]['block']
+            assert correlate_st_diagnostic(query, [], references, texts, caller_nodes, caller_pou=caller,
+                native_ranges=ranges, caller_block_count=block_count)['status'] == 'unresolved'
+    check()
 
 
 @pytest.mark.parametrize('partial', [False, True])
@@ -1201,6 +1838,82 @@ def native_source_chain_inputs():
         programs[name], snapshots[filename] = source.raw, body
     return programs, names, dict(project_id=project, native_version='1.635.0.1',
                                  selections=selections, reads=reads, snapshots=snapshots)
+
+
+def test_public_source_name_collision_cannot_promote_a_body_or_generated_code_position():
+    from copy import deepcopy
+    from hypothesis import given, settings, strategies as st
+    from gxw.native_diagnostics import compare_public_source_diagnostic
+
+    @settings(max_examples=60, deadline=None, derandomize=True)
+    @given(st.permutations(['LEAF', 'PARENT', 'CALLER']), st.integers(min_value=0, max_value=2),
+           st.sampled_from([193, 208]), st.integers(min_value=0, max_value=4096))
+    def check(names, actual_index, language, step):
+        _, _, evidence = native_source_chain_inputs()
+        sources = {row['name']: deepcopy(row['source_object']) for row in evidence['selections']}
+        resource, actual_pou = names[0], names[actual_index]
+        source = sources[actual_pou]
+        source['language'].update(value=language, expected=language)
+        query = {'resource': resource, 'code_step': step, 'hresult': 0, 'code': 0,
+            'location': {'library': '', 'pou': actual_pou, 'program_kind': language, 'network': 1,
+                         'start_step': 1, 'step_count': -1, 'element_id': 0, 'action_transition_present': False},
+            'source_object': source}
+        diagnostic = {'kind': 2, 'code': 0x050c9300, 'step': step,
+                      'library': {'text': ''}, 'name': {'text': resource}}
+        public = {'kind': 2, 'code': diagnostic['code'], 'name': resource, 'instance': resource,
+            'object_id': sources[resource]['body']['id'], 'program_kind': 1, 'step': step,
+            'network': -1, 'left': -1, 'top': step, 'right': -1, 'bottom': -1}
+        compare = lambda p=public, q=query: compare_public_source_diagnostic(p, q, diagnostic,
+            project_id=evidence['project_id'], native_version=evidence['native_version'])
+        result = compare()
+        assert result['status'] == ('source-consistent' if actual_pou == resource else 'source-conflict')
+        assert result['native_source_projection']['source']['pou'] == actual_pou
+        assert result['public_position_binding'] == {'status': 'different-representation',
+            'public_program_kind': 1, 'source_program_kind': language, 'direct_source_mapping_allowed': False}
+        assert not result['public_check_promoted'] and result['original_public_diagnostic'] == public
+        # Matching both body and language still supplies no independent
+        # proof that these public coordinates are current source positions.
+        matching = {**public, 'object_id': source['body']['id'], 'program_kind': language}
+        assert compare(matching)['public_position_binding']['status'] == 'not_established'
+        assert not compare(matching)['public_position_binding']['direct_source_mapping_allowed']
+        assert compare({**public, 'step': step+1})['status'] == 'unresolved'
+        assert compare(q={**query, 'code': 0x2d010025})['status'] == 'unresolved'
+    check()
+
+
+@pytest.mark.parametrize('damage', [None, 'adapter', 'compiler', 'workspace', 'missing_adapter', 'missing_compiler'])
+def test_saved_public_source_audit_keeps_version_binding_with_workspace_reads(tmp_path, monkeypatch, damage):
+    monkeypatch.syspath_prepend(str(ROOT/'research'))
+    from program_check_evidence import analyze_directory
+    _, _, evidence = native_source_chain_inputs()
+    sources = {row['name']: row['source_object'] for row in evidence['selections']}
+    query = {'resource': 'PARENT', 'code_step': 28, 'hresult': 0, 'code': 0,
+        'location': {'library': '', 'pou': 'LEAF', 'program_kind': 208, 'network': 1,
+                     'start_step': 1, 'step_count': -1, 'element_id': 0, 'action_transition_present': False},
+        'source_object': sources['LEAF']}
+    public = {'kind': 2, 'code': 0x050c9300, 'name': 'PARENT', 'instance': 'PARENT',
+        'object_id': sources['PARENT']['body']['id'], 'program_kind': 1, 'step': 28,
+        'network': -1, 'left': -1, 'top': 28, 'right': -1, 'bottom': -1}
+    modules = {'adapter': 'DZDataABS_CompilerAdapter.dll', 'compiler': 'DZDataABS_Compiler_IEC.dll',
+               'workspace': 'DZDataABS_Workspace.dll'}
+    events = [{'operation': 'ProjectID', 'words': evidence['project_id']}]
+    events.extend({'operation': 'OwnedBackendModule', 'name': name,
+                   'version': 'unobserved' if damage == key else '1.635.0.1'}
+                  for key, name in modules.items() if damage != 'missing_' + key)
+    (tmp_path/'native-events.jsonl').write_text('\n'.join(json.dumps(row) for row in events), encoding='utf-8')
+    (tmp_path/'public-source-diagnostic-audit.json').write_text(json.dumps([{
+        'audit': {'original_public_diagnostic': public}, 'source_query': query,
+        'raw_observation': {'kind': public['kind'], 'code': public['code'], 'step': 28,
+                            'library_hex': '', 'name_hex': b'PARENT'.hex()}}]), encoding='utf-8')
+    result = analyze_directory(tmp_path)
+    audit = result['diagnostic_projection']['source_audits'][0]
+    assert result['diagnostic_projection']['source_body_binding'] == (
+        'conflicted' if damage is None else 'partial_or_unresolved')
+    assert audit['status'] == ('source-conflict' if damage is None else 'unresolved')
+    assert not audit['public_check_promoted'] and not result['public_check']['completed']
+    if damage is None:
+        assert audit['native_source_projection']['source']['pou'] == 'LEAF'
+        assert audit['public_position_binding']['status'] == 'different-representation'
 
 
 @pytest.mark.parametrize('missing', ['LEAF', 'PARENT', 'CALLER'])

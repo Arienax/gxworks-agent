@@ -354,6 +354,12 @@ def generation_specification(confirmed_spec: Any) -> dict | None:
     if not isinstance(confirmed_spec, Mapping):
         return None
     result = _project(confirmed_spec, _SPEC_FIELDS)
+    from plc.specification.behavior import normalize_behavior_constraints, normalize_construction_plan
+    if 'behavior_constraints' in confirmed_spec:
+        result['behavior_constraints'] = normalize_behavior_constraints(confirmed_spec['behavior_constraints'])
+    selected = confirmed_spec.get('selected_approach') or {}
+    if 'construction_plan' in selected:
+        result.setdefault('selected_approach', {})['construction_plan'] = normalize_construction_plan(selected['construction_plan'])
     if "operation_intents" in confirmed_spec:
         from plc.instruction_binding import normalize_operation_intents
         result["operation_intents"] = normalize_operation_intents(confirmed_spec["operation_intents"])

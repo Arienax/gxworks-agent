@@ -68,7 +68,7 @@ if (-not [string]::IsNullOrWhiteSpace($GatewayDirectory)) {
 }
 
 $requiredResources = @(
-    "resources\config.default.json", "resources\pattern_library.json", "resources\plc_models.json",
+    "resources\config.default.json", "resources\pattern_library.json", "resources\plc_models.json", "resources\instructions\control_runtime.json",
     "resources\knowledge\fx3u_knowledge.sqlite", "resources\knowledge\fx3u_dense_lsa.npz",
     "resources\knowledge\manifest.json", "resources\knowledge\THIRD_PARTY_NOTICES.md",
     "resources\locales\en.json", "resources\locales\ja.json", "resources\app.ico", "LICENSE",

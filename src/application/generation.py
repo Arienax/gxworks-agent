@@ -358,6 +358,14 @@ class GenerationWorkflow:
                         )
                 elif confirmed_generation_call:
                     from application.generation_agent import generate_confirmed_ladder
+                    from plc.specification.repair import patch_device_addresses
+                    construction_occupancy = patch_device_addresses(self.previous_json) if self.previous_json else set()
+                    if self.previous_json:
+                        from plc.ir import analyze_rung_access
+                        for rung in self.previous_json.get('rungs', []):
+                            reads, writes = analyze_rung_access(rung, plc_model=self.plc_model)
+                            construction_occupancy.update(reads)
+                            construction_occupancy.update(writes)
 
                     result = model_call(
                         generate_confirmed_ladder,
@@ -371,6 +379,7 @@ class GenerationWorkflow:
                             "progress", {"stage": stage, "message": message}
                         ),
                         construction_examples=self.construction_examples,
+                        project_occupied_devices=construction_occupancy,
                     )
                     direct_candidate = result.get("ladder")
                     if not isinstance(direct_candidate, dict):
@@ -386,6 +395,8 @@ class GenerationWorkflow:
                     }
                     if (result.get('operation_binding') or {}).get('receipts'):
                         generation_agent_metadata['operation_binding'] = copy.deepcopy(result['operation_binding'])
+                    if (self.confirmed_context.get('selected_approach') or {}).get('construction_plan'):
+                        generation_agent_metadata['construction_binding'] = copy.deepcopy(result['construction_binding'])
                     validation_messages.append(
                         tr('已由独立生成 Agent 根据确认规格一次生成完整 ladder_v1')
                     )
@@ -678,6 +689,7 @@ class GenerationWorkflow:
                     "height": rendered["height"],
                     "normalization": prepared_candidate["normalization"],
                     "semantic_validation": prepared_candidate.get("semantic_validation"),
+                    "behavior_check": prepared_candidate.get('behavior_check'),
                     "candidate_origin": prepared_candidate.get("candidate_origin"),
                     "artifacts": artifacts,
                     "contract_mismatch": None,

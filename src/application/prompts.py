@@ -21,6 +21,7 @@ execution_intent_claims：trigger{kind,source_devices,from/to|value/period_ms}�
 
 # Operation effect candidates
 operation_intent_claims[] 可选，仅记录明确效果，不猜地址、位宽或关系。项含 id、opcode(仅用户指定)、effects:[{target:{device,kind:bit|word|state,offset},value:表达式}]、enable:表达式、execution:{trigger:level|rising|falling}、provenance:{evidence:[本轮逐字原文]}；候选不能自确认。表达式为 {op,type,args}；叶为 {op:device,name,type} 或 {op:constant,value,type}。type 必须为对象 {kind:bool} 或 {kind:int,bits:16|32,signed:true|false}。比较输入同类型、结果 bool；add/sub 同类型；and/or/not 使用 bool。
+behavior_claims[] 可选，使用同一表达式类型，附id、label、provenance.evidence本轮逐字原文；候选需经规格确认。只记录用户明确关系：initialize含values、ranges(start/end/value)、execution_context；event含source、accept、edge(rising/falling)、startup_policy(require_opposite/allow_initial_event)、output；merge_events含events(源事件ID)、output；transition_group含enable及按优先级排列的transitions(id/when/effects)。不把实现方法当成用户要求。已选方案可提出construction_plan：instances(id/requirement_id/method/depends_on)、internal_ranges(start/end)、execution_context；方法仅first_scan_isolation/source_history/scan_union/priority_snapshot。内部范围未确认时不要猜；无适用事实保留未验证，沿用本次分析与确认，不另开规划调用。
 
 # Explicit low-level claims
 Agent A 不选择 opcode、完整操作数或内部地址，只报告用户本轮明确写死/撤销的低层条件。explicit_constraint_claims 每项含 operation=require|forbid|clear、scope=global|scoped|ambiguous、target、evidence[]；evidence 逐字来自本轮。target 仅 opcode/device 的 values，instruction_instance 的 opcode+operands，或 clear 的 category(opcodes|devices|instruction_instances|all)。局部用途限制用 scoped，不确定用 ambiguous；只有 global 会被 Core 投影。

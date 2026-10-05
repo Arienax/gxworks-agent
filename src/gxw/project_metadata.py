@@ -37,12 +37,14 @@ def mark_observed_source_compile_pending(raw: bytes, *, logical_name: str) -> by
 def read_project_text_context(raw: bytes) -> dict:
     """Read the observed .prj CPU/code-page prefix without interpreting its tail.
 
+    The counted project name, CPU and description precede the fixed prefix.
     Native project attribute/code-page getters agree for the inspected Q/FX
-    controls. This is not a CPU capability or compiler-version description.
+    controls, including an independently authored project with a description.
+    This is not a CPU capability or compiler-version description.
     Unsupported code pages remain None instead of using the host's encoding.
     """
     offset, values = 0, []
-    for _ in range(2):
+    for _ in range(3):
         if offset + 4 > len(raw):
             raise GXWFormatError("truncated project metadata string length")
         count = struct.unpack_from("<I", raw, offset)[0]
@@ -57,13 +59,13 @@ def read_project_text_context(raw: bytes) -> dict:
             raise GXWFormatError("unsupported project metadata string terminator")
         values.append(text[:-1])
         offset = end
-    if len(raw) < offset + 52 or raw[offset:offset + 14] != bytes.fromhex("0100000000000000000000000000"):
+    if len(raw) < offset + 46 or raw[offset:offset + 8] != bytes(8):
         raise GXWFormatError("unsupported project metadata prefix")
-    codepage = struct.unpack_from("<I", raw, offset + 48)[0]
+    codepage = struct.unpack_from("<I", raw, offset + 42)[0]
     # The inspected native converter substitutes 54936 for stored CP936.
     encoding = {932: "cp932", 936: "gb18030", 949: "cp949", 1252: "cp1252"}.get(codepage)
     return dict(cpu=values[1], codepage=codepage, text_encoding=encoding,
-                codepage_offset=offset + 48, metadata_sha256=hashlib.sha256(raw).hexdigest(),
+                codepage_offset=offset + 42, metadata_sha256=hashlib.sha256(raw).hexdigest(),
                 handling="partially-decoded")
 
 

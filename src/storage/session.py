@@ -514,6 +514,22 @@ class SessionStore:
         project = self.get_project(project_id)
         if project is None:
             raise KeyError(project_id)
+        metadata = copy.deepcopy(metadata)
+        spec = metadata.get('confirmed_spec_snapshot') or project.get('confirmed_spec')
+        if spec and spec.get('behavior_constraints') and (metadata.get('artifacts') or {}).get('ir'):
+            from simulator.bounded import check_confirmed_behavior
+            program = json.loads((self.version_dir(project_id, version_id) / metadata['artifacts']['ir']).read_text(encoding='utf-8'))
+            report = check_confirmed_behavior(program, spec, version_binding={'project_id': project_id, 'version_id': version_id})
+            receipt = (metadata.get('generation_metadata') or {}).get('construction_binding') or {}
+            from plc.construction import apply_construction_check
+            report = apply_construction_check(report, receipt)
+            metadata['behavior_check'] = report
+            if report['activation_blocked']:
+                activate = False
+                metadata.update(activation_blocked=True, lifecycle_status='diagnostic')
+                metadata.setdefault('generation_metadata', {})['diagnostic_only'] = True
+            elif report['status'] == 'unverified':
+                metadata['lifecycle_status'] = 'draft'
         version = self._with_version_defaults(
             {
                 "id": version_id,
@@ -568,6 +584,15 @@ class SessionStore:
             raise KeyError(project_id)
         if not any(item.get("id") == version_id for item in project.get("versions", [])):
             raise KeyError(version_id)
+        version = self.get_version(project_id, version_id)
+        if version.get('activation_blocked'):
+            raise ValueError('已确认行为关系存在反例；诊断草稿不能激活。')
+        spec = project.get('confirmed_spec')
+        if spec and spec.get('behavior_constraints'):
+            from simulator.bounded import check_confirmed_behavior
+            program = self.load_program_ir(project_id, version_id, persist_legacy=False)
+            if program and check_confirmed_behavior(program, spec)['activation_blocked']:
+                raise ValueError('当前规格的行为检查发现反例；请修改候选后重新检查。')
         project["active_version_id"] = version_id
         self.save_project(project)
         return self.get_version(project_id, version_id)

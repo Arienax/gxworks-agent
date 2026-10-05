@@ -73,11 +73,8 @@ def _device_tokens(value: Any) -> List[str]:
 
 
 def _first_scan_devices(plc_model: str) -> set[str]:
-    return (
-        {"SM402", "SM8002"}
-        if str(plc_model or "").upper().startswith("FX5")
-        else {"M8002"}
-    )
+    from plc.runtime_semantics import control_runtime_facts
+    return set(control_runtime_facts(plc_model).get('first_scan', {}).get('devices', []))
 
 
 def generation_process_fact_needs(spec: Mapping[str, Any], *, plc_model: str | None = None) -> List[Dict[str, Any]]:
@@ -96,15 +93,17 @@ def generation_process_fact_needs(spec: Mapping[str, Any], *, plc_model: str | N
                  for row in view.get("execution_semantics") or [] if isinstance(row, Mapping)}
     references = json.dumps(view, ensure_ascii=False)
     needs = []
-    if "FIRST_SCAN" in semantics:
+    behavior_facts = any(row.get('status') == 'confirmed' for row in view.get('behavior_constraints', []))
+    if "FIRST_SCAN" in semantics or any(row.get('kind') == 'initialize' and row.get('status') == 'confirmed'
+                                       for row in view.get('behavior_constraints', [])):
         model = str(plc_model or spec.get("plc_model") or "").upper()
         devices = sorted(_first_scan_devices(model)) if model in SUPPORTED_PLC_MODELS else []
         needs.append({"target": "FIRST_SCAN", "dimension": "definition",
-                      "devices": devices, "basis": "confirmed_execution_semantics"})
+                      "devices": devices, "basis": 'confirmed_behavior_constraints' if behavior_facts else "confirmed_execution_semantics"})
     timers = sorted({value.upper() for value in re.findall(r"(?<![A-Za-z0-9_])T\d+(?![A-Za-z0-9_])", references, re.I)})
     if timers:
         needs.append({"target": "TIMER", "dimension": "operation", "devices": timers,
-                      "basis": "declared_timer_references"})
+                      "basis": 'confirmed_behavior_constraints' if behavior_facts else "declared_timer_references"})
     contract = (view.get("selected_approach") or {}).get("generation_contract") or {}
     if "hardware_counter" in (contract.get("required_structures") or []):
         counters = sorted({value.upper() for value in re.findall(r"(?<![A-Za-z0-9_])C\d+(?![A-Za-z0-9_])", references, re.I)})
@@ -134,9 +133,9 @@ def timer_resets_when_disabled(address: str, plc_model: str) -> Optional[bool]:
     parsed = parse_device_address(address, model)
     if parsed is None or parsed[0] != "T":
         return None
-    if model == "FX3U":
-        return not 246 <= parsed[1] <= 255
-    return None
+    from plc.runtime_semantics import timer_runtime_fact
+    fact = timer_runtime_fact(model, address)
+    return fact['reset_on_disable'] if fact else None
 
 
 def _clock_periods(plc_model: str) -> Dict[str, float]:

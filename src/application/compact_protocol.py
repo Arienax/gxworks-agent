@@ -149,7 +149,7 @@ _COMPARE_PREFIXES = frozenset({"=", "==", "<>", ">=", "<=", ">", "<"})
 _TYPED_OUTPUTS = frozenset({"COIL", "PLS", "PLF", "TIMER", "COUNTER"})
 
 
-def compact_response_schema():
+def compact_response_schema(*, allow_construct=False):
     """Small transport schema; engineering validity remains in existing validators."""
     simple = {"type": "string", "minLength": 1, "maxLength": 160}
     parallel = {
@@ -183,12 +183,17 @@ def compact_response_schema():
         "required": ["h", "s", "b"],
         "additionalProperties": False,
     }
-    return {
+    schema = {
         "type": "object",
         "properties": {"r": {"type": "array", "minItems": 1, "items": rung}},
         "required": ["r"],
         "additionalProperties": False,
     }
+    if allow_construct:
+        reference = {'type': 'object', 'properties': {'construct': {'type': 'string', 'minLength': 1, 'maxLength': 64}},
+                     'required': ['construct'], 'additionalProperties': False}
+        schema['properties']['r']['items'] = {'anyOf': [schema['properties']['r']['items'], reference]}
+    return schema
 
 
 @lru_cache(maxsize=1)

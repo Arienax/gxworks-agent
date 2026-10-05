@@ -145,51 +145,10 @@ def native_il_projection(raw, *, encoding):
 
 
 def _read_native_il(raw, *, encoding, preserve_opaque_text):
-    cursor, records, gaps, line_start = 0, [], [], True
-    while cursor < len(raw):
-        size = raw[cursor]
-        if size == 0:  # native instruction delimiter
-            cursor += 1
-            line_start = True
-            continue
-        token = raw[cursor:cursor + size]
-        if size < 3 or len(token) != size or token[-1] != 0:
-            raise ValueError(f"unsupported native IL framing at {cursor}")
-        kind, gap = token[1], None
-        try:
-            text = token[2:-1].decode(encoding)
-        except UnicodeDecodeError as exc:
-            if not preserve_opaque_text:
-                raise
-            text = None
-            gap = dict(native_output_offset=cursor, raw_token_hex=token.hex(),
-                       text_encoding=encoding, diagnostic=str(exc), handling="opaque-preserved")
-        field = "text"
-        if kind >= 0x90:
-            if line_start and kind in (0xD0, 0xD1):
-                records.append({"kind": "label", "text": text})
-            elif line_start or not records or records[-1]["kind"] != "instruction":
-                raise ValueError("native IL operand has no instruction")
-            else:
-                records[-1]["args"].append(text)
-                field = "args"
-        elif kind in (0x80, 0x82):
-            records.append({"kind": "statement" if kind == 0x80 else "note", "text": text})
-        elif kind < 0x80:
-            records.append({"kind": "instruction", "op": text, "args": []})
-            field = "op"
-        else:
-            raise ValueError(f"unknown native IL class {kind}")
-        if gap is not None:
-            gap.update(record_index=len(records) - 1, field=field)
-            if field == "args":
-                gap["argument_index"] = len(records[-1]["args"]) - 1
-            records[-1]["handling"] = "partially-decoded"
-            gaps.append(gap)
-        line_start = False
-        cursor += size
-    return dict(records=records, text_gaps=gaps, native_output_sha256=sha256(raw),
-                handling="partially-decoded" if gaps else "native-decoded")
+    from gxw.token_listing import native_il_projection as project_native_il
+    result = project_native_il(raw, encoding=encoding, preserve_opaque_text=preserve_opaque_text)
+    # Preserve the existing research output field; Core compares actual bytes.
+    return {**result, "native_output_sha256": sha256(raw)}
 
 
 def canonical_record(record):

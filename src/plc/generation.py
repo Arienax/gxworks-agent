@@ -288,6 +288,8 @@ def prepare_ladder_candidate(
                            semantic_requirements=semantics,
                            _canonicalize_devices=previous_ladder is None and not repair_mode)
     validate_plc_ir(program, validate_ladder=False)
+    from simulator.bounded import check_confirmed_behavior
+    behavior_check = check_confirmed_behavior(program, confirmed_spec)
     return {
         "ladder": parsed,
         "program_ir": program,
@@ -295,6 +297,7 @@ def prepare_ladder_candidate(
         "normalization": normalization_summary(normalization),
         "validation_profile": GENERATION_VALIDATION_PROFILE,
         "semantic_validation": semantic_validation,
+        "behavior_check": behavior_check,
         "candidate_origin": candidate_origin,
     }
 

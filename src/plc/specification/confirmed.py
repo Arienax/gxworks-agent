@@ -379,6 +379,13 @@ def validate_spec_draft(spec, plc_model=None):
             normalize_operation_intents(spec['operation_intents'])
         except ValueError as error:
             errors.append(_validation_issue('invalid_operation_intent', str(error), '$.operation_intents'))
+    if 'behavior_constraints' in spec:
+        from plc.specification.behavior import normalize_behavior_constraints, normalize_construction_plan
+        try:
+            normalize_behavior_constraints(spec['behavior_constraints'])
+            normalize_construction_plan((spec.get('selected_approach') or {}).get('construction_plan'))
+        except ValueError as error:
+            errors.append(_validation_issue('invalid_behavior_constraint', str(error), '$.behavior_constraints'))
 
     approaches = [
         item for item in (spec.get("approaches") or []) if isinstance(item, dict)
@@ -1297,6 +1304,10 @@ def build_review_draft(analysis, previous_spec=None):
         "summary": analysis.get("summary") or previous.get("summary", ""),
         "approaches": approaches,
         "selected_approach": selected_approach,
+        "behavior_constraints": copy.deepcopy(previous.get('behavior_constraints') or []) + [
+            copy.deepcopy(row) for row in analysis.get('behavior_constraints', [])
+            if row.get('id') not in {p.get('id') for p in previous.get('behavior_constraints', [])}
+        ],
         "operation_intents": [copy.deepcopy(next((new for new in analysis.get('operation_intents', [])
                                if new.get('id') == item.get('id')), item)) if item.get('status') != 'confirmed'
                               else copy.deepcopy(item) for item in previous.get('operation_intents', [])] + [
@@ -1514,6 +1525,9 @@ def canonicalize_confirmed_spec(spec):
     )
 
     canonical = copy.deepcopy(spec or {})
+    if 'behavior_constraints' in canonical:
+        from plc.specification.behavior import normalize_behavior_constraints
+        canonical['behavior_constraints'] = normalize_behavior_constraints(canonical['behavior_constraints'])
     if "operation_intents" in canonical:
         from plc.instruction_binding import normalize_operation_intents
         canonical["operation_intents"] = normalize_operation_intents(canonical["operation_intents"])

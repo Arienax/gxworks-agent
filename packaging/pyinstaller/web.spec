@@ -10,7 +10,7 @@ from PyInstaller.utils.hooks import collect_all
 root = Path(SPECPATH).resolve().parents[1]
 required = (
     "web/dist/index.html", "resources/config.default.json", "resources/pattern_library.json",
-    "resources/plc_models.json", "resources/knowledge/fx3u_knowledge.sqlite",
+    "resources/plc_models.json", "resources/instructions/control_runtime.json", "resources/knowledge/fx3u_knowledge.sqlite",
     "resources/knowledge/fx3u_dense_lsa.npz", "resources/knowledge/manifest.json",
     "resources/knowledge/THIRD_PARTY_NOTICES.md", "resources/locales/en.json",
     "resources/locales/ja.json", "resources/app.ico", "LICENSE", "start-web.cmd", "scripts/start_web.ps1",
@@ -30,6 +30,7 @@ datas = [
     (str(root / "resources/plc_models.json"), "."),
     (str(root / "resources/locales"), "resources/locales"),
     (str(root / "resources/instructions/mitsubishi"), "resources/instructions/mitsubishi"),
+    (str(root / "resources/instructions/control_runtime.json"), "resources/instructions"),
     (str(root / "resources/knowledge"), "knowledge"),
     (str(root / "resources/app.ico"), "."),
     (str(root / "README.md"), "."),

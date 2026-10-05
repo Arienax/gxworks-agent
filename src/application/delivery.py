@@ -69,6 +69,8 @@ def delivery_summary(workbench, project_id, version_id):
         "decision_receipt_id": receipt_id, "decision_receipt": receipt,
         "decision_receipt_status": "available" if receipt else "not_recorded",
         "static_validation": version.get("validation"), "simulation_runs": runs,
+        "behavior_check": version.get('behavior_check'), "activation_blocked": version.get('activation_blocked', False),
+        "construction_binding": (version.get('generation_metadata') or {}).get('construction_binding'),
         "requirements": requirements, "native_validation": native,
         "reports": [r for r in projects.reports(project_id) if r.get("base_version_id") == version_id],
         "device_io": (program or {}).get("devices", {}),
@@ -193,6 +195,39 @@ def render_delivery(value):
     lines.extend(f"- {cell(message)}" for message in validation.get("messages") or [])
     for report in value.get("reports") or []:
         lines.append(f"- 评审 {cell(report.get('report_id'))}：{cell(report.get('status'))}；{cell(report.get('summary'))}")
+    behavior = value.get('behavior_check') or {}
+    if behavior and behavior.get('status') != 'not_applied':
+        labels = {'violated':'找到违反', 'no_violation_found_in_tested_scope':'受测范围内未发现违反',
+                  'unverified':'未验证'}
+        lines += ["", "## 有界行为检查", "",
+                  f"结果：{cell(labels.get(behavior.get('status'), '未验证'))}；"
+                  f"激活受阻：{readable(bool(value.get('activation_blocked')))}。",
+                  "检查提供短轨迹执行证据，范围及初值、输入、时间假设以本版本检查记录为准。"]
+        coverage = behavior.get('coverage') or {}
+        if 'traces_tested' in coverage:
+            lines.append(f"实际检查 {cell(coverage.get('traces_tested'))} 条轨迹，最长 {cell(coverage.get('maximum_scans'))} 扫描。")
+        for violation in behavior.get('violations') or []:
+            detail = violation.get('reason') or (
+                f"{violation.get('device') or '条件'} 预期 {readable(violation.get('expected'))}，"
+                f"实际 {readable(violation.get('actual'))}")
+            locations = []
+            for write in violation.get('writes') or []:
+                position = write.get('location') or {}
+                label = f"梯级 {position.get('rung_id', position.get('rung'))}，指令 {position.get('instruction_index', position.get('instruction'))}"
+                if label not in locations: locations.append(label)
+            lines.append(f"- 要求 {cell(violation.get('requirement_id'))}：{cell(detail)}；"
+                         f"扫描 {cell(violation.get('scan'))}；构造组 {cell(violation.get('construct_group') or violation.get('instance_id'))}。"
+                         + ("写入位置：" + cell('；'.join(locations)) + "。" if locations else ''))
+        gaps = [(check.get('requirement_id'), reason) for check in behavior.get('checks') or []
+                if check.get('status') == 'unverified' for reason in check.get('reasons') or []]
+        gaps.extend((None,gap.get('reason')) for gap in behavior.get('unsupported_or_missing') or [] if gap.get('reason'))
+        gaps.extend((gap.get('requirement_id') or gap.get('id'),gap.get('reason'))
+                    for gap in behavior.get('construction_gaps') or [] if gap.get('reason'))
+        for requirement, reason in dict.fromkeys(gaps):
+            lines.append(f"- 未验证{('：要求 ' + cell(requirement)) if requirement else ''}：{cell(reason)}。")
+        for violation in behavior.get('construction_violations') or []:
+            lines.append(f"- 构造引用 {cell(violation.get('instance_id'))}：{cell(violation.get('reason'))}；"
+                         f"输出位置 {cell(violation.get('position'))}。")
     lines += ["", "## 本版变更", ""]
     diff = value.get("changes")
     if diff:

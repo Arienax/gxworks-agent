@@ -23,13 +23,13 @@
       "canonical_op": "ZONE_RESET",
       "category": "action",
       "semantic_kind": "function",
-      "cpu_support": ["FX3U"],
+      "cpu_support": ["FX3U", "FX5U"],
       "arity": {"min": 2, "max": 2},
       "operands": [
         {"name": "start", "role": "write", "device_prefixes": ["Y", "M", "S", "T", "C", "D"]},
         {"name": "end", "role": "write", "device_prefixes": ["Y", "M", "S", "T", "C", "D"]}
       ],
-      "notes": "FNC40 ZRST / Zone Reset. JY997D16601. Resets the inclusive range between two like devices."
+      "notes": "FNC40 ZRST / Zone Reset. FX3U: JY997D16601. FX5U: JY997D55801-AB, section 7.4, PDF pp.319-321 (printed pp.317-319), https://dl.mitsubishielectric.com/dl/fa/document/manual/plcf/jy997d55801/jy997d55801ab.pdf. Resets an ascending inclusive range of like bit or word devices; when start >= end only the start device is reset. Application write policy remains authoritative."
     },
     {
       "mnemonic": "UNI",

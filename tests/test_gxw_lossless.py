@@ -391,6 +391,54 @@ def test_q_float_native_display_does_not_replace_raw_value_or_negative_zero():
         assert listing.reconstruct() == body
 
 
+@pytest.fixture
+def described_project_metadata():
+    witness = json.loads((ROOT / 'tests/fixtures/gxw_fbd_source_library.json').read_text())['described_project_native']
+    return witness, base64.b64decode(witness['metadata_base64'])
+
+
+@pytest.mark.parametrize('description', [None, '', '工程说明：Q03UDV，实际 CPU 保持 FX3U/FX3UC',
+                                        '😀\r\n説明', 'a' * 8191])
+def test_project_description_preserves_native_cpu_codepage_and_compile_options(described_project_metadata, description):
+    from gxw.project_metadata import read_project_compile_options
+    witness, original = described_project_metadata
+    raw = original
+    if description is not None:
+        encoded = (description + '\0').encode('utf-16le')
+        raw = (original[:witness['description_offset']] + struct.pack('<I', len(encoded) // 2)
+               + encoded + original[witness['description_end']:])
+    context = read_project_text_context(raw)
+    assert context['cpu'] == witness['cpu']
+    assert context['codepage'] == witness['codepage']
+    assert context['text_encoding'] == 'cp1252'
+    assert context['codepage_offset'] == witness['codepage_offset'] + len(raw) - len(original)
+    options = read_project_compile_options(raw)
+    assert options['values'] == tuple(witness['compile_option_values'])
+    assert options['global_variable_hiding'] is False
+
+
+@pytest.mark.parametrize('damage', ['zero-count', 'over-limit', 'utf16', 'embedded-nul',
+                                  'terminator', 'truncated-description', 'tail-prefix'])
+def test_project_description_gaps_do_not_guess_later_fields(described_project_metadata, damage):
+    witness, original = described_project_metadata
+    raw = bytearray(original)
+    offset, end = witness['description_offset'], witness['description_end']
+    if damage in ('zero-count', 'over-limit'):
+        struct.pack_into('<I', raw, offset, 0 if damage == 'zero-count' else 8193)
+    elif damage == 'utf16':
+        raw[offset + 4:offset + 6] = b'\0\xd8'
+    elif damage == 'embedded-nul':
+        raw[offset + 4:offset + 6] = b'\0\0'
+    elif damage == 'terminator':
+        raw[end - 2] = 65
+    elif damage == 'truncated-description':
+        raw = raw[:end - 1]
+    else:
+        raw[end] = 1
+    with pytest.raises(GXWFormatError):
+        read_project_text_context(raw)
+
+
 @pytest.mark.parametrize("change", ["length", "terminator", "utf16", "prefix", "truncated"])
 def test_project_text_context_rejects_broken_metadata_without_guessing_a_cpu(change):
     with zipfile.ZipFile(Q_EVIDENCE) as archive:

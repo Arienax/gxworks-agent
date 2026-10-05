@@ -1,6 +1,7 @@
 import copy
 
 import pytest
+from hypothesis import given, settings, strategies as st
 
 from application.model_api import _normalize_analysis_result, _routing_text_with_selected_approach
 from plc.specification.approach import (
@@ -12,6 +13,214 @@ from plc.specification.approach import (
 from plc.specification.confirmed import build_review_draft, canonicalize_confirmed_spec, validate_spec_draft
 from plc.specification.legacy_migration import migrate_legacy_approach
 from knowledge.patterns import classify_request
+
+
+def _construction_expression(op, name=None, value=None, args=()):
+    result = {'op': op, 'type': {'kind':'bool'}}
+    if name is not None: result['name'] = name
+    if value is not None: result['value'] = value
+    if args: result['args'] = list(args)
+    return result
+
+
+def _construction_relation(identity, kind, **fields):
+    return {'id':identity,'kind':kind,'status':'confirmed',
+            'provenance':{'source':'user_authored','evidence':['frozen independent requirement']}, **fields}
+
+
+def _construction_spec(model='FX3U'):
+    expr = _construction_expression
+    rows = [
+        _construction_relation('boot','initialize',values={'M100':False,'M110':False,'Y0':True,'D100':17},
+            ranges=[{'start':'M120','end':'M159','value':False}], execution_context={'program_type':'scan','initial_execution_program':False}),
+        _construction_relation('start','event',source=expr('device',name='X0'),accept=expr('device',name='X1'),
+            edge='rising',startup_policy='require_opposite',output='M110'),
+        _construction_relation('choice','transition_group',enable=expr('constant',value=True),transitions=[
+            {'id':'stop','when':expr('device',name='X2'),'effects':[{'target':{'device':'M100','kind':'bit'},'value':expr('constant',value=False)}]},
+            {'id':'start','when':expr('device',name='M110'),'effects':[{'target':{'device':'M100','kind':'bit'},'value':expr('constant',value=True)}]},
+        ])]
+    return {'schema_version':4,'plc_model':model,'behavior_constraints':rows,'selected_approach':{
+        'approach_id':'chosen','name':'chosen','construction_plan':{'internal_ranges':[{'start':'M120','end':'M179'}],
+            'execution_context':{'program_type':'scan','initial_execution_program':False},'instances':[
+                {'id':'init','requirement_id':'boot','method':'first_scan_isolation'},
+                {'id':'edge','requirement_id':'start','method':'source_history','depends_on':['init']},
+                {'id':'priority','requirement_id':'choice','method':'priority_snapshot','depends_on':['edge']}]}}}
+
+
+@pytest.mark.parametrize('model',['FX3U','FX5U'])
+def test_core_construction_expands_and_isolates_nonzero_coil_initialization(model):
+    from application.generation_agent import prepare_model_candidate
+    from simulator.bounded import ScanMachine
+    from plc.validation import validate_ladder_candidate_structure
+    spec = _construction_spec(model)
+    compact = {'r':[{'construct':'init'},{'construct':'edge'},{'construct':'priority'},
+                    {'h':None,'s':[],'b':[{'i':['NO M100'],'o':['COIL Y0','MOV K0 D100']}]}]}
+    result = prepare_model_candidate(compact,spec,model)
+    assert not result['construction_binding']['reference_violations']
+    validate_ladder_candidate_structure(result['ladder'],plc_model=model)
+    machine = ScanMachine(result['ladder'],plc_model=model,initial={'M100':True,'D100':923,'Y0':False},
+                          execution_context={'program_type':'scan','initial_execution_program':False})
+    first = machine.scan({'inputs':{'X0':True,'X1':True,'X2':False}},first_scan=True)['after']
+    assert first['M100'] is False and first['Y0'] is True and first['D100'] == 17
+    assert all(not first['M'+str(i)] for i in range(120,160))
+    held = machine.scan({'inputs':{'X0':True,'X1':True,'X2':False}})['after']
+    assert held['M110'] is False and held['M100'] is False
+    machine.scan({'inputs':{'X0':False,'X1':True,'X2':False}})
+    started = machine.scan({'inputs':{'X0':True,'X1':True,'X2':False}})['after']
+    assert started['M110'] is True and started['M100'] is True and started['Y0'] is True
+    assert started['D100'] == 0
+
+
+@pytest.mark.parametrize('model,boot_device',[('FX3U','M8002'),('FX5U','SM402')])
+def test_construction_candidate_uses_runtime_cpu_after_positive_projection(model,boot_device):
+    from application.confirmed_generation_context import project_confirmed_specification
+    from application.generation_agent import prepare_model_candidate
+    from simulator.bounded import ScanMachine
+    projected = project_confirmed_specification(_construction_spec(model))
+    assert 'plc_model' not in projected
+    compact = {'r':[{'construct':'init'},{'construct':'edge'},{'construct':'priority'},
+                    {'h':None,'s':[],'b':[{'i':['NO M100'],'o':['COIL Y0','MOV K0 D100']}]}]}
+    result = prepare_model_candidate(compact,projected,model)
+    receipt = result['construction_binding']
+    assert receipt['initialization']['device'] == boot_device
+    assert not receipt['reference_violations'] and not receipt['gaps']
+    assert 'plc_model' not in projected
+    first = ScanMachine(result['ladder'],plc_model=model,initial={'M100':True,'D100':923,'Y0':False},
+        execution_context={'program_type':'scan','initial_execution_program':False}).scan(
+            {'inputs':{'X0':True,'X1':True,'X2':False}},first_scan=True)['after']
+    assert first['Y0'] is True and first['D100'] == 17 and first['M100'] is False
+    description = prepare_model_candidate({'r':[compact['r'][-1]]},projected,model,construction_delivery='description')
+    assert description['construction_binding']['initialization']['device'] == boot_device
+
+
+@pytest.mark.parametrize('model',['FX3U','FX5U'])
+@pytest.mark.parametrize('references',[[],['edge'],['priority']])
+def test_partial_construction_references_remain_blocked_reviewable_drafts(model,references):
+    from application.generation_agent import prepare_model_candidate
+    from application.confirmed_generation_context import project_confirmed_specification
+    from plc.construction import apply_construction_check
+    from plc.validation import validate_ladder_candidate_structure
+    compact={'r':[{'construct':identity} for identity in references]+
+        [{'h':None,'s':[],'b':[{'i':[],'o':['COIL Y0']}]}]}
+    result=prepare_model_candidate(compact,project_confirmed_specification(_construction_spec(model)),model)
+    validate_ladder_candidate_structure(result['ladder'],plc_model=model)
+    receipt=result['construction_binding']
+    assert any(v.get('instance_id')=='init' and v['reason']=='missing_reference'
+               for v in receipt['reference_violations'])
+    report=apply_construction_check({'status':'unverified','activation_blocked':False},receipt)
+    assert report['activation_blocked'] and report['status']=='violated'
+
+
+@pytest.mark.parametrize('fault,reason', [
+    ('missing','missing_reference'), ('repeat','duplicate_reference'),
+    ('order','dependency_reference_order'), ('owned','free_write_to_owned_resource'), ('edge','event_reedged')])
+def test_construction_reference_and_ownership_checks(fault,reason):
+    from plc.construction import materialize_construction_references
+    from application.compact_protocol import _output
+    spec = _construction_spec()
+    rows = [{'construct':'init'},{'construct':'edge'},{'construct':'priority'}]
+    if fault == 'missing': rows.pop()
+    if fault == 'repeat': rows.append({'construct':'priority'})
+    if fault == 'order': rows[1:] = rows[1:][::-1]
+    if fault == 'owned': rows.append({'h':None,'s':[],'b':[{'i':['NO X0'],'o':['RST M100']}]})
+    if fault == 'edge': rows.append({'h':None,'s':[],'b':[{'i':['P M110'],'o':['COIL Y0']}]})
+    _, receipt = materialize_construction_references({'r':rows},spec,output_expander=_output)
+    assert reason in [v['reason'] for v in receipt['reference_violations']]
+
+
+def test_construction_unknown_cpu_and_unconfirmed_relation_do_not_inherit_fx3u():
+    from plc.construction import compile_constructions
+    spec = _construction_spec('FX3UC')
+    assert not compile_constructions(spec)['instances']
+    spec.pop('plc_model')
+    assert not compile_constructions(spec)['instances']
+    spec = _construction_spec()
+    spec['behavior_constraints'][0]['status'] = 'candidate'
+    assert 'relation_not_confirmed' in [g['reason'] for g in compile_constructions(spec)['gaps']]
+    spec = _construction_spec('FX5U')
+    spec['selected_approach']['construction_plan']['execution_context'].pop('initial_execution_program')
+    spec['behavior_constraints'][0]['execution_context'].pop('initial_execution_program')
+    assert 'execution_condition_unverified' in [g['reason'] for g in compile_constructions(spec)['gaps']]
+
+
+@pytest.mark.parametrize('model',sorted(__import__('plc.validation',fromlist=['SUPPORTED_PLC_MODELS']).SUPPORTED_PLC_MODELS))
+def test_every_supported_ladder_cpu_routes_only_source_scoped_constructions(model):
+    from plc.construction import compile_constructions
+    from plc.runtime_semantics import control_runtime_facts
+    receipt = compile_constructions(_construction_spec(model))
+    if model in {'FX3U','FX5U'}:
+        assert len(receipt['instances']) == 3 and not receipt['gaps']
+        assert receipt['target_model'] == model
+        assert control_runtime_facts(model)['first_scan']['source']['manual_number']
+    else:
+        assert not receipt['instances'] and receipt['gaps']
+
+
+def test_behavior_confirmation_provenance_and_positive_projection():
+    from plc.specification.behavior import normalize_behavior_constraints, confirm_behavior_constraints
+    from application.confirmed_generation_context import project_confirmed_specification
+    spec = _construction_spec()
+    row = spec['behavior_constraints'][1]
+    row['status'] = 'candidate'
+    row['provenance']['source'] = 'model_candidate'
+    assert normalize_behavior_constraints([row])[0]['status'] == 'candidate'
+    confirmed = confirm_behavior_constraints([row],['start'])[0]
+    assert confirmed['status'] == 'confirmed'
+    assert confirmed['provenance']['source'] == 'user_confirmed'
+    row['status'] = 'confirmed'
+    with pytest.raises(ValueError, match='cannot confirm'):
+        normalize_behavior_constraints([row])
+    row['status'] = 'candidate'
+    projected = project_confirmed_specification(spec)
+    assert projected['behavior_constraints'][0]['id'] == 'boot'
+    assert projected['selected_approach']['construction_plan']['instances'][0]['id'] == 'init'
+
+
+@given(offset=st.integers(200,500), occupied=st.sets(st.integers(0,9),max_size=5))
+@settings(max_examples=30)
+def test_construction_allocator_respects_explicit_bounds_and_project_occupancy(offset,occupied):
+    from plc.construction import Allocation
+    region = [{'start':f'M{offset}','end':f'M{offset+9}'}]
+    reserved = {f'M{offset+i}' for i in occupied}
+    allocator = Allocation('FX3U',region,reserved)
+    actual = [allocator.take('event') for _ in range(10-len(occupied))]
+    assert set(actual) == {f'M{offset+i}' for i in range(10)}-reserved
+    assert len(set(actual)) == len(actual)
+    with pytest.raises(ValueError, match='resource'):
+        allocator.take('event')
+
+
+def test_constructor_reserves_multiword_operands_and_rejects_overlapping_effect_owners():
+    from plc.construction import Allocation, expression_devices, compile_constructions
+    expression = {'op':'device','name':'D100','type':{'kind':'int','bits':32,'signed':True}}
+    assert expression_devices(expression) == {'D100','D101'}
+    allocation = Allocation('FX3U',[{'start':'D100','end':'D105'}],{'D101','D104'})
+    assert allocation.take('snapshot','D',2) == 'D102'
+    with pytest.raises(ValueError): allocation.take('snapshot','D',2)
+    spec = _construction_spec()
+    row = copy.deepcopy(spec['behavior_constraints'][-1]); row['id'] = 'other'
+    spec['behavior_constraints'].append(row)
+    spec['selected_approach']['construction_plan']['instances'].append(
+        {'id':'other_group','requirement_id':'other','method':'priority_snapshot','depends_on':['priority']})
+    assert any(g['reason'].startswith('construction_owner_conflict') for g in compile_constructions(spec)['gaps'])
+
+
+def test_inapplicable_known_reference_remains_gap_and_unknown_reference_is_violation():
+    from plc.construction import materialize_construction_references, apply_construction_check
+    spec = _construction_spec('FX3UC')
+    _,receipt = materialize_construction_references({'r':[{'construct':'init'}]},spec)
+    assert receipt['gaps'] and not receipt['reference_violations']
+    result = apply_construction_check({'status':'no_violation_found_in_tested_scope','activation_blocked':False},receipt)
+    assert result['status'] == 'unverified' and not result['activation_blocked']
+    _,receipt = materialize_construction_references({'r':[{'construct':'invented'}]},spec)
+    assert receipt['reference_violations'][0]['reason'] == 'unknown_reference'
+
+
+@pytest.mark.parametrize('address',['X10','Y7','T200','C0'])
+def test_zero_offset_identity_does_not_infer_an_xy_or_timer_region(address):
+    from plc.device_identity import decimal_region_address
+    assert decimal_region_address(address,0) == address
+    with pytest.raises(ValueError): decimal_region_address(address,1)
 from plc.validation import PLCJsonValidationError, validate_ladder_full
 
 

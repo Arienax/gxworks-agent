@@ -902,17 +902,41 @@ def resolve_process_records(needs, *, plc_model="FX3U", task_type="generate"):
     No occurrence-index fallback: a timer or counter mentioned in an unrelated
     program is not its operating definition. Preserve original source blocks.
     """
+    from plc.runtime_semantics import control_runtime_facts, timer_runtime_fact
+    facts = control_runtime_facts(plc_model)
+    runtime_records = []
+    for need in needs or ():
+        target = need.get('target') if isinstance(need, Mapping) else None
+        if not isinstance(need, Mapping) or plc_model != 'FX5U' and need.get('basis') != 'confirmed_behavior_constraints':
+            continue
+        fact = facts.get('first_scan') if target == 'FIRST_SCAN' else facts.get('timers') if target == 'TIMER' else None
+        if not fact:
+            continue
+        source = fact.get('source', {})
+        content = ({'devices': fact['devices'], 'execution_type': fact['execution_type'], 'conditions': fact['conditions']}
+                   if target == 'FIRST_SCAN' else {'forms': {k: v for k,v in fact.items() if k != 'source'},
+                       'declared_devices': [timer_runtime_fact(plc_model, d) for d in need.get('devices', [])],
+                       'condition': 'ordinary timer; disabled resets; no timebase inference from scan count'})
+        runtime_records.append({'id': 'control_runtime:'+plc_model+':'+target, 'text': json.dumps(content, ensure_ascii=False),
+            'source': source.get('manual_number'), 'manual_number': source.get('manual_number'), 'revision': source.get('revision'),
+            'pdf_page': source.get('pdf_page') or (source.get('pdf_pages') or [None])[0], 'plc_models': [plc_model],
+            'manual_type': 'programming', 'chunk_type': 'source_checked_runtime_fact', 'section': target,
+            'fact_kind': 'process', 'structured_fact_kind': 'process', 'fact_target': target,
+            'structured_fact_target': target, 'source_record': copy.deepcopy(source), 'process_fact_need': copy.deepcopy(need),
+            'process_lookup_basis': 'shared_source_checked_runtime', 'fact_dimensions': [need.get('dimension', 'definition')]})
     core, _path, connection, schema, _meta = _runtime()
     if connection is None or schema is None:
-        return []
+        return runtime_records
     chunks = schema.get("chunks")
     if not chunks or not {"id", "manual_type", "text"}.issubset(chunks["columns"]):
-        return []
-    results = []
+        return runtime_records
+    results = list(runtime_records)
     for need in needs or ():
         if not isinstance(need, Mapping):
             continue
         target = str(need.get("target") or "").upper()
+        if any(r['fact_target'] == target for r in runtime_records):
+            continue
         if target == "FIRST_SCAN":
             candidates = resolve_device_records(need.get("devices"), plc_model=plc_model, task_type=task_type)
             candidates = [row for row in candidates

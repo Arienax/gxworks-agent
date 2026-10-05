@@ -4,6 +4,8 @@
 
 ## 运行时与交付
 
+- [2026-10-05 Core构造与反例检查](2026-10-05-core-construction-value.md)：保留20份ModelScope结果，以官方预设补52项，72项匿名审阅、接口配对边界、检查器误报修复及离线复核。
+- [2026-10-05 ModelScope 手册证据诊断](2026-10-05-modelscope-evidence-value.md)：12例、三组各三轮共108次首次生成，匿名完整程序审阅、救回／弄错、证据交付与缓存计量边界。
 - [2026-10-04 ModelScope 复杂需求用户路径](2026-10-04-modelscope-complex-user-path.md)：四份确认规格、构造范例开关对照、独立程序审阅、实际检索质量及操作路径修复。
 - [2026-10-04 统一指令定义与效果绑定](2026-10-04-instruction-definition-binding.md)：720 个联合形式、3,925 个形式／型号 owner，67 个形式的独立验收与最终 196 次 DeepSeek 对照，Prompt cache 和 SQLite 旧索引构建修复。
 - [2026-10-03 Agent B 操作数用途对照](2026-10-03-agent-b-operand-purpose.md)：ModelScope 两轮各实测 52 次及 CMP 四组 48 次，用途与必要关系的独立增量、剩余错误及验证边界。

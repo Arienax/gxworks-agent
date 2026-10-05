@@ -83,6 +83,8 @@ def current_analysis_protocol_violations(result):
     )
     if 'operation_intents' in result:
         violations.append('$.operation_intents: model must use operation_intent_claims; confirmation belongs to the user')
+    if 'behavior_constraints' in result:
+        violations.append('$.behavior_constraints: model must use behavior_claims; confirmation belongs to the user')
     if 'operation_intent_claims' in result:
         from plc.instruction_binding import normalize_operation_intents
         from plc.instruction_definition import DefinitionError
@@ -675,6 +677,15 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
         "accepted": copy.deepcopy(claim_receipt.get("accepted") or []),
         "rejected": copy.deepcopy(claim_receipt.get("rejected") or []),
     }
+    from plc.specification.behavior import normalize_behavior_constraints
+    normalized['behavior_constraints'] = []
+    normalized['behavior_claim_diagnostics'] = []
+    for claim in normalized.get('behavior_claims') or []:
+        try:
+            normalized['behavior_constraints'].extend(normalize_behavior_constraints(
+                [claim], candidate=True, evidence_text=user_text))
+        except ValueError as error:
+            normalized['behavior_claim_diagnostics'].append({'status': 'unverified', 'reason': str(error)})
     normalized = ensure_hardware_questions(normalized, plc_model, user_text, confirmed_spec)
     normalized = _apply_explicit_user_constraints(
         normalized, user_text, plc_model, confirmed_spec

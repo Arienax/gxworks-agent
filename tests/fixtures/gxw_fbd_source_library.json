@@ -2,6 +2,20 @@
   "scope": "Owned FLOW_PORTS declaration prefix from frozen native interface controls; literal archive framing. No executable body is inferred.",
   "source_base64": "RlVOQ1RJT05fQkxPQ0sgRkxPV19QT1JUUw0KVkFSX0lOUFVUDQogU0lHTkFMOiBCT09MOj1GQUxTRTtbRkFMU0UsIDEsIF07DQpFTkRfVkFSDQpWQVJfT1VUUFVUDQogUkVTVUxUOiBCT09MOj1GQUxTRTtbRkFMU0UsIDEsIF07DQpFTkRfVkFSDQpWQVJfSU5fT1VUDQogU1RBVEU6IElOVDo9MDtbRkFMU0UsIDIsIF07DQpFTkRfVkFSDQpFTkRfRlVOQ1RJT05fQkxPQ0sNCg==",
   "archive_base64": "0wAAANloa0zv90end9vXZh/gquq8S7uOK97Vvub/byOG4WNdW1BFprSZV1VlWTOXSrKHCk3cYcOU1LmB9J5/D78ybCOWpwRnod1qVlCwbs8yrXsflTlcxFXRXUWcFMZFlRQWhPwsZZQ3ceTKPokzxLwU2Yo1O8K7tw7RNQg2KRhRNVU0+jnEQVCSkxz1pfvLMv+qkBSO46kUfP8q3k3nooILnu7Uby64r43vwv5CL77f6+j+jHPBp23k",
+  "described_project_native": {
+    "source": "https://github.com/tarman3/okoma_uf3s/blob/37dcc76c32173b14c18195b1cfaafc380455e132/Project_PLC/project.gxw",
+    "component_version": "1.635.0.1",
+    "converter_version": "15.31",
+    "cpu": "FX3U/FX3UC",
+    "codepage": 1252,
+    "codepage_offset": 150,
+    "description_offset": 42,
+    "description_end": 108,
+    "metadata_base64": "BgAAAE8AawBvAG0AYQAAAAsAAABGAFgAMwBVAC8ARgBYADMAVQBDAAAAHwAAAE0AYQBjAGgAaQBuAGUAIABmAG8AcgAgAHcAaQBuAGQAbwB3AHMAIABwAHIAbwBkAHUAYwB0AGkAbwBuAAAAAAAAAAAAAAAcAAAAAQAAAAEAAAAAAOgHCwAGAAkADAAzAAIAAAACAAAA5AQAAAACAABMBAAA/////////////////////2QAAADHAAAA//////////9kAAAAxwAAAAAPAAD/HQAA//////////8ACAAA/w8AAAAIAAD/DwAA3AAAAPUAAAALAAAABwABAAEAAgABAAQQfwAFAAEABgABAAsAIAADEAEAACABAAEgAAAHEP////8BAAAAAAAAAAEAAAABAAAAAAACAAAAAQAAAAEAAAAAAAIAAAABAAAAAQAAAAAA5AAAAAACAABMBAAA/////////////////////2QAAADHAAAA//////////9kAAAAxwAAAAAPAAD/HQAA//////////8ACAAA/w8AAAAIAAD/DwAA3AAAAPUAAAD/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////AAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAQAAAAEAAAAAAAAABQAAAE0AQQBJAE4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAA=",
+    "compile_option_values": [65543, 131073, 268697601, 327807, 393217, 720897, 268632096, 536870913, 536936449, 268894208, 4294967295],
+    "native_getters": "Original Workspace project attributes, GetProjectCodePage, GetSystemVariableInfo and GetCompileOptionPointer agree with these stored fields; isolated unmodified author project.",
+    "native_run": "research/experiments/sfc-graph-20260926/public-corpus-discovery/v161-independent-described-project/okoma-a1/native-events.jsonl"
+  },
   "label_hiding_native": {
     "cpu": "FX3U/FX3UC",
     "native_cpu": 520,
