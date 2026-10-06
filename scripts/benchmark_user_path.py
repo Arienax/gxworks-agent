@@ -290,12 +290,15 @@ class Journey:
         record = {"case_id": case_id, "phase": command["kind"], "arm": arm,
                   "repeat": repeat, "experiment_seed": experiment_seed, "actual_requests": [], "retrieval": [],
                   "attempts": [], "transport_errors": [], "started_at_utc": datetime.now(timezone.utc).isoformat()}
+        record["submitted_command"] = copy.deepcopy(command)
         self.observed.attempts = record["attempts"]
         self.current = record
         start = time.perf_counter()
         try:
             with no_rag_scope() if disabled else nullcontext():
+                submitted = time.perf_counter()
                 job = self.service.submit(command)
+                record["submission_ms"] = (time.perf_counter()-submitted)*1000
                 job_id = job["id"]
                 # JobManager owns cancellation, retries and worker exceptions.
                 while self.service.jobs.get(job_id)["status"] in {"queued", "running", "cancelling"}:

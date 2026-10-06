@@ -13,6 +13,30 @@ from plc.specification.provenance import (
 )
 
 
+def test_discovery_deduplicates_atomic_units_and_records_budget_omissions(monkeypatch):
+    from application.capability_context import augment_generation_knowledge, reconcile_discovery
+    from knowledge.evidence import KnowledgeContext
+    import knowledge.retriever as retriever
+    cards = [{"id": f"pattern:{i}", "kind": "pattern", "name": f"option{i}", "purpose": "x" * 100,
+              "interface": [], "execution": None, "unknown": [], "functions": ["loop"], "sources": []}
+             for i in range(20)]
+    monkeypatch.setattr(retriever, "discover_capabilities", lambda *a, **k: {
+        "functions": ["loop"], "candidates": cards, "gaps": [], "model_calls": 0})
+    block = '[KNOWLEDGE {"id":"existing"}]\nComplete fact\n[/KNOWLEDGE]'
+    source = KnowledgeContext(block + "\n\n" + block)
+    context = augment_generation_knowledge("循环", source, token_budget=700)
+    discovery = context.manifest["capability_discovery"]
+    assert estimate_tokens(context) <= 700
+    assert discovery["deduplicated_units"] == 1
+    assert str(context).count('"id":"existing"') == 1
+    assert discovery["omitted_candidates"]
+    assert discovery["included_candidates"]
+    receipt = reconcile_discovery(discovery, block)
+    assert not receipt["included_candidates"]
+    assert not receipt["tokens"]["selection_policy_delivered"]
+    assert len(receipt["omitted_candidates"]) == 20
+
+
 def profile(window, output=32768):
     return {
         "capabilityContract": {

@@ -404,7 +404,8 @@ def test_generation_tool_schemas_describe_only_model_owned_input(empty_project):
     adapter = MCPToolAdapter(build_default_tool_runtime(), SessionToolContextProvider(store.base_dir, project_id))
     schemas = {tool.name: tool.input_schema for tool in adapter.list_tools()}
     context_schema = schemas["get_generation_context"]
-    assert set(context_schema["properties"]) == {"user_requirement"}
+    assert set(context_schema["properties"]) == {"user_requirement", "workflow"}
+    assert context_schema["properties"]["workflow"]["enum"] == ["direct_generation", "detailed"]
     assert not context_schema.get("required")
     assert context_schema["additionalProperties"] is False
     schema = schemas["create_program_candidate"]

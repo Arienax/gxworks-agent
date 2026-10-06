@@ -383,6 +383,7 @@ class ContextCompilerInput:
     model_profile: dict = field(default_factory=dict)
     task_type: str = "generate"
     generation_request: str = ""
+    include_generation_request: bool = False
     current_program: object = None
     wire_renderer: object = None
     wire_history: list = field(default_factory=list)
@@ -439,7 +440,7 @@ class ContextCompiler:
         requests = [row for row in runtime_context.get("requests", []) if isinstance(row, Mapping)]
         latest = [requests[-1].get("text", "")] if requests and requests[-1].get("text") else []
         older = [row.get("text", "") for row in requests[:-1] if row.get("text")]
-        if value.task_type == "edit" and value.generation_request:
+        if (value.task_type == "edit" or value.include_generation_request) and value.generation_request:
             latest = [value.generation_request, *latest]
         facts = {key: copy.deepcopy(runtime[key]) for key in (
             "parameters", "io_table", "io_bindings", "execution_semantics",

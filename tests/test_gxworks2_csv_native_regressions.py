@@ -38,6 +38,41 @@ def _out_terminated_blocks(instructions):
     return blocks
 
 
+@pytest.mark.parametrize('model,relay', [('FX3U','M8000'),('FX5U','SM400')])
+@pytest.mark.parametrize('same_rung', [False, True])
+def test_unconditional_output_has_an_independent_cpu_scoped_enable(tmp_path, model, relay, same_rung):
+    from gxworks2.csv_importer import parse_gxworks2_csv
+    from simulator.bounded import ScanMachine
+    conditional = {'inputs':[{'type':'NO','address':'X0'}],
+                   'outputs':[{'type':'APP_INSTR','opcode':'MOV','operands':['K3','D0']}]}
+    unconditional = {'inputs':[], 'outputs':[{'type':'APP_INSTR','opcode':'MOV','operands':['K9','D1']}]}
+    ladder = {'device_comments':{}, 'rungs': [
+        {'rung_id':1,'header_element':None,'shared_inputs':[], 'branches':[conditional,unconditional]}
+        ] if same_rung else [
+        {'rung_id':1,'header_element':None,'shared_inputs':[], 'branches':[conditional]},
+        {'rung_id':2,'header_element':None,'shared_inputs':[], 'branches':[unconditional]}]}
+    before = copy.deepcopy(ladder)
+    program,comments = tmp_path/'program.csv',tmp_path/'comments.csv'
+    assert generate_gx_works2_csv(ladder,program,comments,plc_model=model)
+    rows = _instruction_rows(program)
+    assert [(row[2],row[3]) for row in rows][2:4] == [('LD',relay),('MOV','K9 D1')]
+    parsed = parse_gxworks2_csv(program,comments)
+    for candidate in (ladder,parsed.ladder):
+        machine = ScanMachine(candidate,plc_model=model,initial={'D0':0,'D1':0},
+            execution_context={'program_type':'scan','initial_execution_program':False})
+        assert machine.scan({'inputs':{'X0':False}})['after']['D1'] == 9
+        assert machine.scan({'inputs':{'X0':True}})['after']['D0'] == 3
+        assert not machine.gaps
+    assert ladder == before
+
+
+def test_unknown_cpu_cannot_inherit_an_unconditional_fx3u_enable(tmp_path):
+    ladder = {'device_comments':{},'rungs':[{'header_element':None,'shared_inputs':[],
+        'branches':[{'inputs':[],'outputs':[{'type':'APP_INSTR','opcode':'MOV','operands':['K9','D1']}]}]}]}
+    assert not generate_gx_works2_csv(ladder,tmp_path/'program.csv',tmp_path/'comments.csv',plc_model='UNKNOWN')
+    assert not (tmp_path/'program.csv').exists()
+
+
 def test_fx3u_step_labels_account_for_pls_and_inc(tmp_path):
     program = tmp_path / "program.csv"
     comments = tmp_path / "comments.csv"

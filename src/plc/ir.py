@@ -367,6 +367,24 @@ def _instruction_access(
     spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(op)
     write_indexes = set(spec.write_indexes if spec is not None else ())
     read_write_indexes = set(spec.read_write_indexes if spec is not None else ())
+    if spec is not None and not spec.operands:
+        from plc.instruction_definition import select_fact_dependencies
+        scoped = DEFAULT_INSTRUCTION_REGISTRY.resolve(op, cpu=plc_model)
+        for group in scoped.definition_facts if scoped is not None else ():
+            outputs = group.value.get('outputs', []) if group.dimension.startswith('effects.') else []
+            if not outputs:
+                continue
+            closure = select_fact_dependencies(scoped.definition_facts, [group.id], opcode=op, model=plc_model)
+            if closure['gaps'] or not closure['source_verification_complete']:
+                continue
+            for output in outputs:
+                parameter = output['target']['parameter']
+                if parameter in scoped.native_operand_order:
+                    write_indexes.add(scoped.native_operand_order.index(parameter))
+                    # A partial-word definition may read its destination to
+                    # preserve unaffected bits. Keep the access conservative.
+                    if '"op": "read"' in json.dumps(output['expression']):
+                        read_write_indexes.add(scoped.native_operand_order.index(parameter))
     for index, operand in enumerate(operands or []):
         text = str(operand or "").strip().upper()
         indexed = _INDEXED_DEVICE_RE.fullmatch(text)
@@ -386,7 +404,12 @@ def _instruction_access(
                 reads.add(base)
             continue
 
-        tokens = set(_device_tokens(operand))
+        from plc.device_identity import digit_specified_devices
+        try:
+            grouped = digit_specified_devices(text, plc_model)
+        except ValueError:
+            grouped = None
+        tokens = set(grouped if grouped is not None else _device_tokens(operand))
         if index in write_indexes:
             writes.update(tokens)
             if index in read_write_indexes:

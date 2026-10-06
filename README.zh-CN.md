@@ -2,7 +2,7 @@
 
 简体中文 | [English](README.md)
 
-GXWorks Agent 是面向三菱 PLC 工程的本地工作台，重点支持 FX3U 与 GX Works2。它将需求整理为可审查的规格，生成梯形图候选，保存带版本的 PLC IR，并导出工程产物。Web 工作台和外部 MCP 客户端共用 Python 工程服务。
+GXWorks Agent 是面向三菱 PLC 工程的本地工作台，重点支持 FX3U 与 GX Works2。它从需求生成梯形图候选，保存带版本的 PLC IR，并导出工程产物，同时保留详细规格审查流程。Web 工作台和外部 MCP 客户端共用 Python 工程服务。
 
 在工作台中可以分析需求、确认 I/O、生成或修改程序、查看版本变更，以及导出该版本实际保存的文件。GX Works2 导入、仿真和硬件观察各有操作条件，见 [Web 使用指南](docs/integrations/web.md)。
 
@@ -23,7 +23,7 @@ git lfs pull
 
 构建入口准备后端环境和前端，启动器选择工作区后打开本地工作台。使用期间保持启动窗口打开，结束时用 `Ctrl+C` 停止服务。
 
-在“设置 → 模型 → 模型 API”中配置模型，然后创建工程。先用 Direct 分析需求，检查规格和 I/O，再生成程序。完整操作见[第一个工程](docs/guides/getting-started.md#first-project)。
+在“设置 → 模型 → 模型 API”中配置模型，然后创建工程。“创建程序”对新 Ladder 默认直接生成，也可先确认规格并选择单方案或比较方案。已有版本使用“修改程序”，查询与解释使用只读的“工程问答”。完整操作见[第一个工程](docs/guides/getting-started.md#first-project)。
 
 ### Web 发布包运行
 

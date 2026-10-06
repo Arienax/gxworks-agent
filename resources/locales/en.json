@@ -1,4 +1,6 @@
 {
+  "候选结构与可机检的用户声明已通过；工艺行为仍需核对": "Candidate structure and machine-checkable user declarations passed; process behavior still needs review.",
+  "工程问答只允许查询；请切换到创建程序或修改程序。": "Engineering questions only allow reading; switch to Create program or Modify program.",
   "已将修复合并回本次完整候选，共 {v0} 个梯级；正在重新校验。": "Merged the repair into the complete current candidate ({v0} rungs); validating again.",
   "硬校验未通过，正在结构修复 {v0}/{v1}：{v2}": "Hard validation failed; structural repair {v0}/{v1}: {v2}",
   "\n\n(提示: 未检测到伴随的注释数据)": "\n\n(Note: No accompanying comment data was found)",

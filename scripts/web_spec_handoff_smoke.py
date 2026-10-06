@@ -20,13 +20,15 @@ from urllib.parse import parse_qs, urlsplit
 
 from playwright.async_api import async_playwright, expect
 
+BROWSER_CHANNEL = None
+
 
 SPEC = {"summary": "X0 starts Y0; X1 stops Y0", "io_table": [
     {"address": "X0", "kind": "X", "label": "Start"},
     {"address": "X1", "kind": "X", "label": "Stop"},
     {"address": "Y0", "kind": "Y", "label": "Motor"}], "parameters": []}
 DEFAULT_TEXT = "请严格按照已确认规格生成候选程序。"
-CTA = "按已确认规格生成程序"
+CTA = "按规格生成"
 STALE_NOTICE = "规格已变化，请重新分析后再应用草稿。"
 
 
@@ -70,6 +72,9 @@ class MockAPI:
                 {"id": "mock", "name": "Mock model", "model": "mock", "configured": True}]}
         elif path == "/environment":
             data = {"status": "unverified"}
+        elif path == "/capabilities":
+            data = {"creation": {"plc_model": "FX3U", "default_target_mode": "ladder", "starter_requirement": "FX3U X0启动Y0输出。",
+                                 "target_modes": [{"value": "ladder", "label": "Ladder"}]}, "operations": {}}
         elif path == "/projects":
             data = {"projects": [self.project, self.other]}
         elif path == "/projects/testproject":
@@ -138,6 +143,53 @@ class MockAPI:
                            "summary": {"summary": "Mock candidate pending operator review"}}]
 
 
+class DirectAPI(MockAPI):
+    def __init__(self, clarification=False):
+        super().__init__(history=False)
+        self.clarification = clarification
+
+    async def route(self, route):
+        request = route.request
+        path = urlsplit(request.url).path.removeprefix("/api")
+        if path == "/jobs" and request.method == "POST":
+            body = request.post_data_json
+            self.posts.append(body)
+            assert body["kind"] == "direct_generation" and not self.project["confirmed_spec"]
+            assert body["text"].strip() and body["request_id"]
+            identifier = "direct-question" if self.clarification and len(self.posts) == 1 else "direct-success"
+            data = job(identifier, "direct_generation", "completed", {"status": "needs_input"} if identifier == "direct-question" else {"version_id": "v0001", "status": "saved"})
+            self.jobs.insert(0, data)
+        elif path == "/jobs/direct-question/output":
+            data = {"status": "needs_input", "clarification_job_id": "direct-question",
+                    "missing_info": [{"id": "delay", "question": "延时几秒？", "required": True}],
+                    "generation": {"status": "needs_input", "artifacts": {}}}
+        elif path == "/jobs/direct-success/output":
+            data = {"status": "saved", "version_id": "v0001", "generation": {"target_mode": "ladder"}}
+        else:
+            return await super().route(route)
+        await route.fulfill(status=200, content_type="application/json", body=json.dumps(data))
+
+
+async def direct_generation(page, model):
+    await page.get_by_role("button", name="Agent", exact=True).click()
+    await expect(page.get_by_label("任务目的", exact=True)).to_have_value("create")
+    await expect(page.get_by_label("创建流程", exact=True)).to_have_value("direct")
+    assert await page.get_by_label("任务目的", exact=True).locator("option").all_text_contents() == ["创建程序", "修改程序", "工程问答"]
+    await page.locator(".composer textarea").fill("FX3U X0启动，Y0输出；输入电平和行为已明确。")
+    await page.locator(".composer-actions button").last.click()
+    if model.clarification:
+        await expect(page.get_by_text("延时几秒？", exact=True)).to_be_visible()
+        await expect(page.get_by_role("button", name="查看程序", exact=True)).to_have_count(0)
+        await page.locator(".composer textarea").fill("5秒")
+        await page.get_by_role("button", name="补充并继续", exact=True).click()
+        assert model.posts[1]["clarification_job_id"] == "direct-question"
+        assert model.posts[1]["request_id"] != model.posts[0]["request_id"]
+    await expect(page.get_by_role("button", name="查看程序", exact=True)).to_be_visible()
+    await expect(page.get_by_role("button", name="重新导出 GX Works2 CSV", exact=True)).to_be_visible()
+    assert not model.saves
+    await expect(page.locator(".spec-editor")).to_have_count(0)
+
+
 async def exercise(browser, origin, name, model, action, locale="zh-CN"):
     context = await browser.new_context(viewport={"width": 1600, "height": 1000})
     await context.add_init_script("localStorage.setItem('gx.locale', " + json.dumps(locale) + ");")
@@ -171,8 +223,7 @@ async def baseline(page, model):
     assert len(model.saves) == 1 and model.project["confirmed_spec"]
     await expect(page.locator(".spec-editor")).to_be_visible()
     await page.get_by_role("button", name="Agent", exact=True).click()
-    await expect(page.locator(".composer select")).to_have_value("generation")
-    await page.locator(".composer textarea").fill("")
+    await expect(page.get_by_label("任务目的", exact=True)).to_have_value("create")
     await expect(page.locator(".composer-actions button").last).to_be_disabled()
     await expect(page.get_by_text(STALE_NOTICE, exact=True)).to_be_visible()
     assert not model.posts
@@ -181,8 +232,8 @@ async def baseline(page, model):
 async def handoff(page, model):
     await confirm(page)
     await expect(page.locator(".composer")).to_be_visible()
-    await expect(page.locator(".composer select")).to_have_value("generation")
-    await expect(page.locator(".composer textarea")).to_have_value("")
+    await expect(page.get_by_label("任务目的", exact=True)).to_have_value("create")
+    await expect(page.locator(".composer textarea")).to_have_count(0)
     await expect(page.get_by_text(STALE_NOTICE, exact=True)).to_have_count(0)
     button = page.get_by_role("button", name=CTA, exact=True)
     await expect(button).to_be_disabled()
@@ -194,17 +245,15 @@ async def handoff(page, model):
 
 
 async def keyboard(page, model):
-    await page.locator(".composer select").select_option("generation")
     await expect(page.locator(".composer-actions button").last).to_be_enabled()
-    await page.locator(".composer textarea").press("Control+Enter")
+    await page.locator(".composer-actions button").last.press("Control+Enter")
     await expect(page.locator(".composer-actions button").last).to_be_disabled()
     assert len(model.posts) == 1 and model.posts[0]["text"] == DEFAULT_TEXT
 
 
 async def blocked(page, model):
-    await page.locator(".composer select").select_option("generation")
     await expect(page.locator(".composer-actions button").last).to_be_disabled()
-    await page.locator(".composer textarea").press("Control+Enter")
+    await page.locator(".composer select").first.press("Control+Enter")
     assert not model.posts
 
 
@@ -243,7 +292,6 @@ async def historical(page, model):
 
 
 async def localized(page, model):
-    await page.locator(".composer select").select_option("generation")
     button = page.locator(".composer-actions button").last
     await expect(button).to_be_enabled()
     await button.click()
@@ -275,11 +323,13 @@ async def generation_timeout(page, model):
 
 async def run(origin, baseline_only):
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch()
+        browser = await playwright.chromium.launch(channel=BROWSER_CHANNEL)
         try:
             if baseline_only:
                 return [await exercise(browser, origin, "baseline: stuck panel, empty-input block, stale draft warning", MockAPI(), baseline)]
             cases = [
+                ("Direct default: one submit, program and CSV, no specification", DirectAPI(), direct_generation),
+                ("Direct clarification: bound answer with a new request ID", DirectAPI(clarification=True), direct_generation),
                 ("generation validation failure keeps exact safe location and confirmed spec", MockAPI(confirmed=True, history=False), generation_failure),
                 ("model timeout displays actionable classification", MockAPI(confirmed=True, history=False), generation_timeout),
                 ("confirm -> automatic generation -> preview; no duplicate or automatic approval", MockAPI(), handoff),
@@ -310,11 +360,14 @@ class QuietHandler(SimpleHTTPRequestHandler):
 
 
 def main():
+    global BROWSER_CHANNEL
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--web-dist", type=Path, default=Path("web/dist"))
     parser.add_argument("--report", type=Path, default=Path("web-spec-handoff.json"))
     parser.add_argument("--baseline", action="store_true", help="Verify the original preview.1 regression before applying the fix")
+    parser.add_argument("--browser-channel", default=None, help="Use an installed browser, e.g. msedge")
     args = parser.parse_args()
+    BROWSER_CHANNEL = args.browser_channel
     assert (args.web_dist / "index.html").is_file(), "Build the frontend before this test"
     server = ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(QuietHandler, directory=str(args.web_dist.resolve())))
     thread = threading.Thread(target=server.serve_forever, daemon=True)

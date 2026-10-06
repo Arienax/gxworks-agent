@@ -91,6 +91,20 @@ class Provider:
         yield TextDelta(response)
 
 
+@pytest.mark.parametrize("content", [BROKEN, LOW_LEVEL_SEMANTIC])
+def test_primary_comparison_disables_syntax_and_claim_repair(content):
+    from application.analysis_results import AnalysisProtocolError
+    provider = Provider(content, FIXED)
+    published = []
+    with api.provider_scope(provider), pytest.raises((ResponseRejectedError, AnalysisProtocolError)):
+        api._request_analysis_response([UserMessage("起保停")], allow_repair=False, max_retries=0,
+                                       on_content_chunk=published.append)
+    assert len(provider.requests) == 1
+    assert provider.requests[0].max_retries == 0
+    assert provider.responses == [FIXED]
+    assert not published
+
+
 @pytest.mark.parametrize("stream", [False, True])
 def test_real_analysis_path_corrects_syntax_once_before_publishing(stream, monkeypatch):
     monkeypatch.setattr(api, "_build_knowledge_context", lambda *a, **kw: "")
@@ -140,7 +154,7 @@ def test_valid_analysis_uses_one_request(content):
 
 
 @pytest.mark.parametrize("stream", [False, True])
-def test_bound_source_requires_its_own_evidence_before_publication(stream):
+def test_bound_source_without_its_own_evidence_stays_pending_without_model_repair(stream):
     text = "X001 启动，X003 停止，M0 运行保持。系统运行时 Y000、Y002 保持运行。当 M0 = ON 时允许移位。"
     draft = json.loads(CURRENT_EMPTY)
     draft["missing_info"] = [{"id": "polarity", "question": "启动和停止按下时的有效电平？", "required": True}]
@@ -152,13 +166,102 @@ def test_bound_source_requires_its_own_evidence_before_publication(stream):
         {"path": "/execution_intent_claims/0", "value": replacement}]}, ensure_ascii=False))
     with api.provider_scope(provider):
         response = api._request_analysis_response([UserMessage(text)], stream=stream, user_text=text)
-    request = json.loads(provider.requests[1].messages[-1].content)
-    assert [target["path"] for target in request["targets"]] == ["/execution_intent_claims/0"]
-    assert request["targets"][0]["errors"][0]["code"] == "claimed_device_not_in_evidence"
-    assert request["targets"][0]["must_preserve"]["source_devices"] == ["M0"]
-    assembled = json.loads(response.message.content)
-    assert assembled["execution_intent_claims"] == replacement
-    assert assembled["missing_info"] == draft["missing_info"]
+    assert len(provider.requests) == 1 and len(provider.responses) == 1
+    normalized = api._parse_analysis_response(response.message.content, user_text=text)
+    assert normalized["execution_intent_claims"] == []
+    assert normalized["execution_intent_receipt"]["accepted"] == []
+    assert normalized["execution_intent_receipt"]["pending"] == [{
+        "index": 0, "status": "pending_binding", "reason": "claimed_device_not_in_evidence",
+        "candidate": draft["execution_intent_claims"][0]}]
+    assert normalized["missing_info"] == draft["missing_info"]
+
+
+@pytest.mark.parametrize("case", json.loads((Path(__file__).parent / "fixtures" / "analysis_bound_evidence.json").read_text(encoding="utf-8"))["cases"],
+                         ids=lambda case: case["id"])
+@pytest.mark.parametrize("stream", [False, True])
+@pytest.mark.parametrize("allow_repair", [False, True])
+def test_captured_complete_analysis_preserves_unbound_claim_as_inactive(case, stream, allow_repair):
+    from plc.execution_intent import compile_execution_intent_claims
+    from plc.specification.confirmed import build_review_draft, canonicalize_confirmed_spec
+    raw = json.dumps(case["response"], ensure_ascii=False)
+    original = copy.deepcopy(case)
+    claims = case["response"]["execution_intent_claims"]
+    # The executable grounding rule itself remains strict.
+    core = compile_execution_intent_claims(claims, case["user_text"])
+    assert core["rejected"] == [{"index": 1, "reason": "claimed_device_not_in_evidence"}]
+    provider = Provider(raw)
+    with api.provider_scope(provider):
+        response = api._request_analysis_response([UserMessage(case["user_text"])], stream=stream,
+            user_text=case["user_text"], allow_repair=allow_repair, max_retries=0)
+    result = api._parse_analysis_response(response.message.content, user_text=case["user_text"])
+    assert len(provider.requests) == 1 and response.raw_attempts[0].message.content == raw
+    assert result["execution_intent_claims"] == claims[:1]
+    assert result["execution_intent_receipt"]["accepted"] == core["accepted"]
+    assert result["execution_intent_receipt"]["pending"] == [{
+        "index": 1, "status": "pending_binding", "reason": "claimed_device_not_in_evidence", "candidate": claims[1]}]
+    assert result["missing_info"] == case["response"]["missing_info"]
+    confirmed = canonicalize_confirmed_spec(build_review_draft(result))
+    assert confirmed["execution_semantics"] == result["execution_semantics"]
+    forbidden = "FALLING_EDGE" if claims[1]["trigger"]["kind"] == "transition" else "LEVEL"
+    device = claims[1]["trigger"]["source_devices"][0]
+    assert not any(row["semantic"] == forbidden and device in row["devices"]
+                   and row.get("source") == "agent_a_claim" for row in confirmed["execution_semantics"])
+    assert case == original
+
+
+@pytest.mark.parametrize("damage", ["fabricated_evidence", "illegal_address", "malformed_transition", "explicit_constraint"])
+def test_pending_binding_does_not_mask_other_claim_failures(damage):
+    from application.analysis_results import AnalysisProtocolError, prepare_analysis_payload
+    draft = json.loads(CURRENT_EMPTY)
+    text = "X0：启动按钮。按启动后运行。必须使用 SEGD。"
+    claim = {"trigger": {"kind": "level", "source_devices": ["X0"]}, "evidence": ["按启动后运行。"]}
+    draft["execution_intent_claims"] = [claim]
+    if damage == "fabricated_evidence":
+        claim["evidence"] = ["现场确认已验收"]
+    elif damage == "illegal_address":
+        claim["trigger"]["source_devices"] = ["NOT_A_DEVICE"]
+    elif damage == "malformed_transition":
+        claim["trigger"] = {"kind": "transition", "source_devices": ["X0"], "to": 1}
+    else:
+        draft["explicit_constraint_claims"] = [{"operation": "require", "scope": "global",
+            "target": {"kind": "opcode", "values": ["MOV"]}, "evidence": ["必须使用 SEGD。"]}]
+    prepared = prepare_analysis_payload(draft, user_text=text)
+    assert bool(prepared.get("_deferred_execution_claims")) == (damage == "explicit_constraint")
+    with pytest.raises(AnalysisProtocolError):
+        api._validate_fresh_analysis_content(json.dumps(draft, ensure_ascii=False), user_text=text)
+
+
+@pytest.mark.parametrize("ambiguous", [False, True])
+def test_confirmed_unique_alias_stays_active_and_ambiguous_alias_stays_pending(ambiguous):
+    text = "按停止按钮时复位输出。"
+    spec = {"io_table": [{"kind": "X", "address": "X2", "label": "停止按钮"}]}
+    if ambiguous:
+        spec["io_table"].append({"kind": "X", "address": "X3", "label": "停止按钮"})
+    draft = json.loads(CURRENT_EMPTY)
+    draft["execution_intent_claims"] = [{"trigger": {"kind": "level", "source_devices": ["X2"]}, "evidence": [text]}]
+    result = api._parse_analysis_response(json.dumps(draft, ensure_ascii=False), user_text=text, confirmed_spec=spec)
+    assert bool(result["execution_intent_receipt"]["pending"]) is ambiguous
+    assert bool(result["execution_intent_receipt"]["accepted"]) is not ambiguous
+
+
+def test_pending_claim_keeps_original_repair_indices_and_cannot_be_patched_as_validated():
+    from application.analysis_repair import plan_analysis_repair, apply_analysis_repair
+    from application.analysis_results import AnalysisProtocolError
+    text = "X0：启动按钮。按启动后运行。X1从0变为1时触发。"
+    pending = {"trigger": {"kind": "level", "source_devices": ["X0"]}, "evidence": ["按启动后运行。"]}
+    broken = {"trigger": {"kind": "transition", "source_devices": ["X1"], "to": 1}, "evidence": ["X1从0变为1时触发。"]}
+    draft = json.loads(CURRENT_EMPTY)
+    draft["execution_intent_claims"] = [pending, broken]
+    plan = plan_analysis_repair(draft, text)
+    assert [target["path"] for target in plan["targets"]] == ["/execution_intent_claims/1"]
+    with pytest.raises(AnalysisProtocolError, match="unlisted"):
+        apply_analysis_repair(plan, {"repairs": [{"path": "/execution_intent_claims/0", "value": []}]}, text)
+    fixed = copy.deepcopy(broken)
+    fixed["trigger"]["from"] = 0
+    payload, _ = apply_analysis_repair(plan, {"repairs": [{"path": "/execution_intent_claims/1", "value": [fixed]}]}, text)
+    result = api._parse_analysis_response(json.dumps(payload, ensure_ascii=False), user_text=text)
+    assert result["execution_intent_receipt"]["pending"][0]["candidate"] == pending
+    assert result["execution_intent_claims"] == [fixed]
 
 
 @pytest.mark.parametrize("text,trigger", [

@@ -33,6 +33,8 @@ def _write_program_csv(
     import re
 
     plc_model = _step_width_model(json_data, plc_model)
+    from plc.runtime_semantics import control_runtime_facts
+    always_on = control_runtime_facts(plc_model).get("always_on", [])
     if is_plc_ir(json_data):
         json_data = ir_to_ladder(json_data)
 
@@ -240,6 +242,10 @@ def _write_program_csv(
         if not branches: continue
 
         if len(branches) == 1:
+            if not has_prefix and not branches[0].get("inputs"):
+                if not always_on:
+                    raise GXNativeLoweringError("当前CPU缺少已核对的常ON条件，无法导出无输入梯级")
+                add_instruction("LD", [always_on[0]])
             parse_input_list(branches[0].get("inputs", []), is_first_input=not has_prefix)
             parse_outputs(branches[0].get("outputs", []))
         else:
@@ -255,6 +261,10 @@ def _write_program_csv(
                     parse_outputs(branch.get("outputs", []))
             else:
                 for branch in branches:
+                    if not branch.get("inputs"):
+                        if not always_on:
+                            raise GXNativeLoweringError("当前CPU缺少已核对的常ON条件，无法导出无输入分支")
+                        add_instruction("LD", [always_on[0]])
                     parse_input_list(branch.get("inputs", []), is_first_input=True)
                     parse_outputs(branch.get("outputs", []))
 
@@ -329,12 +339,16 @@ def generate_gx_works2_csv(
         print(f"GX Works2并联网络导出失败: {exc}")
         return False
 
-    return _generate_native_wrapped_csv(
-        export_ladder,
-        output_program_csv,
-        output_comment_csv,
-        infer_device_comments=infer_device_comments,
-        plc_model=plc_model,
-        step_diagnostics=step_diagnostics,
-    )
+    try:
+        return _generate_native_wrapped_csv(
+            export_ladder,
+            output_program_csv,
+            output_comment_csv,
+            infer_device_comments=infer_device_comments,
+            plc_model=plc_model,
+            step_diagnostics=step_diagnostics,
+        )
+    except GXNativeLoweringError as exc:
+        print(f"GX Works2无输入条件导出失败: {exc}")
+        return False
 

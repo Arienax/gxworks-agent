@@ -151,6 +151,8 @@ class Version(PublicResource):
     simulator_runs: list[JsonObject] | None = None
     simulator_test_plans: list[JsonObject] | None = None
     debug_attempts: list[JsonObject] | None = None
+    generation_handoff: JsonObject | None = None
+    maintainability_review: JsonObject | None = None
     artifacts: list[Artifact] = Field(default_factory=list)
     capabilities: Capabilities
 
@@ -249,6 +251,8 @@ class JobEvent(PublicResource):
 
 
 class JobOutput(ExtensibleResource):
+    clarification_job_id: str | None = None
+    missing_info: list[JsonObject] | None = None
     version_id: str | None = None
     analysis: JsonObject | None = None
     spec_draft: JsonObject | None = None

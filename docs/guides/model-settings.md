@@ -10,7 +10,7 @@
 
 模型列表连接测试与生成能力验证是不同操作。能力配置先从本地目录和已有证据解析；需要真实请求时，显式确认单项验证。旧版深度批量扫描已停用。不要用模型列表中的第一个名称代替自己的选择。
 
-模型参数按端点与模型的能力合同展示。`reasoning_effort`、采样参数及其他调优值由保存的模型配置控制。Direct / Design 只选择[分析方式](../architecture/analysis-modes.md)，工作流不会替用户恢复 `high` 或其他推理强度。
+模型参数按端点与模型的能力合同展示。`reasoning_effort`、采样参数及其他调优值由保存的模型配置控制。创建流程与方案策略选择[工作流程](../architecture/analysis-modes.md)，不会替用户恢复 `high` 或其他推理强度。
 
 能力来源、参数取值和请求映射由[能力合同](../integrations/capability-contract-v3.md)说明。配置字段的实现来源是 [storage.config](../../src/storage/config.py)，请求合并规则是 [model_runtime.request_policy.resolve_request](../../src/model_runtime/request_policy.py)。界面不提供的字段不要从其他服务的示例配置直接套用。
 

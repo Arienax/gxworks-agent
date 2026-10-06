@@ -187,6 +187,10 @@ def test_english_fbd_summary_is_allowed_but_dangling_connection_is_rejected(serv
     else:
         assert len(proposals) == 1 and proposals[0]["status"] == "accepted"
         assert service.proposal_preview(proposals[0]["id"])["target_mode"] == "fbd"
+        version = service.projects.version(project["id"], proposals[0]["result"]["version_id"])
+        assert version["maintainability_review"]["model_calls"] == 0
+        assert version["maintainability_review"]["used_capabilities"]
+        assert version["generation_handoff"]["capability_discovery"]["model_calls"] == 0
 
 
 def test_approved_gx_import_uses_own_copy_on_com_queue(service, tmp_path, gx_ready):

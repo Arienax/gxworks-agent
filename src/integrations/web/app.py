@@ -224,7 +224,7 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
     @app.post("/api/jobs", status_code=202, response_model=dto.Job, response_model_exclude_unset=True)
     def submit(command: JobCreate, request: Request):
         payload = command.model_dump()
-        if command.kind == "generation":
+        if command.kind in {"generation", "direct_generation"}:
             experiment_headers = {
                 "construction_examples": request.headers.get("X-GX-Construction-Examples"),
                 "fresh_confirmed_generation": request.headers.get("X-GX-Fresh-Confirmed-Generation"),

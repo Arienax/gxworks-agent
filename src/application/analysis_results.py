@@ -56,30 +56,39 @@ class AnalysisProtocolError(ValueError):
         super().__init__("; ".join(self.violations) or "analysis protocol violation")
 
 
-def prepare_analysis_payload(result, *, contract_stage="bound", user_text=""):
+def prepare_analysis_payload(result, *, contract_stage="bound", user_text="", confirmed_spec=None):
     """Separate optional unbound proposals from the active wire contract.
 
-    Only a missing source binding is deferrable. Other shape failures and
-    fabricated evidence still use the normal bounded protocol repair.
+    A missing device/evidence binding stays an inactive proposal. Other shape
+    failures and fabricated evidence retain the normal bounded protocol repair.
     """
     if not isinstance(result, dict):
         return result
     prepared = copy.deepcopy(result)
     prepared.pop("_deferred_execution_claims", None)
     claims = prepared.get("execution_intent_claims")
-    if contract_stage != "requirements" or not isinstance(claims, list):
+    if not isinstance(claims, list):
         return prepared
-    from plc.execution_intent import execution_intent_claim_violations
+    from plc.execution_intent import compile_execution_intent_claims, execution_intent_claim_violations
     retained, pending = [], []
     text = " ".join(str(user_text or "").split())
     for index, claim in enumerate(claims):
         violations = execution_intent_claim_violations([claim])
         evidence = claim.get("evidence", []) if isinstance(claim, dict) else []
-        if (violations == ["$.execution_intent_claims[0].trigger.source_devices: this trigger kind requires a source device"]
+        if (contract_stage == "requirements"
+                and violations == ["$.execution_intent_claims[0].trigger.source_devices: this trigger kind requires a source device"]
                 and text and all(" ".join(span.split()) in text for span in evidence)):
             pending.append({"index": index, "status": "pending_binding", "reason": "source_binding_missing", "candidate": claim})
-        else:
-            retained.append(claim)
+            continue
+        if not violations:
+            receipt = compile_execution_intent_claims([claim], user_text, confirmed_spec=confirmed_spec)
+            if [item["reason"] for item in receipt["rejected"]] == ["claimed_device_not_in_evidence"]:
+                # Core still rejects the binding. Keep the claim for review,
+                # without synthesizing evidence or turning it into semantics.
+                pending.append({"index": index, "status": "pending_binding",
+                                "reason": "claimed_device_not_in_evidence", "candidate": claim})
+                continue
+        retained.append(claim)
     prepared["execution_intent_claims"] = retained
     if pending:
         prepared["_deferred_execution_claims"] = pending

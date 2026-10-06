@@ -4,6 +4,8 @@
 
 A directly requested Web generation, edit, GXW import, FBD conversion or GX read can save a validated local version through the existing transaction. The transaction checks the candidate, specification, base version and artifacts. Invalid candidates and conflicting proposals do not become active programs.
 
+Web engineering-question jobs (`kind="agent"`) use a read-only tool runtime in every approval mode. They cannot create program proposals, save versions or request GX import. The mode table below applies to explicit engineering operations and connected external Agent tools.
+
 External actions use the workspace's approval policy:
 
 | Mode | Execution consent |

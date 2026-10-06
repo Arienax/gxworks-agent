@@ -248,6 +248,8 @@ Owns HTTP/Web contracts, presentation state, startup, FBD UI, workbench/applicat
 | `tests/test_web_startup.py` | focused coverage for web startup |
 | `tests/test_workbench_service.py` | focused coverage for workbench service |
 | `web/tests/requests.test.mjs` | read cancellation, serial polling, invalidation, visibility and structural sharing |
+| `web/tests/conversation.test.mjs` | task purpose, creation/review stages, explicit modification/regeneration and clarification presentation |
+| `web/tests/generation-review.test.mjs` | delivered capability options, budget omissions and conservative local review presentation |
 | `web/tests/gx-send.test.mjs` | browser-side GX send interaction and presentation wiring |
 | `web/tests/model-parameters.test.mjs` | browser model-parameter UI behavior |
 | `web/tests/module-resolution.test.mjs` | frontend module resolution, packaging-sensitive imports and production chunk boundaries |

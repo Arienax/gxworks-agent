@@ -1,0 +1,44 @@
+{
+  "case_id": "multi_zone_alarm",
+  "name": "三回路报警系统",
+  "category": "complete",
+  "source": {
+    "kind": "vendor_training_reference_ladder",
+    "publisher": "Mitsubishi Electric",
+    "title": "Training Manual GX IEC Developer (Hardware: MELSEC FX)",
+    "document": "208661-B, 04/2010",
+    "url": "https://eu-assets.contentstack.com/v3/assets/blt5412ff9af9aef77f/blt8d64a77044c9f9ab/6171adc99d191809f6ba06e2/208661.pdf",
+    "printed_pages": "5-1 to 5-4",
+    "pdf_pages": [135, 136, 137, 138]
+  },
+  "io": [
+    {"kind": "X", "address": "X1", "label": "钥匙布防开关，1布防，0撤防"},
+    {"kind": "X", "address": "X2", "label": "回路1，常闭，1正常，0报警"},
+    {"kind": "X", "address": "X3", "label": "回路2，常闭，1正常，0报警"},
+    {"kind": "X", "address": "X4", "label": "回路3，常闭，1正常，0报警"},
+    {"kind": "Y", "address": "Y0", "label": "已布防显示"},
+    {"kind": "Y", "address": "Y1", "label": "警笛"},
+    {"kind": "Y", "address": "Y2", "label": "自带闪烁/旋转机构的报警灯使能"},
+    {"kind": "Y", "address": "Y3", "label": "回路1报警记忆显示"},
+    {"kind": "Y", "address": "Y4", "label": "回路2报警记忆显示"},
+    {"kind": "Y", "address": "Y5", "label": "回路3报警记忆显示"}
+  ],
+  "parameters": [
+    {"name": "布防延时", "value": 20, "unit": "s"},
+    {"name": "报警触发延时", "value": 10, "unit": "s"},
+    {"name": "警笛持续时间", "value": 30, "unit": "s"}
+  ],
+  "initial_request": "使用三菱FX3U，编写循环扫描的三回路报警系统。X1为钥匙开关，1请求布防、0撤防；X2、X3、X4是三个常闭报警回路，1正常、0异常。Y0是已布防显示，Y1警笛，Y2外置自带闪烁/旋转机构报警灯的使能输出，Y3、Y4、Y5分别显示回路1、2、3的报警记忆。X1连续为1满20秒才布防，期间任意回路异常不触发报警；不足20秒撤防后重新布防须重新完整等待。布防后任一回路异常即记忆该回路，三个回路可独立记忆，传感器恢复不清除记忆。首次异常后连续等待10秒，若此前撤防则不响铃；延时到达开启警笛和Y2。警笛仅持续30秒，然后停止，Y2和各回路记忆持续至撤防；保持布防时新的回路异常不能重复延长或重启警笛。任意阶段X1为0，当扫描关闭Y0至Y5，并清除本次报警状态和所有等待计时；再布防可完整重复周期。Y2只需持续供电，不能另造PLC闪烁频率。RUN初态X1为0，X2至X4为1，普通内部状态和输出为0。不得新增现场输入输出；实现方法不限，不要求使用特定指令。",
+  "acceptance": ["常闭极性与三个回路独立记忆", "20秒布防边界与中途撤防重计", "10秒触发延时与撤防取消", "警笛30秒且不被后续异常重启", "光报警与回路记忆保留", "撤防同扫描清理及完整再布防周期"],
+  "supplements": [
+    {"fact": "Y2为外置报警灯供电，不要求PLC位闪烁", "source": "5-1 rotating beacon I/O description and 5-3 network 9 continuous coil"},
+    {"fact": "回路报警记忆及后续回路加入", "source": "5-2 networks 3-5 SET outputs; 5-3 network 10 disarm resets"},
+    {"fact": "初态与计时扫描容差", "source": "5-2 variable initials; independent evaluation uses 10ms scans and <=1 scan boundary tolerance"}
+  ],
+  "evaluation_reference": {
+    "language": "Ladder Diagram",
+    "location": "5-2 networks 1-7; 5-3 networks 8-10",
+    "verification_status": "complete vendor example plus documented PLC monitoring procedure; native execution not performed in this run",
+    "excluded_from_generation": true
+  }
+}

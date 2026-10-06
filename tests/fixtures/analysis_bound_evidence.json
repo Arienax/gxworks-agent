@@ -1,0 +1,245 @@
+{
+  "source": "Frozen ModelScope first responses; raw experiment records remain unchanged",
+  "cases": [
+    {
+      "id": "motor_latch_legacy_2",
+      "user_text": "使用三菱 FX3U，生成三相异步电动机起保停梯形图。I/O：X1：启动按钮 SB1，物理常开，按下为1、释放为0；X2：停止按钮 SB2，物理常开，按下为1、释放为0；Y0：接触器 KM，1为电机运行。按一下启动后自保持，释放启动继续运行；按停止立即关闭输出，停止期间启动无效，同时按启动和停止时停止优先。释放停止后不自行启动，须再次按启动。切入 RUN 时输出为 OFF，内部普通非保持存储清零。暂不考虑过载保护，不增加现场 I/O。",
+      "response": {
+        "summary": "FX3U 三相异步电动机起保停：X1（启动，常开，按下为1）与 Y0 自保持触点并联后，串接取反的 X2（停止，常开，按下为1）直接驱动 Y0，实现停止立即断开、停止期间启动无效、停止优先、释放停止后需重新按启动。",
+        "approaches": [
+          {
+            "approach_id": "ap_motor_self_hold",
+            "name": "起保停组合自保持",
+            "description": "启动触点 X1 与输出 Y0 的自保持触点并联构成保持支路，保持支路再与停止条件（X2 取反）串联，直接驱动输出 Y0；停止条件始终串在输出路径上，因此按下停止立即断开输出并对启动形成优先。",
+            "pros": "",
+            "cons": "",
+            "generation_guide": "",
+            "implementation_semantics": [
+              {
+                "kind": "structure",
+                "status": "required",
+                "value": "self_hold"
+              }
+            ]
+          }
+        ],
+        "execution_intent_claims": [
+          {
+            "trigger": {
+              "kind": "level",
+              "source_devices": [
+                "X1"
+              ]
+            },
+            "evidence": [
+              "X1：启动按钮 SB1，物理常开，按下为1、释放为0"
+            ]
+          },
+          {
+            "trigger": {
+              "kind": "level",
+              "source_devices": [
+                "X2"
+              ]
+            },
+            "evidence": [
+              "按停止立即关闭输出，停止期间启动无效，同时按启动和停止时停止优先"
+            ]
+          }
+        ],
+        "operation_intent_claims": [
+          {
+            "id": "oi_y0_run",
+            "effects": [
+              {
+                "target": {
+                  "device": "Y0",
+                  "kind": "bit",
+                  "offset": 0
+                },
+                "value": {
+                  "op": "or",
+                  "type": {
+                    "kind": "bool"
+                  },
+                  "args": [
+                    {
+                      "op": "device",
+                      "name": "X1",
+                      "type": {
+                        "kind": "bool"
+                      }
+                    },
+                    {
+                      "op": "device",
+                      "name": "Y0",
+                      "type": {
+                        "kind": "bool"
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "enable": {
+              "op": "not",
+              "type": {
+                "kind": "bool"
+              },
+              "args": [
+                {
+                  "op": "device",
+                  "name": "X2",
+                  "type": {
+                    "kind": "bool"
+                  }
+                }
+              ]
+            },
+            "execution": {
+              "trigger": "level"
+            },
+            "provenance": {
+              "evidence": [
+                "按一下启动后自保持，释放启动继续运行",
+                "按停止立即关闭输出，停止期间启动无效，同时按启动和停止时停止优先",
+                "释放停止后不自行启动，须再次按启动"
+              ]
+            }
+          }
+        ],
+        "explicit_constraint_claims": [],
+        "missing_info": [],
+        "suggested_io": {
+          "X": {
+            "X1": "启动按钮 SB1",
+            "X2": "停止按钮 SB2"
+          },
+          "Y": {
+            "Y0": "接触器 KM（电机运行输出）"
+          }
+        },
+        "hardware_config": {
+          "plc_model": "FX3U",
+          "io_addressing": "X/Y 采用八进制地址（X000-X367、Y000-Y367）",
+          "field_io": {
+            "X": {
+              "X1": "启动按钮 SB1（物理常开）",
+              "X2": "停止按钮 SB2（物理常开）"
+            },
+            "Y": {
+              "Y0": "接触器 KM 线圈"
+            }
+          },
+          "additional_field_io": "无（不增加现场 I/O，不做过载保护）"
+        },
+        "assumptions": [
+          "起保停按并联自保持的组合逻辑实现：若在按住启动按钮的同时按下并再松开停止按钮，保持支路仍接通，输出会随之恢复；在停止已释放且启动已释放的情况下不会自行启动，必须再次按启动。"
+        ]
+      }
+    },
+    {
+      "id": "segd_countdown_legacy_1",
+      "user_text": "使用三菱 FX3U，必须使用 SEGD 指令实现九秒倒计时。I/O：X0：启动开关，ON为1、OFF为0；Y0：七段显示段a；Y1：七段显示段b；Y2：七段显示段c；Y3：七段显示段d；Y4：七段显示段e；Y5：七段显示段f；Y6：七段显示段g；Y7：小数点；Y10：蜂鸣器，1为报警。段输出为1时点亮；显示采用 SEGD 标准编码，Y7保持0。X0从OFF切到ON的当前扫描立即显示9，以该次启动为计时起点，每满1秒依次显示8、7直到0（第9秒显示0）。显示0后蜂鸣器持续ON，直到关闭开关。关闭开关时显示全部熄灭，蜂鸣器OFF，倒计时停止并复位；再次打开从9重新开始完整的九秒倒计时。RUN初始显示与报警全OFF，普通非保持存储清零，不增加其他现场I/O。",
+      "response": {
+        "summary": "用 SEGD 将倒计时数值解码为段码驱动 Y0–Y7：X0 上升沿置显示值9并以1秒为周期逐秒递减到0，到0后持续点亮蜂鸣器 Y10，X0 断开时熄灭显示、关闭蜂鸣器并清零复位。",
+        "approaches": [
+          {
+            "approach_id": "A1",
+            "name": "SEGD 九秒倒计时",
+            "description": "以启动开关上升沿作为计时起点并装载显示值9；用1秒周期定时脉冲将显示值逐次递减1，直到0；显示值经 SEGD 解码后输出到七段显示；显示值到0时驱动蜂鸣器并保持；启动开关断开时熄灭显示、关闭蜂鸣器并把显示值清零，等待下次上升沿重新从9开始。",
+            "pros": "",
+            "cons": "",
+            "generation_guide": "",
+            "implementation_semantics": [
+              {
+                "kind": "structure",
+                "status": "required",
+                "value": "edge_trigger"
+              },
+              {
+                "kind": "structure",
+                "status": "required",
+                "value": "data_register_counter"
+              },
+              {
+                "kind": "structure",
+                "status": "required",
+                "value": "state_comparison"
+              }
+            ]
+          }
+        ],
+        "execution_intent_claims": [
+          {
+            "trigger": {
+              "kind": "transition",
+              "source_devices": [
+                "X0"
+              ],
+              "from": 0,
+              "to": 1
+            },
+            "evidence": [
+              "X0从OFF切到ON的当前扫描立即显示9，以该次启动为计时起点"
+            ]
+          },
+          {
+            "trigger": {
+              "kind": "transition",
+              "source_devices": [
+                "X0"
+              ],
+              "from": 1,
+              "to": 0
+            },
+            "evidence": [
+              "关闭开关时显示全部熄灭，蜂鸣器OFF，倒计时停止并复位"
+            ]
+          }
+        ],
+        "explicit_constraint_claims": [
+          {
+            "operation": "require",
+            "scope": "global",
+            "target": {
+              "kind": "opcode",
+              "values": [
+                "SEGD"
+              ]
+            },
+            "evidence": [
+              "必须使用 SEGD 指令实现九秒倒计时"
+            ]
+          }
+        ],
+        "missing_info": [],
+        "suggested_io": {
+          "X": {
+            "X0": "启动开关"
+          },
+          "Y": {
+            "Y0": "七段显示段a",
+            "Y1": "七段显示段b",
+            "Y2": "七段显示段c",
+            "Y3": "七段显示段d",
+            "Y4": "七段显示段e",
+            "Y5": "七段显示段f",
+            "Y6": "七段显示段g",
+            "Y7": "小数点（保持0）",
+            "Y10": "蜂鸣器报警"
+          }
+        },
+        "hardware_config": {
+          "model": "FX3U",
+          "addressing": "octal",
+          "device_address_radix": {
+            "X": 8,
+            "Y": 8
+          }
+        },
+        "assumptions": []
+      }
+    }
+  ]
+}

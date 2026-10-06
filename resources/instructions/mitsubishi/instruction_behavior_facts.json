@@ -15727,6 +15727,1192 @@
         }
       },
       "model_diffs": []
+    },
+    {
+      "vendor": "mitsubishi",
+      "base_opcode": "SEGD",
+      "common": {
+        "facts": {
+          "behavior:effect": {
+            "depends_on": [
+              "behavior:types",
+              "behavior:lifecycle",
+              "registry:parameters.order"
+            ],
+            "dimension": "effects.expression_write",
+            "id": "behavior:effect",
+            "members": [
+              "D"
+            ],
+            "scope": {
+              "forms": [
+                "SEGD"
+              ],
+              "models": [
+                "FX3U"
+              ]
+            },
+            "sources": [
+              {
+                "id": "508",
+                "manual_id": "fx3_programming_r",
+                "manual_number": "JY997D16601",
+                "offset_basis": "local_official_PDF_page_and_decoding_table",
+                "opcode": "SEGD",
+                "pdf_pages": [
+                  434,
+                  435
+                ],
+                "review": {
+                  "claim": "only_fact_value_in_exact_form_scope",
+                  "method": "complete_local_official_PDF_pages_visual_review"
+                },
+                "revision": "R",
+                "section": "15.4 FNC 73 – SEGD / Seven Segment Decoder",
+                "target_model": "FX3U"
+              }
+            ],
+            "status": "source_verified",
+            "value": {
+              "behavior": "expression_write",
+              "outputs": [
+                {
+                  "expression": {
+                    "args": [
+                      {
+                        "args": [
+                          {
+                            "args": [
+                              {
+                                "name": "D",
+                                "op": "parameter",
+                                "type": {
+                                  "kind": "opaque"
+                                }
+                              },
+                              {
+                                "op": "constant",
+                                "type": {
+                                  "bits": 16,
+                                  "kind": "int",
+                                  "signed": false
+                                },
+                                "value": 0
+                              }
+                            ],
+                            "op": "read",
+                            "type": {
+                              "bits": 16,
+                              "kind": "int",
+                              "signed": false
+                            }
+                          },
+                          {
+                            "op": "constant",
+                            "type": {
+                              "bits": 16,
+                              "kind": "int",
+                              "signed": false
+                            },
+                            "value": 65280
+                          }
+                        ],
+                        "op": "bit_and",
+                        "type": {
+                          "bits": 16,
+                          "kind": "int",
+                          "signed": false
+                        }
+                      },
+                      {
+                        "args": [
+                          {
+                            "args": [
+                              {
+                                "args": [
+                                  {
+                                    "name": "S",
+                                    "op": "parameter",
+                                    "type": {
+                                      "bits": 16,
+                                      "kind": "int",
+                                      "signed": false
+                                    }
+                                  },
+                                  {
+                                    "op": "constant",
+                                    "type": {
+                                      "bits": 16,
+                                      "kind": "int",
+                                      "signed": false
+                                    },
+                                    "value": 15
+                                  }
+                                ],
+                                "op": "bit_and",
+                                "type": {
+                                  "bits": 16,
+                                  "kind": "int",
+                                  "signed": false
+                                }
+                              },
+                              {
+                                "op": "constant",
+                                "type": {
+                                  "bits": 16,
+                                  "kind": "int",
+                                  "signed": false
+                                },
+                                "value": 0
+                              }
+                            ],
+                            "op": "eq",
+                            "type": {
+                              "kind": "bool"
+                            }
+                          },
+                          {
+                            "op": "constant",
+                            "type": {
+                              "bits": 16,
+                              "kind": "int",
+                              "signed": false
+                            },
+                            "value": 63
+                          },
+                          {
+                            "args": [
+                              {
+                                "args": [
+                                  {
+                                    "args": [
+                                      {
+                                        "name": "S",
+                                        "op": "parameter",
+                                        "type": {
+                                          "bits": 16,
+                                          "kind": "int",
+                                          "signed": false
+                                        }
+                                      },
+                                      {
+                                        "op": "constant",
+                                        "type": {
+                                          "bits": 16,
+                                          "kind": "int",
+                                          "signed": false
+                                        },
+                                        "value": 15
+                                      }
+                                    ],
+                                    "op": "bit_and",
+                                    "type": {
+                                      "bits": 16,
+                                      "kind": "int",
+                                      "signed": false
+                                    }
+                                  },
+                                  {
+                                    "op": "constant",
+                                    "type": {
+                                      "bits": 16,
+                                      "kind": "int",
+                                      "signed": false
+                                    },
+                                    "value": 1
+                                  }
+                                ],
+                                "op": "eq",
+                                "type": {
+                                  "kind": "bool"
+                                }
+                              },
+                              {
+                                "op": "constant",
+                                "type": {
+                                  "bits": 16,
+                                  "kind": "int",
+                                  "signed": false
+                                },
+                                "value": 6
+                              },
+                              {
+                                "args": [
+                                  {
+                                    "args": [
+                                      {
+                                        "args": [
+                                          {
+                                            "name": "S",
+                                            "op": "parameter",
+                                            "type": {
+                                              "bits": 16,
+                                              "kind": "int",
+                                              "signed": false
+                                            }
+                                          },
+                                          {
+                                            "op": "constant",
+                                            "type": {
+                                              "bits": 16,
+                                              "kind": "int",
+                                              "signed": false
+                                            },
+                                            "value": 15
+                                          }
+                                        ],
+                                        "op": "bit_and",
+                                        "type": {
+                                          "bits": 16,
+                                          "kind": "int",
+                                          "signed": false
+                                        }
+                                      },
+                                      {
+                                        "op": "constant",
+                                        "type": {
+                                          "bits": 16,
+                                          "kind": "int",
+                                          "signed": false
+                                        },
+                                        "value": 2
+                                      }
+                                    ],
+                                    "op": "eq",
+                                    "type": {
+                                      "kind": "bool"
+                                    }
+                                  },
+                                  {
+                                    "op": "constant",
+                                    "type": {
+                                      "bits": 16,
+                                      "kind": "int",
+                                      "signed": false
+                                    },
+                                    "value": 91
+                                  },
+                                  {
+                                    "args": [
+                                      {
+                                        "args": [
+                                          {
+                                            "args": [
+                                              {
+                                                "name": "S",
+                                                "op": "parameter",
+                                                "type": {
+                                                  "bits": 16,
+                                                  "kind": "int",
+                                                  "signed": false
+                                                }
+                                              },
+                                              {
+                                                "op": "constant",
+                                                "type": {
+                                                  "bits": 16,
+                                                  "kind": "int",
+                                                  "signed": false
+                                                },
+                                                "value": 15
+                                              }
+                                            ],
+                                            "op": "bit_and",
+                                            "type": {
+                                              "bits": 16,
+                                              "kind": "int",
+                                              "signed": false
+                                            }
+                                          },
+                                          {
+                                            "op": "constant",
+                                            "type": {
+                                              "bits": 16,
+                                              "kind": "int",
+                                              "signed": false
+                                            },
+                                            "value": 3
+                                          }
+                                        ],
+                                        "op": "eq",
+                                        "type": {
+                                          "kind": "bool"
+                                        }
+                                      },
+                                      {
+                                        "op": "constant",
+                                        "type": {
+                                          "bits": 16,
+                                          "kind": "int",
+                                          "signed": false
+                                        },
+                                        "value": 79
+                                      },
+                                      {
+                                        "args": [
+                                          {
+                                            "args": [
+                                              {
+                                                "args": [
+                                                  {
+                                                    "name": "S",
+                                                    "op": "parameter",
+                                                    "type": {
+                                                      "bits": 16,
+                                                      "kind": "int",
+                                                      "signed": false
+                                                    }
+                                                  },
+                                                  {
+                                                    "op": "constant",
+                                                    "type": {
+                                                      "bits": 16,
+                                                      "kind": "int",
+                                                      "signed": false
+                                                    },
+                                                    "value": 15
+                                                  }
+                                                ],
+                                                "op": "bit_and",
+                                                "type": {
+                                                  "bits": 16,
+                                                  "kind": "int",
+                                                  "signed": false
+                                                }
+                                              },
+                                              {
+                                                "op": "constant",
+                                                "type": {
+                                                  "bits": 16,
+                                                  "kind": "int",
+                                                  "signed": false
+                                                },
+                                                "value": 4
+                                              }
+                                            ],
+                                            "op": "eq",
+                                            "type": {
+                                              "kind": "bool"
+                                            }
+                                          },
+                                          {
+                                            "op": "constant",
+                                            "type": {
+                                              "bits": 16,
+                                              "kind": "int",
+                                              "signed": false
+                                            },
+                                            "value": 102
+                                          },
+                                          {
+                                            "args": [
+                                              {
+                                                "args": [
+                                                  {
+                                                    "args": [
+                                                      {
+                                                        "name": "S",
+                                                        "op": "parameter",
+                                                        "type": {
+                                                          "bits": 16,
+                                                          "kind": "int",
+                                                          "signed": false
+                                                        }
+                                                      },
+                                                      {
+                                                        "op": "constant",
+                                                        "type": {
+                                                          "bits": 16,
+                                                          "kind": "int",
+                                                          "signed": false
+                                                        },
+                                                        "value": 15
+                                                      }
+                                                    ],
+                                                    "op": "bit_and",
+                                                    "type": {
+                                                      "bits": 16,
+                                                      "kind": "int",
+                                                      "signed": false
+                                                    }
+                                                  },
+                                                  {
+                                                    "op": "constant",
+                                                    "type": {
+                                                      "bits": 16,
+                                                      "kind": "int",
+                                                      "signed": false
+                                                    },
+                                                    "value": 5
+                                                  }
+                                                ],
+                                                "op": "eq",
+                                                "type": {
+                                                  "kind": "bool"
+                                                }
+                                              },
+                                              {
+                                                "op": "constant",
+                                                "type": {
+                                                  "bits": 16,
+                                                  "kind": "int",
+                                                  "signed": false
+                                                },
+                                                "value": 109
+                                              },
+                                              {
+                                                "args": [
+                                                  {
+                                                    "args": [
+                                                      {
+                                                        "args": [
+                                                          {
+                                                            "name": "S",
+                                                            "op": "parameter",
+                                                            "type": {
+                                                              "bits": 16,
+                                                              "kind": "int",
+                                                              "signed": false
+                                                            }
+                                                          },
+                                                          {
+                                                            "op": "constant",
+                                                            "type": {
+                                                              "bits": 16,
+                                                              "kind": "int",
+                                                              "signed": false
+                                                            },
+                                                            "value": 15
+                                                          }
+                                                        ],
+                                                        "op": "bit_and",
+                                                        "type": {
+                                                          "bits": 16,
+                                                          "kind": "int",
+                                                          "signed": false
+                                                        }
+                                                      },
+                                                      {
+                                                        "op": "constant",
+                                                        "type": {
+                                                          "bits": 16,
+                                                          "kind": "int",
+                                                          "signed": false
+                                                        },
+                                                        "value": 6
+                                                      }
+                                                    ],
+                                                    "op": "eq",
+                                                    "type": {
+                                                      "kind": "bool"
+                                                    }
+                                                  },
+                                                  {
+                                                    "op": "constant",
+                                                    "type": {
+                                                      "bits": 16,
+                                                      "kind": "int",
+                                                      "signed": false
+                                                    },
+                                                    "value": 125
+                                                  },
+                                                  {
+                                                    "args": [
+                                                      {
+                                                        "args": [
+                                                          {
+                                                            "args": [
+                                                              {
+                                                                "name": "S",
+                                                                "op": "parameter",
+                                                                "type": {
+                                                                  "bits": 16,
+                                                                  "kind": "int",
+                                                                  "signed": false
+                                                                }
+                                                              },
+                                                              {
+                                                                "op": "constant",
+                                                                "type": {
+                                                                  "bits": 16,
+                                                                  "kind": "int",
+                                                                  "signed": false
+                                                                },
+                                                                "value": 15
+                                                              }
+                                                            ],
+                                                            "op": "bit_and",
+                                                            "type": {
+                                                              "bits": 16,
+                                                              "kind": "int",
+                                                              "signed": false
+                                                            }
+                                                          },
+                                                          {
+                                                            "op": "constant",
+                                                            "type": {
+                                                              "bits": 16,
+                                                              "kind": "int",
+                                                              "signed": false
+                                                            },
+                                                            "value": 7
+                                                          }
+                                                        ],
+                                                        "op": "eq",
+                                                        "type": {
+                                                          "kind": "bool"
+                                                        }
+                                                      },
+                                                      {
+                                                        "op": "constant",
+                                                        "type": {
+                                                          "bits": 16,
+                                                          "kind": "int",
+                                                          "signed": false
+                                                        },
+                                                        "value": 39
+                                                      },
+                                                      {
+                                                        "args": [
+                                                          {
+                                                            "args": [
+                                                              {
+                                                                "args": [
+                                                                  {
+                                                                    "name": "S",
+                                                                    "op": "parameter",
+                                                                    "type": {
+                                                                      "bits": 16,
+                                                                      "kind": "int",
+                                                                      "signed": false
+                                                                    }
+                                                                  },
+                                                                  {
+                                                                    "op": "constant",
+                                                                    "type": {
+                                                                      "bits": 16,
+                                                                      "kind": "int",
+                                                                      "signed": false
+                                                                    },
+                                                                    "value": 15
+                                                                  }
+                                                                ],
+                                                                "op": "bit_and",
+                                                                "type": {
+                                                                  "bits": 16,
+                                                                  "kind": "int",
+                                                                  "signed": false
+                                                                }
+                                                              },
+                                                              {
+                                                                "op": "constant",
+                                                                "type": {
+                                                                  "bits": 16,
+                                                                  "kind": "int",
+                                                                  "signed": false
+                                                                },
+                                                                "value": 8
+                                                              }
+                                                            ],
+                                                            "op": "eq",
+                                                            "type": {
+                                                              "kind": "bool"
+                                                            }
+                                                          },
+                                                          {
+                                                            "op": "constant",
+                                                            "type": {
+                                                              "bits": 16,
+                                                              "kind": "int",
+                                                              "signed": false
+                                                            },
+                                                            "value": 127
+                                                          },
+                                                          {
+                                                            "args": [
+                                                              {
+                                                                "args": [
+                                                                  {
+                                                                    "args": [
+                                                                      {
+                                                                        "name": "S",
+                                                                        "op": "parameter",
+                                                                        "type": {
+                                                                          "bits": 16,
+                                                                          "kind": "int",
+                                                                          "signed": false
+                                                                        }
+                                                                      },
+                                                                      {
+                                                                        "op": "constant",
+                                                                        "type": {
+                                                                          "bits": 16,
+                                                                          "kind": "int",
+                                                                          "signed": false
+                                                                        },
+                                                                        "value": 15
+                                                                      }
+                                                                    ],
+                                                                    "op": "bit_and",
+                                                                    "type": {
+                                                                      "bits": 16,
+                                                                      "kind": "int",
+                                                                      "signed": false
+                                                                    }
+                                                                  },
+                                                                  {
+                                                                    "op": "constant",
+                                                                    "type": {
+                                                                      "bits": 16,
+                                                                      "kind": "int",
+                                                                      "signed": false
+                                                                    },
+                                                                    "value": 9
+                                                                  }
+                                                                ],
+                                                                "op": "eq",
+                                                                "type": {
+                                                                  "kind": "bool"
+                                                                }
+                                                              },
+                                                              {
+                                                                "op": "constant",
+                                                                "type": {
+                                                                  "bits": 16,
+                                                                  "kind": "int",
+                                                                  "signed": false
+                                                                },
+                                                                "value": 111
+                                                              },
+                                                              {
+                                                                "args": [
+                                                                  {
+                                                                    "args": [
+                                                                      {
+                                                                        "args": [
+                                                                          {
+                                                                            "name": "S",
+                                                                            "op": "parameter",
+                                                                            "type": {
+                                                                              "bits": 16,
+                                                                              "kind": "int",
+                                                                              "signed": false
+                                                                            }
+                                                                          },
+                                                                          {
+                                                                            "op": "constant",
+                                                                            "type": {
+                                                                              "bits": 16,
+                                                                              "kind": "int",
+                                                                              "signed": false
+                                                                            },
+                                                                            "value": 15
+                                                                          }
+                                                                        ],
+                                                                        "op": "bit_and",
+                                                                        "type": {
+                                                                          "bits": 16,
+                                                                          "kind": "int",
+                                                                          "signed": false
+                                                                        }
+                                                                      },
+                                                                      {
+                                                                        "op": "constant",
+                                                                        "type": {
+                                                                          "bits": 16,
+                                                                          "kind": "int",
+                                                                          "signed": false
+                                                                        },
+                                                                        "value": 10
+                                                                      }
+                                                                    ],
+                                                                    "op": "eq",
+                                                                    "type": {
+                                                                      "kind": "bool"
+                                                                    }
+                                                                  },
+                                                                  {
+                                                                    "op": "constant",
+                                                                    "type": {
+                                                                      "bits": 16,
+                                                                      "kind": "int",
+                                                                      "signed": false
+                                                                    },
+                                                                    "value": 119
+                                                                  },
+                                                                  {
+                                                                    "args": [
+                                                                      {
+                                                                        "args": [
+                                                                          {
+                                                                            "args": [
+                                                                              {
+                                                                                "name": "S",
+                                                                                "op": "parameter",
+                                                                                "type": {
+                                                                                  "bits": 16,
+                                                                                  "kind": "int",
+                                                                                  "signed": false
+                                                                                }
+                                                                              },
+                                                                              {
+                                                                                "op": "constant",
+                                                                                "type": {
+                                                                                  "bits": 16,
+                                                                                  "kind": "int",
+                                                                                  "signed": false
+                                                                                },
+                                                                                "value": 15
+                                                                              }
+                                                                            ],
+                                                                            "op": "bit_and",
+                                                                            "type": {
+                                                                              "bits": 16,
+                                                                              "kind": "int",
+                                                                              "signed": false
+                                                                            }
+                                                                          },
+                                                                          {
+                                                                            "op": "constant",
+                                                                            "type": {
+                                                                              "bits": 16,
+                                                                              "kind": "int",
+                                                                              "signed": false
+                                                                            },
+                                                                            "value": 11
+                                                                          }
+                                                                        ],
+                                                                        "op": "eq",
+                                                                        "type": {
+                                                                          "kind": "bool"
+                                                                        }
+                                                                      },
+                                                                      {
+                                                                        "op": "constant",
+                                                                        "type": {
+                                                                          "bits": 16,
+                                                                          "kind": "int",
+                                                                          "signed": false
+                                                                        },
+                                                                        "value": 124
+                                                                      },
+                                                                      {
+                                                                        "args": [
+                                                                          {
+                                                                            "args": [
+                                                                              {
+                                                                                "args": [
+                                                                                  {
+                                                                                    "name": "S",
+                                                                                    "op": "parameter",
+                                                                                    "type": {
+                                                                                      "bits": 16,
+                                                                                      "kind": "int",
+                                                                                      "signed": false
+                                                                                    }
+                                                                                  },
+                                                                                  {
+                                                                                    "op": "constant",
+                                                                                    "type": {
+                                                                                      "bits": 16,
+                                                                                      "kind": "int",
+                                                                                      "signed": false
+                                                                                    },
+                                                                                    "value": 15
+                                                                                  }
+                                                                                ],
+                                                                                "op": "bit_and",
+                                                                                "type": {
+                                                                                  "bits": 16,
+                                                                                  "kind": "int",
+                                                                                  "signed": false
+                                                                                }
+                                                                              },
+                                                                              {
+                                                                                "op": "constant",
+                                                                                "type": {
+                                                                                  "bits": 16,
+                                                                                  "kind": "int",
+                                                                                  "signed": false
+                                                                                },
+                                                                                "value": 12
+                                                                              }
+                                                                            ],
+                                                                            "op": "eq",
+                                                                            "type": {
+                                                                              "kind": "bool"
+                                                                            }
+                                                                          },
+                                                                          {
+                                                                            "op": "constant",
+                                                                            "type": {
+                                                                              "bits": 16,
+                                                                              "kind": "int",
+                                                                              "signed": false
+                                                                            },
+                                                                            "value": 57
+                                                                          },
+                                                                          {
+                                                                            "args": [
+                                                                              {
+                                                                                "args": [
+                                                                                  {
+                                                                                    "args": [
+                                                                                      {
+                                                                                        "name": "S",
+                                                                                        "op": "parameter",
+                                                                                        "type": {
+                                                                                          "bits": 16,
+                                                                                          "kind": "int",
+                                                                                          "signed": false
+                                                                                        }
+                                                                                      },
+                                                                                      {
+                                                                                        "op": "constant",
+                                                                                        "type": {
+                                                                                          "bits": 16,
+                                                                                          "kind": "int",
+                                                                                          "signed": false
+                                                                                        },
+                                                                                        "value": 15
+                                                                                      }
+                                                                                    ],
+                                                                                    "op": "bit_and",
+                                                                                    "type": {
+                                                                                      "bits": 16,
+                                                                                      "kind": "int",
+                                                                                      "signed": false
+                                                                                    }
+                                                                                  },
+                                                                                  {
+                                                                                    "op": "constant",
+                                                                                    "type": {
+                                                                                      "bits": 16,
+                                                                                      "kind": "int",
+                                                                                      "signed": false
+                                                                                    },
+                                                                                    "value": 13
+                                                                                  }
+                                                                                ],
+                                                                                "op": "eq",
+                                                                                "type": {
+                                                                                  "kind": "bool"
+                                                                                }
+                                                                              },
+                                                                              {
+                                                                                "op": "constant",
+                                                                                "type": {
+                                                                                  "bits": 16,
+                                                                                  "kind": "int",
+                                                                                  "signed": false
+                                                                                },
+                                                                                "value": 94
+                                                                              },
+                                                                              {
+                                                                                "args": [
+                                                                                  {
+                                                                                    "args": [
+                                                                                      {
+                                                                                        "args": [
+                                                                                          {
+                                                                                            "name": "S",
+                                                                                            "op": "parameter",
+                                                                                            "type": {
+                                                                                              "bits": 16,
+                                                                                              "kind": "int",
+                                                                                              "signed": false
+                                                                                            }
+                                                                                          },
+                                                                                          {
+                                                                                            "op": "constant",
+                                                                                            "type": {
+                                                                                              "bits": 16,
+                                                                                              "kind": "int",
+                                                                                              "signed": false
+                                                                                            },
+                                                                                            "value": 15
+                                                                                          }
+                                                                                        ],
+                                                                                        "op": "bit_and",
+                                                                                        "type": {
+                                                                                          "bits": 16,
+                                                                                          "kind": "int",
+                                                                                          "signed": false
+                                                                                        }
+                                                                                      },
+                                                                                      {
+                                                                                        "op": "constant",
+                                                                                        "type": {
+                                                                                          "bits": 16,
+                                                                                          "kind": "int",
+                                                                                          "signed": false
+                                                                                        },
+                                                                                        "value": 14
+                                                                                      }
+                                                                                    ],
+                                                                                    "op": "eq",
+                                                                                    "type": {
+                                                                                      "kind": "bool"
+                                                                                    }
+                                                                                  },
+                                                                                  {
+                                                                                    "op": "constant",
+                                                                                    "type": {
+                                                                                      "bits": 16,
+                                                                                      "kind": "int",
+                                                                                      "signed": false
+                                                                                    },
+                                                                                    "value": 121
+                                                                                  },
+                                                                                  {
+                                                                                    "op": "constant",
+                                                                                    "type": {
+                                                                                      "bits": 16,
+                                                                                      "kind": "int",
+                                                                                      "signed": false
+                                                                                    },
+                                                                                    "value": 113
+                                                                                  }
+                                                                                ],
+                                                                                "op": "select",
+                                                                                "type": {
+                                                                                  "bits": 16,
+                                                                                  "kind": "int",
+                                                                                  "signed": false
+                                                                                }
+                                                                              }
+                                                                            ],
+                                                                            "op": "select",
+                                                                            "type": {
+                                                                              "bits": 16,
+                                                                              "kind": "int",
+                                                                              "signed": false
+                                                                            }
+                                                                          }
+                                                                        ],
+                                                                        "op": "select",
+                                                                        "type": {
+                                                                          "bits": 16,
+                                                                          "kind": "int",
+                                                                          "signed": false
+                                                                        }
+                                                                      }
+                                                                    ],
+                                                                    "op": "select",
+                                                                    "type": {
+                                                                      "bits": 16,
+                                                                      "kind": "int",
+                                                                      "signed": false
+                                                                    }
+                                                                  }
+                                                                ],
+                                                                "op": "select",
+                                                                "type": {
+                                                                  "bits": 16,
+                                                                  "kind": "int",
+                                                                  "signed": false
+                                                                }
+                                                              }
+                                                            ],
+                                                            "op": "select",
+                                                            "type": {
+                                                              "bits": 16,
+                                                              "kind": "int",
+                                                              "signed": false
+                                                            }
+                                                          }
+                                                        ],
+                                                        "op": "select",
+                                                        "type": {
+                                                          "bits": 16,
+                                                          "kind": "int",
+                                                          "signed": false
+                                                        }
+                                                      }
+                                                    ],
+                                                    "op": "select",
+                                                    "type": {
+                                                      "bits": 16,
+                                                      "kind": "int",
+                                                      "signed": false
+                                                    }
+                                                  }
+                                                ],
+                                                "op": "select",
+                                                "type": {
+                                                  "bits": 16,
+                                                  "kind": "int",
+                                                  "signed": false
+                                                }
+                                              }
+                                            ],
+                                            "op": "select",
+                                            "type": {
+                                              "bits": 16,
+                                              "kind": "int",
+                                              "signed": false
+                                            }
+                                          }
+                                        ],
+                                        "op": "select",
+                                        "type": {
+                                          "bits": 16,
+                                          "kind": "int",
+                                          "signed": false
+                                        }
+                                      }
+                                    ],
+                                    "op": "select",
+                                    "type": {
+                                      "bits": 16,
+                                      "kind": "int",
+                                      "signed": false
+                                    }
+                                  }
+                                ],
+                                "op": "select",
+                                "type": {
+                                  "bits": 16,
+                                  "kind": "int",
+                                  "signed": false
+                                }
+                              }
+                            ],
+                            "op": "select",
+                            "type": {
+                              "bits": 16,
+                              "kind": "int",
+                              "signed": false
+                            }
+                          }
+                        ],
+                        "op": "select",
+                        "type": {
+                          "bits": 16,
+                          "kind": "int",
+                          "signed": false
+                        }
+                      }
+                    ],
+                    "op": "bit_or",
+                    "type": {
+                      "bits": 16,
+                      "kind": "int",
+                      "signed": false
+                    }
+                  },
+                  "target": {
+                    "kind": "word",
+                    "offset": 0,
+                    "parameter": "D"
+                  }
+                }
+              ],
+              "scope_limits": {
+                "claim": "formalized_exact_low_nibble_decoder_and_high_byte_retention",
+                "destination": "16_bit_word_or_FX3U_digit_specified_bits",
+                "flags": "not_formalized",
+                "hardware_effect": "not_tested",
+                "native_compilation": "not_tested",
+                "overflow": "not_applicable"
+              }
+            },
+            "verification": "source_checked"
+          },
+          "behavior:lifecycle": {
+            "depends_on": [],
+            "dimension": "execution.lifecycle",
+            "id": "behavior:lifecycle",
+            "members": [],
+            "scope": {
+              "forms": [
+                "SEGD"
+              ],
+              "models": [
+                "FX3U"
+              ]
+            },
+            "sources": [
+              {
+                "id": "508",
+                "manual_id": "fx3_programming_r",
+                "manual_number": "JY997D16601",
+                "offset_basis": "local_official_PDF_page_and_decoding_table",
+                "opcode": "SEGD",
+                "pdf_pages": [
+                  434,
+                  435
+                ],
+                "review": {
+                  "claim": "only_fact_value_in_exact_form_scope",
+                  "method": "complete_local_official_PDF_pages_visual_review"
+                },
+                "revision": "R",
+                "section": "15.4 FNC 73 – SEGD / Seven Segment Decoder",
+                "target_model": "FX3U"
+              }
+            ],
+            "status": "source_verified",
+            "value": {
+              "disabled": "retain",
+              "enable": "command_input",
+              "trigger": "level"
+            },
+            "verification": "source_checked"
+          },
+          "behavior:types": {
+            "depends_on": [],
+            "dimension": "parameters.value_type",
+            "id": "behavior:types",
+            "members": [],
+            "scope": {
+              "forms": [
+                "SEGD"
+              ],
+              "models": [
+                "FX3U"
+              ]
+            },
+            "sources": [
+              {
+                "id": "508",
+                "manual_id": "fx3_programming_r",
+                "manual_number": "JY997D16601",
+                "offset_basis": "local_official_PDF_page_and_decoding_table",
+                "opcode": "SEGD",
+                "pdf_pages": [
+                  434,
+                  435
+                ],
+                "review": {
+                  "claim": "only_fact_value_in_exact_form_scope",
+                  "method": "complete_local_official_PDF_pages_visual_review"
+                },
+                "revision": "R",
+                "section": "15.4 FNC 73 – SEGD / Seven Segment Decoder",
+                "target_model": "FX3U"
+              }
+            ],
+            "status": "source_verified",
+            "value": {
+              "bits": 16,
+              "kind": "int",
+              "signed": false
+            },
+            "verification": "source_checked"
+          }
+        }
+      },
+      "owners": [
+        {
+          "forms": [
+            "SEGD"
+          ],
+          "model_profile": "models_1"
+        }
+      ],
+      "form_diffs": {},
+      "model_diffs": []
     }
   ],
   "serialization": "common+form_diff+model_diff-v1",

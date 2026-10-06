@@ -2,7 +2,16 @@
 
 ## Shared context, distinct wire formats
 
-Built-in confirmed generation uses [generate_confirmed_ladder](../../src/application/generation_agent.py) and the compact protocol. External candidate generation uses the full `ladder_v1` instructions from [build_generation_instructions](../../src/application/generation_context.py). Both consume [ConfirmedGenerationContext](../../src/application/confirmed_generation_context.py).
+Built-in Ladder generation uses [generate_direct_ladder](../../src/application/generation_agent.py) for raw Direct requests and `generate_confirmed_ladder` for the optional confirmed workflow. Successful candidates keep the existing compact protocol. Direct may return only the existing `missing_info` question structure with `status="needs_input"` instead; this creates no program or CSV.
+
+Both entries reuse [ConfirmedGenerationContext](../../src/application/confirmed_generation_context.py), with Direct extracting user declarations through Core and retaining the complete raw requirement. MCP new Ladder requests receive the same Direct compact context; confirmed generation and existing edits retain their full `ladder_v1` guidance from [build_generation_instructions](../../src/application/generation_context.py). Every candidate passes through the same CandidateService and IR/artifact path.
+
+[scan_timing_guidance](../../src/plc/timing.py) supplies the shared scan-order and
+relative-timing guidance to analysis proposals and generation requests. The
+generation execution-policy receipt identifies the delivered policy. This adds
+no model call or process parameter; expected measurement traces and reference
+programs remain outside product context. Guidance delivery does not establish
+program behavior.
 
 The selected PLC model reaches [generation_output_contract](../../src/plc/generation_contract.py), so the output schema uses the CPU-scoped instruction registry. Protocol fields are owned by [application.compact_protocol](../../src/application/compact_protocol.py) and [plc.generation_contract](../../src/plc/generation_contract.py), not duplicated in client code.
 

@@ -89,10 +89,13 @@ the only generation source.
   first, for example DFLT D8350 D200, then use DEADD/DESUB/DEMUL/DEDIV.
 - FX3U SFTL/SFTLP source and destination bit ranges must not overlap; prefer a
   D state pointer for pump rotation.
-- An ordinary T timer resets only after its enable path turns OFF. M8000 stays
+- An ordinary T timer resets when its enable path turns OFF or by explicit RST. M8000 stays
   ON throughout RUN, so M8000 alone creates a power-on delay, never a periodic
   oscillator. For matching periods use M8011/M8012/M8013/M8014; otherwise use
   an explicit path that turns the timer enable OFF before the next cycle.
+- If a running timer is explicitly reset after its OUT, its current value and
+  contact are cleared in that scan. Determine the new phase before writing
+  outputs; do not leave all outputs blank for a restart scan.
 - JSON ``TIMER`` outputs use T addresses only. JSON ``COUNTER`` outputs use C
   addresses only; never encode a C counter as ``TIMER``.
 - Do not emulate ALT with same-edge sibling branches ``NC Mx -> SET Mx`` and

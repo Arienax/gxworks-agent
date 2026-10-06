@@ -7,37 +7,38 @@ export type AnalysisMode = components["schemas"]["JobCreate"]["analysis_mode"];
 
 const labels: Record<Locale, { title: string; direct: string; directHint: string; design: string; designHint: string }> = {
   "zh-CN": {
-    title: "分析模式",
-    direct: "Direct 直接实现",
+    title: "方案策略",
+    direct: "单方案",
     directHint: "按当前需求给出一个明确方案，不比较其他架构。",
-    design: "Design 方案设计",
+    design: "比较方案",
     designHint: "探索可行架构，给出 1～3 个方案供选择。",
   },
   en: {
-    title: "Analysis mode",
-    direct: "Direct implementation",
+    title: "Approach strategy",
+    direct: "One approach",
     directHint: "Produce one concrete implementation without comparing architectures.",
-    design: "Design exploration",
+    design: "Compare approaches",
     designHint: "Explore feasible architectures and offer 1–3 alternatives.",
   },
   ja: {
-    title: "分析モード",
-    direct: "Direct 直接実装",
+    title: "方式の検討",
+    direct: "一つの方式",
     directHint: "他の構成と比較せず、要件に沿った一つの実装案を作成します。",
-    design: "Design 方式設計",
+    design: "方式を比較",
     designHint: "実現可能な構成を検討し、1～3 案を提示します。",
   },
 };
 
-export function AnalysisModePicker({ locale, value, onChange }: {
+export function AnalysisModePicker({ locale, value, onChange, disabled = false }: {
   locale: Locale;
   value: AnalysisMode;
   onChange: (mode: AnalysisMode) => void;
+  disabled?: boolean;
 }) {
   const group = useId();
   const text = labels[locale];
   return (
-    <fieldset className="analysis-mode-picker">
+    <fieldset className="analysis-mode-picker" disabled={disabled}>
       <legend>{text.title}</legend>
       {(["direct", "design"] as const).map((mode) => (
         <label key={mode} className={value === mode ? "selected" : ""}>

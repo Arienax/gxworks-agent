@@ -3,6 +3,7 @@ import itertools
 import json
 
 import pytest
+from hypothesis import given, settings, strategies as st
 
 from plc.condition_normalizer import normalize_shared_conditions
 from plc.ir import lower_rung_instructions
@@ -47,6 +48,205 @@ def assert_idempotent(original, **kwargs):
     assert again == normalized
     assert second_summary["changes"] == []
     return normalized, summary
+
+
+@pytest.mark.parametrize("address,model,stable", [
+    ("T0", "FX3U", True), ("T245", "FX3U", True), ("T246", "FX3U", False),
+    ("C0", "FX3U", True), ("C99", "FX3U", True), ("C200", "FX3U", False),
+    ("T1000", "FX5U", True), ("C0", "FX5U", False),
+    ("M8000", "FX3U", True), ("M8013", "FX3U", False),
+    ("M8000", "FX5U", False), ("SM400", "FX5U", True), ("SM402", "FX5U", False),
+])
+def test_condition_stability_uses_exact_cpu_runtime_facts(address, model, stable):
+    from plc.condition_analysis import ConditionAnalysis
+    assert (ConditionAnalysis(model).condition(contact(address)).identity is not None) == stable
+
+
+def test_all_input_and_output_tags_are_classified_including_legacy_forms():
+    from plc.condition_analysis import ConditionAnalysis
+    from plc.validation import VALID_INPUT_TYPES, VALID_OUTPUT_TYPES
+    analysis = ConditionAnalysis()
+    inputs = {kind: contact("X0", kind) for kind in ("NO", "NC", "P", "RISING", "F", "FALLING")}
+    inputs.update(COMPARE={"type": "COMPARE", "expression": "= D0 K1"},
+                  BLOCK_INPUT={"type": "BLOCK_INPUT", "expression": "D0 == K1"},
+                  parallel_block={"type": "parallel_block", "branches": [[contact("X0")], [contact("X1")]]})
+    outputs = {kind: {"type": kind, "address": "M0"} for kind in ("COIL", "PLS", "PLF")}
+    outputs.update(TIMER={"type": "TIMER", "address": "T0", "value": "K2"},
+                   COUNTER={"type": "COUNTER", "address": "C0", "value": "K2"},
+                   APP_INSTR=app("MOV", "K1", "D0"),
+                   BLOCK_OUTPUT={"type": "BLOCK_OUTPUT", "expression": "MOV K1 D0"})
+    assert set(inputs) == VALID_INPUT_TYPES and set(outputs) == VALID_OUTPUT_TYPES
+    for value in inputs.values():
+        classified = analysis.condition(value)
+        assert classified.identity is not None or classified.reason == "edge_evaluation_site"
+    assert analysis.condition(inputs["COMPARE"]).identity == analysis.condition(inputs["BLOCK_INPUT"]).identity
+    assert all(analysis.output(value).writes is not None for value in outputs.values())
+
+
+@pytest.mark.parametrize("output,writes,precision", [
+    (app("MOV", "K0", "D9"), {"D9"}, "definition"),
+    (app("DMOV", "K0", "D9"), {"D9", "D10"}, "definition"),
+    (app("CMP", "D0", "K2", "M9"), {"M9", "M10", "M11"}, "definition"),
+    (app("BMOV", "D0", "D9", "K3"), {"D*"}, "family"),
+    (app("ZRST", "M9", "M11"), {"M9", "M10", "M11"}, "exact"),
+    (app("BMOV", "D0", "D9", "D20"), {"D*"}, "family"),
+    (app("MOV", "D0", "D9Z0"), None, "unknown"),
+    (app("CALL", "P0"), None, "unknown"),
+    (app("MPS"), None, "unknown"),
+    (app("UNLISTED", "M0"), None, "unknown"),
+    (coil("M8034"), None, "unknown"),
+    (app("RST", "D8030"), None, "unknown"),
+])
+def test_effects_use_existing_definitions_or_explicit_conservative_fallback(output, writes, precision):
+    from plc.condition_analysis import ConditionAnalysis
+    result = ConditionAnalysis().output(output)
+    assert result.writes == writes and result.precision == precision
+    if writes is None:
+        assert result.reason
+
+
+def test_late_shorter_prefix_cannot_expand_an_already_factored_subgroup():
+    source = ladder(*(rung(i, branch([contact("X0"), contact("M0"), contact(f"X{i}")], coil(f"Y{i}")))
+                      for i in range(1, 5)), rung(5, branch([contact("X0"), contact("X5")], coil("Y5"))))
+    result, report = assert_idempotent(source)
+    assert len(result["rungs"]) == 2
+    assert result["rungs"][0]["shared_inputs"] == [contact("X0"), contact("M0")]
+    assert report["statistics"] == {"conditions_before": 14, "conditions_after": 8,
+                                    "networks_before": 5, "networks_after": 2}
+
+
+def test_subgroups_within_one_rung_are_factored_without_changing_other_source_ids():
+    source = ladder(rung(10, *(branch([contact("M0"), contact(f"X{i}")], coil(f"Y{i}")) for i in range(4)),
+                         branch([contact("X4")], coil("Y4")), shared=[contact("X0")]),
+                    rung(20, branch([contact("X1")], coil("Y5"))))
+    result, report = assert_idempotent(source)
+    assert [r["rung_id"] for r in result["rungs"]] == [10, 21, 20]
+    assert result["rungs"][-1] == source["rungs"][-1]
+    assert result["rungs"][0]["shared_inputs"] == [contact("X0"), contact("M0")]
+    assert any(c["operation"] == "factor_branch_subgroup" for c in report["changes"])
+    validate_ladder_candidate_structure(result)
+
+
+def test_scoped_subgroups_keep_network_ids_and_pass_existing_scope_enforcement():
+    from plc.candidate_service import CandidateService
+    from plc.change_scope import enforce_change_scope
+    from plc.ir import build_plc_ir
+    source = ladder(rung(10, *(branch([contact("M0"), contact(f"X{i}")], coil(f"Y{i}")) for i in range(4)),
+                         branch([contact("X4")], coil("Y4")), shared=[contact("X0")]),
+                    rung(20, branch([contact("X1")], coil("Y5"))))
+    original = build_plc_ir(source)
+    patch = {"mode": "partial", "rungs": [copy.deepcopy(source["rungs"][0])]}
+    patch["rungs"][0]["branches"][1]["inputs"].append(contact("X1"))
+    prepared = CandidateService().prepare(patch, previous_ladder=source)
+    result = prepared["ladder"]
+    assert [r["rung_id"] for r in result["rungs"]] == [10, 20]
+    assert result["rungs"][-1] == source["rungs"][-1]
+    enforce_change_scope(original, prepared["program_ir"], {"network_ids": ["N0010"]})
+
+
+def test_pure_parallel_arms_factor_and_deduplicate_but_remain_valid_protocol():
+    either = {"type": "parallel_block", "branches": [
+        [contact("X0"), contact("X1")], [contact("X0"), contact("X2")]]}
+    source = ladder(rung(1, branch([either, copy.deepcopy(either)], coil("Y0"))))
+    result, _ = assert_idempotent(source)
+    assert result["rungs"][0]["branches"][0]["inputs"] == [contact("X0"), {
+        "type": "parallel_block", "branches": [[contact("X1")], [contact("X2")]]}]
+    validate_ladder_candidate_structure(result)
+
+
+def test_parallel_intersection_handles_different_positions_and_keeps_absorbed_device_notes():
+    source = ladder(rung(1, branch([{"type": "parallel_block", "branches": [
+        [contact("X0"), contact("M0")], [contact("X1"), contact("M0")]]}], coil("Y0"))))
+    result, _ = assert_idempotent(source)
+    assert result["rungs"][0]["branches"][0]["inputs"] == [contact("M0"), {
+        "type": "parallel_block", "branches": [[contact("X0")], [contact("X1")]]}]
+    annotated = ladder(rung(1, branch([{"type": "parallel_block", "branches": [
+        [contact("X0")], [contact("X0"), {**contact("X1"), "label": "Separate device purpose"}]]}], coil("Y0"))))
+    result, report = assert_idempotent(annotated)
+    assert result == annotated
+    assert any(s["reason"] == "annotated_absorption" for s in report["skipped"])
+
+
+@pytest.mark.parametrize("kind", ["P", "RISING", "F", "FALLING"])
+def test_shared_edge_stays_single_while_pure_common_tail_is_extracted(kind):
+    source = ladder(rung(1, branch([contact("M0"), contact("X1")], coil("Y0")),
+        branch([contact("M0"), contact("X2")], coil("Y1")), header=contact("X0", kind)))
+    result, _ = assert_idempotent(source)
+    assert len(result["rungs"]) == 1 and result["rungs"][0]["header_element"] == contact("X0", kind)
+    assert result["rungs"][0]["shared_inputs"] == [contact("M0")]
+
+
+def test_pure_conjunction_can_share_conditions_in_different_positions():
+    source = ladder(rung(1, branch([contact("X0"), contact("M0")], coil("Y0"))),
+                    rung(2, branch([contact("X1"), contact("M0")], coil("Y1"))))
+    result, _ = assert_idempotent(source)
+    assert len(result["rungs"]) == 1
+    assert result["rungs"][0]["shared_inputs"] == [contact("M0")]
+    assert [b["inputs"] for b in result["rungs"][0]["branches"]] == [[contact("X0")], [contact("X1")]]
+
+
+@given(st.lists(st.sets(st.sampled_from(["X0", "X1", "M0", "T0"]), min_size=1), min_size=2, max_size=7))
+@settings(max_examples=60, deadline=None, derandomize=True)
+def test_partition_cost_matches_independent_exhaustive_contiguous_partition_oracle(paths):
+    source = ladder(*(rung(i + 1, branch([contact(a) for a in sorted(path)], coil(f"Y{i}"))) for i, path in enumerate(paths)))
+    result, report = assert_idempotent(source)
+    costs = []
+    for cuts in itertools.product([False, True], repeat=len(paths) - 1):
+        ends = [i + 1 for i, cut in enumerate(cuts) if cut] + [len(paths)]
+        start, total = 0, 0
+        for end in ends:
+            common = set.intersection(*paths[start:end])
+            if end - start > 1 and not common:
+                break
+            total += sum(map(len, paths[start:end])) - (end - start - 1) * len(common)
+            start = end
+        else:
+            costs.append((total, len(ends)))
+    assert (report["statistics"]["conditions_after"], len(result["rungs"])) == min(costs)
+
+
+_plain_condition = st.one_of(
+    st.builds(contact, st.sampled_from(["X0", "X1", "M0", "M1", "T0", "C0", "Y0"]), st.sampled_from(["NO", "NC"])),
+    st.builds(lambda op, address, n: {"type": "COMPARE", "expression": f"{op} {address} K{n}"},
+              st.sampled_from(["=", ">=", "<"]), st.sampled_from(["D0", "T0", "C0"]), st.integers(0, 3)))
+_condition = st.one_of(_plain_condition,
+    st.builds(contact, st.sampled_from(["X0", "M0"]), st.sampled_from(["P", "F"])),
+    st.builds(lambda arms: {"type": "parallel_block", "branches": arms},
+              st.lists(st.lists(_plain_condition, min_size=1, max_size=3), min_size=1, max_size=3)))
+_output = st.one_of(
+    st.builds(coil, st.sampled_from(["Y0", "Y1", "M0", "M1"])),
+    st.builds(lambda op, address: app(op, address), st.sampled_from(["SET", "RST"]), st.sampled_from(["M0", "M1"])),
+    st.just(app("MOV", "K1", "D0")),
+    st.sampled_from([{"type": "TIMER", "address": "T0", "value": "K2"},
+                    {"type": "COUNTER", "address": "C0", "value": "K2"},
+                    {"type": "PLS", "address": "M0"}, {"type": "PLF", "address": "M1"}]))
+
+
+@st.composite
+def sequential_programs(draw):
+    result = []
+    for index in range(draw(st.integers(1, 5))):
+        shared = draw(st.lists(_condition, max_size=2).filter(lambda items: all(x["type"] != "parallel_block" for x in items)))
+        branches = []
+        for _ in range(draw(st.integers(1, 4))):
+            branches.append(branch(draw(st.lists(_condition, max_size=4)), *draw(st.lists(_output, min_size=1, max_size=2))))
+        result.append(rung(index + 1, *branches, shared=shared))
+    return ladder(*result)
+
+
+@given(sequential_programs(), st.lists(st.tuples(st.booleans(), st.booleans(), st.integers(0, 3)), min_size=3, max_size=8))
+@settings(max_examples=250, deadline=None, derandomize=True)
+def test_generated_normalizations_preserve_every_scan_and_write_order(source, frames):
+    result, report = assert_idempotent(source)
+    assert report["statistics"]["conditions_after"] <= report["statistics"]["conditions_before"]
+    validate_ladder_candidate_structure(result)
+    left = right = {"M0": 1, "M1": 0, "T0": 0, "C0": 0}
+    lt, rt = {}, {}
+    for x0, x1, d0 in frames:
+        left, right = dict(left, X0=x0, X1=x1, D0=d0), dict(right, X0=x0, X1=x1, D0=d0)
+        left, lt, lw = scan(source, left, lt)
+        right, rt, rw = scan(result, right, rt)
+        assert (left, lt, lw) == (right, rt, rw)
 
 
 def test_removes_duplicate_series_and_shared_branch_conditions():
@@ -101,9 +301,9 @@ def test_shared_duplicate_after_coil_write_is_not_removed():
     assert any(item["reason"] == "read_after_write" for item in summary["skipped"])
 
 
-@pytest.mark.parametrize("condition", [contact("X0", "P"), contact("X0", "F"), contact("T0"),
+@pytest.mark.parametrize("condition", [contact("X0", "P"), contact("X0", "F"), contact("C200"),
     contact("M8013"), {"type": "COMPARE", "expression": "= D0Z0 K1"},
-    {"type": "parallel_block", "branches": [[contact("X0")], [contact("X1")]]}])
+    {"type": "parallel_block", "branches": [[contact("X0", "P")], [contact("X1")]]}])
 def test_edges_state_indirect_and_parallel_inputs_are_barriers(condition):
     source = ladder(rung(1, branch([copy.deepcopy(condition), copy.deepcopy(condition)], coil("Y0"))),
                     rung(2, branch([copy.deepcopy(condition), copy.deepcopy(condition)], coil("Y1"))))
@@ -185,10 +385,13 @@ def scan(program, values, timers):
     values = dict(values)
     timers = dict(timers)
     writes = []
+    edge_index = 0
 
     def word(token):
         if token.startswith("K"):
             return int(token[1:])
+        if token.startswith("T") or token.startswith("C"):
+            return timers.get(token, 0)
         return values.get(token, 0)
 
     for network in program["rungs"]:
@@ -206,7 +409,13 @@ def scan(program, values, timers):
             elif op == "MPP":
                 acc = saved.pop()
             elif base or op == "ANI":
-                if op in {"LD", "LDI", "AND", "ANI", "OR", "ORI"}:
+                if op in {"LDP", "LDF", "ANDP", "ANDF", "ORP", "ORF"}:
+                    key = ("edge", edge_index)
+                    edge_index += 1
+                    current, previous = bool(values.get(args[0], 0)), timers.get(key, False)
+                    condition = current and not previous if op.endswith("P") else previous and not current
+                    timers[key] = current
+                elif op in {"LD", "LDI", "AND", "ANI", "OR", "ORI"}:
                     condition = bool(values.get(args[0], 0))
                     condition = not condition if op in {"LDI", "ANI", "ORI"} else condition
                     base = "AND" if op == "ANI" else base
@@ -227,6 +436,13 @@ def scan(program, values, timers):
                 if args[0].startswith("T"):
                     timers[args[0]] = timers.get(args[0], 0) + 1 if acc else 0
                     value = int(timers[args[0]] >= word(args[1]))
+                elif args[0].startswith("C"):
+                    key = ("counter", args[0])
+                    count = timers.get(args[0], 0)
+                    if acc and not timers.get(key) and count < word(args[1]):
+                        count += 1
+                    timers[key], timers[args[0]] = bool(acc), count
+                    value = int(count >= word(args[1]))
                 else:
                     value = int(bool(acc))
                 values[args[0]] = value
@@ -235,7 +451,17 @@ def scan(program, values, timers):
                 if acc:
                     address, value = (args[1], word(args[0])) if op == "MOV" else (args[0], int(op == "SET"))
                     values[address] = value
+                    if op == "RST" and address.startswith(("T", "C")):
+                        timers[address] = 0
                     writes.append((address, value))
+            elif op in {"PLS", "PLF"}:
+                key = ("edge", edge_index)
+                edge_index += 1
+                current, previous = bool(acc), timers.get(key, False)
+                value = int(current and not previous if op == "PLS" else previous and not current)
+                timers[key] = current
+                values[args[0]] = value
+                writes.append((args[0], value))
             else:
                 raise AssertionError("Test VM does not support " + op)
         assert not saved

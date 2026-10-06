@@ -28,6 +28,8 @@ npm run build --prefix web
 
 任务交互导出使用 `GET /api/jobs/{job_id}/diagnostics`，成功和失败任务均可导出已有记录。版本交付摘要使用 `GET /api/projects/{project_id}/versions/{version_id}/delivery`。前者返回 ZIP，后者返回结构化摘要及其 Markdown。具体可用路径以实例 OpenAPI 为准。
 
+Web 工程问答使用 `kind="agent"`，工具调用只读；外部工程工具仍走其共享工具与审批入口。生成任务可通过 [JobCreate.generation_action](../../src/integrations/web/schemas.py)明确选择修改所选版本或按规格重新生成，前置条件和快照绑定由 [WorkbenchService._submit_job](../../src/application/workbench.py)检查；完整流程见[分析与任务分层](../architecture/analysis-modes.md)。
+
 ## 会话与请求
 
 服务监听 loopback。操作员写请求需要会话、同源 Origin 和 `X-CSRF-Token`；Agent 请求使用独立 Bearer token。鉴权及 Host/Origin 规则在 [security.py](../../src/integrations/web/security.py)。不要把操作员 token 当作 MCP Agent token，也不要把登录链接写入工程。

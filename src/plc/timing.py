@@ -18,6 +18,24 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 TIMING_ANALYSIS_SCHEMA_VERSION = 1
 FX3U_TIMING_PROFILE_VERSION = "JY997D16601-Rev.R-Appendix-B-v1"
 
+
+def scan_timing_guidance(plc_model):
+    """Shared scan-order guidance, not a timing certificate or algorithm mandate."""
+    common = """# Scan order and relative timing
+同一扫描按梯级顺序执行：先处理启动/停止/初始化，再更新计时与当前状态、计算显示值，最后写现场输出。先输出后更新会让边界及显示滞后一拍；内部状态写入会立即影响后续条件。
+需求若以启动时刻为起点，每段时长须从该起点或确定的相位边界累计。自由运行时钟的初始相位未知；它不能保证启动后的第一个完整间隔。自复位定时器的 OFF/重新使能扫描会累计延迟，不能把这些脉冲直接当成精确的每秒或每半秒。
+相对计时可用一个持续累计的时间参考，根据当前值比较各相位边界或推导显示值。连续循环须检查周期末端复位与下一周期首态在同扫描的顺序，避免空白扫描或每周期追加重启延迟。具体算法仍服从用户明确的指令与结构要求。"""
+    common += """
+工艺未指定特定计时结构时，阶段、显示与闪烁优先共用同一个持续时间基准。闪烁亮灭直接比较该基准的时间窗口，不另用互相复位的亮/灭子定时器；这些子定时器仍会把复位和重新启动的扫描累加进每个闪烁周期。"""
+    if str(plc_model or "").strip().upper() == "FX3U":
+        common += """
+FX3U 普通 T 定时器使能 OFF 会清当前值及触点；RST 也清当前值及触点。运行中的定时器若在 OUT 后被 RST，该扫描后面的比较读取复位值；先完成周期边界处理，再据当前时间写新周期输出。"""
+        common += """
+连续循环的时间基准应由独立、稳定的运行条件使能，不要把该定时器自身的常闭完成触点串入其 OUT 条件。自身触点断开再恢复会增加 OFF 和重新启动扫描，并在周期末留下旧相位或空白输出；应在时间基准本扫描已经执行后处理边界复位，再复制当前值、比较相位并写输出。若工艺明确指定这种自复位结构，则须保留要求并说明其计时限制。"""
+        common += """
+梯形图 APP_INSTR 必须使用本型号指令资料确认的原生助记符，不要凭通用语言经验把 MOD 等运算符名称写成指令。少量、次数明确的闪烁优先列出各亮时间窗口的 OR 条件，直接比较累计时间；需要算术计算时必须核对原生指令及完整结果字布局。"""
+    return common
+
 _K_RE = re.compile(r"^K(-?\d+)$", re.I)
 _DEVICE_RE = re.compile(r"^(SM|SD|X|Y|M|D|T|C|S)(\d+)$", re.I)
 

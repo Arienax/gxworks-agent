@@ -547,10 +547,19 @@ def build_knowledge_context(
     return KnowledgeContext(text, manifest)
 
 
+def discover_capabilities(requirement, *, plc_model="FX3U", target_mode="ladder",
+                          explicit_targets=(), catalog=()):
+    """Functional discovery uses this same scoped retrieval backend."""
+    from knowledge.capability_discovery import discover
+    return discover(requirement, plc_model=plc_model, target_mode=target_mode,
+                    explicit_targets=explicit_targets, catalog=catalog,
+                    retrieve=retrieve_knowledge)
+
+
 def __getattr__(name):
     # Preserve access to private helper functions/constants that existing tests
     # and diagnostics import from knowledge_retriever.
     return getattr(_core, name)
 
 
-__all__ = ["retrieve_knowledge", "retrieve_fact_aware_knowledge", "retrieve_design_knowledge", "build_knowledge_context"]
+__all__ = ["retrieve_knowledge", "retrieve_fact_aware_knowledge", "retrieve_design_knowledge", "build_knowledge_context", "discover_capabilities"]

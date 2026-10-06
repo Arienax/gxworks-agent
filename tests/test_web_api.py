@@ -123,6 +123,231 @@ def offline(monkeypatch):
     monkeypatch.setattr(api, "_save_history", lambda *a: pytest.fail("Unexpected global history write"))
 
 
+@pytest.mark.parametrize("clarification", [False, True])
+def test_direct_http_once_and_bound_clarification(tmp_path, monkeypatch, offline, clarification):
+    import application.generation_agent as generator
+    monkeypatch.setattr(generator, "_build_knowledge_context", lambda *a, **k: "")
+    monkeypatch.setattr(api, "analyze_requirement_streaming", lambda *a, **k: pytest.fail("Direct invoked analysis"))
+    class DirectProvider(_Provider):
+        def stream(self, request):
+            self.requests.append(request)
+            payload = ({"status": "needs_input", "missing_info": [{"id": "delay", "question": "延时几秒？X7：备用输入。", "required": True}]}
+                       if clarification and len(self.requests) == 1 else
+                       {"r": [{"b": [{"i": ["NO X0"], "o": ["COIL Y0"]}]}]})
+            yield TextDelta(json.dumps(payload, ensure_ascii=False))
+    provider = DirectProvider()
+    workspace, state = tmp_path / "workspace", tmp_path / "state"
+    service = WorkbenchService(workspace, state, model_factory=lambda: (provider, {"model": provider.profile["model"]}))
+    with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
+        headers = _login(client)
+        pid = client.post("/api/projects", json={"name": "Direct", "plc_model": "FX3U"}, headers=headers).json()["id"]
+        command = {"kind": "direct_generation", "project_id": pid, "request_id": "direct-start",
+                   "text": "X0：启动按钮，按下为1。Y0：输出。按启动后延时输出。"}
+        job_id, output = _complete(client, service, client.post("/api/jobs", json=command, headers=headers))
+        assert client.post("/api/jobs", json=command, headers=headers).json()["id"] == job_id
+        assert len(provider.requests) == 1
+        if clarification:
+            assert output["status"] == "needs_input"
+            assert "version_id" not in output and "proposal_id" not in output
+            assert client.get(f"/api/projects/{pid}").json()["versions"] == []
+            other = client.post("/api/projects", json={"name": "Other", "plc_model": "FX3U"}, headers=headers).json()["id"]
+            answer = {**command, "text": "5秒", "clarification_job_id": job_id, "request_id": "direct-answer"}
+            assert client.post("/api/jobs", json={**answer, "project_id": other}, headers=headers).status_code == 409
+            continued, output = _complete(client, service, client.post("/api/jobs", json=answer, headers=headers))
+            assert client.post("/api/jobs", json=answer, headers=headers).json()["id"] == continued
+            assert len(provider.requests) == 2
+            assert command["text"] in provider.requests[1].messages[-1].content
+            assert "5秒" in provider.requests[1].messages[-1].content
+            assert "X7：备用输入。" in provider.requests[1].messages[-1].content
+            snapshot = service.jobs._load(continued)["snapshot"]
+            assert "5秒" in snapshot["user_fact_text"] and "X7" not in snapshot["user_fact_text"]
+            facts = json.loads(provider.requests[1].messages[0].content.split(
+                "# User facts (no generated confirmation specification)\n", 1)[1].split("\n#", 1)[0])
+            assert {row["address"] for row in facts["io_bindings"]} == {"X0", "Y0"}
+        assert output["version_id"]
+        saved = service.projects.raw_version(pid, output["version_id"])
+        assert saved["maintainability_review"] == output["generation"]["maintainability_review"]
+        assert saved["maintainability_review"]["model_calls"] == 0
+        public_version = client.get(f"/api/projects/{pid}/versions/{output['version_id']}").json()
+        assert public_version["maintainability_review"] == saved["maintainability_review"]
+        assert client.get(f"/api/projects/{pid}").json()["confirmed_spec"] is None
+        assert client.get(f"/api/projects/{pid}/versions/{output['version_id']}/artifacts/program_csv").status_code == 200
+        assert all(r.max_retries == 0 for r in provider.requests)
+
+
+def test_st_http_saved_version_keeps_shared_discovery_and_local_review(tmp_path, monkeypatch, offline):
+    from application.generation_context import _build_knowledge_context
+    from knowledge import retriever
+    monkeypatch.setattr(api, "_build_knowledge_context", _build_knowledge_context)
+    monkeypatch.setattr(retriever, "build_knowledge_context", lambda *a, **k: "")
+    class STProvider(_Provider):
+        def stream(self, request):
+            self.requests.append(request)
+            yield TextDelta(json.dumps({"st_code": "Y0 := X0;"}))
+    provider = STProvider()
+    workspace, state = tmp_path / "workspace", tmp_path / "state"
+    service = WorkbenchService(workspace, state,
+        model_factory=lambda: (provider, {"model": provider.profile["model"]}))
+    with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
+        headers = _login(client)
+        pid = client.post("/api/projects", json={"name": "ST", "plc_model": "FX3U", "target_mode": "st"},
+                          headers=headers).json()["id"]
+        from application.confirmed_generation_context import project_direct_user_facts
+        raw = "X0输入按钮，按下为1、释放为0；Y0输出。按住按钮时输出，松开关闭。"
+        service.store.set_confirmed_spec(pid, {**project_direct_user_facts(raw, "FX3U"),
+            "schema_version": 4, "summary": raw, "io_table": [
+            {"address": "X0", "kind": "X", "label": "输入"},
+            {"address": "Y0", "kind": "Y", "label": "输出"}], "parameters": [],
+            "selected_approach": {"approach_id": "user", "name": "已知工程事实"}})
+        command = {"kind": "generation", "project_id": pid, "request_id": "st-review", "text": raw}
+        response = client.post("/api/jobs", json=command, headers=headers)
+        _, output = _complete(client, service, response)
+        version = client.get(f"/api/projects/{pid}/versions/{output['version_id']}").json()
+        assert len(provider.requests) == 1
+        assert version["maintainability_review"] == output["generation"]["maintainability_review"]
+        assert version["maintainability_review"]["model_calls"] == 0
+        assert version["generation_handoff"]["capability_discovery"]["model_calls"] == 0
+        assert client.get(f"/api/projects/{pid}/versions/{output['version_id']}/artifacts/st").text == "Y0 := X0;"
+
+
+@pytest.mark.parametrize("change", ["cancel", "spec_conflict", "profile"])
+def test_direct_cancel_state_conflict_and_frozen_provider(tmp_path, monkeypatch, offline, change):
+    import application.generation_agent as generator
+    monkeypatch.setattr(generator, "_build_knowledge_context", lambda *a, **k: "")
+    started, release = threading.Event(), threading.Event()
+    class Blocking(_Provider):
+        def stream(self, request):
+            self.requests.append(request)
+            started.set()
+            assert release.wait(10)
+            yield TextDelta(json.dumps({"r": [{"b": [{"i": ["NO X0"], "o": ["COIL Y0"]}]}]}))
+    provider, replacement = Blocking(), _Provider()
+    selected = [provider]
+    workspace, state = tmp_path / "workspace", tmp_path / "state"
+    service = WorkbenchService(workspace, state, model_factory=lambda: (selected[0], {"model": selected[0].profile["model"]}))
+    with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
+        headers = _login(client)
+        pid = client.post("/api/projects", json={"name": "Direct state", "plc_model": "FX3U"}, headers=headers).json()["id"]
+        response = client.post("/api/jobs", json={"kind": "direct_generation", "project_id": pid,
+            "text": "X0: Start; Y0: Output. Follow X0.", "request_id": "direct-state"}, headers=headers)
+        assert response.status_code == 202, response.text
+        job = response.json()["id"]
+        try:
+            assert started.wait(5)
+            if change == "cancel":
+                assert client.post(f"/api/jobs/{job}/cancel", headers=headers).status_code == 200
+            elif change == "spec_conflict":
+                service.store.set_confirmed_spec(pid, {"summary": "Changed by user", "io_table": [{"address": "X1", "kind": "X", "label": "Input"}]})
+            else:
+                selected[0] = replacement
+                provider.profile["model"] = "mutated-profile"
+        finally:
+            release.set()
+        service.jobs._futures[job].result(timeout=15)
+        current = client.get(f"/api/jobs/{job}").json()
+        assert len(provider.requests) == 1
+        assert not replacement.requests
+        if change == "profile":
+            assert current["status"] == "completed", current
+            assert provider.requests[0].model != "mutated-profile"
+            assert current["result"]["version_id"]
+        else:
+            assert current["status"] == ("cancelled" if change == "cancel" else "failed"), current
+            if change == "spec_conflict":
+                assert current["error_code"] == "input_conflict"
+            assert client.get(f"/api/projects/{pid}").json()["versions"] == []
+
+
+@pytest.mark.parametrize("tool", ["create_program_candidate", "patch_program", "create_fbd_candidate",
+                                 "import_current_program_to_gxworks2"])
+@pytest.mark.parametrize("approval_mode", ["ask", "auto", "full"])
+def test_web_questions_never_create_candidates_or_dispatch_actions(tmp_path, offline, tool, approval_mode):
+    from model_runtime.provider import ToolCall, ToolCallEnd
+    class QuestionProvider(_Provider):
+        def stream(self, request):
+            self.requests.append(request)
+            if len(self.requests) == 1:
+                yield ToolCallEnd(ToolCall("forbidden", tool, "{}"))
+            else:
+                yield TextDelta("请切换到创建程序或修改程序。")
+    provider = QuestionProvider()
+    workspace, state = tmp_path / "workspace", tmp_path / "state"
+    service = WorkbenchService(workspace, state, model_factory=lambda: (provider, offline_runtime_profile()))
+    with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
+        headers = _login(client)
+        if approval_mode != "ask":
+            service.update_approval_settings(mode=approval_mode, expected_revision=0,
+                                            confirm_full_access=approval_mode == "full")
+        pid = client.post("/api/projects", json={"name": "Question boundary"}, headers=headers).json()["id"]
+        job_id, output = _complete(client, service, client.post("/api/jobs", json={
+            "kind": "agent", "project_id": pid, "request_id": "question", "text": "当前工程状态？",
+        }, headers=headers))
+        assert output["audit"][0]["error_code"] == "READ_ONLY_TOOL"
+        assert output["proposal_ids"] == [] and "version_id" not in output
+        assert client.get(f"/api/projects/{pid}").json()["versions"] == []
+        assert service.proposals.list(pid) == []
+        assert len(service.jobs.list(pid)) == 1
+        assert all(tool not in {schema["function"]["name"] for schema in request.tools}
+                   for request in provider.requests)
+        assert client.get(f"/api/jobs/{job_id}").json()["result"]["proposal_ids"] == []
+
+
+@pytest.mark.parametrize("case", ["no_baseline", "empty_edit", "missing_spec", "regenerate_scope", "wrong_kind"])
+def test_explicit_generation_action_rejects_invalid_inputs_before_model_calls(tmp_path, case):
+    workspace, state = tmp_path / "workspace", tmp_path / "state"
+    if case == "no_baseline":
+        store = SessionStore(base_dir=workspace, legacy_dir=tmp_path)
+        pid = store.create_project("No baseline", plc_model="FX3U")["id"]
+        version_id = None
+    else:
+        store, pid, version_id, _ = _legacy_workspace(workspace)
+    if case == "regenerate_scope":
+        store.set_confirmed_spec(pid, {"summary": "X0 controls Y0", "io_table": [
+            {"address": "X0", "kind": "X", "label": "Input"},
+            {"address": "Y0", "kind": "Y", "label": "Output"}], "parameters": []})
+    service = WorkbenchService(workspace, state, model_factory=lambda: pytest.fail("Invalid action invoked the model"))
+    with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
+        command = {"kind": "agent" if case == "wrong_kind" else "generation", "project_id": pid,
+            "version_id": version_id, "request_id": case, "generation_action":
+            "regenerate" if case in {"missing_spec", "regenerate_scope"} else "edit",
+            "text": "" if case == "empty_edit" else "Change X0 to X1"}
+        if case == "regenerate_scope":
+            command["change_scope"] = {"network_ids": ["N0001"]}
+        response = client.post("/api/jobs", json=command, headers=_login(client))
+        assert response.status_code == 400, response.text
+        assert service.jobs.list(pid) == []
+
+
+def test_explicit_edit_uses_selected_program_even_when_fresh_generation_header_is_enabled(tmp_path, offline):
+    workspace, state = tmp_path / "workspace", tmp_path / "state"
+    _, pid, version_id, _ = _legacy_workspace(workspace)
+    changed = _ladder()
+    changed["device_comments"]["X1"] = "Replacement input"
+    changed["rungs"][0]["branches"][0]["inputs"][0]["address"] = "X1"
+    class EditProvider(_Provider):
+        def stream(self, request):
+            self.requests.append(request)
+            yield TextDelta(json.dumps(changed))
+    provider = EditProvider()
+    service = WorkbenchService(workspace, state, model_factory=lambda: (provider, offline_runtime_profile()))
+    with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
+        job_id, output = _complete(client, service, client.post("/api/jobs", json={
+            "kind": "generation", "project_id": pid, "version_id": version_id, "request_id": "explicit-edit",
+            "generation_action": "edit", "text": "Replace the X0 contact with X1; preserve Y0.",
+        }, headers={**_login(client), "X-GX-Fresh-Confirmed-Generation": "1"}))
+        snapshot = service.jobs._load(job_id)["snapshot"]
+        assert snapshot["fresh_confirmed_generation"] is False
+        assert snapshot["version_id"] == version_id
+        assert output["generation_action"] == "edit"
+        old = client.get(f"/api/projects/{pid}/versions/{version_id}/program").json()
+        new = client.get(f"/api/projects/{pid}/versions/{output['version_id']}/program").json()
+        from plc.ir import ir_to_ladder
+        assert ir_to_ladder(new)["rungs"][0]["branches"][0]["inputs"][0]["address"] == "X1"
+        assert ir_to_ladder(old)["rungs"][0]["branches"][0]["inputs"][0]["address"] == "X0"
+        assert service.proposals.get(output["proposal_id"])["base_version_id"] == version_id
+        assert len(provider.requests) == 1
+
+
 def test_legacy_workspace_http_reads_never_migrate_or_initialize_execution(tmp_path, monkeypatch):
     workspace = tmp_path / "workspace"
     store, project, version, report = _legacy_workspace(workspace)
@@ -650,7 +875,8 @@ def test_web_generation_developer_header_is_explicit_job_input(tmp_path):
 
 
 
-def test_fresh_confirmed_ab_rerun_ignores_existing_version_and_reenters_compact_agent(tmp_path, monkeypatch):
+@pytest.mark.parametrize("route", ["developer_header", "regenerate_action"])
+def test_fresh_confirmed_ab_rerun_ignores_existing_version_and_reenters_compact_agent(tmp_path, monkeypatch, route):
     from application import generation_agent as agent_b
 
     workspace, state = tmp_path / "workspace", tmp_path / "state"
@@ -703,14 +929,18 @@ def test_fresh_confirmed_ab_rerun_ignores_existing_version_and_reenters_compact_
         second = client.post("/api/jobs", headers={
             **headers,
             "X-GX-Construction-Examples": "1",
-            "X-GX-Fresh-Confirmed-Generation": "1",
+            "X-GX-Fresh-Confirmed-Generation": "1" if route == "developer_header" else "0",
         }, json={
             "kind": "generation", "project_id": project, "request_id": "ab-on",
             "text": "Generate", "response_language": "zh-CN",
+            **({"generation_action": "regenerate", "version_id": first_output["version_id"]}
+               if route == "regenerate_action" else {}),
         })
         _, second_output = _complete(client, service, second)
 
         assert second_output["generation"]["first_pass_pipeline"]["mode"] == "confirmed_spec"
+        if route == "regenerate_action":
+            assert second_output["generation_action"] == "regenerate"
         handoff = second_output["generation"]["generation_handoff"]
         # The header enables routing, not unconditional example injection.
         # direct_logic has no high-confidence archetype in the current corpus,

@@ -55,6 +55,14 @@ def build(text=SFTL_REQUEST, spec=None, evidence="FACT_EVIDENCE", profile=PROFIL
 
 
 @pytest.mark.parametrize("mode", ["direct", "design"])
+def test_analysis_proposal_receives_the_shared_core_timing_guidance(mode):
+    from plc.timing import scan_timing_guidance
+    assembled, _, _ = build("X0启动后完整计时，连续循环。", analysis_mode=mode)
+    assert scan_timing_guidance("FX3U") in assembled.system_prompt
+    assert assembled.route.include_design is (mode == "design")
+
+
+@pytest.mark.parametrize("mode", ["direct", "design"])
 def test_semantic_field_example_uses_the_current_array_protocol(mode):
     from application.analysis_results import current_analysis_protocol_violations
     import re

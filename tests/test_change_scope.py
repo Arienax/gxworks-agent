@@ -174,21 +174,25 @@ def test_async_candidates_reject_outside_scope_and_report_reason(engineering, mo
                     "artifacts": PLCCore().compile_project(after, self.output_dir)["artifacts"]}
         monkeypatch.setattr(GenerationWorkflow, "run", generate)
     else:
-        from agent_runtime.agent import AgentRunResult
         def agent(text, **kwargs):
-            assert '"network_ids": ["N0001"]' in text
-            return AgentRunResult("候选待确认", [{"type": "accept_generated_program", "project_id": project_id,
-                "_candidate_ir": after, "change_scope": None}])
+            pytest.fail("Read-only engineering questions must reject edit scopes before invoking a model")
         monkeypatch.setattr('agent_runtime.agent.run_tool_agent', agent)
     before = snapshot_files(store.base_dir)
-    job = workbench.submit({"project_id": project_id, "version_id": version_id, "kind": kind,
+    command = {"project_id": project_id, "version_id": version_id, "kind": kind,
         "text": "修改第一网络", "response_language": "zh-CN", "request_id": "scoped-" + kind,
-        "change_scope": {"network_ids": ["N0001"]}})
-    workbench.jobs._futures[job["id"]].result(timeout=10)
-    result = workbench.jobs.get(job["id"])
-    assert result["status"] == "failed"
-    assert result["error_code"] == "change_scope_violation"
-    assert any("N0002" in event["payload"].get("message", "") for event in workbench.jobs.events(job["id"]))
+        "change_scope": {"network_ids": ["N0001"]}}
+    if kind == "agent":
+        # Web Agent jobs are read-only engineering questions; external MCP
+        # candidate tools keep their separate scoped contract above.
+        with pytest.raises(ValueError, match="修改范围"):
+            workbench.submit(command)
+    else:
+        job = workbench.submit(command)
+        workbench.jobs._futures[job["id"]].result(timeout=10)
+        result = workbench.jobs.get(job["id"])
+        assert result["status"] == "failed"
+        assert result["error_code"] == "change_scope_violation"
+        assert any("N0002" in event["payload"].get("message", "") for event in workbench.jobs.events(job["id"]))
     assert workbench.proposals.list(project_id) == []
     assert snapshot_files(store.base_dir) == before
 

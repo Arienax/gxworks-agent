@@ -342,6 +342,7 @@ class ProposalService:
                                 validation_profile=validation_profile)
                 metadata["normalization"] = copy.deepcopy(payload.get("normalization"))
                 metadata["generation_handoff"] = copy.deepcopy(payload.get("_generation_handoff"))
+                metadata["maintainability_review"] = copy.deepcopy(payload.get("maintainability_review"))
                 if payload.get('_construction_binding'):
                     metadata.setdefault('generation_metadata', {})['construction_binding'] = copy.deepcopy(payload['_construction_binding'])
                 if compiled["artifacts"].get("st_from_ir"):
@@ -359,7 +360,8 @@ class ProposalService:
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     destination.write_bytes(data)
                     artifacts[name] = entry["path"]
-                allowed = {"summary", "validation", "plc_model", "program_name", "generation_metadata"}
+                allowed = {"summary", "validation", "plc_model", "program_name", "generation_metadata",
+                           "generation_handoff", "maintainability_review"}
                 metadata = {key: copy.deepcopy(value) for key, value in (payload.get("metadata") or {}).items() if key in allowed}
                 metadata.update(target_mode=payload["target_mode"], artifacts=artifacts, plc_model=payload.get("plc_model", "FX3U"))
             metadata.update(summary=metadata.get("summary") or record.get("summary", {}).get("summary") or "已校验的程序",

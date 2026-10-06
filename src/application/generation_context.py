@@ -161,11 +161,22 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
     from plc.specification.provenance import retrieval_projection
 
     normalized_task = str(task_type or "generate").strip().casefold()
+    def finish(context):
+        if normalized_task not in {"generate", "edit"}:
+            return context
+        from application.capability_context import augment_generation_knowledge
+        meta = getattr(primary_query, "metadata", {})
+        requirement = (meta.get("capability_requirement") or meta.get("residual_fact_query") or str(primary_query)) if isinstance(meta, dict) else str(primary_query)
+        target = meta.get("target_mode", "ladder") if isinstance(meta, dict) else "ladder"
+        return augment_generation_knowledge(requirement, context, plc_model=plc_model,
+            target_mode=target, confirmed_spec=confirmed_context,
+            catalog=meta.get("callable_catalog", ()) if isinstance(meta, dict) else (),
+            token_budget=meta.get("rag_evidence_token_budget", 12000) if isinstance(meta, dict) else 12000)
     # Retrieval executes the caller's choice. Omitted/None never means "infer".
     def absent(status, reason, **metadata):
         audit_section("manual_context", status=status, reason=reason, source="manual_retriever")
-        return KnowledgeContext("", {"stage": normalized_task, "status": status,
-                                     "reason": reason, "records": [], "plc_model": plc_model, **metadata})
+        return finish(KnowledgeContext("", {"stage": normalized_task, "status": status,
+                                     "reason": reason, "records": [], "plc_model": plc_model, **metadata}))
     if normalized_task in {"contract_repair", "format_repair"}:
         return absent("excluded", "repair_scope_only")
     base_top_k = _KNOWLEDGE_TASK_TOP_K.get(
@@ -240,7 +251,7 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
     manifest["context_sha256"] = text_sha256(result)
     audit_section("manual_context", result, status="included" if result else "empty",
                   reason=lookup_reason, source="manual_retriever")
-    return KnowledgeContext(result, manifest)
+    return finish(KnowledgeContext(result, manifest))
 
 
 def _confirmed_context_text(confirmed_context):
@@ -519,8 +530,22 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
             from application.generation_wire import GenerationWirePrompt
             return GenerationWirePrompt(system_prompt, context.wire_packet)
     else:
-        knowledge_ctx = knowledge_builder(user_requirement, plc_model=plc_model, task_type=normalized_task,
+        from knowledge.evidence import KnowledgeQuery
+        from application.context_compiler import model_budget
+        language_query = KnowledgeQuery(user_requirement, precompiled=True, metadata={
+            **model_budget(model_profile), "target_mode": target_mode,
+            "capability_requirement": user_requirement})
+        knowledge_ctx = knowledge_builder(language_query, plc_model=plc_model, task_type=normalized_task,
                                           confirmed_context=confirmed_context, evidence=retrieval_evidence)
+        if on_context:
+            from plc.specification.provenance import handoff_snapshot
+            from knowledge.evidence import context_manifest
+            manifest = context_manifest(knowledge_ctx, stage=normalized_task)
+            handoff = handoff_snapshot(project_confirmed_specification(confirmed_context), evidence=manifest,
+                                       stage=normalized_task)
+            if manifest.get("capability_discovery"):
+                handoff["capability_discovery"] = copy.deepcopy(manifest["capability_discovery"])
+            on_context(handoff)
     selected_prompt = prompt_builder(target_mode, is_edit_mode=is_edit_mode, user_requirement=user_requirement,
                                      task_type=task_type, review_mode=review_mode, plc_model=plc_model,
                                      confirmed_context=confirmed_context)

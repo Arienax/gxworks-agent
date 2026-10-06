@@ -1,6 +1,6 @@
 import { ConditionNormalization } from "./features/ConditionNormalization";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, FormEvent, ReactNode } from "react";
+import type { CSSProperties, FormEvent, ReactNode, SetStateAction } from "react";
 import {
   Activity,
   ArrowDownToLine,
@@ -20,7 +20,6 @@ import {
   Moon,
   PanelLeftClose,
   Paperclip,
-  Play,
   Plus,
   Send,
   Settings2,
@@ -50,10 +49,13 @@ import { Badge, Button, Modal } from "./components/ui";
 import { statusText, statusTone, translate } from "./i18n";
 import type { Locale } from "./i18n";
 import { SpecEditor } from "./features/SpecEditor";
-import { AnalysisModePicker } from "./features/AnalysisModePicker";
 import type { AnalysisMode } from "./features/AnalysisModePicker";
+import { ConversationControls } from "./features/ConversationControls";
+import { conversationRoute } from "./features/conversationRouting";
+import type { CreationWorkflow, GenerationAction, TaskPurpose } from "./features/conversationRouting";
 import { JobFailure } from "./features/JobFailure";
 import { GenerationResult, useGenerationResult } from "./features/GenerationResult";
+import { CapabilityReview } from "./features/CapabilityReview";
 import { JobProgress } from "./features/JobProgress";
 import { ApprovalSettingsPanel, approvalLabels } from "./features/ApprovalSettings";
 import type { ApprovalSettings } from "./features/ApprovalSettings";
@@ -139,10 +141,15 @@ export default function App() {
   const [theme, setTheme] = useState<"light" | "dark">(() =>
     localStorage.getItem("gx.theme") === "light" ? "light" : "dark",
   );
-  const [text, setText] = useState(""),
-    [intent, setIntent] = useState<"analysis" | "generation" | "agent">(
-      "analysis",
-    );
+  const [task, setTask] = useState<TaskPurpose>("create");
+  const [workflow, setWorkflow] = useState<CreationWorkflow>("direct");
+  const [editAction, setEditAction] = useState<GenerationAction>("edit");
+  const [reviewRequested, setReviewRequested] = useState(false);
+  const [drafts, setDrafts] = useState<Record<TaskPurpose, string>>({ create: "", edit: "", question: "" });
+  const text = drafts[task];
+  const setText = (value: SetStateAction<string>) => setDrafts(before => ({
+    ...before, [task]: typeof value === "function" ? value(before[task]) : value,
+  }));
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>("direct");
   useEffect(() => { setAnalysisMode("direct"); }, [pid]);
   const [attachments, setAttachments] = useState<
@@ -192,12 +199,14 @@ export default function App() {
   useEffect(() => { setGXSend(null); }, [pid, vid, project?.active_version_id]);
   const composerProjectRef = useRef("");
   function syncComposerRoute(value: Project) {
-    const editRegenerate = !!value.confirmed_spec &&
-      ((value.version_count || 0) > 0 || (value.versions?.length || 0) > 0);
-    const routeKey = `${value.id}:${editRegenerate ? "edit-regenerate" : "new-requirement"}`;
+    const editRegenerate = (value.version_count || 0) > 0 || (value.versions?.length || 0) > 0;
+    const routeKey = `${value.id}:${editRegenerate ? "edit-regenerate" : value.confirmed_spec ? "confirmed" : "new-requirement"}`;
     if (composerProjectRef.current === routeKey) return;
     composerProjectRef.current = routeKey;
-    setIntent(editRegenerate ? "generation" : "analysis");
+    setTask(editRegenerate ? "edit" : "create");
+    setWorkflow(value.confirmed_spec || value.target_mode !== "ladder" ? "review" : "direct");
+    setEditAction("edit");
+    setReviewRequested(false);
   }
   useEffect(() => {
     projectEpoch.current += 1;
@@ -212,6 +221,7 @@ export default function App() {
     failedPreviews.current.clear();
     activeProjectRef.current = pid;
     setAttachments([]);
+    setDrafts({ create: "", edit: "", question: "" });
     setVid("");
     setProgram(null);
     setSt("");
@@ -234,6 +244,12 @@ export default function App() {
       (version?.lifecycle_status === "accepted" ? "saved" : version?.target_mode);
   const currentJob = jobs.find((j) => j.id === jobId && j.project_id === pid);
   const generationResult = useGenerationResult(currentJob, outputRetry);
+  const [ignoredClarification, setIgnoredClarification] = useState("");
+  const continuingDirect = currentJob?.kind === "direct_generation" && generationResult.needsInput && currentJob.id !== ignoredClarification;
+  const composerRoute = conversationRoute({ task, workflow, editAction,
+    targetMode: project?.target_mode || "ladder", hasVersions: !!hasSavedVersions,
+    hasSpec: !!project?.confirmed_spec, reviewRequested, continuingDirect });
+  const intent = composerRoute.kind;
   const resultKey = generationResult.id ? `${pid}:${generationResult.id}` : "";
   const generationSaved = !!generationResult.versionId || proposals.some((proposal) =>
     proposal.id === generationResult.proposalId && proposal.action === "accept_local" &&
@@ -241,8 +257,8 @@ export default function App() {
   const displayedJobStatus = currentJob?.kind === "execution" && currentJob.status === "completed" &&
     ["failed", "interrupted", "conflict"].includes(String(currentJob.result?.status || ""))
     ? "failed"
-    : currentJob?.kind === "generation" && currentJob.status === "completed"
-      ? generationResult.blocked ? "contract_mismatch"
+    : (currentJob?.kind === "generation" || currentJob?.kind === "direct_generation") && currentJob.status === "completed"
+      ? generationResult.needsInput ? "needs_input" : generationResult.blocked ? "contract_mismatch"
         : generationSaved ? "saved"
         : generationResult.proposalId ? "candidate_ready"
         : generationResult.loading ? "loading_result" : "result_unavailable"
@@ -250,9 +266,12 @@ export default function App() {
   const pendingCount = proposals.filter((p) => p.status === "pending").length;
   const canWrite = !!session && !session.read_only && !busy && !loading;
   const canGenerate = !!project && project.id === pid &&
-    !!project.confirmed_spec && !specDirty.current && !jobs.some(activeJob);
+    (!!project.confirmed_spec || hasSavedVersions) && !specDirty.current && !jobs.some(activeJob);
   const canSubmit = canWrite && !!pid && project?.id === pid &&
-    (intent === "generation" ? canGenerate : !!text.trim());
+    !jobs.some(activeJob) && composerRoute.available &&
+    (task !== "edit" || !!version) &&
+    (intent !== "generation" || canGenerate) &&
+    (!composerRoute.requiresText || !!text.trim());
   const operations = version?.capabilities?.operations || defaultOperations;
   const refreshAll = () => {
     setRefresh(n => n + 1);
@@ -664,26 +683,34 @@ export default function App() {
   ) {
     if (!project || project.id !== pid) return;
     const epoch = projectEpoch.current;
+    const generationAction = kind === "generation"
+      ? extra.generation_action ?? (kind === intent ? composerRoute.generationAction : undefined)
+      : undefined;
     const job = await api<Job>("/jobs", "POST", {
       kind,
       project_id: pid,
       version_id: vid || null,
       request_id: key(),
       text: kind === "generation"
-        ? text.trim() || t("请严格按照已确认规格生成候选程序。")
+        ? generationAction === "edit" ? text : t("请严格按照已确认规格生成候选程序。")
         : text,
       response_language: locale,
-      attachment_ids: attachments.map((a) => a.attachment_id),
-      ...(["generation", "agent", "gx_read"].includes(kind) && scopeEnabled ? {change_scope: {
+      attachment_ids: kind === "agent" ? [] : attachments.map((a) => a.attachment_id),
+      ...(generationAction ? { generation_action: generationAction } : {}),
+      ...(kind === "direct_generation" && continuingDirect && currentJob
+        ? {clarification_job_id: currentJob.id} : {}),
+      ...((kind === "gx_read" || (kind === "generation" && generationAction === "edit")) && scopeEnabled ? {change_scope: {
         ...(scopeNetworks.trim() ? {network_ids: scopeNetworks.trim().split(/[\s,，]+/)} : {}),
         ...(scopeAddresses.trim() ? {addresses: scopeAddresses.trim().toUpperCase().split(/[\s,，]+/)} : {}),
       }} : {}),
       ...extra,
       ...(kind === "analysis" ? { analysis_mode: analysisMode } : {}),
-    }, kind === "generation" ? {
+    }, kind === "generation" || kind === "direct_generation" ? {
       headers: {
         "X-GX-Construction-Examples": constructionExamples ? "1" : "0",
-        "X-GX-Fresh-Confirmed-Generation": freshConfirmedGeneration ? "1" : "0",
+        "X-GX-Fresh-Confirmed-Generation": generationAction
+          ? generationAction === "regenerate" ? "1" : "0"
+          : freshConfirmedGeneration ? "1" : "0",
       },
     } : {});
     if (activeProjectRef.current !== pid || epoch !== projectEpoch.current)
@@ -693,8 +720,8 @@ export default function App() {
     if (kind === "analysis") specDirty.current = false;
     setJobs((old) => [job, ...old]);
     setPanel("agent");
-    setAttachments([]);
-    if (kind === "generation") setText("");
+    if (kind !== "agent") setAttachments([]);
+    if (kind === "generation" || kind === "direct_generation") setText("");
   }
   async function repairFailedGeneration(job: Job) {
     const savedInvalid = job.kind === "generation" && job.status === "completed" && job.result?.status === "saved_invalid";
@@ -714,6 +741,7 @@ export default function App() {
     const generateAfterSave = currentJob?.kind === "analysis" &&
       currentJob.status === "completed" && !!analysisOutput?.spec_draft &&
       jobId === currentJob.id;
+    const regenerateAfterSave = generateAfterSave && hasSavedVersions && project?.target_mode === "ladder";
     const result = await api<{ valid: boolean; spec?: Spec; hash?: string; issues?: { errors?: { path: string; message: string }[]; warnings?: { message: string }[] } }>(
       `/projects/${pid}/spec`,
       "PUT",
@@ -741,9 +769,12 @@ export default function App() {
     if (currentJob?.kind === "analysis") consumedDrafts.current.add(jobId);
     setAnalysisOutput(null);
     setNotice([t("规格已确认"), ...(result.issues?.warnings || []).map(issue => issue.message)].join("；"));
-    setIntent("generation");
+    setTask(hasSavedVersions ? "edit" : "create");
+    setWorkflow("review");
+    setEditAction(regenerateAfterSave ? "regenerate" : "edit");
+    setReviewRequested(false);
     setPanel("agent");
-    if (generateAfterSave) await submitJob("generation");
+    if (generateAfterSave) await submitJob("generation", regenerateAfterSave ? { generation_action: "regenerate" } : {});
     else void reloadProjectSilently(pid).catch(e => { if (activeProjectRef.current === pid) setError(e.message); });
   }
   async function showProposal(value: Proposal, previewTheme = theme) {
@@ -981,13 +1012,13 @@ export default function App() {
                 : "工程中还没有程序")}</h2>
               <p>{t(generationResult.id
                 ? "请在 Agent 面板查看生成结果及具体诊断。"
-                : "描述控制需求，确认规格后生成第一个程序。")}</p>
+                : "描述控制需求，信息充分时一次生成程序与 CSV。")}</p>
               {generationResult.id && <Button onClick={() => setPanel("agent")}>{t("查看生成结果")}</Button>}
               <Badge>
                 {project.plc_model} · {project.target_mode.toUpperCase()}
               </Badge>
             </div>) : (<FirstProjectGuide example={creation?.starter_requirement || ""} t={t} hasSpec={!!project.confirmed_spec} disabled={!canWrite || jobs.some(activeJob)}
-              onExample={value=>{setText(value);setIntent("analysis");setPanel("agent");}}
+              onExample={value=>{setDrafts(before=>({...before, create:value}));setTask("create");setWorkflow(project.target_mode === "ladder" ? "direct" : "review");setReviewRequested(false);setPanel("agent");}}
               onSpec={()=>setPanel("spec")} onGenerate={()=>void guarded(()=>submitJob("generation"))} />)
           ) : visibleTab === "delivery" ? (
             <DeliverySummary key={`${pid}:${vid}`} pid={pid} vid={vid} t={t} refreshKey={refresh} readOnly={!canWrite}/>
@@ -1036,6 +1067,7 @@ export default function App() {
                   {t("本地检查")}
                 </Button>
               </div>
+              <CapabilityReview metadata={version} t={t} />
               <IssueCards pid={pid} vid={vid} readOnly={!canWrite || !operations.simulation} t={t} refreshKey={refresh}
                 onNetwork={(id,address)=>{setNetwork({...networks.find(n=>n.id===id),id,version_id:vid});setJumpAddress(address||"");setJumpVersion(vid);setTab("ladder");}}
                 onTest={issue=>{setIssueContext({...issue,versionId:vid});setTab("simulation");}}/>
@@ -1481,8 +1513,11 @@ export default function App() {
                 <span className="agent-mark">
                   <CircuitBoard size={22} />
                 </span>
-                <h2>{t("工程工作台")}</h2>
-                <p>{t(hasSavedVersions ? "描述希望修改的行为，或查看当前程序与验证结果。" : "描述控制需求，确认规格后生成第一个程序。")}</p>
+                <h2>{t(task === "question" ? "工程问答" : task === "edit" ? "修改程序" : "创建程序")}</h2>
+                <p>{t(task === "question" ? "查询所选程序和手册，帮助理解行为与诊断。"
+                  : task === "edit" ? "围绕当前选定版本修改程序，或核对规格后重新生成。"
+                  : intent === "direct_generation" ? "描述控制需求，信息充分时一次生成程序与 CSV。"
+                  : "说明控制需求，核对规格后生成程序。")}</p>
                 <div className="context-chips">
                   <Badge>{project?.plc_model || "—"}</Badge>
                   {vid && <Badge>{vid}</Badge>}
@@ -1494,17 +1529,9 @@ export default function App() {
                   )}
                 </div>
               </div>
-              {project?.id === pid && !hasSavedVersions && !!project.confirmed_spec && (
+              {task === "create" && project?.id === pid && !hasSavedVersions && !!project.confirmed_spec && (
                 <div className="candidate-diff">
                   <p>{t("规格已确认。下一步生成程序，无需重新输入需求。")}</p>
-                  <Button
-                    variant="primary"
-                    disabled={!canWrite || !canGenerate}
-                    onClick={() => void guarded(() => submitJob("generation"))}
-                  >
-                    <Play size={14} />
-                    {t("按已确认规格生成程序")}
-                  </Button>
                   {specDirty.current && <p className="muted">{t("规格有未确认修改，请先确认后再生成。")}</p>}
                 </div>
               )}
@@ -1539,7 +1566,7 @@ export default function App() {
                         ))}
                     </details>
                   )}
-                  {currentJob.kind !== "analysis" && currentJob.kind !== "generation" && currentJob.status === "completed" && eventText("content") && (
+                  {currentJob.kind !== "analysis" && currentJob.kind !== "generation" && currentJob.kind !== "direct_generation" && currentJob.status === "completed" && eventText("content") && (
                     <AcceptedMessage
                       kind={currentJob.kind}
                       text={eventText("content")}
@@ -1551,6 +1578,7 @@ export default function App() {
                     onRetry={() => { setOutputRetry((n) => n + 1); void reloadProjectSilently(pid).catch(e => { if (activeProjectRef.current === pid) setError(e.message); }); }}
                     onRepair={() => { if (currentJob) void guarded(() => repairFailedGeneration(currentJob)); }}
                     onSpec={() => setPanel("spec")} t={t} />
+                  {continuingDirect && <Button disabled={!canWrite} onClick={() => {setIgnoredClarification(currentJob.id);setTask("create");setWorkflow("direct");setDrafts(before=>({...before,create:""}));}}>{t("开始新需求")}</Button>}
                   <JobFailure job={currentJob} busy={!canWrite}
                     onRepair={() => void guarded(() => repairFailedGeneration(currentJob))} t={t} />
                   {!!analysisOutput?.spec_draft && (
@@ -1602,12 +1630,12 @@ export default function App() {
                   )}
                 </div>
               )}
-              <p className="acceptance-note">
+              {task !== "question" && <p className="acceptance-note">
                 <ShieldCheck size={13} />
                 {t("程序校验通过后自动保存；可在版本历史中查看或回退。")}
-              </p>
+              </p>}
             </div>
-            {version?.target_mode === "ladder" && <details className="scope-controls" open={scopeEnabled}>
+            {version?.target_mode === "ladder" && task === "edit" && editAction === "edit" && <details className="scope-controls" open={scopeEnabled}>
               <summary>{t("修改范围")}{scopeEnabled ? ` · ${t("局部约束已启用")}` : ` · ${t("整个程序")}`}</summary>
               <label><input type="checkbox" style={{width:"auto"}} checked={scopeEnabled} onChange={e=>setScopeEnabled(e.target.checked)}/> {t("只允许修改指定范围")}</label>
               {scopeEnabled && <><label>{t("允许修改的网络")}<input value={scopeNetworks} onChange={e=>setScopeNetworks(e.target.value)} placeholder="N0001, N0002"/></label>
@@ -1615,47 +1643,35 @@ export default function App() {
                 <label>{t("允许涉及的地址")}<input value={scopeAddresses} onChange={e=>setScopeAddresses(e.target.value)} placeholder="X0, Y0, M0"/></label>
                 <small>{t("至少填写一项；同时填写时两项都必须满足。地址范围包含变更网络修改前后的所有读写地址。")}</small></>}
             </details>}
-            <div className="composer">
+            <div className="composer" onKeyDown={event => {
+              if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && canSubmit) {
+                event.preventDefault();
+                void guarded(() => submitJob());
+              }
+            }}>
               <div className="composer-mode">
-                <select
-                  aria-label={t("输入方式")}
-                  value={intent}
-                  onChange={(e) => setIntent(e.target.value as typeof intent)}
-                >
-                  <option value="analysis">{t("分析需求")}</option>
-                  <option value="generation">{t("生成程序")}</option>
-                  <option value="agent">{t("询问 Agent")}</option>
-                </select>
+                <strong>{t("工程任务")}</strong>
                 <button
                   className="text-button"
-                  disabled={!canWrite}
+                  disabled={!canWrite || task === "question"}
                   onClick={() => setModal("sfc")}
                 >
                   SFC <Workflow size={13} />
                 </button>
               </div>
-              {intent === "analysis" && (
-                <AnalysisModePicker locale={locale} value={analysisMode} onChange={setAnalysisMode} />
-              )}
-              <textarea
-                aria-label={t("描述你的控制需求…")}
-                placeholder={t(intent === "generation"
-                  ? "可补充生成要求；留空则按已确认规格生成。"
-                  : "描述你的控制需求…")}
+              <ConversationControls task={task} onTask={setTask} workflow={workflow} onWorkflow={setWorkflow}
+                editAction={editAction} onEditAction={setEditAction} analysisMode={analysisMode} onAnalysisMode={setAnalysisMode}
+                hasVersions={!!hasSavedVersions} targetMode={project?.target_mode || "ladder"} analyzing={intent === "analysis"}
+                confirmed={!!project?.confirmed_spec && !reviewRequested} onReview={()=>{setWorkflow("review");setReviewRequested(true);}}
+                disabled={!canWrite || jobs.some(activeJob)} locale={locale} t={t} />
+              <p className="composer-hint">{t(composerRoute.hint)}</p>
+              {composerRoute.requiresText && <textarea
+                aria-label={t(composerRoute.placeholder)}
+                placeholder={t(composerRoute.placeholder)}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (
-                    (e.ctrlKey || e.metaKey) &&
-                    e.key === "Enter" &&
-                    canSubmit
-                  ) {
-                    e.preventDefault();
-                    void guarded(() => submitJob());
-                  }
-                }}
-              />
-              {attachments.length > 0 && (
+              />}
+              {task !== "question" && attachments.length > 0 && (
                 <div className="attachment-chips">
                   {attachments.map((a) => (
                     <button
@@ -1686,7 +1702,7 @@ export default function App() {
                 <Button
                   variant="ghost"
                   aria-label={t("添加图片")}
-                  disabled={!canWrite || !pid}
+                  disabled={!canWrite || !pid || task === "question" || !composerRoute.requiresText}
                   onClick={() => uploadRef.current?.click()}
                 >
                   <Paperclip size={16} />
@@ -1698,7 +1714,7 @@ export default function App() {
                   onClick={() => void guarded(() => submitJob())}
                 >
                   <Send size={14} />
-                  {t(intent === "generation" ? "生成程序" : "发送")}
+                  {t(composerRoute.submitLabel)}
                 </Button>
               </div>
             </div>
@@ -1845,7 +1861,7 @@ export default function App() {
             <option value="">{t("暂无任务")}</option>
             {jobs.map((j) => (
               <option key={j.id} value={j.id}>
-                {j.kind} · {statusText(locale, j.id === jobId ? displayedJobStatus || j.status : j.result?.status === "contract_mismatch" ? "contract_mismatch" : j.status)} · {j.id.slice(-6)}
+                {j.kind === "direct_generation" ? t("Direct 一次生成") : j.kind} · {statusText(locale, j.id === jobId ? displayedJobStatus || j.status : j.result?.status === "needs_input" ? "needs_input" : j.result?.status === "contract_mismatch" ? "contract_mismatch" : j.status)} · {j.id.slice(-6)}
               </option>
             ))}
           </select>

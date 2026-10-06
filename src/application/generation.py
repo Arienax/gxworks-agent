@@ -55,6 +55,8 @@ class GenerationRequest:
     response_language: Optional[str] = None
     construction_examples: Optional[bool] = None
     fresh_confirmed_generation: bool = False
+    direct_generation: bool = False
+    user_fact_text: Optional[str] = None
 
     def __post_init__(self):
         object.__setattr__(self, "effort", None)
@@ -65,6 +67,13 @@ class GenerationRequest:
             raise TypeError("construction_examples must be bool or None")
         if not isinstance(self.fresh_confirmed_generation, bool):
             raise TypeError("fresh_confirmed_generation must be bool")
+        if not isinstance(self.direct_generation, bool):
+            raise TypeError("direct_generation must be bool")
+        if self.user_fact_text is not None and not isinstance(self.user_fact_text, str):
+            raise TypeError("user_fact_text must be str or None")
+        if self.direct_generation and (self.target_mode != "ladder" or self.previous_json is not None
+                                       or self.repair_mode or self.format_repair):
+            raise ValueError("Direct 一次生成只适用于新 Ladder 程序；编辑和修复使用原入口。")
 
 
 @dataclass(frozen=True)
@@ -242,6 +251,8 @@ class GenerationWorkflow:
             )
             repair_call = self.target_mode == "ladder" and (self.repair_mode or self.format_repair)
             confirmed_generation_call = (
+                not self.direct_generation
+                and
                 not repair_call
                 and self.target_mode == "ladder"
                 and not is_edit_mode
@@ -356,6 +367,27 @@ class GenerationWorkflow:
                             mode=repair_kind,
                             on_reasoning_chunk=on_reasoning, on_content_chunk=on_content,
                         )
+                elif self.direct_generation:
+                    from application.generation_agent import generate_direct_ladder
+                    result = generate_direct_ladder(
+                        self.user_input, self.plc_model, confirmed_spec=self.confirmed_context,
+                        user_fact_text=self.user_fact_text,
+                        model_name=self.model_name, construction_examples=self.construction_examples,
+                        image_attachments=self.image_attachments,
+                        on_context=lambda value: generation_handoff.update(copy.deepcopy(value)),
+                        on_stage=lambda stage, message: self._emit("progress", {"stage": stage, "message": message}),
+                    )
+                    generation_handoff = copy.deepcopy(result.get("generation_handoff") or {})
+                    generation_agent_metadata = {"mode": "direct_generation", "model_calls": 1}
+                    if result.get("status") == "needs_input":
+                        self._emit("needs_input", {"missing_info": result["missing_info"]})
+                        return {"status": "needs_input", "target_mode": "ladder",
+                                "missing_info": result["missing_info"], "generation_handoff": generation_handoff,
+                                "first_pass_pipeline": generation_agent_metadata, "artifacts": {}}
+                    direct_candidate = copy.deepcopy(result["ladder"])
+                    self.confirmed_context = copy.deepcopy(result["user_facts"])
+                    full_content = json.dumps(direct_candidate, ensure_ascii=False, separators=(",", ":"))
+                    on_content(full_content)
                 elif confirmed_generation_call:
                     from application.generation_agent import generate_confirmed_ladder
                     from plc.specification.repair import patch_device_addresses
@@ -650,8 +682,10 @@ class GenerationWorkflow:
                     "repair_attempts": repair_attempts,
                     "first_pass_pipeline": generation_agent_metadata or {"mode": "direct"},
                     "generation_handoff": {**generation_handoff,
-                        "confirmed_spec_sha256": canonical_sha256(self.confirmed_context) if self.confirmed_context is not None else None,
+                        "confirmed_spec_sha256": canonical_sha256(self.request.confirmed_context if self.direct_generation else self.confirmed_context)
+                            if (self.request.confirmed_context if self.direct_generation else self.confirmed_context) is not None else None,
                         "decision_receipt_id": self.decision_receipt_id},
+                    "maintainability_review": prepared_candidate.get("maintainability_review"),
                     "validation_profile": "generation_structural",
                     "program_name": self.program_name,
                     "revision": self.revision,
@@ -697,7 +731,8 @@ class GenerationWorkflow:
                         "status": "candidate_ready",
                         "profile": "generation_structural",
                         "messages": validation_messages or [
-                            tr('候选结构与当前可机检的已确认语义已通过；其余工程检查保留给 Review')
+                            tr('候选结构与可机检的用户声明已通过；工艺行为仍需核对') if self.direct_generation
+                            else tr('候选结构与当前可机检的已确认语义已通过；其余工程检查保留给 Review')
                         ],
                     },
                 }
@@ -708,8 +743,11 @@ class GenerationWorkflow:
             self._emit("progress", {"stage": "parsed", "message": tr('模型输出已解析为 ST 候选')})
             output_path = self.output_dir / "program.st"
             output_path.write_text(st_text.strip(), encoding="utf-8")
+            from plc.maintainability import review_maintainability
             return {
                 "target_mode": "st",
+                "generation_handoff": generation_handoff,
+                "maintainability_review": review_maintainability(parsed_json, target_mode="st"),
                 "validation_profile": "generation_structural",
                 "width": 0,
                 "height": 0,

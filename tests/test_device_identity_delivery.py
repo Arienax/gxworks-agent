@@ -77,13 +77,13 @@ def test_fresh_program_artifacts_and_explorer_share_device_identity(tmp_path, pa
     rendered = render_generation_artifacts(program, tmp_path)
     for relative in rendered["artifacts"].values():
         assert (tmp_path / relative).stat().st_size > 0
-    saved = json.loads((tmp_path / "ladder.json").read_text())
+    saved = json.loads((tmp_path / "ladder.json").read_text(encoding="utf-8"))
     assert set(saved["device_comments"]) == {"X0", "X1", output}
     with (tmp_path / "comments.csv").open(encoding="utf-16", newline="") as file:
         rows = list(csv.reader(file, delimiter="\t"))[2:]
     assert {r[0] for r in rows} == {"X000", "X001", output[0]+output[1:].zfill(3)}
     assert len(rows) == 3  # GX CSV has its own padding, not duplicate identities.
-    svg = (tmp_path / "ladder.svg").read_text()
+    svg = (tmp_path / "ladder.svg").read_text(encoding="utf-8")
     assert "启动按钮" in svg and "停止按钮" in svg and "电机接触器输出" in svg
 
 

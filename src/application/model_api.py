@@ -272,7 +272,8 @@ def _analysis_json_payload(raw):
 def _validate_fresh_analysis_content(raw, *, contract_stage="bound", user_text="", plc_model="FX3U", confirmed_spec=None):
     from application.analysis_results import prepare_analysis_payload, analysis_grounding_details
     payload = _analysis_json_payload(raw)
-    payload = prepare_analysis_payload(payload, contract_stage=contract_stage, user_text=user_text)
+    payload = prepare_analysis_payload(payload, contract_stage=contract_stage, user_text=user_text,
+                                       confirmed_spec=confirmed_spec)
     validate_current_analysis_protocol(payload)
     details = analysis_grounding_details(payload, user_text, plc_model=plc_model, confirmed_spec=confirmed_spec)
     if details:
@@ -285,7 +286,7 @@ def _parse_analysis_response(raw, plc_model="FX3U", user_text="", confirmed_spec
     return _normalize_analysis_result(result, plc_model, user_text, confirmed_spec)
 
 
-def _request_analysis_response(messages, *, on_format_repair=None, contract_stage="bound", user_text="", plc_model="FX3U", confirmed_spec=None, **kwargs):
+def _request_analysis_response(messages, *, on_format_repair=None, contract_stage="bound", user_text="", plc_model="FX3U", confirmed_spec=None, allow_repair=True, **kwargs):
     """One shared repair budget, private patch output, Core-validated assembly."""
     from application.analysis_repair import (
         SYNTAX_SYSTEM_PROMPT, apply_analysis_repair, assembled_response,
@@ -335,6 +336,8 @@ def _request_analysis_response(messages, *, on_format_repair=None, contract_stag
                 messages, response_contract=ANALYSIS_RESPONSE, **kwargs
             )
         except ResponseRejectedError as rejected:
+            if not allow_repair:
+                raise
             if [(v.path, v.reason) for v in rejected.violations] != [
                 ("content", "invalid_json_object")
             ]:
@@ -362,6 +365,13 @@ def _request_analysis_response(messages, *, on_format_repair=None, contract_stag
                                         confirmed_spec=confirmed_spec, contract_stage=contract_stage)
             if not plan["targets"]:
                 return publish(assembled_response(first, plan["base"], plan["receipt"]) if plan["receipt"]["local"] else first)
+            if not allow_repair:
+                try:
+                    return publish(assembled_response(first, plan["base"], plan["receipt"]))
+                except (AnalysisProtocolError, ResponseRejectedError) as error:
+                    error.raw_attempts = first.raw_attempts
+                    error.raw_response = first.message
+                    raise
             repair_context = repair_messages(plan, user_text)
             repair_contract = ANALYSIS_REPAIR_RESPONSE
 
@@ -487,6 +497,7 @@ def analyze_requirement_streaming(
     image_attachments=None,
     on_format_repair=None,
     analysis_mode="direct",
+    allow_repair=True,
 ):
     """
     阶段1 流式版：分析用户需求，实时显示思考过程。
@@ -522,6 +533,8 @@ def analyze_requirement_streaming(
             user_text=user_requirement,
             plc_model=model,
             confirmed_spec=confirmed_context,
+            allow_repair=allow_repair,
+            **({"max_retries": 0} if not allow_repair else {}),
             effort=None,
             stream=True,
             on_format_repair=on_format_repair,

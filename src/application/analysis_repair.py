@@ -88,7 +88,8 @@ def plan_analysis_repair(payload, user_text, *, plc_model="FX3U", confirmed_spec
     local = []
     if "explicit_constraint_claims" in base:
         base["explicit_constraint_claims"], local = normalize_explicit_claim_representations(base["explicit_constraint_claims"])
-    prepared = prepare_analysis_payload(base, contract_stage=contract_stage, user_text=user_text)
+    prepared = prepare_analysis_payload(base, contract_stage=contract_stage, user_text=user_text,
+                                        confirmed_spec=confirmed_spec)
     deferred = {item["index"] for item in prepared.get("_deferred_execution_claims", [])}
     claims = base.get("execution_intent_claims")
     execution_indices = [i for i in range(len(claims)) if i not in deferred] if isinstance(claims, list) else []

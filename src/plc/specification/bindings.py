@@ -45,7 +45,7 @@ _STATE_NOT_PURPOSE_RE = re.compile(
     r"[+-]?\d+(?:[.,]\d+)?(?=$|[\s~～<>=+\-]|时|時))",
     re.IGNORECASE,
 )
-_DECLARATION_HEADING_RE = re.compile(r"^\s*(?:确认(?:如下现场规格|现场规格|如下)?|现场确认|I/O\s*约定)\s*[：:]\s*", re.I)
+_DECLARATION_HEADING_RE = re.compile(r"^\s*(?:确认(?:如下现场规格|现场规格|如下)?|现场确认|I/O(?:\s*约定)?)\s*[：:]\s*", re.I)
 _NAMED_INPUT_LEVEL_RE = re.compile(
     r"^\s*(X\s*\d+)\s*([^,，、;；：:=?？]{1,32}?)\s*=\s*([01])\s*$", re.I
 )

@@ -1080,6 +1080,34 @@ pre {
   font-size: 11px;
   color: var(--muted);
 }
+.conversation-controls {
+  padding: 8px 10px 0;
+  display: grid;
+  gap: 8px;
+}
+.composer-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.composer-select select {
+  min-width: 0;
+  width: 65%;
+  min-height: 30px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.conversation-controls .analysis-mode-picker { margin: 0; }
+.conversation-controls .text-button { justify-self: start; font-size: 12px; }
+.composer-hint {
+  margin: 8px 10px 2px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
 .composer textarea {
   background: transparent;
   border: 0;

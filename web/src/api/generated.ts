@@ -1549,16 +1549,20 @@ export interface components {
             /** Attachment Ids */
             attachment_ids?: string[];
             change_scope?: components["schemas"]["ChangeScope"] | null;
+            /** Clarification Job Id */
+            clarification_job_id?: string | null;
             /**
              * Deep
              * @default true
              */
             deep: boolean;
+            /** Generation Action */
+            generation_action?: ("edit" | "regenerate") | null;
             /**
              * Kind
              * @enum {string}
              */
-            kind: "analysis" | "generation" | "agent" | "review" | "test_plan" | "debug_plan" | "gx_read" | "gx_inspect";
+            kind: "analysis" | "generation" | "direct_generation" | "agent" | "review" | "test_plan" | "debug_plan" | "gx_read" | "gx_inspect";
             /** Project Id */
             project_id: string;
             /** Request Id */
@@ -1649,12 +1653,18 @@ export interface components {
             } | null;
             /** Base Version Id */
             base_version_id?: string | null;
+            /** Clarification Job Id */
+            clarification_job_id?: string | null;
             /** Content */
             content?: string | null;
             /** Generation */
             generation?: {
                 [key: string]: components["schemas"]["JsonValue"];
             } | null;
+            /** Missing Info */
+            missing_info?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[] | null;
             /** Plan */
             plan?: {
                 [key: string]: components["schemas"]["JsonValue"];
@@ -2366,6 +2376,10 @@ export interface components {
             debug_attempts?: {
                 [key: string]: components["schemas"]["JsonValue"];
             }[] | null;
+            /** Generation Handoff */
+            generation_handoff?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
             /** Gx Sync */
             gx_sync?: {
                 [key: string]: components["schemas"]["JsonValue"];
@@ -2376,6 +2390,10 @@ export interface components {
             ir_sha256?: string | null;
             /** Lifecycle Status */
             lifecycle_status?: string | null;
+            /** Maintainability Review */
+            maintainability_review?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
             /** Parent Version Id */
             parent_version_id?: string | null;
             /** Plc Model */

@@ -158,7 +158,11 @@ def assemble_analysis_prompt(user_request, *, plc_model, confirmed_context=None,
     stage = analysis_contract_stage(user_request, confirmed_context)
     stage_prompt = ANALYSIS_BOUND_PROMPT if stage == "bound" else ANALYSIS_REQUIREMENTS_PROMPT
     core_prompt = ANALYSIS_SYSTEM_PROMPT + "\n\n" + stage_prompt + "\n\n" + _IO_BINDING_PROMPT
-    parts = [core_prompt, mode_prompt, *deltas, model_context, str(knowledge)]
+    from plc.timing import scan_timing_guidance
+    # Analysis proposals and both generation adapters receive the same Core
+    # timing guidance; the old generic pattern bundle is intentionally omitted.
+    timing = scan_timing_guidance(plc_model)
+    parts = [core_prompt, mode_prompt, *deltas, timing, model_context, str(knowledge)]
     if baseline:
         parts.append("# Confirmed project specification\n" + baseline)
     system_prompt = "\n\n".join(part.strip() for part in parts if part and part.strip())

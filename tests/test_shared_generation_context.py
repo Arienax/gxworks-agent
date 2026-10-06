@@ -15,6 +15,88 @@ from application.generation_context import generation_user_input, public_generat
 from application.confirmed_generation_context import CONFIRMED_GENERATION_REQUEST
 
 
+def test_fbd_api_and_mcp_expose_identical_directory_discovery_and_selection():
+    from application.fbd import build_fbd_generation_context, catalog_snapshot
+    from gxw.object_model import default_baseline
+    from plc.maintainability import SELECTION_POLICY
+    raw = "使用TON实现延时控制，保留既有目录接口。"
+    catalog = catalog_snapshot(default_baseline())
+    api_context = build_fbd_generation_context(raw, plc_model="FX3U", catalog=catalog)
+    context = build_tool_context({"id": "fbd-context", "plc_model": "FX3U", "target_mode": "fbd"})
+    registry = build_default_tool_registry()
+    result = registry.call("get_generation_context", {"user_requirement": raw}, context)
+    assert result["ok"], result
+    data = result["data"]
+    assert data["generation_instructions"] == api_context["generation_instructions"]
+    assert data["catalog"]["nodes"] == api_context["generation_input"]["catalog"]
+    assert data["current_model"] == api_context["generation_input"]["previous"]
+    assert data["generation_handoff"]["capability_discovery"] == api_context["generation_handoff"]["capability_discovery"]
+    assert SELECTION_POLICY in data["generation_instructions"]
+    assert data["generation_context_id"]
+    assert data["confirmed_spec"] is None
+
+
+def test_new_receipt_projection_is_identical_for_web_and_mcp_without_retrieval_replay():
+    from application.projects import public
+    from agent_runtime.runtime import _public_value
+    receipt = {"capability_discovery": {"functions": ["copy"], "queries": ["private diagnostic query"],
+        "candidates": [{"id": "delivered", "name": "COPY", "interface": [{"name": "src"}], "sources": []},
+                       {"id": "omitted", "name": "alternative"}],
+        "included_candidates": ["delivered"], "omitted_candidates": ["omitted"],
+        "tokens": {"basis": "deterministic_heuristic_estimate", "net_delta": 100}}}
+    assert public(receipt) == _public_value(receipt)
+    result = public(receipt)["capability_discovery"]
+    assert result["tokens"]["net_delta"] == 100
+    assert "queries" not in result
+    assert [c["id"] for c in result["candidates"]] == ["delivered"]
+    assert "interface" not in result["candidates"][0]
+
+
+def test_raw_direct_api_mcp_share_context_and_keep_user_facts(monkeypatch):
+    from application.confirmed_generation_context import build_direct_generation_context
+    from application.generation_agent import _compact_wire_renderer
+    monkeypatch.setattr(knowledge_retriever, "build_knowledge_context", lambda *a, **k: "")
+    raw = "X0：启动按钮，按下为1。Y0：输出。按住启动按钮时输出，不自保持。"
+    direct = build_direct_generation_context(raw, "FX3U", wire_renderer=_compact_wire_renderer("FX3U", direct=True))
+    registry = build_default_tool_registry()
+    context = build_tool_context({"id": "raw-direct", "plc_model": "FX3U"})
+    result = registry.call("get_generation_context", {"user_requirement": raw}, context)
+    assert result["ok"], result
+    data = result["data"]
+    assert data["workflow_mode"] == "direct_generation"
+    assert data["generation_request"] == raw
+    assert data["generation_instructions"] == direct.wire_packet["messages"][0]["content"]
+    assert not data["confirmed_spec"]
+    assert data["user_facts"]["io_bindings"] == direct.io_bindings
+    submitted = registry.call("create_program_candidate", {"generation_context_id": data["generation_context_id"],
+        "ladder": {"r": [{"b": [{"i": ["NO X0"], "o": ["COIL Y0"]}]}]}}, context)
+    assert submitted["ok"], submitted
+    assert submitted["data"]["requires_confirmation"]
+    assert submitted["data"]["generation_handoff"]["mode"] == "direct_generation"
+
+
+@pytest.mark.parametrize("direct", [False, True])
+def test_compact_paths_deliver_core_scan_timing_guidance_without_examples(monkeypatch, direct):
+    from application.confirmed_generation_context import (
+        build_confirmed_generation_context, build_direct_generation_context,
+    )
+    from application.construction_examples import prepare_construction_examples
+    from application.generation_agent import _compact_wire_renderer
+    from plc.timing import scan_timing_guidance
+    monkeypatch.setattr(knowledge_retriever, "build_knowledge_context", lambda *a, **k: "")
+    raw = "FX3U，X0打开后以本次启动为起点，每秒更新显示，关闭复位。"
+    renderer = _compact_wire_renderer("FX3U", direct=direct,
+        example_block=prepare_construction_examples("FX3U", False))
+    if direct:
+        context = build_direct_generation_context(raw, "FX3U", wire_renderer=renderer)
+    else:
+        context = build_confirmed_generation_context({"summary": raw}, "FX3U", wire_renderer=renderer)
+    delivered = context.wire_packet["messages"][0]["content"]
+    assert scan_timing_guidance("FX3U") in delivered
+    assert context.handoff["generation_execution_policy"] == "settled-facts-v8-native-timing"
+    assert "## PLC execution semantics" not in delivered
+
+
 def _ladder():
     return {
         "device_comments": {"X0": "Start", "X3": "Permit", "Y0": "Motor"},
@@ -141,7 +223,7 @@ def test_source_projection_retains_real_branch_conditions_and_output_operands():
     assert public_generation_ladder(ladder) == ladder
 
 
-@pytest.mark.parametrize("arguments", [{"user_requirement": 1}, {"user_requirement": "a" * 24001},
+@pytest.mark.parametrize("arguments", [{"user_requirement": 1}, {"user_requirement": "a" * 64001},
                                         {"plc_model": "FX5U"}, {"confirmed_spec": {}}])
 def test_optional_requirement_does_not_open_server_owned_context(arguments):
     result = build_default_tool_registry().call("get_generation_context", arguments,

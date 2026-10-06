@@ -550,6 +550,14 @@ class WorkbenchService:
         self.writable()
         # Mode is a frozen job input, never a PLC contract or mutable UI setting.
         command = copy.deepcopy(command)
+        if command.get("generation_action") is not None and command.get("kind") != "generation":
+            raise ValueError("生成动作仅适用于生成程序任务。")
+        if command.get("generation_action") is None:
+            command.pop("generation_action", None)
+        if command.get("clarification_job_id") and command.get("kind") != "direct_generation":
+            raise ValueError("续答仅适用于 Direct 一次生成。")
+        if not command.get("clarification_job_id"):
+            command.pop("clarification_job_id", None)
         if command.get("kind") == "analysis":
             command["analysis_mode"] = "design" if command.get("analysis_mode") == "design" else "direct"
         else:
@@ -578,6 +586,20 @@ class WorkbenchService:
             atomic_json(path, {"command_hash": digest, "job_id": job["id"]})
             return job
 
+    def _direct_user_fact_text(self, snapshot):
+        """Recover only human input when resuming an older clarification snapshot."""
+        parts, visited = [], set()
+        while True:
+            saved = snapshot.get("user_fact_text")
+            parts.append(saved if isinstance(saved, str) else snapshot.get("text", ""))
+            parent_id = snapshot.get("clarification_job_id")
+            if isinstance(saved, str) or not parent_id:
+                return "\n用户续答：\n".join(reversed(parts))
+            if parent_id in visited:
+                raise ConflictError("续答作业链存在循环。")
+            visited.add(parent_id)
+            snapshot = self.jobs._load(record_id(parent_id))["snapshot"]
+
     def _submit_job(self, command):
         self.writable()
         project_id = command["project_id"]
@@ -588,12 +610,58 @@ class WorkbenchService:
             snapshot = {**copy.deepcopy(command), "project": project, "version": context.version,
                         "version_id": context.version_id or None, "program_ir": context.program_ir,
                         "change_scope": scope}
+            generation_action = command.get("generation_action")
+            if generation_action:
+                if generation_action not in {"edit", "regenerate"}:
+                    raise ValueError("无效的生成动作。")
+                if context.version is None:
+                    raise ValueError("修改或重新生成必须绑定已选择的程序版本。")
+                if generation_action == "edit":
+                    if not str(command.get("text") or "").strip():
+                        raise ValueError("请描述希望修改的程序行为。")
+                    snapshot["fresh_confirmed_generation"] = False
+                else:
+                    if (project.get("target_mode") != "ladder"
+                            or context.version.get("target_mode") != "ladder"
+                            or not project.get("confirmed_spec")):
+                        raise ValueError("完整重新生成需要已确认规格和 Ladder 基线版本。")
+                    if scope is not None or command.get("repair_mode") or command.get("format_repair"):
+                        raise ValueError("完整重新生成不能同时指定局部修改或修复。")
+                    snapshot["fresh_confirmed_generation"] = True
+            if command["kind"] == "direct_generation":
+                if project.get("target_mode") != "ladder" or context.program_ir is not None or scope is not None:
+                    raise ValueError("Direct 一次生成用于新 Ladder 程序；已有工程编辑使用生成程序入口。")
+                if not str(command.get("text") or "").strip():
+                    raise ValueError("请输入原始需求或缺参答复。")
+                parent_id = command.get("clarification_job_id")
+                if parent_id:
+                    parent = self.jobs._load(record_id(parent_id))
+                    if (parent.get("kind") != "direct_generation" or parent.get("status") != "completed"
+                            or parent.get("snapshot", {}).get("project_id") != project_id
+                            or (parent.get("result") or {}).get("status") != "needs_input"):
+                        raise ConflictError("续答必须绑定同一工程中等待补充信息的 Direct 作业。")
+                    if parent.get("request_id") == command["request_id"]:
+                        raise ConflictError("续答需要新的请求 ID。")
+                    self._check_snapshot(parent["snapshot"])
+                    previous = self.output(parent_id)
+                    prior_text = parent["snapshot"].get("raw_requirement", parent["snapshot"].get("text", ""))
+                    questions = (previous.get("generation") or {}).get("missing_info", [])
+                    snapshot["raw_requirement"] = (prior_text + "\n\n待补充事实：\n"
+                        + "\n".join(str(q.get("question", "")) for q in questions)
+                        + "\n用户续答：\n" + command["text"])
+                    snapshot["user_fact_text"] = (self._direct_user_fact_text(parent["snapshot"])
+                        + "\n用户续答：\n" + command["text"])
+                    snapshot["attachment_ids"] = list(dict.fromkeys([
+                        *parent["snapshot"].get("attachment_ids", []), *command.get("attachment_ids", [])]))
+                else:
+                    snapshot["raw_requirement"] = command["text"]
+                    snapshot["user_fact_text"] = command["text"]
             if context.version and context.version.get("target_mode") == "fbd":
                 raw = self.projects.artifact(project_id, context.version_id, "gxw").read_bytes()
                 snapshot["fbd_baseline"] = base64.b64encode(raw).decode("ascii")
                 snapshot["fbd_program"] = context.version.get("program_name")
             # Resolve files and credentials at submission, never later from mutable UI state.
-            images = self._attachments(project_id, command.get("attachment_ids", []))
+            images = self._attachments(project_id, snapshot.get("attachment_ids", []))
             repair_plan = command.get("repair_plan") if isinstance(command.get("repair_plan"), dict) else {}
             repair_target = repair_plan.get("target") if isinstance(repair_plan.get("target"), dict) else {}
             deterministic_generation_repair = (
@@ -676,6 +744,7 @@ class WorkbenchService:
             analysis_mode = snapshot.get("analysis_mode", "direct")
             analysis = analyze_requirement_streaming(text, confirmed_spec=project.get("confirmed_spec"),
                 analysis_mode=analysis_mode,
+                allow_repair=snapshot.get("allow_analysis_repair", True),
                 conversation_history=project.get("messages", []), image_attachments=images,
                 on_reasoning_chunk=lambda t: ctx.emit("reasoning", {"text": t}),
                 on_content_chunk=lambda t: ctx.emit("content", {"text": t}), response_language=language,
@@ -685,7 +754,7 @@ class WorkbenchService:
             output = {"analysis_mode": analysis_mode, "analysis": analysis,
                       "spec_draft": build_review_draft(analysis, project.get("confirmed_spec")),
                       "spec_base_hash": public_spec_hash(project.get("confirmed_spec")), "base_version_id": snapshot.get("version_id")}
-        elif kind == "generation":
+        elif kind in {"generation", "direct_generation"}:
             from application.generation import GenerationRequest, GenerationWorkflow, GenerationDependencies
             from plc.ir import ir_to_ladder
             out_dir = self.state_dir / "staging" / ctx.job_id
@@ -708,7 +777,8 @@ class WorkbenchService:
                 else:
                     previous_json = ir_to_ladder(program) if program else None
                 request = GenerationRequest(
-                    user_input=scoped_text, effort=None, target_mode=project["target_mode"],
+                    user_input=snapshot.get("raw_requirement", scoped_text), effort=None, target_mode=project["target_mode"],
+                    user_fact_text=snapshot.get("user_fact_text"),
                     previous_json=previous_json,
                     previous_ir=None if fresh_confirmed_generation else program,
                     confirmed_context=project.get("confirmed_spec"),
@@ -723,16 +793,27 @@ class WorkbenchService:
                     source_handoff=None if fresh_confirmed_generation else (version or {}).get("generation_handoff"),
                     image_attachments=images, model_name=snapshot.get("model", {}).get("model"),
                     response_language=language, construction_examples=snapshot.get("construction_examples"),
-                    fresh_confirmed_generation=fresh_confirmed_generation)
+                    fresh_confirmed_generation=fresh_confirmed_generation,
+                    direct_generation=kind == "direct_generation")
                 metadata = GenerationWorkflow(request, out_dir, ctx.emit, GenerationDependencies(
                     provider=provider, check_cancelled=ctx.checkpoint, preserve_rejected_candidate=True
                 )).run()
             ctx.checkpoint()
             output = {"generation": metadata}
+            if snapshot.get("generation_action"):
+                output["generation_action"] = snapshot["generation_action"]
+            if metadata.get("status") == "needs_input":
+                with self.lock.thread_lock:
+                    self._check_snapshot(snapshot)
+                output.update(status="needs_input", clarification_job_id=ctx.job_id,
+                              missing_info=copy.deepcopy(metadata["missing_info"]))
+                atomic_json(self.state_dir / "outputs" / (ctx.job_id + ".json"), output)
+                return {"status": "needs_input", "clarification_job_id": ctx.job_id}
             payload = {"project_id": project_id, "target_mode": metadata["target_mode"],
                        "plc_model": project.get("plc_model", "FX3U"), "_confirmed_spec": project.get("confirmed_spec"),
                        "_validation_profile": metadata.get("validation_profile", "strict"),
                        "_generation_handoff": copy.deepcopy(metadata.get("generation_handoff")),
+                       "maintainability_review": copy.deepcopy(metadata.get("maintainability_review")),
                        "normalization": metadata.get("normalization"),
                        "_construction_binding": copy.deepcopy((metadata.get('first_pass_pipeline') or {}).get('construction_binding')),
                        "change_scope": snapshot.get("change_scope")}
@@ -753,10 +834,10 @@ class WorkbenchService:
             output.update(proposal_id=proposal["id"], version_id=proposal["result"]["version_id"],
                           status='saved_behavior_draft' if proposal['result'].get('status') == 'saved_behavior_draft' else 'saved')
             ctx.emit("progress", {"stage": "version_saved", "version_id": output["version_id"],
-                "message": "程序已根据确认规格生成并自动保存；可选 Review、仿真或 GX 验证。"})
+                "message": "程序已生成并自动保存；可选 Review、仿真或 GX 验证。"})
         elif kind == "agent":
             from agent_runtime.agent import run_tool_agent
-            result = run_tool_agent(scoped_text, context=context, runtime=self.projects.runtime, provider=provider,
+            result = run_tool_agent(text, context=context, runtime=self.projects.runtime, provider=provider, read_only=True,
                 conversation_history=project.get("messages", []), response_language=language,
                 on_progress=lambda m: ctx.emit("progress", {"message": m}),
                 on_reasoning_chunk=lambda t: ctx.emit("reasoning", {"text": t}),
@@ -764,18 +845,14 @@ class WorkbenchService:
             ctx.checkpoint()
             with self.lock.thread_lock:
                 self._check_snapshot(snapshot)
-                proposals = [self._pending_proposal(p, f"{ctx.job_id}_{i}", base_version_id=snapshot.get("version_id"),
-                    consent=snapshot["approval_consent"], direct_request=True, change_scope=snapshot.get("change_scope"))
-                             for i, p in enumerate(result.pending_actions)]
+                if result.pending_actions:
+                    raise ValueError("工程问答不能提出程序修改或外部操作。")
                 self.store.add_message(project_id, "assistant", result.content, kind="agent")
-            output = {"content": result.content, "audit": result.audit, "proposal_ids": [p["id"] for p in proposals]}
-            saved = [(p.get("result") or {}).get("version_id") for p in proposals if p["action"] == "accept_local"]
-            if saved and saved[-1]:
-                output["version_id"] = saved[-1]
+            output = {"content": result.content, "audit": result.audit, "proposal_ids": []}
         else:
             output = self._plan_or_review(ctx, snapshot, provider)
         atomic_json(self.state_dir / "outputs" / (ctx.job_id + ".json"), output)
-        return {key: output[key] for key in ("proposal_id", "proposal_ids", "version_id", "report_id", "plan_id", "status") if key in output}
+        return {key: output[key] for key in ("proposal_id", "proposal_ids", "version_id", "report_id", "plan_id", "status", "generation_action") if key in output}
 
     def _plan_or_review(self, ctx, snapshot, provider):
         # Pure workflow services are imported only when requested. Their signatures
@@ -909,8 +986,8 @@ class WorkbenchService:
     def _command_scope(command, context):
         from plc.change_scope import validate_scope_baseline
         scope = command.get("change_scope")
-        if scope is not None and command.get("kind") not in (None, "generation", "agent", "gx_read"):
-            raise ValueError("修改范围仅适用于生成程序、Agent 和读取程序候选。")
+        if scope is not None and command.get("kind") not in (None, "generation", "gx_read"):
+            raise ValueError("修改范围仅适用于生成程序和读取程序候选。")
         mode = (context.version or {}).get("target_mode") or context.project.get("target_mode", "ladder")
         if command.get("kind") == "generation" and context.project.get("target_mode") != "ladder":
             mode = context.project["target_mode"]

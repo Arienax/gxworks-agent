@@ -203,6 +203,7 @@ class PLCCore:
             )
         from simulator.bounded import check_confirmed_behavior
         behavior_check = check_confirmed_behavior(candidate, confirmed_spec)
+        from plc.maintainability import review_maintainability
         return {
             "candidate_id": "candidate_" + uuid.uuid4().hex[:16],
             "base_revision": int(program.get("revision") or 0),
@@ -213,6 +214,7 @@ class PLCCore:
             "diff": _program_diff(program, candidate),
             "diagnostics": validation,
             "behavior_check": behavior_check,
+            "maintainability_review": review_maintainability(candidate),
         }
 
     def create_program_candidate(
@@ -257,6 +259,7 @@ class PLCCore:
             "candidate_ir": program_ir,
             "diagnostics": validation,
             "behavior_check": prepared.get('behavior_check'),
+            "maintainability_review": prepared.get("maintainability_review"),
             "summary": {
                 "network_count": len(program_ir["networks"]),
                 "network_ids": [network["id"] for network in program_ir["networks"]],
@@ -344,6 +347,7 @@ def accept_candidate_patch(store: Any, action: Mapping[str, Any]) -> Mapping[str
                 "validation_profile": validation_profile,
                 "normalization": copy.deepcopy(action.get("normalization")),
                 "generation_handoff": copy.deepcopy(action.get("_generation_handoff")),
+                "maintainability_review": copy.deepcopy(action.get("maintainability_review")),
                 "validation": {
                     "status": "candidate_ready" if structural else "passed",
                     "messages": (["候选结构可解析；需求一致性未在生成后重复判定"]

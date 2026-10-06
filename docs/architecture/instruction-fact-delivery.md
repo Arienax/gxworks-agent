@@ -64,6 +64,11 @@ delimiters preserve the original source but cannot create a complete purpose.
 
 ## Targets and retrieval
 
+Generation and editing also use [functional capability discovery](capability-selection.md).
+This shares the existing retriever and definitions, supplies budgeted option
+briefs and records evidence gaps; it creates neither a parallel index nor a
+manual fact workflow for each opcode. Exact user calls retain priority.
+
 [build_confirmed_generation_context](../../src/application/confirmed_generation_context.py) creates the shared generation context. [instruction_fact_targets](../../src/knowledge/instruction_facts.py) identifies instructions from the selected contract, positive selected-plan text and catalogued anchors. Targets select evidence; they do not add required opcodes or choose an analysis mode.
 
 [retrieve_instruction_facts](../../src/knowledge/instruction_facts.py) selects definition prose, operand tables, execution conditions and limits. Exact instruction definitions take precedence over body mentions. Related units stay within their explicit section or parent and manual revision; neighboring pages are not assumed to belong to the same instruction.
@@ -247,6 +252,15 @@ call/protocol contracts without touching hardware. Pulse sequence acceptance,
 special-memory modes, flags and external timing are established only within
 each fact's declared scope; native compilation and physical device behavior
 require their own evidence.
+
+The authored FX3U `SEGD` effect uses JY997D16601 Rev.R, PDF pages 434–435:
+it decodes the source's low nibble, clears destination bit 7 and preserves the
+upper destination byte. Its exact form/model scope does not verify `SEGDP` or
+another CPU. [digit_specified_devices](../../src/plc/device_identity.py) and the
+bounded scan machine cover the documented 16-bit K1–K4 bit-device groups for
+FX3U, including octal X/Y addressing; wider/indexed groups remain unverified.
+The source, dependency closures and independent regression expectations retain
+their respective ownership.
 
 Source-scoped Boolean guards preserve unknown runtime values while reporting
 known constraint violations, including zero divisors and excluded signed

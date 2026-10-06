@@ -11,7 +11,7 @@ import itertools
 import json
 import re
 
-from plc.device_identity import canonical_device, decimal_region_address
+from plc.device_identity import canonical_device, decimal_region_address, digit_specified_devices
 from plc.instruction_definition import Expression, UnknownInstructionSemantics, evaluate_expression, select_fact_dependencies
 from plc.instruction_effects import execute_behavior
 from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
@@ -40,12 +40,18 @@ def _not(value):
     return None if value is None else not value
 
 
-def _leaf(value, memory, bits=16, signed=True):
+def _leaf(value, memory, bits=16, signed=True, plc_model='FX3U'):
     token = str(value).upper()
     if re.fullmatch(r'K-?\d+', token):
         return int(token[1:])
     if re.fullmatch(r'H[0-9A-F]+', token):
         return int(token[1:], 16)
+    devices = digit_specified_devices(token, plc_model)
+    if devices is not None:
+        if any(memory.get(device) is None for device in devices):
+            raise UnknownInstructionSemantics('unknown_digit_specified_memory:'+token)
+        packed = sum(int(bool(memory[device])) << index for index, device in enumerate(devices))
+        return packed-(1 << bits) if signed and packed & (1 << (bits-1)) else packed
     address = canonical_device(token)
     if address not in memory or memory[address] is None:
         raise UnknownInstructionSemantics('unknown_memory:'+address)
@@ -92,6 +98,11 @@ class ScanMachine:
 
     def write(self, address, value, location, kind='word', bits=16):
         address = canonical_device(address)
+        devices = digit_specified_devices(address, self.model)
+        if devices is not None:
+            for index, device in enumerate(devices):
+                self.write(device, None if value is None else bool(int(value) & (1 << index)), location, 'bit')
+            return
         count = max(1, bits//16) if kind != 'bit' else 1
         for offset in range(count):
             target = decimal_region_address(address, offset) if offset else address
@@ -144,15 +155,21 @@ class ScanMachine:
             for name, value in zip(form.spec.native_operand_order, args):
                 value_type = types.get(name, {})
                 parameters[name] = value if name in destinations or value_type.get('kind') == 'opaque' else _leaf(
-                    value, self.memory, value_type.get('bits', 16), value_type.get('signed', True))
+                    value, self.memory, value_type.get('bits', 16), value_type.get('signed', True), plc_model=self.model)
             trigger = 'rising' if form.pulse or form.spec.execution_form in {'pulse', 'single', 'pulse_single', 'single_pulse'} else 'level'
-            result = execute_behavior(behavior, parameters, memory=self.memory, state=self.memory,
+            memory = self.memory
+            grouped = {name: value for name, value in parameters.items() if name in destinations
+                       and isinstance(value, str) and digit_specified_devices(value, self.model) is not None}
+            if grouped:
+                memory = {**self.memory, **{(value, 0): _leaf(value, self.memory, signed=False, plc_model=self.model)
+                                            for value in grouped.values()}}
+            result = execute_behavior(behavior, parameters, memory=memory, state=self.memory,
                                       enabled=enabled, previous_enabled=prior, trigger=trigger, disabled='retain')
             for (base, offset), value in result['writes'].items():
                 definition = next((o for o in behavior.get('outputs', []) if parameters.get(o['target']['parameter']) == base and o['target'].get('offset', 0) == offset), None)
                 kind = definition['target']['kind'] if definition else 'word'
                 bits = Expression.from_mapping(definition['expression']).value_type.bits if definition and kind != 'bit' else 16
-                self.write(decimal_region_address(base, offset), value, location, kind, bits or 16)
+                self.write(base if offset == 0 else decimal_region_address(base, offset), value, location, kind, bits or 16)
             if result.get('external_contract'):
                 raise UnknownInstructionSemantics('external_action_not_executed')
             return
@@ -172,6 +189,7 @@ class ScanMachine:
             self.gap(self.first.get('reason', 'missing_cpu_fact'), 'runtime.first_scan')
         before = copy.deepcopy(self.memory)
         timers_seen = set()
+        timer_drives = {}
         edge_samples = {}
         timestamp = frame.get('timestamp_ms')
         if timestamp is not None:
@@ -180,8 +198,15 @@ class ScanMachine:
             self.timestamp_ms = timestamp
         for rung_index, rung in enumerate(self.ladder.get('rungs', [])):
             accumulator, logic_stack, saved = True, [], []
+            # A branch connected directly to the left bus has its own TRUE
+            # enable. It cannot inherit a preceding independent branch's guard.
+            root_outputs = {f'branches[{index}].outputs[0]' for index, branch in enumerate(rung.get('branches', []))
+                            if not rung.get('header_element') and not rung.get('shared_inputs')
+                            and not branch.get('inputs')}
             for step, (instruction, access) in enumerate(self.instructions[rung_index]):
                 op, args = instruction['op'], instruction['args']
+                if instruction.get('path') in root_outputs:
+                    accumulator = True
                 location = {'rung_id': rung.get('rung_id'), 'rung_index': rung_index,
                             'instruction_index': step, 'path': instruction.get('path'), 'opcode': op, 'operands': args}
                 position = f'{rung_index}.{step}'
@@ -196,7 +221,7 @@ class ScanMachine:
                     if match:
                         connector, suffix = match[1], match[2] or ''
                         if suffix in {'=', '==', '<>', '>=', '<=', '>', '<'}:
-                            left, right = (_leaf(a, self.memory) for a in args)
+                            left, right = (_leaf(a, self.memory, plc_model=self.model) for a in args)
                             value = {'=': left == right, '==': left == right, '<>': left != right,
                                      '>=': left >= right, '<=': left <= right, '>': left > right, '<': left < right}[suffix]
                         else:
@@ -240,6 +265,7 @@ class ScanMachine:
                         if args[0] in timers_seen:
                             raise UnknownInstructionSemantics('repeated_timer_execution_unverified')
                         timers_seen.add(args[0])
+                        timer_drives[args[0]] = accumulator
                         fact = timer_runtime_fact(self.model, args[0], op)
                         if not fact:
                             raise UnknownInstructionSemantics('timer_fact_unavailable')
@@ -258,7 +284,7 @@ class ScanMachine:
                                 elapsed = timestamp-self.timer_starts[args[0]]
                             if type(elapsed) not in {int, float} or elapsed < 0:
                                 raise UnknownInstructionSemantics('explicit_timer_elapsed_time_missing')
-                            preset = _leaf(args[1], self.memory, signed=False)
+                            preset = _leaf(args[1], self.memory, signed=False, plc_model=self.model)
                             count = int(elapsed // fact['unit_ms'])
                             self.write(args[0], min(count, preset), location)
                             self.memory[args[0]+'.contact'] = count >= preset
@@ -272,7 +298,7 @@ class ScanMachine:
                         if not fact or not fact['first'] <= number <= fact['last']:
                             raise UnknownInstructionSemantics('counter_fact_unavailable')
                         value = self.memory.get(args[0])
-                        preset = _leaf(args[1], self.memory, signed=False)
+                        preset = _leaf(args[1], self.memory, signed=False, plc_model=self.model)
                         if accumulator is True and prior is False and value is not None:
                             self.write(args[0], min(value+1, preset), location)
                         elif accumulator is None or accumulator is True and prior is None:
@@ -285,10 +311,11 @@ class ScanMachine:
                         self.write(args[0], accumulator, location, 'bit')
                         continue
                     if op in {'PLS', 'PLF'}:
-                        # Start/retentive-history effects require an explicit
-                        # previous instruction enable; never assume it was OFF.
-                        value = None if prior is None or accumulator is None else (
-                            accumulator and not prior if op == 'PLS' else prior and not accumulator)
+                        # Unknown history still prevents claiming an edge. A
+                        # known OFF PLS drive (or ON PLF drive) cannot fire under
+                        # either possible history: JY997D16601-R 7.12, p213-214.
+                        value = (_and(accumulator, _not(prior)) if op == 'PLS'
+                                 else _and(prior, _not(accumulator)))
                         self.write(args[0], value, location, 'bit')
                         if value is None:
                             self.gap('pulse_history_unverified', location)
@@ -303,6 +330,11 @@ class ScanMachine:
                         if op == 'RST' and args[0].startswith(('T', 'C')):
                             self.memory[args[0]+'.contact'] = False
                             self.timer_starts.pop(args[0], None)
+                            if args[0].startswith('T') and timer_drives.get(args[0]) is True and timestamp is not None:
+                                # RST clears an already executing timer now. Its
+                                # next continuously enabled OUT must not add a
+                                # second scan before starting a fresh interval.
+                                self.timer_starts[args[0]] = timestamp
                             # A reset establishes the count drive's disabled
                             # phase only when its OUT is also evaluated false.
                         continue
@@ -315,15 +347,17 @@ class ScanMachine:
                             if address.startswith(('T', 'C')):
                                 self.memory[address+'.contact'] = False
                                 self.timer_starts.pop(address,None)
+                                if address.startswith('T') and timer_drives.get(address) is True and timestamp is not None:
+                                    self.timer_starts[address] = timestamp
                         continue
                     if op == 'MOV' and 'MOV' in self.facts.get('control', {}).get('forms', []):
                         # The same formal expression/effect interpreter is used
                         # for the shared source-scoped MOV control subset.
                         behavior = {'behavior': 'expression_write', 'outputs': [{'target': {'parameter': 'D', 'offset': 0, 'kind': 'word'},
                             'expression': {'op': 'parameter', 'name': 'S', 'type': {'kind': 'int', 'bits': 16, 'signed': False}}}]}
-                        result = execute_behavior(behavior, {'S': _leaf(args[0], self.memory, signed=False), 'D': args[1]}, memory=self.memory)
+                        result = execute_behavior(behavior, {'S': _leaf(args[0], self.memory, signed=False, plc_model=self.model), 'D': args[1]}, memory=self.memory)
                         for (base, offset), value in result['writes'].items():
-                            self.write(decimal_region_address(base, offset), value, location)
+                            self.write(base if offset == 0 else decimal_region_address(base, offset), value, location)
                         continue
                     self._application(op, args, accumulator, location, prior)
                 except (UnknownInstructionSemantics, ValueError, KeyError, IndexError) as error:

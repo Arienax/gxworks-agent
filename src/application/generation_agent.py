@@ -1,10 +1,8 @@
-"""Agent B: translate a confirmed specification into one ladder candidate.
+"""One compact ladder candidate from raw Direct input or a confirmed specification.
 
-Agent A owns requirement analysis and confirmation. Agent B deliberately receives only
-the confirmed engineering projection. To keep generation latency proportional to the
-actual control logic, the model emits a compact ladder plan; deterministic local code
-expands that plan into the existing ``ladder_v1`` representation before the ordinary
-validators, IR builder and persistence path see it.
+The optional Agent A workflow still supplies only its confirmed projection to B.
+Direct retains the full raw requirement and can return necessary questions instead.
+Both use deterministic compact expansion before ordinary Core/IR/persistence checks.
 """
 from __future__ import annotations
 
@@ -75,7 +73,7 @@ _COMPACT_PROTOCOL = """# Agent B compact ladder protocol
 """ + compact_protocol_prompt()
 
 
-def _compact_wire_renderer(plc_model, *, example_block=None):
+def _compact_wire_renderer(plc_model, *, example_block=None, direct=False):
     model = str(plc_model or "FX3U").strip().upper() or "FX3U"
     # Capture once; compiler remeasurement must render the same experiment arm.
     examples = example_block if example_block is not None else prepare_construction_examples(model)
@@ -97,13 +95,13 @@ def _compact_wire_renderer(plc_model, *, example_block=None):
         # two specs with the same evidence then share that whole prefix. This
         # changes only rendering order, not authority, selection or budgeting.
         system_prompt = (
-            _COMPACT_PROTOCOL
+            (_DIRECT_PROTOCOL if direct else _COMPACT_PROTOCOL)
             + SOURCE_PRECEDENCE
             + f"\n# Selected PLC\n{model}\n"
             + compact_capability_prompt(model, runtime_spec)
             + str(evidence_text or "")
             + examples.text
-            + "\n# Confirmed project specification\n"
+            + ("\n# User facts (no generated confirmation specification)\n" if direct else "\n# Confirmed project specification\n")
             + confirmed
             + operation_intent_prompt(runtime_spec, target_model=model)
             + construction_prompt({**runtime_spec, 'plc_model':model}, delivery=_construction_delivery())
@@ -113,6 +111,7 @@ def _compact_wire_renderer(plc_model, *, example_block=None):
                 evidence_text=evidence_text,
                 task_type="generate",
                 plc_model=model,
+                raw_request=direct,
             )
         )
         return {
@@ -123,6 +122,80 @@ def _compact_wire_renderer(plc_model, *, example_block=None):
         }
 
     return render
+
+
+_DIRECT_PROTOCOL = """# Direct one-call generation
+根据用户完整原始需求直接实现可检查的程序，不执行独立需求分析，不输出方案摘要或确认表，也不自动切换 Design。
+当前用户明确的事实和原文为工艺依据，型号资料为技术依据。实现可自行选择内部 M/D/T/C 地址；不得默默猜测缺失的关键工艺参数、输入电平或新增现场 I/O。
+信息充分时只返回下方既有 compact 梯形图 JSON。真实缺参且影响正确实现时，只返回
+{"status":"needs_input","missing_info":[{"id":"稳定问题标识","question":"简短具体问题","required":true,"options":[],"default":""}]}。
+不问已在原文或用户事实中提供的内容；不让用户确认内部地址、算法或模型整理的规格。缺参回复不得混入梯级、程序或 CSV。
+续答与原文同为用户输入；解决后直接生成。只输出一个最终 JSON，完成后结束，不追加自检重写。
+NO 读取位=1，NC 读取位=0，信号有效电平与触点类型不同。停止/故障须按需求在同扫描优先；OR 放在同一输出路径。
+同一普通 Y/M 只保留一个 COIL owner。T/C 分别使用 TIMER/COUNTER，定时器使能须能复位；事件与持续条件按需求区分。
+""" + compact_protocol_prompt()
+
+
+def generate_direct_ladder(user_requirement, plc_model="FX3U", *, confirmed_spec=None,
+                           model_name=None, on_stage=None, on_context=None,
+                           construction_examples=None, image_attachments=(), user_fact_text=None):
+    """One request yields either a compact candidate or minimal questions."""
+    import application.model_api as api
+    from application.confirmed_generation_context import build_direct_generation_context
+    from model_runtime.response_format import response_plan
+    model = str(plc_model or "FX3U").strip().upper() or "FX3U"
+    projected = _strict_generation_projection(confirmed_spec)
+    examples = prepare_construction_examples(model, construction_examples, projected)
+    base_provider = api.current_provider()
+    context = build_direct_generation_context(
+        user_requirement, model, confirmed_spec=confirmed_spec,
+        user_fact_text=user_fact_text,
+        knowledge_builder=_build_knowledge_context,
+        model_profile=getattr(base_provider, "profile", {}),
+        wire_renderer=_compact_wire_renderer(model, example_block=examples, direct=True),
+    )
+    handoff = context.to_dict()["handoff"]
+    handoff["construction_examples"] = examples.manifest()
+    if on_context:
+        on_context(copy.deepcopy(handoff))
+    if on_stage:
+        on_stage("direct_generation", "正在从原始需求一次生成候选；真实缺参时只提出必要问题")
+    schema = {"anyOf": [_compact_response_schema(), {
+        "type": "object", "required": ["status", "missing_info"], "additionalProperties": False,
+        "properties": {"status": {"const": "needs_input"}, "missing_info": {
+            "type": "array", "minItems": 1, "items": {"type": "object",
+                "required": ["id", "question"], "properties": {
+                    "id": {"type": "string"}, "question": {"type": "string"},
+                    "required": {"type": "boolean"}, "options": {"type": "array", "items": {"type": "string"}},
+                    "default": {"type": "string"},
+                }},
+        }},
+    }]}
+    options, streaming = response_plan(getattr(base_provider, "profile", {}), schema,
+        model=model_name, api_key=getattr(base_provider, "api_key", None), hints=None)
+    messages = copy.deepcopy(context.wire_packet["messages"])
+    if image_attachments:
+        from model_runtime.provider import UserMessage
+        messages[-1] = UserMessage(user_requirement, tuple(image_attachments))
+    contract = ResponseContract("direct_generation", "json", ("missing_info.*.question",))
+    with api.provider_scope(_FirstJSONObjectProvider(base_provider), model_name=model_name):
+        response = api.request_model(messages, model_name=model_name, effort=None,
+            stream=streaming, max_retries=0, options=options, response_contract=contract)
+    value = _json_object(response.message.content)
+    if value.get("status") == "needs_input":
+        from plc.specification.confirmed import normalize_missing_info
+        questions = value.get("missing_info")
+        if (set(value) != {"status", "missing_info"} or not isinstance(questions, list)
+                or not questions or any(not isinstance(q, dict) or not isinstance(q.get("id"), str)
+                    or not q["id"].strip() or not isinstance(q.get("question"), str)
+                    or not q["question"].strip() for q in questions)
+                or len({q["id"] for q in questions}) != len(questions)):
+            raise CompactProtocolError("needs_input 必须只含非空且标识唯一的 missing_info 问题；不得包含程序。")
+        return {"status": "needs_input", "missing_info": normalize_missing_info(questions),
+                "model_calls": 1, "generation_handoff": handoff}
+    prepared = prepare_model_candidate(value, context.confirmed_spec, model)
+    return {**prepared, "model_calls": 1, "generation_handoff": handoff,
+            "user_facts": context.confirmed_spec}
 
 
 class _FirstJSONObjectStream:

@@ -33,6 +33,15 @@ SAFE_TOOL_NAMES = (
     "create_fbd_candidate",
 )
 
+# Engineering questions expose only these operations. New tools require an
+# explicit decision before they become available to the read-only assistant.
+READ_ONLY_TOOL_NAMES = frozenset({
+    "get_current_project", "get_current_program_info", "read_network",
+    "search_plc_manual", "get_diagnostics", "validate_project",
+    "compile_project", "validate_current_program", "get_fbd_catalog",
+    "read_fbd_project",
+})
+
 FORBIDDEN_TOOL_NAMES = frozenset(
     {
         "mouse_click",
@@ -301,14 +310,17 @@ def _get_generation_context(
     )
     public_spec = public_generation_specification(confirmed_spec)
     if context.project.get('target_mode') == 'fbd' or (context.version or {}).get('target_mode') == 'fbd':
-        from gxw.generation_contract import FBD_GENERATION_PROMPT
+        from application.fbd import build_fbd_generation_context
         catalog = _get_fbd_catalog(context, {})
         previous = _read_fbd_project(context, {})['model'] if context.fbd_baseline is not None else None
+        generation = build_fbd_generation_context(str(arguments.get('user_requirement') or ''),
+            plc_model=context.plc_model, confirmed_spec=confirmed_spec, catalog=catalog, previous=previous)
         return {'project_id': context.project_id, 'plc_model': context.plc_model, 'cpu': catalog['cpu'], 'target_mode': 'fbd',
                 'workflow_mode': str(context.project.get('workflow_mode') or 'generate'),
                 'has_confirmed_spec': isinstance(confirmed_spec, Mapping), 'confirmed_spec': public_spec,
                 'current_version_id': context.version_id or None,
-                'generation_instructions': FBD_GENERATION_PROMPT,
+                'generation_instructions': generation['generation_instructions'],
+                'generation_handoff': generation['generation_handoff'],
                 'generation_request': str(arguments.get('user_requirement') or ''),
                 'output_contract': {'tool': 'create_fbd_candidate', 'schema_version': 2,
                                     'operation': 'edit' if previous is not None else 'generate'},
@@ -321,6 +333,24 @@ def _get_generation_context(
     user_requirement = public_generation_value(str(arguments.get("user_requirement") or ""))
     target_mode = str(context.project.get("target_mode") or "ladder")
     is_edit_mode = target_mode == "ladder" and current_ladder is not None
+    if (target_mode == "ladder" and not is_edit_mode
+            and arguments.get("workflow") != "detailed"
+            and (not confirmed_spec or arguments.get("workflow") == "direct_generation")
+            and str(arguments.get("user_requirement") or "").strip()):
+        from application.confirmed_generation_context import build_direct_generation_context
+        from application.generation_agent import _compact_wire_renderer
+        from application.compact_protocol import PROTOCOL_VERSION, compact_response_schema
+        raw = str(arguments["user_requirement"])
+        direct = build_direct_generation_context(raw, context.plc_model, confirmed_spec=confirmed_spec,
+            knowledge_builder=_build_knowledge_context, wire_renderer=_compact_wire_renderer(context.plc_model, direct=True))
+        return {"project_id": context.project_id, "plc_model": context.plc_model, "target_mode": target_mode,
+                "workflow_mode": "direct_generation", "has_confirmed_spec": bool(confirmed_spec),
+                "confirmed_spec": public_spec, "user_facts": direct.confirmed_spec,
+                "current_version_id": None, "generation_request": raw,
+                "generation_instructions": direct.wire_packet["messages"][0]["content"],
+                "generation_handoff": direct.handoff,
+                "output_contract": {"tool": "create_program_candidate", "protocol": PROTOCOL_VERSION,
+                                    "schema": compact_response_schema(), "needs_input": "向用户提出必要问题，解决前不得创建候选。"}}
     if target_mode == "ladder" and isinstance(confirmed_spec, Mapping) and confirmed_spec:
         public_spec = project_confirmed_specification(confirmed_spec)
         if not is_edit_mode:
@@ -371,11 +401,19 @@ def _create_program_candidate(
         raise ValueError("只有 ladder 目标模式可以创建新程序候选。")
     core = PLCCore()
     confirmed_spec = copy.deepcopy(_confirmed_spec(context))
+    candidate_spec = confirmed_spec
+    ladder = arguments["ladder"]
+    if isinstance(generation_handoff, dict) and generation_handoff.get("mode") == "direct_generation":
+        from application.confirmed_generation_context import project_direct_user_facts
+        from application.generation_agent import prepare_model_candidate
+        candidate_spec = project_direct_user_facts(generation_handoff["raw_requirement"], context.plc_model, confirmed_spec)
+        if isinstance(ladder, Mapping) and "r" in ladder:
+            ladder = prepare_model_candidate(ladder, candidate_spec, context.plc_model)["ladder"]
     candidate = core.create_program_candidate(
-        arguments["ladder"],
+        ladder,
         plc_model=context.plc_model,
         program_name=arguments.get("program_name", (context.program_ir or {}).get("program_name", "MAIN")),
-        confirmed_spec=confirmed_spec,
+        confirmed_spec=candidate_spec,
         previous_program=context.program_ir,
     )
     compiled = core.compile_project(candidate["candidate_ir"], validation_profile=candidate["validation_profile"])
@@ -405,6 +443,7 @@ def _create_program_candidate(
             canonical_sha256(confirmed_spec) if confirmed_spec is not None else None
         ),
         "diagnostics": copy.deepcopy(candidate["diagnostics"]),
+        "maintainability_review": copy.deepcopy(candidate.get("maintainability_review")),
         "summary": copy.deepcopy(candidate["summary"]),
         "artifact_hashes": copy.deepcopy(compiled.get("hashes") or {}),
         "_candidate_ir": copy.deepcopy(candidate["candidate_ir"]),
@@ -425,6 +464,7 @@ def _create_program_candidate(
         "validation_profile": candidate["validation_profile"],
         "normalization": copy.deepcopy(candidate["normalization"]),
         "generation_handoff": copy.deepcopy(generation_handoff),
+        "maintainability_review": copy.deepcopy(candidate.get("maintainability_review")),
         "verification": {
             "structural_checks_passed": True,
             "deterministic_checks_passed": True,
@@ -674,7 +714,7 @@ def _compile_project(
     }
 
 
-def _patch_program(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
+def _patch_program(context: ToolContext, arguments: Mapping[str, Any], *, generation_handoff=None) -> Dict[str, Any]:
     from plc.core import PLCCore
     from plc.ir import canonical_sha256
 
@@ -710,10 +750,14 @@ def _patch_program(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[s
         "artifact_hashes": copy.deepcopy(compiled.get("hashes") or {}),
         "_candidate_ir": copy.deepcopy(candidate["candidate_ir"]),
         "_confirmed_spec": confirmed_spec,
+        "maintainability_review": copy.deepcopy(candidate.get("maintainability_review")),
+        "_generation_handoff": copy.deepcopy(generation_handoff),
     }
     return {
         "requires_confirmation": True,
         "message": "候选补丁已通过确定性校验和临时编译，等待用户查看差异。",
+        "maintainability_review": copy.deepcopy(candidate.get("maintainability_review")),
+        "generation_handoff": copy.deepcopy(generation_handoff),
         "candidate_id": candidate["candidate_id"],
         "diff": copy.deepcopy(candidate["diff"]),
         "diagnostics": copy.deepcopy(candidate["diagnostics"]),
@@ -781,7 +825,7 @@ def _read_fbd_project(context: ToolContext, arguments: Mapping[str, Any]) -> Dic
             **read_snapshot(raw, arguments.get('program') or ((context.version or {}).get('program_name') if uploaded is None else None))}
 
 
-def _create_fbd_candidate(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
+def _create_fbd_candidate(context: ToolContext, arguments: Mapping[str, Any], *, generation_handoff=None) -> Dict[str, Any]:
     from pathlib import Path
     import tempfile
     from application.fbd import decode_upload, pack_candidate, prepare_candidate
@@ -809,6 +853,11 @@ def _create_fbd_candidate(context: ToolContext, arguments: Mapping[str, Any]) ->
     with tempfile.TemporaryDirectory(prefix='gxw-fbd-candidate-') as directory:
         payload = prepare_candidate(directory, **kwargs, plc_model=context.plc_model,
                                     summary=arguments.get('summary') or 'Agent 提出的 FBD 候选')
+        if generation_handoff is not None:
+            payload['metadata']['generation_handoff'] = copy.deepcopy(generation_handoff)
+        elif operation != 'import':
+            payload['metadata']['generation_handoff'] = {'stage': operation,
+                'external_model_use': 'not_observed', 'trace_gaps': ['generation_context_not_observed']}
         graph = json.loads((Path(directory) / 'fbd.json').read_bytes())
         svg = (Path(directory) / 'fbd.svg').read_text(encoding='utf-8')
         snapshot = pack_candidate(payload, directory)
@@ -817,6 +866,8 @@ def _create_fbd_candidate(context: ToolContext, arguments: Mapping[str, Any]) ->
               'summary': payload['metadata']['summary'], 'validation': payload['metadata']['validation'],
               '_confirmed_spec': copy.deepcopy(_confirmed_spec(context)), '_fbd_candidate': snapshot}
     return {'requires_confirmation': True, 'model': graph, 'svg': svg,
+            'generation_handoff': copy.deepcopy(payload['metadata'].get('generation_handoff')),
+            'maintainability_review': copy.deepcopy(payload['metadata'].get('maintainability_review')),
             'verification': {'structural_checks_passed': True, 'native_verified': False,
                              'gx_compile': 'not_run'},
             'message': 'FBD 候选已完成结构、声明与预览校验，等待工程确认；GX Works2 编译尚未执行。',
@@ -862,6 +913,19 @@ def build_default_tool_registry() -> ToolRegistry:
             handoff["external_context_id"] = receipt_id
         return _create_program_candidate(context, arguments, generation_handoff=handoff)
 
+    def fbd_candidate(context, arguments):
+        receipt_id = arguments.get('generation_context_id')
+        handoff = receipts.resolve(receipt_id, receipt_binding(context)) if receipt_id else None
+        if handoff is not None:
+            handoff['external_context_id'] = receipt_id
+            handoff['external_model_use'] = 'not_observed'
+        return _create_fbd_candidate(context, arguments, generation_handoff=handoff)
+
+    def program_patch(context, arguments):
+        receipt_id = arguments.get('generation_context_id')
+        handoff = receipts.resolve(receipt_id, receipt_binding(context)) if receipt_id else None
+        return _patch_program(context, arguments, generation_handoff=handoff)
+
     registry = ToolRegistry()
     registry.register(
         ToolDefinition(
@@ -879,9 +943,11 @@ def build_default_tool_registry() -> ToolRegistry:
                 "type": "object",
                 "properties": {
                     "user_requirement": {
-                        "type": "string", "maxLength": 24000,
+                        "type": "string", "maxLength": 64000,
                         "description": "本次生成或修改需求；省略时仍返回当前工程上下文。",
                     },
+                    "workflow": {"type": "string", "enum": ["direct_generation", "detailed"],
+                                 "description": "新 Ladder 有原始需求时默认 Direct；已确认规格可显式选 Direct，编辑仍沿用原入口。"},
                 },
                 "additionalProperties": False,
             },
@@ -1000,6 +1066,10 @@ def build_default_tool_registry() -> ToolRegistry:
             {
                 "type": "object",
                 "properties": {
+                    "generation_context_id": {
+                        "type": "string", "maxLength": 128,
+                        "description": "Optional context receipt from get_generation_context; preserves edit discovery evidence without adding a model call.",
+                    },
                     "patch": {
                         "type": "object",
                         "description": "基于当前 revision/sha256 的 Network 级候选补丁。",
@@ -1043,7 +1113,7 @@ def build_default_tool_registry() -> ToolRegistry:
                 "required": ["patch"],
                 "additionalProperties": False,
             },
-            _patch_program,
+            program_patch,
             confirmation_required=True,
         )
     )
@@ -1076,8 +1146,9 @@ def build_default_tool_registry() -> ToolRegistry:
         '在原生对象和声明副本上生成、编辑或导入 FBD，校验 GXW 与预览后提出工程候选。',
         {'type': 'object', 'properties': {'operation': {'type': 'string', 'enum': ['generate', 'edit', 'import']},
          'model': {'type': 'object'}, 'data_base64': {'type': 'string'}, 'program': {'type': 'string'},
-         'summary': {'type': 'string'}}, 'required': ['operation'], 'additionalProperties': False},
-        _create_fbd_candidate, confirmation_required=True))
+         'summary': {'type': 'string'}, 'generation_context_id': {'type': 'string', 'maxLength': 128}},
+         'required': ['operation'], 'additionalProperties': False},
+        fbd_candidate, confirmation_required=True))
     if tuple(registry.names) != SAFE_TOOL_NAMES:
         raise RuntimeError("default PLC tool registry does not match its allow-list")
     return registry
@@ -1085,6 +1156,7 @@ def build_default_tool_registry() -> ToolRegistry:
 
 __all__ = [
     "FORBIDDEN_TOOL_NAMES",
+    "READ_ONLY_TOOL_NAMES",
     "SAFE_TOOL_NAMES",
     "ToolContext",
     "ToolDefinition",

@@ -28,7 +28,7 @@ CONFIRMED_GENERATION_REQUEST = (
 
 
 # Prompt policy only: no reasoning-token limit, truncation, retry or acceptance gate.
-GENERATION_EXECUTION_POLICY_VERSION = "settled-facts-v4"
+GENERATION_EXECUTION_POLICY_VERSION = "settled-facts-v8-native-timing"
 GENERATION_EXECUTION_POLICY = """# Generation execution policy
 只实现当前确认规格与所选方案。已确认绑定、参数及本轮修改优先于过时的参考说明；保留其余方案约束。仅因具体矛盾、新证据或用户修订重审。
 技术事实按需核对；检索文本不代表完整覆盖，缺证据不等于禁用，不编造查证或测试结果。
@@ -37,7 +37,7 @@ NO 在位=1时导通，NC 在位=0时导通；二者只读位值，不设定初�
 检查启动可达性、串联条件一致性及停止/故障与计数、状态转移的同扫描优先级。按既有协议输出一份最终程序。"""
 
 
-def generation_execution_prompt(confirmed_spec, *, evidence_text="", task_type="generate", plc_model=None):
+def generation_execution_prompt(confirmed_spec, *, evidence_text="", task_type="generate", plc_model=None, raw_request=False):
     """Render one shared materialization policy from the current public snapshot.
 
     No persisted spec fields are removed or reconciled by parsing natural language.
@@ -48,9 +48,14 @@ def generation_execution_prompt(confirmed_spec, *, evidence_text="", task_type="
     from plc.specification.conditions import generation_input_conditions
     spec = confirmed_spec if isinstance(confirmed_spec, Mapping) else {}
     facts = generation_input_conditions(spec.get("io_bindings"), plc_model=plc_model or spec.get("plc_model") or "FX3U")
-    facts["basis"] = "edit_baseline" if task_type == "edit" else "current_confirmed_bindings"
+    facts["basis"] = "explicit_user_facts" if raw_request else "edit_baseline" if task_type == "edit" else "current_confirmed_bindings"
     facts["retrieved_text_present"] = bool(str(evidence_text or "").strip())
-    return ("\n\n" + GENERATION_EXECUTION_POLICY + "\n# Settled input predicates (not a new requirement)\n"
+    policy = GENERATION_EXECUTION_POLICY
+    if raw_request:
+        policy = policy.replace("只实现当前确认规格与所选方案。", "根据完整原文与明确用户事实实现；真实缺参先问必要问题。")
+    from plc.timing import scan_timing_guidance
+    timing = scan_timing_guidance(plc_model or spec.get("plc_model") or "FX3U")
+    return ("\n\n" + policy + "\n\n" + timing + "\n# Settled input predicates (not a new requirement)\n"
             + json.dumps(public_generation_value(facts), ensure_ascii=False, separators=(",", ":")))
 
 
@@ -110,7 +115,7 @@ class ConfirmedGenerationContext:
 def build_confirmed_generation_context(
     confirmed_spec, plc_model, *, user_requirement="", current_program=None,
     task_type="generate", evidence=None, knowledge_builder=None, model_profile=None,
-    decision_receipt_id=None, wire_renderer=None, wire_history=None,
+    decision_receipt_id=None, wire_renderer=None, wire_history=None, raw_request=False,
 ):
     """Project before routing/retrieval; first generation cannot replay Agent A.
 
@@ -124,7 +129,8 @@ def build_confirmed_generation_context(
         raise ValueError("confirmed generation specification is empty")
     model = str(plc_model or "FX3U").strip().upper() or "FX3U"
     current = public_generation_ladder(current_program)
-    request = (public_generation_value(str(user_requirement or ""))
+    request = (str(user_requirement or "") if raw_request else
+               public_generation_value(str(user_requirement or ""))
                if task_type == "edit" else CONFIRMED_GENERATION_REQUEST)
     if knowledge_builder is None:
         from application.generation_context import _build_knowledge_context
@@ -144,6 +150,7 @@ def build_confirmed_generation_context(
         model_profile=copy.deepcopy(model_profile or {}),
         task_type=task_type,
         generation_request=request,
+        include_generation_request=raw_request,
         current_program=current,
         wire_renderer=wire_renderer,
         wire_history=copy.deepcopy(wire_history or []),
@@ -155,7 +162,7 @@ def build_confirmed_generation_context(
     # The fixed first-generation prompt contains transport/topology guidance
     # (for example OR), not additional user lookup needs. Edits still route the
     # actual user delta, alongside the confirmed specification.
-    structured_targets = structured_fact_targets(request if task_type == "edit" else "", projected, plc_model=model)
+    structured_targets = structured_fact_targets(request if task_type == "edit" or raw_request else "", projected, plc_model=model)
     retrieval_query = KnowledgeQuery(
         precompiled.retrieval_packet["query"],
         precompiled=True,
@@ -167,7 +174,9 @@ def build_confirmed_generation_context(
             # First generation uses the explicit fact plan. Flattened I/O and
             # process prose must not backfill arbitrary manuals about pulses or
             # unrelated instructions. Edits retain the current user delta.
-            "residual_fact_query": request if task_type == "edit" else "",
+            "residual_fact_query": request if task_type == "edit" or raw_request else "",
+            "capability_requirement": request if raw_request or task_type == "edit" else str(user_requirement or projected.get("summary") or ""),
+            "target_mode": "ladder",
             # Compatibility for older diagnostics/readers while the structured
             # fact receipt becomes the canonical handoff.
             "instruction_fact_mode": "targeted",
@@ -184,12 +193,12 @@ def build_confirmed_generation_context(
     knowledge_text = public_generation_value(knowledge or "")
     compiled = compiler.compile(compiler_input, evidence_text=knowledge_text)
     from application.context_compactor import compact_if_needed
-    compiled, compiler_input = compact_if_needed(
-        compiler,
-        compiler_input,
-        compiled,
-        evidence_text=knowledge_text,
-    )
+    if not raw_request:
+        compiled, compiler_input = compact_if_needed(
+            compiler, compiler_input, compiled, evidence_text=knowledge_text,
+        )
+    elif compiled.budget_report.get("budget_exceeded_after_compaction"):
+        raise ValueError("原始需求及事实超出当前模型上下文预算；请缩小本次需求或选择更大上下文的模型。")
     knowledge_text = compiled.generation_packet["evidence"]
     runtime_spec = compiled.generation_packet["confirmed_spec"]
     selected = runtime_spec.get("selected_approach") or {}
@@ -222,10 +231,21 @@ def build_confirmed_generation_context(
         handoff["instruction_facts"] = copy.deepcopy(manifest["instruction_facts"])
     if isinstance(manifest.get("structured_facts"), dict):
         handoff["structured_facts"] = copy.deepcopy(manifest["structured_facts"])
+    if isinstance(manifest.get("capability_discovery"), dict):
+        from application.capability_context import reconcile_discovery
+        handoff["capability_discovery"] = reconcile_discovery(manifest["capability_discovery"], knowledge_text)
     handoff.update(copy.deepcopy(compiled.provenance_receipt))
     handoff["budget_report"] = copy.deepcopy(compiled.budget_report)
     # This receipt identifies the policy, not a claimed reduction in model tokens.
     handoff["generation_execution_policy"] = GENERATION_EXECUTION_POLICY_VERSION
+    if raw_request:
+        handoff.update(
+            mode="direct_generation", raw_requirement=request,
+            local_check_coverage={
+                "checked": ["protocol", "addresses", "instruction_forms", "IR", "CSV"],
+                "unverified": ["原文中的时序、重启、互斥及连续周期须另行验收；结构检查不证明工艺正确。"],
+            },
+        )
     return ConfirmedGenerationContext(
         plc_model=model, confirmed_spec=runtime_spec,
         io_bindings=runtime_spec.get("io_bindings") or [],
@@ -234,4 +254,31 @@ def build_confirmed_generation_context(
         current_program=current, generation_request=request,
         wire_packet=compiled.wire_packet,
         handoff=public_generation_value(handoff),
+    )
+
+
+def project_direct_user_facts(user_requirement, plc_model, confirmed_spec=None):
+    """Use only user facts and Core declarations; never manufacture a confirmed plan."""
+    from plc.specification.bindings import extract_declared_bindings, merge_declared_bindings
+    facts = project_confirmed_specification(confirmed_spec)
+    declared = extract_declared_bindings(user_requirement, plc_model)
+    rows = [*facts.get("io_table", []), *facts.get("io_bindings", []), *declared]
+    bindings = merge_declared_bindings(rows, existing=facts.get("io_bindings", []), declared=declared)
+    if bindings:
+        facts["io_bindings"] = bindings
+        facts["io_table"] = [{"kind": row["kind"], "address": row["address"], "label": row.get("label", "")}
+                             for row in bindings]
+    # An empty public fact snapshot is valid for a raw request. The marker is
+    # schema metadata, never a selected method or a model-authored user fact.
+    facts.setdefault("schema_version", 4)
+    return facts
+
+
+def build_direct_generation_context(user_requirement, plc_model, *, confirmed_spec=None,
+                                    user_fact_text=None, **kwargs):
+    # Clarification questions are model context, never user declarations.
+    declarations = user_requirement if user_fact_text is None else user_fact_text
+    facts = project_direct_user_facts(declarations, plc_model, confirmed_spec)
+    return build_confirmed_generation_context(
+        facts, plc_model, user_requirement=user_requirement, raw_request=True, **kwargs,
     )

@@ -146,6 +146,8 @@ def prepare_candidate(output, *, model=None, baseline=None, imported=None, progr
     metadata = {"target_mode": "fbd", "plc_model": plc_model, "program_name": context.program.logical_name,
                 "summary": summary, "validation": {"status": "validated", "messages": messages,
                 "gx_compile": "not_run", "object_issues": graph["issues"]}}
+    from plc.maintainability import review_maintainability
+    metadata["maintainability_review"] = review_maintainability(graph, target_mode="fbd")
     return {"target_mode": "fbd", "plc_model": plc_model, "staging_dir": str(output),
             "artifacts": artifacts, "metadata": metadata}
 
@@ -167,6 +169,32 @@ def graph_diff(before, after):
             "declarations_changed": a["labels"] != b["labels"]}
 
 
+def build_fbd_generation_context(request, *, plc_model, confirmed_spec=None, catalog,
+                                 previous=None, model_profile=None):
+    """Expose the same source-owned interfaces and discovery to API and MCP."""
+    from application.capability_context import augment_generation_knowledge
+    from application.context_compiler import model_budget
+    from application.generation_support import public_generation_specification, public_generation_value
+    from gxw.generation_contract import FBD_GENERATION_PROMPT
+    from knowledge.evidence import context_manifest
+    from plc.specification.provenance import handoff_snapshot
+
+    requirement = public_generation_value(str(request or ""))
+    specification = public_generation_specification(confirmed_spec)
+    knowledge = augment_generation_knowledge(requirement, plc_model=plc_model, target_mode="fbd",
+        confirmed_spec=specification, catalog=catalog,
+        token_budget=model_budget(model_profile)["rag_evidence_token_budget"])
+    manifest = context_manifest(knowledge, stage="generate" if previous is None else "edit")
+    handoff = handoff_snapshot(specification, evidence=manifest, stage=manifest["stage"])
+    handoff["capability_discovery"] = copy.deepcopy(manifest["capability_discovery"])
+    context = {"schema_version": catalog["schema_version"], "cpu": catalog["cpu"],
+               "program": catalog["program"], "catalog": catalog["nodes"],
+               "declaration_tables": catalog["declaration_tables"],
+               "confirmed_spec": specification, "previous": previous, "request": requirement}
+    return {"generation_instructions": FBD_GENERATION_PROMPT + str(knowledge),
+            "generation_input": public_generation_value(context), "generation_handoff": handoff}
+
+
 def generate_candidate(output, snapshot, images, ctx):
     """Ask the existing provider for the supported object contract, then validate it."""
     from application.model_api import _request_model, _user_message_with_images
@@ -175,18 +203,13 @@ def generate_candidate(output, snapshot, images, ctx):
     baseline = base64.b64decode(snapshot["fbd_baseline"]) if snapshot.get("fbd_baseline") else None
     source_context = read_project_context(baseline if baseline is not None else default_baseline(), snapshot.get('fbd_program'))
     previous = source_context.object_model() if baseline is not None else None
-    from gxw.generation_contract import FBD_GENERATION_PROMPT
-    prompt = FBD_GENERATION_PROMPT
-    from application.generation_support import public_generation_specification
-    context = {"schema_version": 2,
-               "cpu": source_context.sources.cpu, "program": source_context.program.logical_name,
-               "catalog": source_context.catalog(),
-               "declaration_tables": {k: v.scope for k, v in source_context.declarations.items()},
-               "confirmed_spec": public_generation_specification(project.get("confirmed_spec")), "previous": previous,
-               "request": snapshot.get("text", "")}
+    from gxw.editor import editor_catalog
+    generation = build_fbd_generation_context(snapshot.get("text", ""),
+        plc_model=project.get("plc_model", "FX3U"), confirmed_spec=project.get("confirmed_spec"),
+        catalog=editor_catalog(source_context), previous=previous, model_profile=snapshot.get("model"))
     ctx.emit("progress", {"message": "正在生成 FBD 对象、连线及声明"})
-    response = _request_model([{"role": "system", "content": prompt},
-        _user_message_with_images(json.dumps(context, ensure_ascii=False), images)],
+    response = _request_model([{"role": "system", "content": generation["generation_instructions"]},
+        _user_message_with_images(json.dumps(generation["generation_input"], ensure_ascii=False), images)],
         model_name=snapshot.get("model", {}).get("model"), effort=None, stream=True,
         on_reasoning_chunk=lambda t: ctx.emit("reasoning", {"text": t}),
         on_content_chunk=lambda t: ctx.emit("content", {"text": t}),
@@ -198,8 +221,10 @@ def generate_candidate(output, snapshot, images, ctx):
     if not isinstance(answer, dict) or set(answer) != {"summary", "model"} or not isinstance(answer["summary"], str):
         raise ValueError("FBD generation did not produce a supported object candidate")
     ctx.checkpoint()
-    return prepare_candidate(output, model=answer["model"], baseline=baseline,
-                             summary=answer["summary"], plc_model=project.get("plc_model", "FX3U"))
+    result = prepare_candidate(output, model=answer["model"], baseline=baseline,
+                               summary=answer["summary"], plc_model=project.get("plc_model", "FX3U"))
+    result["metadata"]["generation_handoff"] = generation["generation_handoff"]
+    return result
 
 
 class FBDService:

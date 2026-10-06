@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "scope": "FX3U; ModelScope deepseek-ai/DeepSeek-V4.1-Flash; requirements frozen before transport",
+  "cases": [
+    {
+      "case_id": "motor_latch",
+      "name": "起保停",
+      "category": "sufficient",
+      "source": {"institution": "广东工程职业技术学院", "url": "https://skills.gdep.edu.cn/skills/portal/blob?filename=8117612.pdf&key=8117612", "pages": [16,17], "title": "三菱FX3U系列PLC基本逻辑指令及应用"},
+      "initial_request": "使用三菱 FX3U，生成三相异步电动机起保停梯形图。I/O：X1：启动按钮 SB1，物理常开，按下为1、释放为0；X2：停止按钮 SB2，物理常开，按下为1、释放为0；Y0：接触器 KM，1为电机运行。按一下启动后自保持，释放启动继续运行；按停止立即关闭输出，停止期间启动无效，同时按启动和停止时停止优先。释放停止后不自行启动，须再次按启动。切入 RUN 时输出为 OFF，内部普通非保持存储清零。暂不考虑过载保护，不增加现场 I/O。",
+      "io": [{"kind":"X","address":"X1","label":"启动按钮"},{"kind":"X","address":"X2","label":"停止按钮"},{"kind":"Y","address":"Y0","label":"接触器"}],
+      "supplements": ["课件第17页接线与程序共同确定两个按钮按下=1；同按停止优先由参考逻辑支持。", "本轮明确 RUN 初态 OFF、内部普通非保持存储清零，以及释放停止后须重新启动，避免初始状态与重启歧义。"],
+      "parameters": [],
+      "acceptance": ["自保持", "停止优先", "高有效输入", "停止后重新启动", "RUN初态OFF"],
+      "evaluation_reference": {"pages":[17],"instruction_list":["LD X001","OR Y000","ANI X002","OUT Y000","END"],"notes":"布局和内部地址不是评分条件。"}
+    },
+    {
+      "case_id": "segd_countdown",
+      "name": "SEGD 九秒倒计时",
+      "category": "specified_instruction",
+      "source": {"institution":"广东工程职业技术学院","url":"https://skills.gdep.edu.cn/skills/portal/blob?filename=8117678.pdf&key=8117678","pages":[24,25,26],"title":"三菱FX3U系列PLC功能指令及应用"},
+      "initial_request": "使用三菱 FX3U，必须使用 SEGD 指令实现九秒倒计时。I/O：X0：启动开关，ON为1、OFF为0；Y0：七段显示段a；Y1：七段显示段b；Y2：七段显示段c；Y3：七段显示段d；Y4：七段显示段e；Y5：七段显示段f；Y6：七段显示段g；Y7：小数点；Y10：蜂鸣器，1为报警。段输出为1时点亮；显示采用 SEGD 标准编码，Y7保持0。X0从OFF切到ON的当前扫描立即显示9，以该次启动为计时起点，每满1秒依次显示8、7直到0（第9秒显示0）。显示0后蜂鸣器持续ON，直到关闭开关。关闭开关时显示全部熄灭，蜂鸣器OFF，倒计时停止并复位；再次打开从9重新开始完整的九秒倒计时。RUN初始显示与报警全OFF，普通非保持存储清零，不增加其他现场I/O。",
+      "io": [{"kind":"X","address":"X0","label":"启动开关"},{"kind":"Y","address":"Y0","label":"段a"},{"kind":"Y","address":"Y1","label":"段b"},{"kind":"Y","address":"Y2","label":"段c"},{"kind":"Y","address":"Y3","label":"段d"},{"kind":"Y","address":"Y4","label":"段e"},{"kind":"Y","address":"Y5","label":"段f"},{"kind":"Y","address":"Y6","label":"段g"},{"kind":"Y","address":"Y7","label":"小数点"},{"kind":"Y","address":"Y10","label":"蜂鸣器"}],
+      "supplements": ["第24页文字要求、第25页I/O、第26页SEGD指令对应本轮指定指令案例；参考程序不进入模型上下文。", "本轮补齐段a～g映射、高有效输出、小数点恒灭、启动扫描立即显示9、启动相对计时、报警关闭与重新启动规则。", "参考程序使用自由运行M8013并在计数支路更新显示，不能仅凭其布局证明启动立即显示9或完整九秒；候选按冻结文字要求评价。"],
+      "parameters": [{"id":"duration","name":"倒计时总时间","value":"9秒","required":true},{"id":"step","name":"每次递减间隔","value":"1秒","required":true}],
+      "acceptance": ["使用SEGD", "启动立即9", "每秒递减", "9秒报警", "关闭清屏", "重新启动从9"],
+      "evaluation_reference": {"pages":[26],"instruction_notes":["X0 OFF复位C0和D0，清Y0～Y7","X0与M8013支路计数C0 K9，SUB K9 C0 D0，SEGD D0 K2Y0，CMP D0 K0 M0","M1驱动Y10"],"notes":"自由时钟相位与显示初始时刻须独立评价，参考图不作为行为真值。"}
+    },
+    {
+      "case_id": "delayed_start",
+      "name": "真正缺延时的启动控制",
+      "category": "missing_fact",
+      "source": {"institution":"广东工程职业技术学院","url":"https://web.gdep.edu.cn/skills/portal/blob?filename=8117645.pdf&key=8117645","pages":[10],"title":"三菱FX3U系列PLC定时器控制应用"},
+      "initial_request": "使用三菱 FX3U，实现延时启动：按下启动按钮，经过一定的延时再启动输出。I/O：X0：启动按钮，按下为1、释放为0；X1：停止按钮，按下为1、释放为0；Y0：被控输出，1为运行。启动按钮只需按一下，等待期间松开不取消启动；停止优先，停止会取消等待、关闭输出并复位计时。释放停止后不自行启动，须再次按启动并完整等待。切入RUN时Y0为OFF，普通非保持存储清零；不增加其他现场I/O。",
+      "clarification_answer": "延时时间为5秒。",
+      "io": [{"kind":"X","address":"X0","label":"启动按钮"},{"kind":"X","address":"X1","label":"停止按钮"},{"kind":"Y","address":"Y0","label":"被控输出"}],
+      "supplements": ["第10页文字未给出秒数；原始输入不能含5秒或K50。参考程序T0 K50支持在模型提问后统一回答5秒。", "第10页图确定I/O和启动保持、停止复位。高有效电平、停止优先、RUN初态及重启等待在两组输入中明确补齐。"],
+      "parameters": [{"id":"delay_seconds","name":"启动延时","value":"5秒","required":true}],
+      "acceptance": ["先询问延时", "5秒边界", "启动自保持", "停止取消等待", "重启完整等待"],
+      "evaluation_reference": {"pages":[10],"instruction_list":["LD X000","OR M0","ANI X001","OUT M0","OUT T0 K50","LD T0","OUT Y000","END"],"notes":"参考程序及5秒仅评估侧读取；回答前不得向生成侧交付。"}
+    },
+    {
+      "case_id": "traffic_cycle",
+      "name": "多阶段交通灯",
+      "category": "complex_complete",
+      "source": {"institution":"广东工程职业技术学院","url":"https://skills.gdep.edu.cn/skills/portal/blob?filename=8117671.pdf&key=8117671","pages":[16,17,18,19],"title":"三菱FX3U系列PLC步进顺控指令及应用"},
+      "initial_request": "使用三菱 FX3U 实现多阶段交通灯。I/O：X0：启动按钮，按下为1、释放为0；Y0：南北红灯；Y1：东西绿灯；Y2：东西黄灯；Y3：东西红灯；Y4：南北绿灯；Y5：南北黄灯，各输出1为点亮。按一下X0启动后持续自动循环，不需要一直按按钮，不添加停止输入。第一半周期南北红灯持续15秒：东西绿灯常亮10秒，然后闪烁3次，每次先亮0.5秒再灭0.5秒，共3秒，然后东西黄灯亮2秒。第二半周期东西红灯持续10秒：南北绿灯常亮5秒，然后同样闪烁3次（每次先亮0.5秒再灭0.5秒），然后南北黄灯亮2秒。随后回到第一半周期无限循环。两个方向不得同时放行，同方向红、黄、绿灯相位互斥；切换时按新相位输出。RUN初始各灯OFF，普通非保持存储清零，未启动前保持OFF。",
+      "io": [{"kind":"X","address":"X0","label":"启动按钮"},{"kind":"Y","address":"Y0","label":"南北红灯"},{"kind":"Y","address":"Y1","label":"东西绿灯"},{"kind":"Y","address":"Y2","label":"东西黄灯"},{"kind":"Y","address":"Y3","label":"东西红灯"},{"kind":"Y","address":"Y4","label":"南北绿灯"},{"kind":"Y","address":"Y5","label":"南北黄灯"}],
+      "supplements": ["第16页冻结I/O与阶段时长，第17页波形补齐0.5秒ON/0.5秒OFF及三次闪烁，第19页参考程序仅评估侧使用。", "本轮明确启动为一次按下后持续循环、初态全灭和相位互斥；不添加未指定的停止、急停或额外硬件。", "第19页示例最后返回S0并再次等待X0，与一次启动持续循环可能冲突；本轮依据冻结文字要求，不要求示例状态地址或梯级布局。"],
+      "parameters": [{"id":"ew_green","name":"东西绿灯常亮","value":"10秒"},{"id":"ns_green","name":"南北绿灯常亮","value":"5秒"},{"id":"blink_count","name":"闪烁次数","value":"3次"},{"id":"blink_on","name":"每次闪烁亮时间","value":"0.5秒"},{"id":"blink_off","name":"每次闪烁灭时间","value":"0.5秒"},{"id":"yellow","name":"黄灯时间","value":"2秒"}],
+      "acceptance": ["15秒与10秒半周期", "闪烁次数", "0.5秒亮灭", "相位互斥", "一次启动持续循环", "连续三周期"],
+      "evaluation_reference": {"pages":[19],"state_notes":["S20:南北红/东西绿10秒","S21/S22:南北红/东西绿0.5秒亮灭，C0 K3","S23:南北红/东西黄2秒","S24:东西红/南北绿5秒","S25/S26:东西红/南北绿0.5秒亮灭，C1 K3","S27:东西红/南北黄2秒，然后S0"],"notes":"示例返回待启动状态的差异单独记录。"}
+    }
+  ]
+}

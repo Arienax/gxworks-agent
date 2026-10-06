@@ -34,6 +34,150 @@ PROFILE = "generation_structural"
 ARTIFACT_NAMES = {"json", "ir", "svg", "st_from_ir", "program_csv", "comment_csv"}
 
 
+@pytest.mark.parametrize("case_id", ["motor_latch", "delayed_start"])
+@pytest.mark.parametrize("fault", [False, True])
+def test_teaching_acceptance_uses_independent_expectations_not_protocol_success(case_id, fault):
+    from scripts.benchmark_direct_generation import evaluate_program, reviewed_confirmation
+    from application.confirmed_generation_context import project_direct_user_facts
+    from application.generation_agent import prepare_model_candidate
+    from plc.candidate_service import CandidateService
+    cases = json.loads((Path(__file__).parents[1] / "benchmarks/direct_teaching_cases.json").read_text(encoding="utf-8"))["cases"]
+    case = next(row for row in cases if row["case_id"] == case_id)
+    text = case["initial_request"] + "\n" + case.get("clarification_answer", "")
+    facts = project_direct_user_facts(text, "FX3U")
+    if case_id == "motor_latch":
+        compact = {"r": [{"b": [{"i": [{"or": [["NO X1"], ["NO Y0"]]}, "NO X2" if fault else "NC X2"], "o": ["COIL Y0"]}]}]}
+    else:
+        compact = {"r": [{"b": [{"i": [{"or": [["NO X0"], ["NO M0"]]}, "NC X1"],
+            "o": ["COIL M0", "TIMER T0 K30" if fault else "TIMER T0 K50"]}]},
+            {"b": [{"i": ["NO T0"], "o": ["COIL Y0"]}]}]}
+    ladder = prepare_model_candidate(compact, facts, "FX3U")["ladder"]
+    candidate = CandidateService().prepare(ladder, confirmed_spec=facts, plc_model="FX3U")
+    # Both the witness and the wrong behavior satisfy the protocol/Core boundary.
+    assert candidate["validation_profile"] == "generation_structural"
+    assessed = evaluate_program(case, candidate["program_ir"])
+    assert assessed["status"] == ("fail" if fault else "pass"), assessed
+    confirmed, receipt = reviewed_confirmation(case, {"spec_draft": {"selected_approach": {"name": "Reference independent test"}}}, text)
+    assert receipt["human_time_measured"] is False
+    assert confirmed["intent_context"]["requests"][0]["text"] == text
+
+
+@pytest.mark.parametrize('destination,status', [('K2Y0','fail'),('K8Y0','unverified')])
+def test_teaching_display_effect_distinguishes_known_failure_from_unsupported_scope(destination,status):
+    from scripts.benchmark_direct_generation import evaluate_program
+    from application.generation_agent import prepare_model_candidate
+    from plc.candidate_service import CandidateService
+    cases = json.loads((Path(__file__).parents[1] / "benchmarks/direct_teaching_cases.json").read_text(encoding="utf-8"))["cases"]
+    case = next(row for row in cases if row["case_id"] == "segd_countdown")
+    candidate = prepare_model_candidate({"r": [{"b": [{"i": ["NO X0"], "o": [f"SEGD K9 {destination}"]}]}]}, {}, "FX3U")["ladder"]
+    program = CandidateService().prepare(candidate, plc_model="FX3U")["program_ir"]
+    result = evaluate_program(case, program)
+    assert result["status"] == status, result
+    assert all(row["status"] == status for row in result["traces"])
+    if status == 'unverified':
+        assert any(row["unchecked_observation_mismatches"] for row in result["traces"])
+    else:
+        assert any(row['failures'] for row in result['traces'])
+
+
+@pytest.mark.parametrize('case_id,fault', [
+    ('segd_countdown', False), ('segd_countdown', True),
+    ('traffic_cycle', False), ('traffic_cycle', True), ('traffic_cycle', 'self_reset'),
+])
+def test_teaching_elapsed_time_witness_checks_boundaries_restart_and_continuous_cycles(tmp_path, case_id, fault):
+    from scripts.benchmark_direct_generation import evaluate_program, evaluate_csv
+    from application.generation_agent import prepare_model_candidate
+    from plc.candidate_service import CandidateService
+    cases = json.loads((Path(__file__).parents[1] / 'benchmarks/direct_teaching_cases.json').read_text(encoding='utf-8'))['cases']
+    case = next(row for row in cases if row['case_id'] == case_id)
+
+    def rung(inputs, *outputs):
+        return {'b': [{'i': inputs, 'o': list(outputs)}]}
+
+    # Hand-authored test witnesses, never delivered to the model. Expectations
+    # remain the independently frozen field-I/O traces, not internal addresses.
+    if case_id == 'segd_countdown':
+        rungs = [rung(['NO X0'], 'TIMER T0 K90'),
+            rung(['NO X0'], 'DIV T0 K11 D10' if fault else 'DIV T0 K10 D10'),
+            rung(['NO X0'], 'SUB K9 D10 D0'),
+            rung(['NO X0'], 'SEGD D0 K2Y0'),
+            rung(['NC X0'], 'MOV K0 K2Y0'),
+            rung(['NO X0', 'NO T0'], 'COIL Y10')]
+    else:
+        rungs = [rung([{'or': [['NO X0'], ['NO M0']]}], 'COIL M0'),
+            rung(['NO M0', 'NC T0'] if fault == 'self_reset' else ['NO M0'],
+                'TIMER T0 K251' if fault is True else 'TIMER T0 K250')]
+        if fault != 'self_reset':
+            rungs.append(rung(['NO T0'], 'RST T0'))
+        rungs += [rung(['NO M0', '< T0 K150'], 'COIL Y0'),
+            rung(['NO M0', {'or': [['< T0 K100'], ['>= T0 K100', '< T0 K105'],
+                ['>= T0 K110', '< T0 K115'], ['>= T0 K120', '< T0 K125']]}], 'COIL Y1'),
+            rung(['NO M0', '>= T0 K130', '< T0 K150'], 'COIL Y2'),
+            rung(['NO M0', '>= T0 K150'], 'COIL Y3'),
+            rung(['NO M0', {'or': [['>= T0 K150', '< T0 K200'], ['>= T0 K200', '< T0 K205'],
+                ['>= T0 K210', '< T0 K215'], ['>= T0 K220', '< T0 K225']]}], 'COIL Y4'),
+            rung(['NO M0', '>= T0 K230'], 'COIL Y5')]
+    ladder = prepare_model_candidate({'r': rungs}, {}, 'FX3U')['ladder']
+    program = CandidateService().prepare(ladder, plc_model='FX3U')['program_ir']
+    result = evaluate_program(case, program)
+    assert result['status'] == ('fail' if fault else 'pass'), result
+    assert all(not row['unknown_reasons'] for row in result['traces'])
+    artifacts = CandidateService().compile(program,tmp_path)['artifacts']
+    csv_result = evaluate_csv(case,tmp_path/artifacts['program_csv'],tmp_path/artifacts['comment_csv'])
+    assert csv_result['status'] == result['status'], csv_result
+
+
+@pytest.mark.parametrize('csv_fault', [False, True])
+def test_offline_review_requires_delivered_csv_behavior_as_well_as_ir(tmp_path, csv_fault):
+    from scripts.benchmark_direct_generation import evaluate_program, expected_traces, review_saved_measurement
+    from application.generation_agent import prepare_model_candidate
+    from plc.candidate_service import CandidateService
+    cases = json.loads((Path(__file__).parents[1]/'benchmarks/direct_teaching_cases.json').read_text(encoding='utf-8'))['cases']
+    case = next(row for row in cases if row['case_id'] == 'motor_latch')
+    task = {'journey_id': 'motor_direct_1', 'case_id': 'motor_latch', 'arm': 'direct', 'repeat': 1}
+    directory = tmp_path/'measurement'
+    target = directory/task['journey_id']
+    delivery = target/'delivery'
+    delivery.mkdir(parents=True)
+
+    def prepare(stop):
+        compact = {'r': [{'b': [{'i': [{'or': [['NO X1'], ['NO Y0']]}, stop], 'o': ['COIL Y0']}]}]}
+        ladder = prepare_model_candidate(compact, {}, 'FX3U')['ladder']
+        return CandidateService().prepare(ladder, plc_model='FX3U')['program_ir']
+
+    program = prepare('NC X2')
+    # Real listing with the wrong stop polarity, while the saved IR is correct.
+    exported = prepare('NO X2') if csv_fault else program
+    compiled = target/'compiled'
+    artifacts = CandidateService().compile(exported, compiled)['artifacts']
+    assert artifacts['program_csv'] == 'program.csv'
+    assert artifacts['comment_csv'] == 'comments.csv'
+    for key in ('program_csv', 'comment_csv'):
+        name = artifacts[key]
+        (delivery/name).write_bytes((compiled/name).read_bytes())
+    acceptance = evaluate_program(case, program)
+    assert acceptance['status'] == 'pass'
+    record = {**task, 'started_at_utc': '2026-10-06T00:00:00+00:00',
+        'jobs': [{'program': program, 'attempts': []}], 'acceptance': acceptance,
+        'failure_class': None, 'questions': [], 'csv_readable': True, 'correct_CSV': True,
+        'machine_total_ms': 100, 'first_submission_offset_ms': 0, 'model_calls': 1,
+        'recovery_calls': 0, 'recovery_wait_ms': 0, 'local_timings': []}
+    original = json.dumps(record, ensure_ascii=False)
+    (target/'journey.json').write_text(original, encoding='utf-8')
+    (directory/'frozen_inputs.json').write_text(json.dumps({'cases': [case], 'schedule': [task],
+        'expected_traces': {'motor_latch': expected_traces('motor_latch')}}, ensure_ascii=False), encoding='utf-8')
+    destination = tmp_path/'review'
+    assert review_saved_measurement(directory, destination) == 0
+    result = json.loads((destination/'reviewed_assessments.json').read_text(encoding='utf-8'))
+    assessed = result['journeys'][0]
+    assert assessed['acceptance']['status'] == 'pass'
+    assert assessed['csv_acceptance']['status'] == ('fail' if csv_fault else 'pass')
+    assert assessed['correct_CSV'] is (not csv_fault)
+    assert assessed['failure_class'] == ('CSV_behavior_trace_failed' if csv_fault else None)
+    assert assessed['CSV_behavior_was_measured_online'] is False
+    assert (target/'journey.json').read_text(encoding='utf-8') == original
+
+
 def _rung(identifier=1, *, condition="X0", target="Y0", output=None):
     return {
         "rung_id": identifier,

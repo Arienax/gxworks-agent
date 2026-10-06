@@ -35,6 +35,38 @@ def _bounded_spec(rows, model='FX3U'):
         'instances': [], 'internal_ranges': [], 'execution_context': {'program_type': 'scan', 'initial_execution_program': False}}}}
 
 
+@pytest.mark.parametrize('opcode', ['PLS', 'PLF'])
+@settings(max_examples=20, derandomize=True)
+@given(current=st.sampled_from([False, True, None]), previous=st.sampled_from([False, True, None]))
+def test_pulse_unknowns_match_every_possible_boolean_history(opcode, current, previous):
+    from simulator.bounded import ScanMachine
+    ladder = _bounded_ladder((['NO X0'], [opcode+' M100']))
+    machine = ScanMachine(ladder, plc_model='FX3U', initial={'X0': current, 'M100': True},
+        execution_context={'program_type': 'scan'}, previous_enables={'0.1': previous})
+    observed = machine.scan({'inputs': {'X0': current}}, first_scan=True)
+    # Independently enumerate all completions of the unknown history; only a
+    # unanimous Boolean result permits a known output.
+    possibilities = set()
+    for before in [False, True] if previous is None else [previous]:
+        for now in [False, True] if current is None else [current]:
+            possibilities.add((before, now) == ((False, True) if opcode == 'PLS' else (True, False)))
+    expected = possibilities.pop() if len(possibilities) == 1 else None
+    assert observed['after']['M100'] is expected
+    assert bool(machine.gaps) is (expected is None)
+
+
+def test_disabled_pulse_establishes_history_before_read_modify_write():
+    from simulator.bounded import ScanMachine
+    ladder = _bounded_ladder((['NO X0'], ['PLS M100']), (['NO M100'], ['INC D0']))
+    machine = ScanMachine(ladder, plc_model='FX3U', initial={'X0': False, 'M100': False, 'D0': 0},
+        execution_context={'program_type': 'scan'})
+    values = []
+    for active in (False, True, True, False, True):
+        values.append(machine.scan({'inputs': {'X0': active}})['after']['D0'])
+    assert values == [0, 1, 1, 1, 2]
+    assert not machine.gaps
+
+
 @pytest.mark.parametrize('model,boot',[('FX3U','M8002'),('FX5U','SM402')])
 def test_bounded_check_uses_ir_cpu_when_confirmed_projection_omits_runtime_identity(model,boot):
     from simulator.bounded import check_bounded_traces
@@ -122,6 +154,76 @@ def test_bounded_explicit_time_by_form_not_scan_count(model,address,opcode,elaps
     without_time = machine.scan({'inputs': {'X0':True}})
     assert without_time['after']['Y0'] is None
     assert 'explicit_timer_elapsed_time_missing' in [g['reason'] for g in machine.gaps]
+
+
+@pytest.mark.parametrize('digit,segments', list(enumerate([
+    'abcdef', 'bc', 'abdeg', 'abcdg', 'bcfg', 'acdfg', 'acdefg', 'abcf',
+    'abcdefg', 'abcdfg', 'abcefg', 'cdefg', 'adef', 'bcdeg', 'adefg', 'aefg',
+])))
+@given(upper=st.integers(min_value=0, max_value=255), high_source=st.integers(min_value=0, max_value=4095))
+def test_segd_official_all_hex_glyphs_preserve_upper_destination_byte(digit, segments, upper, high_source):
+    from simulator.bounded import ScanMachine
+    source = high_source*16+digit
+    expected = sum(1 << 'abcdefg'.index(segment) for segment in segments)
+    machine = ScanMachine(_bounded_ladder((['NO X0'], ['SEGD D0 D10'])), plc_model='FX3U',
+        initial={'X0':False, 'D0':source, 'D10':upper*256+255}, execution_context={'program_type':'scan'})
+    actual = machine.scan({'inputs':{'X0':True}})['after']['D10']
+    assert actual == upper*256+expected
+    assert not machine.gaps
+    assert machine.scan({'inputs':{'X0':False}})['after']['D10'] == actual
+
+
+@pytest.mark.parametrize('digits', [1, 2, 3, 4])
+@pytest.mark.parametrize('prefix', ['Y', 'M', 'S'])
+@given(value=st.integers(min_value=0, max_value=65535), guard=st.booleans())
+def test_digit_specified_transfer_crosses_octal_boundary_and_preserves_neighbours(digits, prefix, value, guard):
+    from simulator.bounded import ScanMachine
+    # Independently frozen sequential-device list: FX3U Y is octal, M/S decimal.
+    suffixes = (['7','10','11','12','13','14','15','16','17','20','21','22','23','24','25','26','27']
+                if prefix == 'Y' else [str(index) for index in range(7,24)])
+    addresses = [prefix+suffix for suffix in suffixes[:4*digits]]
+    left, right = prefix+'6', prefix+suffixes[4*digits]
+    initial = {**dict.fromkeys(addresses,False), left:guard, right:guard, 'D0':value, 'D1':0}
+    operand = f'K{digits}{prefix}7'
+    machine = ScanMachine(_bounded_ladder(([],['MOV D0 '+operand]),([],['MOV '+operand+' D1'])),
+        plc_model='FX3U', initial=initial, execution_context={'program_type':'scan'})
+    result = machine.scan({'inputs':{}})['after']
+    assert result['D1'] == value % (1 << (4*digits))
+    assert result[left] is result[right] is guard
+    if prefix == 'Y':
+        assert not any(device in result for device in ('Y8','Y9'))
+    assert not machine.gaps
+
+
+@pytest.mark.parametrize('enabled_at_reset', [False, True])
+def test_timer_reset_uses_explicit_reset_instant_only_when_already_running(enabled_at_reset):
+    from simulator.bounded import ScanMachine
+    machine = ScanMachine(_bounded_ladder((['NO X0'],['OUT T0 K10']),(['NO X1'],['RST T0'])),
+        plc_model='FX3U', initial={'T0':0,'T0.contact':False}, execution_context={'program_type':'scan'})
+    machine.scan({'timestamp_ms':0,'inputs':{'X0':True,'X1':False}})
+    result = machine.scan({'timestamp_ms':500,'inputs':{'X0':enabled_at_reset,'X1':True}})
+    assert result['after']['T0'] == 0 and result['after']['T0.contact'] is False
+    result = machine.scan({'timestamp_ms':600,'inputs':{'X0':True,'X1':False}})
+    assert result['after']['T0'] == (1 if enabled_at_reset else 0)
+    assert not machine.gaps
+
+
+@pytest.mark.parametrize('damage', ['unknown_group_bit', 'other_cpu'])
+def test_digit_specified_unknown_inputs_and_other_cpu_remain_unverified(damage):
+    from simulator.bounded import ScanMachine
+    machine = ScanMachine(_bounded_ladder(([],['MOV K2M0 D0'])),
+        plc_model='FX5U' if damage=='other_cpu' else 'FX3U',
+        initial={'D0':3}, execution_context={'program_type':'scan','initial_execution_program':False})
+    machine.scan({'inputs':{}})
+    assert machine.gaps
+
+
+def test_segd_device_access_includes_the_occupied_group_with_cpu_radix():
+    from plc.ir import analyze_instruction_access
+    reads,writes = analyze_instruction_access('SEGD',['D0','K2Y7'],plc_model='FX3U')
+    assert set(writes) == {'Y7','Y10','Y11','Y12','Y13','Y14','Y15','Y16'}
+    assert set(reads) >= set(writes) | {'D0'}
+    assert not analyze_instruction_access('SEGD',['D0','K2Y7'],plc_model='FX5U')[1]
 
 
 def test_bounded_all_off_does_not_pass_normal_progress():
@@ -238,7 +340,7 @@ def test_uncertain_write_is_not_a_confirmed_duplicate_transition(model):
 
 
 @pytest.mark.parametrize('model',['FX3U','FX5U'])
-def test_unsupported_bit_group_transfer_cannot_create_a_false_counterexample(model):
+def test_bit_group_transfer_checks_fx3u_and_keeps_other_cpu_unverified(model):
     from simulator.bounded import check_bounded_traces
     row = _bounded_row('history','assertion',when=_bounded_expr('constant',value=True),
         predicate=_bounded_expr('device',name='M121'))
@@ -246,12 +348,14 @@ def test_unsupported_bit_group_transfer_cannot_create_a_false_counterexample(mod
     trace = {'starts_in_run':False,'initial':{'M121':False},
              'frames':[{'inputs':{'X0':False,'X1':True,'X2':False,'X3':False}}]}
     result = check_bounded_traces(ladder,_bounded_spec([row],model),[trace])
-    # A native digit-specified transfer would copy X1 to M121. This limited
-    # checker has no supported bit-group effect and must not call it false.
-    assert result['status'] == 'unverified' and not result['activation_blocked']
+    # The source-scoped FX3U transfer copies X1 to M121. Missing support for
+    # another CPU must still never turn supplied initial memory into a fault.
+    assert result['status'] == ('no_violation_found_in_tested_scope' if model == 'FX3U' else 'unverified')
+    assert not result['activation_blocked']
     assert not result['violations']
-    assert result['checks'][0]['unverified_witnesses']
-    assert 'unknown_instruction_write_scope' in result['checks'][0]['reasons']
+    if model == 'FX5U':
+        assert result['checks'][0]['unverified_witnesses']
+        assert 'unknown_instruction_write_scope' in result['checks'][0]['reasons']
 
 
 def test_generated_trace_domain_reports_budget_cutoff_and_checker_exceptions(monkeypatch):

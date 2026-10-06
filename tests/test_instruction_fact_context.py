@@ -21,6 +21,88 @@ from knowledge.instruction_facts import (
 from knowledge.retriever import build_knowledge_context
 
 
+@pytest.mark.parametrize("text,function,expected", [
+    ("位移与移位处理", "shift", {"SFL", "SFR", "WSFL", "WSFR"}),
+    ("连续数据批量复制到数组", "block_move", {"BMOV", "FMOV"}),
+    ("对结果做区间比较", "compare", {"CMP", "ZCP"}),
+    ("经过延时再启动", "timer", {"STMR"}),
+    ("循环遍历", "loop", {"FOR", "NEXT"}),
+])
+def test_functional_discovery_uses_local_sources_without_an_opcode(text, function, expected):
+    from knowledge.retriever import discover_capabilities
+    found = discover_capabilities(text)
+    assert function in found["functions"]
+    assert expected.intersection(c["name"] for c in found["candidates"])
+    assert found["model_calls"] == 0
+    assert all(c["sources"] for c in found["candidates"])
+
+
+@pytest.mark.parametrize("text", [
+    "在循环扫描MAIN中实现报警", "PLC cyclic scan loop", "在扫描循环中工作",
+    "PID control loop", "closed-loop control", "cyclic redundancy check",
+])
+def test_scan_and_control_cycles_do_not_invent_program_iteration(text):
+    from knowledge.capability_discovery import functional_queries
+    assert "loop" not in {q["function"] for q in functional_queries(text)}
+
+
+def test_program_iteration_keeps_coverage_without_unrelated_loop_sources():
+    from knowledge.capability_discovery import discover
+    records = [{"id": op, "instruction_opcode": op, "section": section}
+               for op, section in [
+                   ("FOR", "Program Flow > Start a FOR/NEXT Loop"),
+                   ("NEXT", "Program Flow > End a FOR/NEXT Loop"),
+                   ("PID", "External Device > PID Control Loop"),
+                   ("CRC", "Others > Cyclic Redundancy Check")]]
+    found = discover("在循环扫描MAIN中循环遍历数组", plc_model="FX3U", target_mode="ladder",
+                     retrieve=lambda *a, **k: records)
+    loop_names = {c["name"] for c in found["candidates"] if "loop" in c["functions"]}
+    assert loop_names == {"FOR", "NEXT"}
+
+
+def test_multistage_sequence_is_not_evidence_for_iteration():
+    from knowledge.capability_discovery import functional_queries
+    functions = {q["function"] for q in functional_queries("完整多阶段交通灯顺序控制")}
+    assert "sequence" in functions
+    assert "loop" not in functions
+
+
+@pytest.mark.parametrize("model", ["FX3U", "FX3SA", "FX5U", "Q03UDV", "Q00J"])
+def test_discovery_obeys_registry_model_scope_without_claiming_native_validation(model):
+    from knowledge.retriever import discover_capabilities
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+    found = discover_capabilities("复制连续数据并做比较", plc_model=model)
+    for card in found["candidates"]:
+        if card["kind"] == "instruction":
+            spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(card["name"], cpu=model)
+            assert spec.supports_cpu(model)
+    assert "native_verified" not in found
+
+
+def test_discovery_retains_unknown_scope_and_colliding_callable_interfaces():
+    from knowledge.capability_discovery import discover
+    directory = [{"kind": "function_block", "type_name": "QUEUE", "qualified_name": owner,
+                  "ports": [{"name": "IN", "side": "in", "data_type": data_type}]}
+                 for owner, data_type in [("local:QUEUE", "BOOL"), ("library:QUEUE", "WORD")]]
+    seen = []
+    found = discover("使用QUEUE实现工件跟踪", plc_model="FX3U", target_mode="fbd", catalog=directory,
+                     explicit_targets=[{"opcode": "NO_SUCH_CALL"}],
+                     retrieve=lambda query, **kwargs: seen.append(query) or [])
+    assert len(found["candidates"]) == 2 and seen
+    assert all("explicit" in c["functions"] for c in found["candidates"])
+    assert {c["interface"][0]["data_type"] for c in found["candidates"]} == {"BOOL", "WORD"}
+    assert all("body_behavior_unverified" in c["unknown"] for c in found["candidates"])
+    assert any(g["reason"] == "not_in_current_language_catalog" for g in found["gaps"])
+
+
+def test_explicit_instruction_scope_is_checked_before_functional_alternatives():
+    from knowledge.capability_discovery import discover
+    found = discover("移位", plc_model="FX3SA", target_mode="ladder",
+        explicit_targets=[{"opcode": "STMR"}], retrieve=lambda *a, **k: [])
+    assert found["candidates"] == []
+    assert any(g["target"] == "STMR" for g in found["gaps"] if "target" in g)
+
+
 def test_source_paragraphs_retain_their_containing_visual_representation_and_page():
     from knowledge.instruction_document import document_units
     text = ('[PAGE 7 PROSE]\nFirst paragraph.\n\nSecond paragraph.\n\n'
@@ -1208,7 +1290,8 @@ def test_shared_generation_handoff_keeps_delivered_fact_report():
     assert spec == before
     report = context.handoff["instruction_facts"]
     assert report["verification"] == "not_performed"
-    assert set(included_knowledge_ids(context.knowledge_context, report["records"])) == {
+    assert set(included_knowledge_ids(context.knowledge_context, report["records"])).intersection(
+        row["id"] for row in report["records"]) == {
         row["id"] for row in report["records"] if row["included"]}
     assert report["facts"] and any(row["source_ids"] for row in report["facts"])
     generic = context.handoff["fact_coverage"]
@@ -1254,7 +1337,11 @@ def test_resolved_generic_io_does_not_open_instruction_retrieval(with_role, monk
     assert not any(address in query for _, _, address in roles)
     monkeypatch.setattr(retriever, "build_knowledge_context",
                         lambda *a, **k: pytest.fail("settled I/O is not a manual fact question"))
-    assert not _build_knowledge_context(query, plc_model="FX3U", confirmed_context=spec)
+    context = _build_knowledge_context(query, plc_model="FX3U", confirmed_context=spec)
+    assert context.manifest["records"] == []
+    assert context.manifest["capability_discovery"]["candidates"] == []
+    from plc.maintainability import SELECTION_POLICY
+    assert str(context).strip() == SELECTION_POLICY.strip()
 
 
 @pytest.mark.parametrize("question", ["MOV K1 D0", "查询 X0 的输入响应时间", "查证 FX3U-4AD 缓冲存储器"])
@@ -1285,3 +1372,7 @@ def test_capability_manifest_tracks_instruction_migration_gaps():
     assert states["confirmed_instruction_instances"] == "enforced"
     assert states["instruction_source_authority"] == "enforced"
     assert states["fact_coverage_delivery"] == "enforced"
+@pytest.mark.parametrize("text", ["撤防时清除本次报警状态和所有等待计时", "全部状态复位", "数组初始化", "clear all alarms"])
+def test_functional_clear_vocabulary_does_not_require_an_opcode(text):
+    from knowledge.capability_discovery import functional_queries
+    assert 'bulk_reset' in {q['function'] for q in functional_queries(text)}

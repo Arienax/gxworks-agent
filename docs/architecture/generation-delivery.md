@@ -10,6 +10,17 @@ The viewer, downloads and reports use the selected version's saved specification
 
 Refreshing a Ladder preview renders the saved canonical IR without another model call. A missing old SVG can be recreated from valid IR; a fingerprint mismatch is reported rather than displayed as the selected program.
 
+[build_gxworks2_csv_bundle](../../src/application/fresh_exports.py) re-exports a saved
+Ladder IR with the current deterministic exporter. The saved version and original
+artifacts remain unchanged, and this operation issues no model request.
+
+An output connected directly to the left bus starts with an independent TRUE
+condition. [csv_export](../../src/gxworks2/csv_export.py) lowers it using the exact
+CPU's verified always-on relay from Core; it cannot inherit the preceding
+network's condition. Missing CPU facts prevent this export. CSV readability or
+IR checks alone do not establish the delivered listing's behavior; the teaching
+runner reuses Core on the imported CSV's actual instruction order.
+
 An unaccepted or invalid candidate may have a diagnostic preview. Its validation state remains attached to the candidate, and it does not become the active version. Partial repairs are materialized before rendering according to [repair boundaries](generation-repair.md).
 
 ## Evidence labels

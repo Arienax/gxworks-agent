@@ -34,7 +34,8 @@ def contained(path: Path, root: Path) -> Path:
 def public(value: Any) -> Any:
     """Defense in depth for metadata; resource schemas remain allowlisted."""
     if isinstance(value, Mapping):
-        return {str(k): public(v) for k, v in value.items()
+        from application.capability_context import public_discovery
+        return {str(k): public_discovery(v) if k == "capability_discovery" else public(v) for k, v in value.items()
                 if not str(k).startswith("_") and not str(k).lower().endswith(("_path", "_dir", "_file")) and not any(
                     token in str(k).lower() for token in ("api_key", "apikey", "token", "credential", "password", "secret", "staging_dir"))}
     if isinstance(value, (list, tuple)):
@@ -97,6 +98,9 @@ class ProjectService:
                 "parent_version_id", "ir_sha256", "confirmed_spec_hash", "confirmed_spec_snapshot",
                 "gx_sync", "simulator_runs", "simulator_test_plans", "debug_attempts")
         result = {k: public(version.get(k)) for k in keys}
+        for key in ("generation_handoff", "maintainability_review"):
+            if key in version:
+                result[key] = public(version[key])
         result["artifacts"] = self.artifacts(project_id, version_id)
         result["capabilities"] = self.capabilities(version)
         return result

@@ -349,6 +349,7 @@ def test_equals_and_named_input_declarations_reach_the_spec_editor_with_levels()
     "X0=1时启动Y0", "X0=1启动Y0", "X0=1且X1=0时运行", "X0=ON", "X0启动Y0=1",
     "X0启动时=1", "X0=1", "D0=0表示无料", "D0=1~3蓝色", "X0、X1为两个输入",
     "X0=1启动Y0=1", "X0=1时X1=0", "X0/X1=1分别启动Y0/Y1", "X0/X1=1时启动",
+    "I/O：X0=1时启动Y0", "I/O: X0=ON",
 ])
 def test_new_declaration_syntax_does_not_promote_states_or_logic_to_wiring(text):
     from plc.specification.bindings import extract_declared_bindings
@@ -356,6 +357,9 @@ def test_new_declaration_syntax_does_not_promote_states_or_logic_to_wiring(text)
 
 
 @pytest.mark.parametrize(("text", "expected"), [
+    ("使用FX3U。I/O：X0：启动按钮，按下为1；X1：停止按钮，按下为1；Y0：电机输出。",
+     {"X0": 1, "X1": 1, "Y0": None}),
+    ("I/O: X0: Start, active=1; Y0: Output", {"X0": 1, "Y0": None}),
     ("X7=1泵A过载，X10=1泵B过载，X11/X12=1分别手动点动A/B",
      {"X7": 1, "X10": 1, "X11": 1, "X12": 1}),
     ("X0／X1=0分别限位A/B，X2：复位按钮，按下为ON", {"X0": 0, "X1": 0, "X2": 1}),

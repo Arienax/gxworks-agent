@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Job, Json } from "../api/client";
 import { api, freshGxCsvUrl } from "../api/client";
 import { Button } from "../components/ui";
+import { CapabilityReview } from "./CapabilityReview";
 
 type Output = Record<string, Json>;
 
@@ -12,7 +13,7 @@ export function useGenerationResult(job: Job | undefined, retry: number) {
   const [result, setResult] = useState<{
     id: string; value?: Output; error?: string;
   }>({ id: "" });
-  const id = job?.kind === "generation" && job.status === "completed" ? job.id : "";
+  const id = (job?.kind === "generation" || job?.kind === "direct_generation") && job.status === "completed" ? job.id : "";
   useEffect(() => {
     const controller = new AbortController();
     setResult(old => old.id === id ? old : { id });
@@ -28,13 +29,14 @@ export function useGenerationResult(job: Job | undefined, retry: number) {
   const validation = metadata?.validation && typeof metadata.validation === "object" && !Array.isArray(metadata.validation)
     ? metadata.validation as Output : undefined;
   const blocked = job?.result?.status === "contract_mismatch" || value?.status === "contract_mismatch" || !!metadata?.contract_mismatch;
+  const needsInput = job?.result?.status === "needs_input" || value?.status === "needs_input";
   const invalidCandidate = value?.status === "saved_invalid" || validation?.status === "invalid_candidate";
   const proposalId = typeof value?.proposal_id === "string" ? value.proposal_id
     : typeof job?.result?.proposal_id === "string" ? job.result.proposal_id : "";
   const versionId = typeof value?.version_id === "string" ? value.version_id
     : typeof job?.result?.version_id === "string" ? job.result.version_id : "";
   const loading = !!id && !versionId && !proposalId && !blocked && (!result.error || result.id !== id) && !value;
-  return { id, projectId: job?.project_id || "", value, metadata, blocked, invalidCandidate, proposalId, versionId, loading,
+  return { id, projectId: job?.project_id || "", value, metadata, blocked, needsInput, invalidCandidate, proposalId, versionId, loading,
     error: result.id === id ? result.error : undefined };
 }
 
@@ -63,7 +65,14 @@ export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSp
     </Button>
   ) : null;
   return <section className="generation-result" aria-label={t("生成结果")}>
-    {result.blocked ? <>
+    {result.needsInput ? <>
+      <p role="status">{t("请补充影响实现的事实，再继续生成。")}</p>
+      {Array.isArray(result.value?.missing_info) && result.value.missing_info.map((row, i) => {
+        const question = row && typeof row === "object" && !Array.isArray(row) ? row.question : "";
+        return <p key={i}>{String(question || "")}</p>;
+      })}
+      <p className="muted">{t("在下方直接回答即可；原始需求会随续答保留。")}</p>
+    </> : result.blocked ? <>
       <p className="error-text" role="status">{t("候选与确认方案冲突，未创建可接受的程序。")}</p>
       {typeof detail?.message === "string" && <p>{detail.message}</p>}
       {Array.isArray(detail?.issues) && <pre className="accepted-content">{detail.issues.map((v) => typeof v === "string" ? v : JSON.stringify(v)).join("\n")}</pre>}
@@ -78,6 +87,9 @@ export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSp
       <Button disabled={busy} onClick={onRepair}>{t("局部修复")}</Button>
     </> : result.versionId ? <>
       <p>{t("程序已校验并自动保存，可直接导出文件。")}</p>
+      {result.metadata?.generation_handoff && typeof result.metadata.generation_handoff === "object"
+        && !Array.isArray(result.metadata.generation_handoff) && result.metadata.generation_handoff.mode === "direct_generation"
+        && <p className="muted">{t("已完成结构检查；工艺时序、互斥与重启尚需核对。")}</p>}
       <Button disabled={busy} onClick={onOpen}>{t("查看程序")}</Button>{" "}
       {freshCsv}
     </> : result.proposalId ? <>
@@ -87,6 +99,7 @@ export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSp
       <p className="error-text" role="alert">{t("任务已结束，但尚未取得可显示的候选结果。")}</p>
       <p>{t("请重试读取结果；不要重复调用模型或重新建立工程。")}</p>
     </>}
+    <CapabilityReview metadata={result.metadata} t={t} />
     <Button disabled={busy} onClick={onRetry}>{t("重新读取结果")}</Button>
   </section>;
 }

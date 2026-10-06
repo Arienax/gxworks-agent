@@ -40,13 +40,15 @@ class ChangeScope(Command):
 
 
 class JobCreate(Command):
-    kind: Literal["analysis", "generation", "agent", "review", "test_plan", "debug_plan", "gx_read", "gx_inspect"]
+    kind: Literal["analysis", "generation", "direct_generation", "agent", "review", "test_plan", "debug_plan", "gx_read", "gx_inspect"]
     project_id: str
     version_id: str | None = None
+    clarification_job_id: str | None = None
     request_id: str = Field(min_length=1, max_length=128)
     text: str = Field(default="", max_length=64000)
     response_language: Literal["zh-CN", "en", "ja"] = "zh-CN"
     analysis_mode: Literal["direct", "design"] = "direct"
+    generation_action: Literal["edit", "regenerate"] | None = None
     attachment_ids: list[str] = Field(default_factory=list, max_length=12)
     run_id: str | None = None
     deep: bool = True

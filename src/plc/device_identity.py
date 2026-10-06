@@ -61,6 +61,29 @@ def decimal_region_address(base, offset):
     return match[1].upper() + str(int(match[2]) + offset)
 
 
+def digit_specified_devices(value, plc_model="FX3U"):
+    """Exact FX3U 16-bit digit specification; X/Y use the CPU's octal radix.
+
+    JY997D16601-R, section 5.4 (PDF p162): Kn names n groups of four consecutive bits.
+    Wider, indexed and other CPU forms remain outside this bounded subset.
+    """
+    match = re.fullmatch(r'K([1-4])([XYMS])(\d+)', str(value).strip(), re.I)
+    if match is None:
+        return None
+    if str(plc_model).upper() != "FX3U":
+        raise ValueError('Digit specification runtime is unavailable for this CPU')
+    from plc.validation import parse_device_address
+    head = parse_device_address(match[2].upper()+match[3], plc_model)
+    if head is None:
+        raise ValueError('Invalid digit specification head device')
+    prefix, start = head
+    radix = 'o' if prefix in {'X', 'Y'} else 'd'
+    devices = tuple(prefix+format(start+i, radix) for i in range(4*int(match[1])))
+    if any(parse_device_address(device, plc_model) is None for device in devices):
+        raise ValueError('Digit specification exceeds the CPU device region')
+    return devices
+
+
 def canonical_expression(value):
     if not isinstance(value, str):
         return value

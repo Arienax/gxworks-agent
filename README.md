@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md) | English
 
-GXWorks Agent is a local engineering workbench for Mitsubishi PLC projects, focused on FX3U and GX Works2. It turns requirements into a reviewable specification, generates Ladder candidates, saves versioned PLC IR, and exports engineering artifacts. The Web workbench and external MCP clients use the same Python engineering services.
+GXWorks Agent is a local engineering workbench for Mitsubishi PLC projects, focused on FX3U and GX Works2. It generates Ladder candidates from requirements, saves versioned PLC IR, and exports engineering artifacts. A detailed specification review remains available. The Web workbench and external MCP clients use the same Python engineering services.
 
 Use the workbench to analyse requirements, review I/O assignments, generate or edit a program, inspect changes, and export the artifacts recorded for that version. GX Works2 import, simulation and hardware observation have separate operating requirements; start with the [Web guide](docs/integrations/web.md).
 
@@ -23,7 +23,7 @@ git lfs pull
 
 The build entry prepares the backend environment and frontend. The launcher asks for a workspace and opens the local workbench. Keep its terminal open while using the application; close the service with `Ctrl+C`.
 
-Configure a model in **Settings → Model → Model API**, then create a project. Start with Direct analysis, review the specification and I/O, and generate a program. [Your first project](docs/guides/getting-started.md#first-project) explains the complete sequence.
+Configure a model in **Settings → Model → Model API**, then create a project. **Create program** defaults to direct generation for new Ladder programs; **Review specification first** offers one approach or an explicit comparison. Use **Modify program** for an existing version and **Engineering questions** for read-only assistance. [Your first project](docs/guides/getting-started.md#first-project) explains the sequence.
 
 ### From a Web package
 

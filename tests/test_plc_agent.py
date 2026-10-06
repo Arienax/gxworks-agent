@@ -14,6 +14,7 @@ from model_runtime.provider import (
 from agent_runtime.agent import run_tool_agent, should_route_to_tool_agent
 from agent_runtime.plc_tools import (
     FORBIDDEN_TOOL_NAMES,
+    READ_ONLY_TOOL_NAMES,
     SAFE_TOOL_NAMES,
     ToolDefinition,
     ToolRegistry,
@@ -76,6 +77,45 @@ def test_default_tool_request_enables_streaming_without_json_response_mode():
     assert [item["function"]["name"] for item in request.tools] == list(
         SAFE_TOOL_NAMES
     )
+
+
+@pytest.mark.parametrize("name", ["create_program_candidate", "patch_program", "create_fbd_candidate",
+                                 "import_current_program_to_gxworks2", "future_write_tool"])
+def test_questions_hide_and_reject_engineering_tools_before_invocation(name):
+    class Runtime(_FakeRuntime):
+        def list_tools(self, context=None):
+            return [{"type": "function", "function": {"name": tool, "parameters": {"type": "object"}}}
+                    for tool in ("get_current_project", name)]
+        def invoke(self, call, context):
+            pytest.fail("Read-only assistant invoked a forbidden handler")
+    runtime = Runtime()
+    provider = _FakeProvider([[ToolCallEnd(ToolCall("blocked", name, "{}"))], [TextDelta("请切换到修改程序。")]])
+    result = run_tool_agent("修改当前程序", context=_context(), runtime=runtime, provider=provider, read_only=True)
+    assert [tool["function"]["name"] for tool in provider.requests[0].tools] == ["get_current_project"]
+    assert not provider.requests[0].tool_response_contracts
+    assert result.audit[0]["error_code"] == "READ_ONLY_TOOL"
+    assert result.pending_actions == []
+    assert provider.requests[1].messages[-1].is_error
+
+
+def test_question_default_tools_are_explicitly_read_only_and_read_calls_still_work():
+    provider = _FakeProvider([[ToolCallEnd(ToolCall("read", "get_current_project", "{}"))], [TextDelta("当前工程已读取。")]])
+    result = run_tool_agent("当前工程？", context=_context(), provider=provider, read_only=True)
+    assert {tool["function"]["name"] for tool in provider.requests[0].tools} == READ_ONLY_TOOL_NAMES
+    assert result.audit[0]["ok"]
+    assert not result.pending_actions
+
+
+def test_question_custom_read_tool_cannot_return_an_engineering_proposal():
+    class Runtime(_FakeRuntime):
+        def invoke(self, call, context):
+            envelope = {"ok": True, "status": "confirmation_required", "data": {"pending_action": {
+                "type": "accept_generated_program", "project_id": "project_test"}}}
+            return ToolResult(call.id, call.name, json.dumps(envelope), envelope)
+    provider = _FakeProvider([[ToolCallEnd(ToolCall("read", "get_current_project", "{}"))], [TextDelta("操作已阻止。")]])
+    result = run_tool_agent("当前工程？", context=_context(), runtime=Runtime(), provider=provider, read_only=True)
+    assert result.audit[0]["error_code"] == "READ_ONLY_TOOL"
+    assert not result.pending_actions
 
 
 def test_agent_uses_only_injected_provider_and_tool_runtime_for_full_loop():

@@ -1210,15 +1210,42 @@
               }
             ]
           },
+          "clarification_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clarification Job Id"
+          },
           "deep": {
             "default": true,
             "title": "Deep",
             "type": "boolean"
           },
+          "generation_action": {
+            "anyOf": [
+              {
+                "enum": [
+                  "edit",
+                  "regenerate"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generation Action"
+          },
           "kind": {
             "enum": [
               "analysis",
               "generation",
+              "direct_generation",
               "agent",
               "review",
               "test_plan",
@@ -1525,6 +1552,17 @@
             ],
             "title": "Base Version Id"
           },
+          "clarification_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clarification Job Id"
+          },
           "content": {
             "anyOf": [
               {
@@ -1549,6 +1587,23 @@
               }
             ],
             "title": "Generation"
+          },
+          "missing_info": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/JsonValue"
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Missing Info"
           },
           "plan": {
             "anyOf": [
@@ -3867,6 +3922,20 @@
             ],
             "title": "Debug Attempts"
           },
+          "generation_handoff": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generation Handoff"
+          },
           "gx_sync": {
             "anyOf": [
               {
@@ -3906,6 +3975,20 @@
               }
             ],
             "title": "Lifecycle Status"
+          },
+          "maintainability_review": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maintainability Review"
           },
           "parent_version_id": {
             "anyOf": [

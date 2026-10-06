@@ -705,7 +705,7 @@ def _within_packing_budget(records, allowance, token_allowance=None):
 
 
 def _pack_definition_target(sources, allowance, owner, needed, order, opcodes, diagnostics,
-                            token_allowance=None):
+                            token_allowance=None, include_uninterpreted=True):
     """Pack compiled dependency closures before unresolved original evidence."""
     from knowledge import core
     from plc.instruction_definition import instruction_task_view
@@ -794,7 +794,7 @@ def _pack_definition_target(sources, allowance, owner, needed, order, opcodes, d
             and (s.get('context_span') or s.get('row_span'))]
         raw_sources.append(raw)
     cost, token_cost = _packing_cost(packed)
-    raw_records = _pack_target(raw_sources, max(0, allowance - cost), needed_categories=needed,
+    raw_records = _pack_target(raw_sources, max(0, allowance - cost) if include_uninterpreted else 0, needed_categories=needed,
                               verified_operand_order=order, verified_opcodes=opcodes,
                               token_allowance=max(0, token_allowance - token_cost)
                               if token_allowance is not None else None)
@@ -852,7 +852,7 @@ def _pack_target(
     results, allowance, *, needed_categories=None,
     verified_operand_order=None, verified_opcodes=(),
     operand_gap_details=(), structured_owner=None, relation_diagnostics=None,
-    token_allowance=None,
+    token_allowance=None, include_uninterpreted=True,
 ):
     """Pack definition, tables and cautions together before any top-k truncation.
 
@@ -878,7 +878,7 @@ def _pack_target(
     definition = (structured_owner or {}).get('instruction_definition') or {}
     if definition.get('facts'):
         return _pack_definition_target(sources, allowance, structured_owner, needed, verified_operand_order,
-                                       verified_opcodes, relation_diagnostics, token_allowance)
+                                       verified_opcodes, relation_diagnostics, token_allowance, include_uninterpreted)
     owner_model = ((structured_owner or {}).get("target_applicability") or {}).get("target_model")
     relation_candidates = []
     # Equivalent same-manual renditions may corroborate a group. Different
@@ -1064,7 +1064,7 @@ def _pack_target(
 
 def retrieve_instruction_facts(
     query, *, plc_model, task_type, char_budget, candidates=(), targets=None,
-    retrieve=None, resolver=None, token_budget=None, primary_slots=None,
+    retrieve=None, resolver=None, token_budget=None, primary_slots=None, compact_sources=False,
 ):
     """Resolve selected instructions directly, then pack their source evidence.
 
@@ -1196,6 +1196,7 @@ def retrieve_instruction_facts(
             structured_owner=structured_owner,
             relation_diagnostics=relation_diagnostics,
             token_allowance=token_allowance - companion_tokens if token_allowance is not None else None,
+            include_uninterpreted=not compact_sources,
         )
         if relation_diagnostics.get('definition_task_view'):
             report.setdefault('definition_requirements', []).extend(relation_diagnostics['definition_requirements'])

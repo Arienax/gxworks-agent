@@ -14,6 +14,114 @@ from model_runtime.provider import TextDelta
 from model_profile_fixtures import offline_runtime_profile
 
 
+@pytest.mark.parametrize("mode,source", [
+    ("st", {"st_code": "(* MOV(X0,Y0) *)\nY0 := X0;\nCopyData(src := D0);"}),
+    ("fbd", {"nodes": [{"template": "function:CopyData"}]}),
+])
+def test_local_review_reports_actual_coverage_without_a_model_or_behavior_claim(mode, source):
+    from plc.maintainability import review_maintainability
+    review = review_maintainability(source, target_mode=mode)
+    assert review["model_calls"] == 0 and review["behavior_verified"] is False
+    assert review["used_capabilities"] == [{"name": "CopyData" if mode == "st" else "function:CopyData", "count": 1}]
+    assert any(row["status"] == "unverified" for row in review["coverage"])
+
+
+def test_repeated_writes_are_advisory_and_retain_locations_without_requiring_a_special_instruction():
+    from plc.maintainability import review_maintainability
+    from plc.candidate_service import CandidateService
+    ladder = _ladder()
+    ladder["rungs"][0]["branches"][0]["outputs"] = [
+        {"type": "APP_INSTR", "opcode": "RST", "operands": [f"M{i}"]} for i in range(3)]
+    review = review_maintainability(ladder)
+    assert review["findings"][0]["replacement_verified"] is False
+    assert {loc["rung_id"] for loc in review["findings"][0]["locations"]} == {1}
+    prepared = CandidateService().prepare(ladder, plc_model="FX3U")
+    assert prepared["maintainability_review"]["findings"]
+
+
+def test_local_review_reports_shared_conditions_and_effect_gaps_without_modification():
+    from plc.maintainability import review_maintainability
+    from plc.candidate_service import CandidateService
+    ladder = _ladder()
+    second = copy.deepcopy(ladder["rungs"][0])
+    second["rung_id"] = 2
+    second["branches"][0]["outputs"][0]["address"] = "Y1"
+    ladder["rungs"].append(second)
+    original = copy.deepcopy(ladder)
+    review = review_maintainability(ladder)
+    assert ladder == original
+    finding = next(row for row in review["findings"] if row["code"] == "repeated_shared_conditions")
+    assert finding["conditions_reducible"] > 0
+    assert finding["locations"] == [{"rung_id": 1}, {"rung_id": 2}]
+    prepared = CandidateService().prepare(ladder)
+    assert not any(f["code"] == "repeated_shared_conditions" for f in prepared["maintainability_review"]["findings"])
+    second["branches"][0]["outputs"] = [{"type": "APP_INSTR", "opcode": "UNKNOWN", "operands": []}]
+    review = review_maintainability(ladder)
+    assert next(c for c in review["coverage"] if c["check"] == "output_effect_footprints")["status"] == "unverified"
+    assert review["condition_review"]["barriers"][0]["reason"] == "instruction_fact_gap"
+    assert review["model_calls"] == 0 and review["behavior_verified"] is False
+    second["branches"][0]["outputs"] = [{"type": "APP_INSTR", "opcode": "BMOV", "operands": ["D0", "D9", "D20"]}]
+    review = review_maintainability(ladder)
+    assert review["condition_review"]["output_effect_precision"]["family"] == 1
+    assert any(b["reason"] == "conservative_write_extent" for b in review["condition_review"]["barriers"])
+
+
+@pytest.mark.parametrize("mode,source,location", [
+    ("st", {"st_code": "(* outer (* inner *) Fake(); *)\nS := 'Fake($'text$')';\nCopy();\nCopy();\nCopy();"},
+     {"line": 3, "column": 1}),
+    ("fbd", {"nodes": [{"id": str(i), "template": "function:Copy"} for i in range(3)]},
+     {"node_id": "0", "source_offset": None, "position": None}),
+])
+def test_repeated_language_calls_have_inspectable_positions_and_no_equivalence_claim(mode, source, location):
+    from plc.maintainability import review_maintainability
+    review = review_maintainability(source, target_mode=mode)
+    assert review["used_capabilities"] == [{"name": "Copy" if mode == "st" else "function:Copy", "count": 3}]
+    finding = review["findings"][0]
+    assert finding["locations"][0] == location
+    assert finding["severity"] == "advisory" and finding["replacement_verified"] is False
+
+
+@pytest.mark.parametrize("coordinate_only", [False, True])
+def test_fbd_review_retains_connection_context_without_inventing_coordinate_bindings(coordinate_only):
+    from plc.maintainability import review_maintainability
+    source = {"nodes": [{"id": str(i), "template": "function:Copy"} for i in range(3)],
+        "wires": [{"from": "0.OUT", "to": "1.IN"}, {"from": "1.OUT", "to": "2.IN"}]}
+    if coordinate_only:
+        source["wires"][0] = {"source_offset": 1234, "start": [1, 2], "end": [3, 4]}
+    original = copy.deepcopy(source)
+    review = review_maintainability(source, target_mode="fbd")
+    assert source == original
+    finding = review["findings"][0]
+    assert not finding["replacement_verified"] and not review["behavior_verified"]
+    assert review["model_calls"] == 0
+    assert len(review["connection_inventory"]) == 2
+    middle = finding["locations"][1]["connections"]
+    assert [row["connection_index"] for row in middle] == ([1] if coordinate_only else [0, 1])
+    if coordinate_only:
+        assert review["connection_inventory"][0] == {"connection_index": 0, "source_offset": 1234,
+            "start": [1, 2], "end": [3, 4], "endpoint_binding": "unverified"}
+        review["connection_inventory"][0]["start"][0] = 99
+        assert source["wires"][0]["start"] == [1, 2]
+    else:
+        assert middle[0]["from"] == "0.OUT" and middle[1]["to"] == "2.IN"
+    coverage = {row["check"]: row["status"] for row in review["coverage"]}
+    assert coverage["explicit_connection_endpoints"] == ("unverified" if coordinate_only else "checked")
+
+
+@pytest.mark.parametrize("tail,expected", [("", 1), ("\n(* incomplete", 0)])
+def test_st_literal_write_review_preserves_locations_and_does_not_infer_shared_guards(tail, expected):
+    from plc.maintainability import review_maintainability
+    source = "(* Fake := 0; *)\nIF X0 THEN\n  First := 0;\nEND_IF;\nSecond := 0;\nThird := 0;\nText := 'Fake := 0;';\nVAR\n  Local : INT := 0;\nEND_VAR;" + tail
+    review = review_maintainability(source, target_mode="st")
+    findings = [row for row in review["findings"] if row["code"] == "repeated_literal_assignments"]
+    assert len(findings) == expected
+    if expected:
+        assert [row["line"] for row in findings[0]["locations"]] == [3, 5, 6]
+        assert [row["destination"] for row in findings[0]["locations"]] == ["First", "Second", "Third"]
+        assert not findings[0]["control_conditions_verified"] and not findings[0]["replacement_verified"]
+    assert not review["behavior_verified"] and review["model_calls"] == 0
+
+
 def _spec():
     return {
         "summary": "X0 controls Y0",
@@ -66,6 +174,56 @@ class OneShotProvider:
         if len(self.requests) > 1:
             raise AssertionError("confirmed generation must not request a second full ladder")
         yield TextDelta(json.dumps({"r": [{"b": [{"i": ["NO X0"], "o": ["COIL Y0"]}]}]}, ensure_ascii=False))
+
+
+def test_raw_direct_generates_once_without_analysis_or_model_compaction(monkeypatch, tmp_path):
+    import application.model_api as api
+    import application.context_compactor as compactor
+    import application.generation_agent as agent
+    monkeypatch.setattr(api, "analyze_requirement_streaming", lambda *a, **k: pytest.fail("Direct invoked Agent A"))
+    monkeypatch.setattr(compactor, "compact_if_needed", lambda *a, **k: pytest.fail("Direct invoked model compaction"))
+    monkeypatch.setattr(agent, "_build_knowledge_context", lambda *a, **k: "")
+    provider = OneShotProvider()
+    raw = "X0：启动按钮，按下为1，释放为0。Y0：运行输出。按住启动时运行，松开停止。"
+    metadata = GenerationWorkflow(GenerationRequest(user_input=raw, direct_generation=True,
+        plc_model="FX3U", model_name=provider.profile["model"]), tmp_path,
+        dependencies=GenerationDependencies(provider=provider)).run()
+    assert len(provider.requests) == 1
+    assert provider.requests[0].max_retries == 0
+    messages = provider.requests[0].messages
+    assert messages[-1].content == raw
+    assert "# Confirmed project specification" not in messages[0].content
+    assert metadata["first_pass_pipeline"] == {"mode": "direct_generation", "model_calls": 1}
+    assert metadata["generation_handoff"]["raw_requirement"] == raw
+    assert metadata["generation_handoff"]["local_check_coverage"]["unverified"]
+    assert (tmp_path / metadata["artifacts"]["program_csv"]).stat().st_size > 0
+
+
+@pytest.mark.parametrize("mixed", [False, True])
+def test_direct_missing_fact_never_delivers_program(monkeypatch, tmp_path, mixed):
+    import application.generation_agent as agent
+    monkeypatch.setattr(agent, "_build_knowledge_context", lambda *a, **k: "")
+    class Questions(OneShotProvider):
+        def stream(self, request):
+            self.requests.append(request)
+            payload = {"status": "needs_input", "missing_info": [{"id": "delay", "question": "延时几秒？", "required": True}]}
+            if mixed:
+                payload["r"] = [{"b": [{"i": [], "o": ["COIL Y0"]}]}]
+            yield TextDelta(json.dumps(payload, ensure_ascii=False))
+    provider = Questions()
+    workflow = GenerationWorkflow(GenerationRequest(user_input="延时启动", direct_generation=True,
+        model_name=provider.profile["model"]), tmp_path, dependencies=GenerationDependencies(provider=provider))
+    if mixed:
+        with pytest.raises(Exception):
+            workflow.run()
+    else:
+        result = workflow.run()
+        assert result["status"] == "needs_input"
+        assert result["missing_info"][0]["id"] == "delay"
+        assert result["artifacts"] == {}
+    assert len(provider.requests) == 1
+    assert not list(tmp_path.glob("*.csv"))
+    assert not list(tmp_path.glob("*.ir.json"))
 
 
 def test_confirmed_generation_uses_one_isolated_agent_call(tmp_path):

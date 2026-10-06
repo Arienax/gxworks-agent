@@ -185,7 +185,8 @@ async def open_page(browser, server, pid):
             await page.goto(server.origin + '/?project=' + pid + '#token=' + server.token)
         response = await loaded.value
         assert response.status == 200, 'Project HTTP load failed: ' + str(response.status)
-        assert (await response.json())['id'] == pid
+        # Initial token navigation can invalidate Chromium's response-body handle.
+        # The exact project URL and its unique rendered name bind this check.
         await expect(page.locator('.project-title h1')).to_have_text(expected_name, timeout=30000)
         return context, page, errors
     except Exception:
@@ -221,14 +222,14 @@ async def run_case(browser, root, web_dist, name, *, legacy_contract=False, faul
         context, page, page_errors = await open_page(browser, server, pid)
         try:
             if not legacy_contract:
+                await page.get_by_label('创建流程', exact=True).select_option('review')
                 await page.locator('.composer textarea').fill(REQUIREMENT)
-                await page.get_by_role('button', name='发送', exact=True).click()
+                await page.get_by_role('button', name='分析并核对规格', exact=True).click()
                 await expect(page.locator('.spec-editor')).to_be_visible(timeout=180000 if live else 30000)
                 await page.get_by_role('button', name='确认规格', exact=True).click()
                 await expect(page.locator('.composer')).to_be_visible()
-                await expect(page.get_by_role('button', name='按已确认规格生成程序', exact=True)).to_be_disabled()
             else:
-                await page.get_by_role('button', name='按已确认规格生成程序', exact=True).click()
+                await page.get_by_role('button', name='按规格生成', exact=True).click()
             job = await wait_job(server, pid)
             output = server.service.output(job['id'])
             project_state = server.service.projects.project(pid)
@@ -617,7 +618,17 @@ async def lifecycle_cases(browser, root, web_dist, results):
             return {'hidden_playback_paused': True, 'cursor_retained': True,
                     'backend_kind': 'test_memory_not_plc_simulator'}
 
+        async def local_review_is_readable(page):
+            review = page.locator('.capability-review').first
+            await expect(review).to_be_visible()
+            await review.locator('summary').click()
+            await expect(review.get_by_text('本地审阅不证明工艺行为、原生编译或设备运行正确。', exact=True)).to_be_visible()
+            await expect(review.get_by_text('调用与重复写入位置: 已检查', exact=False)).to_be_visible()
+            await expect(review.get_by_text('替换等价性与工艺行为: 未验证', exact=False)).to_be_visible()
+            return {'review_visible': True, 'actual_coverage_visible': True, 'review_model_calls': 0}
+
         checks = [('tab-state-and-request-budget', preserve_tabs), ('redraw-keeps-dom', redraw_retains_dom),
+                  ('local-discovery-and-review-without-model', local_review_is_readable),
                   ('plan-save-is-local-and-single-flight', save_plan_retains_editor),
                   ('diagnosis-autorefresh-without-SSE', completion_without_sse),
                   ('slow-poll-and-stale-response', stale_poll_and_slow_reads),

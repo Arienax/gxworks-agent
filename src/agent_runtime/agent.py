@@ -22,6 +22,7 @@ from model_runtime.provider import (
 )
 from agent_runtime.runtime import (
     InProcessToolRuntime,
+    ReadOnlyToolRuntime,
     ToolRuntime,
     build_default_tool_runtime,
 )
@@ -35,6 +36,14 @@ AGENT_SYSTEM_PROMPT = """你是 PLC AI 工作台内的工程助手。
 3. import_current_program_to_gxworks2 只提出确认请求，不代表已经导入。
 4. patch_program 只生成经过本地校验的候选补丁；必须告诉用户仍需查看差异并确认，不能自行接受候选版本或同步 GX Works2。
 5. 工具失败时如实说明。回答简洁，遵守应用设置的输出语言；引用手册事实时给出 source、page/section。
+"""
+
+QUESTION_SYSTEM_PROMPT = """你是 PLC AI 工作台内的工程问答助手。
+只解释工程、程序和手册事实，或运行提供的本地只读检查。
+涉及当前项目、所选版本或校验状态时先读取对应工具，不得猜测。
+本入口不能创建程序、修改程序、保存候选、导入 GX Works2 或执行外部操作。
+用户请求生成或修改时，说明需要切换到“创建程序”或“修改程序”；不要声称已经执行。
+工具失败如实说明；引用手册时给出 source、page/section。遵守应用设置的输出语言。
 """
 
 _AGENT_PATTERNS = (
@@ -125,6 +134,7 @@ def run_tool_agent(
     runtime: Optional[ToolRuntime] = None,
     provider: Optional[ModelProvider] = None,
     registry: Any = None,
+    read_only: bool = False,
     max_rounds: int = 5,
     on_reasoning_chunk=None,
     on_content_chunk=None,
@@ -142,9 +152,11 @@ def run_tool_agent(
             if registry is not None
             else build_default_tool_runtime()
         )
+    if read_only:
+        runtime = ReadOnlyToolRuntime(runtime)
     provider = provider or get_active_provider()
     messages = [
-        SystemMessage(AGENT_SYSTEM_PROMPT),
+        SystemMessage(QUESTION_SYSTEM_PROMPT if read_only else AGENT_SYSTEM_PROMPT),
         *_sanitized_history(conversation_history),
         UserMessage(str(user_text).strip()),
     ]
@@ -161,7 +173,8 @@ def run_tool_agent(
             tools=tuple(runtime.list_tools(context)),
             tool_response_contracts=tuple(
                 (name, tool_argument_contract(name))
-                for name in ("create_program_candidate", "patch_program", "create_fbd_candidate")
+                for name in (() if read_only else
+                             ("create_program_candidate", "patch_program", "create_fbd_candidate"))
             ),
             preserved_annotations=preserved_annotations(
                 getattr(context, "program_ir", None),

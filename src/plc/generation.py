@@ -153,9 +153,12 @@ def normalization_summary(report):
         "extract_common_prefix": "已提取分支公共条件",
         "merge_adjacent_branches": "已提取相邻网络公共条件并保留分支执行顺序",
         "merge_adjacent_coils": "已合并公共条件相同的相邻输出网络",
+        "factor_branch_subgroup": "已按公共条件重新划分连续分支，保留输出顺序",
+        "factor_parallel_condition": "已提取纯逻辑并联支路中的公共条件",
     }
     reasons = {
         "annotation_capacity": "合并会超过既有注释长度限制，保留原说明",
+        "annotated_absorption": "逻辑化简会移除带独立注释的条件，保留原说明位置",
         "non_pure_condition": "含边沿或复杂条件，保留原求值位置",
         "stateful_or_unknown_output": "含状态指令或无法确认的副作用，保留原结构",
         "read_after_write": "条件可能在写入后变化，保留再次读取",
@@ -163,7 +166,23 @@ def normalization_summary(report):
         "distinct_network_notes": "网络说明不同，保留独立网络",
         "different_branch_conditions": "分支条件不同，保留独立网络",
         "outside_scope": "位于本次修改范围之外，保持不变",
+        "scope_preserves_network_identity": "局部编辑保留网络编号与顺序，仅归并网络内部条件",
         "unsupported_container": "保留现有兼容结构",
+        "edge_evaluation_site": "边沿条件保留原求值次数和位置",
+        "shared_evaluation_site": "已缓存的状态条件不可展开为重复求值",
+        "volatile_or_unverified_read": "条件读值的稳定性缺少适用事实，保留原求值位置",
+        "stateful_or_opaque_parallel": "并联块含边沿或未知条件，保留原结构",
+        "parallel_shared_form": "当前共享条件协议不容纳整个并联块，保留支路内表达式",
+        "unsupported_condition": "条件形式尚未覆盖，保留原表达式",
+        "unsupported_comparison": "比较形式尚未覆盖，保留原表达式",
+        "unsupported_output": "输出形式尚未覆盖，保留原执行位置",
+        "control_flow_or_logic_stack": "流程或逻辑栈指令保留原执行边界",
+        "implicit_or_external_effect": "含隐式状态或外部动作，保留原执行边界",
+        "instruction_fact_gap": "指令写入范围缺少适用事实，保留原执行边界",
+        "unresolved_operand_effect": "操作数存在尚未解析的写入范围，保留原执行边界",
+        "implicit_power_flow": "无显式条件的兼容分支保留原累加结果边界",
+        "invalid_scope": "修改范围无法解析，保留原程序",
+        "duplicate_rung_ids": "网络编号重复，交由现有校验报告",
     }
     result = {}
     for key in ("changes", "skipped"):
@@ -255,7 +274,7 @@ def prepare_ladder_candidate(
     progress(tr('正在解析模型输出：检查结构与地址'))
     validate_ladder_candidate_structure(parsed, plc_model=plc_model, require_catalogued_instructions=True)
     from plc.condition_normalizer import normalize_shared_conditions
-    parsed, normalization = normalize_shared_conditions(parsed, allowed_rung_ids=normalization_scope)
+    parsed, normalization = normalize_shared_conditions(parsed, allowed_rung_ids=normalization_scope, plc_model=plc_model)
     validate_ladder_candidate_structure(parsed, plc_model=plc_model, require_catalogued_instructions=True)
 
     if candidate_origin == CONFIRMED_AGENT_ORIGIN:

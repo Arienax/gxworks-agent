@@ -71,7 +71,8 @@ def test_legacy_analysis_output_restores_choices_without_writing(workbench, save
     (directory / (job["id"] + ".json")).write_text(json.dumps(output, ensure_ascii=False), encoding="utf-8")
     state_before, workspace_before = _bytes(workbench.state_dir), _bytes(store.base_dir)
     result = workbench.output(job["id"])
-    assert result["spec_draft"]["parameters"][0] == {"id": "start_input", "name": "旧问题措辞", "value": "X3", "source": "user", "options": ["X0", "X2"]}
+    assert result["spec_draft"]["parameters"][0] == {"id": "start_input", "name": "旧问题措辞", "value": "X3", "source": "user", "options": ["X0", "X2"],
+        "io_binding": {"binding_id": "legacy_start", "kind": "X", "role": "start"}}
     assert _bytes(workbench.state_dir) == state_before
     assert _bytes(store.base_dir) == workspace_before
 

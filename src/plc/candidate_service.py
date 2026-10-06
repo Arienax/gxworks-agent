@@ -17,13 +17,16 @@ class CandidateService:
         candidate_origin="external", on_progress=None,
     ):
         from plc.generation import prepare_ladder_candidate
-        return prepare_ladder_candidate(
+        result = prepare_ladder_candidate(
             candidate, plc_model=plc_model, program_name=program_name, revision=revision,
             confirmed_spec=confirmed_spec, previous_ladder=previous_ladder,
             repair_mode=repair_mode, allowed_rung_ids=allowed_rung_ids,
             allowed_addresses=allowed_addresses, task_type=task_type,
             candidate_origin=candidate_origin, on_progress=on_progress,
         )
+        from plc.maintainability import review_maintainability
+        result["maintainability_review"] = review_maintainability(result["program_ir"])
+        return result
 
     def compile(self, program, output_dir, *, validation_profile="generation_structural"):
         target = Path(output_dir)
