@@ -145,7 +145,7 @@ def read_project(raw, logical_name=None):
     outer = validate_cfb_streams(raw)
     mapping = logical_mapping(outer["projectdatalist.xml"])
     payloads = validate_cfb_streams(outer["_hdb"])
-    names = sorted(k for k in mapping if k.endswith(".Program.pou") and mapping[k] in payloads)
+    names = sorted(k for k in mapping if k.endswith(".pou") and mapping[k] in payloads)
     if logical_name is None:
         if len(names) != 1:
             raise GXWFormatError("select one Program.pou from this GXW project")
@@ -155,7 +155,7 @@ def read_project(raw, logical_name=None):
     program = parse_structured_pou(payloads[mapping[logical_name]], logical_name=logical_name,
                                    preserve_unsupported_records=True)
     declarations = {k: parse_declarations(payloads[v], logical_name=k) for k, v in mapping.items()
-                    if k.endswith((".Labels.lh", ".gh", ".lnl")) and v in payloads}
+                    if k.endswith((".lh", ".gh", ".lnl")) and v in payloads}
     return program, declarations, names
 
 
@@ -477,7 +477,7 @@ def prepare_object_project(model, *, baseline=None):
     program = build_object_program(source, model, sources=context if sources is not None else None,
                                    original_sources=sources if changed else None)
     for logical, patch in edits.items():
-        if documents[logical].scope != 'global' and logical != source.logical_name.removesuffix('.Program.pou') + '.Labels.lh':
+        if documents[logical].scope != 'global' and logical != (sources or context).local_table:
             continue
         for old_name in patch.get('renames', {}):
             if patch['renames'][old_name].casefold() == old_name.casefold():

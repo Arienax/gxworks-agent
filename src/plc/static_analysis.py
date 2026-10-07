@@ -666,7 +666,7 @@ def _repeated_guard_findings(networks):
 
 
 def _timer_feedback_findings(networks, plc_model):
-    from plc.semantics import timer_resets_when_disabled
+    from plc.runtime_semantics import timer_runtime_fact
     from plc.specification.approach import _expand_contact_paths
     timers, coils, timer_writers = [], [], Counter()
     for network in networks:
@@ -681,7 +681,9 @@ def _timer_feedback_findings(networks, plc_model):
                         "paths": paths}
                 if kind == "TIMER":
                     timer_writers[item["address"]] += 1
-                if kind == "TIMER" and timer_resets_when_disabled(item["address"], plc_model) is True:
+                timer_fact = timer_runtime_fact(plc_model, item["address"]) if kind == "TIMER" else None
+                if timer_fact and timer_fact["reset_on_disable"] is True:
+                    item["timer_source"] = timer_fact["source"]
                     timers.append(item)
                 elif kind == "COIL" and re.fullmatch(r"(?:Y|M|S)\d+", item["address"]):
                     coils.append(item)
@@ -695,6 +697,10 @@ def _timer_feedback_findings(networks, plc_model):
                     or not all("NC " + coil["address"] in path for path in timer["paths"])
                     or not any("NO " + timer["address"] in path for path in coil["paths"])):
                 continue
+            source = timer["timer_source"]
+            pages = source.get("pdf_pages", [source.get("pdf_page")])
+            source_identity = (source["manual_number"] + "-Rev." + source["revision"]
+                               + ":pdf" + ",".join(str(page) for page in pages))
             findings.append(_finding(
                 "TIMER_OUTPUT_FEEDBACK", "warning",
                 f"{coil['address']} 的输出路径要求 {timer['address']} 完成，但该定时器又要求 {coil['address']}=0；输出 ON 后该路径会因定时器复位而关断。",
@@ -703,7 +709,7 @@ def _timer_feedback_findings(networks, plc_model):
                 networks=[timer["network"]["id"], coil["network"]["id"]],
                 rung_ids=[timer["network"].get("rung_id"), coil["network"].get("rung_id")],
                 paths=[timer["path"], coil["path"]],
-                evidence=["timer_disable_resets_contact=FX3-programming-Rev.R:pdf100",
+                evidence=["timer_disable_resets_contact=" + source_identity,
                           "timer NC output is present on every known path; output NO timer is present on a path"],
                 confidence="medium",
             ))

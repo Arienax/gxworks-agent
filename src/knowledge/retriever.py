@@ -304,6 +304,13 @@ def retrieve_fact_aware_knowledge(
         normalized_budget,
     )
 
+def format_knowledge_reference(result):
+    """Format one evidence unit through the public knowledge facade."""
+    from knowledge.evidence import evidence_record
+
+    return "Reference role: " + evidence_record(result)["role"] + "\n" + _core._format_result_block(result)
+
+
 def build_knowledge_context(
     query, plc_model="FX3U", task_type="generate", top_k=5, char_budget=6000,
     token_budget=None, include_design=False, design_query=None,
@@ -371,7 +378,7 @@ def build_knowledge_context(
                 continue
             seen.add(marker)
             record = evidence_record(result)
-            block = "Reference role: " + record["role"] + "\n" + _core._format_result_block(result)
+            block = format_knowledge_reference(result)
             cost = len(block) + 2
             token_cost = estimate_tokens(block) + 1
             if used + cost > allowance or (token_allowance is not None and used_tokens + token_cost > token_allowance):
@@ -562,4 +569,4 @@ def __getattr__(name):
     return getattr(_core, name)
 
 
-__all__ = ["retrieve_knowledge", "retrieve_fact_aware_knowledge", "retrieve_design_knowledge", "build_knowledge_context", "discover_capabilities"]
+__all__ = ["retrieve_knowledge", "retrieve_fact_aware_knowledge", "retrieve_design_knowledge", "build_knowledge_context", "discover_capabilities", "format_knowledge_reference"]

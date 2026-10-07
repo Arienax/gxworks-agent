@@ -21,6 +21,21 @@ BENCHMARK_REPORT_PATH = (
 )
 
 
+@pytest.mark.parametrize("manual_type,role", [
+    ("official", "technical_reference"),
+    ("curated_design", "design_reference"),
+    ("third_party_skill", "supporting_reference"),
+])
+def test_public_reference_formatter_preserves_source_role_and_text(manual_type, role):
+    result = {"id": "reference", "source": "original source", "manual_type": manual_type,
+              "text": "Original manual text; 17 words, 3 moves.\nPreserve this line."}
+    original = result.copy()
+    block = knowledge_retriever.format_knowledge_reference(result)
+    assert block.startswith("Reference role: " + role + "\n[KNOWLEDGE ")
+    assert result["text"] in block and block.endswith("[/KNOWLEDGE]")
+    assert result == original
+
+
 def test_bundled_fx3u_index_is_complete_and_integral():
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 
@@ -466,11 +481,15 @@ def test_generic_requests_do_not_inject_unrelated_manual_pages(query):
         plc_model="FX3U",
         task_type="edit",
     ) == []
-    assert api._build_knowledge_context(
+    context = api._build_knowledge_context(
         query,
         plc_model="FX3U",
         task_type="edit",
-    ) == ""
+    )
+    from plc.maintainability import SELECTION_POLICY
+    assert str(context).strip() == SELECTION_POLICY.strip()
+    assert context.manifest["records"] == []
+    assert context.manifest["capability_discovery"]["candidates"] == []
 
 
 def test_transient_retrieval_failure_is_retried_instead_of_cached(monkeypatch):

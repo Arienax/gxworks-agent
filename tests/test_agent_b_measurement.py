@@ -383,16 +383,48 @@ def test_cmp_four_factor_preflight_uses_identical_specs_and_distinct_delivery():
     result=preflight_factorial(cases,provider=provider,evidence_cache={})
     assert result['passed'] and result['network_calls']==0
     for block in result['factorial_blocks']:
-        assert list(block['candidate_counts'].values())==[0,3,0,3]
+        usage_counts = list(block['candidate_counts'].values())
+        assert usage_counts[0] == usage_counts[2] == 0
+        assert usage_counts[1] == usage_counts[3] and usage_counts[1] >= 3
         counts = list(block['relation_counts'].values())
         assert counts[:2] == [0,0] and counts[2] == counts[3] and counts[2] > 0
         case=next(c for c in cases if c['case_id']==block['case_id'])
         for row in block['records']:
             message=json.dumps(row['actual_requests'][0]['messages'],ensure_ascii=False)
             assert ' '.join(['CMP',*case['evaluation']['operands']]) not in message
+            import re
+            cmp_usage = {group['id']
+                for message in row['actual_requests'][0]['messages']
+                for match in re.finditer(r'(?m)^\[INSTRUCTION FACTS ([^\n]+)\]\n(\{[^\n]+\})', str(message.get('content', '')))
+                if json.loads(match[1])['opcode'] == 'CMP'
+                for group in json.loads(match[2])['groups']
+                if group['status'] == 'candidate_evidence' and group['value'].get('facet')}
+            assert cmp_usage == ({'operand:1:purpose', 'operand:2:purpose', 'operand:3:purpose'}
+                                 if row['arm'] in {FACTORIAL_ARMS[1], FACTORIAL_ARMS[3]} else set())
             delivered={r['dimension']:r['status'] for r in row['handoff']['fact_coverage']['requirements'] if r['dimension'] in
                        {'operation.result_mapping', 'execution.disabled_retention'}}
             assert set(delivered.values())==({'unresolved'} if row['arm'] in FACTORIAL_ARMS[:2] else {'candidate_evidence'})
+
+
+@pytest.mark.parametrize('removed_arms', [('usage_bound_no_relations',), ('usage_bound_no_relations', 'usage_bound')])
+def test_factorial_preflight_rejects_missing_or_unequal_usage_treatment(monkeypatch, removed_arms):
+    import scripts.benchmark_agent_b as benchmark
+
+    original_run_case = benchmark.run_case
+    def strip_treatment(case, arm, **kwargs):
+        record = original_run_case(case, arm, **kwargs)
+        if arm in removed_arms:
+            for request in record['actual_requests']:
+                for message in request['messages']:
+                    if isinstance(message.get('content'), str):
+                        message['content'] = without_candidate_usage(message['content'])
+        return record
+
+    monkeypatch.setattr(benchmark, 'run_case', strip_treatment)
+    provider = OpenAICompatibleProvider(offline_runtime_profile(), 'fixture-key', client=object())
+    case = next(c for c in _challenge_cases() if c['case_id'] == 'cmp-negative-reference')
+    with pytest.raises(ValueError, match='invalid factor delivery'):
+        benchmark.preflight_factorial([case], provider=provider, evidence_cache={})
 
 
 def test_factorial_schedule_keeps_four_arms_adjacent_and_randomizes_blocks():

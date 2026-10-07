@@ -13,9 +13,11 @@ import tempfile
 from typing import Mapping
 
 from .container_writer import replace_project_stream, validate_cfb_streams
-from .declarations import DeclarationDocument, edit_declarations, parse_declarations, serialize_declarations, resolve_label
+from .declarations import (DeclarationDocument, edit_declarations, local_table_for,
+                           parse_declarations, serialize_declarations, resolve_label)
 from .models import GXWFormatError, StructuredProgram
-from .project_metadata import logical_mapping, synchronize_history, read_project_compile_options
+from .project_metadata import (logical_mapping, synchronize_history, read_project_compile_options,
+                               project_source_groups)
 from .structured_pou import parse_structured_pou
 from .structured_pou_writer import serialize_structured_pou
 
@@ -72,6 +74,13 @@ class ProjectWriteResult:
     data: bytes
     report: dict
 
+    def saved_object_name(self, logical_name):
+        """Select the verified saved object after native child normalization."""
+        for item in self.report.get('objects', []):
+            if item.get('object') == logical_name:
+                return item.get('saved_object', logical_name)
+        return logical_name
+
 
 @dataclass(frozen=True)
 class PreparedProjectWrite:
@@ -98,7 +107,7 @@ def _declaration_manifest(document):
              "record_id": r.record_id, "class_code": r.class_code} for r in document.rows]
 
 
-def _bind_function_blocks(programs, declarations, mapping, payloads):
+def _bind_function_blocks(programs, declarations, mapping, payloads, source_groups=None):
     """Resolve existing local/global instances or add a local declaration.
 
     This is explicit policy for generation, not an inferred compiler repair.
@@ -106,7 +115,7 @@ def _bind_function_blocks(programs, declarations, mapping, payloads):
     """
     documents = dict(declarations)
     for logical in mapping:
-        if logical.endswith((".Labels.lh", ".gh")) and logical not in documents:
+        if logical.endswith((".lh", ".gh")) and logical not in documents and mapping[logical] in payloads:
             documents[logical] = parse_declarations(payloads[mapping[logical]], logical_name=logical)
     changed = dict(declarations)
     project_metadata = [payloads[mapping[name]] for name in mapping if name.endswith('.prj') and mapping[name] in payloads]
@@ -117,7 +126,7 @@ def _bind_function_blocks(programs, declarations, mapping, payloads):
         except GXWFormatError:
             pass  # Preserve unsupported metadata; ambiguous names cannot bind.
     for logical, program in programs.items():
-        local_name = logical.removesuffix(".Program.pou") + ".Labels.lh"
+        local_name = local_table_for(documents, logical, source_groups)
         instances = {}
         for node in program.nodes:
             if node.kind.value != "function_block":
@@ -129,7 +138,8 @@ def _bind_function_blocks(programs, declarations, mapping, payloads):
         for key, node in instances.items():
             if local_name not in documents:
                 raise GXWFormatError(f"missing local declaration table: {local_name}")
-            binding = resolve_label(documents, logical, node.symbol, global_variable_hiding=hiding)
+            binding = resolve_label(documents, logical, node.symbol, global_variable_hiding=hiding,
+                                    local_table=local_name)
             target = binding[0] if binding else local_name
             if binding and binding[1].type_code not in (0, 15):
                 raise GXWFormatError(f"FB instance conflicts with a variable: {node.symbol}")
@@ -162,10 +172,11 @@ def prepare_project_write(baseline: bytes, programs: StructuredProgram | Mapping
     hdb = outer_payloads["_hdb"]
     nested_payloads = validate_cfb_streams(hdb)
     if sync_fb_declarations:
-        declarations = _bind_function_blocks(programs, declarations, mapping, nested_payloads)
+        declarations = _bind_function_blocks(programs, declarations, mapping, nested_payloads,
+                                             project_source_groups(outer_payloads['projectdatalist.xml'])[0])
     replacements, objects = {}, []
     for logical, model in programs.items():
-        if logical != model.logical_name or not logical.endswith(".Program.pou"):
+        if logical != model.logical_name or not logical.endswith(".pou"):
             raise GXWFormatError("model/key must name the same Program.pou")
         if logical not in mapping or mapping[logical] not in nested_payloads:
             raise GXWFormatError(f"unresolved Program.pou: {logical}")

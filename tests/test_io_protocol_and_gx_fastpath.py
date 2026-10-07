@@ -12,7 +12,7 @@ from gxworks2.ui_automation import PywinautoGXWorks2UIAutomation
 
 def test_analysis_prompt_requires_nonempty_labels_for_normal_io():
     prompt = api.ANALYSIS_SYSTEM_PROMPT
-    assert '普通 X/Y/M/D/T/C/S 用“地址:用途”JSON 对象' in prompt
+    assert 'X/Y/M/D/T/C/S 用“地址:用途”对象分组' in prompt
     assert "不得只给地址数组" in prompt
     # Blank labels are enforced deterministically by the normalizer below, not by a frozen sentence.
     assert "suggested_io" in prompt

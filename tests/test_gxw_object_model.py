@@ -66,6 +66,26 @@ def source_binding_baseline():
     return raw
 
 
+def project_rows_variant(raw, edits):
+    """Change only named current directory fields, retaining payload/history bytes."""
+    from xml.sax.saxutils import escape
+    from src.gxw.container_writer import validate_cfb_streams, replace_project_stream
+    from src.gxw.project_metadata import current_rows
+    outer = validate_cfb_streams(raw)
+    xml = outer['projectdatalist.xml']
+    rows, encoding = current_rows(xml, 'DSPROJECTDATA', 'D_Projectdata')
+    replacements = []
+    for row in rows:
+        fields = row.fields()
+        name = fields['szName'].text.strip()
+        for key, value in edits.get(name, {}).items():
+            field = fields[key]
+            replacements.append((field.content_start, field.content_end, escape(value).encode(encoding)))
+    for start, end, value in sorted(replacements, reverse=True):
+        xml = xml[:start] + value + xml[end:]
+    return replace_project_stream(raw, 'projectdatalist.xml', xml)[0]
+
+
 def user_library_binding_baseline(*, damage=None):
     """Generated metadata boundary control, without native acceptance claims."""
     import struct
@@ -244,37 +264,123 @@ def test_native_rename_plan_property_preserves_independent_formals_and_source_by
     from hypothesis import strategies as st
     from src.gxw.object_model import prepare_object_project, read_project_context
     from src.gxw.native_write import native_source_plan
+    from src.gxw.native_write import verify_native_save
+    from src.gxw.native_diagnostics import native_validation_source_plan
+    from src.gxw.editor import edit_draft
+    from src.gxw.models import UnknownRecord
+    from src.gxw.project_writer import build_gxw_project
+    from src.gxw.container_writer import validate_cfb_streams
     from src.gxw.structured_pou_writer import serialize_structured_pou
+    import struct
     raw = source_binding_baseline()
-    context = read_project_context(raw)
-    original = context.object_model()
-    fb = next(n for n in original['nodes'] if n['template'].startswith('function_block:'))
+    source, _, _ = read_project(raw)
+    opaque = UnknownRecord(max(r.offset for r in source.iter_records()) + 1, 12, 99,
+                           struct.pack('<III', 12, 99, 0x12345678))
+    raw = build_gxw_project(raw, replace(source, unknown_records=(opaque,),
+        record_count=source.record_count + 1)).data
     # Frozen native formals are independent of the edited model/plan.
     _, _, _, witness = source_binding_witness()
     oracle = next(n['interface'] for n in witness['final_source_view']['nodes'] if 'interface' in n)
 
-    @hypothesis.settings(max_examples=80, deadline=None, derandomize=True)
-    @hypothesis.given(st.text(alphabet='abcXYZ中文实例_', min_size=1, max_size=32))
-    def check(suffix):
+    @hypothesis.settings(max_examples=50, deadline=None, derandomize=True)
+    @hypothesis.example('程序', '标签', '中文实例')
+    @hypothesis.given(
+        st.text(alphabet='abcXYZ程序_-', min_size=1, max_size=12),
+        st.text(alphabet='abcXYZ标签_-', min_size=1, max_size=12),
+        st.text(alphabet='abcXYZ中文实例_', min_size=1, max_size=32))
+    def check(source_child, label_child, suffix):
+        program_name, local = '1.' + source_child + '.pou', '1.' + label_child + '.lh'
+        variant = project_rows_variant(raw, {'1.Program.pou': {'szName': program_name},
+                                             '1.Labels.lh': {'szName': local}})
+        context = read_project_context(variant)
+        original = context.object_model()
+        fb = next(n for n in original['nodes'] if n['template'].startswith('function_block:'))
+        assert context.sources.local_table == local
+        assert context.sources.label(fb['symbol'])[0] == local
         renamed = 'PROP_' + suffix
-        model = deepcopy(original)
-        next(n for n in model['nodes'] if n['id'] == fb['id'])['symbol'] = renamed
-        local = context.program.logical_name.removesuffix('.Program.pou') + '.Labels.lh'
-        model['declaration_edits'] = {local: {'renames': {fb['symbol']: renamed}}}
-        prepared = prepare_object_project(model, baseline=raw)
+        model = edit_draft(original, {'action': 'update_node', 'id': fb['id'],
+            'field': 'symbol', 'value': renamed}, context=context)['model']
+        assert set(model['declaration_edits']) == {local}
+        assert model['declaration_edits'][local]['renames'] == {fb['symbol']: renamed}
+        prepared = prepare_object_project(model, baseline=variant)
         plan = native_source_plan(prepared)
         assert plan['updates'][0]['after']['name'] == renamed
+        validation_plan = native_validation_source_plan(variant)
+        assert validation_plan['programs'][0]['name'] == '1'
+        assert validation_plan['programs'][0]['body'] == plan['before_body']
         rebuilt = prepared.programs[context.program.logical_name]
         node = next(n for n in rebuilt.nodes if n.symbol == renamed)
         sources = context.sources.with_declarations({**context.declarations, **prepared.declarations})
         ports = sources.callable(node)['ports']
         assert [(p['formal_name'], p['class_code'], p['data_type'], p['side']) for p in ports] == [
             (p['name'], p['class_code'], p['declared_type'], p['side']) for p in oracle['ports']]
-        assert [r.raw for r in rebuilt.unknown_records] == [r.raw for r in context.program.unknown_records]
+        assert [r.raw for r in rebuilt.unknown_records] == [opaque.raw]
+        assert [wire.raw for wire in rebuilt.wires] == [wire.raw for wire in context.program.wires]
         assert base64.b64decode(plan['after_body']) in serialize_structured_pou(rebuilt)
         assert context.object_model() == original
+        saved = generate_object_project(model, baseline=variant).data
+        # The saved-name transition is an observed vendor operation. This
+        # directory-only control is not native compilation/acceptance evidence.
+        normalized = project_rows_variant(saved, {program_name: {'szName': '1.Program.pou'},
+                                                 local: {'szName': '1.Labels.lh'}})
+        result = verify_native_save(prepared, normalized, {})
+        assert result.report['validation']['unedited_sources'] == 'preserved'
+        after = read_project_context(normalized)
+        assert after.program.logical_name == '1.Program.pou'
+        assert after.sources.label(renamed)[0] == '1.Labels.lh'
+        assert after.declarations['1.Labels.lh'].rows[1].raw == context.declarations[local].rows[1].raw
+        block = next(n for n in after.program.nodes if n.symbol == renamed)
+        assert [(p['formal_name'], p['class_code'], p['data_type'], p['side'])
+                for p in after.sources.callable(block)['ports']] == [
+            (p['name'], p['class_code'], p['declared_type'], p['side']) for p in oracle['ports']]
+        assert [r.raw for r in after.program.unknown_records] == [opaque.raw]
+        before_payloads = validate_cfb_streams(validate_cfb_streams(variant)['_hdb'])
+        after_payloads = validate_cfb_streams(validate_cfb_streams(normalized)['_hdb'])
+        edited_streams = {prepared.mapping[program_name], prepared.mapping[local]}
+        assert {k: v for k, v in before_payloads.items() if k not in edited_streams} == {
+            k: v for k, v in after_payloads.items() if k not in edited_streams}
 
     check()
+
+
+@pytest.mark.parametrize('damage', ['duplicate_role', 'different_folder', 'missing_role', 'different_owner'])
+def test_project_declaration_binding_never_falls_back_from_invalid_native_groups(damage):
+    from src.gxw.object_model import read_project_context
+    from src.gxw.container_writer import validate_cfb_streams
+    from src.gxw.project_metadata import project_source_groups
+    from src.gxw.native_diagnostics import native_validation_source_plan
+    raw = source_binding_shadow_baseline(hiding=True)
+    groups, _ = project_source_groups(validate_cfb_streams(raw)['projectdatalist.xml'])
+    patch = {
+        'duplicate_role': {'1.Program.pou': {'ucFileType': '1'}},
+        'different_folder': {'1.Labels.lh': {'uiFolderNo': str(groups['1.Program.pou']['folder'] + 1)}},
+        'missing_role': {'1.Labels.lh': {'ucFileType': '9'}},
+        'different_owner': {'1.Labels.lh': {'szName': 'OTHER.Labels.lh'}},
+    }[damage]
+    variant = project_rows_variant(raw, patch)
+    context = read_project_context(variant)
+    assert context.sources.local_table is None
+    assert context.sources.label('TIMER_A') is None
+    assert any(issue['code'] == 'project_source_owner_gap' for issue in context.sources.issues)
+    assert any(issue['code'] == 'callable_source_gap' for issue in context.object_model()['issues'])
+    with pytest.raises(GXWFormatError):
+        native_validation_source_plan(variant)
+
+
+@pytest.mark.parametrize('damage', ['source_folder', 'declaration_role', 'foreign_child', 'foreign_configuration'])
+def test_native_child_normalization_cannot_replace_registered_objects(damage):
+    from src.gxw.object_model import prepare_object_project, read_project_context
+    from src.gxw.native_write import verify_native_save
+    raw = source_binding_baseline()
+    prepared = prepare_object_project(read_project_context(raw).object_model(), baseline=raw)
+    patch = {
+        'source_folder': {'1.Program.pou': {'uiFolderNo': '987'}},
+        'declaration_role': {'1.Labels.lh': {'ucFileType': '9'}},
+        'foreign_child': {'1.Program.pou': {'szName': 'OTHER.Program.pou'}},
+        'foreign_configuration': {'Global1.gh': {'szName': 'OTHER.gh'}},
+    }[damage]
+    with pytest.raises(GXWFormatError, match='registered project object identities|unverified project object name'):
+        verify_native_save(prepared, project_rows_variant(raw, patch), {})
 
 
 def test_native_row_lineage_does_not_use_shared_saved_record_id():

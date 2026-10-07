@@ -8,8 +8,8 @@ from __future__ import annotations
 
 def _native_validation_sources(raw):
     from .container_writer import validate_cfb_streams
-    from .project_metadata import logical_mapping, read_project_text_context
-    from .declarations import parse_declarations
+    from .project_metadata import logical_mapping, project_source_groups, read_project_text_context
+    from .declarations import local_table_for, parse_declarations
     from .source_header import source_payload_offset
     from .models import GXWFormatError
     outer = validate_cfb_streams(raw)
@@ -19,14 +19,17 @@ def _native_validation_sources(raw):
     if len(metadata) != 1:
         raise GXWFormatError('native validation requires one project configuration')
     context = read_project_text_context(metadata[0])
+    groups, _ = project_source_groups(outer['projectdatalist.xml'])
+    documents = {name: parse_declarations(nested[key], logical_name=name)
+                 for name, key in mapping.items() if name.endswith('.lh')}
     programs, names = [], set()
     for logical, key in mapping.items():
-        if not logical.endswith('.Program.pou'):
+        if not logical.endswith('.pou'):
             continue
-        labels = logical.removesuffix('.Program.pou') + '.Labels.lh'
+        labels = local_table_for(documents, logical, groups)
         if labels not in mapping:
             raise GXWFormatError('native validation source has no paired declarations: ' + logical)
-        declarations = parse_declarations(nested[mapping[labels]], logical_name=labels)
+        declarations = documents[labels]
         name = declarations.owner_name
         kind = nested[key][source_payload_offset(nested[key])]
         if declarations.scope != 'local' or not name or name in names or kind not in (193, 208):
@@ -554,7 +557,7 @@ def _native_network_members(records, network, block_count):
 
 
 def correlate_native_compile_position(report, *, cpu, pou, program_kind, text=None, model=None, connectivity=None,
-                                      source_body_id=None):
+                                      source_body_id=None, logical_name=None):
     """Project observed Q03UDV structured compilation positions, without code.
 
     The caller first binds all original source getter reads around this Build.
@@ -589,8 +592,11 @@ def correlate_native_compile_position(report, *, cpu, pou, program_kind, text=No
             return {**unresolved, 'reason': 'native compile ST line is outside the current observed source span'}
         source.update(zero_based_line=line, text=lines[line])
         return result
-    if (not isinstance(model, dict) or model.get('schema_version') != 2
-            or model.get('cpu') != cpu or model.get('program') != pou+'.Program.pou'):
+    expected_program = logical_name if logical_name is not None else pou + '.Program.pou'
+    if (not isinstance(expected_program, str) or not expected_program.startswith(pou + '.')
+            or not expected_program.endswith('.pou') or not isinstance(model, dict)
+            or model.get('schema_version') != 2 or model.get('cpu') != cpu
+            or model.get('program') != expected_program):
         return {**unresolved, 'reason': 'current source-bound FBD model is unavailable'}
     blocks = model.get('blocks', [{}])
     network = report.get('network')
@@ -1114,7 +1120,8 @@ def project_native_validation(raw, observation, snapshots):
                 body = next((value for value in compile_context['stages'][-1]['sources'] if value['pou'] == pou), {})
                 projection = correlate_native_compile_position(report, cpu=context['cpu'], pou=pou,
                     program_kind=source.get('program_kind'), text=texts.get(pou), model=graph_models.get(pou),
-                    connectivity=graph_connectivity.get(pou), source_body_id=body.get('body_id'))
+                    connectivity=graph_connectivity.get(pou), source_body_id=body.get('body_id'),
+                    logical_name=source.get('logical_name'))
                 if projection['status'] == 'source-resolved':
                     projection['source']['body_id'] = body['body_id']
             graph = projection.pop('graph_projection', {'status': 'not_applicable', 'public_check_promoted': False})

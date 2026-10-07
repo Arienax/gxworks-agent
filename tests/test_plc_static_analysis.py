@@ -162,7 +162,9 @@ def test_repeated_guard_does_not_guess_beyond_its_local_proof(mode):
 @pytest.mark.parametrize("model,timer_address,output_type,timer_kind,expected", [
     ("FX3U", "T0", "COIL", "NC", True), ("FX3U", "T200", "COIL", "NC", True),
     ("FX3U", "T250", "COIL", "NC", False), ("FX3U", "T0", "PLS", "NC", False),
-    ("FX3U", "T0", "COIL", "NO", False), ("FX5U", "T0", "COIL", "NC", False),
+    ("FX3U", "T0", "COIL", "NO", False), ("FX5U", "T0", "COIL", "NC", True),
+    ("FX3G", "T0", "COIL", "NC", False), ("FX5UC", "T0", "COIL", "NC", False),
+    ("Q03UDV", "T0", "COIL", "NC", False),
 ])
 def test_timer_output_feedback_uses_known_disable_behavior_and_explicit_contacts(model, timer_address, output_type, timer_kind, expected):
     data = ladder(rung(1, inputs=[contact(timer_kind, "M10")], outputs=[timer(timer_address, "K20")]),
@@ -178,6 +180,20 @@ def test_timer_feedback_does_not_assume_a_contact_resets_with_another_timer_writ
     )
     codes = finding_codes(build_plc_ir(data))
     assert "TIMER_OUTPUT_FEEDBACK" not in codes
+
+
+@pytest.mark.parametrize("model,source", [
+    ("FX3U", "JY997D16601-Rev.R:pdf100"),
+    ("FX5U", "JY997D55801-Rev.AB:pdf136,137"),
+])
+def test_timer_feedback_cites_the_exact_cpu_runtime_source(model, source):
+    data = ladder(
+        rung(1, inputs=[contact("NC", "M10")], outputs=[timer("T0", "K20")]),
+        rung(2, inputs=[contact("NO", "T0")], outputs=[coil("M10")]),
+    )
+    findings = build_plc_ir(data, plc_model=model)["analysis"]["findings"]
+    finding = next(row for row in findings if row["code"] == "TIMER_OUTPUT_FEEDBACK")
+    assert finding["evidence"][0] == "timer_disable_resets_contact=" + source
 
 
 def test_scan_dependencies_are_facts_and_only_explicit_expectation_becomes_warning():

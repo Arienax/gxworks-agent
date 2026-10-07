@@ -300,7 +300,10 @@ def test_resolved_self_hold_does_not_query_unrelated_manuals(monkeypatch):
     import knowledge.retriever as retriever
     monkeypatch.setattr(retriever, "build_knowledge_context", lambda *a, **k: pytest.fail("No specific fact target"))
     context = build_confirmed_generation_context(old_confirmed_spec(), "FX3U")
-    assert context.knowledge_context == ""
+    from plc.maintainability import SELECTION_POLICY
+    assert str(context.knowledge_context).strip() == SELECTION_POLICY.strip()
+    assert context.handoff["generation_evidence"]["records"] == []
+    assert context.handoff["capability_discovery"]["included_candidates"] == []
     assert {r["address"] for r in context.io_bindings} == {"X0", "X1", "Y0"}
 
 

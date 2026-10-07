@@ -1,5 +1,9 @@
-"""Source Web entrypoint contract without running npm, pip, or GX software."""
+"""Source Web entrypoints and inert documentation packaging without npm or GX."""
 from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from hypothesis import example, given, settings, strategies as st
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -85,3 +89,53 @@ def test_settings_selftest_uses_only_disposable_state(monkeypatch, capsys):
     monkeypatch.setattr(web_entry.sys, "argv", ["web", "--self-test-settings"])
     assert web_entry.run() == 0
     assert json.loads(capsys.readouterr().out)["user_state_modified"] is False
+
+
+@settings(max_examples=30, deadline=None)
+@given(drive=st.sampled_from(list("CDEFGHIJKLMNOPQRSTUVWXYZcdefghijklmnopqrstuvwxyz")),
+       separator=st.sampled_from(["/", "\\"]),
+       name=st.text(alphabet="abcXYZ012 _()-资料", min_size=1, max_size=24))
+@example(drive="C", separator="/", name="offline-replay")
+def test_documentation_preserves_external_windows_angle_links(drive, separator, name):
+    from scripts.package_documentation import stage_documentation
+
+    link = f"[local evidence](<{drive}:{separator}Users{separator}{name}.json>)"
+    text = "# Report\n\n" + link + "\n"
+    with TemporaryDirectory() as directory:
+        root = Path(directory) / "source"
+        root.mkdir()
+        (root / "README.md").write_text(text, encoding="utf-8")
+        destination = Path(directory) / "package"
+        manifest = stage_documentation(root, destination)
+        assert (destination / "README.md").read_text(encoding="utf-8") == text
+        assert set(manifest["files"]) == {"README.md"}
+
+
+def test_documentation_rewrites_angle_source_links_and_keeps_fenced_examples(tmp_path):
+    from scripts.package_documentation import stage_documentation
+
+    root = tmp_path / "source"
+    (root / "src").mkdir(parents=True)
+    source = root / "src" / "example (local).py"
+    data = b"print('source reference only')\n"
+    source.write_bytes(data)
+    link = "[example](<src/example (local).py#entry>)"
+    (root / "README.md").write_text(link + "\n\n```md\n" + link + "\n```\n", encoding="utf-8")
+    destination = tmp_path / "package"
+    manifest = stage_documentation(root, destination)
+    reference = "docs/source/src/example (local).py.txt"
+    assert (destination / reference).read_bytes() == data
+    assert (destination / "README.md").read_text(encoding="utf-8") == (
+        f"[example](<{reference}#entry>)\n\n```md\n{link}\n```\n")
+    assert manifest["files"][reference]["kind"] == "source-reference"
+
+
+def test_documentation_angle_links_still_reject_source_tree_escape(tmp_path):
+    from scripts.package_documentation import stage_documentation
+
+    root = tmp_path / "source"
+    root.mkdir()
+    (tmp_path / "private.txt").write_text("outside source tree", encoding="utf-8")
+    (root / "README.md").write_text("[private](<../private.txt>)", encoding="utf-8")
+    with pytest.raises(ValueError, match="leaves the source tree"):
+        stage_documentation(root, tmp_path / "package")

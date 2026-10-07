@@ -9,9 +9,9 @@ import base64
 from dataclasses import fields
 import struct
 
-from .declarations import LabelRecord, parse_declarations
+from .declarations import LabelRecord, local_table_for, parse_declarations
 from .models import GXWFormatError
-from .project_metadata import logical_mapping, read_project_text_context
+from .project_metadata import current_rows, logical_mapping, project_source_groups, read_project_text_context
 from .project_writer import PreparedProjectWrite, ProjectWriteResult, binary_diff
 from .container_writer import validate_cfb_streams
 from .source_header import source_payload_offset
@@ -42,7 +42,10 @@ def native_source_plan(prepared: PreparedProjectWrite) -> dict:
     if len(prepared.programs) != 1:
         raise GXWFormatError('native source save requires one selected existing Program.pou')
     logical = next(iter(prepared.programs))
-    local = logical.removesuffix('.Program.pou') + '.Labels.lh'
+    groups, _ = project_source_groups(prepared.outer['projectdatalist.xml'])
+    documents = {name: parse_declarations(prepared.nested[stream], logical_name=name)
+                 for name, stream in prepared.mapping.items() if name.endswith('.lh') and stream in prepared.nested}
+    local = local_table_for(documents, logical, groups)
     if local not in prepared.mapping:
         raise GXWFormatError('native source save requires the selected POU local declaration table')
     original = parse_declarations(prepared.nested[prepared.mapping[local]], logical_name=local)
@@ -104,27 +107,58 @@ def native_source_plan(prepared: PreparedProjectWrite) -> dict:
             'remove': remove, 'create': create, 'updates': updates}
 
 
+def _saved_object_names(prepared, saved_metadata, saved_mapping, groups, documents):
+    """Follow the observed localized child-name normalization by native identity."""
+    def identities(metadata, mapping):
+        rows, _ = current_rows(metadata, 'DSPROJECTDATA', 'D_Projectdata')
+        result = {}
+        for row in rows:
+            values = {key: value.text.strip() for key, value in row.fields().items()}
+            name = values.get('szName')
+            if name in mapping and mapping[name] == values.get('iID'):
+                result[name] = tuple(values.get(key) for key in
+                    ('iID', 'ucProductType', 'ucFolderType', 'uiFolderNo', 'ucReserve', 'ucFileType'))
+        return result
+
+    before = identities(prepared.outer['projectdatalist.xml'], prepared.mapping)
+    after = identities(saved_metadata, saved_mapping)
+    by_identity = {key: name for name, key in after.items()}
+    if len(by_identity) != len(after) or set(before.values()) != set(after.values()):
+        raise GXWFormatError('native save changed the registered project object identities')
+    names = {name: by_identity[key] for name, key in before.items()}
+    allowed = {}
+    for program, group in groups.items():
+        local = local_table_for(documents, program, groups)
+        if local is not None:
+            owner = documents[local].owner_name
+            allowed[program], allowed[local] = owner + '.Program.pou', owner + '.Labels.lh'
+    for original, saved in names.items():
+        if original != saved and allowed.get(original) != saved:
+            raise GXWFormatError('native save changed an unverified project object name: ' + original)
+    return names
+
+
 def verify_native_save(prepared: PreparedProjectWrite, raw: bytes, observation: dict) -> ProjectWriteResult:
     """Inspect the saved file, including untouched source and opaque row fields."""
     plan = native_source_plan(prepared)
     outer = validate_cfb_streams(raw)
     mapping = logical_mapping(outer['projectdatalist.xml'])
     nested = validate_cfb_streams(outer['_hdb'])
-    if set(mapping) != set(prepared.mapping):
-        raise GXWFormatError('native save changed the registered project objects; missing=' +
-                             repr(sorted(set(prepared.mapping) - set(mapping))) + '; added=' +
-                             repr(sorted(set(mapping) - set(prepared.mapping))))
     logical = next(iter(prepared.programs))
-    local = logical.removesuffix('.Program.pou') + '.Labels.lh'
-    if workspace_body(nested[mapping[logical]]) != workspace_body(prepared.replacements[logical][2]):
+    groups, _ = project_source_groups(prepared.outer['projectdatalist.xml'])
+    documents = {name: parse_declarations(prepared.nested[stream], logical_name=name)
+                 for name, stream in prepared.mapping.items() if name.endswith('.lh') and stream in prepared.nested}
+    local = local_table_for(documents, logical, groups)
+    names = _saved_object_names(prepared, outer['projectdatalist.xml'], mapping, groups, documents)
+    if workspace_body(nested[mapping[names[logical]]]) != workspace_body(prepared.replacements[logical][2]):
         raise GXWFormatError('saved native source differs from the current prepared graph')
     for name, stream in prepared.mapping.items():
-        if name not in (logical, local) and name.endswith(('.Program.pou', '.Labels.lh', '.gh', '.lnl', '.lnb', '.lif', '.prj')):
-            if nested.get(mapping[name]) != prepared.nested.get(stream):
+        if name not in (logical, local) and name.endswith(('.pou', '.lh', '.gh', '.lnl', '.lnb', '.lif', '.prj')):
+            if nested.get(mapping[names[name]]) != prepared.nested.get(stream):
                 raise GXWFormatError('native save changed an unedited source/configuration object: ' + name)
     original = parse_declarations(prepared.nested[prepared.mapping[local]], logical_name=local)
     expected = prepared.declarations.get(local, original)
-    actual = parse_declarations(nested[mapping[local]], logical_name=local)
+    actual = parse_declarations(nested[mapping[names[local]]], logical_name=names[local])
     if (actual.owner_name, actual.owner_pou_type, actual.owner_return_type) != (
             expected.owner_name, expected.owner_pou_type, expected.owner_return_type):
         raise GXWFormatError('saved native declaration owner differs from the selected POU')
@@ -143,14 +177,16 @@ def verify_native_save(prepared: PreparedProjectWrite, raw: bytes, observation: 
             raise GXWFormatError('created native FB cache fields differ from the observed layout')
         if wanted.name in typed and (saved.type_code, saved.type_reference) != (0, ''):
             raise GXWFormatError('changed native FB cache fields differ from the observed layout')
-    objects = [{'object': name, 'stream': mapping[name], 'old_length': len(old),
-                'new_length': len(nested[mapping[name]]), 'offset_space': 'logical source stream bytes',
-                'binary_changes': binary_diff(old, nested[mapping[name]])}
+    objects = [{'object': name, 'saved_object': names[name], 'stream': mapping[names[name]], 'old_length': len(old),
+                'new_length': len(nested[mapping[names[name]]]), 'offset_space': 'logical source stream bytes',
+                'binary_changes': binary_diff(old, nested[mapping[names[name]]])}
                for name, (_, old, _) in prepared.replacements.items()]
     report = {'schema_version': 1, 'operation': 'native_source_save', 'objects': objects,
               'native_workspace': observation,
+              'registered_object_renames': [{'before': name, 'after': saved}
+                                           for name, saved in names.items() if name != saved],
               'vendor_changed_streams': [name for name, stream in prepared.mapping.items()
-                                         if prepared.nested.get(stream) != nested.get(mapping[name])],
+                                         if prepared.nested.get(stream) != nested.get(mapping[names[name]])],
               'validation': {'parser': 'passed', 'source_body': 'exact', 'declarations': 'passed',
                              'unedited_sources': 'preserved', 'workspace_load': 'passed',
                              'native_save': 'passed', 'saved_file_readback': 'passed', 'gxworks_open': 'not_run',

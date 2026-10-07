@@ -8,6 +8,8 @@
 
 [read_project_context](../../src/gxw/object_model.py)绑定当前 GXW 字节、所选 Program、声明和工程 CPU，供目录、v2 对象投影、预览及候选校验共用。自定义 FB 的形参取自该工程的库源码或项目 FB 声明；`IN_OUT` 两侧使用 `in.NAME`／`out.NAME`，端口名、方向和类型由 Core 返回。修改声明后重新解析形参，候选写入后从新 GXW 重建上下文。重命名现有实例会同时更新图形引用和声明；重命名形参会同步更新该端口已有的取反设置和命名连线。
 
+源码与局部声明通过当前工程目录的原生文件夹和文件角色关联，支持 `POU_01.程序.pou`／`POU_01.标签.lh` 这类子对象名；缺失、重复或声明归属不符时返回 `project_source_owner_gap`。原生保存将子对象名规范化为 `Program`／`Labels` 时，[verify_native_save](../../src/gxw/native_write.py)核对流 ID、文件夹和角色，以及源码和声明内容；预览与候选回读使用已确认的保存后对象名。历史中的标签名称可以保留，写入时通过唯一流 ID 关联原记录。
+
 来源缺失或接口不一致的调用保留原始记录并返回 `callable_source_gap`，不能凭名称克隆。未登记但有明确边界的记录按原始字节保留，已知对象仍可局部编辑。无法确定记录边界的输入会被拒绝。
 
 保存的 FBD 版本提供 `program.gxw`、`fbd.json`、`fbd.svg` 和写入报告。版本、产物及校验结果的关系见[生成交付](../architecture/generation-delivery.md)。

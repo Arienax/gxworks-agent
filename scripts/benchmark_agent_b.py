@@ -288,7 +288,10 @@ def preflight_factorial(cases, *, provider, model=None, evidence_cache=None):
             raise ValueError(f"{case['case_id']}: content outside the two factors differs")
         counts = [_candidate_count(r) for r in requests]
         relation_counts = [sum(str(m.get('content','')).count('[RELATION EVIDENCE ') for m in r['messages']) for r in requests]
-        if (counts != [0,3,0,3] or relation_counts[:2] != [0,0]
+        # Discovery can add relevant instruction facts. The two usage arms
+        # must still carry the same nonempty treatment and controls carry none.
+        if (counts[0] != 0 or counts[2] != 0 or counts[1] <= 0 or counts[1] != counts[3]
+                or relation_counts[:2] != [0,0]
                 or relation_counts[2] <= 0 or relation_counts[2] != relation_counts[3]):
             raise ValueError(f"{case['case_id']}: invalid factor delivery {counts} / {relation_counts}")
         examples = [row['handoff']['construction_examples'] for row in records]

@@ -362,7 +362,8 @@ def test_legacy_commands_sync_history_and_never_overwrite(tmp_path, tool):
 
 
 @pytest.mark.parametrize("case_index", range(3))
-def test_compile_pending_matches_native_setter_payloads(case_index):
+@pytest.mark.parametrize("localized", [False, True])
+def test_compile_pending_matches_native_setter_payloads(case_index, localized):
     import hashlib
 
     fixture = json.loads((Path(__file__).parent / "fixtures/gxw_compile_pending.json").read_text(encoding="utf-8"))
@@ -372,9 +373,12 @@ def test_compile_pending_matches_native_setter_payloads(case_index):
     assert hashlib.sha256(original).hexdigest() == case["original_sha256"]
     assert hashlib.sha256(native).hexdigest() == case["native_marked_sha256"]
     assert case["native_reopen_status"] == 1
-    actual = mark_observed_source_compile_pending(original, logical_name=case["logical_name"])
+    logical = case['logical_name']
+    if localized:
+        logical = logical.replace('.Program.pou', '.程序.pou').replace('.Labels.lh', '.标签.lh')
+    actual = mark_observed_source_compile_pending(original, logical_name=logical)
     assert actual == native
-    assert mark_observed_source_compile_pending(actual, logical_name=case["logical_name"]) == native
+    assert mark_observed_source_compile_pending(actual, logical_name=logical) == native
 
 
 @pytest.mark.parametrize("variant", ["unknown-header", "unknown-marker", "resource", "truncated"])

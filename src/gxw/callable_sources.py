@@ -10,11 +10,11 @@ from functools import lru_cache
 import re
 
 from .container_writer import validate_cfb_streams
-from .declarations import parse_declarations, resolve_label
+from .declarations import local_table_for, parse_declarations, resolve_label
 from .library_sources import decode_library_archive, parse_library_source, parse_library_declarations
 from .models import GXWFormatError, NodeKind
 from .project_metadata import (current_rows, logical_mapping, read_project_text_context,
-                               read_project_compile_options)
+                               read_project_compile_options, project_source_groups)
 from .semantic import (FunctionBlockCategory, FunctionBlockPortSpec, FunctionBlockSpec,
                        SemanticPortRole)
 
@@ -201,9 +201,10 @@ class ProjectCallableSources:
     """Read-only callable/declaration context for one selected native program."""
 
     def __init__(self, cpu, program_name, declarations, library_sources, *, global_variable_hiding=False,
-                 user_library_owners=None):
+                 user_library_owners=None, source_groups=None):
         self.cpu, self.program_name, self.declarations = cpu, program_name, declarations
         self.user_library_owners = dict(user_library_owners or {})
+        self.source_groups = dict(source_groups) if source_groups is not None else None
         self.global_variable_hiding = global_variable_hiding
         self.library_cpu = LIBRARY_CPU_SECTIONS.get(cpu, cpu)
         self.catalog = defaultdict(list)
@@ -227,6 +228,17 @@ class ProjectCallableSources:
             library_owner = self.user_library_owners.get(stream)
             if library_owner is not None:
                 owner = library_owner['name']
+            elif self.source_groups is not None:
+                sources = [name for name, group in self.source_groups.items() if group['labels'] == stream]
+                if len(sources) != 1:
+                    continue
+                try:
+                    local_table_for(declarations, sources[0], self.source_groups)
+                except GXWFormatError:
+                    self.issues.append({'code': 'project_callable_owner_gap', 'stream': stream,
+                                        'message': 'project callable owner and declaration stream differ'})
+                    continue
+                owner = document.owner_name
             elif stream.endswith('.Labels.lh'):
                 owner = stream.removesuffix('.Labels.lh')
             else:
@@ -253,13 +265,26 @@ class ProjectCallableSources:
             raise GXWFormatError('one project CPU context is required for source library selection')
         if declarations is None:
             declarations = {name: parse_declarations(value, logical_name=name)
-                            for name, value in streams.items() if name.endswith(('.Labels.lh', '.gh', '.lnl'))}
+                            for name, value in streams.items() if name.endswith(('.lh', '.gh', '.lnl'))}
         else:
             # Supplied draft declarations override the matching current bytes.
             # Library formals still belong to this project snapshot.
             declarations = {**{name: parse_declarations(value, logical_name=name)
                 for name, value in streams.items() if name.endswith('.lnl')}, **declarations}
         libraries, issues = {}, []
+        source_groups, source_issues = project_source_groups(outer['projectdatalist.xml'])
+        issues.extend(source_issues)
+        for program in list(source_groups):
+            try:
+                if program not in streams or local_table_for(declarations, program, source_groups) is None:
+                    raise GXWFormatError('native project source or declaration payload is missing')
+            except GXWFormatError as error:
+                issues.append({'code': 'project_source_owner_gap', 'stream': program, 'message': str(error)})
+                del source_groups[program]
+        if program_name not in source_groups and not any(
+                issue.get('stream') == program_name or program_name in issue.get('streams', []) for issue in issues):
+            issues.append({'code': 'project_source_owner_gap', 'stream': program_name,
+                           'message': 'selected native source has no unambiguous project declaration group'})
         user_library_owners, owner_issues, descriptors = _user_library_owners(outer['projectdatalist.xml'], streams)
         issues.extend(owner_issues)
         for name, value in streams.items():
@@ -275,7 +300,7 @@ class ProjectCallableSources:
             hiding = None
             issues.append({'code': 'project_compile_option_gap', 'stream': project_name, 'message': str(error)})
         result = cls(contexts[0]['cpu'], program_name, declarations, libraries, global_variable_hiding=hiding,
-                     user_library_owners=user_library_owners)
+                     user_library_owners=user_library_owners, source_groups=source_groups)
         result.issues[:0] = issues
         return result
 
@@ -289,8 +314,15 @@ class ProjectCallableSources:
         return result
 
     def label(self, symbol):
+        local = self.local_table
+        if self.source_groups is not None and local is None:
+            return None
         return resolve_label(self.declarations, self.program_name, symbol,
-                             global_variable_hiding=self.global_variable_hiding)
+                             global_variable_hiding=self.global_variable_hiding, local_table=local)
+
+    @property
+    def local_table(self):
+        return local_table_for(self.declarations, self.program_name, self.source_groups)
 
     def declaration_kind(self, row):
         if row.type_code == 15:

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+from collections import defaultdict
 from dataclasses import dataclass, field
 import hashlib
 import struct
@@ -23,7 +24,7 @@ def mark_observed_source_compile_pending(raw: bytes, *, logical_name: str) -> by
     """
     prefix = bytes.fromhex("01000000000001000000000001000a00000000000200000001000000010000000000")
     raw = bytes(raw)
-    if (not logical_name.endswith((".Program.pou", ".Labels.lh", ".gh"))
+    if (not logical_name.endswith((".pou", ".lh", ".gh"))
             or len(raw) < 54 or not raw.startswith(prefix)):
         raise GXWFormatError("outside observed source compile-status header")
     marker = struct.unpack_from("<I", raw, 50)[0]
@@ -180,6 +181,39 @@ def current_rows(raw: bytes, dataset: str, row_name: str) -> tuple[list[XmlEleme
     return [child for child in candidates[0].children if child.name == row_name], encoding
 
 
+def project_source_groups(raw: bytes) -> tuple[dict[str, dict], list[dict]]:
+    """Pair current project POU source/labels by native folder and file roles.
+
+    Folder type 7, file roles 1/2 are shared by the inspected native-created
+    localized project and independent author POUs. Child display names are
+    not binding keys. Missing/duplicate roles remain explicit gaps; unknown
+    file roles and their payloads are left untouched.
+    """
+    rows, _ = current_rows(raw, 'DSPROJECTDATA', 'D_Projectdata')
+    groups = defaultdict(list)
+    for row in rows:
+        fields = {key: value.text.strip() for key, value in row.fields().items()}
+        if fields.get('bScrapFlag', 'false').lower() in ('true', '1'):
+            continue
+        if fields.get('ucFolderType') == '7':
+            groups[tuple(fields.get(key) for key in
+                         ('ucProductType', 'uiFolderNo', 'ucReserve'))].append(fields)
+    result, issues = {}, []
+    for key, members in groups.items():
+        labels = [m.get('szName', '') for m in members if m.get('ucFileType') == '1']
+        sources = [m.get('szName', '') for m in members if m.get('ucFileType') == '2']
+        if (key[0] != '1' or key[2] != '0' or not key[1] or not key[1].isascii()
+                or not key[1].isdecimal() or len(key[1]) > 10
+                or not 1 <= int(key[1]) <= 0xffffffff or len(labels) != 1 or len(sources) != 1
+                or not labels[0].endswith('.lh') or not sources[0].endswith('.pou')):
+            issues.append({'code': 'project_source_owner_gap',
+                           'streams': [m.get('szName', '') for m in members],
+                           'message': 'missing or ambiguous native project declaration/source group'})
+            continue
+        result[sources[0]] = {'labels': labels[0], 'folder': int(key[1])}
+    return result, issues
+
+
 def logical_mapping(raw: bytes) -> dict[str, str]:
     rows, _ = current_rows(raw, "DSPROJECTDATA", "D_Projectdata")
     result = {}
@@ -206,8 +240,8 @@ def md5_base64(raw: bytes) -> str:
 def synchronize_history(raw: bytes, replacements: dict, *, current_mapping: dict | None = None) -> tuple[bytes, list, list]:
     """replacements: logical name -> (stream ID, old payload, new payload).
 
-    Native POU renaming can retain a previous Program history name across saves
-    and payload changes. Resolve that alias only through the current directory's unique
+    Native POU/child renaming can retain previous source or label history names
+    across saves and payload changes. Resolve aliases through the current directory's unique
     stream ID, retaining the historical name bytes. A name belonging to another
     current object remains a conflicting identity.
     """
@@ -227,12 +261,13 @@ def synchronize_history(raw: bytes, replacements: dict, *, current_mapping: dict
             source_alias = (current_mapping is not None and current_mapping.get(logical) == stream
                             and list(current_mapping.values()).count(stream) == 1
                             and history_name and history_name not in current_mapping
-                            and logical.endswith(".Program.pou") and history_name.endswith(".Program.pou"))
+                            and any(logical.endswith(suffix) and history_name.endswith(suffix)
+                                    for suffix in (".pou", ".lh")))
             if not source_alias:
                 raise GXWFormatError(f"history name/ID mismatch for {logical}")
             preserved.append({"object": logical, "stream": stream, "field": "szProjectdataName",
                               "status": "native-source-name-alias", "value": history_name,
-                              "reason": "current directory uniquely binds the renamed Program stream; history name preserved"})
+                              "reason": "current directory uniquely binds the renamed source stream; history name preserved"})
         if "iFileSize" not in fields or not fields["iFileSize"].text.strip().isdigit():
             raise GXWFormatError(f"missing/invalid history iFileSize for {logical}")
         updates = {"iFileSize": str(len(new))}

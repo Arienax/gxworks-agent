@@ -15,7 +15,7 @@ from application.fbd import prepare_candidate
 from application.workbench import WorkbenchService
 from application.workspace import ConflictError
 from gxw.object_model import default_baseline, read_project, read_project_context
-from tests.test_gxw_object_model import two_timers, source_binding_baseline
+from tests.test_gxw_object_model import two_timers, source_binding_baseline, project_rows_variant
 from tests.test_execution_coordinator import FakeCOM
 from tests.test_web_api import _app, _login, ORIGIN
 from tests.test_workbench_service import _program
@@ -337,6 +337,8 @@ def test_native_envelope_preview_and_save_share_source_plan_and_keep_v2(service,
     # Only the application boundary is doubled; this envelope is not native
     # acceptance evidence. Live native save/cold-compile is a separate check.
     raw, _ = replace_project_stream(source_binding_baseline(), 'Project.gd2', b'0' * 64)
+    raw = project_rows_variant(raw, {'1.Program.pou': {'szName': '1.程序.pou'},
+                                    '1.Labels.lh': {'szName': '1.标签.lh'}})
     calls = []
 
     def save(_self, prepared):
@@ -347,6 +349,8 @@ def test_native_envelope_preview_and_save_share_source_plan_and_keep_v2(service,
             if old != new:
                 hdb, _ = replace_project_stream(hdb, stream, new)
         saved, _ = replace_project_stream(raw, '_hdb', hdb)
+        saved = project_rows_variant(saved, {'1.程序.pou': {'szName': '1.Program.pou'},
+                                            '1.标签.lh': {'szName': '1.Labels.lh'}})
         return verify_native_save(prepared, saved, {'operation': 'test_double'})
 
     monkeypatch.setattr(NativeWorkspaceSourceSave, 'save', save)
@@ -355,9 +359,11 @@ def test_native_envelope_preview_and_save_share_source_plan_and_keep_v2(service,
         'request_id': 'native-import', 'data_base64': base64.b64encode(raw).decode()})
     base = accept(service, imported)
     original = service.projects.program(project['id'], base)
+    assert original['program'] == '1.程序.pou'
     fb = next(n for n in original['nodes'] if n['template'].startswith('function_block:'))
     draft = service.fbd.editor(project['id'], original,
         {'action': 'update_node', 'id': fb['id'], 'field': 'symbol', 'value': 'NATIVE_UPDATED'}, base)['model']
+    assert draft['declaration_edits']['1.标签.lh']['renames'] == {'TIMER_A': 'NATIVE_UPDATED'}
     preview = service.fbd.preview(project['id'], draft, base)
     saved = service.fbd.propose({'operation': 'edit', 'project_id': project['id'],
         'version_id': base, 'request_id': 'native-edit', 'model': draft})
@@ -365,6 +371,8 @@ def test_native_envelope_preview_and_save_share_source_plan_and_keep_v2(service,
     assert calls[0] == calls[1]
     assert service.projects.program(project['id'], current) == preview['model']
     assert preview['model']['schema_version'] == 2
+    assert preview['model']['program'] == '1.Program.pou'
+    assert '1.Labels.lh' in preview['model']['labels']
     assert preview['gx_compile'] == service.projects.version(project['id'], current)['validation']['gx_compile'] == 'not_run'
     assert service.projects.artifact(project['id'], base, 'gxw').read_bytes() == raw
     updated = next(n for n in preview['model']['nodes'] if n['symbol'] == 'NATIVE_UPDATED')

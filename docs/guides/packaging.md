@@ -20,7 +20,7 @@ python -m pip install -r requirements.txt
 
 ## 文档、模板与资源
 
-包内说明由 [package_documentation.py](../../scripts/package_documentation.py) 的 `stage_documentation` 从同一源码目录生成。它保留文档间的相对链接，将被引用的源码复制为只读用途的 `.txt` 参考文件，并生成 `documentation-manifest.json`，分别记录源文件与分发文件 SHA-256。入口由 `build_web_package.ps1` 在构建后调用；PyInstaller 的运行资源清单保持原有定义。
+包内说明由 [package_documentation.py](../../scripts/package_documentation.py) 的 `stage_documentation` 从同一源码目录生成。它保留文档间的相对链接，支持尖括号包围的链接目标，将被引用的源码复制为只读用途的 `.txt` 参考文件，并生成 `documentation-manifest.json`，分别记录源文件与分发文件 SHA-256。Windows 本机绝对路径及网络链接保留原文，不作为仓库内分发资源。入口由 `build_web_package.ps1` 在构建后调用；PyInstaller 的运行资源清单保持原有定义。
 
 直接检查文档分发，可指定独立输出目录：
 

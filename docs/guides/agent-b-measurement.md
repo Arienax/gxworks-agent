@@ -65,7 +65,7 @@ python scripts/benchmark_agent_b.py benchmarks/agent_b_operand_purpose_cases.jso
 
 关系消融移除整个原子手册证据组，保留共同正文、规格、型号事实、顺序及范例。它同时更新块回执和对应必要关系维度，不把未交付关系记为已送达。这里的“原文”仍指当前已清理的共同手册正文，不代表未经打包的完整原页。产品默认交付完整关系；消融只在 benchmark 中存在。
 
-`preflight_factorial` 离线编译四份最终请求，检查去除两个因素后内容完全相同、用途数量为 `0/3/0/3`、前两组无关系、后两组具有相同的非零完整关系组数量。组块以 `(case_id, repeat)` 为单位随机排列，同一块四组相邻执行，组内也随机排列。新跑 A/B 基线，避免跨测量时段比较旧基线与新处理组。
+`preflight_factorial` 离线编译四份最终请求，检查去除两个因素后内容完全相同、用途数量为 `0/N/0/N`（`N>0`）、前两组无关系、后两组具有相同的非零完整关系组数量。用途总数包含功能发现带入的相关指令事实，不固定为 CMP 本身的三个参数；两组用途处理仍须一致。组块以 `(case_id, repeat)` 为单位随机排列，同一块四组相邻执行，组内也随机排列。新跑 A/B 基线，避免跨测量时段比较旧基线与新处理组。
 
 ```powershell
 $env:PYTHONUTF8 = '1'
@@ -82,12 +82,12 @@ python scripts/benchmark_agent_b.py benchmarks/agent_b_operand_purpose_challenge
 ## 确认效果与 Core 参数绑定对照
 
 [agent_b_instruction_effect_cases.jsonl](../../benchmarks/agent_b_instruction_effect_cases.jsonl)
-包含 67 个已核对形式的 97 个合成操作意图案例，其中保留 15 个非脉冲形式的 30 个 `challenge-` 难例。规格给类型、效果目标、使能、触发和必要状态，完整原生操作数只在独立 `evaluation` 中出现。两组使用同一规格、手册证据、范例和保存的模型参数：`native_parameters` 让模型填原生参数，`core_binding` 让模型输出固定字面标记 `OP <id>`。两组随后都经过产品实际的显式 Core 阶段：原生返回也可依据已确认效果、已核对定义及相同读值重绑。产品没有实验开关。
+包含 68 个已核对形式的 98 个合成操作意图案例，其中保留 15 个非脉冲形式的 30 个 `challenge-` 难例。SEGD 案例使用已有独立七段字形 witness 的固定编码，覆盖全部十六进制数字、目的高八位保留、源高位忽略、禁用保持及持续使能。规格给类型、效果目标、使能、触发和必要状态，完整原生操作数只在独立 `evaluation` 中出现。两组使用同一规格、手册证据、范例和保存的模型参数：`native_parameters` 让模型填原生参数，`core_binding` 让模型输出固定字面标记 `OP <id>`。两组随后都经过产品实际的显式 Core 阶段：原生返回也可依据已确认效果、已核对定义及相同读值重绑。产品没有实验开关。
 
 `preflight_binding` 检查实际最终请求仅在绑定说明上不同。`first_candidate.Core_binding`
 保存首次候选的绑定回执；`first_candidate.raw_model_candidate` 单独评价绑定前的模型输出，修正后的通过不计为模型原始答对。`native_parameter_rebindings` 统计实际原生参数修正；`binding_contrasts` 区分 `operation_reference` 和 `native_read_parameter_rebinding`，保留同案例、同重复的成功方向及耗时。没有操作意图的控制案例两组最终请求应完全相同。
 
-`effect_traces` 给出 277 条独立固定的输入状态、是否使能及预期写入；评估复用 Core 参考原语核对实际调用，不由生产定义生成预期。序列轨迹逐帧检查触发、保持、重新使能及 `memory_after`。它可检出“绑定和验证共同使用错误定义”的问题，仍不证明原生执行。`raw_model_native_evaluated_runs` 是原始原生输出的评价分母，待 Core 展开的 OP 引用不计为原生失败。
+`effect_traces` 给出 295 条独立固定的输入状态、是否使能及预期写入；评估复用 Core 参考原语核对实际调用，不由生产定义生成预期。序列轨迹逐帧检查触发、保持、重新使能及 `memory_after`。它可检出“绑定和验证共同使用错误定义”的问题，仍不证明原生执行。`raw_model_native_evaluated_runs` 是原始原生输出的评价分母，待 Core 展开的 OP 引用不计为原生失败。
 
 `--require-reviewed-effects` 在任何真实调用前核对案例是否覆盖当前每个已核对效果形式及其独立轨迹，缺失时退出。它只约束测量输入，不改变产品支持范围。起保停对照可另加入同一私有案例输入。
 

@@ -256,7 +256,7 @@ def edit_draft(value, command=None, *, templates=None, context=None):
                         item["name"] = new
                     # The graph and its source declaration are one edit. Direct
                     # terminals and instance/member references keep their binding.
-                    current_local = model['program'].removesuffix('.Program.pou') + '.Labels.lh'
+                    current_local = previous_sources.local_table if previous_sources else model['program'].removesuffix('.Program.pou') + '.Labels.lh'
                     visible = table == current_local or table.endswith('.gh')
                     if visible and previous_sources:
                         binding = previous_sources.label(name)

@@ -99,14 +99,31 @@ class DeclarationDocument:
     owner_pou_status: int | None = None
 
 
-def resolve_label(documents, program_name, symbol, *, global_variable_hiding=False):
+def local_table_for(documents, program_name, source_groups=None):
+    """Resolve one local owner through current native metadata when supplied."""
+    if source_groups is None:
+        # Standalone source models retain their existing canonical-name API.
+        name = program_name.removesuffix('.Program.pou') + '.Labels.lh'
+    else:
+        name = source_groups.get(program_name, {}).get('labels')
+    if name not in documents:
+        return None
+    document = documents[name]
+    if source_groups is not None and (document.scope != 'local' or not document.owner_name
+            or not program_name.startswith(document.owner_name + '.')
+            or not name.startswith(document.owner_name + '.')):
+        raise GXWFormatError('project declaration owner and native source group differ')
+    return name
+
+
+def resolve_label(documents, program_name, symbol, *, global_variable_hiding=False, local_table=...):
     """Resolve one source name in the selected POU's local/global scope.
 
     A unique local label hides a unique global label only when the project's
     native option enables it. Duplicate declarations within a scope and an
     unknown option remain ambiguous. No declaration is removed or rewritten.
     """
-    local_name = program_name.removesuffix('.Program.pou') + '.Labels.lh'
+    local_name = local_table_for(documents, program_name) if local_table is ... else local_table
     local = [(local_name, row) for row in documents[local_name].rows
              if row.name.casefold() == symbol.casefold()] if local_name in documents else []
     globals_ = [(name, row) for name, doc in documents.items() if doc.scope == 'global'
@@ -165,7 +182,7 @@ def parse_structure_declarations(raw: bytes, *, logical_name: str) -> StructureD
 
 
 def parse_declarations(raw: bytes, *, logical_name: str) -> DeclarationDocument:
-    if logical_name.endswith((".Labels.lh", ".lnl")):
+    if logical_name.endswith((".lh", ".lnl")):
         scope = "local"
     elif logical_name.endswith((".gh", ".lng")):
         scope = "global"

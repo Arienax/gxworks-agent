@@ -244,7 +244,7 @@ Owns HTTP/Web contracts, presentation state, startup, FBD UI, workbench/applicat
 | `tests/test_web_demo_isolation.py` | focused coverage for web demo isolation |
 | `tests/test_web_fbd.py` | shared FBD context, preview/candidate persistence, offline native-save routing, version preservation and resource conflicts |
 | `tests/test_web_live_acceptance.py` | focused coverage for web live acceptance |
-| `tests/test_web_source_entrypoints.py` | focused coverage for web source entrypoints |
+| `tests/test_web_source_entrypoints.py` | source launch/build entrypoints and inert documentation packaging, including link preservation and source-tree limits |
 | `tests/test_web_startup.py` | focused coverage for web startup |
 | `tests/test_workbench_service.py` | focused coverage for workbench service |
 | `web/tests/requests.test.mjs` | read cancellation, serial polling, invalidation, visibility and structural sharing |

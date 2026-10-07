@@ -40,7 +40,7 @@ def inspect_upload(data_base64):
     streams = validate_cfb_streams(decode_upload(data_base64))
     mapping = logical_mapping(streams["projectdatalist.xml"])
     payloads = validate_cfb_streams(streams["_hdb"])
-    return {"programs": sorted(k for k, v in mapping.items() if k.endswith(".Program.pou") and v in payloads)}
+    return {"programs": sorted(k for k, v in mapping.items() if k.endswith(".pou") and v in payloads)}
 
 
 def read_snapshot(raw, program_name=None):
@@ -120,7 +120,7 @@ def prepare_candidate(output, *, model=None, baseline=None, imported=None, progr
             raise ValueError("Native FBD generation currently has an FX3U project template only")
         result = _write_candidate(model, baseline=baseline)
         raw, report = result.data, result.report
-        program_name = model.get("program")
+        program_name = result.saved_object_name(model.get("program"))
     else:
         raw = imported
         report = {"operation": "import", "gxw_sha256": hashlib.sha256(raw).hexdigest(),
@@ -283,7 +283,7 @@ class FBDService:
             try:
                 baseline = self._context(project_id, version_id, model.get('program')).raw
                 result = _write_candidate(model, baseline=baseline)
-                context = read_project_context(result.data, model.get('program'))
+                context = read_project_context(result.data, result.saved_object_name(model.get('program')))
                 return {"model_sha256": canonical_hash(model),
                         "gxw_sha256": hashlib.sha256(result.data).hexdigest(),
                         "svg": context.svg(), "model": context.object_model(),

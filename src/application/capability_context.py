@@ -133,8 +133,8 @@ def augment_generation_knowledge(requirement, knowledge="", *, plc_model="FX3U",
             discovery["omitted_evidence"].append(target["opcode"])
             discovery["gaps"].append({"target": target["opcode"], "reason": "no_complete_fact_unit_within_budget"})
         for row in rows:
-            from knowledge.retriever import _format_result_block
-            block = "Reference role: technical_reference\n" + _format_result_block(row)
+            from knowledge.retriever import format_knowledge_reference
+            block = format_knowledge_reference(row)
             cost = estimate_tokens(block + "\n\n")
             if used + cost > budget:
                 discovery["omitted_evidence"].append(row["id"])

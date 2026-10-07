@@ -128,12 +128,14 @@ def test_runtime_and_builtin_agent_do_not_depend_on_optional_mcp_sdk():
         )
 
 
-def test_generation_contract_uses_only_stdlib_and_authoritative_instruction_registry():
+def test_generation_contract_uses_only_stdlib_and_authoritative_core_contracts():
     # The selected base already derives opcode schemas from the CPU instruction
     # registry. Keep that single source of truth instead of copying an allowlist.
     allowed = {"__future__", "copy", "re", "typing", "dataclasses", "json", "hashlib"}
     assert set(_imports(SOURCE_ROOT / "agent_runtime/messages.py")) <= allowed
-    assert set(_imports(SOURCE_ROOT / "plc/generation_contract.py")) <= allowed | {"plc.instructions", "plc.instruction_binding"}
+    assert set(_imports(SOURCE_ROOT / "plc/generation_contract.py")) <= allowed | {
+        "plc.instructions", "plc.instruction_binding", "plc.specification.behavior",
+    }
 
 
 def test_external_tool_runtime_has_no_model_or_credential_dependency():

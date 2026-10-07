@@ -123,7 +123,8 @@ def test_saved_confirmed_project_uses_explicit_edit_regenerate_route():
     assert "value.confirmed_spec" in route
     assert "value.version_count" in route
     assert "value.versions?.length" in route
-    assert 'setIntent(editRegenerate ? "generation" : "analysis")' in route
+    assert 'setTask(editRegenerate ? "edit" : "create")' in route
+    assert 'setEditAction("edit")' in route
     assert "text" not in route
 
 

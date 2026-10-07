@@ -1270,7 +1270,8 @@ def test_native_compile_positions_keep_in_out_formal_ambiguity_and_current_write
     def check(network, x, y, data):
         # The native controls identify a FB by network/bbox plus formal name,
         # or identify its writeback terminal by network/bbox without that name.
-        model = {'cpu': 'Q03UDV', 'schema_version': 2, 'program': 'FBD_MAIN.Program.pou',
+        logical_name = 'FBD_MAIN.' + data.draw(st.sampled_from(['Program', '程序'])) + '.pou'
+        model = {'cpu': 'Q03UDV', 'schema_version': 2, 'program': logical_name,
                  'unknown_record_count': 0, 'blocks': [{} for _ in range(network+1)], 'nodes': [], 'wires': []}
         for block in range(network+1):
             offset = 100+block*200
@@ -1288,11 +1289,14 @@ def test_native_compile_positions_keep_in_out_formal_ambiguity_and_current_write
             'network': network, 'step': -1, 'left': x, 'top': y, 'right': x+2, 'bottom': y+3,
             'arguments': [{'text': 'STATE'}]}
         project = lambda r=report, graph=None: correlate_native_compile_position(r, cpu='Q03UDV', pou='FBD_MAIN',
-            program_kind=208, model=model, connectivity=graph)
+            program_kind=208, model=model, connectivity=graph, logical_name=logical_name)
         actual = project(); graph = actual['graph_projection']
         offset = 100+(network-1)*200
         assert actual['status'] == 'source-resolved' and actual['instance_resolution'] == 'not_available_in_compile_report'
         assert graph['object']['object_id'] == f'n{offset}'
+        model['program'] = 'OTHER.Program.pou'
+        assert project()['status'] == 'unresolved'
+        model['program'] = logical_name
         assert graph['port_association']['status'] == 'ambiguous'
         assert {(p['port_name'], p['side']) for p in graph['port_association']['candidates']} == {
             ('in.STATE','in'), ('out.STATE','out')}
@@ -1315,7 +1319,8 @@ def test_native_compile_positions_keep_in_out_formal_ambiguity_and_current_write
                   'source_object_id': body_id}
         public.pop('library')  # There is no library string in the public record.
         public_project = lambda r=public, identity=body_id: correlate_native_compile_position(r, cpu='Q03UDV',
-            pou='FBD_MAIN', program_kind=208, model=model, connectivity=connectivity, source_body_id=identity)
+            pou='FBD_MAIN', program_kind=208, model=model, connectivity=connectivity, source_body_id=identity,
+            logical_name=logical_name)
         assert public_project()['graph_projection'] == resolved['graph_projection']
         changed_id = list(body_id); index = data.draw(st.integers(min_value=0, max_value=11))
         changed_id[index] = (changed_id[index]+1) & 0xffffffff

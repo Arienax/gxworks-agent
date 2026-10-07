@@ -14,7 +14,7 @@ from pathlib import Path
 import re
 from urllib.parse import unquote, urlsplit
 
-LINK = re.compile(r"(?<!!)\[([^\]\n]*)\]\(([^\s)]+)\)")
+LINK = re.compile(r"(?<!!)\[([^\]\n]*)\]\((<[^<>\n]+>|[^\s)]+)\)")
 PUBLIC_READMES = (
     "README.md", "README.zh-CN.md", "AGENTS.md", "requirements/README.md",
     "resources/knowledge/README.md", "resources/knowledge/THIRD_PARTY_NOTICES.md",
@@ -84,6 +84,9 @@ def stage_documentation(root: Path, destination: Path) -> dict:
             return source.read_bytes()
         def replace(match):
             label, url = match.groups()
+            angled = url.startswith("<") and url.endswith(">")
+            if angled:
+                url = url[1:-1]
             parsed = urlsplit(url)
             if parsed.scheme or parsed.netloc or not parsed.path:
                 return match.group(0)
@@ -92,6 +95,8 @@ def stage_documentation(root: Path, destination: Path) -> dict:
             relative = Path(os.path.relpath(target, out.parent)).as_posix()
             if parsed.fragment:
                 relative += "#" + parsed.fragment
+            if angled:
+                relative = "<" + relative + ">"
             return "[" + label + "](" + relative + ")"
         # Fenced examples remain literal. Rewrite only Markdown links outside them.
         parts = re.split(r"(```.*?```|~~~.*?~~~)", text, flags=re.S)
