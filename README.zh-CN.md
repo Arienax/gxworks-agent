@@ -12,7 +12,7 @@ GXWorks Agent 支持 Ladder、ST（结构化文本）和原生 FBD 工作流，�
 
 以 FX3U 输送线片段为例：检索 `WSFL`、`INC` 和 `T200` 的工程上下文，构造梯形图候选，再通过 MCP 保存。结构化指令事实与手册证据为候选提供依据；保存结果包含 Ladder JSON、IR、SVG、由 IR 派生的 ST，以及用于 GX 导入的 CSV。
 
-GIF 根据实际 SDK/MCP 返回结果和生成产物制作。候选由助手根据返回上下文构造，并非内置模型自主运行的录屏。本次展示上下文检索与结构检查通过，不表示获得了 token 压缩收益、通过原生编译或验证了 PLC 行为。
+GIF 根据实际 SDK/MCP 返回结果和生成产物制作。候选由助手根据返回上下文构造，并非内置模型自主运行的录屏。
 
 ## ST：独立生成与审阅结构化文本
 
@@ -35,15 +35,13 @@ ST 在 Web 工作台有独立生成流程：分析需求、确认规格，再结
 
 在工作台直接配置模型 API，使用内置 Direct 生成流程，再查看程序网络、软元件地址和可导出的产物。Direct 可减少外部 Agent 的编排开销，实际 token 消耗取决于模型与任务。它与 MCP 共用工程上下文处理链路；工作台问答仍可能使用多轮工具调用。
 
-录屏展示已生成的 Ladder、网络与地址检查器，以及导出菜单，没有展示现场模型生成或 token 用量对照。
-
 ## FBD：修改已有 GXW 工程
 
 ![MCP 为已有 FBD 工程第一轴加入故障锁存、复位和延时使能](resources/assets/fbd-control-logic-demo.gif)
 
 在三菱电机 MotionControl JEC 示例的第一轴中加入故障锁存、复位和 500 ms 延时使能。保留原有 FB 实现及 Axis 的 `IN_OUT` 连线，新增 SR/TON 逻辑，将使能条件接入已有功率控制块。
 
-GIF 展示已保存的 FBD 修改，未进行 GX 编译或设备运行；只修改第一轴，没有写入 ST 正文。来源：[三菱电机 MotionControl JEC 示例](https://eu-assets.contentstack.com/v3/assets/blt5412ff9af9aef77f/blt9206f69c182f67c3/634ea5238602a36d8e991e63/MotionControl_JEC_a.zip)。
+来源：[三菱电机 MotionControl JEC 示例](https://eu-assets.contentstack.com/v3/assets/blt5412ff9af9aef77f/blt9206f69c182f67c3/634ea5238602a36d8e991e63/MotionControl_JEC_a.zip)。
 
 FBD 不限于演示中的连线修改：可以基于起始工程或导入的 GXW 生成、编辑候选，增删和修改对象、连线、声明及多个网络，使用当前工程与库中的 FB 接口和 `IN_OUT` 参数，并查看图形预览、版本差异和 GXW 产物。
 
@@ -94,8 +92,8 @@ npm start
 
 ## 当前范围
 
-- GX 集成需要 Windows。原生集成绑定 GX Works2 **1.635.0.1**；桌面发送需要可交互的 Windows 会话。
-- 原生 FBD 编辑沿用来源工程的 CPU 和接口。内置起始模板为 FX3U，其他 CPU 需要导入对应工程。
+- GX 集成需要 Windows，桌面发送需要可交互的 Windows 会话。
+- 原生 FBD 集成绑定 GX Works2 **1.635.0.1**；梯形图与 ST 的生成、编辑和导出不受该版本限制。FBD 编辑沿用来源工程的 CPU 和接口，内置起始模板为 FX3U，其他 CPU 需要导入对应工程。
 - CPU 出现在菜单中，不代表其指令与验证覆盖完全一致。缺少验证配置时返回未验证状态。
 - FBD 支持对象、连线、声明、多网络和基于来源工程的 FB/Program 创建。SFC 已有后端/MCP 的动作、转换子程序编辑路径，尚不是完整图形 IDE。
 - 产物保存或导入成功，不等于编译通过或 PLC 行为正确。

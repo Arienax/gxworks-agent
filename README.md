@@ -12,7 +12,7 @@ GXWorks Agent supports Ladder, Structured Text (ST), and native FBD workflows. I
 
 An FX3U conveyor example: retrieve context for `WSFL`, `INC`, and `T200`, construct a Ladder candidate, and save it through MCP. Structured instruction facts and manual evidence inform the candidate; the saved version includes Ladder JSON, IR, SVG, ST derived from IR, and GX import CSVs.
 
-The GIF visualizes actual SDK/MCP results and generated artifacts. The assistant constructed the candidate from the returned context; this is not a recording of an embedded model running autonomously. This run demonstrates context retrieval and structural acceptance, not token savings, native compilation, or PLC behavior.
+The GIF visualizes actual SDK/MCP results and generated artifacts. The assistant constructed the candidate from the returned context; this is not a recording of an embedded model running autonomously.
 
 ## ST: generate and review Structured Text
 
@@ -35,15 +35,13 @@ Your client or harness supplies the model and planning loop. GXWorks Agent suppl
 
 Configure a model API directly in the workbench and use the built-in Direct generation workflow, then inspect program networks, device addresses, and available exports. Direct can reduce external agent orchestration overhead; actual token use depends on the model and task. It shares the engineering context pipeline with MCP, and workbench question-answering can still involve tool loops.
 
-This recording shows an already-generated Ladder program, network/address inspection, and the export menu (source comments and some UI text retain their original language). It does not show a live model generation call or a token-usage comparison.
-
 ## FBD: edit an existing GXW project
 
 ![MCP adds fault latching, reset and delayed enable to the first axis of an existing FBD project](resources/assets/fbd-control-logic-demo-en.gif)
 
 Add fault latching, reset, and a 500 ms enable delay to the first axis of Mitsubishi Electric's MotionControl JEC example. The edit preserves existing FB implementations and Axis `IN_OUT` wiring, adds SR/TON logic, and connects the permit to the existing power-control block.
 
-The GIF shows the saved FBD change, not GX compilation or machine execution. It changes only the first axis and does not write an ST body. Source: [Mitsubishi Electric MotionControl JEC example](https://eu-assets.contentstack.com/v3/assets/blt5412ff9af9aef77f/blt9206f69c182f67c3/634ea5238602a36d8e991e63/MotionControl_JEC_a.zip).
+Source: [Mitsubishi Electric MotionControl JEC example](https://eu-assets.contentstack.com/v3/assets/blt5412ff9af9aef77f/blt9206f69c182f67c3/634ea5238602a36d8e991e63/MotionControl_JEC_a.zip).
 
 FBD goes beyond the wiring change in the demo. Generate or edit candidates from a starting project or imported GXW; add, change, or remove objects, connections, declarations, and multiple networks; use project/library FB interfaces and `IN_OUT` parameters; and inspect graphical previews, version differences, and GXW artifacts.
 
@@ -94,8 +92,8 @@ Native saving, code checking, GX import, and simulation require the correspondin
 
 ## Current scope
 
-- GX integration requires Windows. Native integration is tied to GX Works2 **1.635.0.1**; desktop delivery needs an interactive Windows session.
-- Native FBD editing uses the source project's CPU and interfaces. The built-in starting template is FX3U; other CPUs need a matching imported project.
+- GX integration requires Windows; desktop delivery needs an interactive Windows session.
+- Native FBD integration is tied to GX Works2 **1.635.0.1**. Ladder and ST generation, editing, and export do not require this version. FBD editing uses the source project's CPU and interfaces; the built-in starting template is FX3U, and other CPUs need a matching imported project.
 - CPU menu availability does not imply uniform instruction or validation coverage. Unsupported validation profiles return an unverified result.
 - FBD supports objects, connections, declarations, networks, and source-bound FB/Program creation. SFC has backend/MCP editing for existing action and transition subprograms; it is not a complete graphical SFC IDE.
 - A saved artifact or successful import does not establish successful compilation or correct PLC behavior.
