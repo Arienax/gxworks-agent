@@ -889,6 +889,17 @@
             ],
             "title": "Model"
           },
+          "native_save": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Native Save"
+          },
           "operation": {
             "enum": [
               "generate",
@@ -3747,6 +3758,49 @@
         "title": "SFCInput",
         "type": "object"
       },
+      "SFCJumpEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "before_step_reference": {
+            "maximum": 65535.0,
+            "minimum": 0.0,
+            "title": "Before Step Reference",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "jump",
+            "title": "Kind",
+            "type": "string"
+          },
+          "target_step_reference": {
+            "maximum": 65535.0,
+            "minimum": 0.0,
+            "title": "Target Step Reference",
+            "type": "integer"
+          },
+          "x": {
+            "maximum": 65535.0,
+            "minimum": 0.0,
+            "title": "X",
+            "type": "integer"
+          },
+          "y": {
+            "maximum": 65535.0,
+            "minimum": 0.0,
+            "title": "Y",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "x",
+          "y",
+          "before_step_reference",
+          "target_step_reference"
+        ],
+        "title": "SFCJumpEdit",
+        "type": "object"
+      },
       "SFCPreview-Input": {
         "additionalProperties": false,
         "properties": {
@@ -3770,7 +3824,14 @@
             "anyOf": [
               {
                 "items": {
-                  "$ref": "#/components/schemas/SFCGraphEdit"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SFCGraphEdit"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SFCJumpEdit"
+                    }
+                  ]
                 },
                 "maxItems": 8192,
                 "minItems": 1,
@@ -3881,7 +3942,14 @@
             "anyOf": [
               {
                 "items": {
-                  "$ref": "#/components/schemas/SFCGraphEdit"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SFCGraphEdit"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SFCJumpEdit"
+                    }
+                  ]
                 },
                 "maxItems": 8192,
                 "minItems": 1,

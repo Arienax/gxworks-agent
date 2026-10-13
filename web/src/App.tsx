@@ -15,6 +15,7 @@ import {
   FileCode2,
   FolderOpen,
   GitBranch,
+  Github,
   History,
   LoaderCircle,
   Moon,
@@ -1168,6 +1169,10 @@ export default function App() {
             GXWorks <span>Agent</span>
           </h1>
           <p className="eyebrow">{t("工程工作台")}</p>
+          <a className="project-source login-project-source" href="https://github.com/Arienax/gxworks-agent"
+            target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" aria-label={t("GitHub 项目来源")}>
+            <Github size={17} /><span>Arienax/gxworks-agent</span>
+          </a>
           {connecting ? (
             <p>
               <LoaderCircle className="spin" size={16} />{" "}
@@ -1233,6 +1238,11 @@ export default function App() {
           {t("工程工作台")}
         </div>
         <div className="header-actions">
+          <a className="project-source" href="https://github.com/Arienax/gxworks-agent"
+            target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"
+            aria-label={t("GitHub 项目来源")} title="GitHub · Arienax/gxworks-agent">
+            <Github size={18} /><span>GitHub</span>
+          </a>
           <button
             className="icon-button"
             disabled={busy}

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "test:gx-send": "node --test tests/gx-send.test.mjs",
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",

@@ -1534,6 +1534,8 @@ export interface components {
             model?: {
                 [key: string]: unknown;
             } | null;
+            /** Native Save */
+            native_save?: boolean | null;
             /**
              * Operation
              * @enum {string}
@@ -2390,12 +2392,28 @@ export interface components {
             /** Steps */
             steps: components["schemas"]["SFCStep"][];
         };
+        /** SFCJumpEdit */
+        SFCJumpEdit: {
+            /** Before Step Reference */
+            before_step_reference: number;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "jump";
+            /** Target Step Reference */
+            target_step_reference: number;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
         /** SFCPreview */
         "SFCPreview-Input": {
             /** Child Edits */
             child_edits?: components["schemas"]["SFCChildEdit"][] | null;
             /** Graph Edits */
-            graph_edits?: components["schemas"]["SFCGraphEdit"][] | null;
+            graph_edits?: (components["schemas"]["SFCGraphEdit"] | components["schemas"]["SFCJumpEdit"])[] | null;
             /** Program */
             program?: string | null;
             /** Project Id */
@@ -2427,7 +2445,7 @@ export interface components {
             /** Data Base64 */
             data_base64?: string | null;
             /** Graph Edits */
-            graph_edits?: components["schemas"]["SFCGraphEdit"][] | null;
+            graph_edits?: (components["schemas"]["SFCGraphEdit"] | components["schemas"]["SFCJumpEdit"])[] | null;
             /**
              * Operation
              * @enum {string}

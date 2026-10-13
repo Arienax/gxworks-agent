@@ -450,6 +450,24 @@ pre {
   align-items: center;
   gap: 9px;
 }
+.project-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.project-source:hover, .project-source:focus-visible {
+  text-decoration: underline;
+}
+.login-project-source { margin-bottom: 16px; }
+@media (max-width: 760px) {
+  .header-actions .project-source span { display: none; }
+}
 .language-select {
   font-size: 12px;
   min-height: 28px;

@@ -15,6 +15,7 @@ import sys
 POLICY = "publication/public-files.json"
 MAX_BYTES = 2 * 1024 * 1024
 ROOT_FILES = {
+    "package.json", "package-lock.json", "tools/web-runtime.mjs", "checks/web-runtime.test.mjs",
     "README.md", "README.zh-CN.md", "LICENSE", "THIRD_PARTY_NOTICES.md",
     "CONTRIBUTING.md", "SECURITY.md", ".gitignore", ".gitattributes",
     ".githooks/pre-commit", ".githooks/pre-push",

@@ -19,9 +19,11 @@ jobs:
         with:
           node-version: '22.14.0'
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
       - run: npm ci
-        working-directory: web
+      - run: node --test checks/*.test.mjs
       - run: node --experimental-strip-types --test tests/*.test.mjs
         working-directory: web
       - run: npm run build

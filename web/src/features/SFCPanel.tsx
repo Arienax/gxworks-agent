@@ -20,7 +20,11 @@ export type SFCModel = { program: string; cpu: string; codepage: number;
     records: { kind: string; references: number[] }[] };
   actions: { name: string; number: number; registrations: { zoom: string; qualifier: number }[] }[];
   children: Child[]; issues: (string | { message?: string; code?: string })[] };
-type GraphEdit = { step_reference: number; action_number: number };
+type ActionEdit = { step_reference: number; action_number: number };
+type JumpEdit = { kind: "jump"; x: number; y: number; before_step_reference: number; target_step_reference: number };
+type GraphEdit = ActionEdit | JumpEdit;
+const isActionEdit = (edit: GraphEdit): edit is ActionEdit => !("kind" in edit);
+const isJumpEdit = (edit: GraphEdit): edit is JumpEdit => "kind" in edit && edit.kind === "jump";
 type Preview = { program: SFCModel; validation: { native_save: string }; diff: { has_changes: boolean } };
 
 export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: {
@@ -40,6 +44,9 @@ export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: 
   const symbols = new Map((topology?.symbols || []).map(symbol => [symbol.cell, symbol]));
   const positions = new Map(cells.map(cell => [cell.id, [(cell.x + 1) * 128, (cell.y + 1) * 64]]));
   const picked = cells.find(cell => cell.id === selected);
+  const sourceJump = source?.graph.topology?.jumps.find(jump => jump.source === selected);
+  const sourceJumpCell = source?.graph.cells?.find(cell => cell.id === selected);
+  const targetSteps = (source?.graph.cells || []).filter(cell => cell.role === "step" && cell.binding.status === "source-resolved");
   const names = picked?.role === "step" ? picked.binding.registrations?.map(item => item.zoom) || []
     : picked?.binding.child ? [picked.binding.child] : [];
   const children = (model?.children || []).filter(child => names.includes(child.name));
@@ -56,7 +63,15 @@ export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: 
   }
   function change(step: number, action: number, original: number) {
     setCandidate(null);
-    setEdits(before => [...before.filter(edit => edit.step_reference !== step), ...(action === original ? [] : [{ step_reference: step, action_number: action }])]);
+    setEdits(before => [...before.filter(edit => !isActionEdit(edit) || edit.step_reference !== step), ...(action === original ? [] : [{ step_reference: step, action_number: action }])]);
+  }
+  function changeJump(target: number) {
+    if (!sourceJump || !sourceJumpCell) return;
+    const cell = sourceJumpCell;
+    setCandidate(null);
+    setEdits(before => [...before.filter(edit => !isJumpEdit(edit) || edit.x !== cell.x || edit.y !== cell.y),
+      ...(target === sourceJump.step_reference ? [] : [{ kind: "jump" as const, x: cell.x, y: cell.y,
+        before_step_reference: sourceJump.step_reference, target_step_reference: target }])]);
   }
   async function prepare() {
     if (!source || locked || !edits.length) return;
@@ -116,7 +131,7 @@ export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: 
               : terminal ? symbol.kind === "jump" ? `${t("跳转")} S${symbol.reference}` : t("结束") : t("原生连接符")}
             onClick={() => setSelected(cell.id)} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelected(cell.id); } }}>
             {cell.role === "step" ? <><rect x="-45" y="-21" width="90" height="42" rx="3"/>
-              {cell.type === 26 && <rect x="-40" y="-16" width="80" height="32" rx="2"/>}
+              {(cell.type === 10 || cell.type === 26) && <rect x="-40" y="-16" width="80" height="32" rx="2"/>}
               <text textAnchor="middle" y="-2">S{cell.binding.step_reference}</text>
               <text className="sfc-action" textAnchor="middle" y="14">{t("动作")} {cell.binding.action_number}</text></>
               : cell.role === "transition" ? <><rect x="-22" y="-4" width="44" height="8"/><text x="29" y="5">T{cell.binding.transition_number}</text></>
@@ -137,11 +152,19 @@ export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: 
         {(source?.graph.records || []).filter(row => row.kind === "step-action-reference").map(row => {
           const [step, action] = row.references;
           return <label key={step}>S{step}<select aria-label={`S${step} ${t("动作")}`} disabled={locked || !editable}
-            value={edits.find(edit => edit.step_reference === step)?.action_number ?? action}
+            value={edits.filter(isActionEdit).find(edit => edit.step_reference === step)?.action_number ?? action}
             onChange={e => change(step, Number(e.target.value), action)}>
             {source?.actions.map(item => <option key={item.name} value={item.number}>{t("动作")} {item.number}</option>)}
           </select></label>;
         })}
+        {sourceJump && sourceJumpCell && <label>{t("跳转目标")}<select aria-label={t("跳转目标")}
+          disabled={locked || !editable}
+          value={edits.filter(isJumpEdit).find(edit => edit.x === sourceJumpCell.x && edit.y === sourceJumpCell.y)?.target_step_reference ?? sourceJump.step_reference}
+          onChange={e => changeJump(Number(e.target.value))}>
+          {!targetSteps.some(cell => cell.binding.step_reference === sourceJump.step_reference) &&
+            <option value={sourceJump.step_reference} disabled>S{sourceJump.step_reference} · {t("未解析")}</option>}
+          {targetSteps.map(cell => <option key={cell.id} value={cell.binding.step_reference}>S{cell.binding.step_reference}</option>)}
+        </select></label>}
         <h3>{t("所选子程序")}</h3>
         {!children.length && <p className="muted">{t("选择步骤或转换条件查看源码。")}</p>}
         {children.map(child => <article key={child.name}><strong>{t(child.kind === "transition" ? "转换条件" : "动作")}</strong>

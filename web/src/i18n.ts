@@ -1,9 +1,12 @@
 export type Locale = "zh-CN" | "en" | "ja";
 const words: Record<string, [string, string]> = {
+  "后续修改由 GX Works2 保存": ["Save subsequent changes with GX Works2", "以後の変更をGX Works2で保存"],
+  "GitHub 项目来源": ["GitHub project source", "GitHub プロジェクト"],
   "SFC 图形": ["SFC diagram", "SFC図"],
   "读取原生图形": ["Read native diagram", "ネイティブ図を読み取る"],
   "转换条件": ["Transition", "移行条件"],
   "跳转": ["Jump", "ジャンプ"],
+  "跳转目标": ["Jump target", "ジャンプ先"],
   "结束": ["End", "終了"],
   "步骤与动作": ["Steps and actions", "ステップとアクション"],
   "所选子程序": ["Selected child program", "選択した子プログラム"],

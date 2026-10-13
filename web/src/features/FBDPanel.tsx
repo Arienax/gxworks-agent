@@ -201,6 +201,7 @@ export function FBDImport({ pid, vid, disabled, onProposal, t }: {
 }) {
   const [upload, setUpload] = useState<{ filename: string; data_base64: string } | null>(null);
   const [programs, setPrograms] = useState<string[]>([]), [program, setProgram] = useState("");
+  const [nativeSave, setNativeSave] = useState(false);
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
   async function read(file?: File) {
     if (!file) return;
@@ -222,7 +223,7 @@ export function FBDImport({ pid, vid, disabled, onProposal, t }: {
     setBusy(true); setError("");
     try {
       const proposal = await api<Proposal>("/fbd/proposals", "POST", { operation: "import", project_id: pid,
-        version_id: vid || null, request_id: key(), data_base64: upload.data_base64, program });
+        version_id: vid || null, request_id: key(), data_base64: upload.data_base64, program, native_save: nativeSave });
       await onProposal(proposal);
     } catch (e) { setError(String(e instanceof Error ? e.message : e)); }
     finally { setBusy(false); }
@@ -230,6 +231,7 @@ export function FBDImport({ pid, vid, disabled, onProposal, t }: {
   return <div className="form fbd-import">
     <label>{t("选择 GXW 工程")}<input type="file" accept=".gxw" disabled={disabled || busy} onChange={e => void read(e.target.files?.[0])} /></label>
     {upload && <label>{t("程序")}<select value={program} onChange={e => setProgram(e.target.value)}>{programs.map(p => <option key={p}>{p}</option>)}</select></label>}
+    <label><input type="checkbox" checked={nativeSave} disabled={disabled || busy} onChange={e => setNativeSave(e.target.checked)}/>{t("后续修改由 GX Works2 保存")}</label>
     {error && <p role="alert" className="fbd-error">{error}</p>}
     <Button disabled={disabled || busy || !upload} variant="primary" onClick={() => void propose()}><FileUp size={15} />{t(busy ? "正在读取…" : "校验导入并保存")}</Button>
   </div>;
