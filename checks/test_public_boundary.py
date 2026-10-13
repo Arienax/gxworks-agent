@@ -81,9 +81,10 @@ class PublicBoundaryTests(unittest.TestCase):
     def test_reviewed_demo_gif_is_the_only_binary_media_exception(self):
         import base64
         gif = base64.b64decode("R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==")
-        name = "resources/assets/demo.gif"
-        allowed = boundary.ROOT_FILES | {name}
-        self.assertEqual(boundary.inspect_file(name, "100644", gif, allowed), [])
+        allowed = boundary.ROOT_FILES | boundary.README_ASSETS
+        for name in boundary.README_ASSETS:
+            with self.subTest(path=name):
+                self.assertEqual(boundary.inspect_file(name, "100644", gif, allowed), [])
         self.assertTrue(boundary.inspect_file("resources/assets/other.gif", "100644", gif, allowed))
         self.assertTrue(boundary.inspect_file("README.md", "100644", gif, allowed))
         for invalid in (gif[:-1], gif + b"extra", b"MZexecutable", gif[:-1] + b"\x21\xfe\x06secret\x00\x3b"):

@@ -14,10 +14,21 @@ import sys
 
 POLICY = "publication/public-files.json"
 MAX_BYTES = 2 * 1024 * 1024
-README_ASSETS = {"resources/assets/demo.gif"}
+README_ASSETS = {
+    "resources/assets/demo.gif",
+    "resources/assets/ladder-rag-core-demo.gif",
+    "resources/assets/ladder-rag-core-demo-en.gif",
+    "resources/assets/ladder-rag-core-demo-ja.gif",
+    "resources/assets/web-gui-view-deliver.gif",
+    "resources/assets/web-gui-view-deliver-en.gif",
+    "resources/assets/web-gui-view-deliver-ja.gif",
+    "resources/assets/fbd-control-logic-demo.gif",
+    "resources/assets/fbd-control-logic-demo-en.gif",
+    "resources/assets/fbd-control-logic-demo-ja.gif",
+}
 ROOT_FILES = {
     "package.json", "package-lock.json", "tools/web-runtime.mjs", "checks/web-runtime.test.mjs",
-    "README.md", "README.zh-CN.md", "LICENSE", "THIRD_PARTY_NOTICES.md",
+    "README.md", "README.zh-CN.md", "README.ja.md", "LICENSE", "THIRD_PARTY_NOTICES.md",
     "CONTRIBUTING.md", "SECURITY.md", ".gitignore", ".gitattributes",
     ".githooks/pre-commit", ".githooks/pre-push",
     ".github/workflows/public-boundary.yml", "docs/private-component.md",

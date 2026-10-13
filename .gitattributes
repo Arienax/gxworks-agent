@@ -3,3 +3,12 @@
 *.sh text eol=lf
 .githooks/* text eol=lf
 resources/assets/demo.gif binary
+resources/assets/fbd-control-logic-demo-en.gif binary
+resources/assets/fbd-control-logic-demo-ja.gif binary
+resources/assets/fbd-control-logic-demo.gif binary
+resources/assets/ladder-rag-core-demo-en.gif binary
+resources/assets/ladder-rag-core-demo-ja.gif binary
+resources/assets/ladder-rag-core-demo.gif binary
+resources/assets/web-gui-view-deliver-en.gif binary
+resources/assets/web-gui-view-deliver-ja.gif binary
+resources/assets/web-gui-view-deliver.gif binary

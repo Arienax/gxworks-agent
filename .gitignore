@@ -2,6 +2,7 @@
 /*
 !/README.md
 !/README.zh-CN.md
+!/README.ja.md
 !/LICENSE
 !/THIRD_PARTY_NOTICES.md
 !/CONTRIBUTING.md
@@ -20,6 +21,15 @@ resources/*
 !resources/assets/
 resources/assets/*
 !resources/assets/demo.gif
+!resources/assets/fbd-control-logic-demo-en.gif
+!resources/assets/fbd-control-logic-demo-ja.gif
+!resources/assets/fbd-control-logic-demo.gif
+!resources/assets/ladder-rag-core-demo-en.gif
+!resources/assets/ladder-rag-core-demo-ja.gif
+!resources/assets/ladder-rag-core-demo.gif
+!resources/assets/web-gui-view-deliver-en.gif
+!resources/assets/web-gui-view-deliver-ja.gif
+!resources/assets/web-gui-view-deliver.gif
 !/package.json
 !/package-lock.json
 web/node_modules/
