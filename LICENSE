@@ -1,0 +1,117 @@
+SOURCE-AVAILABLE PROPRIETARY LICENSE
+
+Copyright (c) 2026 Arienax. All rights reserved.
+
+This software and its accompanying source code, documentation, configuration,
+assets, and other project-authored materials (collectively, the "Software")
+are made available as source-available proprietary software. This is not an
+open-source license.
+
+1. PERMITTED USE
+
+Subject to the terms of this License, you may:
+
+- view, download, and clone the Software;
+- run the Software locally for personal, educational, academic, research,
+  evaluation, testing, and development purposes;
+- use the Software internally within an organization, including a commercial
+  organization, provided the Software is not distributed or made available to
+  third parties as part of a product or service;
+- modify the Software for the permitted uses above;
+- create and maintain private forks, mirrors, and modified copies for the
+  permitted uses above; and
+- create a public fork solely as technically necessary to prepare and submit a
+  contribution to the canonical upstream repository, provided that the fork is
+  not used as an independent distribution, mirror, release channel, product,
+  or service.
+
+2. RESTRICTIONS
+
+Except with prior written permission from the copyright holder, you may not:
+
+- redistribute, republish, or otherwise distribute the Software, modified
+  versions, or derivative works;
+- distribute compiled binaries, packages, installers, containers, appliances,
+  or other executable forms that contain or are derived from the Software;
+- sublicense, sell, resell, rent, lease, license, relicense, or white-label the
+  Software;
+- incorporate the Software or a derivative work into a product, application,
+  device package, SDK, library, or other deliverable that is distributed to
+  third parties;
+- provide the Software or a derivative work as a hosted service, SaaS, API,
+  managed service, cloud service, remote-access service, or similar offering;
+- use the Software as part of a paid third-party product or service where the
+  Software or a derivative work is delivered, exposed, hosted, or otherwise
+  made available to that third party; or
+- use the Software to bypass, violate, or circumvent the license terms,
+  technical protections, or other rights of Mitsubishi Electric or any other
+  third party.
+
+3. CONTRIBUTIONS
+
+Unless otherwise agreed in writing, by intentionally submitting a contribution
+to the canonical upstream repository, you grant the copyright holder a
+perpetual, worldwide, irrevocable, non-exclusive, royalty-free license to use,
+reproduce, modify, prepare derivative works from, distribute, sublicense, and
+relicense that contribution as part of this project or related works.
+
+You retain any copyright you otherwise hold in your contribution.
+
+4. THIRD-PARTY MATERIALS
+
+Third-party software, libraries, assets, documentation, data, and other
+materials included with or referenced by this repository remain subject to
+their own licenses and notices. This License does not replace, modify, or
+supersede those third-party terms.
+
+5. PREVIOUSLY RELEASED VERSIONS
+
+Copies, revisions, or releases of this project that were previously distributed
+under the Apache License 2.0 remain licensed under the terms that applied to
+those copies at the time they were distributed. This License applies from the
+repository revision that adopts it onward, to materials for which the copyright
+holder has the right to apply these terms, unless a file or component states a
+different license.
+
+6. TRADEMARKS AND THIRD-PARTY RIGHTS
+
+This License grants no rights to the trademarks, product names, documentation,
+software, project formats, or other intellectual property of Mitsubishi
+Electric or any other third party.
+
+GX Works, MELSEC, Mitsubishi Electric, and related names and marks belong to
+their respective owners. This project is independent and is not affiliated
+with, endorsed by, sponsored by, or approved by Mitsubishi Electric unless
+explicitly stated otherwise by Mitsubishi Electric.
+
+7. DISCLAIMER OF WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY OF ANY
+KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT,
+ACCURACY, RELIABILITY, SAFETY, OR FITNESS FOR INDUSTRIAL OR PRODUCTION USE.
+
+PLC, automation, machinery, and safety-related outputs produced or assisted by
+the Software must be independently reviewed and validated before deployment.
+
+8. LIMITATION OF LIABILITY
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE COPYRIGHT HOLDER AND CONTRIBUTORS
+SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+PUNITIVE, OR CONSEQUENTIAL DAMAGES, INCLUDING WITHOUT LIMITATION LOSS OF DATA,
+LOSS OF PROFITS, LOSS OF PRODUCTION, EQUIPMENT DAMAGE, BUSINESS INTERRUPTION,
+PERSONAL INJURY, OR OTHER LOSS ARISING FROM OR RELATED TO THE SOFTWARE OR ITS
+USE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+9. TERMINATION
+
+Any rights granted under this License terminate automatically if you materially
+violate its terms. Upon termination, you must cease exercising the rights
+provided by this License. Rights granted under applicable third-party licenses
+are unaffected.
+
+10. RESERVATION OF RIGHTS
+
+All rights not expressly granted by this License are reserved by the copyright
+holder. Additional permissions, including redistribution, commercial
+integration, hosted use, or relicensing, require prior written authorization.

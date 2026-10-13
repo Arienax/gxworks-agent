@@ -1,0 +1,13 @@
+.delivery-report {max-width:1100px;line-height:1.75;overflow-wrap:anywhere;font-size:14px}
+.delivery-report h1 {font-size:23px;line-height:1.4;margin:0 0 20px}
+.delivery-report h2 {font-size:18px;margin:32px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.delivery-report h3 {font-size:15px;margin:20px 0 8px}
+.delivery-report p {margin:10px 0;white-space:pre-wrap}
+.delivery-report ul {padding-left:24px;margin:12px 0}
+.delivery-report li {margin:8px 0;white-space:pre-wrap}
+.delivery-report blockquote {margin:12px 0;padding:10px 16px;border-left:3px solid var(--accent);background:var(--hover);white-space:pre-wrap}
+.delivery-table {overflow-x:auto;margin:12px 0;border:1px solid var(--border);border-radius:6px}
+.delivery-table table {width:100%;border-collapse:collapse;table-layout:auto}
+.delivery-table th,.delivery-table td {padding:10px 14px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border);min-width:75px}
+.delivery-table th {font-weight:600;background:var(--hover)}
+.delivery-table tr:last-child td {border-bottom:0}

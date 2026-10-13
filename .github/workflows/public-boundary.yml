@@ -1,0 +1,28 @@
+name: Public Boundary
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python tools/check_public_boundary.py --history
+      - run: python -m unittest discover -s checks -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: node --experimental-strip-types --test tests/*.test.mjs
+        working-directory: web
+      - run: npm run build
+        working-directory: web
