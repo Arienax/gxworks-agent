@@ -19,6 +19,7 @@
     "package-lock.json",
     "package.json",
     "publication/public-files.json",
+    "resources/assets/demo.gif",
     "tools/check_public_boundary.py",
     "tools/web-runtime.mjs",
     "web/index.html",

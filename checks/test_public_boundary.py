@@ -78,6 +78,18 @@ class PublicBoundaryTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(ValueError):
                 boundary.load_allowlist(json.dumps({"files": sorted(boundary.ROOT_FILES | {name})}).encode())
 
+    def test_reviewed_demo_gif_is_the_only_binary_media_exception(self):
+        import base64
+        gif = base64.b64decode("R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==")
+        name = "resources/assets/demo.gif"
+        allowed = boundary.ROOT_FILES | {name}
+        self.assertEqual(boundary.inspect_file(name, "100644", gif, allowed), [])
+        self.assertTrue(boundary.inspect_file("resources/assets/other.gif", "100644", gif, allowed))
+        self.assertTrue(boundary.inspect_file("README.md", "100644", gif, allowed))
+        for invalid in (gif[:-1], gif + b"extra", b"MZexecutable", gif[:-1] + b"\x21\xfe\x06secret\x00\x3b"):
+            with self.subTest(payload=invalid):
+                self.assertTrue(boundary.inspect_file(name, "100644", invalid, allowed))
+
 
 if __name__ == "__main__":
     unittest.main()

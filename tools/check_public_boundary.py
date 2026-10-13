@@ -14,6 +14,7 @@ import sys
 
 POLICY = "publication/public-files.json"
 MAX_BYTES = 2 * 1024 * 1024
+README_ASSETS = {"resources/assets/demo.gif"}
 ROOT_FILES = {
     "package.json", "package-lock.json", "tools/web-runtime.mjs", "checks/web-runtime.test.mjs",
     "README.md", "README.zh-CN.md", "LICENSE", "THIRD_PARTY_NOTICES.md",
@@ -43,7 +44,7 @@ def allowed_path(name: str) -> bool:
         return False
     if path.as_posix() != name:
         return False
-    if name in ROOT_FILES:
+    if name in ROOT_FILES or name in README_ASSETS:
         return True
     return ((name.startswith("web/src/") and path.suffix in {".ts", ".tsx", ".css"})
             or (name.startswith("web/tests/") and name.endswith(".test.mjs")))
@@ -66,6 +67,10 @@ def inspect_file(name: str, mode: str, data: bytes, allowed: set[str]) -> list[s
         problems.append(f"{name}: symbolic links and submodules are forbidden")
     if len(data) > MAX_BYTES:
         return problems + [f"{name}: exceeds the public text-file size limit"]
+    if name in README_ASSETS:
+        if not valid_demo_gif(data):
+            problems.append(f"{name}: invalid GIF or unsupported metadata")
+        return problems
     if data.startswith((b"PK\x03\x04", b"MZ", b"\x7fELF", b"\x1f\x8b", b"version https://git-lfs.github.com/spec/v1")) or b"\x00" in data:
         return problems + [f"{name}: binary, archive or LFS payload is forbidden"]
     try:
@@ -76,6 +81,55 @@ def inspect_file(name: str, mode: str, data: bytes, allowed: set[str]) -> list[s
         if pattern.search(text):
             problems.append(f"{name}: possible {label}; inspect locally (matched value withheld)")
     return problems
+
+
+def valid_demo_gif(data: bytes) -> bool:
+    """Accept a complete GIF stream with frame controls and optional looping only."""
+    if len(data) < 14 or data[:6] not in {b"GIF87a", b"GIF89a"}:
+        return False
+    if not int.from_bytes(data[6:8], "little") or not int.from_bytes(data[8:10], "little"):
+        return False
+    position, frames = 13, 0
+    if data[10] & 0x80:
+        position += 3 * (2 ** ((data[10] & 7) + 1))
+    def blocks(start):
+        while start < len(data):
+            size = data[start]
+            start += 1
+            if size == 0:
+                return start
+            start += size
+        return len(data) + 1
+    while position < len(data):
+        marker = data[position]
+        position += 1
+        if marker == 0x3B:
+            return frames > 0 and position == len(data)
+        if marker == 0x2C:
+            if position + 9 >= len(data):
+                return False
+            flags = data[position + 8]
+            position += 9
+            if flags & 0x80:
+                position += 3 * (2 ** ((flags & 7) + 1))
+            if position >= len(data) or not 2 <= data[position] <= 8:
+                return False
+            position = blocks(position + 1)
+            frames += 1
+        elif marker == 0x21:
+            if data[position:position + 2] == b"\xF9\x04":
+                if data[position + 6:position + 7] != b"\x00":
+                    return False
+                position += 7
+            elif data[position:position + 13] == b"\xFF\x0BNETSCAPE2.0":
+                if data[position + 13:position + 15] != b"\x03\x01" or data[position + 17:position + 18] != b"\x00":
+                    return False
+                position += 18
+            else:
+                return False
+        else:
+            return False
+    return False
 
 
 def entries(repo: Path, revision: str | None):

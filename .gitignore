@@ -15,6 +15,11 @@
 !/tools/
 !/checks/
 !/web/
+!/resources/
+resources/*
+!resources/assets/
+resources/assets/*
+!resources/assets/demo.gif
 !/package.json
 !/package-lock.json
 web/node_modules/

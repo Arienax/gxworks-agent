@@ -1,6 +1,6 @@
 # Components and optional bridging
 
-MCP and Web are independently installable packages. Each contains its own compiled core and runtime dependencies. Neither starts the other automatically. Keep installation folders separate.
+MCP and Web are independently installable packages. Each includes everything needed to run its service. Neither starts the other automatically. Keep installation folders separate.
 
 ## Independent MCP
 
@@ -10,7 +10,7 @@ The host client supplies the model. No Web model profile or model API credential
 
 ## Independent Web
 
-Run `npm install`, `npm run build` and `npm start` in the repository or extracted Web package. The Node launcher invokes the compiled backend directly, without PowerShell, and opens the browser. Projects default to the current user's LocalAppData under `GXWorks Agent/web-workspace`; no folder selection is required. Web serves its own interface and engineering API on loopback. Configure a model provider in settings for generation. The browser uses relative `/api` URLs; `web/openapi.json` and `web/src/api/generated.ts` document the contract.
+Run `npm install`, `npm run build` and `npm start` in the repository or extracted Web package. The service starts and opens the browser. Projects default to the current user's LocalAppData under `GXWorks Agent/web-workspace`; no folder selection is required. Web serves its own interface and engineering API on loopback. Configure a model provider in settings for generation. The browser uses relative `/api` URLs; `web/openapi.json` and `web/src/api/generated.ts` document the contract.
 
 For UI development run `npm run dev` in `web`; the proxy targets `http://127.0.0.1:8765`. Origin, session, CSRF, approval and resource-lock checks remain enforced. Never put tokens or model credentials in committed files or browser build variables.
 

@@ -1,27 +1,15 @@
-# Publication boundary
+# Repository checks
 
-This repository has independent Git history. Do not merge the private development repository, add it as a submodule, copy its `.git` directory, or push its branches or tags here.
-
-Only reviewed frontend source, interface schemas, synthetic frontend tests, these documents and publication checks belong here. Core implementation, native adapters, templates, knowledge databases, engineering samples, research scripts, experimental records, reports, snapshots and archives remain in private development storage. Private development can retain its own private remote and history.
-
-`publication/public-files.json` lists each approved public file. New frontend files must be reviewed and added explicitly. The checker also enforces an independent path boundary, text-only content, a size limit and common credential/native-code checks. A filename allowlist cannot prove that arbitrary new text is safe: inspect the diff before every push.
+This repository accepts Web interface source, HTTP interface definitions, frontend tests and user documentation. `publication/public-files.json` lists the accepted files, including the reviewed README demonstration at `resources/assets/demo.gif`. Add new files explicitly and include the allowlist change in the review.
 
 Enable local checks after cloning:
 
-```powershell
+```sh
 git config core.hooksPath .githooks
 python tools/check_public_boundary.py --index
 python tools/check_public_boundary.py --history
 ```
 
-The pre-commit hook examines the complete staged tree. The pre-push hook examines every commit reachable from local refs, including files added and later deleted. The workflow repeats the history check and tests. CI runs after upload, so local review and the pre-push check are the first boundary. Do not bypass hooks. No LFS content or binary files belong in Git history.
+The pre-commit hook checks the complete staged tree. The pre-push hook checks every commit reachable from local refs. CI repeats the checks, runs tests and builds the interface. Review the diff before pushing and do not bypass the hooks.
 
-## Binary releases
-
-Reviewed Windows assets are built in the private development environment and attached to GitHub Releases separately. Publish MCP and Web as independent packages. Each must pass isolated startup and engineering checks, contain its runtime dependencies and third-party licenses, and identify the public project URL.
-
-First-party Python implementation is compiled into native extensions; native adapters are obfuscated. Exclude raw source, private bytecode, debug symbols, source maps, obfuscation mappings, experimental records, reports, build logs and research archives. Legacy developer bundles are not public release assets. Audit the final archives; the Git hooks do not audit Release uploads.
-
-Local protection increases analysis effort but cannot guarantee a minimum reverse-engineering cost or prevent extraction of algorithms and runtime data. Public interfaces describe user-visible behavior.
-
-Keeping the old development repository private does not recall copies previously downloaded or publicly forked. Existing licenses and third-party notices continue to apply to their respective materials.
+Keep credentials, personal engineering files, generated output and LFS content out of commits. Binary content is limited to the reviewed README demonstration; executable packages are distributed separately on the project's Releases page. Review every frame before replacing demonstration media.
