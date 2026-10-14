@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MPL-2.0
 """Audit the complete Git index or every locally reachable commit before upload.
 
 An explicit allowlist and text checks prevent common accidental disclosures.
@@ -29,6 +30,7 @@ README_ASSETS = {
 ROOT_FILES = {
     "package.json", "package-lock.json", "tools/web-runtime.mjs", "checks/web-runtime.test.mjs",
     "README.md", "README.zh-CN.md", "README.ja.md", "LICENSE", "THIRD_PARTY_NOTICES.md",
+    "LICENSE-SCOPE.md", "LICENSE-RUNTIME.md", "SOURCE_CODE.md", "web/LICENSE.md", "tools/LICENSE.md",
     "CONTRIBUTING.md", "SECURITY.md", ".gitignore", ".gitattributes",
     ".githooks/pre-commit", ".githooks/pre-push",
     ".github/workflows/public-boundary.yml", "docs/private-component.md",

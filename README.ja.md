@@ -1,10 +1,26 @@
-# GXWorks Agent
+<h1 align="center">GXWorks Agent</h1>
 
-[简体中文](README.zh-CN.md) | [English](README.md) | 日本語
+<h3 align="center">三菱電機 PLC エンジニアリング向け MCP ツールと AI ワークベンチ。</h3>
 
-**エージェントとハーネス向けの三菱電機PLCエンジニアリングツール。**
+<p align="center"><strong>設計情報の取得から、プログラムの作成・レビュー、GX Works2 への受け渡しまで。</strong></p>
+
+<p align="center">
+  <a href="https://github.com/Arienax/gxworks-agent/releases/latest"><img src="https://img.shields.io/github/v/release/Arienax/gxworks-agent?style=flat-square&amp;color=2563eb" alt="Latest release"></a>
+  <a href="docs/private-component.md"><img src="https://img.shields.io/badge/MCP-engineering_tools-7c3aed?style=flat-square" alt="MCP engineering tools"></a>
+  <a href="#quick-start"><img src="https://img.shields.io/badge/Windows-10%2F11_x64-0078d4?style=flat-square" alt="Windows 10/11 x64"></a>
+  <a href="LICENSE-SCOPE.md"><img src="https://img.shields.io/badge/Interface-MPL--2.0-f59e0b?style=flat-square" alt="Interface: MPL-2.0"></a>
+  <a href="LICENSE-RUNTIME.md"><img src="https://img.shields.io/badge/Runtime-free_internal_use-16a34a?style=flat-square" alt="Runtime: free internal use"></a>
+</p>
+
+<p align="center"><strong><a href="https://github.com/Arienax/gxworks-agent/releases/latest">ダウンロード</a> · <a href="docs/private-component.md">MCP と Web</a> · <a href="https://github.com/Arienax/gxworks-agent/issues">問題の報告</a></strong></p>
+
+<p align="center"><a href="#quick-start">クイックスタート</a> · <a href="#ladder">ラダー</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#web">Web</a> · <a href="#diagnostics">診断・検証</a></p>
+
+<p align="center"><a href="README.zh-CN.md">简体中文</a> · <a href="README.md">English</a> · <strong>日本語</strong></p>
 
 GXWorks Agentは、ラダー、構造化テキスト（ST）、ネイティブFBDのワークフローに対応しています。MCP経由で外部エージェントにプロジェクト情報、CPUに対応する命令、マニュアルの根拠資料、エンジニアリングツールを提供します。外部クライアントのモデルを使い、ツールを呼び出して成果物をバージョン管理できます。標準のMCPランタイムは単独で動作し、Webワークベンチは必要に応じて利用できます。
+
+<a name="ladder"></a>
 
 ## ラダー：設計情報の取得からプログラムの保存まで
 
@@ -13,6 +29,8 @@ GXWorks Agentは、ラダー、構造化テキスト（ST）、ネイティブFB
 FX3Uのコンベヤ制御の一部を例に、`WSFL`、`INC`、`T200`に関する情報を取得し、ラダーの候補を作成してMCP経由で保存します。構造化された命令情報とマニュアルの記述を根拠に候補を作成し、ラダーJSON、IR、SVG、IRから変換した構造化テキスト（ST）、GXインポート用CSVを保存します。
 
 GIFは実際のSDK/MCPの応答と生成物をもとに構成しています。返された情報を使ってアシスタントが候補を作成したもので、内蔵モデルの自律動作を録画したものではありません。
+
+<a name="st"></a>
 
 ## ST：構造化テキストの生成とレビュー
 
@@ -29,11 +47,15 @@ STにはWebワークベンチ内の専用生成フローがあります。要求
 
 モデルと計画・実行ループはクライアントまたはハーネスが担当します。GXWorks Agentは設計情報、ツール、バージョン保存、操作結果を提供します。
 
+<a name="web"></a>
+
 ## Web GUI：プログラムの確認とエクスポート
 
 ![Webワークベンチで保存済みラダー、ネットワークとデバイスアドレス、エクスポートメニューを表示](resources/assets/web-gui-view-deliver-ja.gif)
 
 ワークベンチでモデルAPIを直接設定し、内蔵のDirect生成フローを利用できます。生成後はネットワークやデバイスアドレス、エクスポート可能な成果物を確認できます。Directは外部エージェントによる処理の取りまとめに伴う負荷を減らせますが、実際のトークン使用量はモデルとタスクに依存します。MCPと共通の設計コンテキスト処理を使い、ワークベンチの質問応答では複数回のツール呼び出しが発生する場合もあります。
+
+<a name="fbd"></a>
 
 ## FBD：既存のGXWプロジェクトを編集
 
@@ -47,6 +69,8 @@ FBDではデモの配線変更に加え、開始用プロジェクトやイン�
 
 元のプロジェクトが対応する範囲で、FBとProgramを新規作成できます。Programは既存タスク、新規タスク、または新規リソースに登録できます。ネイティブ保存、コンパイル、コードチェックは個別に実行し、結果を対象のプロジェクトバージョンに紐づけます。
 
+<a name="diagnostics"></a>
+
 ## プロジェクト管理・診断・検証
 
 | 機能 | できること |
@@ -56,6 +80,8 @@ FBDではデモの配線変更に加え、開始用プロジェクトやイン�
 | 既存SFCの編集 | 既存SFCプロジェクトをインポートしてプログラムとグラフを読み取り、既存のアクション・トランジションのサブプログラム、対応範囲内のステップのアクション番号とジャンプ先を編集できます。候補と差分の確認に対応し、SFCプロジェクト全体をゼロから作る機能はありません。 |
 | ラダーのシミュレーション | テスト計画、デバイス入力、期待結果を設定し、対応バックエンドで実行します。結果の保存・振り返り、要求との対応付けができます。命令とCPUの対応範囲はバックエンドによって異なります。 |
 | PLCの読み取り専用モニター | 操作員の許可に基づき、設定済みのMX Component論理局から指定デバイスを読み取り、値と読み取り記録を確認します。権限はプロジェクトバージョン、アドレス範囲、有効期限に紐づき、取り消せます。この機能はPLCに書き込みません。 |
+
+<a name="quick-start"></a>
 
 ## クイックスタート
 
@@ -108,4 +134,4 @@ npm start
 
 [コンポーネントと接続設定](docs/private-component.md) · [貢献ガイド](CONTRIBUTING.md) · [Issue](https://github.com/Arienax/gxworks-agent/issues) · [セキュリティ](SECURITY.md)
 
-GXWorks Agentは、**ソースコードを閲覧できるプロプライエタリ[ライセンス](LICENSE)**で提供されます。許可された複製には、ライセンス全文と[第三者の権利表記](THIRD_PARTY_NOTICES.md)を保持してください。
+公開 Web インターフェースと付属の公開ファイルは [MPL-2.0](LICENSE) で提供されます。対象は[ライセンス範囲](LICENSE-SCOPE.md)を参照してください。非公開 Core とネイティブアダプターには、組織内の商用利用も無料とする別の[ランタイム利用規約](LICENSE-RUNTIME.md)が適用されます。貢献者は自身の著作権を保持します。本ライセンスで配布する際は、適用ライセンス、[第三者の権利表記](THIRD_PARTY_NOTICES.md)、[MPL ソースの入手方法](SOURCE_CODE.md)を添付してください。過去のリリースはそれぞれの元のライセンスを保持します。

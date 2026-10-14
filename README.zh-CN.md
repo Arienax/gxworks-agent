@@ -1,10 +1,26 @@
-# GXWorks Agent
+<h1 align="center">GXWorks Agent</h1>
 
-简体中文 | [English](README.md) | [日本語](README.ja.md)
+<h3 align="center">面向三菱 PLC 工程的 MCP 工具与 AI 工作台。</h3>
 
-**面向 Agent 和 harness 的三菱 PLC 工程工具。**
+<p align="center"><strong>读取工程上下文，构建与审阅程序，交付到 GX Works2。</strong></p>
+
+<p align="center">
+  <a href="https://github.com/Arienax/gxworks-agent/releases/latest"><img src="https://img.shields.io/github/v/release/Arienax/gxworks-agent?style=flat-square&amp;color=2563eb" alt="Latest release"></a>
+  <a href="docs/private-component.md"><img src="https://img.shields.io/badge/MCP-engineering_tools-7c3aed?style=flat-square" alt="MCP engineering tools"></a>
+  <a href="#quick-start"><img src="https://img.shields.io/badge/Windows-10%2F11_x64-0078d4?style=flat-square" alt="Windows 10/11 x64"></a>
+  <a href="LICENSE-SCOPE.md"><img src="https://img.shields.io/badge/Interface-MPL--2.0-f59e0b?style=flat-square" alt="Interface: MPL-2.0"></a>
+  <a href="LICENSE-RUNTIME.md"><img src="https://img.shields.io/badge/Runtime-free_internal_use-16a34a?style=flat-square" alt="Runtime: free internal use"></a>
+</p>
+
+<p align="center"><strong><a href="https://github.com/Arienax/gxworks-agent/releases/latest">下载</a> · <a href="docs/private-component.md">MCP 与 Web</a> · <a href="https://github.com/Arienax/gxworks-agent/issues">问题反馈</a></strong></p>
+
+<p align="center"><a href="#quick-start">快速上手</a> · <a href="#ladder">Ladder</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#web">Web</a> · <a href="#diagnostics">诊断与验证</a></p>
+
+<p align="center"><strong>简体中文</strong> · <a href="README.md">English</a> · <a href="README.ja.md">日本語</a></p>
 
 GXWorks Agent 支持 Ladder、ST（结构化文本）和原生 FBD 工作流，通过 MCP 向外部 Agent 提供工程上下文、CPU 对应的指令、手册依据和工程工具。外部客户端使用自己的模型，调用工具并保存带版本的工程产物。默认 MCP 独立运行，Web 工作台可选。
+
+<a name="ladder"></a>
 
 ## Ladder：从工程上下文到程序产物
 
@@ -13,6 +29,8 @@ GXWorks Agent 支持 Ladder、ST（结构化文本）和原生 FBD 工作流，�
 以 FX3U 输送线片段为例：检索 `WSFL`、`INC` 和 `T200` 的工程上下文，构造梯形图候选，再通过 MCP 保存。结构化指令事实与手册证据为候选提供依据；保存结果包含 Ladder JSON、IR、SVG、由 IR 派生的 ST，以及用于 GX 导入的 CSV。
 
 GIF 根据实际 SDK/MCP 返回结果和生成产物制作。候选由助手根据返回上下文构造，并非内置模型自主运行的录屏。
+
+<a name="st"></a>
 
 ## ST：独立生成与审阅结构化文本
 
@@ -29,11 +47,15 @@ ST 在 Web 工作台有独立生成流程：分析需求、确认规格，再结
 
 客户端或 harness 负责模型与规划循环，GXWorks Agent 提供工程上下文、工具、版本保存和操作回执。
 
+<a name="web"></a>
+
 ## Web GUI：查看程序与导出产物
 
 ![Web 工作台查看已保存梯形图、网络与软元件地址，以及导出菜单](resources/assets/web-gui-view-deliver.gif)
 
 在工作台直接配置模型 API，使用内置 Direct 生成流程，再查看程序网络、软元件地址和可导出的产物。Direct 可减少外部 Agent 的编排开销，实际 token 消耗取决于模型与任务。它与 MCP 共用工程上下文处理链路；工作台问答仍可能使用多轮工具调用。
+
+<a name="fbd"></a>
 
 ## FBD：修改已有 GXW 工程
 
@@ -47,6 +69,8 @@ FBD 不限于演示中的连线修改：可以基于起始工程或导入的 GXW
 
 在来源工程支持的范围内，可以新建 FB 和 Program。新建 Program 可注册到已有任务、新任务或新资源；原生保存与当前代码的编译、检查分别执行，结果关联到对应的工程版本。
 
+<a name="diagnostics"></a>
+
 ## 工程管理、诊断与验证
 
 | 功能 | 可以完成的工作 |
@@ -56,6 +80,8 @@ FBD 不限于演示中的连线修改：可以基于起始工程或导入的 GXW
 | SFC 已有工程编辑 | 导入已有 SFC 工程，读取程序与图形，编辑已有动作、转换子程序，以及受支持的步骤动作编号、跳转目标；提供候选预览和版本差异，尚不支持从零新建完整 SFC 工程。 |
 | 梯形图仿真 | 配置测试方案、软元件输入与预期结果，运行受支持的仿真后端，保存并回看运行结果，将测试与需求对应。具体指令和 CPU 支持随后端而定。 |
 | PLC 只读监测 | 经操作员授权，通过已配置的 MX Component 逻辑站读取指定软元件，查看数值与读取记录。权限绑定工程版本、地址范围和有效期，可撤销；此功能不向 PLC 写入。 |
+
+<a name="quick-start"></a>
 
 ## 快速上手
 
@@ -108,4 +134,4 @@ npm start
 
 [组件与可选连接](docs/private-component.md) · [贡献指南](CONTRIBUTING.md) · [问题反馈](https://github.com/Arienax/gxworks-agent/issues) · [安全政策](SECURITY.md)
 
-GXWorks Agent 采用**源码可见的专有[许可证](LICENSE)**。许可范围内的副本须保留许可证原文及[第三方归属声明](THIRD_PARTY_NOTICES.md)。
+公开 Web 界面及其配套公开文件采用 [MPL-2.0](LICENSE)，具体边界见[许可范围](LICENSE-SCOPE.md)。闭源核心及原生适配器采用独立的[核心免费使用协议](LICENSE-RUNTIME.md)，包括商业组织内部免费使用。贡献者保留各自版权。按本次许可分发时须附带适用许可、[第三方声明](THIRD_PARTY_NOTICES.md)和 [MPL 源码获取说明](SOURCE_CODE.md)。已有发布版本保留其原许可。

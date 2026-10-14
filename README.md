@@ -1,10 +1,26 @@
-# GXWorks Agent
+<h1 align="center">GXWorks Agent</h1>
 
-[简体中文](README.zh-CN.md) | English | [日本語](README.ja.md)
+<h3 align="center">MCP tools and an AI workbench for Mitsubishi PLC engineering.</h3>
 
-**Mitsubishi PLC engineering tools for agents and harnesses.**
+<p align="center"><strong>Read project context. Build and review programs. Deliver to GX Works2.</strong></p>
+
+<p align="center">
+  <a href="https://github.com/Arienax/gxworks-agent/releases/latest"><img src="https://img.shields.io/github/v/release/Arienax/gxworks-agent?style=flat-square&amp;color=2563eb" alt="Latest release"></a>
+  <a href="docs/private-component.md"><img src="https://img.shields.io/badge/MCP-engineering_tools-7c3aed?style=flat-square" alt="MCP engineering tools"></a>
+  <a href="#quick-start"><img src="https://img.shields.io/badge/Windows-10%2F11_x64-0078d4?style=flat-square" alt="Windows 10/11 x64"></a>
+  <a href="LICENSE-SCOPE.md"><img src="https://img.shields.io/badge/Interface-MPL--2.0-f59e0b?style=flat-square" alt="Interface: MPL-2.0"></a>
+  <a href="LICENSE-RUNTIME.md"><img src="https://img.shields.io/badge/Runtime-free_internal_use-16a34a?style=flat-square" alt="Runtime: free internal use"></a>
+</p>
+
+<p align="center"><strong><a href="https://github.com/Arienax/gxworks-agent/releases/latest">Downloads</a> · <a href="docs/private-component.md">MCP &amp; Web</a> · <a href="https://github.com/Arienax/gxworks-agent/issues">Issues</a></strong></p>
+
+<p align="center"><a href="#quick-start">Quick start</a> · <a href="#ladder">Ladder</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#web">Web</a> · <a href="#diagnostics">Diagnostics</a></p>
+
+<p align="center"><a href="README.zh-CN.md">简体中文</a> · <strong>English</strong> · <a href="README.ja.md">日本語</a></p>
 
 GXWorks Agent supports Ladder, Structured Text (ST), and native FBD workflows. It gives external agents project context, CPU-specific instructions, manual evidence, and engineering tools through MCP. Connect through MCP, use your own model, and save versioned engineering artifacts. The default MCP runtime works independently; the Web workbench is optional.
+
+<a name="ladder"></a>
 
 ## Ladder: from engineering context to a saved program
 
@@ -13,6 +29,8 @@ GXWorks Agent supports Ladder, Structured Text (ST), and native FBD workflows. I
 An FX3U conveyor example: retrieve context for `WSFL`, `INC`, and `T200`, construct a Ladder candidate, and save it through MCP. Structured instruction facts and manual evidence inform the candidate; the saved version includes Ladder JSON, IR, SVG, ST derived from IR, and GX import CSVs.
 
 The GIF visualizes actual SDK/MCP results and generated artifacts. The assistant constructed the candidate from the returned context; this is not a recording of an embedded model running autonomously.
+
+<a name="st"></a>
 
 ## ST: generate and review Structured Text
 
@@ -29,11 +47,15 @@ Local ST inspection checks the supported syntax and semantics and reports unsupp
 
 Your client or harness supplies the model and planning loop. GXWorks Agent supplies the engineering context, tools, persistence, and operation receipts.
 
+<a name="web"></a>
+
 ## Web GUI: inspect and export a program
 
 ![Web workbench showing a saved Ladder program, network and device inspection, and the export menu](resources/assets/web-gui-view-deliver-en.gif)
 
 Configure a model API directly in the workbench and use the built-in Direct generation workflow, then inspect program networks, device addresses, and available exports. Direct can reduce external agent orchestration overhead; actual token use depends on the model and task. It shares the engineering context pipeline with MCP, and workbench question-answering can still involve tool loops.
+
+<a name="fbd"></a>
 
 ## FBD: edit an existing GXW project
 
@@ -47,6 +69,8 @@ FBD goes beyond the wiring change in the demo. Generate or edit candidates from 
 
 Where the source project supports it, create FBs and Programs. A new Program can be registered in an existing task, a new task, or a new resource. Native saving, compilation, and code checking are separate operations with results tied to the corresponding project version.
 
+<a name="diagnostics"></a>
+
 ## Project management, diagnostics, and validation
 
 | Feature | Available work |
@@ -56,6 +80,8 @@ Where the source project supports it, create FBs and Programs. A new Program can
 | Existing SFC projects | Import an existing SFC project, read its program and graph, edit existing action and transition subprograms, and change supported step action numbers and jump targets. Preview candidates and version differences; creating a complete SFC project from scratch is not supported. |
 | Ladder simulation | Define test plans, device inputs, and expected results; run supported simulation backends; save and review results; and relate tests to requirements. Instruction and CPU support depend on the backend. |
 | Read-only PLC monitoring | With operator approval, read selected devices through a configured MX Component logical station and view values and read records. Revocable permissions are bound to the project version, address range, and expiry; this feature does not write to the PLC. |
+
+<a name="quick-start"></a>
 
 ## Quick start
 
@@ -108,4 +134,4 @@ Emergency stops, guarding, and other safety functions require an independent saf
 
 [Components and optional connections](docs/private-component.md) · [Contributing](CONTRIBUTING.md) · [Issues](https://github.com/Arienax/gxworks-agent/issues) · [Security](SECURITY.md)
 
-GXWorks Agent is provided under a **source-available proprietary [license](LICENSE)**. Keep the full license and [third-party notices](THIRD_PARTY_NOTICES.md) with permitted copies.
+The public Web interface and its accompanying public files use [MPL-2.0](LICENSE); see the [license scope](LICENSE-SCOPE.md). The closed Core and native adapters use the separate [Runtime Free Use Agreement](LICENSE-RUNTIME.md), including free internal commercial use. Contributors retain their copyright. Distributions under these terms must retain the applicable licenses, [third-party notices](THIRD_PARTY_NOTICES.md) and [MPL source availability](SOURCE_CODE.md). Earlier releases retain their original licenses.

@@ -78,6 +78,11 @@ class PublicBoundaryTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(ValueError):
                 boundary.load_allowlist(json.dumps({"files": sorted(boundary.ROOT_FILES | {name})}).encode())
 
+    def test_allowlist_cannot_omit_license_or_source_notices(self):
+        for name in ("LICENSE", "LICENSE-RUNTIME.md", "LICENSE-SCOPE.md", "SOURCE_CODE.md", "web/LICENSE.md", "tools/LICENSE.md"):
+            with self.subTest(missing=name), self.assertRaisesRegex(ValueError, "missing required"):
+                boundary.load_allowlist(json.dumps({"files": sorted(boundary.ROOT_FILES - {name})}).encode())
+
     def test_reviewed_demo_gif_is_the_only_binary_media_exception(self):
         import base64
         gif = base64.b64decode("R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==")
